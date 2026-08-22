@@ -21,9 +21,7 @@ use std::path::{Path, PathBuf};
 
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 
-use crate::documents::design_directory::{
-    self, ModuleIdentity, TaskIdentity, SPEC_ROOT,
-};
+use crate::documents::design_directory::{self, ModuleIdentity, TaskIdentity, SPEC_ROOT};
 use crate::entities::documents::design_document;
 use crate::entities::work_management::issue;
 use crate::entities::worktrees::worktree;
@@ -34,9 +32,7 @@ use crate::worktree_status::repository::module_folder;
 
 use super::error::{LaunchPathsError, LaunchPathsErrorCode};
 use super::request::{LaunchPathsRequest, LaunchScope, SUPPORTED_VERSION};
-use super::view::{
-    LaunchPathsView, WorktreeUse, WORKTREE_CHECKOUT_MISSING, WORKTREE_NONE,
-};
+use super::view::{LaunchPathsView, WorktreeUse, WORKTREE_CHECKOUT_MISSING, WORKTREE_NONE};
 
 /// The lifecycle states whose checkout a launch may still run in. A `conflict`
 /// worktree holds a stopped merge the developer resolves in place, so it is
@@ -68,6 +64,26 @@ impl LaunchPathsService {
             LaunchScope::Plan | LaunchScope::Instant => self.scratch_paths(&request).await,
             LaunchScope::Docchat => self.document_paths(&request).await,
         }
+    }
+
+    pub(crate) fn preflight_module_folder(
+        &self,
+        module_id: &str,
+    ) -> Result<PathBuf, super::ModuleFolderFailure> {
+        let catalog = self.profiles.read();
+        let folder = catalog
+            .recent_profile_index
+            .and_then(|index| usize::try_from(index).ok())
+            .and_then(|index| catalog.profiles.get(index))
+            .and_then(|profile| {
+                profile
+                    .module_links
+                    .iter()
+                    .rev()
+                    .find(|link| compact_uuid(&link.module_id) == compact_uuid(module_id))
+            })
+            .map(|link| link.path.as_str());
+        super::validate_module_folder(folder)
     }
 
     // -----------------------------------------------------------------
@@ -110,17 +126,16 @@ impl LaunchPathsService {
         let module = self.module_identity(&module_id).await?;
         let task = self.task_identity(task_id).await?;
         let relative = match (root.as_ref(), module.as_ref(), task.as_ref()) {
-            (Some(root), Some(module), Some(task)) => {
-                Some(design_directory::resolve_task_design_dir(root, module, task))
-            }
+            (Some(root), Some(module), Some(task)) => Some(
+                design_directory::resolve_task_design_dir(root, module, task),
+            ),
             _ => None,
         };
 
         Ok(LaunchPathsView {
-            // Only an isolated checkout overrides the caller's cwd; the
-            // module-folder case returns `None` so the launch keeps the
-            // directory it already resolved.
-            working_directory: worktree_root.map(display),
+            // Rust is the launch authority, so it must return the approved
+            // module fallback as well as an isolated worktree override.
+            working_directory: root.as_ref().map(|path| display(path.clone())),
             design_directory: materialize(root.as_deref(), relative.as_deref()),
             design_directory_relative: relative,
             module_directory_name: module.as_ref().map(design_directory::module_dir_name),
@@ -149,8 +164,7 @@ impl LaunchPathsService {
                 WorktreeUse::absent(top_level, owner.is_shared, WORKTREE_NONE),
             ));
         };
-        if !USABLE_WORKTREE_STATES.contains(&row.status.as_str())
-            || !Path::new(&row.path).is_dir()
+        if !USABLE_WORKTREE_STATES.contains(&row.status.as_str()) || !Path::new(&row.path).is_dir()
         {
             return Ok((
                 None,
@@ -188,7 +202,7 @@ impl LaunchPathsService {
             .map(|module| design_directory::planning_design_dir(module, &request.agent_run_id));
 
         Ok(LaunchPathsView {
-            working_directory: None,
+            working_directory: root.as_ref().map(|path| display(path.clone())),
             design_directory: materialize(root.as_deref(), relative.as_deref()),
             design_directory_relative: relative,
             module_directory_name: module.as_ref().map(design_directory::module_dir_name),
@@ -258,10 +272,7 @@ impl LaunchPathsService {
             }))
     }
 
-    async fn task_identity(
-        &self,
-        task_id: &str,
-    ) -> Result<Option<TaskIdentity>, LaunchPathsError> {
+    async fn task_identity(&self, task_id: &str) -> Result<Option<TaskIdentity>, LaunchPathsError> {
         Ok(issue::Entity::find_by_id(compact_uuid(task_id))
             .one(&self.database)
             .await?

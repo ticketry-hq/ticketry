@@ -63,6 +63,9 @@ async fn adopted() -> (tempfile::TempDir, sea_orm::DatabaseConnection, RunsServi
     let path = directory.path().join("state.db");
     fixture(&path);
     adopt(directory.path()).await.unwrap();
+    muxed_studio_lib::terminal_persistence::adopt(directory.path())
+        .await
+        .unwrap();
     let database = Database::connect(format!("sqlite:{}?mode=rw", path.display()))
         .await
         .unwrap();
@@ -88,7 +91,7 @@ fn intent(seed: u128, attempt: Option<String>) -> LaunchIntent {
         project_id: id(701),
         issue_id: id(704),
         scope: "task".to_owned(),
-        provider: PROVIDER.to_owned(),
+        provider: Some(PROVIDER.to_owned()),
         target_kind: "task".to_owned(),
         target_id: id(704),
         policy_reference: None,

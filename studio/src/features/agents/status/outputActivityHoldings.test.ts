@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useAgentStatusStore } from "./store";
-import { dispatchStatusFrame } from "./testing/legacyStatusFrameTestDriver";
+import { applySnapshotFrame } from "./stream/statusSnapshot";
+import { statusRunHolding } from "./testing/durableStatusFrames";
 import {
   projectRunPresentation,
   stallDeadlineAt,
@@ -20,8 +21,11 @@ function run(overrides: Partial<RunRecord> = {}): RunRecord {
     module_id: "module-1",
     agent: "codex",
     scope: "task",
+    launch_state: "Implement",
+    launch_model: "gpt-5.6",
     started_at: OBSERVED_AT,
     state: "working",
+    effective_state: "working",
     updated_at: OBSERVED_AT,
     output_sequence: 1,
     last_output_at: OBSERVED_AT,
@@ -87,8 +91,10 @@ describe("terminal output activity projection", () => {
 
   it("never overlays a run that already reached a terminal outcome", () => {
     vi.advanceTimersByTime(STALL_AFTER_MS * 10);
-    expect(projectRunPresentation(run({ state: "exited" }))).toBe("exited");
-    expect(projectRunPresentation(run({ state: "lost" }))).toBe("lost");
+    expect(projectRunPresentation(run({ state: "exited", effective_state: "stalled" })))
+      .toBe("exited");
+    expect(projectRunPresentation(run({ state: "lost", effective_state: "stalled" })))
+      .toBe("lost");
   });
 
   it("has no deadline for a session with no recorded output origin", () => {
@@ -99,22 +105,25 @@ describe("terminal output activity projection", () => {
 
 describe("independently ordered lifecycle and activity axes", () => {
   it("advances the activity axis without claiming a lifecycle state", () => {
-    holding().upsertRun(run({ state: "needs_input", output_sequence: 1 }));
+    holding().upsertRun(run({
+      state: "needs_input",
+      effective_state: "needs_input",
+      output_sequence: 1,
+    }));
 
-    dispatchStatusFrame({
-      v: 1,
-      type: "terminal_activity",
-      at: "2026-08-15T12:01:00.000Z",
-      run: run({
+    holding().applyActivity(
+      run({
         state: "working",
+        effective_state: "working",
         output_sequence: 2,
         last_output_at: "2026-08-15T12:01:00.000Z",
       }),
-    });
+    );
 
     const stored = holding().runs["run-1"];
     expect(stored.output_sequence).toBe(2);
     expect(stored.last_output_at).toBe("2026-08-15T12:01:00.000Z");
+    expect(stored.effective_state).toBe("working");
     // The activity delta carried a `working` record; the run's own lifecycle
     // fact is what survives.
     expect(stored.state).toBe("needs_input");
@@ -123,12 +132,9 @@ describe("independently ordered lifecycle and activity axes", () => {
   it("ignores an activity frame that is not newer by output sequence", () => {
     holding().upsertRun(run({ output_sequence: 5, last_output_at: OBSERVED_AT }));
 
-    dispatchStatusFrame({
-      v: 1,
-      type: "terminal_activity",
-      at: "2026-08-15T11:00:00.000Z",
-      run: run({ output_sequence: 4, last_output_at: "2026-08-15T11:00:00.000Z" }),
-    });
+    holding().applyActivity(
+      run({ output_sequence: 4, last_output_at: "2026-08-15T11:00:00.000Z" }),
+    );
 
     expect(holding().runs["run-1"].output_sequence).toBe(5);
     expect(holding().runs["run-1"].last_output_at).toBe(OBSERVED_AT);
@@ -156,11 +162,11 @@ describe("independently ordered lifecycle and activity axes", () => {
     // A snapshot seeded on the far side of the boundary must present stalled
     // immediately, from persisted facts alone.
     const stale = new Date(Date.now() - STALL_AFTER_MS).toISOString();
-    dispatchStatusFrame({
-      v: 1,
-      type: "snapshot",
-      scope: { project_id: "project-1", task_id: null },
-      runs: [run({ output_sequence: 9, last_output_at: stale })],
+    applySnapshotFrame({
+      __typename: "RunStatusSnapshot",
+      project_id: "project-1",
+      cursor: 9,
+      runs: [statusRunHolding(run({ output_sequence: 9, last_output_at: stale }))],
       automation_attempts: [],
       at: new Date().toISOString(),
     });
@@ -190,16 +196,13 @@ describe("terminal outcomes outrank the inactivity overlay", () => {
   it("ignores an activity observation that raced the ending", () => {
     holding().upsertRun(run({ state: "exited", updated_at: OBSERVED_AT }));
 
-    dispatchStatusFrame({
-      v: 1,
-      type: "terminal_activity",
-      at: "2026-08-15T12:00:30.000Z",
-      run: run({
+    holding().applyActivity(
+      run({
         state: "working",
         output_sequence: 9,
         last_output_at: "2026-08-15T12:00:30.000Z",
       }),
-    });
+    );
 
     const stored = holding().runs["run-1"];
     expect(stored.state).toBe("exited");
@@ -242,11 +245,16 @@ describe("terminal outcomes outrank the inactivity overlay", () => {
     const stale = new Date(Date.now() - STALL_AFTER_MS * 3).toISOString();
     for (const at of [new Date(Date.now() - 1).toISOString(), stale]) {
       useAgentStatusStore.setState({ runs: {} });
-      dispatchStatusFrame({
-        v: 1,
-        type: "snapshot",
-        scope: { project_id: "project-1", task_id: null },
-        runs: [run({ state: "exited", updated_at: at, last_output_at: at })],
+      applySnapshotFrame({
+        __typename: "RunStatusSnapshot",
+        project_id: "project-1",
+        cursor: 10,
+        runs: [statusRunHolding(run({
+          state: "exited",
+          effective_state: "exited",
+          updated_at: at,
+          last_output_at: at,
+        }))],
         automation_attempts: [],
         at: new Date().toISOString(),
       });

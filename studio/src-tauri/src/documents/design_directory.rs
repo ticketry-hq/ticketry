@@ -173,7 +173,10 @@ mod tests {
 
     #[test]
     fn slugs_collapse_punctuation_and_survive_nothing_usable() {
-        assert_eq!(slugify("Platform Runtime", MODULE_SLUG_MAX), "platform-runtime");
+        assert_eq!(
+            slugify("Platform Runtime", MODULE_SLUG_MAX),
+            "platform-runtime"
+        );
         assert_eq!(slugify("  ***  ", MODULE_SLUG_MAX), "untitled");
         assert_eq!(slugify("a".repeat(60).as_str(), TASK_SLUG_MAX).len(), 40);
         assert_eq!(slugify("Design/Doc — v2", TASK_SLUG_MAX), "design-doc-v2");

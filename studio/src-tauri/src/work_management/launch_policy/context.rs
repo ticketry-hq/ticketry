@@ -21,7 +21,12 @@ impl<'a> LaunchContextReader<'a> {
         task: &TaskRow,
     ) -> Result<(SelectedProfileInput, ModuleLinkInput), LaunchPolicyError> {
         let catalog = self.profiles.read();
-        let index = catalog.recent_profile_index.unwrap_or(0);
+        let index = catalog.recent_profile_index.ok_or_else(|| {
+            rejected(
+                "profile_not_configured",
+                "No selected local profile can satisfy this launch request.",
+            )
+        })?;
         let position = usize::try_from(index).ok();
         let profile = position
             .and_then(|position| catalog.profiles.get(position))
@@ -48,6 +53,8 @@ impl<'a> LaunchContextReader<'a> {
             .find(|link| compact_uuid(&link.module_id) == compact_uuid(&module_id))
             .map(|link| link.path.trim().to_owned())
             .filter(|path| !path.is_empty());
+        crate::launch_paths::validate_module_folder(path.as_deref())
+            .map_err(|failure| rejected("module_folder_unusable", failure.message()))?;
         Ok((
             SelectedProfileInput {
                 index,

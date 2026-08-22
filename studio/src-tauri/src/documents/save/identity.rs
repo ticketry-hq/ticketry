@@ -126,12 +126,11 @@ mod tests {
         assert_eq!(SaveIntent::decode(&payload), Some(save()));
         // Nothing in the payload is a body, a command, or an absolute path, so
         // the journal accepts it as immutable intent.
-        assert!(intent(
-            &uuid::Uuid::from_u128(1).hyphenated().to_string(),
-            &save()
-        )
-        .fingerprint()
-        .is_ok());
+        assert!(
+            intent(&uuid::Uuid::from_u128(1).hyphenated().to_string(), &save())
+                .fingerprint()
+                .is_ok()
+        );
         assert!(SaveIntent::decode(&json!({ "documentId": "d1" })).is_none());
     }
 

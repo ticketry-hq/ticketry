@@ -1,15 +1,35 @@
+use std::sync::Arc;
+
+use async_trait::async_trait;
 use sea_orm::{ConnectionTrait, Database};
 use serde_json::{json, Value};
 use tauri_graphql::{TransportApi, TransportApiImpl};
 
 use super::tests::{post, start_authorizer, PROJECT};
 use super::{loopback, McpConfiguration, McpRuntime};
+use crate::entities::terminals::session;
 use crate::graphql_foundation::initialize_with_worktracker_commands_and_install;
+use crate::terminal_cleanup::{
+    CleanupKillResult, CleanupRuntimeObservation, TerminalCleanupRuntime,
+};
 
 const TASK_TYPE: &str = "30000000-0000-0000-0000-000000000001";
 const BACKLOG: &str = "40000000-0000-0000-0000-000000000001";
 const REVIEW: &str = "40000000-0000-0000-0000-000000000002";
 const MODULE: &str = "20000000-0000-0000-0000-000000000001";
+
+struct MissingTerminalRuntime;
+
+#[async_trait]
+impl TerminalCleanupRuntime for MissingTerminalRuntime {
+    async fn inspect(&self, _: &session::Model) -> CleanupRuntimeObservation {
+        CleanupRuntimeObservation::Missing
+    }
+
+    async fn kill_verified(&self, _: &session::Model) -> CleanupKillResult {
+        panic!("proved absence must not spend a kill")
+    }
+}
 
 async fn prepare_command_database(directory: &tempfile::TempDir) {
     let path = directory.path().join("state.db");
@@ -108,6 +128,23 @@ async fn prepare_command_database(directory: &tempfile::TempDir) {
                 work_item_id TEXT, payload TEXT NOT NULL,
                 committed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
+            CREATE TABLE agent_terminal_sessions (
+                agent_run_id TEXT PRIMARY KEY REFERENCES agent_runs(id) ON DELETE CASCADE,
+                tmux_session_name TEXT NOT NULL UNIQUE, task_id TEXT NOT NULL,
+                module_id TEXT NOT NULL, project_id TEXT NOT NULL, created_at TEXT NOT NULL,
+                terminated_at TEXT, scope TEXT NOT NULL, doc_rel_path TEXT,
+                runtime_cleanup_pending BOOL NOT NULL DEFAULT 0, runtime_namespace TEXT,
+                output_identity TEXT, output_sequence INTEGER NOT NULL DEFAULT 0,
+                last_output_at TEXT, agent TEXT
+            );
+            CREATE TABLE terminal_cleanup_effects (
+                effect_id TEXT PRIMARY KEY, agent_run_id TEXT NOT NULL UNIQUE
+                    REFERENCES agent_terminal_sessions(agent_run_id) ON DELETE CASCADE,
+                cause TEXT NOT NULL, state TEXT NOT NULL, lease_owner TEXT,
+                lease_expires_at TEXT, attempt_count INTEGER NOT NULL DEFAULT 0,
+                last_error_code TEXT, last_error_message TEXT, runtime_evidence TEXT,
+                created_at TEXT NOT NULL, updated_at TEXT NOT NULL, applied_at TEXT
+            );
             INSERT INTO worktracker_project VALUES
                 ('10000000000000000000000000000000', '90000000000000000000000000000000',
                  'Authorized', 'AUTH', '', 0, 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
@@ -142,6 +179,14 @@ async fn prepare_command_database(directory: &tempfile::TempDir) {
                 (id, issue_id, agent, status, started_at, scope)
                 VALUES ('run-valid', '30000000000000000000000000000000', 'codex',
                         'running', '2026-08-15T00:00:00+00:00', 'task');
+            INSERT INTO agent_terminal_sessions
+                (agent_run_id, tmux_session_name, task_id, module_id, project_id,
+                 created_at, scope, runtime_namespace, agent)
+                VALUES ('run-valid', 'pt-run-valid',
+                        '30000000000000000000000000000000',
+                        '20000000000000000000000000000001',
+                        '10000000000000000000000000000000',
+                        '2026-08-15T00:00:00+00:00', 'task', 'fixture-runtime', 'codex');
             INSERT INTO worktracker_provider VALUES
                 ('50000000000000000000000000000001', 'codex', 1, 1),
                 ('50000000000000000000000000000002', 'disabled', 0, 1);
@@ -206,13 +251,16 @@ async fn mcp_mutations_cover_crud_hierarchy_workflow_and_blockers_through_rust_c
     let directory = tempfile::tempdir().unwrap();
     prepare_command_database(&directory).await;
     let (backend_address, backend_shutdown, backend_task) = start_authorizer().await;
-    let runtime = McpRuntime::start(McpConfiguration {
-        address: loopback(0).unwrap(),
-        database_path: directory.path().join("state.db"),
-        media_root: directory.path().join("media"),
-        backend_base_url: format!("http://{backend_address}/api"),
-        backend_api_key: "fixture-key".to_owned(),
-    })
+    let runtime = McpRuntime::start_for_test(
+        McpConfiguration {
+            address: loopback(0).unwrap(),
+            database_path: directory.path().join("state.db"),
+            media_root: directory.path().join("media"),
+            backend_base_url: format!("http://{backend_address}/api"),
+            backend_api_key: "fixture-key".to_owned(),
+        },
+        Arc::new(MissingTerminalRuntime),
+    )
     .await
     .unwrap();
     let url = format!("http://{}/mcp", runtime.address());

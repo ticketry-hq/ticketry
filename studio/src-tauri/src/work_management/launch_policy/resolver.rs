@@ -43,6 +43,7 @@ impl LaunchPolicyResolver {
         if !binding.has_policy() {
             return Err(binding_missing());
         }
+        let state_name = policy.state_name(&task.project_id, state_id).await?;
         let prompt = binding.prompt.trim().to_owned();
         if prompt.is_empty() {
             return Err(rejected(
@@ -85,6 +86,7 @@ impl LaunchPolicyResolver {
             project_id: canonical_uuid(&task.project_id),
             issue_type_id: canonical_uuid(&task.issue_type_id),
             state_id: canonical_uuid(state_id),
+            state_name: Some(state_name),
             prompt,
             required_skills,
             provider: selection.provider,
@@ -98,14 +100,10 @@ impl LaunchPolicyResolver {
 
 fn enforce_door_gate(
     scope: CallerScope,
-    auto_start: bool,
+    _auto_start: bool,
     subtree_run_enabled: bool,
 ) -> Result<(), LaunchPolicyError> {
     match scope {
-        CallerScope::AutoStart if !auto_start => Err(rejected(
-            "auto_start_not_enabled",
-            "Auto-start is not enabled for this launch binding.",
-        )),
         CallerScope::Subtree if !subtree_run_enabled => Err(rejected(
             "subtree_run_not_enabled",
             "Subtree execution is not enabled for this launch binding.",

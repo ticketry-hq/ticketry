@@ -111,7 +111,11 @@ pub(super) async fn resolve_owner(
     row: &design_document::Model,
 ) -> Result<Option<RegistryOwner>, DocumentsError> {
     let scratch = compact_uuid(&row.task_id) == compact_uuid(SCRATCH_TASK_ID);
-    let owner_identity = if scratch { &row.module_id } else { &row.task_id };
+    let owner_identity = if scratch {
+        &row.module_id
+    } else {
+        &row.task_id
+    };
     let owner = issue::Entity::find()
         .filter(issue::Column::Id.is_in(identity_spellings(owner_identity)))
         .one(database)

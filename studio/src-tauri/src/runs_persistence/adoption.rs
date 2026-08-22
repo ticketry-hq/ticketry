@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -24,6 +24,8 @@ pub enum DjangoGeneration {
     HistoricalFailuresDismissed,
     RunKindRemoved,
     Current,
+    LegacyTerminalAuthority,
+    Merged,
 }
 
 impl DjangoGeneration {
@@ -35,11 +37,16 @@ impl DjangoGeneration {
             Self::HistoricalFailuresDismissed => 11,
             Self::RunKindRemoved => 12,
             Self::Current => 13,
+            Self::LegacyTerminalAuthority | Self::Merged => 15,
         }
     }
 
     fn leaf(self) -> &'static str {
-        DJANGO_MIGRATIONS[self.number() - 1]
+        match self {
+            Self::LegacyTerminalAuthority => schema::LEGACY_TERMINAL_DJANGO_LEAF,
+            Self::Merged => schema::MERGED_DJANGO_LEAF,
+            _ => DJANGO_MIGRATIONS[self.number() - 1],
+        }
     }
 }
 
@@ -83,10 +90,7 @@ pub async fn adopt(data_directory: &Path) -> Result<AdoptionEvidence, RunsPersis
     let source = classify(&database).await?;
     validate_manifest(&database, source).await?;
     validate_semantics(&database).await?;
-    let digest_generation = match source {
-        SourceClassification::Django(generation) => generation,
-        SourceClassification::RustOwned => DjangoGeneration::Current,
-    };
+    let digest_generation = digest_generation(&database, source).await?;
     let before = stable_digest(&database, digest_generation).await?;
     database.close().await.map_err(storage)?;
 
@@ -112,10 +116,18 @@ pub async fn adopt(data_directory: &Path) -> Result<AdoptionEvidence, RunsPersis
     verify_snapshot(&snapshot_path, source, digest_generation, &before).await?;
 
     let writable = connect(&path, false).await?;
+    writable
+        .execute_unprepared("PRAGMA foreign_keys=OFF")
+        .await
+        .map_err(storage)?;
     let SourceClassification::Django(generation) = source else {
         unreachable!()
     };
     schema::install(&writable, Some(generation.leaf()), &before).await?;
+    writable
+        .execute_unprepared("PRAGMA foreign_keys=ON")
+        .await
+        .map_err(storage)?;
     integrity(&writable).await?;
     let installed = classify(&writable).await?;
     if installed != SourceClassification::RustOwned {
@@ -188,13 +200,16 @@ async fn classify(
         }
         Some("0012_remove_legacy_agentrun_run_kind") => DjangoGeneration::RunKindRemoved,
         Some(schema::CURRENT_DJANGO_LEAF) => DjangoGeneration::Current,
+        Some(schema::LEGACY_TERMINAL_DJANGO_LEAF) => DjangoGeneration::LegacyTerminalAuthority,
+        Some(schema::MERGED_DJANGO_LEAF) => DjangoGeneration::Merged,
         _ => {
             return Err(incompatible(
                 "unknown Runs migration history; no named bridge matches",
             ))
         }
     };
-    if migrations != DJANGO_MIGRATIONS[..generation.number()] {
+    let expected = expected_migrations(generation);
+    if migrations != expected {
         return Err(incompatible(
             "Runs migration history contains a gap or unknown migration",
         ));
@@ -211,16 +226,35 @@ async fn validate_manifest(
         .iter()
         .map(|value| (*value).to_owned())
         .collect::<BTreeSet<_>>();
-    if matches!(source, SourceClassification::Django(generation) if generation.number() < 13) {
+    if matches!(source, SourceClassification::Django(generation) if generation.number() < 13 || generation == DjangoGeneration::LegacyTerminalAuthority)
+    {
         expected_agent.remove("model");
         expected_agent.remove("reasoning");
+    }
+    if matches!(source, SourceClassification::Django(generation) if !matches!(generation, DjangoGeneration::LegacyTerminalAuthority | DjangoGeneration::Merged))
+    {
+        expected_agent.remove("launch_state");
+        expected_agent.remove("launch_model");
+    }
+    if matches!(
+        source,
+        SourceClassification::Django(DjangoGeneration::LegacyTerminalAuthority)
+    ) {
+        expected_agent.insert("initial_prompt".to_owned());
     }
     if matches!(source, SourceClassification::Django(generation) if generation != DjangoGeneration::Current)
         && agent.contains("run_kind")
     {
         expected_agent.insert("run_kind".to_owned());
     }
-    if agent != expected_agent {
+    let rust_legacy_shape = source == SourceClassification::RustOwned
+        && agent
+            == AGENT_RUN_COLUMNS
+                .iter()
+                .map(|column| (*column).to_owned())
+                .chain(["initial_prompt".to_owned()])
+                .collect();
+    if agent != expected_agent && !rust_legacy_shape {
         return Err(incompatible(format!(
             "unknown schema for agent_runs: observed {agent:?}"
         )));
@@ -229,14 +263,11 @@ async fn validate_manifest(
         .iter()
         .map(|value| (*value).to_owned())
         .collect::<BTreeSet<_>>();
-    let generation = match source {
-        SourceClassification::Django(generation) => generation,
-        SourceClassification::RustOwned => DjangoGeneration::Current,
-    };
-    if generation.number() >= 9 {
+    let generation = digest_generation(database, source).await?;
+    if source == SourceClassification::RustOwned || generation.number() >= 9 {
         expected_attempt.extend(["error_details".to_owned(), "retryable".to_owned()]);
     }
-    if generation.number() >= 11 {
+    if source == SourceClassification::RustOwned || generation.number() >= 11 {
         expected_attempt.insert("dismissed_at".to_owned());
     }
     let attempt = schema::columns(database, "automation_attempts").await?;
@@ -250,6 +281,76 @@ async fn validate_manifest(
             if !table_exists(database, table).await? {
                 return Err(incompatible(format!("Rust Runs schema is missing {table}")));
             }
+        }
+    }
+    validate_adopted_column_shapes(database, source).await?;
+    Ok(())
+}
+
+async fn validate_adopted_column_shapes(
+    database: &impl ConnectionTrait,
+    source: SourceClassification,
+) -> Result<(), RunsPersistenceError> {
+    let rows = database
+        .query_all_raw(Statement::from_string(
+            DbBackend::Sqlite,
+            "PRAGMA table_info('agent_runs')".to_owned(),
+        ))
+        .await
+        .map_err(storage)?;
+    let facts = rows
+        .into_iter()
+        .map(|row| {
+            Ok((
+                row.try_get::<String>("", "name").map_err(storage)?,
+                (
+                    row.try_get::<String>("", "type")
+                        .map_err(storage)?
+                        .to_ascii_lowercase(),
+                    row.try_get::<i32>("", "notnull").map_err(storage)?,
+                    row.try_get::<Option<String>>("", "dflt_value")
+                        .map_err(storage)?,
+                ),
+            ))
+        })
+        .collect::<Result<BTreeMap<_, _>, RunsPersistenceError>>()?;
+    for (column, data_type) in [
+        ("agent", "varchar"),
+        ("model", "varchar"),
+        ("reasoning", "varchar"),
+        ("scope", "varchar"),
+        ("launch_state", "varchar"),
+        ("launch_model", "varchar"),
+    ] {
+        let Some((observed_type, not_null, default)) = facts.get(column) else {
+            continue;
+        };
+        let expected_not_null = if column == "scope" {
+            1
+        } else if column == "agent"
+            && matches!(
+                source,
+                SourceClassification::Django(
+                    DjangoGeneration::IssueScoped
+                        | DjangoGeneration::LaunchRejection
+                        | DjangoGeneration::RequiredSkillRetry
+                        | DjangoGeneration::HistoricalFailuresDismissed
+                        | DjangoGeneration::RunKindRemoved
+                        | DjangoGeneration::Current
+                )
+            )
+        {
+            // The parallel optional-provider branch can already have widened
+            // this column before its merge leaf exists. Both fingerprints are
+            // safe because adoption only widens and never fills a provider.
+            *not_null
+        } else {
+            0
+        };
+        if observed_type != data_type || *not_null != expected_not_null || default.is_some() {
+            return Err(incompatible(format!(
+                "unknown definition for agent_runs.{column}"
+            )));
         }
     }
     Ok(())
@@ -285,8 +386,17 @@ async fn stable_digest(
 ) -> Result<String, RunsPersistenceError> {
     let mut hasher = Sha256::new();
     let mut agent_columns = AGENT_RUN_COLUMNS.to_vec();
-    if generation.number() < 13 {
+    if !matches!(
+        generation,
+        DjangoGeneration::LegacyTerminalAuthority | DjangoGeneration::Merged
+    ) {
+        agent_columns.retain(|column| !matches!(*column, "launch_state" | "launch_model"));
+    }
+    if generation.number() < 13 || generation == DjangoGeneration::LegacyTerminalAuthority {
         agent_columns.retain(|column| !matches!(*column, "model" | "reasoning"));
+    }
+    if generation == DjangoGeneration::LegacyTerminalAuthority {
+        agent_columns.push("initial_prompt");
     }
     digest_table(database, "agent_runs", &agent_columns, &mut hasher).await?;
     let mut attempt_columns = ATTEMPT_BASE_COLUMNS.to_vec();
@@ -304,6 +414,73 @@ async fn stable_digest(
     )
     .await?;
     Ok(format!("{:x}", hasher.finalize()))
+}
+
+fn expected_migrations(generation: DjangoGeneration) -> Vec<String> {
+    match generation {
+        DjangoGeneration::LegacyTerminalAuthority => [
+            &DJANGO_MIGRATIONS[..12],
+            &[
+                "0013_agentrun_optional_agent",
+                "0014_agentrun_launch_metadata",
+                schema::LEGACY_TERMINAL_DJANGO_LEAF,
+            ],
+        ]
+        .concat()
+        .into_iter()
+        .map(str::to_owned)
+        .collect(),
+        DjangoGeneration::Merged => [
+            &DJANGO_MIGRATIONS[..12],
+            &[
+                schema::CURRENT_DJANGO_LEAF,
+                "0013_agentrun_optional_agent",
+                "0014_agentrun_launch_metadata",
+                schema::MERGED_DJANGO_LEAF,
+            ],
+        ]
+        .concat()
+        .into_iter()
+        .map(str::to_owned)
+        .collect(),
+        _ => DJANGO_MIGRATIONS[..generation.number()]
+            .iter()
+            .map(|value| (*value).to_owned())
+            .collect(),
+    }
+}
+
+async fn digest_generation(
+    database: &impl ConnectionTrait,
+    source: SourceClassification,
+) -> Result<DjangoGeneration, RunsPersistenceError> {
+    if let SourceClassification::Django(generation) = source {
+        return Ok(generation);
+    }
+    let row = database
+        .query_one_raw(Statement::from_string(
+            DbBackend::Sqlite,
+            "SELECT source_leaf FROM ticketry_runs_adoption WHERE singleton=1".to_owned(),
+        ))
+        .await
+        .map_err(storage)?
+        .ok_or_else(|| incompatible("Runs ownership ledger is incomplete"))?;
+    let leaf = row.try_get::<String>("", "source_leaf").map_err(storage)?;
+    match leaf.as_str() {
+        "0008_agentrun_issue" => Ok(DjangoGeneration::IssueScoped),
+        "0009_automationattempt_launch_rejection" => Ok(DjangoGeneration::LaunchRejection),
+        "0010_make_required_skill_failures_retryable" => Ok(DjangoGeneration::RequiredSkillRetry),
+        "0011_dismiss_historical_automation_failures" => {
+            Ok(DjangoGeneration::HistoricalFailuresDismissed)
+        }
+        "0012_remove_legacy_agentrun_run_kind" => Ok(DjangoGeneration::RunKindRemoved),
+        schema::CURRENT_DJANGO_LEAF => Ok(DjangoGeneration::Current),
+        schema::LEGACY_TERMINAL_DJANGO_LEAF => Ok(DjangoGeneration::LegacyTerminalAuthority),
+        schema::MERGED_DJANGO_LEAF => Ok(DjangoGeneration::Merged),
+        _ => Err(incompatible(
+            "Runs ownership ledger has an unknown source leaf",
+        )),
+    }
 }
 
 async fn digest_table(

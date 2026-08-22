@@ -29,9 +29,32 @@ pub struct TransitionWorkItem {
     pub origin: TransitionOrigin,
 }
 
+#[derive(Debug, Clone)]
+pub struct TransitionExpectation {
+    pub source_state_id: String,
+    pub work_item_revision: i64,
+    pub workflow_revision: i32,
+    pub request_identity: String,
+    pub causation: TransitionCausation,
+}
+
+#[derive(Debug, Clone)]
+pub enum TransitionCausation {
+    RunNow { launch_policy_decision_id: String },
+}
+
 pub async fn transition(
     database: &DatabaseConnection,
     input: TransitionWorkItem,
+    facts: Option<&WorkFactRecorder>,
+) -> Result<String, CommandError> {
+    transition_with_expectation(database, input, None, facts).await
+}
+
+pub async fn transition_with_expectation(
+    database: &DatabaseConnection,
+    input: TransitionWorkItem,
+    expectation: Option<TransitionExpectation>,
     facts: Option<&WorkFactRecorder>,
 ) -> Result<String, CommandError> {
     let id = database_uuid(&input.id, "id")?;
@@ -57,6 +80,32 @@ pub async fn transition(
         .one(&transaction)
         .await?
         .ok_or_else(|| CommandError::NotFound("Work-item type not found.".to_owned()))?;
+    if let Some(expected) = &expectation {
+        let source_id = database_uuid(&expected.source_state_id, "source_state_id")?;
+        if current.state_id.as_deref() != Some(source_id.as_str())
+            || current.state_revision != expected.work_item_revision
+            || kind.workflow_revision != expected.workflow_revision
+        {
+            return Err(CommandError::StaleRevision(
+                "The Work Item or its workflow changed after preflight.".to_owned(),
+            ));
+        }
+        if expected.request_identity.trim().is_empty() {
+            return Err(CommandError::validation(
+                "A guarded transition requires a request identity.",
+            ));
+        }
+        match &expected.causation {
+            TransitionCausation::RunNow {
+                launch_policy_decision_id,
+            } if launch_policy_decision_id.trim().is_empty() => {
+                return Err(CommandError::validation(
+                    "Run Now causation requires a launch policy decision.",
+                ));
+            }
+            TransitionCausation::RunNow { .. } => {}
+        }
+    }
     let from = match &current.state_id {
         Some(state_id) => {
             state::Entity::find_by_id(state_id)
@@ -208,6 +257,14 @@ pub async fn transition(
         .one(&transaction)
         .await?
         .is_some_and(|binding| binding.auto_start);
+    let run_now_decision_id =
+        expectation
+            .as_ref()
+            .and_then(|expectation| match &expectation.causation {
+                TransitionCausation::RunNow {
+                    launch_policy_decision_id,
+                } => Some(launch_policy_decision_id.as_str()),
+            });
     transition_occurrences::append(
         &transaction,
         NewTransitionOccurrence {
@@ -227,6 +284,7 @@ pub async fn transition(
             work_item_revision: revision,
             workflow_revision: kind.workflow_revision,
             destination_auto_start,
+            run_now_decision_id,
         },
     )
     .await?;

@@ -11,6 +11,7 @@ use rmcp::{
 use sea_orm::DatabaseConnection;
 use serde_json::{json, Map, Value};
 
+use crate::terminal_cleanup::TerminalCleanupService;
 use crate::work_management::commands::attachments::AttachmentStorage;
 use crate::work_management::launch_policy::LaunchPolicyResolver;
 
@@ -22,6 +23,9 @@ pub struct WorktrackerMcpService {
     storage: AttachmentStorage,
     backend: BackendPort,
     launch_policy: LaunchPolicyResolver,
+    graph_runs: Option<crate::graph_run_service::GraphRunService>,
+    terminal_cleanup: TerminalCleanupService,
+    terminal_launch: Option<crate::terminal_launch::TerminalLaunchService>,
     /// Automatic worktree integration, when the journal it needs is installed.
     /// It is not an MCP tool and has no request path: this listener simply
     /// happens to be where committed transitions are produced, so it is also
@@ -36,6 +40,9 @@ impl WorktrackerMcpService {
         storage: AttachmentStorage,
         backend: BackendPort,
         launch_policy: LaunchPolicyResolver,
+        graph_runs: Option<crate::graph_run_service::GraphRunService>,
+        terminal_cleanup: TerminalCleanupService,
+        terminal_launch: Option<crate::terminal_launch::TerminalLaunchService>,
         integrations: Option<crate::worktree_integrate::WorktreeIntegrateService>,
     ) -> Self {
         Self {
@@ -43,6 +50,9 @@ impl WorktrackerMcpService {
             storage,
             backend,
             launch_policy,
+            graph_runs,
+            terminal_cleanup,
+            terminal_launch,
             integrations,
             tools: Arc::new(registry::tools()),
         }
@@ -74,53 +84,24 @@ impl WorktrackerMcpService {
         };
         CallToolResult::structured(structured).into()
     }
+}
 
-    pub async fn reconcile_launch_policy(&self) {
-        if let Err(error) = crate::work_management::launch_policy::prepare_pending_auto_starts(
-            &self.database,
-            &self.launch_policy,
-            128,
-        )
+pub(super) async fn execute_launch_decision(
+    database: &DatabaseConnection,
+    service: Option<&crate::terminal_launch::TerminalLaunchService>,
+    decision: &crate::work_management::launch_policy::LaunchPolicyDecision,
+) -> Result<crate::entities::terminals::session::Model, ()> {
+    let Some(service) = service else {
+        return Err(());
+    };
+    crate::work_management::launch_policy::execute_pending_decision(database, service, decision)
         .await
-        {
-            eprintln!("Ticketry could not prepare auto-start policy: {error}");
-            return;
-        }
-        // A retry the user asked for is resolved in the same pass: its pending
-        // child is durable, so the launch it still owes is exactly the kind of
-        // work this reconciler exists to finish.
-        if let Err(error) = crate::work_management::launch_policy::prepare_pending_retries(
-            &self.database,
-            &self.launch_policy,
-            128,
-        )
-        .await
-        {
-            eprintln!("Ticketry could not prepare Automation Attempt retries: {error}");
-            return;
-        }
-        let decisions =
-            match crate::work_management::launch_policy::pending(&self.database, 128).await {
-                Ok(decisions) => decisions,
-                Err(error) => {
-                    eprintln!("Ticketry could not read pending launch decisions: {error}");
-                    return;
-                }
-            };
-        for decision in decisions {
-            let result = self.backend.perform_launch_decision(&decision).await;
-            if result.get("error").is_none() {
-                if let Err(error) = crate::work_management::launch_policy::mark_delivered(
-                    &self.database,
-                    &decision.decision_id,
-                )
-                .await
-                {
-                    eprintln!("Ticketry could not acknowledge a launch decision: {error}");
-                }
-            }
-        }
-    }
+        .map_err(|error| {
+            eprintln!(
+                "Ticketry could not execute Rust launch policy decision {}: {error}",
+                decision.decision_id,
+            );
+        })
 }
 
 impl ServerHandler for WorktrackerMcpService {
@@ -156,7 +137,7 @@ impl ServerHandler for WorktrackerMcpService {
                 wrap_result: false,
             }));
         }
-        let (principal, authorization) = match self.backend.authorize(&context).await {
+        let (principal, _authorization) = match self.backend.authorize(&context).await {
             Ok(value) => value,
             Err(failure) => {
                 return Ok(CallToolResult::structured(failure.0).into());
@@ -167,10 +148,11 @@ impl ServerHandler for WorktrackerMcpService {
             dispatch::dispatch(
                 &self.database,
                 &self.storage,
-                &self.backend,
                 &self.launch_policy,
+                self.graph_runs.as_ref(),
+                &self.terminal_cleanup,
+                self.terminal_launch.as_ref(),
                 &principal,
-                &authorization,
                 request.name.as_ref(),
                 &arguments,
             )

@@ -15,8 +15,8 @@ use sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, Statement};
 
 mod common;
 use common::runs_status_fixture::{
-    insert_event, insert_run, FOREIGN_PROJECT, PROJECT, PUBLIC_FOREIGN_PROJECT, PUBLIC_PROJECT,
-    TASK,
+    insert_event, insert_run, insert_run_with_launch_snapshot, FOREIGN_PROJECT, PROJECT,
+    PUBLIC_FOREIGN_PROJECT, PUBLIC_PROJECT, TASK,
 };
 
 async fn fixture() -> (tempfile::TempDir, DatabaseConnection, RunsServices) {
@@ -67,6 +67,13 @@ fn kinds(frames: &[RunStatusFrame]) -> Vec<&str> {
         .collect()
 }
 
+fn holding<'a>(
+    rows: &'a [muxed_studio_lib::runs_persistence::AgentRunHolding],
+    id: &str,
+) -> &'a muxed_studio_lib::runs_persistence::AgentRunHolding {
+    rows.iter().find(|run| run.agent_run_id == id).unwrap()
+}
+
 async fn high_water(services: &RunsServices) -> i64 {
     services
         .outbox()
@@ -87,6 +94,110 @@ async fn commit_lifecycle(services: &RunsServices, run_id: &str, kind: &str, at:
         })
         .await
         .expect("the lifecycle fact commits");
+}
+
+async fn insert_terminal_baseline(database: &DatabaseConnection, run_id: &str, observed_at: &str) {
+    database
+        .execute_raw(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
+            "INSERT INTO agent_terminal_sessions (agent_run_id, tmux_session_name, task_id, module_id, project_id, created_at, scope, runtime_cleanup_pending, output_sequence, last_output_at) VALUES (?, ?, ?, ?, ?, ?, 'task', 0, 0, ?)",
+            [
+                run_id.into(),
+                format!("pt-{run_id}").into(),
+                TASK.into(),
+                common::runs_status_fixture::MODULE.into(),
+                common::runs_status_fixture::PROJECT.into(),
+                observed_at.into(),
+                observed_at.into(),
+            ],
+        ))
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn snapshot_projects_the_inclusive_stall_boundary_with_outcome_precedence() {
+    let (_directory, database, services) = fixture().await;
+    for run_id in ["run-live", "run-waiting", "run-ended"] {
+        insert_run(&database, run_id, TASK, "2026-08-20T10:00:00Z").await;
+        insert_terminal_baseline(&database, run_id, "2026-08-20T10:00:00Z").await;
+    }
+    commit_lifecycle(
+        &services,
+        "run-waiting",
+        "awaiting_input",
+        "2026-08-20T10:00:30Z",
+    )
+    .await;
+    services
+        .lifecycle()
+        .apply_terminal_fact(TerminalFact {
+            agent_run_id: "run-ended".to_owned(),
+            outcome: TerminalOutcome::Terminated,
+            occurred_at: "2026-08-20T10:00:30Z".to_owned(),
+            exit_code: None,
+        })
+        .await
+        .unwrap();
+
+    let before = services
+        .queries()
+        .run_holdings_at(PUBLIC_PROJECT, None, "2026-08-20T10:00:59Z")
+        .await
+        .unwrap();
+    let boundary = services
+        .queries()
+        .run_holdings_at(PUBLIC_PROJECT, None, "2026-08-20T10:01:00Z")
+        .await
+        .unwrap();
+    assert_eq!(holding(&before, "run-live").state, "unknown");
+    assert_eq!(holding(&before, "run-live").effective_state, "unknown");
+    assert_eq!(holding(&boundary, "run-live").state, "unknown");
+    assert_eq!(holding(&boundary, "run-live").effective_state, "stalled");
+    assert_eq!(
+        holding(&boundary, "run-waiting").effective_state,
+        "needs_input"
+    );
+    assert_eq!(holding(&boundary, "run-ended").effective_state, "exited");
+}
+
+#[tokio::test]
+async fn lifecycle_event_and_snapshot_share_the_effective_stall_projection() {
+    let (_directory, database, services) = fixture().await;
+    insert_run(&database, "run-effective", TASK, "2026-08-20T10:00:00Z").await;
+    insert_terminal_baseline(&database, "run-effective", "2026-08-20T10:00:00Z").await;
+
+    commit_lifecycle(
+        &services,
+        "run-effective",
+        "turn_start",
+        "2026-08-20T10:01:00Z",
+    )
+    .await;
+    let payload: String = database
+        .query_one_raw(Statement::from_string(
+            DbBackend::Sqlite,
+            "SELECT payload FROM runs_status_events ORDER BY cursor DESC LIMIT 1".to_owned(),
+        ))
+        .await
+        .unwrap()
+        .unwrap()
+        .try_get("", "payload")
+        .unwrap();
+    let event: serde_json::Value = serde_json::from_str(&payload).unwrap();
+    let snapshot = services
+        .queries()
+        .run_holdings_at(PUBLIC_PROJECT, None, "2026-08-20T10:01:00Z")
+        .await
+        .unwrap();
+
+    assert_eq!(event["state"], "working");
+    assert_eq!(event["effectiveState"], "stalled");
+    assert_eq!(holding(&snapshot, "run-effective").state, "working");
+    assert_eq!(
+        holding(&snapshot, "run-effective").effective_state,
+        "stalled"
+    );
 }
 
 #[tokio::test]
@@ -121,6 +232,41 @@ async fn a_fresh_subscriber_is_baselined_at_the_high_water_cursor_and_then_goes_
     assert!(event.cursor > baseline);
     assert_eq!(event.project_id, PUBLIC_PROJECT);
     assert_eq!(event.payload.0["state"], "needs_input");
+}
+
+#[tokio::test]
+async fn snapshots_and_live_events_publish_the_same_immutable_launch_metadata() {
+    let (_directory, database, services) = fixture().await;
+    insert_run_with_launch_snapshot(
+        &database,
+        "run-snapshot",
+        TASK,
+        "2026-08-16T10:00:00Z",
+        "Implement",
+        "gpt-5.6",
+    )
+    .await;
+    let mut stream = Box::pin(open_status_stream(services.stream(), request(None)));
+    let opening = take(&mut stream, 2).await;
+    let RunStatusFrame::RunStatusSnapshot(snapshot) = &opening[0] else {
+        panic!("the first frame is a snapshot");
+    };
+    assert_eq!(snapshot.runs[0].launch_state.as_deref(), Some("Implement"));
+    assert_eq!(snapshot.runs[0].launch_model.as_deref(), Some("gpt-5.6"));
+
+    commit_lifecycle(
+        &services,
+        "run-snapshot",
+        "turn_start",
+        "2026-08-16T10:01:00Z",
+    )
+    .await;
+    let live = take(&mut stream, 1).await;
+    let RunStatusFrame::RunStatusEvent(event) = &live[0] else {
+        panic!("the lifecycle update is a durable event");
+    };
+    assert_eq!(event.payload.0["launchState"], "Implement");
+    assert_eq!(event.payload.0["launchModel"], "gpt-5.6");
 }
 
 #[tokio::test]

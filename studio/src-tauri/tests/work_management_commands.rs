@@ -9,7 +9,8 @@ use muxed_studio_lib::work_management::entities::{
 };
 use muxed_studio_lib::work_management::open_for_commands;
 use sea_orm::{
-    ColumnTrait, ConnectionTrait, Database, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder,
+    ActiveModelTrait, ColumnTrait, ConnectionTrait, Database, EntityTrait, PaginatorTrait,
+    QueryFilter, QueryOrder, Set,
 };
 use tauri_graphql::{TransportApi, TransportApiImpl};
 
@@ -175,22 +176,16 @@ async fn catalogue_creation_validates_groups_levels_and_appends_orders() {
     assert!(!created_state.color.is_empty());
     assert!(!created_state.is_protected);
 
-    let type_id = catalog::create_issue_type(
-        &database,
-        catalog::CreateIssueType {
-            project_id: PROJECT.to_owned(),
-            name: "Implementation".to_owned(),
-            level: "task".to_owned(),
-            color: Some("#123456".to_owned()),
-        },
-    )
+    let created_type = issue_type::ActiveModel {
+        project_id: Set(PROJECT.to_owned()),
+        name: Set("Implementation".to_owned()),
+        level: Set("task".to_owned()),
+        color: Set("#123456".to_owned()),
+        ..Default::default()
+    }
+    .insert(&database)
     .await
     .unwrap();
-    let created_type = issue_type::Entity::find_by_id(type_id)
-        .one(&database)
-        .await
-        .unwrap()
-        .unwrap();
     assert_eq!(created_type.sort_order, 2);
     assert_eq!(created_type.color, "#123456");
 
@@ -970,7 +965,7 @@ async fn graphql_exposes_only_authored_mutations_and_structured_errors() {
     for field in [
         "create_project",
         "create_state",
-        "create_issue_type",
+        "worktrackerIssuetypeCreateOne",
         "create_work_item",
         "update_work_item",
         "reorder_work_item",
@@ -979,6 +974,10 @@ async fn graphql_exposes_only_authored_mutations_and_structured_errors() {
         "delete_state",
     ] {
         assert!(fields.contains(field), "missing authored mutation {field}");
+    }
+    assert!(!fields.contains("create_issue_type"));
+    for operation in ["CreateBatch", "Update", "Delete"] {
+        assert!(!fields.contains(format!("worktrackerIssuetype{operation}").as_str()));
     }
     for duplicate in [
         "archive_work_item",
@@ -1027,6 +1026,32 @@ async fn graphql_exposes_only_authored_mutations_and_structured_errors() {
             .iter()
             .any(|field| field.starts_with("set_issue_type")),
         "a per-field workflow mutation is still public: {fields:?}"
+    );
+
+    let issue_type_create: serde_json::Value = serde_json::from_str(
+        &api.clone()
+            .graphql_execute(
+                serde_json::json!({
+                    "query": format!(
+                        "mutation {{ worktrackerIssuetypeCreateOne(data: {{ projectId: \"{PROJECT}\", name: \"Generated\", level: \"task\" }}) {{ id name level color sortOrder }} }}"
+                    )
+                })
+                .to_string(),
+            )
+            .await,
+    )
+    .unwrap();
+    assert!(
+        issue_type_create.get("errors").is_none(),
+        "{issue_type_create}"
+    );
+    assert_eq!(
+        issue_type_create["data"]["worktrackerIssuetypeCreateOne"]["name"],
+        "Generated"
+    );
+    assert_eq!(
+        issue_type_create["data"]["worktrackerIssuetypeCreateOne"]["color"],
+        ""
     );
 
     let workflow_write: serde_json::Value = serde_json::from_str(

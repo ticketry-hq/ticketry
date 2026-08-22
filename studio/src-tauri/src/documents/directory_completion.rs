@@ -130,7 +130,10 @@ mod tests {
         let root = fixture();
 
         assert_eq!(
-            names(complete_directories(&format!("{}/.h", root.path().display()))),
+            names(complete_directories(&format!(
+                "{}/.h",
+                root.path().display()
+            ))),
             vec![".hidden"]
         );
         assert_eq!(

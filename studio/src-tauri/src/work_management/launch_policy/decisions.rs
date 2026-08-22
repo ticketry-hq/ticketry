@@ -1,11 +1,11 @@
 use sea_orm::{
     sea_query::{Expr, Index, OnConflict},
-    ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, NotSet, QueryFilter, QueryOrder,
-    QuerySelect, Schema, Set,
+    ColumnTrait, Condition, ConnectionTrait, DatabaseConnection, EntityTrait, NotSet, QueryFilter,
+    QueryOrder, QuerySelect, QueryTrait, Schema, Set,
 };
 
 use super::{LaunchPolicyDecision, LaunchPolicyError};
-use crate::work_management::entities::launch_policy_decision;
+use crate::work_management::entities::{launch_policy_decision, transition_occurrence};
 
 pub(super) async fn ensure_schema(database: &impl ConnectionTrait) -> Result<(), sea_orm::DbErr> {
     let backend = database.get_database_backend();
@@ -82,6 +82,19 @@ pub async fn pending(
 ) -> Result<Vec<LaunchPolicyDecision>, LaunchPolicyError> {
     let rows = launch_policy_decision::Entity::find()
         .filter(launch_policy_decision::Column::DeliveredAt.is_null())
+        .filter(
+            Condition::any()
+                .add(launch_policy_decision::Column::CallerScope.ne("run_now"))
+                .add(
+                    launch_policy_decision::Column::DecisionId.in_subquery(
+                        transition_occurrence::Entity::find()
+                            .select_only()
+                            .column(transition_occurrence::Column::RunNowDecisionId)
+                            .filter(transition_occurrence::Column::RunNowDecisionId.is_not_null())
+                            .into_query(),
+                    ),
+                ),
+        )
         .order_by_asc(launch_policy_decision::Column::CreatedAt)
         .order_by_asc(launch_policy_decision::Column::DecisionId)
         .limit(limit)
@@ -90,7 +103,7 @@ pub async fn pending(
     rows.into_iter().map(decode).collect()
 }
 
-async fn load_by_identity(
+pub async fn load_by_identity(
     database: &DatabaseConnection,
     caller_scope: &str,
     idempotency_key: &str,

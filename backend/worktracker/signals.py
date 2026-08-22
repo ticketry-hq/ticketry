@@ -19,7 +19,8 @@ The flow, for one ``Issue`` save:
    registers a ``transaction.on_commit`` callback that sends the signal — so a
    rolled-back transition never emits.
 3. The signal fans out to logging plus the ``apps.runs`` status-feed and
-   ``apps.execution`` automation receivers. Grep the signal's ``dispatch_uid``
+   Rust's transition-occurrence consumer. The committed occurrence, not a
+   Django receiver, owns automation delivery.
    values to enumerate the current set — the no-synchronous-state-mutation rule
    documented on ``_log_state_change`` binds all of them.
 

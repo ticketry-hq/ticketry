@@ -105,7 +105,9 @@ async function fixture() {
     },
     sandboxRoot,
     sidecarLog,
+    sqliteStatements: [],
     sqlite: async (_database, sql) => {
+      context.sqliteStatements.push(sql);
       if (sql.includes("SELECT count(*) FROM worktracker_workspace")) return "1";
       if (sql.includes("INSERT OR REPLACE INTO acceptance_evidence")) {
         upgradeSentinel = sql.match(/VALUES \('upgrade', '([^']+)'\)/)?.[1] ?? "";
@@ -185,6 +187,10 @@ test("main executable comes from CFBundleExecutable when helpers are also execut
 test("upgrade_with_existing_data preserves a sentinel and three snapshot generations", async () => {
   await withFixture(async (context) => {
     assert.equal(await upgradeWithExistingDataScenario(context), true);
+    assert.equal(
+      context.sqliteStatements.includes("PRAGMA wal_checkpoint(TRUNCATE);"),
+      true,
+    );
     for (const generation of [1, 2, 3]) {
       assert.equal(
         await readFile(

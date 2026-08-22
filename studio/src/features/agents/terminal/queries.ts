@@ -3,7 +3,12 @@ import type {
   PersistedTerminalSession,
   ResumableTerminalSession,
 } from "../types";
-import * as api from "../api/agentApi";
+import {
+  readScratchResumableTerminalSessions,
+  readScratchTerminalSessions,
+  readTaskResumableTerminalSessions,
+  readTaskTerminalSessions,
+} from "./internal/sessionReadTransport";
 import { queryClient } from "../../../shared/query/queryClient";
 import { queryKeys } from "../../../shared/query/keys";
 
@@ -19,7 +24,7 @@ export function usePersistedTerminalSessions(
       queryKey: taskId
         ? queryKeys.terminalSessions.persisted(taskId)
         : queryKeys.terminalSessions.persisted("none"),
-      queryFn: ({ signal }) => api.getTerminals(taskId!, signal),
+      queryFn: ({ signal }) => readTaskTerminalSessions(taskId!, signal),
       enabled: taskId !== null,
       staleTime: 0,
     },
@@ -40,7 +45,7 @@ export function useScratchTerminalSessions(
           ? queryKeys.terminalSessions.scratch(projectId, moduleId)
           : queryKeys.terminalSessions.scratch("none", null),
       queryFn: ({ signal }) =>
-        api.getScratchTerminals(projectId!, moduleId!, signal),
+        readScratchTerminalSessions(projectId!, moduleId!, signal),
       enabled: projectId !== null && moduleId !== null,
       staleTime: 0,
     },
@@ -65,13 +70,8 @@ export function useResumableTerminalSessions(
       ),
       queryFn: ({ signal }) =>
         taskId
-          ? api.listResumableTerminals(taskId, undefined, undefined, signal)
-          : api.listResumableTerminals(
-              undefined,
-              projectId!,
-              moduleId!,
-              signal,
-            ),
+          ? readTaskResumableTerminalSessions(taskId, signal)
+          : readScratchResumableTerminalSessions(projectId!, moduleId!, signal),
       enabled,
       staleTime: 0,
     },

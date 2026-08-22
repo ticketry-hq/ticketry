@@ -7,7 +7,6 @@ from django.http import JsonResponse
 
 RUST_OWNER_ENV = "TICKETRY_RUST_WORKTRACKER_OWNER"
 SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
-DJANGO_OWNED_SUFFIXES = ("/graph-run", "/launch-agent")
 DJANGO_OWNED_CATALOG_PREFIXES = (
     "/api/work-tracker/providers",
     "/api/work-tracker/models",
@@ -46,8 +45,6 @@ class RustWorkTrackerWriteOwnershipMiddleware:
             return False
         path = request.path.rstrip("/")
         if not path.startswith("/api/work-tracker/"):
-            return False
-        if path.endswith(DJANGO_OWNED_SUFFIXES):
             return False
         if path.startswith(DJANGO_OWNED_CATALOG_PREFIXES):
             return False

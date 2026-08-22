@@ -57,7 +57,13 @@ impl DirectoryWatch for ScriptedWatch {
 
 impl FilesystemWatcher for ScriptedWatcher {
     fn watch(&self, root: &Path) -> Result<Box<dyn DirectoryWatch>, WatchUnavailable> {
-        if self.unwatchable.lock().unwrap().iter().any(|denied| denied == root) {
+        if self
+            .unwatchable
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|denied| denied == root)
+        {
             return Err(WatchUnavailable);
         }
         let (sender, receiver) = mpsc::unbounded_channel();
@@ -131,7 +137,11 @@ impl Fixture {
 
     /// The registry rows for the task bucket, without reconciling anything.
     async fn registered(&self) -> Vec<String> {
-        rows(&self.database, "SELECT rel_path FROM design_documents ORDER BY rel_path").await
+        rows(
+            &self.database,
+            "SELECT rel_path FROM design_documents ORDER BY rel_path",
+        )
+        .await
     }
 
     /// Every durable document fact in the outbox, as `kind rel_path`.
@@ -213,7 +223,7 @@ async fn fixture() -> Fixture {
             model TEXT, reasoning TEXT, status TEXT NOT NULL, started_at TEXT NOT NULL,
             ended_at TEXT, exit_code INTEGER, error TEXT, cwd TEXT, provider_session_id TEXT,
             lifecycle_state TEXT, lifecycle_updated_at TEXT, design_dir TEXT, resumed_from TEXT,
-            scope TEXT NOT NULL
+            scope TEXT NOT NULL, launch_state TEXT, launch_model TEXT
         );
         CREATE TABLE runs_status_events (
             cursor integer PRIMARY KEY AUTOINCREMENT,
@@ -279,11 +289,7 @@ async fn terminate_run(fixture: &Fixture, id: &str) {
 }
 
 fn supervisor(fixture: &Fixture, watcher: &ScriptedWatcher) -> DocumentWatchSupervisor {
-    DocumentWatchSupervisor::with_watcher(
-        &fixture.documents(),
-        Arc::new(watcher.clone()),
-        WINDOW,
-    )
+    DocumentWatchSupervisor::with_watcher(&fixture.documents(), Arc::new(watcher.clone()), WINDOW)
 }
 
 /// Wait until `condition` holds, or fail. Watchers are background tasks, so a
@@ -348,10 +354,17 @@ async fn shutdown_stops_every_watcher_and_starts_no_more() {
     supervisor.reconcile().await.expect("start the watcher");
 
     supervisor.stop_all();
-    supervisor.reconcile().await.expect("reconcile after shutdown");
+    supervisor
+        .reconcile()
+        .await
+        .expect("reconcile after shutdown");
 
     assert_eq!(supervisor.live_count(), 0);
-    assert_eq!(watcher.started_roots().len(), 1, "no watcher starts after shutdown");
+    assert_eq!(
+        watcher.started_roots().len(),
+        1,
+        "no watcher starts after shutdown"
+    );
 }
 
 #[tokio::test]
@@ -558,16 +571,19 @@ async fn a_directory_that_cannot_be_watched_still_reconciles_through_the_registr
     write(&root, "SPEC.md", "# spec");
     register_run(&fixture, "run-a", "task", "running", &root).await;
     let watcher = ScriptedWatcher::default();
-    watcher
-        .unwatchable
-        .lock()
-        .unwrap()
-        .push(root.canonicalize().expect("canonicalize the design directory"));
+    watcher.unwatchable.lock().unwrap().push(
+        root.canonicalize()
+            .expect("canonicalize the design directory"),
+    );
     let supervisor = supervisor(&fixture, &watcher);
 
     supervisor.reconcile().await.expect("reconcile watchers");
 
-    assert_eq!(supervisor.live_count(), 0, "no watcher claims an unwatchable root");
+    assert_eq!(
+        supervisor.live_count(),
+        0,
+        "no watcher claims an unwatchable root"
+    );
     let rows = fixture
         .documents()
         .refresh_task(TaskRegistryScope {
@@ -578,7 +594,9 @@ async fn a_directory_that_cannot_be_watched_still_reconciles_through_the_registr
         .await
         .expect("refresh the registry");
     assert_eq!(
-        rows.iter().map(|row| row.rel_path.as_str()).collect::<Vec<_>>(),
+        rows.iter()
+            .map(|row| row.rel_path.as_str())
+            .collect::<Vec<_>>(),
         vec!["SPEC.md"],
         "live discovery is an optimization; the registry still converges without it",
     );

@@ -29,7 +29,7 @@ pub struct LaunchIntent {
     pub project_id: String,
     pub issue_id: String,
     pub scope: String,
-    pub provider: String,
+    pub provider: Option<String>,
     pub target_kind: String,
     pub target_id: String,
     pub policy_reference: Option<String>,
@@ -57,7 +57,7 @@ impl LaunchIntent {
             project_id: required(object, "projectId")?,
             issue_id: required(object, "issueId")?,
             scope: required(object, "scope")?,
-            provider: required(object, "provider")?,
+            provider: optional(object, "provider")?,
             target_kind: required(object, "targetKind")?,
             target_id: required(object, "targetId")?,
             policy_reference: optional(object, "policyReference")?,
@@ -74,7 +74,6 @@ impl LaunchIntent {
             ("projectId", self.project_id.as_str()),
             ("issueId", self.issue_id.as_str()),
             ("scope", self.scope.as_str()),
-            ("provider", self.provider.as_str()),
             ("targetKind", self.target_kind.as_str()),
             ("targetId", self.target_id.as_str()),
         ] {
@@ -84,6 +83,7 @@ impl LaunchIntent {
         }
         for (name, value) in [
             ("automationAttemptId", self.automation_attempt_id.as_deref()),
+            ("provider", self.provider.as_deref()),
             ("policyReference", self.policy_reference.as_deref()),
         ] {
             if value.is_some_and(|value| {
@@ -91,6 +91,18 @@ impl LaunchIntent {
             }) {
                 return Err(invalid(format!("launch intent field '{name}' is invalid")));
             }
+        }
+        if self.scope == "shell" {
+            if self.provider.is_some()
+                || self.automation_attempt_id.is_some()
+                || self.policy_reference.is_some()
+            {
+                return Err(invalid(
+                    "shell launch intent cannot carry provider or workflow metadata",
+                ));
+            }
+        } else if self.provider.is_none() {
+            return Err(invalid("agent launch intent requires a provider"));
         }
         Ok(())
     }

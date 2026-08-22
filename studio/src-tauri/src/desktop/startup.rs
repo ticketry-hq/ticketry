@@ -4,6 +4,7 @@
 
 use tauri::Manager;
 
+use crate::data_directory::established_data_directory;
 use crate::desktop::backend_launch::launch_packaged_backend;
 use crate::desktop::data_directory::DesktopDataDirectoryOwnership;
 use crate::desktop::environment::smoke_startup_exit_requested;
@@ -14,8 +15,7 @@ use crate::desktop::runtime_configuration::{
 use crate::desktop::service_health::{ServiceHealth, ServiceHealthState};
 use crate::desktop::service_state::DesktopServiceState;
 use crate::desktop::supervisor_monitor::start_supervisor_monitor;
-use crate::ownership::established_data_directory;
-use crate::supervisor::{self, SupervisorError};
+use crate::sidecar_supervision::{self, SupervisorError};
 use crate::{graphql_foundation, settings_persistence};
 
 pub(crate) fn initialize_services(
@@ -90,11 +90,11 @@ pub(crate) fn initialize_services(
     }
     let state = application.state::<DesktopServiceState>();
     if let Some(message) = startup_error {
-        let log_path = supervisor::sidecar_log_path(&ownership.data_directory);
+        let log_path = sidecar_supervision::sidecar_log_path(&ownership.data_directory);
         let health = ServiceHealth::failed(
             &SupervisorError {
                 service: "backend".to_owned(),
-                kind: supervisor::FailureKind::Crash,
+                kind: sidecar_supervision::FailureKind::Crash,
                 message,
             },
             &log_path,
@@ -113,7 +113,7 @@ pub(crate) fn initialize_services(
             if smoke_startup_exit_requested() {
                 return Err(message.into());
             }
-            let log_path = supervisor::sidecar_log_path(
+            let log_path = sidecar_supervision::sidecar_log_path(
                 established_data_directory().map_err(|error| error.to_string())?,
             );
             let health = {
@@ -128,7 +128,7 @@ pub(crate) fn initialize_services(
                     ServiceHealth::failed(
                         &SupervisorError {
                             service: "backend".to_owned(),
-                            kind: supervisor::FailureKind::Crash,
+                            kind: sidecar_supervision::FailureKind::Crash,
                             message,
                         },
                         &log_path,

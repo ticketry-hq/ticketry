@@ -120,6 +120,10 @@ const relocateAndStamp = (directory) => {
           'self._base_path = "/api" if host is None else host',
           'self._base_path = "/api" if host is None else host.rstrip(\'/\')\n        if self._base_path.endswith(\'/work-tracker\'):\n            self._base_path = self._base_path[:-len(\'/work-tracker\')]',
         )
+        // OpenAPI Generator 7.23 emits invalid Python for an enum whose sole
+        // value is null. The nullable owning field already maps to Optional,
+        // so this placeholder only needs to remain importable.
+        .replace("class NullEnum(, Enum):", "class NullEnum(Enum):")
         .split("\n")
         .map((line) => line.trimEnd())
         .join("\n")

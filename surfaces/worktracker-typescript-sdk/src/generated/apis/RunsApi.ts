@@ -16,42 +16,23 @@
 
 import * as runtime from '../runtime.js';
 import {
-    type AgentStatusResponse,
-    AgentStatusResponseFromJSON,
-    AgentStatusResponseToJSON,
-} from '../models/AgentStatusResponse.js';
-import {
-    type AutomationAttempt,
-    AutomationAttemptFromJSON,
-    AutomationAttemptToJSON,
-} from '../models/AutomationAttempt.js';
-import {
-    type LifecycleAccepted,
-    LifecycleAcceptedFromJSON,
-    LifecycleAcceptedToJSON,
-} from '../models/LifecycleAccepted.js';
-import {
-    type LifecycleEvent,
-    LifecycleEventFromJSON,
-    LifecycleEventToJSON,
-} from '../models/LifecycleEvent.js';
-import {
     type Open,
     OpenFromJSON,
     OpenToJSON,
 } from '../models/Open.js';
+import {
+    type RunAuthorization,
+    RunAuthorizationFromJSON,
+    RunAuthorizationToJSON,
+} from '../models/RunAuthorization.js';
+import {
+    type RunAuthorizationRequest,
+    RunAuthorizationRequestFromJSON,
+    RunAuthorizationRequestToJSON,
+} from '../models/RunAuthorizationRequest.js';
 
-export interface AutomationAttemptsRetryCreateRequest {
-    attemptId: string;
-}
-
-export interface LifecycleEventsCreateRequest {
-    lifecycleEvent: LifecycleEvent;
-}
-
-export interface RunsAgentStatusRetrieveRequest {
-    projectId: string;
-    taskId?: string;
+export interface RunsAuthorizationCreateRequest {
+    runAuthorizationRequest: RunAuthorizationRequest;
 }
 
 export interface RunsModuleActivityRetrieveRequest {
@@ -67,70 +48,44 @@ export interface RunsModuleActivityRetrieveRequest {
  */
 export interface RunsApiInterface {
     /**
-     * Creates request options for automationAttemptsRetryCreate without sending the request
-     * @param {string} attemptId
+     * Creates request options for runsAuthorizationCreate without sending the request
+     * @param {RunAuthorizationRequest} runAuthorizationRequest
      * @throws {RequiredError}
      * @memberof RunsApiInterface
      */
-    automationAttemptsRetryCreateRequestOpts(requestParameters: AutomationAttemptsRetryCreateRequest): Promise<runtime.RequestOpts>;
+    runsAuthorizationCreateRequestOpts(requestParameters: RunsAuthorizationCreateRequest): Promise<runtime.RequestOpts>;
 
     /**
      *
-     * @param {string} attemptId
+     * @param {RunAuthorizationRequest} runAuthorizationRequest
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      * @memberof RunsApiInterface
      */
-    automationAttemptsRetryCreateRaw(requestParameters: AutomationAttemptsRetryCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<AutomationAttempt>>;
+    runsAuthorizationCreateRaw(requestParameters: RunsAuthorizationCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<RunAuthorization>>;
 
     /**
      */
-    automationAttemptsRetryCreate(requestParameters: AutomationAttemptsRetryCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AutomationAttempt>;
+    runsAuthorizationCreate(requestParameters: RunsAuthorizationCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<RunAuthorization>;
 
     /**
-     * Creates request options for lifecycleEventsCreate without sending the request
-     * @param {LifecycleEvent} lifecycleEvent
+     * Creates request options for runsMcpAuthorizeCreate without sending the request
      * @throws {RequiredError}
      * @memberof RunsApiInterface
      */
-    lifecycleEventsCreateRequestOpts(requestParameters: LifecycleEventsCreateRequest): Promise<runtime.RequestOpts>;
-
-    /**
-     * Lifecycle ingress for agent hooks, guarded by run-scoped authorization.  The view skips DRF\'s static-API-key authentication because its callers are hook subprocesses that never hold the desktop credential. Instead each launch injects a Studio-signed Bearer credential bound to exactly one run (the same scheme :class:`SelfTerminateView` uses), so an arbitrary local process cannot spoof lifecycle state or hijack another run\'s ``provider_session_id``.
-     * @param {LifecycleEvent} lifecycleEvent
-     * @param {*} [options] Override http request option.
-     * @throws {RequiredError}
-     * @memberof RunsApiInterface
-     */
-    lifecycleEventsCreateRaw(requestParameters: LifecycleEventsCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<LifecycleAccepted>>;
-
-    /**
-     * Lifecycle ingress for agent hooks, guarded by run-scoped authorization.  The view skips DRF\'s static-API-key authentication because its callers are hook subprocesses that never hold the desktop credential. Instead each launch injects a Studio-signed Bearer credential bound to exactly one run (the same scheme :class:`SelfTerminateView` uses), so an arbitrary local process cannot spoof lifecycle state or hijack another run\'s ``provider_session_id``.
-     */
-    lifecycleEventsCreate(requestParameters: LifecycleEventsCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<LifecycleAccepted>;
-
-    /**
-     * Creates request options for runsAgentStatusRetrieve without sending the request
-     * @param {string} projectId
-     * @param {string} [taskId]
-     * @throws {RequiredError}
-     * @memberof RunsApiInterface
-     */
-    runsAgentStatusRetrieveRequestOpts(requestParameters: RunsAgentStatusRetrieveRequest): Promise<runtime.RequestOpts>;
+    runsMcpAuthorizeCreateRequestOpts(): Promise<runtime.RequestOpts>;
 
     /**
      *
-     * @param {string} projectId
-     * @param {string} [taskId]
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      * @memberof RunsApiInterface
      */
-    runsAgentStatusRetrieveRaw(requestParameters: RunsAgentStatusRetrieveRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<AgentStatusResponse>>;
+    runsMcpAuthorizeCreateRaw(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Open>>;
 
     /**
      */
-    runsAgentStatusRetrieve(requestParameters: RunsAgentStatusRetrieveRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AgentStatusResponse>;
+    runsMcpAuthorizeCreate(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Open>;
 
     /**
      * Creates request options for runsModuleActivityRetrieve without sending the request
@@ -163,60 +118,13 @@ export interface RunsApiInterface {
 export class RunsApi extends runtime.BaseAPI implements RunsApiInterface {
 
     /**
-     * Creates request options for automationAttemptsRetryCreate without sending the request
+     * Creates request options for runsAuthorizationCreate without sending the request
      */
-    async automationAttemptsRetryCreateRequestOpts(requestParameters: AutomationAttemptsRetryCreateRequest): Promise<runtime.RequestOpts> {
-        if (requestParameters['attemptId'] == null) {
+    async runsAuthorizationCreateRequestOpts(requestParameters: RunsAuthorizationCreateRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['runAuthorizationRequest'] == null) {
             throw new runtime.RequiredError(
-                'attemptId',
-                'Required parameter "attemptId" was null or undefined when calling automationAttemptsRetryCreate().'
-            );
-        }
-
-        const queryParameters: any = {};
-
-        const headerParameters: runtime.HTTPHeaders = {};
-
-        if (this.configuration && this.configuration.apiKey) {
-            headerParameters["x-api-key"] = await this.configuration.apiKey("x-api-key"); // ApiKeyAuth authentication
-        }
-
-
-        let urlPath = `/automation-attempts/{attempt_id}/retry`;
-        urlPath = urlPath.replace('{attempt_id}', encodeURIComponent(String(requestParameters['attemptId'])));
-
-        return {
-            path: urlPath,
-            method: 'POST',
-            headers: headerParameters,
-            query: queryParameters,
-        };
-    }
-
-    /**
-     */
-    async automationAttemptsRetryCreateRaw(requestParameters: AutomationAttemptsRetryCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<AutomationAttempt>> {
-        const requestOptions = await this.automationAttemptsRetryCreateRequestOpts(requestParameters);
-        const response = await this.request(requestOptions, initOverrides);
-
-        return new runtime.JSONApiResponse(response, (jsonValue) => AutomationAttemptFromJSON(jsonValue));
-    }
-
-    /**
-     */
-    async automationAttemptsRetryCreate(requestParameters: AutomationAttemptsRetryCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AutomationAttempt> {
-        const response = await this.automationAttemptsRetryCreateRaw(requestParameters, initOverrides);
-        return await response.value();
-    }
-
-    /**
-     * Creates request options for lifecycleEventsCreate without sending the request
-     */
-    async lifecycleEventsCreateRequestOpts(requestParameters: LifecycleEventsCreateRequest): Promise<runtime.RequestOpts> {
-        if (requestParameters['lifecycleEvent'] == null) {
-            throw new runtime.RequiredError(
-                'lifecycleEvent',
-                'Required parameter "lifecycleEvent" was null or undefined when calling lifecycleEventsCreate().'
+                'runAuthorizationRequest',
+                'Required parameter "runAuthorizationRequest" was null or undefined when calling runsAuthorizationCreate().'
             );
         }
 
@@ -226,56 +134,43 @@ export class RunsApi extends runtime.BaseAPI implements RunsApiInterface {
 
         headerParameters['Content-Type'] = 'application/json';
 
+        if (this.configuration && this.configuration.apiKey) {
+            headerParameters["x-api-key"] = await this.configuration.apiKey("x-api-key"); // ApiKeyAuth authentication
+        }
 
-        let urlPath = `/lifecycle/events`;
+
+        let urlPath = `/runs/authorization`;
 
         return {
             path: urlPath,
             method: 'POST',
             headers: headerParameters,
             query: queryParameters,
-            body: LifecycleEventToJSON(requestParameters['lifecycleEvent']),
+            body: RunAuthorizationRequestToJSON(requestParameters['runAuthorizationRequest']),
         };
     }
 
     /**
-     * Lifecycle ingress for agent hooks, guarded by run-scoped authorization.  The view skips DRF\'s static-API-key authentication because its callers are hook subprocesses that never hold the desktop credential. Instead each launch injects a Studio-signed Bearer credential bound to exactly one run (the same scheme :class:`SelfTerminateView` uses), so an arbitrary local process cannot spoof lifecycle state or hijack another run\'s ``provider_session_id``.
      */
-    async lifecycleEventsCreateRaw(requestParameters: LifecycleEventsCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<LifecycleAccepted>> {
-        const requestOptions = await this.lifecycleEventsCreateRequestOpts(requestParameters);
+    async runsAuthorizationCreateRaw(requestParameters: RunsAuthorizationCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<RunAuthorization>> {
+        const requestOptions = await this.runsAuthorizationCreateRequestOpts(requestParameters);
         const response = await this.request(requestOptions, initOverrides);
 
-        return new runtime.JSONApiResponse(response, (jsonValue) => LifecycleAcceptedFromJSON(jsonValue));
+        return new runtime.JSONApiResponse(response, (jsonValue) => RunAuthorizationFromJSON(jsonValue));
     }
 
     /**
-     * Lifecycle ingress for agent hooks, guarded by run-scoped authorization.  The view skips DRF\'s static-API-key authentication because its callers are hook subprocesses that never hold the desktop credential. Instead each launch injects a Studio-signed Bearer credential bound to exactly one run (the same scheme :class:`SelfTerminateView` uses), so an arbitrary local process cannot spoof lifecycle state or hijack another run\'s ``provider_session_id``.
      */
-    async lifecycleEventsCreate(requestParameters: LifecycleEventsCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<LifecycleAccepted> {
-        const response = await this.lifecycleEventsCreateRaw(requestParameters, initOverrides);
+    async runsAuthorizationCreate(requestParameters: RunsAuthorizationCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<RunAuthorization> {
+        const response = await this.runsAuthorizationCreateRaw(requestParameters, initOverrides);
         return await response.value();
     }
 
     /**
-     * Creates request options for runsAgentStatusRetrieve without sending the request
+     * Creates request options for runsMcpAuthorizeCreate without sending the request
      */
-    async runsAgentStatusRetrieveRequestOpts(requestParameters: RunsAgentStatusRetrieveRequest): Promise<runtime.RequestOpts> {
-        if (requestParameters['projectId'] == null) {
-            throw new runtime.RequiredError(
-                'projectId',
-                'Required parameter "projectId" was null or undefined when calling runsAgentStatusRetrieve().'
-            );
-        }
-
+    async runsMcpAuthorizeCreateRequestOpts(): Promise<runtime.RequestOpts> {
         const queryParameters: any = {};
-
-        if (requestParameters['projectId'] != null) {
-            queryParameters['project_id'] = requestParameters['projectId'];
-        }
-
-        if (requestParameters['taskId'] != null) {
-            queryParameters['task_id'] = requestParameters['taskId'];
-        }
 
         const headerParameters: runtime.HTTPHeaders = {};
 
@@ -284,11 +179,11 @@ export class RunsApi extends runtime.BaseAPI implements RunsApiInterface {
         }
 
 
-        let urlPath = `/runs/agent-status`;
+        let urlPath = `/runs/mcp-authorize`;
 
         return {
             path: urlPath,
-            method: 'GET',
+            method: 'POST',
             headers: headerParameters,
             query: queryParameters,
         };
@@ -296,17 +191,17 @@ export class RunsApi extends runtime.BaseAPI implements RunsApiInterface {
 
     /**
      */
-    async runsAgentStatusRetrieveRaw(requestParameters: RunsAgentStatusRetrieveRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<AgentStatusResponse>> {
-        const requestOptions = await this.runsAgentStatusRetrieveRequestOpts(requestParameters);
+    async runsMcpAuthorizeCreateRaw(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Open>> {
+        const requestOptions = await this.runsMcpAuthorizeCreateRequestOpts();
         const response = await this.request(requestOptions, initOverrides);
 
-        return new runtime.JSONApiResponse(response, (jsonValue) => AgentStatusResponseFromJSON(jsonValue));
+        return new runtime.JSONApiResponse(response, (jsonValue) => OpenFromJSON(jsonValue));
     }
 
     /**
      */
-    async runsAgentStatusRetrieve(requestParameters: RunsAgentStatusRetrieveRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AgentStatusResponse> {
-        const response = await this.runsAgentStatusRetrieveRaw(requestParameters, initOverrides);
+    async runsMcpAuthorizeCreate(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Open> {
+        const response = await this.runsMcpAuthorizeCreateRaw(initOverrides);
         return await response.value();
     }
 

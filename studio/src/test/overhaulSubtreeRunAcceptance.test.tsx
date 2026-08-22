@@ -45,7 +45,7 @@ async function openCampaignDetails(): Promise<HTMLElement> {
 describe("overhaul acceptance — subtree execution", () => {
   it("[overhaul-21] repeats Run subtree to revive an inactive campaign", async () => {
     const http = campaignFixture();
-    mountStudio({ http });
+    mountStudio({ http, graphQlExecution: true });
 
     const details = await openCampaignDetails();
     const runSubtree = within(details).getByRole("button", {
@@ -66,7 +66,7 @@ describe("overhaul acceptance — subtree execution", () => {
 
   it("[overhaul-57] runs a subtree serially beside the parallel action under one capability", async () => {
     const http = campaignFixture();
-    mountStudio({ http });
+    mountStudio({ http, graphQlExecution: true });
 
     const details = await openCampaignDetails();
     const runSubtree = within(details).getByRole("button", {

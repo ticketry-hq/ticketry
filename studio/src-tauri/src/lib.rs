@@ -3,28 +3,37 @@
 //! This file declares the module tree and exports the single entry point
 //! `main.rs` calls. The desktop shell itself lives in [`desktop`].
 
+pub mod data_directory;
 pub mod desktop;
-pub mod discovery;
 pub mod document_watch;
 pub mod documents;
 pub mod documents_persistence;
 pub mod entities;
+pub mod execution_graph;
+pub mod execution_persistence;
+pub mod execution_reconciliation;
+pub mod graph_run_service;
 pub mod graphql_foundation;
+pub mod hook_spool;
 pub mod launch_paths;
+pub mod launch_planning;
 pub mod native_terminal;
-pub mod native_terminal_chords;
-pub mod native_terminal_focus_trace;
-mod owned_sidecar;
-pub mod ownership;
 pub mod query_root;
-mod release_manifest;
-pub mod runs_effect_port;
+pub mod run_now;
 pub mod runs_persistence;
 pub mod settings_persistence;
-pub mod supervisor;
-pub mod terminal_runtime;
-mod tmux_viewer;
-pub mod viewer_commands;
+pub mod sidecar_supervision;
+pub mod terminal_cleanup;
+pub mod terminal_launch;
+pub mod terminal_lifecycle;
+pub mod terminal_output_activity;
+pub mod terminal_persistence;
+pub mod terminal_reconciliation;
+pub mod terminal_resume;
+pub mod terminal_viewer;
+pub mod tmux_adapter;
+pub mod tool_discovery;
+pub mod viewer_ownership;
 pub mod work_management;
 pub mod workspace_handoff;
 pub mod workspace_operations;

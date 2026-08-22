@@ -100,6 +100,9 @@ pub fn tools() -> Vec<Tool> {
         tool("reparent_tasks", "Reparent existing work items under a parent work item.\n\nBoth parent_task_id and each entry in task_ids may be a UUID or a\nworktracker key (e.g. \"VEEVI-68\"). If module_id is omitted, the\nreparented tasks inherit the parent's module. Returns a dict with keys:\nparent_task_id, reparented, skipped, failed.", json!({
             "project_id": {"type": "string"}, "parent_task_id": {"type": "string"}, "task_ids": {"type": "array", "items": {"type": "string"}}, "module_id": nullable_string()
         }), &["project_id", "parent_task_id", "task_ids"]),
+        tool("run_now", "Move an eligible Story to Implement and launch its agent as one action.\n\n``id_or_key`` accepts a work-item UUID or key. Rust owns refusal, destination-policy preflight, workflow move, and task-scoped launch ordering. Refusals are returned as structured results; a committed destination is present only when the move occurred.", json!({
+            "id_or_key": {"type": "string"}
+        }), &["id_or_key"]),
         tool("set_issue_type_workflow_auto_start", "Toggle auto-start; enabling requires a valid launch binding.", json!({
             "type_id": {"type": "string"}, "state_id": {"type": "string"}, "auto_start": {"type": "boolean"}, "workflow_revision": {"type": "integer"}
         }), &["type_id", "state_id", "auto_start", "workflow_revision"]),
@@ -131,9 +134,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn registry_has_the_legacy_thirty_tool_contract() {
+    fn registry_adds_run_now_to_the_legacy_tool_contract() {
         let tools = tools();
-        assert_eq!(tools.len(), 30);
+        assert_eq!(tools.len(), 31);
         let names: Vec<&str> = tools.iter().map(|tool| tool.name.as_ref()).collect();
         assert_eq!(
             names,
@@ -161,6 +164,7 @@ mod tests {
                 "list_tasks",
                 "remove_issue_type_workflow_transition",
                 "reparent_tasks",
+                "run_now",
                 "set_issue_type_workflow_auto_start",
                 "set_issue_type_workflow_start_state",
                 "set_issue_type_workflow_transition_permission",

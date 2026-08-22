@@ -2,7 +2,6 @@ use std::ffi::OsStr;
 use std::fs;
 use std::io;
 use std::path::PathBuf;
-use std::process::{Command, Stdio};
 
 const TEMP_SQLITE_FLAG: &str = "--temp-sqlite";
 const TEMP_SQLITE_PREFIX: &str = "ticketry-temp-sqlite-";
@@ -65,13 +64,10 @@ impl Drop for TemporarySqliteProfile {
             return;
         }
 
-        // Temporary mode deliberately gives up durable agent sessions along
-        // with its database. The socket name is unique to this launch.
-        let _ = Command::new("tmux")
-            .args(["-L", &self.tmux_socket, "kill-server"])
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status();
+        // Temporary mode deliberately gives up its verified sessions with the
+        // database. The adapter refuses foreign entries even on this socket.
+        let _ = muxed_studio_lib::tmux_adapter::TmuxAdapter::discover()
+            .and_then(|adapter| adapter.kill_all_verified());
         match fs::remove_dir_all(&self.path) {
             Ok(()) => eprintln!("Removed temporary SQLite profile: {}", self.path.display()),
             Err(error) if error.kind() == io::ErrorKind::NotFound => {}

@@ -1,6 +1,10 @@
 import { useRef, useState } from "react";
 import { toast } from "../../../../../../state/clientStore";
-import { ApiError, apiErrorMessage, executeTaskSubtree } from "../../../../../../shared/api/client";
+import { ApiError, apiErrorMessage } from "../../../../../../shared/api/client";
+import {
+  executeTaskSubtree,
+  type GraphRunExecutionMode,
+} from "../../../../../../features/execution";
 import { TEMP_TASK_ID } from "../../../../../../features/agents/types";
 import {
   refreshSubtreeRunCapabilities,
@@ -8,7 +12,7 @@ import {
 } from "../../../../../../features/settings";
 import { queryClient } from "../../../../../../shared/query/queryClient";
 import { queryKeys } from "../../../../../../shared/query/keys";
-import type { GraphRunExecutionMode, WorkItem } from "../../../../../../shared/api/types";
+import type { WorkItem } from "../../../../../../shared/api/types";
 import { stateById, useCachedStates } from "../../../../../../shared/query/stateCatalog";
 
 /**
@@ -87,7 +91,8 @@ export function useSubtreeRunLaunch({
         error instanceof ApiError &&
         error.body &&
         typeof error.body === "object" &&
-        (error.body as Record<string, unknown>).error === "subtree_run_not_enabled"
+        ((error.body as Record<string, unknown>).error === "subtree_run_not_enabled" ||
+          (error.body as Record<string, unknown>).code === "subtree_run_not_enabled")
       ) {
         await Promise.all([
           refreshSubtreeRunCapabilities(item.project_id),

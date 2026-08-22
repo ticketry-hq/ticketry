@@ -205,8 +205,12 @@ impl DiscardExecutor {
         let mut removal = Removal::default();
         match observation.checkout {
             CheckoutState::Present => {
-                self.step(git_effects::remove(self.git(), &plan.repository, &plan.checkout))
-                    .await?;
+                self.step(git_effects::remove(
+                    self.git(),
+                    &plan.repository,
+                    &plan.checkout,
+                ))
+                .await?;
                 removal.checkout_removed = true;
             }
             CheckoutState::Stale => {
@@ -284,8 +288,8 @@ impl DiscardExecutor {
         // The fact's project and owner come from the Work Item graph, which is
         // not what this settlement changes, so they are resolved before the
         // transaction opens.
-        let scope = crate::worktree_facts::resolve_scope(&self.work_items, &plan.top_level_row_id)
-            .await;
+        let scope =
+            crate::worktree_facts::resolve_scope(&self.work_items, &plan.top_level_row_id).await;
         let events = self.events.clone();
         let written = self
             .journal
@@ -301,14 +305,9 @@ impl DiscardExecutor {
                         settlement::delete_row(transaction, &plan)
                             .await
                             .map_err(settlement_failure)?;
-                        settlement::append_fact(
-                            events.as_ref(),
-                            transaction,
-                            &plan,
-                            scope.as_ref(),
-                        )
-                        .await
-                        .map_err(settlement_failure)
+                        settlement::append_fact(events.as_ref(), transaction, &plan, scope.as_ref())
+                            .await
+                            .map_err(settlement_failure)
                     })
                 },
             )

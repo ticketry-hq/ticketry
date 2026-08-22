@@ -77,6 +77,11 @@ async function statusStreamModule({ schema, sourceRoot }) {
   for (const required of [
     "run_status_stream(project_id: String!, after_cursor: Int): RunStatusFrame!",
     "union RunStatusFrame = RunStatusSnapshot | RunStatusEvent | RunStatusCaughtUp | RunStatusResetRequired | RunStatusFailed",
+    "launch_state: String",
+    "launch_model: String",
+    "effective_state: String!",
+    "output_sequence: Int!",
+    "last_output_at: String",
   ]) {
     if (!schema.includes(required)) {
       throw new Error(`Runs status stream schema is missing ${required}`);
@@ -98,12 +103,17 @@ export interface RunHoldingPayload {
   readonly project_id: string;
   readonly task_id: string | null;
   readonly module_id: string;
-  readonly agent: string;
+  readonly agent: string | null;
   readonly scope: string;
+  readonly launch_state: string | null;
+  readonly launch_model: string | null;
   readonly started_at: string;
   readonly state: string;
+  readonly effective_state: string;
   readonly updated_at: string;
   readonly provider_session_id: string | null;
+  readonly output_sequence: number;
+  readonly last_output_at: string | null;
 }
 
 export interface RunStatusSnapshotFrame {

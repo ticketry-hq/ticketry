@@ -7,7 +7,7 @@
 //! Shared by several integration binaries, so not every helper is used by all.
 #![allow(dead_code)]
 
-use muxed_studio_lib::discovery::{preflight_report, SupportedTool, ToolHealth};
+use muxed_studio_lib::tool_discovery::{preflight_report, SupportedTool, ToolHealth};
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -31,6 +31,10 @@ pub struct TmuxEnvironmentOverride {
 
 impl TmuxEnvironmentOverride {
     pub fn set(path: &Path) -> Self {
+        Self::set_with_data_directory(path, &path.join("data"))
+    }
+
+    pub fn set_with_data_directory(path: &Path, data_directory: &Path) -> Self {
         let previous_tmpdir = env::var_os("TMUX_TMPDIR");
         let previous_tmux = env::var_os("TMUX");
         let previous_term = env::var_os("TERM");
@@ -41,7 +45,7 @@ impl TmuxEnvironmentOverride {
         env::remove_var("TMUX");
         env::set_var("TERM", "xterm-256color");
         env::remove_var("TERMINFO");
-        env::set_var("MUXED_DATA_DIR", path.join("data"));
+        env::set_var("MUXED_DATA_DIR", data_directory);
         env::set_var("MUXED_TMUX_SOCKET", SOCKET);
         Self {
             previous_tmpdir,
@@ -90,6 +94,12 @@ pub struct IsolatedTmux {
 
 impl IsolatedTmux {
     pub fn start() -> Self {
+        let server = Self::start_empty();
+        server.create_hosted(RUN_ID, "exec /bin/sh");
+        server
+    }
+
+    pub fn start_empty() -> Self {
         let executable = tmux_path();
         // tmux's Unix-domain socket has a small platform path limit. Keep the
         // isolated directory short even when the system temporary directory is
@@ -103,40 +113,156 @@ impl IsolatedTmux {
                 .as_nanos()
         ));
         fs::create_dir(&socket_dir).expect("create isolated tmux socket directory");
-        run_tmux(
-            &executable,
-            &socket_dir,
-            [
-                "-f",
-                "/dev/null",
-                "new-session",
-                "-d",
-                "-s",
-                "pt-integration-run",
-            ],
-        );
-        run_tmux(
-            &executable,
-            &socket_dir,
-            [
-                "set-option",
-                "-t",
-                "pt-integration-run",
-                "window-size",
-                "manual",
-            ],
-        );
         Self {
             executable,
             socket_dir,
         }
     }
 
+    pub fn create_hosted(&self, agent_run_id: &str, command: &str) {
+        let session = format!("pt-{agent_run_id}");
+        let output = Command::new(&self.executable)
+            .env("TMUX_TMPDIR", &self.socket_dir)
+            .env_remove("TMUX")
+            .current_dir(&self.socket_dir)
+            .args(["-L", SOCKET, "-f", "/dev/null", "new-session", "-d", "-s"])
+            .arg(&session)
+            .arg("while :; do sleep 1; done")
+            .stdin(Stdio::null())
+            .output()
+            .expect("create isolated hosted command");
+        assert!(
+            output.status.success(),
+            "tmux hosted-command setup failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        self.command(["set-option", "-t", &session, "remain-on-exit", "on"]);
+        self.command(["set-option", "-t", &session, "window-size", "manual"]);
+        self.command(["set-option", "-t", &session, "status", "off"]);
+        self.command(["set-option", "-t", &session, "@pt-owner", "ticketry-v1"]);
+        self.command([
+            "set-option",
+            "-t",
+            &session,
+            "@pt-agent-run-id",
+            agent_run_id,
+        ]);
+        self.command([
+            "set-option",
+            "-t",
+            &session,
+            "@pt-runtime-namespace",
+            "tmux-characterization",
+        ]);
+        let output = Command::new(&self.executable)
+            .env("TMUX_TMPDIR", &self.socket_dir)
+            .env_remove("TMUX")
+            .current_dir(&self.socket_dir)
+            .args(["-L", SOCKET, "respawn-pane", "-k", "-t"])
+            .arg(&session)
+            .arg(command)
+            .stdin(Stdio::null())
+            .output()
+            .expect("start isolated hosted command");
+        assert!(
+            output.status.success(),
+            "tmux hosted command failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    pub fn inventory(&self) -> Vec<(String, String)> {
+        let output = Command::new(&self.executable)
+            .env("TMUX_TMPDIR", &self.socket_dir)
+            .env_remove("TMUX")
+            .args([
+                "-L",
+                SOCKET,
+                "list-sessions",
+                "-F",
+                "#{session_name}|#{@pt-agent-run-id}",
+            ])
+            .stdin(Stdio::null())
+            .output()
+            .expect("inventory isolated tmux server");
+        if !output.status.success() {
+            return Vec::new();
+        }
+        let mut inventory = String::from_utf8(output.stdout)
+            .expect("tmux inventory is UTF-8")
+            .lines()
+            .map(|line| {
+                let (name, identity) = line.split_once('|').expect("tmux inventory delimiter");
+                (name.to_owned(), identity.to_owned())
+            })
+            .collect::<Vec<_>>();
+        inventory.sort();
+        inventory
+    }
+
+    pub fn hosted_exit_code(&self, agent_run_id: &str) -> Option<i32> {
+        let session = format!("pt-{agent_run_id}:0.0");
+        let output = Command::new(&self.executable)
+            .env("TMUX_TMPDIR", &self.socket_dir)
+            .env_remove("TMUX")
+            .args([
+                "-L",
+                SOCKET,
+                "display-message",
+                "-p",
+                "-t",
+                &session,
+                "#{pane_dead}|#{pane_dead_status}",
+            ])
+            .stdin(Stdio::null())
+            .output()
+            .expect("inspect isolated hosted command");
+        if !output.status.success() {
+            return None;
+        }
+        let value = String::from_utf8(output.stdout).expect("tmux pane state is UTF-8");
+        let (dead, code) = value
+            .trim()
+            .split_once('|')
+            .expect("tmux pane-state delimiter");
+        (dead == "1").then(|| code.parse().expect("numeric hosted-command exit code"))
+    }
+
+    pub fn set_session_option(&self, agent_run_id: &str, key: &str, value: &str) {
+        let session = format!("pt-{agent_run_id}");
+        self.command(["set-option", "-t", &session, key, value]);
+    }
+
+    pub fn add_window(&self, agent_run_id: &str) {
+        let session = format!("pt-{agent_run_id}");
+        self.command(["split-window", "-d", "-t", &session]);
+    }
+
+    pub fn stop_server(&self) {
+        let output = Command::new(&self.executable)
+            .env("TMUX_TMPDIR", &self.socket_dir)
+            .env_remove("TMUX")
+            .args(["-L", SOCKET, "kill-server"])
+            .stdin(Stdio::null())
+            .output()
+            .expect("stop isolated tmux server");
+        assert!(
+            output.status.success(),
+            "tmux server stop failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
     pub fn has_session(&self) -> bool {
+        self.has_agent_run(RUN_ID)
+    }
+
+    pub fn has_agent_run(&self, agent_run_id: &str) -> bool {
+        let session = format!("pt-{agent_run_id}");
         Command::new(&self.executable)
             .env("TMUX_TMPDIR", &self.socket_dir)
             .env_remove("TMUX")
-            .args(["-L", SOCKET, "has-session", "-t", "pt-integration-run"])
+            .args(["-L", SOCKET, "has-session", "-t", &session])
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
@@ -231,6 +357,10 @@ impl IsolatedTmux {
                 value,
             ],
         );
+    }
+
+    fn command<const N: usize>(&self, arguments: [&str; N]) {
+        run_tmux(&self.executable, &self.socket_dir, arguments);
     }
 }
 

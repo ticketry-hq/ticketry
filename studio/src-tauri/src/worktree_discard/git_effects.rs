@@ -99,8 +99,9 @@ pub(crate) async fn observe(
         Some(_) => CheckoutState::Stale,
         None if checkout.exists() => CheckoutState::Foreign {
             code: "worktree_path_taken".to_owned(),
-            detail: "Something that is not a worktree of this repository occupies the recorded path."
-                .to_owned(),
+            detail:
+                "Something that is not a worktree of this repository occupies the recorded path."
+                    .to_owned(),
         },
         None => CheckoutState::Absent,
     };

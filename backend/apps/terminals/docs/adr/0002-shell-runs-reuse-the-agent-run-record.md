@@ -36,7 +36,7 @@ sharing one record, so the divergence between the code's spelling and the
 domain's vocabulary is explicit rather than hidden.
 
 Ending a shell run publishes `agent_run_terminated` like any run. This is a
-verified no-op — `execution.driver.observe_agent_run_terminated` filters
+verified no-op. Rust's lifecycle consumer filters
 `LaunchedTask` by run id and returns early when there are no rows, and a shell
 is never a `LaunchedTask` — but it is a real coupling that a parallel concept
 would not have had, and any future subscriber to that seam must tolerate runs

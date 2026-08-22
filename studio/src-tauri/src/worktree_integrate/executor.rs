@@ -300,14 +300,9 @@ impl IntegrateExecutor {
         }
 
         // 4. Delete the merged task branch.
-        git_evidence::delete_branch(
-            self.git(),
-            &plan.repository,
-            &plan.branch,
-            base_checked_out,
-        )
-        .await
-        .map_err(|error| retryable(error.code_str(), error.to_string()))?;
+        git_evidence::delete_branch(self.git(), &plan.repository, &plan.branch, base_checked_out)
+            .await
+            .map_err(|error| retryable(error.code_str(), error.to_string()))?;
         self.checkpoint(claim, json!({ "branchDeleted": true }))
             .await?;
 
@@ -374,8 +369,8 @@ impl IntegrateExecutor {
     ) -> WorkspaceOperationOutcome {
         // Resolved before the settlement opens: the Work Item graph is not what
         // the settlement changes, and the row it addresses is about to go.
-        let scope = crate::worktree_facts::resolve_scope(&self.work_items, &plan.top_level_row_id)
-            .await;
+        let scope =
+            crate::worktree_facts::resolve_scope(&self.work_items, &plan.top_level_row_id).await;
         let (outcome, change) = match &landing {
             Landing::Landed { commit, base_tip } => (
                 WorkspaceOperationOutcome::Applied {
@@ -570,13 +565,11 @@ impl IntegrateExecutor {
         &self,
         plan: &IntegrationPlan,
     ) -> Result<bool, WorkspaceOperationOutcome> {
-        Ok(
-            git_evidence::head_branch(self.git(), &plan.repository)
-                .await
-                .map_err(git_failure)?
-                .as_deref()
-                == Some(plan.base_ref.as_str()),
-        )
+        Ok(git_evidence::head_branch(self.git(), &plan.repository)
+            .await
+            .map_err(git_failure)?
+            .as_deref()
+            == Some(plan.base_ref.as_str()))
     }
 
     /// Record one boundary observation under this attempt's lease. A

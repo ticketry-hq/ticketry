@@ -101,7 +101,8 @@ const WORKTREE_COLUMNS: &[&str] =
     crate::worktree_persistence::ownership_manifest::ADOPTED_TABLES[0].1;
 
 /// The authored journal, at the shape the capability manifest declares.
-const OPERATION_COLUMNS: &[&str] = crate::workspace_operations::ownership_manifest::OWNED_TABLES[0].1;
+const OPERATION_COLUMNS: &[&str] =
+    crate::workspace_operations::ownership_manifest::OWNED_TABLES[0].1;
 
 /// Every table whose production writer is Rust after the Slice 4 handoff.
 pub fn owned_tables() -> Vec<&'static str> {
@@ -152,9 +153,7 @@ pub fn validate_assignment() -> Result<(), WorkspaceHandoffError> {
 /// table means an adoption did not complete; an unknown or extra column means a
 /// migration this build has never seen already wrote through the schema. Both
 /// refuse the handoff rather than enabling a writer over an unrecognised shape.
-pub async fn validate_schema(
-    database: &impl ConnectionTrait,
-) -> Result<(), WorkspaceHandoffError> {
+pub async fn validate_schema(database: &impl ConnectionTrait) -> Result<(), WorkspaceHandoffError> {
     validate_assignment()?;
     for (table, writer, columns) in OWNED_TABLES {
         let observed = observed_columns(database, table).await?;

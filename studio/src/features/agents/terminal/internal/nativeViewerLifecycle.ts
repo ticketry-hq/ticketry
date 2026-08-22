@@ -64,7 +64,7 @@ export function ensureNativeViewerLifecycle({
   let completedHandle: string | null = null;
   let handle: string | null = null;
   let tornDown = false;
-  const viewerLease = createViewerLease(desktopViewerLease, runId);
+  const viewerLease = createViewerLease(desktopViewerLease, runId, "native");
   let leaseTimer: ReturnType<typeof setInterval> | null = null;
 
   const releaseLease = () => {
@@ -160,7 +160,7 @@ export function ensureNativeViewerLifecycle({
             if (disposed || tornDown) return null;
             const attached = await invoke<NativeTerminalStatus>(
               "native_terminal_attach",
-              { runId, frame },
+              { runId, viewerId: viewerLease.viewerId, frame },
             );
             if (disposed || tornDown) {
               await invoke("native_terminal_detach", {

@@ -1,0 +1,140 @@
+use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
+
+use crate::entities::runs::automation_attempt;
+use crate::terminal_launch::{CreateTerminalSession, TerminalLaunchKind, TerminalLaunchService};
+
+use super::{mark_delivered, CallerScope, LaunchPolicyDecision};
+
+/// Prepare one durable policy decision through the Rust Terminal owner, then
+/// mark it delivered before attempting the recoverable external effect.
+pub(crate) async fn execute(
+    database: &DatabaseConnection,
+    service: &TerminalLaunchService,
+    decision: &LaunchPolicyDecision,
+) -> Result<crate::entities::terminals::session::Model, String> {
+    let kind = if matches!(
+        decision.caller_scope,
+        CallerScope::Interactive | CallerScope::RunNow
+    ) {
+        TerminalLaunchKind::Task
+    } else {
+        TerminalLaunchKind::Automation
+    };
+    let automation_attempt_id = match decision.caller_scope {
+        CallerScope::AutoStart => Some(
+            automation_attempt::Entity::find()
+                .filter(
+                    automation_attempt::Column::TransitionId
+                        .eq(decision.idempotency_key.replace('-', "")),
+                )
+                .filter(automation_attempt::Column::RetryOfId.is_null())
+                .one(database)
+                .await
+                .map_err(|error| error.to_string())?
+                .map(|attempt| attempt.id)
+                .ok_or_else(|| {
+                    format!(
+                        "launch decision {} has no root Automation Attempt",
+                        decision.decision_id
+                    )
+                })?,
+        ),
+        CallerScope::Retry => Some(decision.idempotency_key.clone()),
+        _ => None,
+    };
+    let accepted = service
+        .prepare_policy(
+            request(decision, kind, automation_attempt_id),
+            decision.state_name.clone(),
+        )
+        .await
+        .map_err(|error| error.code_str().to_owned())?;
+    mark_delivered(database, &decision.decision_id)
+        .await
+        .map_err(|error| error.code().to_owned())?;
+    service
+        .execute_accepted(accepted)
+        .await
+        .map_err(|error| error.code_str().to_owned())
+}
+
+fn request(
+    decision: &LaunchPolicyDecision,
+    kind: TerminalLaunchKind,
+    automation_attempt_id: Option<String>,
+) -> CreateTerminalSession {
+    let client_request_id = match decision.caller_scope {
+        CallerScope::RunNow => decision.decision_id.clone(),
+        _ => decision.idempotency_key.clone(),
+    };
+    CreateTerminalSession {
+        client_request_id,
+        project_id: decision.project_id.clone(),
+        issue_id: decision.task_id.clone(),
+        module_id: decision.module_link.module_id.clone(),
+        target_id: decision.task_id.clone(),
+        kind,
+        provider: Some(decision.provider.clone()),
+        model: decision.model.clone(),
+        reasoning: decision.reasoning.clone(),
+        policy_reference: Some(decision.policy_identity.clone()),
+        prompt: Some(decision.prompt.clone()),
+        resume_from_agent_run_id: None,
+        automation_attempt_id,
+        required_skills: decision.required_skills.clone(),
+        working_directory_identity: format!("task:{}", decision.task_id.replace('-', "")),
+        design_directory_identity: None,
+        document_relative_path: None,
+        columns: 120,
+        rows: 32,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::work_management::launch_policy::{ModuleLinkInput, SelectedProfileInput};
+
+    fn decision(decision_id: &str) -> LaunchPolicyDecision {
+        LaunchPolicyDecision {
+            version: 2,
+            decision_id: decision_id.to_owned(),
+            policy_identity: "binding:1".to_owned(),
+            policy_version: 7,
+            caller_scope: CallerScope::RunNow,
+            idempotency_key: "transport-request".to_owned(),
+            task_id: "task".to_owned(),
+            project_id: "project".to_owned(),
+            issue_type_id: "story".to_owned(),
+            state_id: "implement".to_owned(),
+            state_name: Some("Implement".to_owned()),
+            prompt: "Implement this Story.".to_owned(),
+            required_skills: Vec::new(),
+            provider: "codex".to_owned(),
+            model: Some("gpt-test".to_owned()),
+            reasoning: None,
+            selected_profile: SelectedProfileInput {
+                index: 0,
+                name: "Local".to_owned(),
+                workspace_slug: "test".to_owned(),
+            },
+            module_link: ModuleLinkInput {
+                module_id: "module".to_owned(),
+                path: Some("/tmp/module".to_owned()),
+            },
+        }
+    }
+
+    #[test]
+    fn run_now_launch_identities_derive_from_the_durable_decision() {
+        let first = request(&decision("decision-1"), TerminalLaunchKind::Task, None);
+        let replay = request(&decision("decision-1"), TerminalLaunchKind::Task, None);
+        let other = request(&decision("decision-2"), TerminalLaunchKind::Task, None);
+
+        assert_eq!(first.client_request_id, "decision-1");
+        assert_eq!(first.agent_run_id(), replay.agent_run_id());
+        assert_eq!(first.effect_id(), replay.effect_id());
+        assert_ne!(first.agent_run_id(), other.agent_run_id());
+        assert_ne!(first.effect_id(), other.effect_id());
+    }
+}

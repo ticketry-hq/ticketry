@@ -310,11 +310,9 @@ impl CreateExecutor {
         // Resolved before the transaction opens: the fact's project and owner
         // come from the Work Item graph, and reading them is not settlement
         // work that should hold the settlement transaction open.
-        let scope = crate::worktree_facts::resolve_scope(
-            self.work_items(),
-            &plan.owner.top_level_task_id,
-        )
-        .await;
+        let scope =
+            crate::worktree_facts::resolve_scope(self.work_items(), &plan.owner.top_level_task_id)
+                .await;
         let written = self
             .journal
             .settle_with(

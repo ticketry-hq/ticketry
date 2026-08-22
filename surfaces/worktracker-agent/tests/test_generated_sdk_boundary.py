@@ -19,7 +19,7 @@ from worktracker_sdk.generated import (
     WorkflowsApi,
 )
 from worktracker_sdk.generated.exceptions import ApiException
-from worktracker_sdk.root_api import ExecutionApi, LaunchApi, RevisionedDeleteApi
+from worktracker_sdk.root_api import RevisionedDeleteApi
 
 from worktracker_agent.api.service import WorktrackerService
 
@@ -89,8 +89,6 @@ def test_default_service_builds_generated_per_tag_clients():
     assert isinstance(service.sdk.models, ModelsApi)
     assert isinstance(service.sdk.providers, ProvidersApi)
     assert isinstance(service.sdk.reasoning_levels, ReasoningLevelsApi)
-    assert isinstance(service.sdk.execution, ExecutionApi)
-    assert isinstance(service.sdk.launch, LaunchApi)
     assert isinstance(service.sdk.revisioned_delete, RevisionedDeleteApi)
     # The generated operations already carry the /work-tracker segment, so the
     # SDK host must be the /api root. Keeping the segment here is what produced

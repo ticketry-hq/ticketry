@@ -20,6 +20,9 @@ import { queryClient } from "../shared/query/queryClient";
 import { queryKeys } from "../shared/query/keys";
 import { useClientStore } from "../state/clientStore";
 import { rankBetween } from "../features/work-items/utilities/rank";
+import type { TypedDocumentNode } from "../graphql-foundation/typedDocument";
+import { FoundationGraphQlError } from "../graphql-foundation/foundationClient";
+import { createBrowserRuntime, initializeStudioRuntime } from "../runtime";
 
 export interface HttpFixture {
   tree(moduleId: string, tree: ModuleTree): void;
@@ -36,7 +39,7 @@ export interface HttpFixture {
   graphRunCount(id: string): number;
   graphRunModes(id: string): Array<string | null>;
   runNowCount(id: string): number;
-  /** Fails the next Run Now POST only, leaving other requests untouched. */
+  /** Refuses the next Run Now mutation only, leaving other requests untouched. */
   failNextRunNow(status: number, body?: unknown): void;
   /** Holds Run Now responses until the returned release is called. */
   holdRunNow(): () => void;
@@ -53,6 +56,10 @@ export interface HttpFixture {
   /** Holds graph-run responses until the returned release is called. */
   holdGraphRuns(): () => void;
   setSubtreeRunEnabled(enabled: boolean): void;
+  executeGraphQl<TResult, TVariables>(
+    document: TypedDocumentNode<TResult, TVariables>,
+    variables: TVariables,
+  ): Promise<TResult>;
   failNext(status: number, body?: unknown): void;
 }
 
@@ -108,6 +115,7 @@ class BoundaryFixture implements StudioFixture {
   private graphRunFailures: Array<{ status: number; body: unknown }> = [];
   private graphRunInertPresses = 0;
   private graphRunGate: Promise<void> | null = null;
+  private readonly armedGraphRuns = new Set<string>();
   private runNowFailures: Array<{ status: number; body: unknown }> = [];
   private runNowGate: Promise<void> | null = null;
   private subtreeRunEnabled = true;
@@ -293,6 +301,116 @@ class BoundaryFixture implements StudioFixture {
     this.subtreeRunEnabled = enabled;
   }
 
+  async executeGraphQl<TResult, TVariables>(
+    document: TypedDocumentNode<TResult, TVariables>,
+    variables: TVariables,
+  ): Promise<TResult> {
+    const input = variables as {
+      rootId?: string;
+      executionMode?: string | null;
+      idOrKey?: string;
+    };
+    if (document.operationName === "RunWorkTrackerWorkItemNow") {
+      const id = input.idOrKey;
+      if (!id) throw new Error("RunWorkTrackerWorkItemNow requires idOrKey.");
+      this.runNowCalls.push({ id });
+      const failure = this.runNowFailures.shift();
+      if (this.runNowGate) await this.runNowGate;
+      if (failure) {
+        const body = failure.body && typeof failure.body === "object"
+          ? failure.body as Record<string, unknown>
+          : {};
+        return {
+          run_now: {
+            target_id: body.target_id ?? id,
+            committed_state: body.committed_state ?? null,
+            run: null,
+            detail: body.detail ?? "Run Now could not be started.",
+            code: body.code ?? "run_now_unavailable",
+            remedy: body.remedy ?? null,
+          },
+        } as TResult;
+      }
+      const current = this.items.get(id);
+      const implement = [...this.states.values()].find(
+        (state) => state.name === "Implement",
+      );
+      if (!current || !implement?.id) {
+        return {
+          run_now: {
+            target_id: id,
+            committed_state: null,
+            run: null,
+            detail: "The work item was not found.",
+            code: "task_not_found",
+            remedy: null,
+          },
+        } as TResult;
+      }
+      this.items.set(id, { ...current, state: implement.id });
+      return {
+        run_now: {
+          target_id: id,
+          committed_state: { id: implement.id, name: implement.name },
+          run: {
+            target_id: id,
+            agent: "codex",
+            agent_run_id: `run-now-${id}`,
+          },
+          detail: "Run Now started.",
+          code: "run_now_started",
+          remedy: null,
+        },
+      } as TResult;
+    }
+    const id = input.rootId;
+    if (!id) throw new Error(`${document.operationName} requires rootId.`);
+    if (document.operationName === "ExecutionGraphRunHolding") {
+      return {
+        graph_run_holding: {
+          nodes: this.armedGraphRuns.has(id)
+            ? [{ root_id: id, execution_mode: "parallel" }]
+            : [],
+        },
+      } as TResult;
+    }
+    if (
+      document.operationName !== "CreateExecutionGraphRun" &&
+      document.operationName !== "UpdateExecutionGraphRun"
+    ) {
+      throw new Error(`Unexpected GraphQL operation ${document.operationName}.`);
+    }
+    this.graphRuns.push({ id, mode: input.executionMode ?? null });
+    const failure = this.graphRunFailures.shift();
+    const inert = this.graphRunInertPresses > 0;
+    if (inert) this.graphRunInertPresses -= 1;
+    if (this.graphRunGate) await this.graphRunGate;
+    if (failure) {
+      const body = failure.body && typeof failure.body === "object"
+        ? failure.body as Record<string, unknown>
+        : {};
+      const code = typeof body.error === "string"
+        ? body.error
+        : failure.status === 409
+          ? "conflict"
+          : "unknown";
+      const message = typeof body.detail === "string"
+        ? body.detail
+        : "The Graph Run operation could not be completed.";
+      throw new FoundationGraphQlError(code as "conflict", message);
+    }
+    this.armedGraphRuns.add(id);
+    return {
+      graph_run_result: {
+        graph_run: {
+          root_id: id,
+          execution_mode: input.executionMode ?? "parallel",
+        },
+        launched: inert ? [] : this.launchableChildren(id),
+      },
+    } as TResult;
+  }
+
   failNext(status: number, body: unknown = null): void {
     this.nextFailure = { status, body };
   }
@@ -419,29 +537,6 @@ class BoundaryFixture implements StudioFixture {
       // press is accepted and launches nothing.
       const launched = inert ? [] : this.launchableChildren(id);
       return json({ root_id: id, launched }, 201);
-    }
-    const runNowMatch = path.match(
-      /\/work-tracker\/work-items\/([^/]+)\/run-now$/,
-    );
-    if (method === "POST" && runNowMatch) {
-      const id = decodeURIComponent(runNowMatch[1]);
-      this.runNowCalls.push({ id });
-      const failure = this.runNowFailures.shift();
-      if (this.runNowGate) await this.runNowGate;
-      if (failure) return json(failure.body, failure.status);
-      const current = this.items.get(id);
-      const implement = [...this.states.values()].find((state) => state.name === "Implement");
-      if (!current || !implement?.id) return json({ detail: "Not found" }, 404);
-      this.items.set(id, { ...current, state: implement.id });
-      return json({
-        target_id: id,
-        committed_state: { id: implement.id, name: implement.name },
-        run: {
-          target_id: id,
-          agent: "codex",
-          agent_run_id: `run-now-${id}`,
-        },
-      }, 201);
     }
     const attachmentMatch = path.match(
       /\/work-tracker\/work-items\/([^/]+)\/attachments$/,
@@ -596,11 +691,13 @@ export function mountStudio({
   http,
   selectedTaskId = null,
   children,
+  graphQlExecution = false,
 }: {
   http: HttpFixture;
   route?: string;
   selectedTaskId?: string | null;
   children?: ReactNode;
+  graphQlExecution?: boolean;
 }): RenderResult {
   if (!(http instanceof BoundaryFixture)) {
     throw new Error("mountStudio requires the HTTP fixture returned by fixture().");
@@ -610,6 +707,13 @@ export function mountStudio({
   restoreFetch = () => {
     globalThis.fetch = previousFetch;
   };
+  if (graphQlExecution) {
+    const browser = createBrowserRuntime({ environment: {} });
+    initializeStudioRuntime({
+      ...browser,
+      writeWorkTracker: (routes) => routes.graphQl(http.executeGraphQl.bind(http)),
+    });
+  }
 
   queryClient.clear();
   useStudioStore.setState({
@@ -641,4 +745,5 @@ export function mountStudio({
 afterEach(() => {
   restoreFetch?.();
   restoreFetch = null;
+  initializeStudioRuntime(createBrowserRuntime({ environment: {} }));
 });

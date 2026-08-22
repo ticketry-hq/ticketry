@@ -6,14 +6,6 @@ from types import SimpleNamespace
 from uuid import UUID
 
 from worktracker_sdk.generated.exceptions import ApiException
-from worktracker_sdk.root_api import (
-    DependencyGraphNodeOut,
-    DependencyGraphOut,
-    ExecuteGraphOut,
-    LaunchedAgentOut,
-    ResetGraphOut,
-    RunNowOut,
-)
 
 
 _TS = datetime(2026, 1, 1, 0, 0, 0)
@@ -56,8 +48,6 @@ class FakeGeneratedSdk:
         self.providers = FakeApi()
         self.reasoning_levels = FakeApi()
         self.attachments = FakeApi()
-        self.execution = FakeApi()
-        self.launch = FakeApi()
         self.revisioned_delete = FakeApi()
 
 
@@ -199,46 +189,16 @@ def make_detail(task=None, attachments=None):
     )
 
 
-def make_launched_agent(**over) -> LaunchedAgentOut:
-    data = dict(
-        target_id="44444444-4444-4444-4444-444444444444",
-        agent="codex",
-        agent_run_id="run-1",
-    )
-    data.update(over)
-    return LaunchedAgentOut(**data)
-
-
-def make_run_now(**over) -> RunNowOut:
-    data = dict(
-        target_id="44444444-4444-4444-4444-444444444444",
-        committed_state={
-            "id": "77777777-7777-7777-7777-777777777777",
-            "name": "Implement",
-        },
-        run=make_launched_agent(),
-    )
-    data.update(over)
-    return RunNowOut(**data)
-
-
 __all__ = [
-    "DependencyGraphNodeOut",
-    "DependencyGraphOut",
-    "ExecuteGraphOut",
     "FakeGeneratedSdk",
-    "LaunchedAgentOut",
-    "ResetGraphOut",
     "make_api_error",
     "make_attachment",
     "make_detail",
     "make_issue_type",
     "make_flat_module",
     "make_flat_work_item",
-    "make_launched_agent",
     "make_module",
     "make_project",
-    "make_run_now",
     "make_state",
     "make_work_item",
     "raises",

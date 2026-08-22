@@ -25,14 +25,13 @@ from worktracker_sdk.generated import (
     ProjectsApi,
     ProvidersApi,
     ReasoningLevelsApi,
-    RunNowRefusal,
     StatesApi,
     WorkItemCreate,
     WorkItemsApi,
     WorkflowsApi,
 )
 from worktracker_sdk.generated.exceptions import ApiException, NotFoundException
-from worktracker_sdk.root_api import ExecutionApi, LaunchApi, RevisionedDeleteApi
+from worktracker_sdk.root_api import RevisionedDeleteApi
 
 from worktracker_agent.api.schemas import (
     WorktrackerAttachmentInfo,
@@ -77,8 +76,6 @@ class GeneratedSdk:
     providers: ProvidersApi
     reasoning_levels: ReasoningLevelsApi
     attachments: AttachmentsApi
-    execution: ExecutionApi
-    launch: LaunchApi
     revisioned_delete: RevisionedDeleteApi
 
     @classmethod
@@ -101,8 +98,6 @@ class GeneratedSdk:
             providers=ProvidersApi(api_client),
             reasoning_levels=ReasoningLevelsApi(api_client),
             attachments=AttachmentsApi(api_client),
-            execution=ExecutionApi(api_client),
-            launch=LaunchApi(api_client),
             revisioned_delete=RevisionedDeleteApi(api_client),
         )
 
@@ -1130,119 +1125,6 @@ class WorktrackerService:
             depended_by=depended_by_refs,
             advisory=advisory,
         )
-
-    @classmethod
-    def _sdk_execution_error(cls, error: ApiException) -> Optional[str]:
-        """Pull the execution route's ``{"error"}`` message off a 4xx body.
-
-        Reads the message off the generated exception (``{"error", "message"}``);
-        a 5xx (or non-object body) yields ``None`` so the caller re-raises. Used
-        by the rooted execution surface (#894).
-        """
-        body = cls._sdk_error_body(error)
-        if body is None:
-            return None
-        return body.get("error") or body.get("detail")
-
-    def execute_dependency_graph(
-        self,
-        root_task_id: str,
-        agent: str | None = None,
-        reset: bool = False,
-    ) -> Dict[str, Any]:
-        """Launch eligible direct children of an armed root task (#721).
-
-        Routes through the SDK's rooted execution resource (#894). The response
-        contains only task ids launched by this call. ``reset=True`` first
-        clears the root's permanent launch ledger, then performs the normal
-        execute. A 4xx becomes ``{"root_id", "error"}``.
-        """
-        root_task_id = str(self._sdk_resolve_task_id(root_task_id))
-        try:
-            if reset:
-                self.sdk.execution.reset_graph(root_task_id)
-            result = self.sdk.execution.execute_graph(root_task_id, agent)
-        except ApiException as error:
-            detail = self._sdk_execution_error(error)
-            if detail is None:
-                raise
-            return {"root_id": root_task_id, "error": detail}
-        return result.model_dump(mode="json")
-
-    def get_dependency_graph(self, root_task_id: str) -> Dict[str, Any]:
-        """Read a task subtree's factual workflow state and dependency edges."""
-        try:
-            root_task_id = str(self._sdk_resolve_task_id(root_task_id))
-            graph = self.sdk.execution.get_dependency_graph(root_task_id)
-        except ApiException as error:
-            detail = self._sdk_execution_error(error)
-            if detail is None:
-                raise
-            return {"root_id": root_task_id, "error": detail}
-        return graph.model_dump(mode="json")
-
-    def launch_default_coding_agent(self, id_or_key: str) -> Dict[str, Any]:
-        """Launch the current-state coding agent for a target work item (#924).
-
-        Resolves ``id_or_key`` (UUID or ``KEY-N``) to a target id and routes
-        through the SDK's rooted launch resource, which starts a normal
-        task-scoped coding session whose prompt is built from the target ticket
-        — no caller prompt, no orchestration/graph/planning run, no workflow
-        move. Returns ``{"target_id", "agent", "agent_run_id"}`` on a durable
-        launch, or ``{"target_id", "error"}`` when the backend rejects it (4xx,
-        e.g. unknown target, no module ancestry, no selected profile), read off
-        the generated exception body; a 5xx (e.g. unavailable tmux) propagates.
-        """
-        target_id = str(self._sdk_resolve_task_id(id_or_key))
-        try:
-            launched = self.sdk.launch.default_coding_agent(target_id)
-        except ApiException as error:
-            body = self._sdk_error_body(error)
-            if body and body.get("code") == "required_skill_unavailable":
-                return {"target_id": target_id, "error": body}
-            detail = self._sdk_execution_error(error)
-            if detail is None:
-                raise
-            return {"target_id": target_id, "error": detail}
-        return launched.model_dump(mode="json")
-
-    def run_now(
-        self,
-        id_or_key: str,
-        *,
-        authorization: str | None = None,
-    ) -> Dict[str, Any]:
-        """Invoke the backend-owned composed Run Now capability as an agent."""
-
-        target_id = str(id_or_key)
-        try:
-            target_id = str(self._sdk_resolve_task_id(id_or_key))
-            result = self.sdk.execution.run_now(
-                target_id,
-                origin="agent",
-                authorization=authorization,
-            )
-        except ApiException as error:
-            if isinstance(error.data, RunNowRefusal):
-                return error.data.model_dump(mode="json")
-            body = self._sdk_error_body(error)
-            if body is None:
-                raise
-            try:
-                refusal = RunNowRefusal.model_validate(body)
-            except ValueError:
-                pass
-            else:
-                return refusal.model_dump(mode="json")
-            detail = body.get("error") or body.get("detail") or "task_not_found"
-            return {
-                "target_id": target_id,
-                "committed_state": None,
-                "run": None,
-                "detail": detail,
-                "code": body.get("code") or detail,
-            }
-        return result.model_dump(mode="json")
 
     def reparent_tasks(
         self,

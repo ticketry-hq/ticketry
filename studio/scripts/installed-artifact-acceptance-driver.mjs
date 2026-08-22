@@ -273,6 +273,9 @@ export async function upgradeWithExistingDataScenario(context) {
       + "(name TEXT PRIMARY KEY, value TEXT NOT NULL);"
       + `INSERT OR REPLACE INTO acceptance_evidence VALUES ('upgrade', '${sentinel}');`,
   );
+  // The desktop database uses WAL mode. Flush committed pages before copying
+  // the main file so every recovery generation is a complete SQLite image.
+  await context.sqlite(context.databasePath, "PRAGMA wal_checkpoint(TRUNCATE);");
   for (const generation of [1, 2, 3]) {
     await copyFile(
       context.databasePath,

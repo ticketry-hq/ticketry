@@ -10,7 +10,14 @@ import {
   useAgentStatusStore,
   STALL_AFTER_MS,
 } from "../features/agents/status";
-import { dispatchStatusFrame } from "../features/agents/status/testing/legacyStatusFrameTestDriver";
+import { applyRunStatusFrame } from "../features/agents/status/stream/runStatusHolding";
+import { applySnapshotFrame } from "../features/agents/status/stream/statusSnapshot";
+import {
+  lifecycleStatusFrame,
+  statusRunHolding,
+  terminalActivityStatusFrame,
+  terminalStatusFrame,
+} from "../features/agents/status/testing/durableStatusFrames";
 import {
   useTerminalStore,
   type SessionMeta,
@@ -71,8 +78,11 @@ function run(overrides: Partial<RunRecord> = {}): RunRecord {
     module_id: "module-1",
     agent: "codex",
     scope: "task",
+    launch_state: "Implement",
+    launch_model: "gpt-5.6",
     started_at: LAUNCHED_AT,
     state: "working",
+    effective_state: "working",
     updated_at: LAUNCHED_AT,
     output_sequence: 1,
     last_output_at: LAUNCHED_AT,
@@ -158,7 +168,7 @@ describe("overhaul acceptance — terminal outcome authority", () => {
     // The tab's X is an explicit termination, not a viewer-only dismissal: it
     // still goes through the backend.
     fireEvent.click(
-      screen.getByRole("button", { name: "Close codex terminal" }),
+      screen.getByRole("button", { name: "Close Implement codex terminal" }),
     );
     await vi.waitFor(() => {
       expect(terminalApi.terminateTerminal).toHaveBeenCalledWith("run-1");
@@ -166,13 +176,12 @@ describe("overhaul acceptance — terminal outcome authority", () => {
 
     // The backend's confirmed ending arrives on the shared status feed.
     act(() => {
-      dispatchStatusFrame({
-        v: 1,
-        type: "backend_session",
-        agent_run_id: "run-1",
-        status: "exited",
+      applyRunStatusFrame(terminalStatusFrame({
+        projectId: "project-1",
+        agentRunId: "run-1",
+        state: "exited",
         at: TERMINATED_AT,
-      });
+      }));
     });
     expectExitedEverywhere();
 
@@ -187,16 +196,18 @@ describe("overhaul acceptance — terminal outcome authority", () => {
     // A capture that raced the kill is delivered afterwards. It may not
     // resurrect the run into a live state, nor re-arm a deadline.
     act(() => {
-      dispatchStatusFrame({
-        v: 1,
-        type: "terminal_activity",
-        at: new Date().toISOString(),
-        run: run({
+      const at = new Date().toISOString();
+      applyRunStatusFrame(terminalActivityStatusFrame({
+        projectId: "project-1",
+        agentRunId: "run-1",
+        at,
+        run: statusRunHolding(run({
           state: "working",
+          effective_state: "working",
           output_sequence: 9,
-          last_output_at: new Date().toISOString(),
-        }),
-      });
+          last_output_at: at,
+        })),
+      }));
       vi.advanceTimersByTime(STALL_AFTER_MS * 3);
     });
     expectExitedEverywhere();
@@ -204,16 +215,17 @@ describe("overhaul acceptance — terminal outcome authority", () => {
     // Reloading reads the persisted outcome back: the same Exited status is
     // reconstructed well past the threshold, with no live tab restored.
     act(() => {
-      dispatchStatusFrame({
-        v: 1,
-        type: "snapshot",
-        scope: { project_id: "project-1", task_id: null },
+      applySnapshotFrame({
+        __typename: "RunStatusSnapshot",
+        project_id: "project-1",
+        cursor: 3,
         runs: [
-          run({
+          statusRunHolding(run({
             state: "exited",
+            effective_state: "exited",
             updated_at: TERMINATED_AT,
             last_output_at: LAUNCHED_AT,
-          }),
+          })),
         ],
         automation_attempts: [],
         at: new Date().toISOString(),
@@ -227,12 +239,12 @@ describe("overhaul acceptance — terminal outcome authority", () => {
     startStallDeadlines();
 
     act(() => {
-      dispatchStatusFrame({
-        v: 1,
-        type: "agent_lifecycle",
+      applyRunStatusFrame(lifecycleStatusFrame({
+        projectId: "project-1",
+        agentRunId: "run-1",
+        state: "quiet",
         at: "2026-08-15T12:00:10.000Z",
-        run: run({ state: "quiet", updated_at: "2026-08-15T12:00:10.000Z" }),
-      });
+      }));
       vi.advanceTimersByTime(STALL_AFTER_MS);
     });
     // Both the terminal tab and the aggregate badge read the same projection.
@@ -241,16 +253,18 @@ describe("overhaul acceptance — terminal outcome authority", () => {
     // Ordinary resumed output on a still-live run is the opposite case: it
     // clears the overlay and returns the provider's own last word.
     act(() => {
-      dispatchStatusFrame({
-        v: 1,
-        type: "terminal_activity",
-        at: new Date().toISOString(),
-        run: run({
+      const at = new Date().toISOString();
+      applyRunStatusFrame(terminalActivityStatusFrame({
+        projectId: "project-1",
+        agentRunId: "run-1",
+        at,
+        run: statusRunHolding(run({
           state: "working",
+          effective_state: "working",
           output_sequence: 2,
-          last_output_at: new Date().toISOString(),
-        }),
-      });
+          last_output_at: at,
+        })),
+      }));
     });
     expect(screen.queryByLabelText(STALLED_TITLE)).not.toBeInTheDocument();
     expect(

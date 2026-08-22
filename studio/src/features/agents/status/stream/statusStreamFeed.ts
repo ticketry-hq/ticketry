@@ -32,8 +32,11 @@ import {
   createDocumentInvalidator,
   type DocumentInvalidator,
 } from "./documentInvalidation";
+import { applyCreatedDocumentFact } from "./documentDiscovery";
 import { applySnapshotFrame } from "./statusSnapshot";
 import { readStatusFact } from "./statusFacts";
+import { applyRunStatusFact } from "./runStatusHolding";
+import { refreshTerminalHoldings } from "./terminalInvalidation";
 import {
   createWorkItemInvalidator,
   type WorkItemInvalidator,
@@ -121,16 +124,14 @@ export const statusStreamFeed = {
     const applyEvent = (frame: RunStatusEventFrame): void => {
       const fact = readStatusFact(frame);
       if (!fact) return;
+      const runResult = applyRunStatusFact(fact);
+      if (runResult === "unknown_run") {
+        resync();
+        return;
+      }
+      if (runResult === "applied") return;
       const runs = useAgentStatusStore.getState();
       switch (fact.family) {
-        case "agent_run": {
-          if (!runs.runs[fact.agentRunId]) {
-            resync();
-            return;
-          }
-          runs.applyState(fact.agentRunId, fact.state, fact.occurredAt);
-          return;
-        }
         case "automation_attempt":
           runs.upsertAutomationAttempt(fact.attempt);
           return;
@@ -147,6 +148,7 @@ export const statusStreamFeed = {
           );
           return;
         case "document":
+          applyCreatedDocumentFact(fact);
           documents.record({ scope: fact.scope, ownerId: fact.ownerId });
           return;
         case "worktree":
@@ -221,6 +223,7 @@ export const statusStreamFeed = {
             documents.flush();
             worktrees.flush();
             refreshDocumentRegistries();
+            void refreshTerminalHoldings();
             // Live Git state can have moved while the stream was gone without
             // any fact this client received saying so.
             void refreshWorktreeHoldings();

@@ -9,11 +9,18 @@
  */
 import type { RunStatusEventFrame } from "../generated/statusStream";
 import type { AutomationAttemptPayload } from "../generated/attempts";
-import { toAutomationAttemptRecord } from "./statusHoldingAdapters";
-import type { AutomationAttemptRecord, RawLifecycleState } from "../types";
+import type { RunHoldingPayload } from "../generated/statusStream";
+import { toAutomationAttemptRecord, toRunRecord } from "./statusHoldingAdapters";
+import type {
+  AutomationAttemptRecord,
+  RawLifecycleState,
+  RunPresentationState,
+  RunRecord,
+} from "../types";
 
 export const AGENT_RUN_LIFECYCLE = "agent_run.lifecycle";
 export const AGENT_RUN_TERMINAL = "agent_run.terminal";
+export const AGENT_RUN_TERMINAL_ACTIVITY = "agent_run.terminal_activity";
 export const WORK_ITEM_CHANGED = "work_item.changed";
 export const WORK_ITEM_DELETED = "work_item.deleted";
 export const WORKFLOW_STATE_CHANGED = "workflow_state.changed";
@@ -34,7 +41,15 @@ export interface AgentRunFact {
   readonly family: "agent_run";
   readonly agentRunId: string;
   readonly state: RawLifecycleState;
+  readonly effectiveState: RunPresentationState;
   readonly occurredAt: string;
+  readonly exitCode: number | null;
+  readonly terminalOutcome: boolean;
+}
+
+export interface AgentRunActivityFact {
+  readonly family: "agent_run_activity";
+  readonly run: RunRecord;
 }
 
 export interface WorkItemFact {
@@ -78,6 +93,9 @@ export interface DocumentFact {
   readonly ownerId: string;
   readonly moduleId: string | null;
   readonly removed: boolean;
+  readonly documentId: string | null;
+  readonly relPath: string | null;
+  readonly changeKind: string | null;
 }
 
 /**
@@ -99,6 +117,7 @@ export interface WorktreeFact {
 
 export type StatusFact =
   | AgentRunFact
+  | AgentRunActivityFact
   | WorkItemFact
   | WorkflowStateFact
   | AutomationAttemptFact
@@ -154,11 +173,37 @@ export function readStatusFact(frame: RunStatusEventFrame): StatusFact | null {
       const state = text(payload.state);
       const occurredAt = text(payload.occurredAt) ?? frame.committed_at;
       if (agentRunId === null || state === null) return null;
+      const effectiveState = text(payload.effectiveState) ?? state;
+      const exitCode = typeof payload.exitCode === "number" ? payload.exitCode : null;
       return {
         family: "agent_run",
         agentRunId,
         state: state as RawLifecycleState,
+        effectiveState: effectiveState as RunPresentationState,
         occurredAt,
+        exitCode,
+        terminalOutcome: frame.event_kind === AGENT_RUN_TERMINAL,
+      };
+    }
+    case AGENT_RUN_TERMINAL_ACTIVITY: {
+      if (!isRecord(payload.run)) return null;
+      const run = payload.run;
+      if (
+        text(run.agent_run_id) === null ||
+        text(run.project_id) === null ||
+        text(run.module_id) === null ||
+        text(run.scope) === null ||
+        text(run.started_at) === null ||
+        text(run.state) === null ||
+        text(run.effective_state) === null ||
+        text(run.updated_at) === null ||
+        typeof run.output_sequence !== "number"
+      ) {
+        return null;
+      }
+      return {
+        family: "agent_run_activity",
+        run: toRunRecord(run as unknown as RunHoldingPayload),
       };
     }
     case WORK_ITEM_CHANGED:
@@ -203,6 +248,9 @@ export function readStatusFact(frame: RunStatusEventFrame): StatusFact | null {
         ownerId,
         moduleId: text(payload.moduleId),
         removed: frame.event_kind === DOCUMENT_DELETED,
+        documentId: text(payload.documentId),
+        relPath: text(payload.relPath),
+        changeKind: text(payload.changeKind),
       };
     }
     case WORKTREE_CHANGED:

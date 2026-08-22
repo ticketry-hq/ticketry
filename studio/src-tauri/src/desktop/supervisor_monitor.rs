@@ -7,13 +7,12 @@ use std::thread;
 use std::time::Duration;
 use tauri::Manager;
 
+use crate::data_directory::established_data_directory;
 use crate::desktop::mcp_runtime::ensure_in_process_mcp;
 use crate::desktop::runs_handoff;
 use crate::desktop::service_health::ServiceHealth;
 use crate::desktop::service_state::DesktopServiceState;
-use crate::ownership::established_data_directory;
-use crate::runs_effect_port;
-use crate::supervisor::{self, SupervisorError, SupervisorEvent};
+use crate::sidecar_supervision::{self, SupervisorError, SupervisorEvent};
 use crate::{runs_persistence, settings_persistence, work_management};
 
 fn recovery_health_updates(events: &[SupervisorEvent], pair_is_ready: bool) -> Vec<ServiceHealth> {
@@ -41,7 +40,7 @@ fn recovery_health_updates(events: &[SupervisorEvent], pair_is_ready: bool) -> V
 /// launch backlog drains, so recovery cannot resurrect a stale `ready: true`.
 fn runs_gate_result(
     application: &tauri::AppHandle,
-    supervisor: &crate::supervisor::Supervisor,
+    _supervisor: &crate::sidecar_supervision::Supervisor,
     pair_is_ready: bool,
 ) -> Result<(), String> {
     let data_directory = established_data_directory().map_err(|error| error.to_string())?;
@@ -53,22 +52,11 @@ fn runs_gate_result(
     if runs_persistence::published_readiness_is_complete(&data_directory) {
         return Ok(());
     }
-    let Some(port) = supervisor.port() else {
-        return Ok(());
-    };
     let commands = application
         .state::<crate::desktop::launch_runtime::DesktopLaunchRuntime>()
         .commands()?
         .clone();
-    let effect_port = runs_effect_port::RunsEffectPort::new(
-        format!("http://127.0.0.1:{port}/api"),
-        supervisor.credential().to_owned(),
-    );
-    tauri::async_runtime::block_on(runs_handoff::reopen_gate(
-        &data_directory,
-        &commands,
-        &effect_port,
-    ))
+    tauri::async_runtime::block_on(runs_handoff::reopen_gate(&data_directory, &commands))
 }
 
 pub(crate) fn start_supervisor_monitor(application: tauri::AppHandle) {
@@ -100,7 +88,7 @@ pub(crate) fn start_supervisor_monitor(application: tauri::AppHandle) {
             let new_events = events.get(observed_events..).unwrap_or(&[]);
             let backend_is_ready = supervisor.port().is_some();
             let mcp_error = if result.is_ok() && backend_is_ready {
-                ensure_in_process_mcp(&state, supervisor).err()
+                ensure_in_process_mcp(&application, &state, supervisor).err()
             } else {
                 None
             };
@@ -157,7 +145,7 @@ pub(crate) fn start_supervisor_monitor(application: tauri::AppHandle) {
                     ServiceHealth::failed(
                         &SupervisorError {
                             service: "mcp".to_owned(),
-                            kind: supervisor::FailureKind::Crash,
+                            kind: sidecar_supervision::FailureKind::Crash,
                             message,
                         },
                         supervisor.log_path(),
@@ -169,7 +157,7 @@ pub(crate) fn start_supervisor_monitor(application: tauri::AppHandle) {
                     ServiceHealth::failed(
                         &SupervisorError {
                             service: "slice2-readiness".to_owned(),
-                            kind: supervisor::FailureKind::Crash,
+                            kind: sidecar_supervision::FailureKind::Crash,
                             message: error.to_string(),
                         },
                         supervisor.log_path(),
@@ -181,7 +169,7 @@ pub(crate) fn start_supervisor_monitor(application: tauri::AppHandle) {
                     ServiceHealth::failed(
                         &SupervisorError {
                             service: "slice3-readiness".to_owned(),
-                            kind: supervisor::FailureKind::Crash,
+                            kind: sidecar_supervision::FailureKind::Crash,
                             message: error,
                         },
                         supervisor.log_path(),
@@ -200,7 +188,7 @@ mod tests {
     #[test]
     fn recovery_attempt_reports_recovering_then_ready_for_a_serving_pair() {
         let updates = recovery_health_updates(
-            &[supervisor::SupervisorEvent::Restarting {
+            &[sidecar_supervision::SupervisorEvent::Restarting {
                 service: "backend".to_owned(),
                 attempt: 1,
             }],
@@ -219,7 +207,7 @@ mod tests {
     #[test]
     fn queued_recovery_reports_recovering_before_the_pair_is_serving() {
         let updates = recovery_health_updates(
-            &[supervisor::SupervisorEvent::RecoveryQueued {
+            &[sidecar_supervision::SupervisorEvent::RecoveryQueued {
                 service: "backend".to_owned(),
             }],
             false,

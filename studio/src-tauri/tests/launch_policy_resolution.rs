@@ -50,6 +50,13 @@ async fn fixture() -> (tempfile::TempDir, DatabaseConnection, LaunchPolicyResolv
                 state_revision bigint NOT NULL, manual_module_order bool NOT NULL,
                 created_at datetime NOT NULL, updated_at datetime NOT NULL
             );
+            CREATE TABLE worktracker_state (
+                id char(32) PRIMARY KEY, project_id char(32) NOT NULL,
+                name varchar(255) NOT NULL, "group" varchar(32) NOT NULL,
+                color varchar(32) NOT NULL, sort_order integer NOT NULL,
+                is_protected bool NOT NULL, created_at datetime NOT NULL,
+                updated_at datetime NOT NULL
+            );
             CREATE TABLE worktracker_issuetype (
                 id char(32) PRIMARY KEY, project_id char(32) NOT NULL,
                 name varchar(255) NOT NULL, level varchar(16) NOT NULL,
@@ -91,10 +98,33 @@ async fn fixture() -> (tempfile::TempDir, DatabaseConnection, LaunchPolicyResolv
                 auto_start bool NOT NULL, subtree_run_enabled bool NOT NULL,
                 created_at datetime NOT NULL, updated_at datetime NOT NULL
             );
+            CREATE TABLE automation_attempts (
+                id text PRIMARY KEY, transition_id text NOT NULL,
+                issue_id text NOT NULL, from_state_id text NOT NULL,
+                to_state_id text NOT NULL, workflow_revision integer NOT NULL,
+                status text NOT NULL, agent text, agent_run_id text, error text,
+                error_details text, retryable bool NOT NULL DEFAULT 1,
+                dismissed_at text, retry_of_id text, root_attempt_id text,
+                created_at text NOT NULL, updated_at text NOT NULL
+            );
+            CREATE UNIQUE INDEX uniq_auto_attempt_transition_root
+                ON automation_attempts(transition_id) WHERE retry_of_id IS NULL;
+            CREATE TABLE runs_status_events (
+                cursor integer PRIMARY KEY AUTOINCREMENT,
+                event_id text NOT NULL UNIQUE, project_id text NOT NULL,
+                event_kind text NOT NULL, payload_version integer NOT NULL,
+                subject_kind text NOT NULL, subject_id text NOT NULL,
+                agent_run_id text, automation_attempt_id text,
+                work_item_id text, payload text NOT NULL,
+                committed_at text NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
             INSERT INTO worktracker_workspace VALUES
                 ('{WORKSPACE}', 'meml', 'Memory', 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
             INSERT INTO worktracker_project VALUES
                 ('{PROJECT}', '{WORKSPACE}', 'Main', 'MAIN', '', 2, 0, 0,
+                 CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+            INSERT INTO worktracker_state VALUES
+                ('{STATE}', '{PROJECT}', 'Implement', 'started', '', 1, 0,
                  CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
             INSERT INTO worktracker_issuetype VALUES
                 ('{TYPE}', '{PROJECT}', 'Implementation', 'task', '', 0, '{STATE}', 17, 0,
@@ -136,7 +166,8 @@ async fn fixture() -> (tempfile::TempDir, DatabaseConnection, LaunchPolicyResolv
     std::fs::write(
         directory.path().join("profiles.json"),
         format!(
-            r#"{{"recent_profile_index":0,"profiles":[{{"name":"Local","workspace_slug":"meml","module_links":[{{"module_id":"{MODULE}","path":"/workspace/main"}}]}}]}}"#
+            r#"{{"recent_profile_index":0,"profiles":[{{"name":"Local","workspace_slug":"meml","module_links":[{{"module_id":"{MODULE}","path":"{}"}}]}}]}}"#,
+            directory.path().display()
         ),
     )
     .unwrap();
@@ -160,7 +191,8 @@ fn request(scope: CallerScope, key: &str) -> LaunchPolicyRequest {
 
 #[tokio::test]
 async fn all_doors_share_one_complete_versioned_snapshot() {
-    let (_directory, _database, resolver) = fixture().await;
+    let (directory, _database, resolver) = fixture().await;
+    let expected_folder = directory.path().display().to_string();
     for scope in [
         CallerScope::Interactive,
         CallerScope::AutoStart,
@@ -170,9 +202,10 @@ async fn all_doors_share_one_complete_versioned_snapshot() {
             .resolve(request(scope, scope.as_str()))
             .await
             .unwrap();
-        assert_eq!(decision.version, 1);
+        assert_eq!(decision.version, 2);
         assert_eq!(decision.policy_identity, "launch-binding:1");
         assert_eq!(decision.policy_version, 17);
+        assert_eq!(decision.state_name.as_deref(), Some("Implement"));
         assert_eq!(
             decision.task_id,
             uuid::Uuid::parse_str(TASK).unwrap().to_string()
@@ -195,7 +228,7 @@ async fn all_doors_share_one_complete_versioned_snapshot() {
         );
         assert_eq!(
             decision.module_link.path.as_deref(),
-            Some("/workspace/main")
+            Some(expected_folder.as_str())
         );
         assert_eq!(decision.caller_scope, scope);
         assert_eq!(decision.idempotency_key, scope.as_str());
@@ -257,7 +290,82 @@ async fn resolution_rejects_every_established_policy_failure_code() {
 }
 
 #[tokio::test]
-async fn each_unattended_door_enforces_its_own_gate() {
+async fn resolution_rejects_every_unusable_selected_module_folder() {
+    let cases = ["unset", "relative", "missing", "file"];
+    for case in cases {
+        let (directory, _database, resolver) = fixture().await;
+        let path = match case {
+            "unset" => String::new(),
+            "relative" => "relative/repository".to_owned(),
+            "missing" => directory.path().join("missing").display().to_string(),
+            "file" => {
+                let path = directory.path().join("regular-file");
+                std::fs::write(&path, b"not a directory").unwrap();
+                path.display().to_string()
+            }
+            _ => unreachable!(),
+        };
+        std::fs::write(
+            directory.path().join("profiles.json"),
+            format!(
+                r#"{{"recent_profile_index":0,"profiles":[{{"name":"Local","workspace_slug":"meml","module_links":[{{"module_id":"{MODULE}","path":{}}}]}}]}}"#,
+                serde_json::to_string(&path).unwrap(),
+            ),
+        )
+        .unwrap();
+
+        let error = resolver
+            .resolve(request(CallerScope::Interactive, case))
+            .await
+            .unwrap_err();
+        assert_eq!(error.code(), "module_folder_unusable", "{case}");
+    }
+}
+
+#[tokio::test]
+async fn resolution_rejects_when_no_profile_is_selected() {
+    let (directory, _database, resolver) = fixture().await;
+    std::fs::write(
+        directory.path().join("profiles.json"),
+        r#"{"recent_profile_index":null,"profiles":[]}"#,
+    )
+    .unwrap();
+
+    let error = resolver
+        .resolve(request(CallerScope::Interactive, "no-profile"))
+        .await
+        .unwrap_err();
+    assert_eq!(error.code(), "profile_not_configured");
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn resolution_rejects_an_inaccessible_selected_module_folder() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let (directory, _database, resolver) = fixture().await;
+    let blocked = directory.path().join("blocked");
+    std::fs::create_dir(&blocked).unwrap();
+    std::fs::set_permissions(&blocked, std::fs::Permissions::from_mode(0o600)).unwrap();
+    std::fs::write(
+        directory.path().join("profiles.json"),
+        format!(
+            r#"{{"recent_profile_index":0,"profiles":[{{"name":"Local","workspace_slug":"meml","module_links":[{{"module_id":"{MODULE}","path":{}}}]}}]}}"#,
+            serde_json::to_string(&blocked.display().to_string()).unwrap(),
+        ),
+    )
+    .unwrap();
+
+    let error = resolver
+        .resolve(request(CallerScope::Interactive, "inaccessible"))
+        .await
+        .unwrap_err();
+    assert_eq!(error.code(), "module_folder_unusable");
+    std::fs::set_permissions(&blocked, std::fs::Permissions::from_mode(0o700)).unwrap();
+}
+
+#[tokio::test]
+async fn unattended_doors_honor_committed_auto_start_and_live_subtree_policy() {
     let (_directory, database, resolver) = fixture().await;
     database
         .execute_unprepared(
@@ -265,14 +373,10 @@ async fn each_unattended_door_enforces_its_own_gate() {
         )
         .await
         .unwrap();
-    assert_eq!(
-        resolver
-            .resolve(request(CallerScope::AutoStart, "auto"))
-            .await
-            .unwrap_err()
-            .code(),
-        "auto_start_not_enabled"
-    );
+    assert!(resolver
+        .resolve(request(CallerScope::AutoStart, "auto"))
+        .await
+        .is_ok());
     assert_eq!(
         resolver
             .resolve(request(CallerScope::Subtree, "subtree"))
@@ -362,6 +466,9 @@ async fn auto_start_occurrences_become_decisions_or_recoverable_rejections() {
             ) VALUES (
                 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 1, '{TASK}', '{PROJECT}', '{TYPE}',
                 '{STATE}', '{STATE}', 'started', 'started', 1, 17, 1
+            ), (
+                'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee', 1, '{TASK}', '{PROJECT}', '{TYPE}',
+                '{STATE}', '{STATE}', 'started', 'started', 2, 17, 0
             )
             "#
         ))
@@ -377,6 +484,29 @@ async fn auto_start_occurrences_become_decisions_or_recoverable_rejections() {
         decisions[0].idempotency_key,
         "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     );
+    let attempt_count = database
+        .query_one_raw(sea_orm::Statement::from_string(
+            sea_orm::DbBackend::Sqlite,
+            "SELECT COUNT(*) AS count FROM automation_attempts WHERE transition_id = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'"
+                .to_owned(),
+        ))
+        .await
+        .unwrap()
+        .unwrap()
+        .try_get::<i64>("", "count")
+        .unwrap();
+    assert_eq!(attempt_count, 1);
+    let all_attempts = database
+        .query_one_raw(sea_orm::Statement::from_string(
+            sea_orm::DbBackend::Sqlite,
+            "SELECT COUNT(*) AS count FROM automation_attempts".to_owned(),
+        ))
+        .await
+        .unwrap()
+        .unwrap()
+        .try_get::<i64>("", "count")
+        .unwrap();
+    assert_eq!(all_attempts, 1, "inert occurrences create no attempt");
 
     database
         .execute_unprepared(&format!(
@@ -394,6 +524,31 @@ async fn auto_start_occurrences_become_decisions_or_recoverable_rejections() {
         ))
         .await
         .unwrap();
+    let immutable = launch_policy::prepare_pending_auto_starts(&database, &resolver, 10)
+        .await
+        .unwrap();
+    assert_eq!(immutable.len(), 1);
+    assert_eq!(
+        immutable[0].idempotency_key,
+        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    );
+
+    database
+        .execute_unprepared(&format!(
+            r#"
+            UPDATE worktracker_launchbinding SET prompt = '';
+            INSERT INTO worktracker_transitionoccurrence (
+                occurrence_id, version, issue_id, project_id, issue_type_id,
+                from_state_id, to_state_id, from_group, to_group,
+                work_item_revision, workflow_revision, destination_auto_start
+            ) VALUES (
+                'cccccccccccccccccccccccccccccccc', 1, '{TASK}', '{PROJECT}', '{TYPE}',
+                '{STATE}', '{STATE}', 'started', 'started', 3, 17, 1
+            );
+            "#
+        ))
+        .await
+        .unwrap();
     assert!(
         launch_policy::prepare_pending_auto_starts(&database, &resolver, 10)
             .await
@@ -403,7 +558,7 @@ async fn auto_start_occurrences_become_decisions_or_recoverable_rejections() {
     let row = database
         .query_one_raw(sea_orm::Statement::from_string(
             sea_orm::DbBackend::Sqlite,
-            "SELECT code FROM ticketry_launchpolicyrejection WHERE idempotency_key = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'"
+            "SELECT code FROM ticketry_launchpolicyrejection WHERE idempotency_key = 'cccccccccccccccccccccccccccccccc'"
                 .to_owned(),
         ))
         .await
@@ -411,7 +566,7 @@ async fn auto_start_occurrences_become_decisions_or_recoverable_rejections() {
         .unwrap();
     assert_eq!(
         row.try_get::<String>("", "code").unwrap(),
-        "auto_start_not_enabled"
+        "prompt_not_configured"
     );
 
     // The rejection is a diagnosis, not a verdict: it is readable against the
@@ -421,17 +576,17 @@ async fn auto_start_occurrences_become_decisions_or_recoverable_rejections() {
         .await
         .unwrap();
     assert_eq!(rejections.len(), 1);
-    assert_eq!(rejections[0].code, "auto_start_not_enabled");
+    assert_eq!(rejections[0].code, "prompt_not_configured");
     assert!(rejections[0].recoverable);
     assert_eq!(
         rejections[0].occurrence_id,
-        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        "cccccccccccccccccccccccccccccccc"
     );
 
     database
         .execute_unprepared(
             r#"
-            UPDATE worktracker_launchbinding SET auto_start = 1;
+            UPDATE worktracker_launchbinding SET prompt = 'Implement it.';
             UPDATE ticketry_launchpolicyrejection
                 SET rejected_at = datetime('now', '-1 hour');
             "#,
@@ -444,12 +599,57 @@ async fn auto_start_occurrences_become_decisions_or_recoverable_rejections() {
     assert_eq!(recovered.len(), 1);
     assert_eq!(
         recovered[0].idempotency_key,
-        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        "cccccccccccccccccccccccccccccccc"
     );
     assert!(launch_policy::rejections_for_work_item(&database, TASK)
         .await
         .unwrap()
         .is_empty());
+}
+
+#[tokio::test]
+async fn auto_start_backlog_is_bounded_and_ordered_by_commit_then_identity() {
+    let (_directory, database, resolver) = fixture().await;
+    database
+        .execute_unprepared(&format!(
+            r#"
+            INSERT INTO worktracker_transitionoccurrence (
+                occurrence_id, version, issue_id, project_id, issue_type_id,
+                from_state_id, to_state_id, from_group, to_group,
+                work_item_revision, workflow_revision, destination_auto_start, committed_at
+            ) VALUES
+                ('ffffffffffffffffffffffffffffffff', 1, '{TASK}', '{PROJECT}', '{TYPE}',
+                 '{STATE}', '{STATE}', 'started', 'started', 3, 17, 1, '2026-01-02 00:00:00'),
+                ('22222222222222222222222222222222', 1, '{TASK}', '{PROJECT}', '{TYPE}',
+                 '{STATE}', '{STATE}', 'started', 'started', 2, 17, 1, '2026-01-01 00:00:00'),
+                ('11111111111111111111111111111111', 1, '{TASK}', '{PROJECT}', '{TYPE}',
+                 '{STATE}', '{STATE}', 'started', 'started', 1, 17, 1, '2026-01-01 00:00:00');
+            "#
+        ))
+        .await
+        .unwrap();
+
+    let first = launch_policy::prepare_pending_auto_starts(&database, &resolver, 2)
+        .await
+        .unwrap();
+    assert_eq!(
+        first
+            .iter()
+            .map(|decision| decision.idempotency_key.as_str())
+            .collect::<Vec<_>>(),
+        [
+            "11111111111111111111111111111111",
+            "22222222222222222222222222222222"
+        ]
+    );
+    let second = launch_policy::prepare_pending_auto_starts(&database, &resolver, 2)
+        .await
+        .unwrap();
+    assert_eq!(second.len(), 1);
+    assert_eq!(
+        second[0].idempotency_key,
+        "ffffffffffffffffffffffffffffffff"
+    );
 }
 
 /// The retry command only appends a pending child; the launch it is still owed
@@ -534,16 +734,6 @@ async fn seed_attempts(database: &DatabaseConnection) {
     database
         .execute_unprepared(&format!(
             r#"
-            CREATE TABLE automation_attempts (
-                id char(32) PRIMARY KEY, transition_id char(32) NOT NULL,
-                issue_id char(32) NOT NULL, from_state_id char(32) NOT NULL,
-                to_state_id char(32) NOT NULL, workflow_revision integer NOT NULL,
-                status varchar(16) NOT NULL, agent varchar(64),
-                agent_run_id varchar(255), error text, error_details text,
-                retryable bool NOT NULL, dismissed_at datetime,
-                retry_of_id char(32), root_attempt_id char(32),
-                created_at datetime NOT NULL, updated_at datetime NOT NULL
-            );
             INSERT INTO automation_attempts (
                 id, transition_id, issue_id, from_state_id, to_state_id,
                 workflow_revision, status, retryable, retry_of_id, root_attempt_id,

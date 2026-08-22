@@ -1,7 +1,9 @@
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 
 use super::LaunchPolicyError;
-use crate::work_management::entities::{issue, issue_type, launch_binding, project, workspace};
+use crate::work_management::entities::{
+    issue, issue_type, launch_binding, project, state, workspace,
+};
 
 pub(super) struct PolicyReader<'a> {
     database: &'a DatabaseConnection,
@@ -66,6 +68,24 @@ impl<'a> PolicyReader<'a> {
                 auto_start: row.auto_start,
                 subtree_run_enabled: row.subtree_run_enabled,
             }))
+    }
+
+    pub(super) async fn state_name(
+        &self,
+        project_id: &str,
+        state_id: &str,
+    ) -> Result<String, LaunchPolicyError> {
+        state::Entity::find_by_id(compact_uuid(state_id))
+            .filter(state::Column::ProjectId.eq(compact_uuid(project_id)))
+            .one(self.database)
+            .await?
+            .map(|row| row.name)
+            .ok_or_else(|| {
+                LaunchPolicyError::rejected(
+                    "launch_context_incomplete",
+                    "The workflow state selected for launch is unavailable.",
+                )
+            })
     }
 }
 

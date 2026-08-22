@@ -15,47 +15,6 @@ class RouteDeclaration:
 
 
 MODEL_ROUTES = {
-    "GraphRun": {
-        "reads": (
-            RouteDeclaration(
-                "GET",
-                "/api/work-tracker/work-items/{issue_id}/graph-run",
-                "Retrieve the factual dependency subtree for a graph-run root.",
-            ),
-        ),
-        "writes": (
-            RouteDeclaration(
-                "POST",
-                "/api/work-tracker/work-items/{issue_id}/graph-run",
-                "Create and arm one graph-run header for a work-item root.",
-            ),
-            RouteDeclaration(
-                "DELETE",
-                "/api/work-tracker/work-items/{issue_id}/graph-run",
-                "Reset one graph run by deleting its header and launch ledger.",
-            ),
-        ),
-    },
-    "LaunchAgent": {
-        "reads": (),
-        "writes": (
-            RouteDeclaration(
-                "POST",
-                "/api/work-tracker/work-items/{issue_id}/launch-agent",
-                "Launch one task-scoped coding agent for a work item.",
-            ),
-        ),
-    },
-    "RunNow": {
-        "reads": (),
-        "writes": (
-            RouteDeclaration(
-                "POST",
-                "/api/work-tracker/work-items/{issue_id}/run-now",
-                "Move an eligible Story to Implement and launch its pinned policy.",
-            ),
-        ),
-    },
     "Workspace": {
         "reads": (
             RouteDeclaration(
@@ -374,91 +333,13 @@ HOST_ROUTES = (
         "DELETE", "/api/config/profiles/{index}", "Delete a local profile."
     ),
     RouteDeclaration(
-        "POST",
-        "/api/automation-attempts/{attempt_id}/retry",
-        "Retired: retry is an authored Rust command; this route refuses.",
-    ),
-    RouteDeclaration(
-        "POST", "/api/lifecycle/events", "Ingest and publish one lifecycle event."
-    ),
-    RouteDeclaration(
         "GET", "/api/runs/module-activity", "Read recent module activity."
     ),
     RouteDeclaration(
-        "GET", "/api/runs/agent-status", "Read the authoritative agent status snapshot."
+        "POST", "/api/runs/authorization", "Issue a credential for one Rust-owned Agent Run."
     ),
     RouteDeclaration(
-        "POST", "/api/terminals/viewers/lease", "Acquire a terminal viewer lease."
-    ),
-    RouteDeclaration(
-        "POST", "/api/terminals/viewers/lease/renew", "Renew a terminal viewer lease."
-    ),
-    RouteDeclaration(
-        "POST",
-        "/api/terminals/viewers/lease/release",
-        "Release a terminal viewer lease.",
-    ),
-    RouteDeclaration(
-        "POST",
-        "/api/terminals/viewers/output",
-        "Report one native terminal viewer's output observation.",
-    ),
-    RouteDeclaration(
-        "POST",
-        "/api/terminals",
-        "Create a durable terminal run through the control-plane service.",
-    ),
-    RouteDeclaration("GET", "/api/terminals", "List active terminal runs for a task."),
-    RouteDeclaration("DELETE", "/api/terminals", "Terminate one terminal run."),
-    RouteDeclaration(
-        "POST", "/api/terminals/resume", "Resume a provider conversation."
-    ),
-    RouteDeclaration(
-        "GET", "/api/terminals/resumable", "List resumable provider conversations."
-    ),
-    RouteDeclaration("GET", "/api/terminals/scratch", "List scratch terminal runs."),
-    RouteDeclaration(
-        "POST",
-        "/api/terminals/shells",
-        "Create a durable login shell rooted in a module folder.",
-    ),
-    RouteDeclaration(
-        "GET", "/api/terminals/shells", "List a module's live login shells."
-    ),
-    RouteDeclaration(
-        "POST",
-        "/api/terminals/self-terminate",
-        "Terminate the Studio-authorized current run.",
-    ),
-    RouteDeclaration(
-        "POST",
-        "/api/terminals/mcp-authorize",
-        "Resolve the authenticated MCP caller to its durable run scope.",
-    ),
-    RouteDeclaration(
-        "GET",
-        "/api/terminals/runs-effects",
-        "Publish the terminal executor's Slice 3 Runs health record.",
-    ),
-    RouteDeclaration(
-        "POST",
-        "/api/terminals/runs-effects/observe",
-        "Report what exists under one deterministic runtime identity.",
-    ),
-    RouteDeclaration(
-        "POST",
-        "/api/terminals/runs-effects/execute",
-        "Perform one already-durable launch effect and report its outcome.",
-    ),
-    RouteDeclaration(
-        "GET",
-        "/api/execution/launch-policy-effects",
-        "Publish the Django effect port's Slice 2 readiness contract.",
-    ),
-    RouteDeclaration(
-        "POST",
-        "/api/execution/launch-policy-effects",
-        "Perform one immutable Rust-authored launch decision idempotently.",
+        "POST", "/api/runs/mcp-authorize", "Resolve a run credential to its WorkTracker scope."
     ),
     # The workspace routes below were retired at the Slice 4 handoff. Every one of
     # them writes — listing documents rescans and prunes, live worktree status
@@ -509,14 +390,6 @@ PUBLIC_ROUTE_REASONS = {
         "GET",
         "/api/healthz",
     ): "The sidecar supervisor needs a credential-free liveness probe.",
-    (
-        "POST",
-        "/api/lifecycle/events",
-    ): "Provider hook subprocesses lack the desktop API key; the handler verifies a run-scoped Authorization token injected at launch.",
-    (
-        "POST",
-        "/api/terminals/self-terminate",
-    ): "The handler authenticates the calling run with its narrower run-scoped Authorization token.",
     (
         "GET",
         "/api/docs/{doc_id}/{asset_path}",

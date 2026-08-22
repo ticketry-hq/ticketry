@@ -10,7 +10,6 @@ from worktracker_agent.api.schemas import (
     WorktrackerScopeContext,
     WorktrackerOperationResult,
 )
-from worktracker_agent.mcp.termination import _request_authorization
 
 
 class WorktrackerToolset:
@@ -322,78 +321,6 @@ class WorktrackerToolset:
     ) -> dict:
         """Add a reverse dependency edge: dependent_task_id depends on task_id."""
         return self.service.add_task_dependent(task_id, dependent_task_id)
-
-    def execute_dependency_graph_tool(
-        self,
-        ctx: Any,
-        root_task_id: str,
-        agent: str | None = None,
-        reset: bool = False,
-    ) -> dict:
-        """Launch eligible direct children of a root task.
-
-        Only direct children participate. Each child launches once after every
-        blocker reaches a satisfying workflow state; a durable ledger prevents
-        later re-launches.
-
-        Passing ``reset=True`` clears that root's ledger first, then executes
-        newly launchable direct children. The default leaves the ledger intact.
-
-        Returns ``root_id`` and task ids launched by this call."""
-        return self.service.execute_dependency_graph(root_task_id, agent, reset=reset)
-
-    def get_dependency_graph_tool(
-        self,
-        ctx: Any,
-        root_task_id: str,
-    ) -> dict:
-        """Read a task subtree's workflow states and dependency edges.
-
-        Returns the root plus factual nodes carrying ``id``, workflow-state
-        ``state``, ``parent_id``, and ``blocked_by`` ids. This read never
-        launches agents and does not depend on an execution run.
-        """
-        return self.service.get_dependency_graph(root_task_id)
-
-    def launch_default_coding_agent_tool(
-        self,
-        ctx: Any,
-        id_or_key: str,
-    ) -> dict:
-        """Launch the default coding agent for one work item (#924).
-
-        Starts a normal, task-scoped coding session for the target ticket: the
-        prompt is built from that ticket's own context (you cannot pass prompt
-        text), and the current-state binding selects the provider. ``id_or_key`` is the
-        target's UUID or key (e.g. ``PROJ-123``).
-
-        Returns ``{"target_id", "agent", "agent_run_id"}`` once the run
-        is durably launched — the agent then continues on its own in a detached
-        terminal. On a backend rejection it returns ``{"target_id", "error"}``
-        instead of raising (unknown target, no module ancestry, no selected
-        profile). This is a single interactive launch: it starts no orchestration
-        run, dependency graph, or planning phase, and never moves the target's
-        workflow state. Repeated calls each start a fresh run.
-        """
-        return self.service.launch_default_coding_agent(id_or_key)
-
-    def run_now_tool(
-        self,
-        ctx: Any,
-        id_or_key: str,
-    ) -> dict:
-        """Move an eligible Story to Implement and launch its agent as one action.
-
-        ``id_or_key`` accepts a work-item UUID or key (for example ``MEML-9``).
-        The backend owns refusal, destination-policy preflight, workflow move,
-        and task-scoped launch ordering. Refusals are returned as structured
-        results; a committed destination is present only when the move occurred.
-        """
-
-        return self.service.run_now(
-            id_or_key,
-            authorization=_request_authorization(),
-        )
 
     def get_task_scope_context_tool(
         self,

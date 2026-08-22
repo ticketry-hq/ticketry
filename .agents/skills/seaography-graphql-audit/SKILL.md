@@ -32,7 +32,8 @@ Inventory these before judging any resolver:
 
 - database migrations and tables;
 - SeaORM entities, columns, primary keys, and relations;
-- Seaography entity registrations and whether each uses `mutation: false`;
+- Seaography entity registrations, whether each uses `mutation: false`, and
+  any `GeneratedMutations` selection installed by Ticketry's registrar;
 - the schema builder's database connection;
 - `BuilderContext` type codecs, input skips, guards, filters, and hooks;
 - generated GraphQL SDL;
@@ -43,7 +44,7 @@ Inventory these before judging any resolver:
 Use `rg` and the generated SDL as the first-pass inventory. Useful searches:
 
 ```bash
-rg -n "register_entity!|mutation: false|register_custom_(query|mutation)" studio/src-tauri/src
+rg -n "register_entity!|mutation: false|GeneratedMutations|register_generated_mutations|register_custom_(query|mutation)" studio/src-tauri/src
 rg -n "CustomFields|CustomOutputType|CustomInputType" studio/src-tauri/src
 rg -n "insert_skips|update_skips|entity_guard|field_guard|entity_filter|entity_watch|before_active_model_save" studio/src-tauri/src
 rg -n "rusqlite|sqlx::|from_sql|from_string" studio/src-tauri/src
@@ -85,10 +86,16 @@ aliases, codecs, and caller adaptation cannot represent it.
 ### Mutations
 
 For every registered entity, audit create-one, create-batch, update, and delete
-together. Flag:
+together, then compare the result with Ticketry's per-operation selection.
+Flag:
 
-- generated mutations enabled without a four-operation safety audit;
-- `mutation: false` with no written invariant/override record;
+- any generated operation selected without a four-operation safety audit;
+- `mutation: false` with neither a `GeneratedMutations` selection nor a written
+  invariant/override record;
+- a selected operation absent from the audit, or an audited-private operation
+  present in the SDL;
+- duplicated entity mutation registration or multiple helper calls that can
+  register the same support type twice;
 - custom flat CRUD that skips, guards, filters, constraints, or hooks could
   safely express;
 - unrestricted inputs exposing ownership, ranks, revisions, timestamps,
@@ -99,9 +106,10 @@ together. Flag:
 - update/create seams that do not return the authoritative model;
 - named domain operations absent from the exception registry.
 
-Do not recommend generated mutations just because create is easy. In
-Seaography rc.9 one unsafe delete keeps the whole generated mutation bundle
-private.
+Do not recommend a generated operation just because its persistence is simple.
+Use Ticketry's registrar to keep each unsafe or unused operation private.
+Generated update/delete remain filter-based and are normally unsuitable where
+a non-null identity is required.
 
 ### Hooks and invariant placement
 
@@ -195,7 +203,7 @@ Finally give a least-complex-to-most-complex convergence queue. Prefer:
 1. caller aliases/adapters and one-column codecs;
 2. generated reads and relations;
 3. mirrored output/pass-through layer deletion;
-4. flat generated mutations whose complete bundles are safe;
+4. flat generated mutation operations whose individual selections are safe;
 5. restricted model-shaped mutations using SeaORM transactions;
 6. invariant-heavy graph/workflow operations last.
 
@@ -209,7 +217,7 @@ When the user asks to fix findings, explicitly switch to the sibling
 
 1. read its full instructions again;
 2. start from the migration/entity/registration/caller operation;
-3. complete the four-write audit before enabling any generated mutation;
+3. complete the four-write audit before selecting any generated mutation;
 4. create an override record for every custom seam that remains;
 5. run the skill's required focused, drift, typecheck, and acceptance tests;
 6. report the reduced custom counts and blockers that remain.

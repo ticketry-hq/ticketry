@@ -1,10 +1,5 @@
-use std::sync::{Arc, Mutex};
-
-use async_trait::async_trait;
 use muxed_studio_lib::runs_persistence::{
-    AgentRunHolding, AuthenticatedAgentRun, LifecycleFact, McpRunControl, RunTerminationService,
-    RunsPersistenceError, RunsServices, TerminalFact, TerminalOutcome, TerminateRunRequest,
-    TerminationExecutor, TerminationExecutorEvidence,
+    AgentRunHolding, LifecycleFact, RunsServices, TerminalFact, TerminalOutcome,
 };
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection, DbBackend, Statement};
 
@@ -23,7 +18,16 @@ async fn fixture() -> (tempfile::TempDir, DatabaseConnection, RunsServices) {
             model TEXT, reasoning TEXT,
             status TEXT NOT NULL, started_at TEXT NOT NULL, ended_at TEXT, exit_code INTEGER,
             error TEXT, cwd TEXT, provider_session_id TEXT, lifecycle_state TEXT,
-            lifecycle_updated_at TEXT, design_dir TEXT, resumed_from TEXT, scope TEXT NOT NULL
+            lifecycle_updated_at TEXT, design_dir TEXT, resumed_from TEXT, scope TEXT NOT NULL,
+            launch_state TEXT, launch_model TEXT
+        );
+        CREATE TABLE agent_terminal_sessions (
+            agent_run_id TEXT PRIMARY KEY, tmux_session_name TEXT NOT NULL,
+            task_id TEXT NOT NULL, module_id TEXT NOT NULL, project_id TEXT NOT NULL,
+            created_at TEXT NOT NULL, terminated_at TEXT, scope TEXT NOT NULL,
+            doc_rel_path TEXT, runtime_cleanup_pending BOOL NOT NULL DEFAULT 0,
+            runtime_namespace TEXT, output_identity TEXT,
+            output_sequence INTEGER NOT NULL DEFAULT 0, last_output_at TEXT, agent TEXT
         );
         CREATE TABLE runs_status_events (
             cursor INTEGER PRIMARY KEY AUTOINCREMENT, event_id TEXT NOT NULL UNIQUE,
@@ -429,93 +433,6 @@ async fn failed_event_append_rolls_back_the_lifecycle_row() {
     assert_eq!(row.provider_session_id, None);
 }
 
-#[derive(Default)]
-struct FakeExecutor {
-    requests: Mutex<Vec<TerminateRunRequest>>,
-}
-
-#[async_trait]
-impl TerminationExecutor for FakeExecutor {
-    async fn terminate(
-        &self,
-        request: TerminateRunRequest,
-    ) -> Result<TerminationExecutorEvidence, RunsPersistenceError> {
-        self.requests.lock().unwrap().push(request);
-        Ok(TerminationExecutorEvidence { was_present: true })
-    }
-}
-
-#[tokio::test]
-async fn termination_is_principal_bound_and_shared_with_the_mcp_adapter() {
-    let (_directory, database, services) = fixture().await;
-    insert_run(
-        &database,
-        "run-current",
-        "task-a",
-        "2026-08-12T07:00:00Z",
-        None,
-        "running",
-        Some("working"),
-        Some("2026-08-12T08:00:00Z"),
-        None,
-        "task",
-    )
-    .await;
-    insert_run(
-        &database,
-        "run-mcp",
-        "task-b",
-        "2026-08-12T07:00:00Z",
-        None,
-        "running",
-        Some("working"),
-        Some("2026-08-12T08:00:00Z"),
-        None,
-        "task",
-    )
-    .await;
-    let executor = Arc::new(FakeExecutor::default());
-    let termination = RunTerminationService::new(
-        database.clone(),
-        services.lifecycle().clone(),
-        executor.clone(),
-    );
-    let foreign = AuthenticatedAgentRun {
-        agent_run_id: "run-current".into(),
-        issue_id: "task-b".into(),
-        project_id: "project-a".into(),
-        scope: "task".into(),
-    };
-    assert!(termination.terminate_current_run(&foreign).await.is_err());
-    assert!(executor.requests.lock().unwrap().is_empty());
-    let current = AuthenticatedAgentRun {
-        agent_run_id: "run-current".into(),
-        issue_id: "task-a".into(),
-        project_id: "project-a".into(),
-        scope: "task".into(),
-    };
-    let result = termination.terminate_current_run(&current).await.unwrap();
-    assert!(result.terminated && !result.already_terminated && result.durable_fact_applied);
-    assert_eq!(
-        executor.requests.lock().unwrap().as_slice(),
-        &[TerminateRunRequest {
-            agent_run_id: "run-current".into()
-        }]
-    );
-    let mcp = McpRunControl::new(termination);
-    let mcp_result = mcp
-        .terminate_current_run(&AuthenticatedAgentRun {
-            agent_run_id: "run-mcp".into(),
-            issue_id: "task-b".into(),
-            project_id: "project-a".into(),
-            scope: "task".into(),
-        })
-        .await
-        .unwrap();
-    assert!(mcp_result.durable_fact_applied);
-    assert_eq!(event_count(&database).await, 2);
-}
-
 #[tokio::test]
 async fn same_timestamp_lifecycle_facts_resolve_in_arrival_order() {
     let (_directory, database, services) = fixture().await;
@@ -559,67 +476,13 @@ async fn same_timestamp_lifecycle_facts_resolve_in_arrival_order() {
 }
 
 #[tokio::test]
-async fn terminating_a_settled_run_spends_no_effect_and_appends_no_fact() {
-    let (_directory, database, services) = fixture().await;
-    insert_run(
-        &database,
-        "run-ended",
-        "task-a",
-        "2026-08-12T07:00:00Z",
-        Some("2026-08-12T09:00:00Z"),
-        "completed",
-        Some("exited"),
-        Some("2026-08-12T09:00:00Z"),
-        None,
-        "task",
-    )
-    .await;
-    let executor = Arc::new(FakeExecutor::default());
-    let result = RunTerminationService::new(
-        database.clone(),
-        services.lifecycle().clone(),
-        executor.clone(),
-    )
-    .terminate_current_run(&AuthenticatedAgentRun {
-        agent_run_id: "run-ended".into(),
-        issue_id: "task-a".into(),
-        project_id: "project-a".into(),
-        scope: "task".into(),
-    })
-    .await
-    .unwrap();
-    assert!(result.already_terminated && !result.durable_fact_applied);
-    assert!(executor.requests.lock().unwrap().is_empty());
-    assert_eq!(event_count(&database).await, 0);
-}
-
-#[tokio::test]
-async fn unbound_graphql_callers_cannot_reach_run_scoped_termination() {
-    let database = Database::connect("sqlite::memory:").await.unwrap();
-    let schema = muxed_studio_lib::query_root::foundation_schema(
-        database, None, None, None, None, None, None, None, None, None,
-    )
-    .unwrap();
-    let response = schema
-        .execute("mutation { terminate_current_agent_run { agent_run_id } }")
-        .await;
-    // The desktop transport binds no Agent Run, so the caller is rejected for
-    // being unbound rather than misreported as a missing service.
-    let body = serde_json::to_value(&response).unwrap();
-    assert_eq!(
-        body["errors"][0]["extensions"]["code"], "caller_run_unbound",
-        "{body}"
-    );
-}
-
-#[tokio::test]
-async fn generated_graphql_contract_has_scoped_holdings_and_targetless_termination() {
+async fn generated_graphql_contract_has_scoped_holdings_and_no_legacy_run_termination() {
     let sdl = muxed_studio_lib::graphql_foundation::generated_schema_sdl()
         .await
         .unwrap();
     assert!(sdl
         .contains("agent_run_holdings(project_id: String!, task_id: String): [AgentRunHolding!]!"));
     assert!(sdl.contains("ingest_agent_lifecycle("));
-    assert!(sdl.contains("terminate_current_agent_run: CurrentRunTermination!"));
-    assert!(!sdl.contains("terminate_current_agent_run(agent_run_id:"));
+    assert!(!sdl.contains("terminate_current_agent_run"));
+    assert!(sdl.contains("terminal_session_update(agent_run_id: String!, termination_request_id: String): AgentTerminalSessions!"));
 }

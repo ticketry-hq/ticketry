@@ -132,8 +132,11 @@ mod tests {
         std::fs::write(outside.path().join("secret.md"), "secret").expect("write outside content");
         let root = tempfile::tempdir().expect("create a design directory");
         write(root.path(), "real.md", "real");
-        std::os::unix::fs::symlink(outside.path().join("secret.md"), root.path().join("escape.md"))
-            .expect("create the escaping symlink");
+        std::os::unix::fs::symlink(
+            outside.path().join("secret.md"),
+            root.path().join("escape.md"),
+        )
+        .expect("create the escaping symlink");
 
         assert_eq!(scan_documents(root.path()), vec!["real.md".to_owned()]);
     }

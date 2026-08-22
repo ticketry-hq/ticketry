@@ -164,7 +164,7 @@ async fn fixture() -> Fixture {
             model TEXT, reasoning TEXT, status TEXT NOT NULL, started_at TEXT NOT NULL,
             ended_at TEXT, exit_code INTEGER, error TEXT, cwd TEXT, provider_session_id TEXT,
             lifecycle_state TEXT, lifecycle_updated_at TEXT, design_dir TEXT, resumed_from TEXT,
-            scope TEXT NOT NULL
+            scope TEXT NOT NULL, launch_state TEXT, launch_model TEXT
         );
         CREATE TABLE runs_status_events (
             cursor INTEGER PRIMARY KEY AUTOINCREMENT, event_id TEXT NOT NULL UNIQUE,
@@ -238,7 +238,8 @@ fn digest(bytes: &[u8]) -> String {
 }
 
 fn canonical(path: &std::path::Path) -> std::path::PathBuf {
-    path.canonicalize().expect("canonicalize the design directory")
+    path.canonicalize()
+        .expect("canonicalize the design directory")
 }
 
 fn id(value: u128) -> String {
@@ -438,7 +439,12 @@ async fn a_crash_after_staging_finishes_the_rename_and_converges_after_two_resta
     // Prepared, staged, flushed — and then the process died before the rename.
     fixture
         .journal()
-        .prepare(save_intent(&fixture, &operation, b"# original", b"# staged"))
+        .prepare(save_intent(
+            &fixture,
+            &operation,
+            b"# original",
+            b"# staged",
+        ))
         .await
         .expect("prepare the save");
     std::fs::write(
@@ -449,7 +455,11 @@ async fn a_crash_after_staging_finishes_the_rename_and_converges_after_two_resta
 
     let saves = fixture.saves();
     saves.reconciler().reconcile().await.expect("first restart");
-    saves.reconciler().reconcile().await.expect("second restart");
+    saves
+        .reconciler()
+        .reconcile()
+        .await
+        .expect("second restart");
 
     assert_eq!(fixture.body(), b"# staged");
     assert_eq!(registry_digest(&fixture).await, Some(digest(b"# staged")));
@@ -464,7 +474,12 @@ async fn a_crash_after_the_rename_adopts_the_file_and_records_it_once() {
     let operation = id(1);
     fixture
         .journal()
-        .prepare(save_intent(&fixture, &operation, b"# original", b"# renamed"))
+        .prepare(save_intent(
+            &fixture,
+            &operation,
+            b"# original",
+            b"# renamed",
+        ))
         .await
         .expect("prepare the save");
     // The rename committed; the settlement transaction never did.
@@ -472,7 +487,11 @@ async fn a_crash_after_the_rename_adopts_the_file_and_records_it_once() {
 
     let saves = fixture.saves();
     saves.reconciler().reconcile().await.expect("first restart");
-    saves.reconciler().reconcile().await.expect("second restart");
+    saves
+        .reconciler()
+        .reconcile()
+        .await
+        .expect("second restart");
 
     assert_eq!(fixture.body(), b"# renamed", "one file version");
     assert_eq!(registry_digest(&fixture).await, Some(digest(b"# renamed")));
@@ -494,7 +513,11 @@ async fn a_crash_before_staging_leaves_the_file_untouched_rather_than_guessing_a
 
     let saves = fixture.saves();
     saves.reconciler().reconcile().await.expect("first restart");
-    saves.reconciler().reconcile().await.expect("second restart");
+    saves
+        .reconciler()
+        .reconcile()
+        .await
+        .expect("second restart");
 
     assert_eq!(fixture.body(), b"# original");
     assert_eq!(registry_digest(&fixture).await, None);
@@ -521,7 +544,11 @@ async fn a_document_that_moved_on_under_a_prepared_save_is_a_non_overwriting_con
 
     let saves = fixture.saves();
     saves.reconciler().reconcile().await.expect("first restart");
-    saves.reconciler().reconcile().await.expect("second restart");
+    saves
+        .reconciler()
+        .reconcile()
+        .await
+        .expect("second restart");
 
     assert_eq!(fixture.body(), b"# theirs", "evidence is never overwritten");
     assert_eq!(registry_digest(&fixture).await, None);

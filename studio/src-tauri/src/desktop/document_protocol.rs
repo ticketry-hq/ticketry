@@ -53,8 +53,7 @@ fn resolve_service<R: Runtime>(application: &tauri::AppHandle<R>) -> Option<Docu
 async fn respond(service: &DocumentsService, request: Request<Vec<u8>>) -> Response<Vec<u8>> {
     // Only reads exist. A write shaped like one is refused before any path is
     // resolved, so the protocol can never become a second save seam.
-    if request.method() != tauri::http::Method::GET
-        && request.method() != tauri::http::Method::HEAD
+    if request.method() != tauri::http::Method::GET && request.method() != tauri::http::Method::HEAD
     {
         return not_found();
     }
@@ -132,9 +131,7 @@ fn asset_response(asset: DocumentAsset) -> Response<Vec<u8>> {
     if let Some(etag) = asset.etag.as_deref() {
         response = response.header("ETag", etag);
     }
-    response
-        .body(asset.bytes)
-        .unwrap_or_else(|_| not_found())
+    response.body(asset.bytes).unwrap_or_else(|_| not_found())
 }
 
 /// One shape for every refusal, carrying no body and no local path.

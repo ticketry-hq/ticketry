@@ -154,7 +154,9 @@ impl DocumentSaveService {
             WorkspaceOperationOutcome::Conflicted { code, message, .. } => {
                 Err(DocumentSaveError::external_conflict(&code, &message))
             }
-            WorkspaceOperationOutcome::Failed { code, message, .. } => Err(failure(&code, &message)),
+            WorkspaceOperationOutcome::Failed { code, message, .. } => {
+                Err(failure(&code, &message))
+            }
         }
     }
 
@@ -269,7 +271,11 @@ mod tests {
             Some(digest.as_str())
         );
         for rejected in ["", "not-a-digest", &"a".repeat(63), &"z".repeat(64)] {
-            assert_eq!(normalized_digest(rejected), None, "{rejected} is not usable");
+            assert_eq!(
+                normalized_digest(rejected),
+                None,
+                "{rejected} is not usable"
+            );
         }
     }
 }

@@ -26,6 +26,9 @@ pub async fn prepare_pending_retries(
 ) -> Result<Vec<LaunchPolicyDecision>, LaunchPolicyError> {
     let mut attempts = unjudged(database, limit).await?;
     attempts.extend(retryable(database, limit).await?);
+    attempts
+        .sort_by(|left, right| (&left.created_at, &left.id).cmp(&(&right.created_at, &right.id)));
+    attempts.truncate(limit as usize);
 
     let mut decisions = Vec::new();
     for attempt in attempts {

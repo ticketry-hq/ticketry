@@ -4,8 +4,6 @@ use rmcp::{service::RequestContext, RoleServer};
 use serde::Deserialize;
 use serde_json::{json, Value};
 
-use crate::work_management::launch_policy::LaunchPolicyDecision;
-
 #[derive(Clone)]
 pub struct BackendPort {
     client: Client,
@@ -21,15 +19,6 @@ pub struct RunPrincipal {
     pub scope: String,
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
-struct EffectPortReadiness {
-    version: i32,
-    ready: bool,
-    policy_owner: String,
-    effect_owner: String,
-    django_write_fallback: bool,
-}
-
 #[derive(Debug)]
 pub struct AuthorizationFailure(pub Value);
 
@@ -40,27 +29,6 @@ impl BackendPort {
             base_url: base_url.trim_end_matches('/').to_owned(),
             api_key,
         }
-    }
-
-    pub async fn verify_launch_policy_readiness(&self) -> Result<(), String> {
-        let value = self
-            .request(Method::GET, "/execution/launch-policy-effects", None, None)
-            .await
-            .map_err(|_| "Django launch-effect compatibility port is unavailable.".to_owned())?;
-        let readiness: EffectPortReadiness = serde_json::from_value(value)
-            .map_err(|_| "Django launch-effect readiness response is invalid.".to_owned())?;
-        if readiness
-            != (EffectPortReadiness {
-                version: 1,
-                ready: true,
-                policy_owner: "rust".to_owned(),
-                effect_owner: "django".to_owned(),
-                django_write_fallback: false,
-            })
-        {
-            return Err("Django launch-effect compatibility port is not Slice 2 ready.".to_owned());
-        }
-        Ok(())
     }
 
     pub async fn authorize(
@@ -77,7 +45,7 @@ impl BackendPort {
         let response = self
             .request(
                 Method::POST,
-                "/terminals/mcp-authorize",
+                "/runs/mcp-authorize",
                 Some(&authorization),
                 None,
             )
@@ -91,39 +59,6 @@ impl BackendPort {
                     "error": "run_control_invalid_response"
                 }))
             })
-    }
-
-    pub async fn terminate(&self, authorization: &str) -> Value {
-        self.request(
-            Method::POST,
-            "/terminals/self-terminate",
-            Some(authorization),
-            None,
-        )
-        .await
-        .unwrap_or_else(|body| body)
-    }
-
-    pub async fn reset_dependency_graph(&self, authorization: &str, task_id: &str) -> Value {
-        self.request(
-            Method::DELETE,
-            &format!("/work-tracker/work-items/{task_id}/graph-run"),
-            Some(authorization),
-            None,
-        )
-        .await
-        .unwrap_or_else(|body| json!({"root_id": task_id, "error": error_detail(&body)}))
-    }
-
-    pub async fn perform_launch_decision(&self, decision: &LaunchPolicyDecision) -> Value {
-        self.request(
-            Method::POST,
-            "/execution/launch-policy-effects",
-            None,
-            Some(serde_json::to_value(decision).unwrap_or_else(|_| json!({}))),
-        )
-        .await
-        .unwrap_or_else(|body| json!({"target_id": decision.task_id, "error": error_value(&body)}))
     }
 
     async fn request(
@@ -183,21 +118,6 @@ fn normalize_authorization_error(status: StatusCode, body: Value) -> Value {
     body
 }
 
-fn error_detail(body: &Value) -> String {
-    body.get("error")
-        .or_else(|| body.get("detail"))
-        .and_then(Value::as_str)
-        .unwrap_or("execution_unavailable")
-        .to_owned()
-}
-
-fn error_value(body: &Value) -> Value {
-    body.get("error")
-        .or_else(|| body.get("detail"))
-        .cloned()
-        .unwrap_or_else(|| Value::String("execution_unavailable".to_owned()))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -210,5 +130,12 @@ mod tests {
         );
         assert_eq!(body["error"], "caller_run_unbound");
         assert_eq!(body["reason"], "authorization_expired");
+    }
+
+    #[test]
+    fn backend_port_has_no_graph_run_execution_route() {
+        let source = include_str!("backend_port.rs");
+        assert!(!source.contains(concat!("/", "graph-run")));
+        assert!(!source.contains(concat!("reset_", "dependency_graph")));
     }
 }

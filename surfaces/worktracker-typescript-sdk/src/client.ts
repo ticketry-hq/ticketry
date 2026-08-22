@@ -10,7 +10,6 @@ import {
 import { AttachmentsApi } from "./generated/apis/AttachmentsApi.js";
 import { ConfigurationApi } from "./generated/apis/ConfigurationApi.js";
 import { DocumentsApi } from "./generated/apis/DocumentsApi.js";
-import { ExecutionApi } from "./generated/apis/ExecutionApi.js";
 import { IssueTypesApi } from "./generated/apis/IssueTypesApi.js";
 import { LaunchBindingsApi } from "./generated/apis/LaunchBindingsApi.js";
 import { ModelsApi } from "./generated/apis/ModelsApi.js";
@@ -25,7 +24,6 @@ import { WorkflowsApi } from "./generated/apis/WorkflowsApi.js";
 import { WorkspaceApi } from "./generated/apis/WorkspaceApi.js";
 import { WorkItemsApi } from "./generated/apis/WorkItemsApi.js";
 import { SystemApi } from "./generated/apis/SystemApi.js";
-import { TerminalsApi } from "./generated/apis/TerminalsApi.js";
 import { WorktreesApi } from "./generated/apis/WorktreesApi.js";
 import { WorkTrackerApiError } from "./errors.js";
 
@@ -40,7 +38,6 @@ export interface WorkTrackerClient {
   attachments: AttachmentsApi;
   configuration: ConfigurationApi;
   documents: DocumentsApi;
-  execution: ExecutionApi;
   issueTypes: IssueTypesApi;
   launchBindings: LaunchBindingsApi;
   models: ModelsApi;
@@ -55,7 +52,6 @@ export interface WorkTrackerClient {
   workspace: WorkspaceApi;
   workItems: WorkItemsApi;
   system: SystemApi;
-  terminals: TerminalsApi;
   worktrees: WorktreesApi;
 }
 
@@ -105,7 +101,6 @@ export function createWorkTrackerClient(
     attachments: new AttachmentsApi(configuration),
     configuration: new ConfigurationApi(configuration),
     documents: new DocumentsApi(configuration),
-    execution: new ExecutionApi(configuration),
     issueTypes: new IssueTypesApi(configuration),
     launchBindings: new LaunchBindingsApi(configuration),
     models: new ModelsApi(configuration),
@@ -120,7 +115,6 @@ export function createWorkTrackerClient(
     workspace: new WorkspaceApi(configuration),
     workItems: new WorkItemsApi(configuration),
     system: new SystemApi(configuration),
-    terminals: new TerminalsApi(configuration),
     worktrees: new WorktreesApi(configuration),
   };
 }

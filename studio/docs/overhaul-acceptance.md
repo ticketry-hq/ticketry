@@ -133,6 +133,9 @@ named gate before the full Studio suite, typecheck, and build.
 | 124 | Task workspace Settings occlusion converges on the newest navigation and presentation intent: a pending modal hide shields a newer Details destination until native completion, and a close/reopen/close sequence cannot accept an older reveal merely because the newest request uses the same retained handle. Together with the shared mounted Settings cases 117–118, the gate preserves native-chord singleton routing, hidden-viewer focus exclusion, late attachment suppression, owner/geometry convergence, compatibility fallback, and failure recovery. |
 | 125 | Module creation refuses a missing folder before creating the module. |
 | 126 | Opening state configuration over a selected Task terminal hides the retained native viewer without detaching or replacing it, and closing state configuration remeasures and reveals the same handle. |
+| 153 | The desktop xterm fallback attaches, exchanges bytes, resizes, scrolls, suspends, resumes, and detaches through Tauri viewer commands instead of the Python terminal WebSocket. |
+| 154 | Desktop Run Now, agent and module-shell discovery and control use caller-owned GraphQL over TauRPC, deliberate launches get fresh request IDs while retries retain them, mutations refresh canonical terminal holdings, and native plus xterm viewers share generation-bound lease authority. |
+| 155 | Studio snapshots and live output events consume the same Rust run projection, including Shell scope, nullable provider, launch metadata, effective state, output sequence, and output time. |
 
 Each executable case carries one stable `[overhaul-NN]` marker. The gate has a
 contract test that fails if a marker is missing or duplicated. When a Studio UI

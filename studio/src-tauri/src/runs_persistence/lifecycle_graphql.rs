@@ -7,8 +7,7 @@ use seaography::{
 use serde::Serialize;
 
 use super::{
-    AgentRunHolding, AuthenticatedAgentRun, LifecycleAcceptance, LifecycleFact,
-    RunTerminationService, RunsPersistenceError, RunsServices, TerminationResult,
+    AgentRunHolding, LifecycleAcceptance, LifecycleFact, RunsPersistenceError, RunsServices,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, CustomOutputType)]
@@ -30,25 +29,6 @@ impl From<LifecycleAcceptance> for LifecycleAccepted {
             state: value.state,
             occurred_at: value.occurred_at,
             event_cursor: value.event_cursor,
-        }
-    }
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, CustomOutputType)]
-pub struct CurrentRunTermination {
-    pub agent_run_id: String,
-    pub terminated: bool,
-    pub already_terminated: bool,
-    pub durable_fact_applied: bool,
-}
-
-impl From<TerminationResult> for CurrentRunTermination {
-    fn from(value: TerminationResult) -> Self {
-        Self {
-            agent_run_id: value.agent_run_id,
-            terminated: value.terminated,
-            already_terminated: value.already_terminated,
-            durable_fact_applied: value.durable_fact_applied,
         }
     }
 }
@@ -93,26 +73,11 @@ impl AgentRunMutations {
             .map(Into::into)
             .map_err(graphql_error)
     }
-
-    /// No target identifier is accepted. The principal is installed by the
-    /// authenticated transport rather than parsed from GraphQL variables, so
-    /// an unbound caller is rejected before any service is consulted. The
-    /// desktop transport binds no Agent Run; agents reach termination through
-    /// the authenticated MCP transport, which shares this service.
-    async fn terminate_current_agent_run(ctx: &Context<'_>) -> Result<CurrentRunTermination> {
-        let principal = principal(ctx)?;
-        termination(ctx)?
-            .terminate_current_run(principal)
-            .await
-            .map(Into::into)
-            .map_err(graphql_error)
-    }
 }
 
 pub fn register(mut builder: seaography::Builder) -> seaography::Builder {
     builder.register_custom_output::<AgentRunHolding>();
     builder.register_custom_output::<LifecycleAccepted>();
-    builder.register_custom_output::<CurrentRunTermination>();
     builder.register_custom_query::<AgentRunQueries>();
     builder.register_custom_mutation::<AgentRunMutations>();
     builder
@@ -123,12 +88,6 @@ fn services<'a>(ctx: &'a Context<'a>) -> Result<&'a RunsServices> {
     ctx.data::<RunsServices>().map_err(|_| unavailable())
 }
 
-fn termination<'a>(ctx: &'a Context<'a>) -> Result<&'a RunTerminationService> {
-    ready(ctx)?;
-    ctx.data::<RunTerminationService>()
-        .map_err(|_| unavailable())
-}
-
 /// Every Runs query and command passes through the readiness gate first. A
 /// partially ready runtime refuses rather than reaching a half-adopted store.
 fn ready(ctx: &Context<'_>) -> Result<()> {
@@ -137,13 +96,6 @@ fn ready(ctx: &Context<'_>) -> Result<()> {
     } else {
         Err(super::readiness_gate::unavailable())
     }
-}
-
-fn principal<'a>(ctx: &'a Context<'a>) -> Result<&'a AuthenticatedAgentRun> {
-    ctx.data::<AuthenticatedAgentRun>().map_err(|_| {
-        Error::new("The current Agent Run is not authenticated.")
-            .extend_with(|_, extension| extension.set("code", "caller_run_unbound"))
-    })
 }
 
 fn unavailable() -> Error {

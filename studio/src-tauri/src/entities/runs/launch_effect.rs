@@ -13,7 +13,7 @@ pub struct Model {
     pub project_id: String,
     pub issue_id: String,
     pub scope: String,
-    pub provider: String,
+    pub provider: Option<String>,
     pub target_kind: String,
     pub target_id: String,
     pub policy_reference: Option<String>,

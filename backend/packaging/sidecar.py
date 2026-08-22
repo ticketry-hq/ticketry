@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import argparse
 import contextlib
-import hashlib
-import importlib
 import io
 import json
 import os
@@ -23,21 +21,10 @@ from studio_server.atomic_files import atomic_write_bytes
 
 CREDENTIAL_ENV = "MUXED_SIDECAR_CREDENTIAL"
 DEFAULT_DESKTOP_ORIGIN = "tauri://localhost"
-PACKAGED_HOOK_RUNNER_ENV = "MUXED_PACKAGED_HOOK_RUNNER"
-HOOK_SPOOL_DIR_ENV = "MUXED_HOOK_SPOOL_DIR"
 MIGRATION_FAILURE_LINE = "MUXED_FAILURE migration database could not be migrated"
 STARTUP_FAILURE_LINE = "MUXED_FAILURE crash sidecar could not start"
-SKILL_PREPARATION_EVENT = "provider_skill_preparation_failed"
 SNAPSHOT_RETENTION = 3
 POSTGRES_MIGRATION_LOCK_ID = 0x5449434B45545259
-
-HOOK_MODULES = {
-    "agy": "apps.terminals.agents.hooks.agy_hook",
-    "claude": "apps.terminals.agents.hooks.claude_hook",
-    "codex": "apps.terminals.agents.hooks.codex_hook",
-    "gemini": "apps.terminals.agents.hooks.gemini_hook",
-}
-
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Ticketry backend sidecar")
@@ -87,30 +74,6 @@ def configure_environment(args: argparse.Namespace) -> None:
     os.environ["MUXED_ALLOWED_HOSTS"] = "localhost,127.0.0.1,[::1]"
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "studio_server.settings")
     os.environ.setdefault("MUXED_DESKTOP_ORIGIN", DEFAULT_DESKTOP_ORIGIN)
-    os.environ["MUXED_LIFECYCLE_URL"] = (
-        f"http://127.0.0.1:{args.port}/api/lifecycle/events"
-    )
-    # Packaged agent hooks execute under provider command sandboxes.  Give the
-    # tiny native hook transport a stable, private temp spool that survives a
-    # backend restart for this installation/worktree.  The backend drains the
-    # files and performs the normal lifecycle ingest outside the sandbox.
-    spool_identity = hashlib.sha256(str(data_dir).encode("utf-8")).hexdigest()[:16]
-    hook_spool_dir = (
-        Path(tempfile.gettempdir()) / f"ticketry-hook-spool-{spool_identity}"
-    )
-    hook_spool_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
-    os.chmod(hook_spool_dir, 0o700)
-    os.environ[HOOK_SPOOL_DIR_ENV] = str(hook_spool_dir)
-    if getattr(sys, "frozen", False):
-        # Re-entering this one-file PyInstaller binary from an agent command
-        # sandbox is not a valid fallback: its bootloader needs a semaphore the
-        # sandbox denies. Fail startup visibly if packaging ever omits the
-        # dedicated native runner instead of launching sessions with hooks that
-        # are guaranteed to fail.
-        packaged_runner = os.environ.get(PACKAGED_HOOK_RUNNER_ENV)
-        if not packaged_runner or not Path(packaged_runner).is_file():
-            raise RuntimeError("packaged hook runner is missing")
-
     credential = os.environ.get(CREDENTIAL_ENV, "")
     if credential:
         os.environ["WORKTRACKER_API_TOKEN"] = credential
@@ -264,19 +227,6 @@ def serve(port: int) -> None:
     ReadyServer(config).run()
 
 
-def run_hook(argv: list[str]) -> int:
-    """Dispatch one agent hook through code embedded in the frozen binary."""
-
-    if not argv or argv[0] not in HOOK_MODULES:
-        hook_name = argv[0] if argv else "<missing>"
-        print(f"Unknown hook: {hook_name}", file=sys.stderr)
-        return 2
-    module = importlib.import_module(HOOK_MODULES[argv[0]])
-    sys.argv = [f"muxed-backend hook {argv[0]}", *argv[1:]]
-    module._reporter.run(module.SPEC)
-    return 0
-
-
 def run_mcp() -> int:
     """Run the packaged WorkTracker MCP service from the same artifact."""
 
@@ -297,213 +247,65 @@ def run_mcp() -> int:
     return 0
 
 
-def verify_skill_catalog() -> int:
-    """Verify resources through the same import path used by the frozen app."""
+def run_skills(command: str) -> int:
+    """Install or smoke-test the bundled provider-visible skill catalog."""
 
-    from apps.terminals.agents.skills import verify_catalog
+    from apps.terminals.agents.injectors.agy import build_agy_mcp_servers
+    from apps.terminals.agents.injectors.claude import build_claude_mcp_config
+    from apps.terminals.agents.injectors.codex import build_codex_mcp_servers
+    from apps.terminals.agents.injectors.gemini import build_gemini_mcp_servers
+    from apps.terminals.agents.skills.catalog import verify_catalog
+    from apps.terminals.agents.skills.installation import (
+        SUPPORTED_PROVIDERS,
+        install_packaged_skills,
+        visible_skill_candidates,
+    )
 
     lock = verify_catalog()
+    names = tuple(package["name"] for package in lock["packages"])
+    home = Path.home()
+    install_packaged_skills(home=home, environ=os.environ)
+    if command == "install":
+        print(json.dumps({"installed": list(SUPPORTED_PROVIDERS)}, separators=(",", ":")))
+        return 0
+
+    providers = {}
+    mcp_url = "http://127.0.0.1:8123/mcp"
+    authorization = "Bearer packaged-smoke"
+    mcp_configured = {
+        "claude": "worktracker-agent"
+        in build_claude_mcp_config(mcp_url, authorization)["mcpServers"],
+        "codex": "worktracker-agent"
+        in build_codex_mcp_servers(mcp_url, authorization),
+        "agy": "worktracker-agent"
+        in build_agy_mcp_servers(mcp_url, authorization),
+        "gemini": "worktracker-agent"
+        in build_gemini_mcp_servers(mcp_url, authorization),
+    }
+    for provider in SUPPORTED_PROVIDERS:
+        visible = visible_skill_candidates(
+            provider,
+            names=names,
+            home=home,
+            environ=os.environ,
+        )
+        providers[provider] = sorted(name for name, paths in visible.items() if paths)
     print(
         json.dumps(
-            {
-                "commit": lock["upstream"]["commit"],
-                "packages": [package["name"] for package in lock["packages"]],
-            },
+            {"providers": providers, "mcp_configured": mcp_configured},
             separators=(",", ":"),
+            sort_keys=True,
         )
     )
-    return 0
-
-
-def install_skill_catalog() -> int:
-    """Install or safely upgrade pinned skills in provider-native roots."""
-
-    from apps.terminals.agents.skills.installation import install_packaged_skills
-
-    installed = install_packaged_skills()
-    print(
-        json.dumps(
-            {
-                "installed": {
-                    provider: str(path) for provider, path in installed.items()
-                }
-            },
-            separators=(",", ":"),
-        )
-    )
-    return 0
-
-
-def prepare_provider_skills() -> None:
-    """Prepare optional provider integrations without gating application use."""
-
-    from apps.terminals.agents.skills.installation import (
-        SkillInstallationError,
-        install_packaged_skills,
-    )
-
-    try:
-        install_packaged_skills()
-    except Exception as exc:
-        diagnostic = {
-            "event": SKILL_PREPARATION_EVENT,
-            "reason": getattr(exc, "reason", "unexpected"),
-            "message": getattr(exc, "message", str(exc)),
-        }
-        if isinstance(exc, SkillInstallationError):
-            diagnostic.update(
-                {
-                    "provider": exc.provider,
-                    "skill": exc.skill,
-                    "path": str(exc.path),
-                }
-            )
-        print(json.dumps(diagnostic, separators=(",", ":")), file=sys.stderr, flush=True)
-
-
-def verify_skill_installations() -> int:
-    """Verify the persistent provider installations without changing them."""
-
-    from apps.terminals.agents.skills.installation import verify_all_installations
-
-    installed = verify_all_installations()
-    print(
-        json.dumps(
-            {
-                "verified": {
-                    provider: str(path) for provider, path in installed.items()
-                }
-            },
-            separators=(",", ":"),
-        )
-    )
-    return 0
-
-
-def smoke_skill_providers() -> int:
-    """Exercise persistent installation and native discovery for every provider."""
-
-    with tempfile.TemporaryDirectory(prefix="ticketry-skill-smoke-") as temporary:
-        smoke_root = Path(temporary)
-        os.environ.setdefault("MUXED_DATA_DIR", str(smoke_root / "data"))
-        os.environ.setdefault("MUXED_STATE_DB", str(smoke_root / "data/state.db"))
-        os.environ.setdefault("DJANGO_SETTINGS_MODULE", "studio_server.settings")
-
-        import django
-
-        django.setup()
-
-        from apps.terminals.agents.registry import (
-            cleanup_temporary_artifacts,
-            get_adapter,
-        )
-        from apps.terminals.agents.skills.installation import (
-            install_packaged_skills,
-            provider_skill_root,
-        )
-        from apps.terminals.agents.skills.preflight import resolve_required_skills
-
-        configured_repository = os.environ.get("MUXED_SKILL_SMOKE_REPOSITORY")
-        repository = (
-            Path(configured_repository).resolve()
-            if configured_repository
-            else smoke_root / "repository"
-        )
-        repository.mkdir(parents=True, exist_ok=True)
-        requested = (
-            "code-review",
-            "grill-with-docs",
-            "implement",
-            "tdd",
-            "to-spec",
-            "to-tickets",
-        )
-        discovered: dict[str, list[str]] = {}
-        mcp_configured: dict[str, bool] = {}
-        install_packaged_skills()
-
-        for provider in ("claude", "codex", "agy", "gemini"):
-            adapter = get_adapter(provider)
-            resolved = resolve_required_skills(
-                provider=provider,
-                required_skills=requested,
-                cwd=str(repository),
-                supports_required_skills=adapter.supports_required_skills,
-                available_tools=adapter.available_worktracker_tools,
-            )
-            augmentation = adapter.augment_launch(
-                [provider, "packaged offline smoke"],
-                f"packaged-smoke-{provider}",
-                lifecycle_url="http://127.0.0.1:1/api/lifecycle/events",
-                mcp_url="http://127.0.0.1:1/mcp",
-                skills=resolved,
-            )
-            try:
-                argv = list(augmentation.argv)
-                environment = dict(augmentation.environment)
-                names = {
-                    path.name
-                    for path in provider_skill_root(provider).iterdir()
-                    if path.is_dir()
-                }
-                if provider == "claude":
-                    mcp_configured[provider] = any(
-                        "worktracker-agent" in value for value in argv
-                    )
-                elif provider == "codex":
-                    mcp_configured[provider] = any(
-                        "worktracker-agent" in value for value in argv
-                    )
-                elif provider == "agy":
-                    settings_path = Path(
-                        environment["GEMINI_CLI_SYSTEM_SETTINGS_PATH"]
-                    )
-                    settings = json.loads(settings_path.read_text(encoding="utf-8"))
-                    mcp_configured[provider] = "worktracker-agent" in settings[
-                        "mcpServers"
-                    ]
-                else:
-                    settings_path = Path(
-                        environment["GEMINI_CLI_SYSTEM_SETTINGS_PATH"]
-                    )
-                    settings = json.loads(settings_path.read_text(encoding="utf-8"))
-                    mcp_configured[provider] = "worktracker-agent" in settings[
-                        "mcpServers"
-                    ]
-                if names != set(resolved.names):
-                    raise RuntimeError(
-                        f"{provider} did not expose the complete packaged closure"
-                    )
-                discovered[provider] = sorted(names)
-            finally:
-                cleanup_temporary_artifacts(augmentation.temporary_artifacts)
-
-        print(
-            json.dumps(
-                {
-                    "providers": discovered,
-                    "mcp_configured": mcp_configured,
-                },
-                separators=(",", ":"),
-            )
-        )
     return 0
 
 
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
-    if argv[:1] == ["hook"]:
-        return run_hook(argv[1:])
     if argv == ["mcp"]:
         return run_mcp()
-    if argv == ["skills", "verify"]:
-        return verify_skill_catalog()
-    if argv == ["skills", "install"]:
-        return install_skill_catalog()
-    if argv == ["skills", "verify-installation"]:
-        return verify_skill_installations()
-    if argv == ["skills", "smoke-providers"]:
-        return smoke_skill_providers()
+    if argv in (["skills", "install"], ["skills", "smoke-providers"]):
+        return run_skills(argv[1])
     args = parse_args(argv)
     if not 0 < args.port < 65536:
         raise SystemExit("--port must be between 1 and 65535")
@@ -529,7 +331,6 @@ def main(argv: list[str] | None = None) -> int:
         traceback.print_exc()
         print(MIGRATION_FAILURE_LINE, flush=True)
         return 1
-    prepare_provider_skills()
     serve(args.port)
     return 0
 

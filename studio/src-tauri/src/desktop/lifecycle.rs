@@ -6,7 +6,8 @@ use tauri::Manager;
 
 use crate::desktop::data_directory::DesktopDataDirectoryOwnership;
 use crate::desktop::service_state::DesktopServiceState;
-use crate::{native_terminal, settings_persistence, viewer_commands};
+use crate::terminal_viewer::webview_commands;
+use crate::{native_terminal, settings_persistence};
 
 pub(crate) const MAIN_WINDOW_LABEL: &str = "main";
 
@@ -40,7 +41,7 @@ pub(crate) fn detach_transient_viewers(application: &tauri::AppHandle) {
     // freshly loaded Studio layout without signalling or killing durable tmux
     // sessions.
     application
-        .state::<viewer_commands::ViewerCommandState>()
+        .state::<webview_commands::ViewerCommandState>()
         .detach_all();
     application
         .state::<native_terminal::NativeTerminalState>()
@@ -53,7 +54,9 @@ pub(crate) fn shutdown_packaged_backend(application: &tauri::AppHandle) {
     // Live document discovery is the first thing to stop: a watcher settling
     // into a store that is about to close would write for a workspace nobody
     // is looking at any more.
-    if let Some(launch) = application.try_state::<crate::desktop::launch_runtime::DesktopLaunchRuntime>() {
+    if let Some(launch) =
+        application.try_state::<crate::desktop::launch_runtime::DesktopLaunchRuntime>()
+    {
         launch.stop_document_watchers();
     }
     let ownership = application.state::<DesktopDataDirectoryOwnership>();
@@ -65,6 +68,32 @@ pub(crate) fn shutdown_packaged_backend(application: &tauri::AppHandle) {
     // never inherits a `ready: true` record from a process that is gone.
     let _ = crate::desktop::runs_handoff::close_gate(&ownership.data_directory);
     let _ = crate::desktop::workspace_handoff::close_gate(&ownership.data_directory);
+    let output_sweep = state
+        .output_sweep
+        .lock()
+        .expect("output sweep lock poisoned")
+        .take();
+    if let Some(runtime) = output_sweep {
+        tauri::async_runtime::block_on(runtime.shutdown());
+    }
+    let execution_runtime = state
+        .execution_runtime
+        .lock()
+        .expect("execution runtime lock poisoned")
+        .take();
+    if let Some(runtime) = execution_runtime {
+        tauri::async_runtime::block_on(runtime.shutdown());
+    }
+    let terminal_runtime = state
+        .terminal_runtime
+        .lock()
+        .expect("terminal runtime lock poisoned")
+        .take();
+    if let Some(runtime) = terminal_runtime {
+        if let Err(error) = tauri::async_runtime::block_on(runtime.shutdown()) {
+            eprintln!("Ticketry could not finish terminal shutdown: {error}");
+        }
+    }
     let mcp_runtime = state
         .mcp_runtime
         .lock()

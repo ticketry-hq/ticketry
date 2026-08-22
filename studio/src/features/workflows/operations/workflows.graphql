@@ -106,7 +106,7 @@ mutation ReorderWorkTrackerStates($projectId: String!, $orderedIds: [String!]!) 
 }
 
 mutation CreateWorkTrackerIssueType($projectId: String!, $name: String!, $level: String!, $color: String) {
-  create_issue_type(project_id: $projectId, name: $name, level: $level, color: $color) {
+  create_issue_type: worktrackerIssuetypeCreateOne(data: { projectId: $projectId, name: $name, level: $level, color: $color }) {
     id project: projectId name level color sort_order: sortOrder start_state: startStateId workflow_revision: workflowRevision is_pathfind: isPathfind created_at: createdAt updated_at: updatedAt
   }
 }

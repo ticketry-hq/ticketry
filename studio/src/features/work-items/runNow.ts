@@ -1,11 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { useSyncExternalStore } from "react";
-import type { RunNowResponse } from "@worktracker/typescript-sdk/models";
 import { useTerminalStore, type SessionMeta } from "../agents/terminal/appNavigation";
 import { launchFailureMessage } from "../agents/terminal";
 import { toast, useClientStore } from "../../state/clientStore";
 import * as api from "../../shared/api/client";
-import { RunNowRefusalError } from "../../shared/api/client";
 import type {
   IssueType,
   ScopedWorkflowSettings,
@@ -16,6 +14,11 @@ import { queryClient } from "../../shared/query/queryClient";
 import { queryKeys } from "../../shared/query/keys";
 import { getStatesSnapshot } from "../../shared/query/stateCatalog";
 import { getIssueTypesSnapshot } from "../settings";
+import {
+  RunNowRefusalError,
+  runWorkItemNow,
+  type RunNowResponse,
+} from "./internal/runNowTransport";
 
 type WorkflowTransitions = ScopedWorkflowSettings["transitions"];
 
@@ -107,7 +110,7 @@ function committedStateFromError(error: unknown): { id: string; name: string } |
 
 function refusalMessage(error: unknown): string {
   if (error instanceof RunNowRefusalError) {
-    const { code } = error.body;
+    const { code, detail, remedy } = error.body;
     if (code === "task_already_active") {
       return "An agent is already running for this Story. Close its terminal before trying again.";
     }
@@ -120,6 +123,7 @@ function refusalMessage(error: unknown): string {
     if (code === "run_now_not_eligible") {
       return "This Story is no longer eligible to Run now. Refresh its workflow and try again.";
     }
+    if (remedy) return `${detail} Next action: ${remedy}`;
   }
   return launchFailureMessage(error);
 }
@@ -157,7 +161,7 @@ export function startRunNow(item: WorkItem, moduleId: string | null): boolean {
   }
 
   setPending(item.id, true);
-  void api.runWorkItemNow(item.id).then((response) => {
+  void runWorkItemNow(item.id).then((response) => {
     reconcileCommittedState(item, response.committed_state);
     activateRunTerminal(item, moduleId, response);
     toast.success("Run now started.");

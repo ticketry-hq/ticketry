@@ -6,8 +6,9 @@ use serde_json::json;
 use super::entities::agent_run;
 use super::work_item_scope;
 use super::{
-    timestamp, LifecycleAcceptance, LifecycleFact, LifecycleService, NewStatusEvent,
-    RunsPersistenceError, RunsPersistenceErrorCode, TerminalAcceptance, TerminalFact,
+    run_holding_in, timestamp, LifecycleAcceptance, LifecycleFact, LifecycleService,
+    NewStatusEvent, RunsPersistenceError, RunsPersistenceErrorCode, TerminalAcceptance,
+    TerminalFact,
 };
 
 struct RunState {
@@ -19,6 +20,8 @@ struct RunState {
     provider_session_id: Option<String>,
     lifecycle_state: Option<String>,
     lifecycle_updated_at: Option<String>,
+    launch_state: Option<String>,
+    launch_model: Option<String>,
 }
 
 impl LifecycleService {
@@ -26,6 +29,20 @@ impl LifecycleService {
     /// authoritative row and its durable status event commit together.
     pub async fn apply_lifecycle_fact(
         &self,
+        fact: LifecycleFact,
+    ) -> Result<LifecycleAcceptance, RunsPersistenceError> {
+        let transaction = self.database().begin().await?;
+        let acceptance = self.apply_lifecycle_fact_in(&transaction, fact).await?;
+        transaction.commit().await?;
+        if acceptance.applied {
+            self.events().wake_committed();
+        }
+        Ok(acceptance)
+    }
+
+    pub(crate) async fn apply_lifecycle_fact_in(
+        &self,
+        transaction: &sea_orm::DatabaseTransaction,
         fact: LifecycleFact,
     ) -> Result<LifecycleAcceptance, RunsPersistenceError> {
         let occurred_at = timestamp::normalize(&fact.occurred_at)?;
@@ -40,9 +57,7 @@ impl LifecycleService {
             .as_deref()
             .map(validate_provider_session)
             .transpose()?;
-        let transaction = self.database().begin().await?;
-        let Some(run) = load_run(&transaction, &fact.agent_run_id).await? else {
-            transaction.commit().await?;
+        let Some(run) = load_run(transaction, &fact.agent_run_id).await? else {
             return Ok(LifecycleAcceptance {
                 accepted: true,
                 known_run: false,
@@ -70,7 +85,6 @@ impl LifecycleService {
         };
 
         if !provider_changed && !lifecycle_changed {
-            transaction.commit().await?;
             return Ok(LifecycleAcceptance {
                 accepted: true,
                 known_run: true,
@@ -88,7 +102,7 @@ impl LifecycleService {
                     Expr::value(provider_session_id.clone()),
                 )
                 .filter(agent_run::Column::Id.eq(&fact.agent_run_id))
-                .exec(&transaction)
+                .exec(transaction)
                 .await?;
         }
         if lifecycle_changed {
@@ -100,7 +114,7 @@ impl LifecycleService {
                 )
                 .filter(agent_run::Column::Id.eq(&fact.agent_run_id))
                 .filter(agent_run::Column::EndedAt.is_null())
-                .exec(&transaction)
+                .exec(transaction)
                 .await?;
         }
         let resulting_state = if lifecycle_changed {
@@ -108,17 +122,24 @@ impl LifecycleService {
         } else {
             run.lifecycle_state.unwrap_or_else(|| "unknown".to_owned())
         };
+        let effective_state = run_holding_in(transaction, &fact.agent_run_id, &occurred_at)
+            .await?
+            .map(|holding| holding.effective_state)
+            .unwrap_or_else(|| resulting_state.clone());
         let event_id = uuid::Uuid::new_v4().simple().to_string();
         let payload = json!({
             "agentRunId": fact.agent_run_id,
             "state": resulting_state,
+            "effectiveState": effective_state,
             "occurredAt": occurred_at,
             "providerSessionCaptured": provider_changed,
+            "launchState": run.launch_state,
+            "launchModel": run.launch_model,
         });
         let cursor = self
             .events()
             .append(
-                &transaction,
+                transaction,
                 NewStatusEvent {
                     event_id: &event_id,
                     project_id: &run.project_id,
@@ -133,8 +154,6 @@ impl LifecycleService {
                 },
             )
             .await?;
-        transaction.commit().await?;
-        self.events().wake_committed();
         Ok(LifecycleAcceptance {
             accepted: true,
             known_run: true,
@@ -170,6 +189,21 @@ impl LifecycleService {
         transaction: &sea_orm::DatabaseTransaction,
         fact: TerminalFact,
     ) -> Result<TerminalAcceptance, RunsPersistenceError> {
+        self.apply_terminal_fact_in_observed(transaction, fact, || Ok(()), || Ok(()))
+            .await
+    }
+
+    pub(crate) async fn apply_terminal_fact_in_observed<F, G>(
+        &self,
+        transaction: &sea_orm::DatabaseTransaction,
+        fact: TerminalFact,
+        after_run_fact: F,
+        after_status_append: G,
+    ) -> Result<TerminalAcceptance, RunsPersistenceError>
+    where
+        F: FnOnce() -> Result<(), RunsPersistenceError>,
+        G: FnOnce() -> Result<(), RunsPersistenceError>,
+    {
         let occurred_at = timestamp::normalize(&fact.occurred_at)?;
         let run = load_run(transaction, &fact.agent_run_id)
             .await?
@@ -180,7 +214,7 @@ impl LifecycleService {
                 )
             })?;
         let public_state = fact.outcome.public_state().to_owned();
-        if !should_apply_terminal(&run, fact.outcome.status(), &occurred_at)? {
+        if !should_apply_terminal(&run, fact.outcome.status(), fact.exit_code, &occurred_at)? {
             return Ok(TerminalAcceptance {
                 applied: false,
                 state: if run.status == "lost" {
@@ -214,13 +248,21 @@ impl LifecycleService {
             .filter(agent_run::Column::Id.eq(&fact.agent_run_id))
             .exec(transaction)
             .await?;
+        after_run_fact()?;
+        let effective_state = run_holding_in(transaction, &fact.agent_run_id, &occurred_at)
+            .await?
+            .map(|holding| holding.effective_state)
+            .unwrap_or_else(|| public_state.clone());
         let event_id = uuid::Uuid::new_v4().simple().to_string();
         let payload = json!({
             "agentRunId": fact.agent_run_id,
             "state": public_state,
+            "effectiveState": effective_state,
             "outcome": fact.outcome.status(),
             "occurredAt": occurred_at,
             "exitCode": fact.exit_code,
+            "launchState": run.launch_state,
+            "launchModel": run.launch_model,
         });
         let cursor = self
             .events()
@@ -240,6 +282,7 @@ impl LifecycleService {
                 },
             )
             .await?;
+        after_status_append()?;
         Ok(TerminalAcceptance {
             applied: true,
             state: public_state,
@@ -301,6 +344,7 @@ fn should_apply_lifecycle(
 fn should_apply_terminal(
     run: &RunState,
     incoming_status: &str,
+    incoming_exit_code: Option<i32>,
     incoming_at: &str,
 ) -> Result<bool, RunsPersistenceError> {
     let Some(current_at) = run.ended_at.as_deref() else {
@@ -314,6 +358,9 @@ fn should_apply_terminal(
             )
         })?);
     if ordering.is_lt() || (run.status == "lost" && incoming_status != "lost") {
+        return Ok(false);
+    }
+    if run.status == incoming_status && (run.exit_code.is_some() || incoming_exit_code.is_none()) {
         return Ok(false);
     }
     Ok(!(ordering.is_eq() && run.status == incoming_status))
@@ -338,5 +385,7 @@ async fn load_run(
         provider_session_id: run.provider_session_id,
         lifecycle_state: run.lifecycle_state,
         lifecycle_updated_at: run.lifecycle_updated_at,
+        launch_state: run.launch_state,
+        launch_model: run.launch_model,
     }))
 }

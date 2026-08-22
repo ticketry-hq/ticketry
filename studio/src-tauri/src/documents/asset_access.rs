@@ -147,8 +147,11 @@ mod tests {
         let outside = tempfile::tempdir().expect("create an outside directory");
         std::fs::write(outside.path().join("secret.md"), "secret").expect("write outside content");
         let root = root();
-        std::os::unix::fs::symlink(outside.path().join("secret.md"), root.path().join("escape.md"))
-            .expect("create the escaping symlink");
+        std::os::unix::fs::symlink(
+            outside.path().join("secret.md"),
+            root.path().join("escape.md"),
+        )
+        .expect("create the escaping symlink");
 
         assert!(read_asset(root.path(), "escape.md").is_none());
     }

@@ -7,7 +7,6 @@ SCRATCH_TASK_ID = "00000000-0000-0000-0000-000000000000"
 
 def backfill_agent_run_issues(apps, schema_editor):
     AgentRun = apps.get_model("runs", "AgentRun")
-    AgentTerminalSession = apps.get_model("terminals", "AgentTerminalSession")
     Issue = apps.get_model("worktracker", "Issue")
     alias = schema_editor.connection.alias
 
@@ -38,9 +37,6 @@ def backfill_agent_run_issues(apps, schema_editor):
     if orphan_ids:
         for offset in range(0, len(orphan_ids), 500):
             batch = orphan_ids[offset : offset + 500]
-            AgentTerminalSession.objects.using(alias).filter(
-                agent_run_id__in=batch
-            ).delete()
             AgentRun.objects.using(alias).filter(
                 id__in=batch
             ).delete()
@@ -56,7 +52,6 @@ def backfill_agent_run_scopes(apps, schema_editor):
 class Migration(migrations.Migration):
     dependencies = [
         ("runs", "0007_backfill_terminal_lifecycle_state"),
-        ("terminals", "0001_initial"),
         ("worktracker", "0036_issue_module"),
     ]
 

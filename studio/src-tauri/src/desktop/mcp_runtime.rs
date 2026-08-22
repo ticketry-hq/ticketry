@@ -2,11 +2,13 @@
 //! optional: the desktop stays usable when its port cannot be bound.
 
 use std::path::Path;
+use tauri::Manager;
 
+use crate::data_directory::established_data_directory;
 use crate::desktop::environment::{optional_port, DEVELOPMENT_MCP_PORT_ENV};
+use crate::desktop::launch_runtime::DesktopLaunchRuntime;
 use crate::desktop::service_state::DesktopServiceState;
-use crate::ownership::established_data_directory;
-use crate::supervisor::Supervisor;
+use crate::sidecar_supervision::Supervisor;
 use crate::work_management;
 
 /// External MCP clients get one stable endpoint in both development and
@@ -22,20 +24,28 @@ pub(crate) async fn start_in_process_mcp(
     backend_port: u16,
     backend_api_key: &str,
     mcp_port: u16,
+    terminal_launch: Option<crate::terminal_launch::TerminalLaunchService>,
 ) -> Result<work_management::mcp::McpRuntime, String> {
-    work_management::mcp::McpRuntime::start(work_management::mcp::McpConfiguration {
+    let configuration = work_management::mcp::McpConfiguration {
         address: work_management::mcp::loopback(mcp_port).map_err(|error| error.to_string())?,
         database_path: data_directory.join("state.db"),
         media_root: data_directory.join("media"),
         backend_base_url: format!("http://127.0.0.1:{backend_port}/api"),
         backend_api_key: backend_api_key.to_owned(),
-    })
-    .await
+    };
+    match terminal_launch {
+        Some(service) => {
+            work_management::mcp::McpRuntime::start_with_terminal_launch(configuration, service)
+                .await
+        }
+        None => work_management::mcp::McpRuntime::start(configuration).await,
+    }
 }
 
 /// Restart the listener if it stopped while the backend kept serving. The
 /// caller already holds the supervisor lock.
 pub(crate) fn ensure_in_process_mcp(
+    application: &tauri::AppHandle,
     state: &DesktopServiceState,
     supervisor: &Supervisor,
 ) -> Result<(), String> {
@@ -54,11 +64,20 @@ pub(crate) fn ensure_in_process_mcp(
         .port()
         .ok_or_else(|| "backend is unavailable for WorkTracker MCP".to_owned())?;
     let mcp_port = configured_mcp_port()?;
+    let composed = application
+        .state::<DesktopLaunchRuntime>()
+        .composed_runtime()?
+        .clone();
+    let terminal_launch = crate::terminal_launch::TerminalLaunchService::new(
+        composed.commands().clone(),
+        std::sync::Arc::new(composed.terminal_runtime().clone()),
+    );
     *runtime = Some(tauri::async_runtime::block_on(start_in_process_mcp(
         &data_directory,
         backend_port,
         supervisor.credential(),
         mcp_port,
+        Some(terminal_launch),
     ))?);
     Ok(())
 }

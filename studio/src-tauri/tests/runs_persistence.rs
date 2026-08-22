@@ -58,6 +58,25 @@ async fn adopts_current_history_without_rewriting_and_reopens_deterministically(
     assert_eq!(second.source, SourceClassification::RustOwned);
     assert_eq!(first.stable_digest, second.stable_digest);
     let db = open(&path).await;
+    let columns = db
+        .query_all_raw(Statement::from_string(
+            DbBackend::Sqlite,
+            "PRAGMA table_info('agent_runs')".to_owned(),
+        ))
+        .await
+        .unwrap();
+    let adopted = columns
+        .into_iter()
+        .map(|row| {
+            (
+                row.try_get::<String>("", "name").unwrap(),
+                row.try_get::<i32>("", "notnull").unwrap(),
+            )
+        })
+        .collect::<std::collections::BTreeMap<_, _>>();
+    assert_eq!(adopted["agent"], 0);
+    assert_eq!(adopted["launch_state"], 0);
+    assert_eq!(adopted["launch_model"], 0);
     let services = RunsServices::new(db);
     let run = services
         .queries()
@@ -81,30 +100,93 @@ async fn adopts_current_history_without_rewriting_and_reopens_deterministically(
 }
 
 #[tokio::test]
-async fn rejects_unknown_schema_before_mutation() {
+async fn adopts_live_launch_metadata_lineage_without_losing_agentless_runs() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("state.db");
     fixture(&path);
     let db = open(&path).await;
-    db.execute_unprepared("ALTER TABLE agent_runs ADD COLUMN surprise text")
-        .await
-        .unwrap();
+    db.execute_unprepared(
+        "UPDATE agent_runs SET launch_model='legacy-model' WHERE id='run-stable';
+         ALTER TABLE agent_runs DROP COLUMN model;
+         ALTER TABLE agent_runs DROP COLUMN reasoning;
+         ALTER TABLE agent_runs ADD COLUMN initial_prompt text NULL;
+         INSERT INTO agent_runs
+           (id, issue_id, agent, status, started_at, scope, launch_state, launch_model)
+         SELECT 'shell-agentless', issue_id, NULL, 'completed', started_at, 'shell',
+                launch_state, NULL FROM agent_runs WHERE id='run-stable';
+         DELETE FROM django_migrations
+          WHERE app='runs' AND name IN
+            ('0013_agentrun_launch_configuration_snapshot', '0015_merge_20260819_1521');
+         INSERT INTO django_migrations (app, name, applied)
+         VALUES ('runs', '0015_agentrun_initial_prompt', CURRENT_TIMESTAMP);",
+    )
+    .await
+    .unwrap();
     db.close().await.unwrap();
-    assert!(adopt(directory.path())
-        .await
-        .unwrap_err()
-        .to_string()
-        .contains("unknown schema"));
+
+    let first = adopt(directory.path()).await.unwrap();
+    assert!(matches!(first.source, SourceClassification::Django(_)));
+    let second = adopt(directory.path()).await.unwrap();
+    assert_eq!(second.source, SourceClassification::RustOwned);
+    assert_eq!(first.stable_digest, second.stable_digest);
+
     let db = open(&path).await;
     let row = db
         .query_one_raw(Statement::from_string(
             DbBackend::Sqlite,
-            "SELECT COUNT(*) AS count FROM sqlite_master WHERE name='ticketry_runs_adoption'",
+            "SELECT model, launch_state, launch_model FROM agent_runs WHERE id='run-stable'"
+                .to_owned(),
         ))
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(row.try_get::<i64>("", "count").unwrap(), 0);
+    assert_eq!(row.try_get::<String>("", "model").unwrap(), "legacy-model");
+    assert!(row
+        .try_get::<Option<String>>("", "launch_state")
+        .unwrap()
+        .is_none());
+    assert_eq!(
+        row.try_get::<String>("", "launch_model").unwrap(),
+        "legacy-model"
+    );
+    let row = db
+        .query_one_raw(Statement::from_string(
+            DbBackend::Sqlite,
+            "SELECT COUNT(*) AS count FROM agent_runs WHERE id='shell-agentless' AND agent IS NULL"
+                .to_owned(),
+        ))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(row.try_get::<i64>("", "count").unwrap(), 1);
+}
+
+#[tokio::test]
+async fn rejects_unknown_schema_before_mutation() {
+    for mutation in [
+        "ALTER TABLE agent_runs ADD COLUMN surprise text",
+        "PRAGMA writable_schema=ON; UPDATE sqlite_master SET sql=replace(sql, '\"agent\" varchar NULL', '\"agent\" text NULL') WHERE type='table' AND name='agent_runs'; PRAGMA writable_schema=OFF",
+        "PRAGMA writable_schema=ON; UPDATE sqlite_master SET sql=replace(sql, '\"launch_state\" varchar NULL', '\"launch_state\" varchar NOT NULL') WHERE type='table' AND name='agent_runs'; PRAGMA writable_schema=OFF",
+        "PRAGMA writable_schema=ON; UPDATE sqlite_master SET sql=replace(sql, '\"launch_model\" varchar NULL', '\"launch_model\" varchar NULL DEFAULT ''legacy''') WHERE type='table' AND name='agent_runs'; PRAGMA writable_schema=OFF",
+    ] {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("state.db");
+        fixture(&path);
+        let db = open(&path).await;
+        db.execute_unprepared(mutation).await.unwrap();
+        db.close().await.unwrap();
+        assert!(adopt(directory.path()).await.is_err(), "accepted {mutation}");
+        let db = open(&path).await;
+        let row = db
+            .query_one_raw(Statement::from_string(
+                DbBackend::Sqlite,
+                "SELECT COUNT(*) AS count FROM sqlite_master WHERE name='ticketry_runs_adoption'",
+            ))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(row.try_get::<i64>("", "count").unwrap(), 0);
+    }
 }
 
 #[tokio::test]

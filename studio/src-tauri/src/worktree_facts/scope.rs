@@ -35,10 +35,7 @@ pub struct WorktreeFactScope {
 /// `task_id` may be any Work Item that participates in the checkout — the
 /// owner itself or a descendant sharing it — in either spelling. `None` means
 /// the graph could not answer, which is a reason to publish nothing.
-pub async fn resolve(
-    work_items: &DatabaseConnection,
-    task_id: &str,
-) -> Option<WorktreeFactScope> {
+pub async fn resolve(work_items: &DatabaseConnection, task_id: &str) -> Option<WorktreeFactScope> {
     let owner = owner::resolve(work_items, task_id).await.ok()?;
     let top_level_row_id = owner.top_level_row_id();
     // The project comes off the owning row rather than off the worktree row's
@@ -135,6 +132,9 @@ mod tests {
         // Work Item has no active owner at all.
         assert_eq!(resolve(&database, MODULE).await, None);
         assert_eq!(resolve(&database, ARCHIVED).await, None);
-        assert_eq!(resolve(&database, "60000000000000000000000000009999").await, None);
+        assert_eq!(
+            resolve(&database, "60000000000000000000000000009999").await,
+            None
+        );
     }
 }

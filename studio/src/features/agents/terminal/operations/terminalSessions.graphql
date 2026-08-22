@@ -1,0 +1,211 @@
+fragment TerminalSessionFields on AgentTerminalSessions {
+  agent_run_id: agentRunId
+  module_id: moduleId
+  scope
+  doc_rel_path: docRelPath
+  created_at: createdAt
+  agent_run: agentRun {
+    id
+    launch_state: launchState
+    launch_model: launchModel
+  }
+}
+
+query ModuleShellSessions($moduleId: String!, $limit: Int!) {
+  terminal_sessions: agentTerminalSessions(
+    filters: {
+      moduleId: { eq: $moduleId }
+      scope: { eq: "shell" }
+      terminatedAt: { is_null: true }
+    }
+    orderBy: { createdAt: ASC, agentRunId: ASC }
+    pagination: { offset: { limit: $limit, offset: 0 } }
+  ) {
+    sessions: nodes {
+      ...TerminalSessionFields
+    }
+  }
+}
+
+fragment ResumableTerminalSessionFields on AgentRuns {
+  agent_run_id: id
+  agent
+  status
+  started_at: startedAt
+  ended_at: endedAt
+  launch_state: launchState
+  launch_model: launchModel
+  provider_session_id: providerSessionId
+  resumed_from: resumedFrom
+  scope
+}
+
+query TaskTerminalSessions($taskId: String!, $limit: Int!) {
+  terminal_sessions: agentTerminalSessions(
+    filters: {
+      taskId: { eq: $taskId }
+      terminatedAt: { is_null: true }
+    }
+    orderBy: { createdAt: DESC, agentRunId: ASC }
+    pagination: { offset: { limit: $limit, offset: 0 } }
+  ) {
+    sessions: nodes {
+      ...TerminalSessionFields
+    }
+  }
+}
+
+query ScratchTerminalSessions(
+  $projectId: String!
+  $moduleId: String!
+  $limit: Int!
+) {
+  terminal_sessions: agentTerminalSessions(
+    filters: {
+      taskId: { eq: "00000000-0000-0000-0000-000000000000" }
+      projectId: { eq: $projectId }
+      moduleId: { eq: $moduleId }
+      scope: { ne: "shell" }
+      terminatedAt: { is_null: true }
+    }
+    orderBy: { createdAt: DESC, agentRunId: ASC }
+    pagination: { offset: { limit: $limit, offset: 0 } }
+  ) {
+    sessions: nodes {
+      ...TerminalSessionFields
+    }
+  }
+}
+
+query TaskResumableTerminalSessions($taskId: String!) {
+  resumable_sessions: resumable_terminal_sessions(task_id: $taskId) {
+    ...ResumableTerminalSessionFields
+  }
+}
+
+query ScratchResumableTerminalSessions(
+  $projectId: String!
+  $moduleId: String!
+) {
+  resumable_sessions: resumable_terminal_sessions(
+    project_id: $projectId
+    module_id: $moduleId
+  ) {
+    ...ResumableTerminalSessionFields
+  }
+}
+
+mutation CreateTerminalSession(
+  $clientRequestId: String!
+  $projectId: String!
+  $issueId: String!
+  $moduleId: String!
+  $targetId: String!
+  $kind: String!
+  $provider: String!
+  $workingDirectoryIdentity: String!
+  $columns: Int!
+  $rows: Int!
+  $model: String
+  $reasoning: String
+  $policyReference: String
+  $prompt: String
+  $resumeFromAgentRunId: String
+  $automationAttemptId: String
+  $requiredSkills: [String!]
+  $designDirectoryIdentity: String
+  $documentRelativePath: String
+) {
+  terminal_session: terminal_session_create(
+    client_request_id: $clientRequestId
+    project_id: $projectId
+    issue_id: $issueId
+    module_id: $moduleId
+    target_id: $targetId
+    kind: $kind
+    provider: $provider
+    working_directory_identity: $workingDirectoryIdentity
+    columns: $columns
+    rows: $rows
+    model: $model
+    reasoning: $reasoning
+    policy_reference: $policyReference
+    prompt: $prompt
+    resume_from_agent_run_id: $resumeFromAgentRunId
+    automation_attempt_id: $automationAttemptId
+    required_skills: $requiredSkills
+    design_directory_identity: $designDirectoryIdentity
+    document_relative_path: $documentRelativePath
+  ) {
+    ...TerminalSessionFields
+  }
+}
+
+mutation CreateModuleShell(
+  $clientRequestId: String!
+  $moduleId: String!
+  $columns: Int!
+  $rows: Int!
+) {
+  terminal_session: terminal_session_create(
+    client_request_id: $clientRequestId
+    module_id: $moduleId
+    kind: "shell"
+    columns: $columns
+    rows: $rows
+  ) {
+    ...TerminalSessionFields
+  }
+}
+
+mutation ResumeTerminalSession(
+  $clientRequestId: String!
+  $projectId: String!
+  $issueId: String!
+  $moduleId: String!
+  $targetId: String!
+  $kind: String!
+  $provider: String!
+  $workingDirectoryIdentity: String!
+  $columns: Int!
+  $rows: Int!
+  $resumeFromAgentRunId: String!
+  $model: String
+  $reasoning: String
+  $policyReference: String
+  $requiredSkills: [String!]
+  $designDirectoryIdentity: String
+) {
+  terminal_session: terminal_session_create(
+    client_request_id: $clientRequestId
+    project_id: $projectId
+    issue_id: $issueId
+    module_id: $moduleId
+    target_id: $targetId
+    kind: $kind
+    provider: $provider
+    working_directory_identity: $workingDirectoryIdentity
+    columns: $columns
+    rows: $rows
+    resume_from_agent_run_id: $resumeFromAgentRunId
+    model: $model
+    reasoning: $reasoning
+    policy_reference: $policyReference
+    required_skills: $requiredSkills
+    design_directory_identity: $designDirectoryIdentity
+  ) {
+    ...TerminalSessionFields
+  }
+}
+
+mutation UpdateTerminalSession(
+  $agentRunId: String!
+  $terminationRequestId: String
+) {
+  terminal_session: terminal_session_update(
+    agent_run_id: $agentRunId
+    termination_request_id: $terminationRequestId
+  ) {
+    ...TerminalSessionFields
+  }
+}

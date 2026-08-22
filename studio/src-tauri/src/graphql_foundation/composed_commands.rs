@@ -36,6 +36,9 @@ pub(crate) struct ComposedWorktracker {
     /// Deliberately not "the backlog is empty": an ambiguous document or
     /// repository is meant to stay deferred without disabling unrelated ones.
     pub(crate) workspace_reconciled: bool,
+    pub(crate) viewer_ownership: crate::viewer_ownership::ViewerOwnershipService,
+    pub(crate) terminal_runtime: crate::terminal_lifecycle::InteractiveTerminalLaunchRuntime,
+    pub(crate) output_activity: crate::terminal_output_activity::TerminalOutputActivityService,
 }
 
 /// The live command connection, profile store, and workspace services held by
@@ -47,6 +50,9 @@ pub struct ComposedCommandRuntime {
     documents: DocumentsService,
     document_watch: Option<DocumentWatchSupervisor>,
     workspace_reconciled: bool,
+    viewer_ownership: crate::viewer_ownership::ViewerOwnershipService,
+    terminal_runtime: crate::terminal_lifecycle::InteractiveTerminalLaunchRuntime,
+    output_activity: crate::terminal_output_activity::TerminalOutputActivityService,
 }
 
 impl ComposedCommandRuntime {
@@ -57,6 +63,9 @@ impl ComposedCommandRuntime {
             documents: composed.documents,
             document_watch: composed.document_watch,
             workspace_reconciled: composed.workspace_reconciled,
+            viewer_ownership: composed.viewer_ownership,
+            terminal_runtime: composed.terminal_runtime,
+            output_activity: composed.output_activity,
         }
     }
 
@@ -86,5 +95,19 @@ impl ComposedCommandRuntime {
     /// its mutation lock keeps serialising every writer in this process.
     pub fn profiles(&self) -> &ProfileStore {
         &self.profiles
+    }
+
+    pub fn viewer_ownership(&self) -> &crate::viewer_ownership::ViewerOwnershipService {
+        &self.viewer_ownership
+    }
+
+    pub fn terminal_runtime(&self) -> &crate::terminal_lifecycle::InteractiveTerminalLaunchRuntime {
+        &self.terminal_runtime
+    }
+
+    pub fn output_activity(
+        &self,
+    ) -> &crate::terminal_output_activity::TerminalOutputActivityService {
+        &self.output_activity
     }
 }

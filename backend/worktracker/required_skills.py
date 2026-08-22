@@ -4,15 +4,20 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterable
-from importlib.resources import files
+from pathlib import Path
 
 from worktracker.reviewed_defaults import REVIEWED_REQUIRED_SKILLS
 
 
 _PINNED_UPSTREAM_SKILL_LOCK = json.loads(
-    files("apps.terminals.agents.skills")
-    .joinpath("lock.json")
-    .read_text(encoding="utf-8")
+    (
+        Path(__file__).resolve().parents[1]
+        / "apps"
+        / "terminals"
+        / "agents"
+        / "skills"
+        / "lock.json"
+    ).read_text(encoding="utf-8")
 )
 PINNED_UPSTREAM_SKILL_IDS = tuple(_PINNED_UPSTREAM_SKILL_LOCK["selected_packages"])
 _PINNED_UPSTREAM_SKILL_ID_SET = frozenset(PINNED_UPSTREAM_SKILL_IDS)

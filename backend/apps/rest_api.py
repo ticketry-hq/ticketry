@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from asgiref.sync import async_to_sync
-from django.conf import settings as django_settings
 from django.http import HttpResponse
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
@@ -15,21 +14,12 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.documents import api as documents
-from apps.errors import ApplicationError
-from apps.execution import api as execution
-from apps.execution.execution_mode import EXECUTION_MODE_CHOICES
 from apps.runs import api as runs
+from apps.runs import authorization as run_authorization
 from apps.runs.run_scopes import RUN_SCOPES
 from apps.settings_store import api as settings
 from apps.settings_store.schemas import ProfileBody
-from apps.terminals import api as terminals
-from apps.terminals import shell_api as terminal_shells
-from apps.terminals.authorization import (
-    RunAuthorizationError,
-    verify_run_authorization,
-)
 from apps.worktrees import api as worktrees
-from studio_server.contracts import LifecycleEvent
 
 
 class OpenSerializer(serializers.Serializer):
@@ -108,16 +98,12 @@ class RecentIndexSerializer(serializers.Serializer):
     recent_profile_index = serializers.IntegerField()
 
 
-class LifecycleEventSerializer(serializers.Serializer):
+class RunAuthorizationRequestSerializer(serializers.Serializer):
     agent_run_id = serializers.CharField()
-    agent = serializers.ChoiceField(choices=("claude", "agy", "codex", "gemini"))
-    kind = serializers.ChoiceField(
-        choices=("session_start", "turn_start", "tool_use", "awaiting_input", "permission_required", "turn_complete", "idle", "error", "session_end")
-    )
-    ts = serializers.CharField()
-    message = serializers.CharField(required=False, allow_null=True)
-    source = serializers.ChoiceField(choices=("hook", "inactivity", "transport"), required=False)
-    provider_session_id = serializers.CharField(required=False, allow_null=True)
+
+
+class RunAuthorizationSerializer(serializers.Serializer):
+    authorization = serializers.CharField()
 
 
 class AutomationAttemptSerializer(serializers.Serializer):
@@ -167,110 +153,6 @@ class AgentStatusResponseSerializer(serializers.Serializer):
     runs = AgentRunRecordSerializer(many=True)
     automation_attempts = AutomationAttemptSerializer(many=True)
     at = serializers.CharField()
-
-
-class LifecycleAcceptedSerializer(serializers.Serializer):
-    accepted = LifecycleEventSerializer()
-    received_at = serializers.CharField()
-
-
-class ViewerLeaseSerializer(serializers.Serializer):
-    agent_run_id = serializers.CharField()
-    viewer_id = serializers.CharField()
-    transport = serializers.ChoiceField(choices=("browser", "desktop"))
-
-
-class ViewerLeaseReleaseSerializer(serializers.Serializer):
-    agent_run_id = serializers.CharField()
-    viewer_id = serializers.CharField()
-
-
-class ViewerOutputReportSerializer(serializers.Serializer):
-    agent_run_id = serializers.CharField()
-
-
-class ViewerOutputReportResultSerializer(serializers.Serializer):
-    agent_run_id = serializers.CharField()
-    observed = serializers.BooleanField()
-
-
-class ReplacedViewerSerializer(serializers.Serializer):
-    viewer_id = serializers.CharField()
-    transport = serializers.CharField()
-
-
-class ViewerLeaseResultSerializer(serializers.Serializer):
-    agent_run_id = serializers.CharField()
-    viewer_id = serializers.CharField()
-    transport = serializers.CharField()
-    expires_at = serializers.CharField()
-    replaced = ReplacedViewerSerializer(allow_null=True)
-
-
-class ReleaseResultSerializer(serializers.Serializer):
-    released = serializers.BooleanField()
-
-
-class AgentRunIdSerializer(serializers.Serializer):
-    agent_run_id = serializers.CharField()
-
-
-class ResumeResultSerializer(AgentRunIdSerializer):
-    resumed_from = serializers.CharField()
-
-
-class TerminateResultSerializer(AgentRunIdSerializer):
-    terminated = serializers.BooleanField()
-
-
-class SelfTerminateResultSerializer(TerminateResultSerializer):
-    ok = serializers.BooleanField()
-    already_terminated = serializers.BooleanField()
-
-
-class CreateTerminalSerializer(serializers.Serializer):
-    agent = serializers.CharField()
-    project_id = serializers.CharField()
-    module_id = serializers.CharField()
-    task_id = serializers.CharField(required=False, allow_null=True)
-    initial_prompt = serializers.CharField(required=False, allow_null=True)
-    is_planning = serializers.BooleanField(required=False)
-    is_instant = serializers.BooleanField(required=False)
-    instant_prompt = serializers.CharField(required=False, allow_null=True)
-    is_doc_chat = serializers.BooleanField(required=False)
-    doc_rel_path = serializers.CharField(required=False, allow_null=True)
-    doc_id = serializers.CharField(required=False, allow_null=True)
-
-
-class TerminalRunSerializer(serializers.Serializer):
-    agent_run_id = serializers.CharField()
-    doc_rel_path = serializers.CharField(required=False, allow_null=True)
-    created_at = serializers.CharField(required=False)
-
-
-class CreateModuleShellSerializer(serializers.Serializer):
-    module_id = serializers.CharField()
-
-
-class ModuleShellSerializer(serializers.Serializer):
-    agent_run_id = serializers.CharField()
-    module_id = serializers.CharField()
-    created_at = serializers.CharField()
-
-
-class ResumableTerminalSerializer(serializers.Serializer):
-    agent_run_id = serializers.CharField()
-    agent = serializers.CharField()
-    status = serializers.CharField()
-    started_at = serializers.CharField()
-    launch_state = serializers.CharField(allow_null=True)
-    launch_model = serializers.CharField(allow_null=True)
-    # The run's own routing scope. A scratch Plan or Instant conversation
-    # records no launch state by design, so this is the only durable source for
-    # the word its resume chip shows (#708).
-    scope = serializers.ChoiceField(choices=RUN_SCOPES)
-    provider_session_id = serializers.CharField()
-    resumed_from = serializers.CharField(allow_null=True)
 
 
 class SaveDocumentSerializer(serializers.Serializer):
@@ -330,68 +212,6 @@ class CreateWorktreeSerializer(serializers.Serializer):
 class DiscardSerializer(serializers.Serializer):
     removed = serializers.BooleanField()
     reason = serializers.CharField()
-
-
-class AgentOverrideSerializer(serializers.Serializer):
-    agent = serializers.CharField(required=False)
-
-
-class RunNowRequestSerializer(serializers.Serializer):
-    origin = serializers.ChoiceField(choices=("human", "agent"), required=False)
-
-
-class GraphRunRequestSerializer(serializers.Serializer):
-    """Graph-run create body: provider override plus execution mode."""
-
-    agent = serializers.CharField(required=False)
-    mode = serializers.ChoiceField(choices=EXECUTION_MODE_CHOICES, required=False)
-
-
-class GraphNodeSerializer(serializers.Serializer):
-    id = serializers.CharField()
-    state = serializers.CharField()
-    parent_id = serializers.CharField(allow_null=True)
-    blocked_by = serializers.ListField(child=serializers.CharField())
-
-
-class GraphSerializer(serializers.Serializer):
-    root_id = serializers.CharField()
-    nodes = GraphNodeSerializer(many=True)
-
-
-class GraphRunResultSerializer(serializers.Serializer):
-    root_id = serializers.CharField()
-    launched = serializers.ListField(child=serializers.CharField())
-
-
-class GraphResetResultSerializer(serializers.Serializer):
-    root_id = serializers.CharField()
-    cleared = serializers.ListField(child=serializers.CharField())
-
-
-class LaunchedAgentResponseSerializer(serializers.Serializer):
-    target_id = serializers.CharField()
-    agent = serializers.CharField()
-    agent_run_id = serializers.CharField()
-
-
-class CommittedStateSerializer(serializers.Serializer):
-    id = serializers.CharField()
-    name = serializers.CharField()
-
-
-class RunNowResponseSerializer(serializers.Serializer):
-    target_id = serializers.CharField()
-    committed_state = CommittedStateSerializer()
-    run = LaunchedAgentResponseSerializer()
-
-
-class RunNowRefusalSerializer(serializers.Serializer):
-    target_id = serializers.CharField()
-    committed_state = CommittedStateSerializer(allow_null=True)
-    run = LaunchedAgentResponseSerializer(allow_null=True)
-    detail = serializers.CharField()
-    code = serializers.CharField()
 
 
 def _serialize_result(result):
@@ -493,42 +313,6 @@ class ModuleFolderValidationView(AuthenticatedAPIView):
         )
 
 
-class AutomationRetryView(AuthenticatedAPIView):
-    @extend_schema(tags=["runs"], request=None, responses={200: AutomationAttemptSerializer, 404: OpenSerializer, 409: OpenSerializer})
-    def post(self, request, attempt_id):
-        return _serialize_result(runs.retry_automation_attempt(attempt_id))
-
-
-class LifecycleEventView(PublicAPIView):
-    """Lifecycle ingress for agent hooks, guarded by run-scoped authorization.
-
-    The view skips DRF's static-API-key authentication because its callers are
-    hook subprocesses that never hold the desktop credential. Instead each
-    launch injects a Studio-signed Bearer credential bound to exactly one run
-    (the same scheme :class:`SelfTerminateView` uses), so an arbitrary local
-    process cannot spoof lifecycle state or hijack another run's
-    ``provider_session_id``.
-    """
-
-    @extend_schema(tags=["runs"], request=LifecycleEventSerializer, responses={202: LifecycleAcceptedSerializer, 401: OpenSerializer})
-    def post(self, request):
-        event = _pydantic(LifecycleEvent, request.data)
-        if not getattr(django_settings, "WORKTRACKER_DISABLE_AUTH", False):
-            try:
-                authorized_run_id = verify_run_authorization(
-                    request.headers.get("Authorization")
-                )
-            except RunAuthorizationError as exc:
-                raise ApplicationError(
-                    401, str(exc), code="caller_run_unbound"
-                ) from exc
-            if authorized_run_id != event.agent_run_id:
-                raise ApplicationError(
-                    401, "authorization_run_mismatch", code="caller_run_mismatch"
-                )
-        return _serialize_result(async_to_sync(runs.ingest_lifecycle_event)(event))
-
-
 class ModuleActivityView(AuthenticatedAPIView):
     @extend_schema(tags=["runs"], parameters=[OpenApiParameter("project_id", str, required=True), OpenApiParameter("window_days", int)], responses={200: {"type": "object", "additionalProperties": {"type": "string"}}})
     def get(self, request):
@@ -539,112 +323,18 @@ class ModuleActivityView(AuthenticatedAPIView):
         return _serialize_result(async_to_sync(runs.get_module_activity)(project_id, window_days))
 
 
-class AgentStatusView(AuthenticatedAPIView):
-    @extend_schema(tags=["runs"], parameters=[OpenApiParameter("project_id", str, required=True), OpenApiParameter("task_id", str)], responses=AgentStatusResponseSerializer)
-    def get(self, request):
-        project_id = request.query_params.get("project_id")
-        if not project_id:
-            return Response({"detail": {"error": "project_id_required"}}, status=400)
-        return _serialize_result(async_to_sync(runs.agent_status)(project_id, request.query_params.get("task_id")))
-
-
-class ViewerLeaseView(AuthenticatedAPIView):
-    @extend_schema(tags=["terminals"], request=ViewerLeaseSerializer, responses={200: ViewerLeaseResultSerializer, 400: ErrorEnvelopeSerializer, 404: ErrorEnvelopeSerializer})
+class RunAuthorizationView(AuthenticatedAPIView):
+    @extend_schema(tags=["runs"], request=RunAuthorizationRequestSerializer, responses=RunAuthorizationSerializer)
     def post(self, request):
-        return _serialize_result(terminals.acquire_viewer_lease(_pydantic(terminals.ViewerLeaseBody, request.data)))
+        body = RunAuthorizationRequestSerializer(data=request.data)
+        body.is_valid(raise_exception=True)
+        return Response({"authorization": run_authorization.issue(body.validated_data["agent_run_id"])})
 
 
-class ViewerLeaseRenewView(AuthenticatedAPIView):
-    @extend_schema(tags=["terminals"], request=ViewerLeaseReleaseSerializer, responses={200: ViewerLeaseResultSerializer, 409: ErrorEnvelopeSerializer})
+class RunPrincipalView(AuthenticatedAPIView):
+    @extend_schema(tags=["runs"], request=None, responses=OpenSerializer)
     def post(self, request):
-        return _serialize_result(terminals.renew_viewer_lease(_pydantic(terminals.ViewerLeaseReleaseBody, request.data)))
-
-
-class ViewerLeaseReleaseView(AuthenticatedAPIView):
-    @extend_schema(tags=["terminals"], request=ViewerLeaseReleaseSerializer, responses=ReleaseResultSerializer)
-    def post(self, request):
-        return _serialize_result(terminals.release_viewer_lease(_pydantic(terminals.ViewerLeaseReleaseBody, request.data)))
-
-
-class ViewerOutputReportView(AuthenticatedAPIView):
-    @extend_schema(tags=["terminals"], request=ViewerOutputReportSerializer, responses=ViewerOutputReportResultSerializer)
-    def post(self, request):
-        return _serialize_result(terminals.report_viewer_output(_pydantic(terminals.ViewerOutputReportBody, request.data)))
-
-
-class TerminalCollectionView(AuthenticatedAPIView):
-    @extend_schema(tags=["terminals"], parameters=[OpenApiParameter("task_id", str, required=True)], responses=TerminalRunSerializer(many=True))
-    def get(self, request):
-        task_id = request.query_params.get("task_id")
-        if not task_id:
-            return Response({"detail": {"error": "task_id_required"}}, status=400)
-        return _serialize_result(terminals.list_terminals(task_id))
-
-    @extend_schema(tags=["terminals"], request=CreateTerminalSerializer, responses={200: AgentRunIdSerializer, 400: ErrorEnvelopeSerializer, 500: ErrorEnvelopeSerializer})
-    def post(self, request):
-        return _serialize_result(terminals.create_terminal(_pydantic(terminals.CreateTerminalRunBody, request.data)))
-
-    @extend_schema(tags=["terminals"], parameters=[OpenApiParameter("agent_run_id", str, required=True)], responses={200: TerminateResultSerializer, 404: ErrorEnvelopeSerializer, 500: ErrorEnvelopeSerializer})
-    def delete(self, request):
-        agent_run_id = request.query_params.get("agent_run_id")
-        if not agent_run_id:
-            return Response({"detail": {"error": "agent_run_id_required"}}, status=400)
-        return _serialize_result(terminals.terminate_terminal(agent_run_id))
-
-
-class TerminalResumeView(AuthenticatedAPIView):
-    @extend_schema(tags=["terminals"], parameters=[OpenApiParameter("agent_run_id", str, required=True)], request=None, responses={200: ResumeResultSerializer, 404: ErrorEnvelopeSerializer, 409: ErrorEnvelopeSerializer, 500: ErrorEnvelopeSerializer})
-    def post(self, request):
-        agent_run_id = request.query_params.get("agent_run_id")
-        if not agent_run_id:
-            return Response({"detail": {"error": "agent_run_id_required"}}, status=400)
-        return _serialize_result(terminals.resume_terminal(agent_run_id))
-
-
-class ResumableTerminalsView(AuthenticatedAPIView):
-    @extend_schema(tags=["terminals"], parameters=[OpenApiParameter("task_id", str), OpenApiParameter("project_id", str), OpenApiParameter("module_id", str)], responses=ResumableTerminalSerializer(many=True))
-    def get(self, request):
-        return _serialize_result(terminals.list_resumable_terminals(request.query_params.get("task_id"), request.query_params.get("project_id"), request.query_params.get("module_id")))
-
-
-class ScratchTerminalsView(AuthenticatedAPIView):
-    @extend_schema(tags=["terminals"], parameters=[OpenApiParameter("project_id", str, required=True), OpenApiParameter("module_id", str)], responses=TerminalRunSerializer(many=True))
-    def get(self, request):
-        project_id = request.query_params.get("project_id")
-        if not project_id:
-            return Response({"detail": {"error": "project_id_required"}}, status=400)
-        return _serialize_result(terminals.list_scratch_terminals(project_id, request.query_params.get("module_id")))
-
-
-class ModuleShellCollectionView(AuthenticatedAPIView):
-    """A module's durable login shells, which are runs with no agent."""
-
-    @extend_schema(tags=["terminals"], parameters=[OpenApiParameter("module_id", str, required=True)], responses=ModuleShellSerializer(many=True))
-    def get(self, request):
-        module_id = request.query_params.get("module_id")
-        if not module_id:
-            return Response({"detail": {"error": "module_id_required"}}, status=400)
-        return _serialize_result(terminal_shells.list_module_shells(module_id))
-
-    @extend_schema(tags=["terminals"], request=CreateModuleShellSerializer, responses={200: AgentRunIdSerializer, 409: ErrorEnvelopeSerializer, 500: ErrorEnvelopeSerializer})
-    def post(self, request):
-        return _serialize_result(terminal_shells.create_module_shell(_pydantic(terminal_shells.CreateModuleShellBody, request.data)))
-
-
-class SelfTerminateView(PublicAPIView):
-    @extend_schema(tags=["terminals"], request=None, responses={200: SelfTerminateResultSerializer, 401: OpenSerializer, 404: OpenSerializer, 500: OpenSerializer})
-    def post(self, request):
-        return _serialize_result(
-            terminals.self_terminate_terminal(request.headers.get("Authorization"))
-        )
-
-
-class McpRunAuthorizationView(AuthenticatedAPIView):
-    @extend_schema(tags=["terminals"], request=None, responses={200: OpenSerializer, 401: OpenSerializer, 404: OpenSerializer})
-    def post(self, request):
-        return _serialize_result(
-            terminals.authorize_mcp_run(request.headers.get("Authorization"))
-        )
+        return Response(run_authorization.principal(request.headers.get("Authorization")))
 
 
 class DocumentsView(AuthenticatedAPIView):
@@ -715,116 +405,3 @@ class WorktreeDiscardView(AuthenticatedAPIView):
     @extend_schema(tags=["worktrees"], parameters=[OpenApiParameter("parent_id", str), OpenApiParameter("module_id", str)], request=None, responses=DiscardSerializer)
     def post(self, request, task_id):
         return _serialize_result(worktrees.discard_worktree(task_id, request.query_params.get("parent_id"), request.query_params.get("module_id")))
-
-
-class GraphRunView(AuthenticatedAPIView):
-    @extend_schema(operation_id="workItemsGraphRunRetrieve", tags=["execution"], responses={200: GraphSerializer, 404: ErrorEnvelopeSerializer})
-    def get(self, request, issue_id):
-        return _serialize_result(execution.get_dependency_graph(issue_id))
-
-    @extend_schema(operation_id="workItemsGraphRunCreate", tags=["execution"], request=GraphRunRequestSerializer, responses={201: GraphRunResultSerializer, 404: ErrorEnvelopeSerializer, 409: ErrorEnvelopeSerializer, 422: ErrorEnvelopeSerializer})
-    def post(self, request, issue_id):
-        return _serialize_result(execution.create_execute_graph(issue_id, _pydantic(execution.ExecuteGraphIn, request.data)))
-
-    @extend_schema(operation_id="workItemsGraphRunDestroy", tags=["execution"], responses={200: GraphResetResultSerializer, 404: ErrorEnvelopeSerializer})
-    def delete(self, request, issue_id):
-        return _serialize_result(execution.reset_execute_graph(issue_id))
-
-
-class LaunchAgentView(AuthenticatedAPIView):
-    @extend_schema(operation_id="workItemsLaunchAgentCreate", tags=["execution"], request=AgentOverrideSerializer, responses={201: LaunchedAgentResponseSerializer, 400: ErrorEnvelopeSerializer, 404: ErrorEnvelopeSerializer, 422: ErrorEnvelopeSerializer, 503: ErrorEnvelopeSerializer})
-    def post(self, request, issue_id):
-        return _serialize_result(execution.create_launch_agent(issue_id, _pydantic(execution.LaunchAgentIn, request.data)))
-
-
-class RunsEffectReadinessView(AuthenticatedAPIView):
-    """The health record Rust requires before it will call this executor."""
-
-    @extend_schema(operation_id="runsEffectPortReadiness", tags=["terminals"], responses={200: OpenSerializer})
-    def get(self, request):
-        from apps.terminals import runs_effect_port
-
-        readiness = runs_effect_port.readiness()
-        return Response(readiness, status=200 if readiness["ready"] else 503)
-
-
-class RunsEffectObserveView(AuthenticatedAPIView):
-    @extend_schema(operation_id="runsEffectPortObserve", tags=["terminals"], request=OpenSerializer, responses={200: OpenSerializer})
-    def post(self, request):
-        from apps.terminals import runs_effect_port
-
-        return Response(runs_effect_port.observe(request.data or {}), status=200)
-
-
-class RunsEffectExecuteView(AuthenticatedAPIView):
-    @extend_schema(operation_id="runsEffectPortExecute", tags=["terminals"], request=OpenSerializer, responses={200: OpenSerializer})
-    def post(self, request):
-        from apps.terminals import runs_effect_port
-
-        return Response(runs_effect_port.execute(request.data or {}), status=200)
-
-
-class LaunchPolicyEffectView(AuthenticatedAPIView):
-    @extend_schema(operation_id="launchPolicyEffectReadiness", tags=["execution"], responses={200: OpenSerializer})
-    def get(self, request):
-        from apps.settings_store.write_ownership import rust_owns_slice2_writes
-
-        ready = rust_owns_slice2_writes()
-        return Response(
-            {
-                "version": 1,
-                "ready": ready,
-                "policy_owner": "rust",
-                "effect_owner": "django",
-                "django_write_fallback": False,
-            },
-            status=200 if ready else 503,
-        )
-
-    @extend_schema(operation_id="launchPolicyEffectCreate", tags=["execution"], request=OpenSerializer, responses={200: OpenSerializer, 201: OpenSerializer})
-    def post(self, request):
-        from apps.settings_store.write_ownership import (
-            rust_owns_slice2_writes,
-            slice2_commands_ready,
-        )
-
-        if rust_owns_slice2_writes() and not slice2_commands_ready():
-            return Response(
-                {
-                    "detail": "Slice 2 is not ready; launch commands are disabled",
-                    "code": "slice2_not_ready",
-                },
-                status=503,
-            )
-        decision = _pydantic(execution.LaunchPolicyDecisionIn, request.data)
-        return _serialize_result(execution.perform(decision))
-
-
-class RunNowView(AuthenticatedAPIView):
-    @extend_schema(
-        operation_id="workItemsRunNowCreate",
-        tags=["execution"],
-        request=RunNowRequestSerializer,
-        responses={
-            201: RunNowResponseSerializer,
-            400: RunNowRefusalSerializer,
-            404: RunNowRefusalSerializer,
-            409: RunNowRefusalSerializer,
-            422: RunNowRefusalSerializer,
-            503: RunNowRefusalSerializer,
-        },
-    )
-    def post(self, request, issue_id):
-        try:
-            caller_agent_run_id = verify_run_authorization(
-                request.headers.get("Authorization")
-            )
-        except RunAuthorizationError:
-            caller_agent_run_id = None
-        return _serialize_result(
-            execution.create_run_now(
-                issue_id,
-                _pydantic(execution.RunNowIn, request.data),
-                caller_agent_run_id=caller_agent_run_id,
-            )
-        )

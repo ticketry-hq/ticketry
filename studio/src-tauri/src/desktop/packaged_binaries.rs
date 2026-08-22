@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use tauri::Manager;
 
 use crate::desktop::environment::{smoke_startup_exit_requested, SMOKE_SIDECAR_BINARY};
-use crate::release_manifest;
+use crate::sidecar_supervision::release_manifest;
 
 const HOOK_RUNNER_BINARY: &str = "ticketry-hook";
 

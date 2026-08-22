@@ -1,13 +1,7 @@
-from django.urls import path
+"""Django exposes no production WebSocket routes.
 
-from apps.terminals.consumers import TerminalConsumer
+Terminal bytes and controls are owned by the Rust tmux adapter. Status uses the
+in-process GraphQL subscription, so an empty route table is intentional.
+"""
 
-
-# The project status WebSocket was retired at the Slice 3 handoff. Studio's
-# sole status authority is the in-process GraphQL subscription over the durable
-# Rust outbox, so there is deliberately no second status transport to fall back
-# to. Only the terminal transport remains, and it moves with the Terminals
-# slice.
-websocket_urlpatterns = [
-    path("ws/terminal", TerminalConsumer.as_asgi()),
-]
+websocket_urlpatterns = []

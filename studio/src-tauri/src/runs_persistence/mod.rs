@@ -2,9 +2,9 @@
 //!
 //! `RunsServices` is installed in the live GraphQL schema, so Agent Run
 //! holdings and lifecycle ingress are authoritative Rust paths. Run-scoped
-//! termination is authorized here and reaches the temporary Python terminal
-//! boundary only as a `TerminationExecutor`, driven by the authenticated MCP
-//! transport. Launches reach that same boundary as a `LaunchExecutor`, which
+//! termination is owned by `terminal_cleanup`, while Runs supplies the Agent
+//! Run outcome and durable status transaction used at settlement. Launches
+//! reach their executor as a `LaunchExecutor`, which
 //! performs one already-durable effect and reports a typed outcome without
 //! ever writing a Runs table. Effects that outlive a crash are drained by
 //! reconciliation, which observes the deterministic runtime identity through a
@@ -20,6 +20,7 @@ mod error;
 mod intent;
 mod launch_claim;
 mod launch_cleanup;
+mod launch_defer;
 mod launch_dispatch;
 mod launch_executor;
 mod launch_outcome;
@@ -30,7 +31,6 @@ mod launch_scan;
 mod lifecycle;
 mod lifecycle_graphql;
 mod lifecycle_types;
-mod mcp;
 pub mod ownership_manifest;
 mod queries;
 mod readiness;
@@ -45,8 +45,7 @@ mod status_frames;
 mod status_stream;
 mod status_subscription;
 mod status_wakeup;
-mod termination;
-mod timestamp;
+pub(crate) mod timestamp;
 mod work_item_scope;
 
 pub use adoption::{
@@ -57,7 +56,9 @@ pub use intent::LaunchIntent;
 pub use launch_claim::{ClaimedLaunch, MAX_LEASE_SECONDS};
 pub use launch_dispatch::LaunchDispatchService;
 pub use launch_executor::{LaunchExecutor, LaunchExecutorFailure, LaunchRuntimeEvidence};
+pub(crate) use launch_outcome::LaunchSettlementParticipant;
 pub use launch_outcome::{LaunchOutcome, RecordedLaunch};
+pub(crate) use launch_preparation::LaunchPreparationParticipant;
 pub use launch_preparation::{PrepareLaunchRequest, PreparedLaunch, RunSnapshot};
 pub use launch_probe::{LaunchRuntimeProbe, RuntimeIdentity, RuntimeObservation};
 pub use launch_reconciliation::{
@@ -67,7 +68,7 @@ pub use launch_reconciliation::{
 pub use lifecycle_types::{
     LifecycleAcceptance, LifecycleFact, TerminalAcceptance, TerminalFact, TerminalOutcome,
 };
-pub use mcp::McpRunControl;
+pub(crate) use queries::run_holding_in;
 pub use readiness::{
     publish as publish_readiness, published_readiness_is_complete, unavailable_error,
     Slice3Readiness, READINESS_FILE,
@@ -96,10 +97,6 @@ pub use status_frames::{
     RunStatusResetRequired, RunStatusSnapshot, StatusEventPayload, SUPPORTED_PAYLOAD_VERSION,
 };
 pub use status_stream::{StatusStreamRequest, MAX_REPLAY_BYTES, MAX_REPLAY_EVENTS};
-pub use termination::{
-    AuthenticatedAgentRun, RunTerminationService, TerminateRunRequest, TerminationExecutor,
-    TerminationExecutorEvidence, TerminationResult,
-};
 
 pub(crate) fn register_graphql(builder: seaography::Builder) -> seaography::Builder {
     status_subscription::register(lifecycle_graphql::register(attempt_graphql::register(

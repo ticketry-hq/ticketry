@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use muxed_studio_lib::workspace_handoff::{
-    self, manifest, published_readiness_is_complete, publish_readiness, Slice4Readiness,
+    self, manifest, publish_readiness, published_readiness_is_complete, Slice4Readiness,
     WorkspaceReadinessGate,
 };
 use sea_orm::{ConnectionTrait, Database, DbBackend, Statement};
@@ -166,7 +166,10 @@ async fn adoption_preserves_every_existing_document_and_worktree_row() {
         document.try_get::<String>("", "root_dir").unwrap(),
         "/repos/ticketry/spec/mod--abc/T766--slug"
     );
-    assert_eq!(document.try_get::<String>("", "rel_path").unwrap(), "SPEC.md");
+    assert_eq!(
+        document.try_get::<String>("", "rel_path").unwrap(),
+        "SPEC.md"
+    );
     // The bridge's one new column is nullable and lazily populated, never
     // invented at adoption.
     assert!(document

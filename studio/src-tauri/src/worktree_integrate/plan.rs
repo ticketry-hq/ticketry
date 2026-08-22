@@ -58,7 +58,10 @@ pub(crate) enum PlanResolution {
     NoRepository(&'static str),
     /// The repository, branch, or checkout recorded on the row is not the one
     /// the module now resolves to. Nothing is landed on a guess.
-    Mismatched { code: &'static str, detail: String },
+    Mismatched {
+        code: &'static str,
+        detail: String,
+    },
 }
 
 pub(crate) async fn derive(

@@ -186,7 +186,10 @@ mod tests {
         std::fs::write(root.path().join("SPEC.md"), "# spec").expect("write the document");
         let digest = digest_of(&root.path().join("SPEC.md")).expect("digest the document");
 
-        let plan = plan_roots(&roots(root.path()), &[row(root.path(), "SPEC.md", Some(&digest))]);
+        let plan = plan_roots(
+            &roots(root.path()),
+            &[row(root.path(), "SPEC.md", Some(&digest))],
+        );
 
         assert!(plan.is_empty(), "a convergent rescan writes nothing");
     }
@@ -220,7 +223,11 @@ mod tests {
         // the canonical design directory resolves it.
         let spellings = BTreeSet::from([
             root.path().to_string_lossy().into_owned(),
-            canonical.join("notes").join("..").to_string_lossy().into_owned(),
+            canonical
+                .join("notes")
+                .join("..")
+                .to_string_lossy()
+                .into_owned(),
         ]);
 
         let plan = plan_roots(&spellings, &[]);

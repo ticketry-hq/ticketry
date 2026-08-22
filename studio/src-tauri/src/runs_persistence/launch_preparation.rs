@@ -5,6 +5,7 @@
 //! lifecycle fact, and its status event appear together or not at all. Only a
 //! committed effect may wake an executor.
 
+use async_trait::async_trait;
 use chrono::Utc;
 use sea_orm::{
     ActiveModelTrait, ActiveValue::NotSet, ActiveValue::Set, ColumnTrait, Condition,
@@ -35,6 +36,8 @@ pub struct RunSnapshot {
     pub design_dir: Option<String>,
     pub resumed_from: Option<String>,
     pub provider_session_id: Option<String>,
+    pub launch_state: Option<String>,
+    pub launch_model: Option<String>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -52,10 +55,49 @@ pub struct PreparedLaunch {
     pub event_cursor: Option<i64>,
 }
 
+/// A capability whose durable intent must commit with the Runs launch.
+///
+/// Terminal launch material is the first participant. Keeping the transaction
+/// here means the Runs service remains the only code that mints Agent Runs and
+/// Launch Effects, while the participating model can add its own row before
+/// the same commit.
+#[async_trait]
+pub(crate) trait LaunchPreparationParticipant: Send + Sync {
+    async fn prepare_in(
+        &self,
+        transaction: &DatabaseTransaction,
+        intent: &LaunchIntent,
+        reused: bool,
+    ) -> Result<(), RunsPersistenceError>;
+}
+
+struct NoLaunchPreparationParticipant;
+
+#[async_trait]
+impl LaunchPreparationParticipant for NoLaunchPreparationParticipant {
+    async fn prepare_in(
+        &self,
+        _transaction: &DatabaseTransaction,
+        _intent: &LaunchIntent,
+        _reused: bool,
+    ) -> Result<(), RunsPersistenceError> {
+        Ok(())
+    }
+}
+
 impl EffectService {
     pub async fn prepare_launch(
         &self,
         request: PrepareLaunchRequest,
+    ) -> Result<PreparedLaunch, RunsPersistenceError> {
+        self.prepare_launch_with(request, &NoLaunchPreparationParticipant)
+            .await
+    }
+
+    pub(crate) async fn prepare_launch_with(
+        &self,
+        request: PrepareLaunchRequest,
+        participant: &dyn LaunchPreparationParticipant,
     ) -> Result<PreparedLaunch, RunsPersistenceError> {
         let intent = normalize(request.intent.clone())?;
         let transaction = self.database().begin().await?;
@@ -67,6 +109,7 @@ impl EffectService {
             .map(launch_effect)
         {
             validate_reuse(&existing, &intent)?;
+            participant.prepare_in(&transaction, &intent, true).await?;
             transaction.commit().await?;
             return Ok(PreparedLaunch {
                 effect: existing,
@@ -112,6 +155,8 @@ impl EffectService {
             "state": "starting",
             "occurredAt": started_at,
             "providerSessionCaptured": false,
+            "launchState": request.snapshot.launch_state,
+            "launchModel": request.snapshot.launch_model,
         });
         let cursor = self
             .events()
@@ -131,6 +176,7 @@ impl EffectService {
                 },
             )
             .await?;
+        participant.prepare_in(&transaction, &intent, false).await?;
         transaction.commit().await?;
         self.events().wake_committed();
         Ok(PreparedLaunch {
@@ -273,6 +319,8 @@ async fn mint_or_validate_run(
         design_dir: Set(request.snapshot.design_dir.clone()),
         resumed_from: Set(request.snapshot.resumed_from.clone()),
         scope: Set(intent.scope.clone()),
+        launch_state: Set(request.snapshot.launch_state.clone()),
+        launch_model: Set(request.snapshot.launch_model.clone()),
     }
     .insert(transaction)
     .await

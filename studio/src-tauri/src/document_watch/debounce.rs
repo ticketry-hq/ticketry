@@ -49,7 +49,10 @@ impl PendingPaths {
     /// pending. Zero means it is already due.
     pub(super) fn due_in(&self, now: Instant) -> Option<Duration> {
         let since = self.since?;
-        Some(self.window.saturating_sub(now.saturating_duration_since(since)))
+        Some(
+            self.window
+                .saturating_sub(now.saturating_duration_since(since)),
+        )
     }
 
     /// Take everything folded so far. The caller settles what it takes.

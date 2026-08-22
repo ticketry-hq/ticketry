@@ -29,6 +29,7 @@ import { queryKeys } from "../../../../shared/query/keys";
 const WORK_ITEM_ENTITY_PREFIX = ["workItem"] as const;
 const WORK_ITEM_COLLECTION_PREFIX = ["work-items"] as const;
 const DOCUMENT_REGISTRY_PREFIX = ["documents", "registry"] as const;
+const TERMINAL_HOLDINGS_PREFIX = ["terminal-sessions"] as const;
 
 export interface CanonicalRefreshRequest {
   readonly projectId: string;
@@ -69,6 +70,7 @@ export async function refreshCanonicalHoldings(
     refetch(queryKeys.workflows.catalog(request.projectId)),
     refetch(queryKeys.states.byProject(request.projectId)),
     refetch(DOCUMENT_REGISTRY_PREFIX),
+    refetch(TERMINAL_HOLDINGS_PREFIX),
     refetch(queryKeys.worktrees.all),
   ]);
 }

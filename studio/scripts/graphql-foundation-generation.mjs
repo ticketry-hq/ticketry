@@ -7,6 +7,10 @@ import { generateSettingsOperations } from "./settings-operation-generation.mjs"
 import { generateAgentStatusOperations } from "./agent-status-operation-generation.mjs";
 import { generateWorktreeOperations } from "./worktree-operation-generation.mjs";
 import { generateDocumentOperations } from "./documents-operation-generation.mjs";
+import { generateTerminalOperations } from "./terminal-operation-generation.mjs";
+import { generateTerminalEntities } from "./terminal-entity-generation.mjs";
+import { generateExecutionEntities } from "./execution-entity-generation.mjs";
+import { generateExecutionOperations } from "./execution-operation-generation.mjs";
 
 export const studioRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -54,6 +58,50 @@ export async function generateFoundationArtifacts(outputRoot) {
     ],
     tauriRoot,
   );
+  const terminalDatabasePath = join(outputRoot, "terminal-generation.sqlite3");
+  const rawTerminalEntities = join(outputRoot, "raw-terminal-entities");
+  run(
+    "cargo",
+    ["run", "--locked", "--quiet", "--bin", "prepare_terminal_generation_db", "--", terminalDatabasePath],
+    tauriRoot,
+  );
+  run(
+    "sea-orm-cli",
+    [
+      "generate", "entity",
+      "--database-url", `sqlite://${terminalDatabasePath}`,
+      "--output-dir", rawTerminalEntities,
+      "--entity-format", "dense",
+      "--seaography",
+      "--tables", "agent_runs,agent_terminal_sessions",
+      "--with-prelude", "none",
+      "--banner-version", "off",
+    ],
+    tauriRoot,
+  );
+  await generateTerminalEntities({ rawDirectory: rawTerminalEntities, outputRoot });
+  const executionDatabasePath = join(outputRoot, "execution-generation.sqlite3");
+  const rawExecutionEntities = join(outputRoot, "raw-execution-entities");
+  run(
+    "cargo",
+    ["run", "--locked", "--quiet", "--bin", "prepare_execution_generation_db", "--", executionDatabasePath],
+    tauriRoot,
+  );
+  run(
+    "sea-orm-cli",
+    [
+      "generate", "entity",
+      "--database-url", `sqlite://${executionDatabasePath}`,
+      "--output-dir", rawExecutionEntities,
+      "--entity-format", "dense",
+      "--seaography",
+      "--tables", "graph_runs,launched_tasks,worktracker_project,worktracker_issue,agent_runs",
+      "--with-prelude", "none",
+      "--banner-version", "off",
+    ],
+    tauriRoot,
+  );
+  await generateExecutionEntities({ rawDirectory: rawExecutionEntities, outputRoot });
   const schemaPath = join(outputRoot, "schema.graphql");
   const bindingsPath = join(outputRoot, "taurpc.ts");
   const operationsPath = join(outputRoot, "operations.ts");
@@ -98,6 +146,16 @@ export async function generateFoundationArtifacts(outputRoot) {
     outputRoot,
   });
   await generateDocumentOperations({
+    schemaPath,
+    sourceRoot: join(studioRoot, "src"),
+    outputRoot,
+  });
+  await generateTerminalOperations({
+    schemaPath,
+    sourceRoot: join(studioRoot, "src"),
+    outputRoot,
+  });
+  await generateExecutionOperations({
     schemaPath,
     sourceRoot: join(studioRoot, "src"),
     outputRoot,

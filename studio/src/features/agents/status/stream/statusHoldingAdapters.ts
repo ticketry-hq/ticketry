@@ -64,8 +64,13 @@ export function toRunRecord(payload: RunHoldingPayload): RunRecord {
     module_id: payload.module_id,
     agent: payload.agent,
     scope: payload.scope as AgentRunScope,
+    launch_state: payload.launch_state,
+    launch_model: payload.launch_model,
     started_at: payload.started_at,
     state: payload.state as RawLifecycleState,
+    effective_state: payload.effective_state as RunRecord["effective_state"],
     updated_at: payload.updated_at,
+    output_sequence: payload.output_sequence,
+    last_output_at: payload.last_output_at,
   };
 }

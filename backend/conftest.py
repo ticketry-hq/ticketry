@@ -40,33 +40,3 @@ def seeded_provider_rows(request):
                 "supports_unattended": True,
             },
         )
-
-
-@pytest.fixture(autouse=True)
-def local_rust_runs_runtime(monkeypatch):
-    """Serve Runs commands locally instead of over the loopback Rust port.
-
-    Rust owns every Runs table in shipping and runs in its own process, which
-    this suite does not start. Substituting the port keeps every existing
-    assertion about durable outcomes honest while proving the Django code
-    reaches those tables only through the owner's command surface.
-    """
-
-    from apps.runs import rust_port
-    from apps.runs.tests import fake_rust_runtime
-
-    fake_rust_runtime.reset()
-    for command in (
-        "apply_lifecycle_fact",
-        "record_terminal_outcome",
-        "prepare_launch",
-        "settle_launch",
-        "launch",
-        "materialize_attempt",
-        "record_attempt_outcome",
-    ):
-        monkeypatch.setattr(
-            rust_port, command, getattr(fake_rust_runtime, command)
-        )
-    yield
-    fake_rust_runtime.reset()

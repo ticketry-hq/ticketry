@@ -52,7 +52,6 @@ def _isolated_sidecar_environment() -> dict[str, str]:
         "MUXED_ADMIN_ENABLED",
         "MUXED_DESKTOP_ORIGIN",
         "MUXED_HOOK_SPOOL_DIR",
-        "MUXED_SKILL_SMOKE_REPOSITORY",
         "MUXED_SIDECAR_CREDENTIAL",
         "MUXED_STATE_DB",
         "MUXED_APPROVED_AGY_PATH",
@@ -66,15 +65,54 @@ def _isolated_sidecar_environment() -> dict[str, str]:
         "WORKTRACKER_DISABLE_AUTH",
     ):
         environment.pop(name, None)
-    # Startup installs required provider skills. Keep subprocess tests away
-    # from the developer's real provider configuration.
     environment["HOME"] = str(
         Path(tempfile.gettempdir()) / f"ticketry-sidecar-test-home-{os.getpid()}"
     )
-    runner = environment.get("MUXED_HOOK_RUNNER_BINARY")
-    if runner:
-        environment["MUXED_PACKAGED_HOOK_RUNNER"] = runner
     return environment
+
+
+def test_packaged_skill_smoke_is_offline_complete_and_preserves_provider_config(tmp_path):
+    environment = _isolated_sidecar_environment()
+    environment["HOME"] = str(tmp_path / "home")
+    home = Path(environment["HOME"])
+    configuration = [
+        home / ".claude/settings.json",
+        home / ".codex/config.toml",
+        home / ".agy/settings.json",
+        home / ".gemini/settings.json",
+    ]
+    for index, path in enumerate(configuration):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(f"provider-config-{index}\n", encoding="utf-8")
+
+    result = subprocess.run(
+        _entrypoint_command("skills", "smoke-providers"),
+        cwd=tmp_path,
+        env=environment,
+        text=True,
+        capture_output=True,
+        timeout=30,
+        check=True,
+    )
+
+    evidence = json.loads(result.stdout.splitlines()[-1])
+    expected = {
+        "code-review",
+        "domain-modeling",
+        "grill-with-docs",
+        "grilling",
+        "implement",
+        "setup-matt-pocock-skills",
+        "tdd",
+        "to-spec",
+        "to-tickets",
+    }
+    assert set(evidence["providers"]) == {"claude", "codex", "agy", "gemini"}
+    assert all(expected <= set(names) for names in evidence["providers"].values())
+    assert all(evidence["mcp_configured"].values())
+    for index, path in enumerate(configuration):
+        assert path.read_text(encoding="utf-8") == f"provider-config-{index}\n"
+    assert not (home / "tmp/ticketry-agent-runs").exists()
 
 
 def _assert_database_startup_failure(data_dir: Path) -> None:
@@ -162,109 +200,6 @@ def test_sidecar_refuses_a_structurally_corrupt_database(tmp_path):
     _assert_database_startup_failure(tmp_path)
 
 
-def test_sidecar_dispatches_packaged_lifecycle_hooks():
-    result = subprocess.run(
-        _entrypoint_command(
-            "hook",
-            "codex",
-            "--agent-run-id",
-            "run-packaged",
-            "--lifecycle-url",
-            "http://127.0.0.1:1/api/lifecycle/events",
-        ),
-        input=json.dumps({"hook_event_name": "SessionStart"}),
-        text=True,
-        capture_output=True,
-        timeout=10,
-    )
-
-    assert result.returncode == 0
-    assert result.stdout == ""
-    assert "--port" not in result.stderr
-
-
-def test_sidecar_resolves_and_verifies_packaged_skills_without_network():
-    environment = _isolated_sidecar_environment()
-    environment.update(
-        {
-            "NO_PROXY": "127.0.0.1,localhost",
-            "HTTP_PROXY": "http://127.0.0.1:1",
-            "HTTPS_PROXY": "http://127.0.0.1:1",
-            "ALL_PROXY": "http://127.0.0.1:1",
-        }
-    )
-
-    result = subprocess.run(
-        _entrypoint_command("skills", "verify"),
-        cwd=Path("/"),
-        env=environment,
-        text=True,
-        capture_output=True,
-        timeout=30,
-    )
-
-    assert result.returncode == 0, result.stderr
-    verified = json.loads(result.stdout)
-    assert verified["commit"] == "ed37663cc5fbef691ddfecd080dff42f7e7e350d"
-    assert set(verified["packages"]) == {
-        "code-review",
-        "grill-with-docs",
-        "implement",
-        "tdd",
-        "to-spec",
-        "to-tickets",
-        "grilling",
-        "domain-modeling",
-        "setup-matt-pocock-skills",
-    }
-
-
-def test_sidecar_install_and_verify_installation_commands_are_offline(tmp_path):
-    home = tmp_path / "home"
-    environment = _isolated_sidecar_environment()
-    environment.update(
-        {
-            "HOME": str(home),
-            "NO_PROXY": "127.0.0.1,localhost",
-            "HTTP_PROXY": "http://127.0.0.1:1",
-            "HTTPS_PROXY": "http://127.0.0.1:1",
-            "ALL_PROXY": "http://127.0.0.1:1",
-        }
-    )
-
-    installed = subprocess.run(
-        _entrypoint_command("skills", "install"),
-        cwd=Path("/"),
-        env=environment,
-        text=True,
-        capture_output=True,
-        timeout=30,
-    )
-    verified = subprocess.run(
-        _entrypoint_command("skills", "verify-installation"),
-        cwd=Path("/"),
-        env=environment,
-        text=True,
-        capture_output=True,
-        timeout=30,
-    )
-
-    assert installed.returncode == 0, installed.stderr
-    assert verified.returncode == 0, verified.stderr
-    assert set(json.loads(installed.stdout)["installed"]) == {
-        "claude",
-        "codex",
-        "agy",
-        "gemini",
-    }
-    assert set(json.loads(verified.stdout)["verified"]) == {
-        "claude",
-        "codex",
-        "agy",
-        "gemini",
-    }
-
-
 def _file_snapshot(root: Path) -> dict[str, bytes]:
     return {
         str(path.relative_to(root)): path.read_bytes()
@@ -273,266 +208,10 @@ def _file_snapshot(root: Path) -> dict[str, bytes]:
     }
 
 
-def test_sidecar_installs_and_smokes_every_packaged_provider_offline(
-    tmp_path,
-):
-    home = tmp_path / "fresh-home"
-    repository = tmp_path / "repository"
-    for root in (home, repository):
-        for provider in ("claude", "codex", "agy", "gemini"):
-            config = root / f".{provider}" / "settings"
-            config.parent.mkdir(parents=True, exist_ok=True)
-            config.write_bytes(f"{root.name}:{provider}:unchanged\n".encode())
-    before_home = _file_snapshot(home)
-    before_repository = _file_snapshot(repository)
-
-    environment = _isolated_sidecar_environment()
-    environment.update(
-        {
-            "HOME": str(home),
-            "MUXED_SKILL_SMOKE_REPOSITORY": str(repository),
-            "NO_PROXY": "127.0.0.1,localhost",
-            "HTTP_PROXY": "http://127.0.0.1:1",
-            "HTTPS_PROXY": "http://127.0.0.1:1",
-            "ALL_PROXY": "http://127.0.0.1:1",
-        }
-    )
-    result = subprocess.run(
-        _entrypoint_command("skills", "smoke-providers"),
-        cwd=Path("/"),
-        env=environment,
-        text=True,
-        capture_output=True,
-        timeout=30,
-    )
-
-    assert result.returncode == 0, result.stderr
-    smoke = json.loads(result.stdout)
-    expected = {
-        "code-review",
-        "grill-with-docs",
-        "implement",
-        "tdd",
-        "to-spec",
-        "to-tickets",
-        "grilling",
-        "domain-modeling",
-        "setup-matt-pocock-skills",
-    }
-    assert set(smoke["providers"]) == {"claude", "codex", "agy", "gemini"}
-    assert all(set(names) == expected for names in smoke["providers"].values())
-    assert smoke["mcp_configured"] == {
-        "claude": True,
-        "codex": True,
-        "agy": True,
-        "gemini": True,
-    }
-    after_home = _file_snapshot(home)
-    for path, contents in before_home.items():
-        assert after_home[path] == contents
-    assert after_home.keys() > before_home.keys()
-    assert _file_snapshot(repository) == before_repository
-    overlay_parent = Path(tempfile.gettempdir()) / "ticketry-agent-runs"
-    assert all(
-        not (overlay_parent / f"packaged-smoke-{provider}").exists()
-        for provider in smoke["providers"]
-    )
-
-
-@pytest.mark.skipif(
-    not os.environ.get("MUXED_HOOK_RUNNER_BINARY"),
-    reason="requires the built sandbox-safe hook runner",
-)
-def test_packaged_hook_spool_updates_the_run_state(tmp_path):
-    """The shipped native hook and frozen backend compose end to end."""
-
-    runner = os.environ["MUXED_HOOK_RUNNER_BINARY"]
-    run_id = "packaged-hook-run"
-    with _running_sidecar(
-        tmp_path,
-        MUXED_PACKAGED_HOOK_RUNNER=runner,
-    ) as port:
-        headers = {"x-api-key": (tmp_path / "worktracker_token").read_text().strip()}
-        base_url = f"http://127.0.0.1:{port}/api/work-tracker"
-        workspace_response = httpx.get(
-            f"{base_url}/workspace", headers=headers, timeout=30
-        )
-        assert workspace_response.status_code == 200
-        assert workspace_response.json()["slug"] == "meml"
-        project_response = httpx.post(
-            f"{base_url}/projects",
-            headers=headers,
-            json={"name": "Packaged hook", "slug": "PKG"},
-            timeout=5,
-        )
-        assert project_response.status_code == 200
-        project_id = project_response.json()["id"]
-
-        issue_types_response = httpx.get(
-            f"{base_url}/projects/{project_id}/issue-types",
-            headers=headers,
-            timeout=5,
-        )
-        assert issue_types_response.status_code == 200
-        issue_types = issue_types_response.json()
-        module_type_id = next(
-            issue_type["id"]
-            for issue_type in issue_types
-            if issue_type["level"] == "module"
-        )
-        task_type_id = next(
-            issue_type["id"]
-            for issue_type in issue_types
-            if issue_type["name"] == "Story"
-        )
-
-        module_response = httpx.post(
-            f"{base_url}/projects/{project_id}/modules",
-            headers=headers,
-            json={"name": "Packaged hook", "issue_type_id": module_type_id},
-            timeout=5,
-        )
-        assert module_response.status_code == 200
-        module_id = module_response.json()["id"]
-        task_response = httpx.post(
-            f"{base_url}/projects/{project_id}/work-items",
-            headers=headers,
-            json={
-                "name": "Packaged hook",
-                "parent_id": module_id,
-                "issue_type_id": task_type_id,
-            },
-            timeout=5,
-        )
-        assert task_response.status_code == 200
-        task_id = task_response.json()["id"]
-
-        with sqlite3.connect(tmp_path / "state.db") as database:
-            database.execute(
-                """
-                INSERT INTO agent_runs (
-                    id, issue_id, agent, status,
-                    started_at, lifecycle_state, lifecycle_updated_at, scope
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    run_id,
-                    task_id.replace("-", ""),
-                    "codex",
-                    "running",
-                    "2020-01-01T00:00:00+00:00",
-                    "unknown",
-                    "2020-01-01T00:00:00+00:00",
-                    "task",
-                ),
-            )
-            database.execute(
-                """
-                INSERT INTO agent_terminal_sessions (
-                    agent_run_id, tmux_session_name, task_id, module_id,
-                    project_id, agent, created_at, scope
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    run_id,
-                    f"pt-{run_id}",
-                    task_id,
-                    module_id,
-                    project_id,
-                    "codex",
-                    "2020-01-01T00:00:00+00:00",
-                    "task",
-                ),
-            )
-
-        spool_identity = hashlib.sha256(
-            str(tmp_path.resolve()).encode("utf-8")
-        ).hexdigest()[:16]
-        spool_dir = (
-            Path(tempfile.gettempdir()) / f"ticketry-hook-spool-{spool_identity}"
-        )
-        result = subprocess.run(
-            [
-                runner,
-                "hook",
-                "codex",
-                "--spool-dir",
-                str(spool_dir),
-                "--agent-run-id",
-                run_id,
-                "--lifecycle-url",
-                "http://127.0.0.1:1/api/lifecycle/events",
-            ],
-            input=json.dumps(
-                {
-                    "hook_event_name": "SessionStart",
-                    "session_id": "packaged-provider-session",
-                }
-            ),
-            text=True,
-            capture_output=True,
-            timeout=10,
-        )
-        assert result.returncode == 0
-        assert result.stdout == ""
-        assert result.stderr == ""
-
-        deadline = time.monotonic() + 5
-        stored = None
-        while time.monotonic() < deadline:
-            with sqlite3.connect(tmp_path / "state.db") as database:
-                stored = database.execute(
-                    """
-                    SELECT lifecycle_state, provider_session_id
-                    FROM agent_runs WHERE id = ?
-                    """,
-                    (run_id,),
-                ).fetchone()
-            if stored == ("starting", "packaged-provider-session"):
-                break
-            time.sleep(0.05)
-        assert stored == ("starting", "packaged-provider-session")
-
-
-def test_sidecar_rejects_unknown_packaged_hook():
-    result = subprocess.run(
-        _entrypoint_command("hook", "typo"),
-        text=True,
-        capture_output=True,
-        timeout=10,
-    )
-
-    assert result.returncode == 2
-    assert result.stdout == ""
-    assert "typo" in result.stderr
-
-
 @pytest.mark.skipif(
     not os.environ.get("MUXED_SIDECAR_BINARY"),
     reason="requires the built desktop sidecar",
 )
-def test_frozen_backend_refuses_to_start_without_native_hook_runner(tmp_path):
-    environment = _isolated_sidecar_environment()
-    environment.pop("MUXED_PACKAGED_HOOK_RUNNER", None)
-    environment.pop("MUXED_HOOK_RUNNER_BINARY", None)
-
-    result = subprocess.run(
-        _sidecar_command(_free_port(), tmp_path),
-        cwd=tmp_path,
-        env=environment,
-        text=True,
-        capture_output=True,
-        timeout=30,
-    )
-
-    assert result.returncode == 1
-    assert (
-        result.stdout.splitlines().count("MUXED_FAILURE crash sidecar could not start")
-        == 1
-    )
-    assert "packaged hook runner is missing" in result.stderr
-
-
 @pytest.mark.skipif(
     not os.environ.get("MUXED_SIDECAR_BINARY"),
     reason="requires the built desktop sidecar",
@@ -750,66 +429,6 @@ def _running_sidecar(data_dir: Path, **environment_overrides: str):
     finally:
         process.terminate()
         assert process.wait(timeout=10) == 0
-
-
-def test_sidecar_startup_installs_skills_before_readiness(tmp_path):
-    home = tmp_path / "home"
-    data_dir = tmp_path / "data"
-    data_dir.mkdir()
-
-    with _running_sidecar(data_dir, HOME=str(home)):
-        pass
-
-    expected = {
-        "code-review",
-        "domain-modeling",
-        "grill-with-docs",
-        "grilling",
-        "implement",
-        "setup-matt-pocock-skills",
-        "tdd",
-        "to-spec",
-        "to-tickets",
-    }
-    roots = (
-        home / ".claude/skills",
-        home / ".codex/skills",
-        home / ".agy/skills",
-        home / ".gemini/skills",
-    )
-    for root in roots:
-        assert {path.name for path in root.iterdir() if path.is_dir()} == expected
-
-
-def test_sidecar_startup_uses_an_existing_user_skill_without_warning(tmp_path):
-    home = tmp_path / "home"
-    conflict = home / ".codex/skills/to-spec"
-    conflict.mkdir(parents=True)
-    (conflict / "SKILL.md").write_text("---\nname: to-spec\n---\nuser-owned\n")
-    data_dir = tmp_path / "data"
-    environment = _isolated_sidecar_environment()
-    environment["HOME"] = str(home)
-
-    process = subprocess.Popen(
-        _sidecar_command(_free_port(), data_dir),
-        cwd=tmp_path,
-        env=environment,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-    try:
-        _wait_for_readiness(process)
-        process.terminate()
-        assert process.wait(timeout=10) == 0
-        stderr = process.stderr.read()
-    finally:
-        if process.poll() is None:
-            process.terminate()
-            process.wait(timeout=10)
-
-    assert '"event":"provider_skill_preparation_failed"' not in stderr
-    assert (conflict / "SKILL.md").read_text().endswith("user-owned\n")
 
 
 def test_pending_migration_creates_consistent_private_bounded_snapshot(tmp_path):

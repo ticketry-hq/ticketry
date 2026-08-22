@@ -48,8 +48,7 @@ impl WorkspaceStateProbe for DiscardProbe {
         }
         let Some(intent) = DiscardIntent::decode(&subject.payload) else {
             return ExternalObservation::Uncertain {
-                detail: "The prepared worktree discard cannot be decoded by this build."
-                    .to_owned(),
+                detail: "The prepared worktree discard cannot be decoded by this build.".to_owned(),
             };
         };
         let plan = match self.executor.resubject(&intent).await {
@@ -65,7 +64,9 @@ impl WorkspaceStateProbe for DiscardProbe {
             // A re-read that already decided the operation's fate says so in
             // the same vocabulary the reconciler understands.
             Ok(Subject::Mismatched(WorkspaceOperationOutcome::Conflicted {
-                code, message, ..
+                code,
+                message,
+                ..
             })) => {
                 return ExternalObservation::Conflicting {
                     code,

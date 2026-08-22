@@ -112,34 +112,6 @@ def test_contract_records_flat_relations_and_binary_attachment_upload():
     }
 
 
-def test_run_now_refusals_document_the_partial_outcome():
-    schema = _schema()
-    operation = schema["paths"]["/work-tracker/work-items/{issue_id}/run-now"]["post"]
-    refusal_ref = "#/components/schemas/RunNowRefusal"
-
-    for status in ("400", "404", "409", "422", "503"):
-        assert operation["responses"][status]["content"]["application/json"]["schema"] == {
-            "$ref": refusal_ref,
-        }
-
-    refusal = schema["components"]["schemas"]["RunNowRefusal"]
-    assert refusal["required"] == [
-        "code",
-        "committed_state",
-        "detail",
-        "run",
-        "target_id",
-    ]
-    assert refusal["properties"]["committed_state"] == {
-        "allOf": [{"$ref": "#/components/schemas/CommittedState"}],
-        "nullable": True,
-    }
-    assert refusal["properties"]["run"] == {
-        "allOf": [{"$ref": "#/components/schemas/LaunchedAgentResponse"}],
-        "nullable": True,
-    }
-
-
 def test_work_item_batch_read_is_a_bounded_post_body():
     schema = _schema()
     operation = schema["paths"]["/work-tracker/work-items/batch"]["post"]

@@ -6,11 +6,11 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 use tauri::Manager;
 
-use crate::desktop::environment::{optional_port, DEVELOPMENT_BACKEND_PORT_ENV};
-use crate::ownership::{
+use crate::data_directory::{
     established_data_directory, DataDirectoryAccess, DataDirectoryGuard, DevelopmentMode,
     DEVELOPMENT_BACKEND_PORT,
 };
+use crate::desktop::environment::{optional_port, DEVELOPMENT_BACKEND_PORT_ENV};
 
 /// Kept in Tauri managed state for the entire lifetime of any backend that
 /// the desktop may start.  `None` is the deliberate `pnpm dev` connect mode.

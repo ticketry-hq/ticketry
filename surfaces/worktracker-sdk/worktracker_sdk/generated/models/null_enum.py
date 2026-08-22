@@ -19,7 +19,7 @@ from enum import Enum
 from typing_extensions import Self
 
 
-class NullEnum(, Enum):
+class NullEnum(Enum):
     """
     NullEnum
     """

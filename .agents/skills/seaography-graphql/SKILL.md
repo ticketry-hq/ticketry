@@ -59,9 +59,14 @@ missing capability and add a parity test that keeps the exception narrow.
 
 ## Audit all four generated writes together
 
-In Seaography `2.0.0-rc.9`, mutation registration is all-or-nothing per entity:
-create-one, create-batch, update, and delete are installed together. Before
-removing `mutation: false`, fill out this table for the entity:
+Seaography `2.0.0-rc.9` natively installs create-one, create-batch, update, and
+delete together. Ticketry's
+`graphql_foundation::generated_mutations::register_generated_mutations` helper
+assembles the same public Seaography builders selectively. Register the entity
+with `mutation: false`, then call the helper once with the audited selection.
+Do not copy or wrap generated resolvers.
+
+Before selecting any write, fill out this table for the entity:
 
 | Operation | Public fields | Identity/scope | Invariants | Safe framework seam |
 | --- | --- | --- | --- | --- |
@@ -70,8 +75,28 @@ removing `mutation: false`, fill out this table for the entity:
 | Update | | | | |
 | Delete | | | | |
 
-Enable generated mutations only when **every row is safe**. One unsafe delete
-means the entire generated bundle stays private.
+Each row is an independent publication decision. An unsafe delete no longer
+blocks a safe create-one, but it remains private. Generated update and delete
+still accept optional filters and can affect multiple rows, so do not select
+them when Ticketry requires a non-null concrete identity.
+
+```rust
+seaography::register_entity!(builder, model, mutation: false);
+register_generated_mutations::<model::Entity, model::ActiveModel>(
+    &mut builder,
+    GeneratedMutations {
+        create_one: true,
+        create_batch: false,
+        update: false,
+        delete: false,
+    },
+);
+```
+
+The `mutation: false` registration and helper call form one generated contract.
+The completed four-row audit and an SDL selection test are the required written
+evidence; do not add a second registration or call the helper twice for one
+entity.
 
 For generated writes, configure these layers before authoring code:
 
@@ -110,9 +135,9 @@ domain rules that must also hold for MCP, native, background, or test writers.
 
 ## Keep necessary overrides model-shaped
 
-If the four generated writes are not all safe:
+For each generated write that is not safe:
 
-1. Leave `mutation: false` on the entity.
+1. Leave that operation unselected in the Ticketry helper.
 2. Expose the smallest restricted `create<Model>`, `update<Model>`, and/or
    `delete<Model>` seam.
 3. Bind a concrete non-null identity for update/delete.
@@ -157,6 +182,8 @@ Custom does not mean bypassing the ORM.
 Test the boundary that made the design safe:
 
 - generated SDL/operation drift and protected-field absence;
+- selected-operation drift: only the audited create-one/create-batch/update/
+  delete fields and their required input/output types are present;
 - real GraphQL query/mutation behavior, including relations and codecs;
 - unauthorized and out-of-scope rows for guards/filters;
 - create/update/delete hook behavior at the pinned framework version;

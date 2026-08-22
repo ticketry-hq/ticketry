@@ -13,6 +13,10 @@ import { requestWorktreeDiscard } from "../features/agents/worktrees/internal/di
 import { readWorktreeStatus } from "../features/agents/worktrees/internal/statusTransport";
 import { createDesktopRuntime } from "../runtime/desktopRuntime";
 import { initializeStudioRuntime } from "../runtime";
+import {
+  readScratchTerminalSessions,
+  readTaskTerminalSessions,
+} from "../features/agents/terminal/internal/sessionReadTransport";
 
 /**
  * The Slice 4 cutover, observed from Studio.
@@ -57,6 +61,7 @@ const RETIRED_ROUTES = [
   "/api/docs",
   "/api/fs/complete",
   "/api/worktrees",
+  "/api/terminals",
 ];
 
 const absentWorktree = {
@@ -144,6 +149,20 @@ function answer(request: GraphQlRequest): string {
           },
         },
       });
+    case "TaskTerminalSessions":
+    case "ScratchTerminalSessions":
+      return JSON.stringify({
+        data: {
+          terminal_sessions: {
+            sessions: [{
+              agent_run_id: "run-1",
+              doc_rel_path: null,
+              created_at: "2026-08-19T12:00:00Z",
+              agent_run: { id: "run-1" },
+            }],
+          },
+        },
+      });
     default:
       throw new Error(`Unexpected operation ${request.operationName}`);
   }
@@ -199,6 +218,12 @@ describe("workspace cutover desktop runtime acceptance", () => {
     await expect(
       requestWorktreeDiscard(TASK, newOperationId(), { moduleId: MODULE }),
     ).resolves.toMatchObject({ removed: true });
+    await expect(readTaskTerminalSessions(TASK)).resolves.toEqual([{
+      agent_run_id: "run-1",
+      doc_rel_path: null,
+      created_at: "2026-08-19T12:00:00Z",
+    }]);
+    await expect(readScratchTerminalSessions("p1", MODULE)).resolves.toHaveLength(1);
 
     // Every capability answered, and each one answered through GraphQL.
     expect(operations).toEqual([
@@ -209,6 +234,8 @@ describe("workspace cutover desktop runtime acceptance", () => {
       "WorktreeStatus",
       "WorktreeCreate",
       "WorktreeDiscard",
+      "TaskTerminalSessions",
+      "ScratchTerminalSessions",
     ]);
     // Not "no legacy route was called" but "no HTTP request happened at all":
     // the weaker claim would pass a runtime that had quietly moved a legacy

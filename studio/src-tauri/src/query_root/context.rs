@@ -3,9 +3,11 @@ use std::sync::Arc;
 use sea_orm::EntityTrait;
 use seaography::{
     async_graphql::dynamic::FieldValue, BuilderContext, ColumnOptions, EntityColumnId,
+    LifecycleHooks, MultiLifecycleHooks,
 };
 use uuid::Uuid;
 
+use crate::entities::terminals::session as terminal_session;
 use crate::entities::work_management as entities;
 use crate::entities::worktrees::worktree;
 
@@ -108,12 +110,37 @@ pub(super) fn builder_context() -> BuilderContext {
             worktree::Column::ModuleId,
         ],
     );
+    add_uuid_columns::<terminal_session::Entity>(
+        &mut context,
+        [
+            terminal_session::Column::ProjectId,
+            terminal_session::Column::ModuleId,
+            terminal_session::Column::TaskId,
+        ],
+    );
+    add_uuid_columns::<crate::entities::execution::graph_run::Entity>(
+        &mut context,
+        [
+            crate::entities::execution::graph_run::Column::RootId,
+            crate::entities::execution::graph_run::Column::ModuleId,
+            crate::entities::execution::graph_run::Column::ProjectId,
+        ],
+    );
     // Derived, Git-owned, and server-owned Worktree columns are never part of
     // a generated input, whatever the entity's mutation registration is.
     crate::worktree_persistence::column_policy::apply(&mut context);
     // Design Document roots and provenance leave the contract on the entity
     // itself; every remaining adopted column is skipped in generated inputs.
     crate::documents_persistence::column_policy::apply(&mut context);
+    // Terminal writes remain private, but the generated inputs are still
+    // denylisted centrally so later registration cannot expose lifecycle data.
+    crate::terminal_persistence::column_policy::apply(&mut context);
+    crate::work_management::graphql::apply_generated_input_policy(&mut context);
+    context.hooks = LifecycleHooks::new(
+        MultiLifecycleHooks::default()
+            .add(crate::terminal_persistence::TerminalReadScope)
+            .add(crate::graph_run_service::GraphRunReadScope),
+    );
 
     context
 }

@@ -1,6 +1,8 @@
 mod composed_commands;
 mod composition;
 mod database;
+pub(crate) mod entity_registration;
+pub(crate) mod generated_mutations;
 pub use crate::entities::foundation as entities;
 pub(crate) mod error;
 pub mod migrations;
@@ -27,9 +29,8 @@ pub async fn initialize(
     database_path: &Path,
 ) -> Result<FoundationRuntime, FoundationInitializationError> {
     let database = database::open(database_path).await?;
-    let schema =
-        crate::query_root::foundation_schema(
-        database, None, None, None, None, None, None, None, None, None,
+    let schema = crate::query_root::foundation_schema_with_terminal_services(
+        database, None, None, None, None, None, None, None, None, None, None,
     )?;
     Ok(FoundationRuntime {
         endpoint: GraphQlEndpoint::new(schema),
@@ -50,9 +51,10 @@ pub async fn initialize_with_worktracker_and_install(
                 error.to_string(),
             )
         })?;
-    let schema = crate::query_root::foundation_schema(
+    let schema = crate::query_root::foundation_schema_with_terminal_services(
         foundation_database,
         Some(worktracker_database),
+        None,
         None,
         None,
         None,
@@ -99,12 +101,13 @@ pub async fn initialize_with_keybinding_settings_and_install(
                     error.to_string(),
                 )
             })?;
-    let schema = crate::query_root::foundation_schema(
+    let schema = crate::query_root::foundation_schema_with_terminal_services(
         foundation_database,
         None,
         None,
         None,
         Some(settings_repository),
+        None,
         None,
         None,
         None,
@@ -244,7 +247,20 @@ async fn initialize_with_worktracker_commands_and_install_inner(
     )
     .publishing(document_facts(&worktracker_database).await);
     let document_watch = compose_document_watch(&documents).await;
-    let schema = crate::query_root::foundation_schema(
+    let viewer_ownership =
+        crate::viewer_ownership::ViewerOwnershipService::new(worktracker_database.clone());
+    let terminal_runtime = crate::terminal_lifecycle::InteractiveTerminalLaunchRuntime::new();
+    let terminal_services = Some(crate::query_root::TerminalServices {
+        launch: crate::terminal_launch::TerminalLaunchService::new(
+            worktracker_database.clone(),
+            std::sync::Arc::new(terminal_runtime.clone()),
+        ),
+        viewers: viewer_ownership.clone(),
+        output_activity: crate::terminal_output_activity::TerminalOutputActivityService::production(
+            worktracker_database.clone(),
+        ),
+    });
+    let schema = crate::query_root::foundation_schema_with_terminal_services(
         foundation_database,
         Some(worktracker_database.clone()),
         Some(crate::work_management::commands::CommandDatabase(
@@ -257,6 +273,7 @@ async fn initialize_with_worktracker_commands_and_install_inner(
         work_facts,
         worktree_operations,
         Some(documents.clone()),
+        terminal_services.clone(),
     )?;
     api.install_endpoint(GraphQlEndpoint::new(schema))
         .map_err(|error| {
@@ -270,6 +287,13 @@ async fn initialize_with_worktracker_commands_and_install_inner(
         documents,
         document_watch,
         workspace_reconciled,
+        viewer_ownership,
+        terminal_runtime,
+        output_activity: terminal_services
+            .as_ref()
+            .expect("terminal services were composed")
+            .output_activity
+            .clone(),
     })
 }
 
@@ -533,6 +557,24 @@ pub async fn adopt_worktracker_and_install(
     crate::runs_persistence::adopt(data_directory)
         .await
         .map_err(runs_adoption_error)?;
+    // Terminal persistence depends on the adopted Agent Run and Launch Effect
+    // identities. Refuse an unknown Terminal leaf before the product schema or
+    // any Rust terminal writer becomes reachable.
+    crate::terminal_persistence::preflight(data_directory)
+        .await
+        .map_err(terminal_adoption_error)?;
+    crate::terminal_persistence::adopt(data_directory)
+        .await
+        .map_err(terminal_adoption_error)?;
+    // Execution campaigns depend on adopted Work Management, Runs, and
+    // Terminal identities. Classify and validate them only after those three
+    // stores are ready, and before any future Graph Run command is composed.
+    crate::execution_persistence::preflight(data_directory)
+        .await
+        .map_err(execution_adoption_error)?;
+    crate::execution_persistence::adopt(data_directory)
+        .await
+        .map_err(execution_adoption_error)?;
     // The Documents and Worktrees write leases change hands here, after Runs
     // because document and worktree facts are appended to the Runs outbox, and
     // before any workspace command is composed. An unknown or malformed
@@ -581,6 +623,24 @@ fn runs_adoption_error(
     )
 }
 
+fn terminal_adoption_error(
+    error: crate::terminal_persistence::TerminalPersistenceError,
+) -> FoundationInitializationError {
+    FoundationInitializationError::new(
+        FoundationInitializationErrorCode::WorktrackerDatabaseOpen,
+        format!("Terminal adoption failed ({}): {error}", error.code_str()),
+    )
+}
+
+fn execution_adoption_error(
+    error: crate::execution_persistence::ExecutionPersistenceError,
+) -> FoundationInitializationError {
+    FoundationInitializationError::new(
+        FoundationInitializationErrorCode::WorktrackerDatabaseOpen,
+        format!("Execution adoption failed: {error}"),
+    )
+}
+
 async fn verify_graphql_readiness(
     api: &tauri_graphql::TransportApiImpl,
 ) -> Result<(), FoundationInitializationError> {
@@ -607,10 +667,7 @@ async fn verify_graphql_readiness(
 
 pub async fn generated_schema_sdl() -> Result<String, FoundationInitializationError> {
     let database = database::in_memory().await?;
-    crate::query_root::foundation_schema(
-        database, None, None, None, None, None, None, None, None, None,
-    )
-        .map(|schema| schema.sdl())
+    crate::query_root::generated_contract_schema(database).map(|schema| schema.sdl())
 }
 
 pub async fn initialize_with_profile_settings_and_install(
@@ -619,7 +676,7 @@ pub async fn initialize_with_profile_settings_and_install(
     api: &tauri_graphql::TransportApiImpl,
 ) -> Result<(), FoundationInitializationError> {
     let foundation_database = database::open(foundation_database_path).await?;
-    let schema = crate::query_root::foundation_schema(
+    let schema = crate::query_root::foundation_schema_with_terminal_services(
         foundation_database,
         None,
         None,
@@ -628,6 +685,7 @@ pub async fn initialize_with_profile_settings_and_install(
         Some(crate::settings_persistence::SettingsStores::new(
             data_directory,
         )),
+        None,
         None,
         None,
         None,

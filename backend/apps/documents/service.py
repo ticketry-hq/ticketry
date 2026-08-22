@@ -23,7 +23,7 @@ from apps.documents import dao as documents_dao
 from apps.documents import design_docs
 from apps.documents.models import DesignDocument
 from apps.runs import dao as runs_dao
-from apps.terminals.dao import SCRATCH_TASK_ID
+from apps.runs.run_scopes import SCRATCH_TASK_ID
 from apps import worktracker_queries
 from apps.settings_store.compatibility import read_profile
 from apps.settings_store.config import module_link_path

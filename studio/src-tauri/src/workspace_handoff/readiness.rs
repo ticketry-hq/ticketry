@@ -216,8 +216,8 @@ mod tests {
             .expect("publish the closed gate");
         assert!(!published_readiness_is_complete(directory.path()));
 
-        let mut unknown_field = serde_json::to_value(Slice4Readiness::complete())
-            .expect("encode readiness");
+        let mut unknown_field =
+            serde_json::to_value(Slice4Readiness::complete()).expect("encode readiness");
         unknown_field
             .as_object_mut()
             .expect("readiness is an object")

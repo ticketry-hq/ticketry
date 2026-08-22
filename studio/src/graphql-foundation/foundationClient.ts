@@ -40,6 +40,35 @@ export type FoundationDomainErrorCode =
   | "automation_attempt_not_found"
   | "automation_attempt_not_failed"
   | "automation_attempt_not_retryable"
+  | "terminal_launch_invalid"
+  | "module_folder_unusable"
+  | "terminal_launch_conflict"
+  | "terminal_launch_busy"
+  | "terminal_runtime_unavailable"
+  | "terminal_runtime_identity_conflict"
+  | "terminal_runtime_exited"
+  | "terminal_cleanup_invalid"
+  | "terminal_session_not_found"
+  | "terminal_cleanup_conflict"
+  | "terminal_cleanup_busy"
+  | "terminal_cleanup_pending"
+  | "terminal_launch_storage_failed"
+  | "terminal_cleanup_storage_failed"
+  | "resume_unknown"
+  | "resume_active"
+  | "resume_sessionless"
+  | "resume_agentless"
+  | "resume_unsupported"
+  | "resume_wrong_scope"
+  | "resume_already_resumed"
+  | "invalid_identity"
+  | "invalid_transport"
+  | "viewer_mechanics_not_prepared"
+  | "viewer_mechanics_failed"
+  | "agent_run_not_found"
+  | "viewer_lease_not_owned"
+  | "viewer_lease_storage_failed"
+  | "subtree_run_not_enabled"
   | "unknown";
 
 interface GraphQlErrorPayload {
@@ -92,6 +121,35 @@ const knownCode = (value: unknown): FoundationDomainErrorCode => {
     case "automation_attempt_not_found":
     case "automation_attempt_not_failed":
     case "automation_attempt_not_retryable":
+    case "terminal_launch_invalid":
+    case "module_folder_unusable":
+    case "terminal_launch_conflict":
+    case "terminal_launch_busy":
+    case "terminal_runtime_unavailable":
+    case "terminal_runtime_identity_conflict":
+    case "terminal_runtime_exited":
+    case "terminal_cleanup_invalid":
+    case "terminal_session_not_found":
+    case "terminal_cleanup_conflict":
+    case "terminal_cleanup_busy":
+    case "terminal_cleanup_pending":
+    case "terminal_launch_storage_failed":
+    case "terminal_cleanup_storage_failed":
+    case "resume_unknown":
+    case "resume_active":
+    case "resume_sessionless":
+    case "resume_agentless":
+    case "resume_unsupported":
+    case "resume_wrong_scope":
+    case "resume_already_resumed":
+    case "invalid_identity":
+    case "invalid_transport":
+    case "viewer_mechanics_not_prepared":
+    case "viewer_mechanics_failed":
+    case "agent_run_not_found":
+    case "viewer_lease_not_owned":
+    case "viewer_lease_storage_failed":
+    case "subtree_run_not_enabled":
       return value;
     default:
       return "unknown";

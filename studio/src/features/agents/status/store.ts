@@ -5,6 +5,7 @@ import type {
   AgentStatusScope,
   AutomationAttemptRecord,
   RawLifecycleState,
+  RunPresentationState,
   RunRecord,
 } from "./types";
 
@@ -18,6 +19,7 @@ interface AgentStatusActions {
     state: RawLifecycleState,
     at: string,
     exitCode?: number | null,
+    effectiveState?: RunPresentationState,
   ) => void;
   reconcileScope: (scope: AgentStatusScope, runs: RunRecord[], at: string) => void;
   upsertAutomationAttempt: (attempt: AutomationAttemptRecord) => void;
@@ -63,6 +65,10 @@ function mergeAxes(current: RunRecord | undefined, incoming: RunRecord): RunReco
   }
   return {
     ...incoming,
+    // The accepted lifecycle fact was projected against an older activity
+    // axis. Recompute from the newer local output time instead of keeping its
+    // stale effective overlay.
+    effective_state: incoming.state,
     output_sequence: current.output_sequence,
     last_output_at: current.last_output_at,
   };
@@ -81,6 +87,7 @@ function putRun(data: AgentStatusData, incoming: RunRecord): void {
     ) {
       data.runs[incoming.agent_run_id] = {
         ...current,
+        effective_state: incoming.effective_state,
         output_sequence: incoming.output_sequence,
         last_output_at: incoming.last_output_at,
       };
@@ -202,6 +209,7 @@ export const useAgentStatusStore = create<AgentStatusStore>((set) => ({
       const merged = current
         ? {
             ...current,
+            effective_state: run.effective_state,
             output_sequence: run.output_sequence,
             last_output_at: run.last_output_at,
           }
@@ -223,13 +231,14 @@ export const useAgentStatusStore = create<AgentStatusStore>((set) => ({
    * process result is a fact about the process, never something an ending with
    * nothing to report may erase (#670).
    */
-  applyState(runId, state, at, exitCode) {
+  applyState(runId, state, at, exitCode, effectiveState) {
     set((current) => {
       const run = current.runs[runId];
       if (!run) return current;
       const incoming = {
         ...run,
         state,
+        effective_state: effectiveState ?? state,
         updated_at: at,
         exit_code: exitCode ?? run.exit_code ?? null,
       };

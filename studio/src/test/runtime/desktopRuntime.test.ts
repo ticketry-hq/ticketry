@@ -47,7 +47,6 @@ describe("desktop runtime contract", () => {
         workTrackerApi: "http://127.0.0.1:8787/api/work-tracker",
         agentApi: "http://127.0.0.1:8787/api",
         statusApi: "http://127.0.0.1:8787/api",
-          terminalWebSocket: "ws://127.0.0.1:8787/ws/terminal",
       },
       values: { workTrackerApiKey: "ephemeral-key" },
       serviceHealth: {
@@ -67,7 +66,7 @@ describe("desktop runtime contract", () => {
 
     expect(runtime.capabilities).toEqual({
       statusFeed: true,
-      websocketTerminal: true,
+      websocketTerminal: false,
       nativeLifecycle: false,
       serviceSupervision: true,
       nativeTerminal: false,
@@ -116,7 +115,7 @@ describe("desktop runtime contract", () => {
     );
   });
 
-  it("rejects invalid native startup configuration with an actionable error", async () => {
+  it("does not admit the retired Python terminal WebSocket into desktop configuration", async () => {
     const configuration = startupConfiguration();
     const invoke = vi.fn().mockResolvedValue({
       ...configuration,
@@ -126,9 +125,8 @@ describe("desktop runtime contract", () => {
       },
     });
 
-    await expect(createDesktopRuntime({ invoke })).rejects.toThrowError(
-      "Desktop initialization failed: terminalWebSocket must be a loopback WebSocket URL",
-    );
+    const runtime = await createDesktopRuntime({ invoke });
+    expect(runtime.startup().endpoints).not.toHaveProperty("terminalWebSocket");
   });
 
   it("rejects endpoints that the desktop content policy cannot reach", async () => {

@@ -7,7 +7,7 @@
 //! late callback from a replaced viewer cannot scroll its replacement.
 
 use super::worker::NativeViewerCommand;
-use crate::terminal_runtime::TerminalScrollDirection;
+use crate::terminal_viewer::attachment::TerminalScrollDirection;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Sender;
 use std::sync::Arc;

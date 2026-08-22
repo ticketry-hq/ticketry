@@ -56,14 +56,14 @@ async fn evaluate<R: tauri::Runtime>(
     let documents = runtime.documents();
     let mut readiness = Slice4Readiness::unavailable();
 
-    readiness.documents_ownership =
-        crate::documents_persistence::documents_adopted(database).await;
+    readiness.documents_ownership = crate::documents_persistence::documents_adopted(database).await;
     readiness.worktree_ownership = crate::worktree_persistence::worktrees_adopted(database).await;
     // The journal has never had a Django writer, so its ownership is simply
     // whether the installed shape is the one this build authored. Without it no
     // filesystem or Git effect has a recovery record at all.
-    readiness.operation_journal_ownership =
-        crate::workspace_operations::schema::verify(database).await.is_ok();
+    readiness.operation_journal_ownership = crate::workspace_operations::schema::verify(database)
+        .await
+        .is_ok();
     readiness.ownership_validated = manifest::validate_schema(database).await.is_ok();
     readiness.status_outbox = documents.publishes_durable_facts();
     readiness.operation_reconciliation = runtime.workspace_reconciled();
@@ -130,9 +130,7 @@ const REQUIRED_MUTATIONS: &[&str] = &[
 
 /// Prove the authoritative document and worktree fields are registered on the
 /// installed schema before Studio is told the capability is live.
-async fn verify_workspace_surface(
-    api: &tauri_graphql::TransportApiImpl,
-) -> Result<bool, String> {
+async fn verify_workspace_surface(api: &tauri_graphql::TransportApiImpl) -> Result<bool, String> {
     let response = api
         .clone()
         .graphql_execute(
@@ -160,8 +158,10 @@ async fn verify_workspace_surface(
             .unwrap_or_default();
         names.iter().all(|name| fields.contains(name))
     };
-    Ok(registered("/data/__schema/queryType/fields", REQUIRED_QUERIES)
-        && registered("/data/__schema/mutationType/fields", REQUIRED_MUTATIONS))
+    Ok(
+        registered("/data/__schema/queryType/fields", REQUIRED_QUERIES)
+            && registered("/data/__schema/mutationType/fields", REQUIRED_MUTATIONS),
+    )
 }
 
 #[cfg(test)]

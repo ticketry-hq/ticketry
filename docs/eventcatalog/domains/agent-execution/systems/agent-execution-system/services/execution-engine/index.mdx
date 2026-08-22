@@ -2,7 +2,7 @@
 id: execution-engine
 name: Execution Engine
 version: 1.0.0
-summary: Derives executable graphs, computes readiness, launches agents, and persists graph-run state.
+summary: Schedules ready direct children and persists Graph Runs and per-task launch claims.
 owners:
   - ticketry
 receives:
@@ -22,9 +22,10 @@ flows:
   - id: dependency-graph-execution
 ---
 
-The graph is a projection of current WorkTracker dependency edges. Durable
-`GraphRun` rows preserve execution context; `EngineRun` rows preserve per-node
-status.
+The graph read is a projection of current WorkTracker hierarchy and dependency
+edges. A campaign schedules only the root's direct children. `GraphRun` stores
+the armed root and execution mode. Each `LaunchedTask` stores the durable launch
+claim for one direct child before Ticketry asks the terminal runtime to act.
 
 <NodeGraph />
 

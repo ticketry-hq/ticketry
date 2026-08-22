@@ -45,15 +45,11 @@ def test_rust_owner_disables_every_legacy_slice2_route(monkeypatch, method, path
     assert json.loads(response.content)["code"] == "django_slice2_write_disabled"
 
 
-def test_rust_owner_keeps_reads_and_the_django_effect_port_available(monkeypatch):
+def test_rust_owner_keeps_reads_available(monkeypatch):
     monkeypatch.setenv(RUST_OWNER_ENV, "1")
 
     assert guarded_response("GET", "/api/config").status_code == 204
     assert guarded_response("GET", "/api/work-tracker/providers").status_code == 204
-    assert (
-        guarded_response("POST", "/api/execution/launch-policy-effects").status_code
-        == 204
-    )
 
 
 def test_non_http_profile_writer_is_also_disabled(monkeypatch, tmp_path):

@@ -3,12 +3,203 @@ type AgentRunHolding {
 	project_id: String!
 	task_id: String
 	module_id: String!
-	agent: String!
+	agent: String
 	scope: String!
+	launch_state: String
+	launch_model: String
 	started_at: String!
 	state: String!
+	effective_state: String!
 	updated_at: String!
 	provider_session_id: String
+	output_sequence: Int!
+	last_output_at: String
+}
+
+type AgentRunViewerLeases {
+	agentRunId: String!
+	viewerId: String!
+	transport: String!
+	generation: String!
+	acquiredAt: String!
+	expiresAt: String!
+	agentRun: AgentRuns
+}
+
+type AgentRunViewerLeasesConnection {
+	pageInfo: PageInfo!
+	paginationInfo: PaginationInfo
+	nodes: [AgentRunViewerLeases!]!
+	edges: [AgentRunViewerLeasesEdge!]!
+}
+
+type AgentRunViewerLeasesEdge {
+	cursor: String!
+	node: AgentRunViewerLeases!
+}
+
+input AgentRunViewerLeasesFilterInput {
+	agentRunId: StringFilterInput
+	viewerId: StringFilterInput
+	transport: StringFilterInput
+	generation: StringFilterInput
+	acquiredAt: StringFilterInput
+	expiresAt: StringFilterInput
+	and: [AgentRunViewerLeasesFilterInput!]
+	or: [AgentRunViewerLeasesFilterInput!]
+	not: AgentRunViewerLeasesFilterInput
+}
+
+input AgentRunViewerLeasesHavingInput {
+	agentRun: AgentRunsFilterInput
+}
+
+input AgentRunViewerLeasesOrderInput {
+	agentRunId: OrderByEnum
+	viewerId: OrderByEnum
+	transport: OrderByEnum
+	generation: OrderByEnum
+	acquiredAt: OrderByEnum
+	expiresAt: OrderByEnum
+}
+
+type AgentRuns {
+	id: String!
+	issueId: String!
+	ticketSeq: Int
+	agent: String
+	model: String
+	reasoning: String
+	status: String!
+	startedAt: String!
+	endedAt: String
+	exitCode: Int
+	error: String
+	providerSessionId: String
+	lifecycleState: String
+	lifecycleUpdatedAt: String
+	resumedFrom: String
+	scope: String!
+	launchState: String
+	launchModel: String
+	issue: WorktrackerIssue
+}
+
+type AgentRunsConnection {
+	pageInfo: PageInfo!
+	paginationInfo: PaginationInfo
+	nodes: [AgentRuns!]!
+	edges: [AgentRunsEdge!]!
+}
+
+type AgentRunsEdge {
+	cursor: String!
+	node: AgentRuns!
+}
+
+input AgentRunsFilterInput {
+	id: StringFilterInput
+	issueId: StringFilterInput
+	ticketSeq: IntegerFilterInput
+	agent: StringFilterInput
+	model: StringFilterInput
+	reasoning: StringFilterInput
+	status: StringFilterInput
+	startedAt: StringFilterInput
+	endedAt: StringFilterInput
+	exitCode: IntegerFilterInput
+	error: StringFilterInput
+	providerSessionId: StringFilterInput
+	lifecycleState: StringFilterInput
+	lifecycleUpdatedAt: StringFilterInput
+	resumedFrom: StringFilterInput
+	scope: StringFilterInput
+	launchState: StringFilterInput
+	launchModel: StringFilterInput
+	and: [AgentRunsFilterInput!]
+	or: [AgentRunsFilterInput!]
+	not: AgentRunsFilterInput
+}
+
+input AgentRunsHavingInput {
+	issue: WorktrackerIssueFilterInput
+}
+
+input AgentRunsOrderInput {
+	id: OrderByEnum
+	issueId: OrderByEnum
+	ticketSeq: OrderByEnum
+	agent: OrderByEnum
+	model: OrderByEnum
+	reasoning: OrderByEnum
+	status: OrderByEnum
+	startedAt: OrderByEnum
+	endedAt: OrderByEnum
+	exitCode: OrderByEnum
+	error: OrderByEnum
+	providerSessionId: OrderByEnum
+	lifecycleState: OrderByEnum
+	lifecycleUpdatedAt: OrderByEnum
+	resumedFrom: OrderByEnum
+	scope: OrderByEnum
+	launchState: OrderByEnum
+	launchModel: OrderByEnum
+}
+
+type AgentTerminalSessions {
+	agentRunId: String!
+	taskId: String!
+	moduleId: String!
+	projectId: String!
+	createdAt: String!
+	terminatedAt: String
+	scope: String!
+	docRelPath: String
+	agent: String
+	agentRun: AgentRuns
+}
+
+type AgentTerminalSessionsConnection {
+	pageInfo: PageInfo!
+	paginationInfo: PaginationInfo
+	nodes: [AgentTerminalSessions!]!
+	edges: [AgentTerminalSessionsEdge!]!
+}
+
+type AgentTerminalSessionsEdge {
+	cursor: String!
+	node: AgentTerminalSessions!
+}
+
+input AgentTerminalSessionsFilterInput {
+	agentRunId: StringFilterInput
+	taskId: StringFilterInput
+	moduleId: StringFilterInput
+	projectId: StringFilterInput
+	createdAt: StringFilterInput
+	terminatedAt: StringFilterInput
+	scope: StringFilterInput
+	docRelPath: StringFilterInput
+	agent: StringFilterInput
+	and: [AgentTerminalSessionsFilterInput!]
+	or: [AgentTerminalSessionsFilterInput!]
+	not: AgentTerminalSessionsFilterInput
+}
+
+input AgentTerminalSessionsHavingInput {
+	agentRun: AgentRunsFilterInput
+}
+
+input AgentTerminalSessionsOrderInput {
+	agentRunId: OrderByEnum
+	taskId: OrderByEnum
+	moduleId: OrderByEnum
+	projectId: OrderByEnum
+	createdAt: OrderByEnum
+	terminatedAt: OrderByEnum
+	scope: OrderByEnum
+	docRelPath: OrderByEnum
+	agent: OrderByEnum
 }
 
 type AutomationAttemptProjection {
@@ -34,13 +225,6 @@ input BooleanFilterInput {
 	is_in: [Boolean!]
 	is_not_in: [Boolean!]
 	is_null: Boolean
-}
-
-type CurrentRunTermination {
-	agent_run_id: String!
-	terminated: Boolean!
-	already_terminated: Boolean!
-	durable_fact_applied: Boolean!
 }
 
 input CursorInput {
@@ -125,6 +309,70 @@ type GlobalLaunchDefault {
 	provider: String!
 	model: String
 	reasoning: String
+}
+
+type GraphRunDeletePayload {
+	graph_run: GraphRuns!
+	cleared_child_ids: [String!]!
+}
+
+type GraphRunMutationPayload {
+	graph_run: GraphRuns!
+	prepared_child_ids: [String!]!
+}
+
+type GraphRuns {
+	rootId: String!
+	agent: String
+	createdAt: String!
+	updatedAt: String!
+	moduleId: String
+	projectId: String!
+	executionMode: String!
+	root: WorktrackerIssue
+	module: WorktrackerIssue
+	project: WorktrackerProject
+}
+
+type GraphRunsConnection {
+	pageInfo: PageInfo!
+	paginationInfo: PaginationInfo
+	nodes: [GraphRuns!]!
+	edges: [GraphRunsEdge!]!
+}
+
+type GraphRunsEdge {
+	cursor: String!
+	node: GraphRuns!
+}
+
+input GraphRunsFilterInput {
+	rootId: StringFilterInput
+	agent: StringFilterInput
+	createdAt: TextFilterInput
+	updatedAt: TextFilterInput
+	moduleId: StringFilterInput
+	projectId: StringFilterInput
+	executionMode: StringFilterInput
+	and: [GraphRunsFilterInput!]
+	or: [GraphRunsFilterInput!]
+	not: GraphRunsFilterInput
+}
+
+input GraphRunsHavingInput {
+	root: WorktrackerIssueFilterInput
+	module: WorktrackerIssueFilterInput
+	project: WorktrackerProjectFilterInput
+}
+
+input GraphRunsOrderInput {
+	rootId: OrderByEnum
+	agent: OrderByEnum
+	createdAt: OrderByEnum
+	updatedAt: OrderByEnum
+	moduleId: OrderByEnum
+	projectId: OrderByEnum
+	executionMode: OrderByEnum
 }
 
 input IdentityFilterInput {
@@ -268,16 +516,9 @@ input MigrationProbesOrderInput {
 	value: OrderByEnum
 }
 
-input MigrationProbesUpdateInput {
-	id: Int
-	value: String
-}
-
 type Mutation {
 	migrationProbesCreateOne(data: MigrationProbesInsertInput!): MigrationProbesBasic!
-	migrationProbesCreateBatch(data: [MigrationProbesInsertInput!]!): [MigrationProbesBasic!]!
-	migrationProbesUpdate(data: MigrationProbesUpdateInput!, filter: MigrationProbesFilterInput): [MigrationProbesBasic!]!
-	migrationProbesDelete(filter: MigrationProbesFilterInput): Int!
+	worktrackerIssuetypeCreateOne(data: WorktrackerIssuetypeInsertInput!): WorktrackerIssuetypeBasic!
 	worktree_create(task_id: String!, operation_id: String!): WorktreeStatusView!
 	worktree_discard(task_id: String!, operation_id: String!): WorktreeDiscardResult!
 	acknowledge_onboarding: WorktrackerWorkspace!
@@ -287,7 +528,6 @@ type Mutation {
 	create_state(project_id: String!, name: String!, group: String!, color: String): WorktrackerState!
 	update_state(id: String!, name: String, group: String, color: String, sort_order: Int): WorktrackerState!
 	reorder_states(project_id: String!, ordered_ids: [String!]!): [WorktrackerState!]!
-	create_issue_type(project_id: String!, name: String!, level: String!, color: String): WorktrackerIssuetype!
 	update_issue_type(id: String!, name: String, color: String, sort_order: Int, start_state_id: String, workflow_revision: Int): WorktrackerIssuetype!
 	delete_issue_type(id: String!, reassign_to: String): Boolean!
 	reorder_issue_types(project_id: String!, ordered_ids: [String!]!): [WorktrackerIssuetype!]!
@@ -311,7 +551,16 @@ type Mutation {
 	retry_automation_attempt(attempt_id: String!): AutomationAttemptProjection!
 	dismiss_automation_attempt(attempt_id: String!): AutomationAttemptProjection!
 	ingest_agent_lifecycle(agent_run_id: String!, kind: String!, occurred_at: String!, provider_session_id: String): LifecycleAccepted!
-	terminate_current_agent_run: CurrentRunTermination!
+	terminal_session_create(client_request_id: String!, project_id: String, issue_id: String, module_id: String!, target_id: String, kind: String!, provider: String, working_directory_identity: String, columns: Int!, rows: Int!, model: String, reasoning: String, policy_reference: String, prompt: String, resume_from_agent_run_id: String, automation_attempt_id: String, required_skills: [String!], design_directory_identity: String, document_relative_path: String): AgentTerminalSessions!
+	terminal_session_update(agent_run_id: String!, termination_request_id: String): AgentTerminalSessions!
+	terminal_output_observe(agent_run_id: String!): TerminalOutputObservation!
+	run_now(id_or_key: String!, request_identity: String!): RunNowPayload!
+	graph_run_create(root_id: String!, execution_mode: String): GraphRunMutationPayload!
+	graph_run_update(root_id: String!, execution_mode: String): GraphRunMutationPayload!
+	graph_run_delete(root_id: String!): GraphRunDeletePayload!
+	create_viewer_lease(agent_run_id: String!, viewer_id: String!, transport: String!): AgentRunViewerLeases!
+	update_viewer_lease(agent_run_id: String!, viewer_id: String!, generation: String!): AgentRunViewerLeases!
+	delete_viewer_lease(agent_run_id: String!, viewer_id: String!, generation: String!): AgentRunViewerLeases
 	refresh_task_document_registry(task_id: String!, project_id: String, module_id: String): [DesignDocuments!]!
 	refresh_scratch_document_registry(module_id: String!): [DesignDocuments!]!
 	save_design_document(document_id: String!, expected_digest: String!, content: String!, operation_id: String!): DocumentSaveOutcome!
@@ -375,6 +624,7 @@ type Query {
 	worktrackerAgentmodel(filters: WorktrackerAgentmodelFilterInput, having: WorktrackerAgentmodelHavingInput, orderBy: WorktrackerAgentmodelOrderInput, pagination: PaginationInput): WorktrackerAgentmodelConnection!
 	worktrackerAgentmodelreasoninglevel(filters: WorktrackerAgentmodelreasoninglevelFilterInput, having: WorktrackerAgentmodelreasoninglevelHavingInput, orderBy: WorktrackerAgentmodelreasoninglevelOrderInput, pagination: PaginationInput): WorktrackerAgentmodelreasoninglevelConnection!
 	worktrackerReasoninglevel(filters: WorktrackerReasoninglevelFilterInput, having: WorktrackerReasoninglevelHavingInput, orderBy: WorktrackerReasoninglevelOrderInput, pagination: PaginationInput): WorktrackerReasoninglevelConnection!
+	graphRuns(filters: GraphRunsFilterInput, having: GraphRunsHavingInput, orderBy: GraphRunsOrderInput, pagination: PaginationInput): GraphRunsConnection!
 	worktrees(filters: WorktreesFilterInput, having: WorktreesHavingInput, orderBy: WorktreesOrderInput, pagination: PaginationInput): WorktreesConnection!
 	worktree_status(task_id: String!): WorktreeStatusView!
 	keybinding_setting: KeybindingSetting
@@ -382,8 +632,32 @@ type Query {
 	local_settings: LocalSettings!
 	automation_attempts(project_id: String!, task_id: String): [AutomationAttemptProjection!]!
 	agent_run_holdings(project_id: String!, task_id: String): [AgentRunHolding!]!
+	agentRuns(filters: AgentRunsFilterInput, having: AgentRunsHavingInput, orderBy: AgentRunsOrderInput, pagination: PaginationInput): AgentRunsConnection!
+	agentTerminalSessions(filters: AgentTerminalSessionsFilterInput, having: AgentTerminalSessionsHavingInput, orderBy: AgentTerminalSessionsOrderInput, pagination: PaginationInput): AgentTerminalSessionsConnection!
+	agentRunViewerLeases(filters: AgentRunViewerLeasesFilterInput, having: AgentRunViewerLeasesHavingInput, orderBy: AgentRunViewerLeasesOrderInput, pagination: PaginationInput): AgentRunViewerLeasesConnection!
+	resumable_terminal_sessions(task_id: String, project_id: String, module_id: String): [AgentRuns!]!
 	designDocuments(filters: DesignDocumentsFilterInput, having: DesignDocumentsHavingInput, orderBy: DesignDocumentsOrderInput, pagination: PaginationInput): DesignDocumentsConnection!
 	directory_completions(path: String!): [String!]!
+}
+
+type RunNowPayload {
+	target_id: String!
+	code: String!
+	detail: String!
+	remedy: String
+	committed_state: RunNowStatePayload
+	run: RunNowRunPayload
+}
+
+type RunNowRunPayload {
+	target_id: String!
+	agent: String!
+	agent_run_id: String!
+}
+
+type RunNowStatePayload {
+	id: String!
+	name: String!
 }
 
 type RunStatusCaughtUp {
@@ -449,6 +723,12 @@ input StringFilterInput {
 
 type Subscription {
 	run_status_stream(project_id: String!, after_cursor: Int): RunStatusFrame!
+}
+
+type TerminalOutputObservation {
+	advanced: Boolean!
+	output_sequence: Int!
+	last_output_at: String
 }
 
 input TextFilterInput {
@@ -748,6 +1028,20 @@ type WorktrackerIssuetype {
 	launchBinding(filters: WorktrackerLaunchbindingFilterInput, orderBy: WorktrackerLaunchbindingOrderInput, pagination: PaginationInput): WorktrackerLaunchbindingConnection!
 }
 
+type WorktrackerIssuetypeBasic {
+	id: String!
+	projectId: String!
+	name: String!
+	level: String!
+	color: String!
+	sortOrder: Int!
+	startStateId: String
+	workflowRevision: Int!
+	isPathfind: Boolean!
+	createdAt: String!
+	updatedAt: String!
+}
+
 type WorktrackerIssuetypeConnection {
 	pageInfo: PageInfo!
 	paginationInfo: PaginationInfo
@@ -783,6 +1077,13 @@ input WorktrackerIssuetypeHavingInput {
 	issue: WorktrackerIssueFilterInput
 	issueTypeTransition: WorktrackerIssuetypetransitionFilterInput
 	launchBinding: WorktrackerLaunchbindingFilterInput
+}
+
+input WorktrackerIssuetypeInsertInput {
+	projectId: String!
+	name: String!
+	level: String!
+	color: String
 }
 
 input WorktrackerIssuetypeOrderInput {

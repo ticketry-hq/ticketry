@@ -20,7 +20,7 @@ use super::entities::operation as operation_entity;
 use super::records::operation;
 use super::{
     claim::validate_owner, intent, sanitize, timestamp, WorkspaceOperationError,
-    WorkspaceOperationErrorCode, WorkspaceOperationRecord, WorkspaceOperationJournal,
+    WorkspaceOperationErrorCode, WorkspaceOperationJournal, WorkspaceOperationRecord,
 };
 
 /// The evidence key checkpoints accumulate under, so a settlement's own

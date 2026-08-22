@@ -29,13 +29,7 @@ def test_rust_owner_disables_django_worktracker_mutations(monkeypatch):
     assert json.loads(response.content)["code"] == "django_worktracker_write_disabled"
 
 
-def test_rust_owner_keeps_reads_and_django_owned_execution_routes_available(monkeypatch):
+def test_rust_owner_keeps_reads_available(monkeypatch):
     monkeypatch.setenv(RUST_OWNER_ENV, "1")
 
     assert guarded_response("GET", "/api/work-tracker/projects").status_code == 204
-    assert (
-        guarded_response(
-            "POST", "/api/work-tracker/work-items/missing/graph-run"
-        ).status_code
-        == 204
-    )

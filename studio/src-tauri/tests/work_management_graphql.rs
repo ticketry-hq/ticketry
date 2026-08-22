@@ -66,6 +66,11 @@ async fn fixture() -> (tempfile::TempDir, sea_orm::DatabaseConnection) {
         CREATE TABLE worktracker_agentmodelreasoninglevel (
             id integer PRIMARY KEY, agent_model_id char(32) NOT NULL, reasoning_level_id char(32) NOT NULL
         );
+        CREATE TABLE graph_runs (
+            root_id char(32) PRIMARY KEY, agent varchar(255), created_at datetime NOT NULL,
+            updated_at datetime NOT NULL, module_id char(32), project_id char(32) NOT NULL,
+            execution_mode varchar(16) NOT NULL, launch_configuration text
+        );
         INSERT INTO worktracker_workspace VALUES
             ('90000000000000000000000000000000', 'local', 'Local', 0,
              '2026-08-12 00:00:00', '2026-08-12 00:00:00');
@@ -103,6 +108,13 @@ async fn fixture() -> (tempfile::TempDir, sea_orm::DatabaseConnection) {
             ('70000000000000000000000000000000', '50000000000000000000000000000000', 'gpt-5.6');
         INSERT INTO worktracker_agentmodelreasoninglevel VALUES
             (1, '70000000000000000000000000000000', '60000000000000000000000000000000');
+        INSERT INTO graph_runs VALUES
+            ('40000000000000000000000000000001', 'codex', '2026-08-12 00:00:01', '2026-08-12 00:00:01',
+             '20000000000000000000000000000002', '10000000000000000000000000000000', 'parallel', '{"prompt":"private"}'),
+            ('40000000000000000000000000000002', 'codex', '2026-08-12 00:00:02', '2026-08-12 00:00:02',
+             '20000000000000000000000000000002', '10000000000000000000000000000000', 'serial', '{"prompt":"private"}'),
+            ('f0000000000000000000000000000001', 'codex', '2026-08-12 00:00:03', '2026-08-12 00:00:03',
+             NULL, 'f0000000000000000000000000000002', 'parallel', '{"prompt":"foreign"}');
     "#).await.expect("create Django-shaped read fixture");
     (directory, writer)
 }
@@ -187,6 +199,72 @@ async fn generated_reads_expose_filters_relations_and_dataloaders() {
             ["reasoningLevelId"],
         "60000000-0000-0000-0000-000000000000"
     );
+}
+
+#[tokio::test]
+async fn graph_run_reads_are_scoped_filterable_related_and_paginated() {
+    let (directory, _writer) = fixture().await;
+    let api = TransportApiImpl::new();
+    initialize_with_worktracker_and_install(
+        &directory.path().join("rust-core.sqlite3"),
+        &directory.path().join("state.db"),
+        &api,
+    )
+    .await
+    .expect("install composed GraphQL endpoint");
+
+    let response: serde_json::Value = serde_json::from_str(
+        &api.clone()
+            .graphql_execute(request(
+                r#"query {
+                  latest: graphRuns(
+                    filters: { agent: { eq: "codex" } }
+                    orderBy: { updatedAt: DESC }
+                    pagination: { offset: { limit: 1, offset: 0 } }
+                  ) { nodes { rootId executionMode root { name } project { slug } } }
+                  serial: graphRuns(filters: { executionMode: { eq: "serial" } }) {
+                    nodes { rootId executionMode module { name } }
+                  }
+                }"#,
+                serde_json::json!({}),
+            ))
+            .await,
+    )
+    .expect("decode Graph Run read");
+
+    assert!(response.get("errors").is_none(), "{response:#}");
+    assert_eq!(
+        response["data"]["latest"]["nodes"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(
+        response["data"]["latest"]["nodes"][0]["rootId"],
+        "40000000-0000-0000-0000-000000000002"
+    );
+    assert_eq!(
+        response["data"]["latest"]["nodes"][0]["root"]["name"],
+        "Active child"
+    );
+    assert_eq!(
+        response["data"]["latest"]["nodes"][0]["project"]["slug"],
+        "MEM"
+    );
+    assert_eq!(
+        response["data"]["serial"]["nodes"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(
+        response["data"]["serial"]["nodes"][0]["module"]["name"],
+        "Newer"
+    );
+    assert!(!response.to_string().contains("private"));
+    assert!(!response.to_string().contains("foreign"));
 }
 
 #[tokio::test]

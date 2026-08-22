@@ -147,7 +147,11 @@ impl WorktreeIntegrateService {
             PlanResolution::Plan(plan) => *plan,
             PlanResolution::NoWorktree => return Ok(None),
             PlanResolution::NoRepository(reason) => {
-                return Ok(Some(self.deferred(occurrence, &completed, reason.to_owned())))
+                return Ok(Some(self.deferred(
+                    occurrence,
+                    &completed,
+                    reason.to_owned(),
+                )))
             }
             PlanResolution::Mismatched { detail, .. } => {
                 return Ok(Some(self.deferred(occurrence, &completed, detail)))
@@ -159,7 +163,11 @@ impl WorktreeIntegrateService {
         let prepared = match self.executor.journal().prepare(intent).await {
             Ok(prepared) => prepared,
             Err(error) => {
-                return Ok(Some(self.deferred(occurrence, &completed, error.to_string())))
+                return Ok(Some(self.deferred(
+                    occurrence,
+                    &completed,
+                    error.to_string(),
+                )))
             }
         };
         // A duplicate delivery of the same occurrence answers from the durable
@@ -183,7 +191,11 @@ impl WorktreeIntegrateService {
         {
             Ok(claim) => claim,
             Err(error) => {
-                return Ok(Some(self.deferred(occurrence, &completed, error.to_string())))
+                return Ok(Some(self.deferred(
+                    occurrence,
+                    &completed,
+                    error.to_string(),
+                )))
             }
         };
         Ok(Some(IntegrationDelivery {

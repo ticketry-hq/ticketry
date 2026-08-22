@@ -1,37 +1,84 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
+import { initializeStudioRuntime, type StudioRuntime } from "../../../../runtime";
 import { desktopViewerLease } from "./viewerLease";
 
-const fetchMock = vi.fn();
+function desktopRuntime(
+  writeWorkTracker: StudioRuntime["writeWorkTracker"],
+): StudioRuntime {
+  return {
+    platform: "desktop",
+    capabilities: {
+      statusFeed: true,
+      websocketTerminal: false,
+      nativeLifecycle: true,
+      serviceSupervision: true,
+      nativeTerminal: true,
+      nativeFolderPicker: true,
+    },
+    readWorkTracker: writeWorkTracker,
+    writeWorkTracker,
+    readSettings: writeWorkTracker,
+    writeSettings: writeWorkTracker,
+    statusStream: () => null,
+    documentUrl: (id, path) => `ticketrydoc://localhost/${id}/${path}`,
+    pickFolder: async () => null,
+    retryServices: async () => {},
+    startup: () => ({
+      endpoints: {
+        workTrackerApi: "/api/work-tracker",
+        agentApi: "/api",
+        statusApi: "/api",
+        terminalWebSocket: "/ws/terminal",
+      },
+      values: { workTrackerApiKey: "" },
+      serviceHealth: {
+        state: "ready",
+        service: "backend",
+        message: null,
+        logPointer: null,
+      },
+      initialNotices: [],
+    }),
+    subscribeServiceHealth: () => () => {},
+    subscribeUserNotices: () => () => {},
+  };
+}
 
-beforeEach(() => {
-  fetchMock.mockReset();
-  fetchMock.mockResolvedValue(new Response("{}", { status: 200 }));
-  vi.stubGlobal("fetch", fetchMock);
-  vi.unstubAllEnvs();
-});
-
-afterEach(() => {
-  vi.unstubAllEnvs();
-});
-
-describe("desktop viewer lease authentication", () => {
-  it("sends the runtime API key when acquiring a lease", async () => {
-    vi.stubEnv("VITE_WT_API_KEY", "desktop-viewer-secret");
-
-    await desktopViewerLease.acquire("run-1", "viewer-1");
-
-    const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe("/api/terminals/viewers/lease");
-    expect(new Headers(init.headers).get("x-api-key")).toBe(
-      "desktop-viewer-secret",
+describe("desktop viewer lease GraphQL transport", () => {
+  it("keeps one generation across acquire, renew, and release", async () => {
+    const execute = vi.fn(async (
+      document: { operationName: string },
+      _variables: unknown,
+    ) => ({
+      viewer_lease: document.operationName === "DeleteViewerLease"
+        ? null
+        : {
+            agent_run_id: "run-1",
+            viewer_id: "viewer-1",
+            transport: "native",
+            generation: "generation-1",
+            acquired_at: "2026-08-19T10:00:00Z",
+            expires_at: "2026-08-19T10:00:30Z",
+          },
+    }));
+    initializeStudioRuntime(
+      desktopRuntime((routes) => routes.graphQl(execute as never)),
     );
-  });
 
-  it("omits the API key when the runtime key is empty", async () => {
-    await desktopViewerLease.acquire("run-1", "viewer-1");
+    const lease = await desktopViewerLease.acquire("run-1", "viewer-1", "native");
+    await desktopViewerLease.renew("run-1", "viewer-1", lease.generation);
+    await desktopViewerLease.release("run-1", "viewer-1", lease.generation);
 
-    const [, init] = fetchMock.mock.calls[0];
-    expect(new Headers(init.headers).has("x-api-key")).toBe(false);
+    expect(execute.mock.calls.map(([document]) => document.operationName)).toEqual([
+      "CreateViewerLease",
+      "UpdateViewerLease",
+      "DeleteViewerLease",
+    ]);
+    expect(execute.mock.calls.map(([, variables]) => variables)).toEqual([
+      { agentRunId: "run-1", viewerId: "viewer-1", transport: "native" },
+      { agentRunId: "run-1", viewerId: "viewer-1", generation: "generation-1" },
+      { agentRunId: "run-1", viewerId: "viewer-1", generation: "generation-1" },
+    ]);
   });
 });

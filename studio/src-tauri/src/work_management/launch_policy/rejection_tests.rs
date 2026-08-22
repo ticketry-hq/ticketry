@@ -43,6 +43,7 @@ async fn seed_occurrence(database: &DatabaseConnection, occurrence_id: &str) {
         work_item_revision: Set(1),
         workflow_revision: Set(1),
         destination_auto_start: Set(true),
+        run_now_decision_id: Set(None),
         committed_at: sea_orm::NotSet,
     })
     .exec_without_returning(database)

@@ -59,25 +59,10 @@ WRITING_CALLS = {
 READ_ONLY_MODULES = {
     "apps/runs/models.py",
     "apps/runs/admin.py",
-    "apps/runs/dao/lifecycle.py",
     "apps/runs/dao/activity.py",
-    "apps/runs/dao/automation.py",
-    "apps/runs/projections.py",
     "apps/runs/write_ownership.py",
     "apps/terminals/models.py",
-    "apps/terminals/persistence.py",
-    "apps/terminals/viewer_leases.py",
-    "apps/terminals/dao/sessions.py",
-    "apps/execution/launch_policy_port.py",
-    "apps/execution/signals.py",
-    "apps/execution/driver.py",
-    "apps/execution/transition_occurrences.py",
-    "apps/terminals/control_plane.py",
-    "apps/terminals/launch.py",
-    "apps/terminals/reconciliation.py",
-    "apps/terminals/runs_effect_port.py",
-    "apps/terminals/runtime/_fake.py",
-    "apps/terminals/api.py",
+    "apps/runs/authorization.py",
 }
 
 

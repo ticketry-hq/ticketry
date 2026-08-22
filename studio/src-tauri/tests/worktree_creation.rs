@@ -546,8 +546,7 @@ async fn a_child_creates_and_then_shares_its_top_level_parents_checkout() {
     assert_eq!(facts[0].payload["removed"], false);
     assert_eq!(facts[0].payload["state"], "active");
     assert!(
-        facts[0].payload.get("path").is_none()
-            && facts[0].payload.get("repoRoot").is_none(),
+        facts[0].payload.get("path").is_none() && facts[0].payload.get("repoRoot").is_none(),
         "a fact names identities and refs, never a local path"
     );
     assert_eq!(

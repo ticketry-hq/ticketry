@@ -31,12 +31,13 @@ def _execute_spec(monkeypatch, *, package_datas=()):
     captured = {}
 
     class Analysis:
-        def __init__(self, _scripts, *, binaries, datas, hiddenimports, **_kwargs):
+        def __init__(self, _scripts, *, binaries, datas, hiddenimports, excludes, **_kwargs):
             self.scripts = []
             self.pure = []
             self.binaries = binaries
             self.datas = datas
             captured["datas"] = list(datas)
+            captured["excludes"] = list(excludes)
 
     class PYZ:
         def __init__(self, _pure):
@@ -55,11 +56,11 @@ def _execute_spec(monkeypatch, *, package_datas=()):
             "EXE": EXE,
         },
     )
-    return captured["datas"]
+    return captured
 
 
 def test_reviewed_defaults_are_an_explicit_direct_sidecar_input(monkeypatch):
-    datas = _execute_spec(monkeypatch)
+    datas = _execute_spec(monkeypatch)["datas"]
     explicit_entries = [
         (Path(source).resolve(), destination)
         for source, destination in datas
@@ -94,3 +95,11 @@ def test_sidecar_packaging_rejects_database_artifacts_in_any_form(monkeypatch):
 
     for database_path in database_paths:
         assert database_path in str(error.value)
+
+
+def test_sidecar_excludes_python_terminal_runtime(monkeypatch):
+    excludes = set(_execute_spec(monkeypatch)["excludes"])
+
+    assert "apps.terminals" in excludes
+    assert "apps.terminals.models" in excludes
+    assert "apps.terminals.migrations.0001_initial" in excludes

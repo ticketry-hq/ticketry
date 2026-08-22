@@ -1,6 +1,8 @@
 use chrono::{Duration, Utc};
-use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
+use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter};
 use std::collections::HashMap;
+
+use crate::entities::terminals::session;
 
 use super::entities::agent_run;
 use super::work_item_scope::{self, HoldingScope};
@@ -10,6 +12,7 @@ use super::{
 };
 
 const STATUS_WINDOW_DAYS: i64 = 30;
+const STALL_AFTER_SECONDS: i64 = 60;
 
 struct HoldingRow {
     id: String,
@@ -17,7 +20,7 @@ struct HoldingRow {
     project_id: String,
     issue_type: String,
     module_id: String,
-    agent: String,
+    agent: Option<String>,
     scope: String,
     started_at: String,
     status: String,
@@ -25,6 +28,10 @@ struct HoldingRow {
     lifecycle_state: Option<String>,
     lifecycle_updated_at: Option<String>,
     provider_session_id: Option<String>,
+    launch_state: Option<String>,
+    launch_model: Option<String>,
+    output_sequence: i64,
+    last_output_at: Option<String>,
 }
 
 impl QueryProjectionService {
@@ -37,64 +44,111 @@ impl QueryProjectionService {
             .await
     }
 
-    /// Clock-injected authoritative query used by restart/horizon tests and by
-    /// snapshot assembly to keep one timestamp baseline.
     pub async fn run_holdings_at(
         &self,
         project_id: &str,
         task_id: Option<&str>,
         now: &str,
     ) -> Result<Vec<AgentRunHolding>, RunsPersistenceError> {
-        let now = timestamp::parse(now)?;
-        let cutoff = now - Duration::days(STATUS_WINDOW_DAYS);
-        let project_id = database_uuid(project_id);
-        let task_id = task_id.map(database_uuid);
-        let issue_ids =
-            work_item_scope::ids_for_project(self.database(), &project_id, task_id.as_deref())
-                .await?;
-        if issue_ids.is_empty() {
-            return Ok(Vec::new());
-        }
-        let rows = agent_run::Entity::find()
-            .filter(agent_run::Column::IssueId.is_in(issue_ids))
-            .filter(agent_run::Column::Scope.ne("docchat"))
-            .all(self.database())
-            .await?;
-        let scopes = work_item_scope::holding_scopes(
-            self.database(),
-            rows.iter().map(|run| run.issue_id.clone()).collect(),
-        )
+        run_holdings_on(self.database(), project_id, task_id, now).await
+    }
+}
+
+async fn run_holdings_on(
+    database: &impl ConnectionTrait,
+    project_id: &str,
+    task_id: Option<&str>,
+    now: &str,
+) -> Result<Vec<AgentRunHolding>, RunsPersistenceError> {
+    let now = timestamp::parse(now)?;
+    let cutoff = now - Duration::days(STATUS_WINDOW_DAYS);
+    let project_id = database_uuid(project_id);
+    let task_id = task_id.map(database_uuid);
+    let issue_ids =
+        work_item_scope::ids_for_project(database, &project_id, task_id.as_deref()).await?;
+    if issue_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+    let rows = agent_run::Entity::find()
+        .filter(agent_run::Column::IssueId.is_in(issue_ids))
+        .filter(agent_run::Column::Scope.ne("docchat"))
+        .all(database)
+        .await?;
+    let terminal_rows = session::Entity::find()
+        .filter(session::Column::AgentRunId.is_in(rows.iter().map(|run| run.id.clone())))
+        .all(database)
         .await?
         .into_iter()
-        .map(|scope| (scope.id.clone(), scope))
+        .map(|row| (row.agent_run_id.clone(), row))
         .collect::<HashMap<_, _>>();
-        let mut holdings = rows
-            .into_iter()
-            .filter_map(|run| {
-                let scope = scopes.get(&run.issue_id)?;
-                Some(holding_row(run, scope))
-            })
-            .into_iter()
-            .map(project)
-            .collect::<Result<Vec<_>, _>>()?
-            .into_iter()
-            .filter(|holding| {
-                holding.ended_at.is_none()
-                    || holding
-                        .updated
-                        .as_ref()
-                        .is_some_and(|updated| *updated >= cutoff)
-            })
-            .map(|holding| holding.value)
-            .collect::<Vec<_>>();
-        holdings.sort_by(|left, right| {
-            right
-                .updated_at
-                .cmp(&left.updated_at)
-                .then_with(|| right.agent_run_id.cmp(&left.agent_run_id))
-        });
-        Ok(holdings)
+    let scopes = work_item_scope::holding_scopes(
+        database,
+        rows.iter().map(|run| run.issue_id.clone()).collect(),
+    )
+    .await?
+    .into_iter()
+    .map(|scope| (scope.id.clone(), scope))
+    .collect::<HashMap<_, _>>();
+    let mut holdings = rows
+        .into_iter()
+        .filter_map(|run| {
+            let scope = scopes.get(&run.issue_id)?;
+            let terminal = terminal_rows.get(&run.id);
+            Some(holding_row(run, scope, terminal))
+        })
+        .map(|row| project(row, now))
+        .collect::<Result<Vec<_>, _>>()?
+        .into_iter()
+        .filter(|holding| {
+            holding.ended_at.is_none()
+                || holding
+                    .updated
+                    .as_ref()
+                    .is_some_and(|updated| *updated >= cutoff)
+        })
+        .map(|holding| holding.value)
+        .collect::<Vec<_>>();
+    holdings.sort_by(|left, right| {
+        right
+            .updated_at
+            .cmp(&left.updated_at)
+            .then_with(|| right.agent_run_id.cmp(&left.agent_run_id))
+    });
+    Ok(holdings)
+}
+
+/// Build an event projection through the same mapper the snapshot uses.
+pub(crate) async fn run_holding_in(
+    database: &impl ConnectionTrait,
+    agent_run_id: &str,
+    now: &str,
+) -> Result<Option<AgentRunHolding>, RunsPersistenceError> {
+    let Some(run) = agent_run::Entity::find_by_id(agent_run_id)
+        .one(database)
+        .await?
+    else {
+        return Ok(None);
+    };
+    if run.scope == "docchat" {
+        return Ok(None);
     }
+    let Some(scope) = work_item_scope::holding_scopes(database, vec![run.issue_id.clone()])
+        .await?
+        .into_iter()
+        .next()
+    else {
+        return Ok(None);
+    };
+    let terminal = session::Entity::find_by_id(agent_run_id)
+        .one(database)
+        .await?;
+    Ok(Some(
+        project(
+            holding_row(run, &scope, terminal.as_ref()),
+            timestamp::parse(now)?,
+        )?
+        .value,
+    ))
 }
 
 struct ProjectedHolding {
@@ -103,7 +157,10 @@ struct ProjectedHolding {
     updated: Option<chrono::DateTime<Utc>>,
 }
 
-fn project(row: HoldingRow) -> Result<ProjectedHolding, RunsPersistenceError> {
+fn project(
+    row: HoldingRow,
+    now: chrono::DateTime<Utc>,
+) -> Result<ProjectedHolding, RunsPersistenceError> {
     let started = history_timestamp(&row.started_at)?;
     let lifecycle = row
         .lifecycle_updated_at
@@ -111,7 +168,12 @@ fn project(row: HoldingRow) -> Result<ProjectedHolding, RunsPersistenceError> {
         .map(history_timestamp)
         .transpose()?;
     let ended = row.ended_at.as_deref().map(history_timestamp).transpose()?;
-    let updated = [Some(started), lifecycle, ended]
+    let output = row
+        .last_output_at
+        .as_deref()
+        .map(history_timestamp)
+        .transpose()?;
+    let updated = [Some(started), lifecycle, output, ended]
         .into_iter()
         .flatten()
         .max()
@@ -126,6 +188,16 @@ fn project(row: HoldingRow) -> Result<ProjectedHolding, RunsPersistenceError> {
     } else {
         row.lifecycle_state.unwrap_or_else(|| "unknown".to_owned())
     };
+    let effective_state = if !matches!(
+        state.as_str(),
+        "needs_input" | "permission_required" | "exited" | "lost" | "error"
+    ) && output
+        .is_some_and(|observed| now - observed >= Duration::seconds(STALL_AFTER_SECONDS))
+    {
+        "stalled".to_owned()
+    } else {
+        state.clone()
+    };
     Ok(ProjectedHolding {
         value: AgentRunHolding {
             agent_run_id: row.id,
@@ -136,8 +208,13 @@ fn project(row: HoldingRow) -> Result<ProjectedHolding, RunsPersistenceError> {
             scope: row.scope,
             started_at: timestamp::format(started),
             state,
+            effective_state,
             updated_at: timestamp::format(updated),
             provider_session_id: row.provider_session_id,
+            launch_state: row.launch_state,
+            launch_model: row.launch_model,
+            output_sequence: row.output_sequence,
+            last_output_at: row.last_output_at,
         },
         ended_at: row.ended_at,
         updated: Some(updated),
@@ -153,7 +230,11 @@ fn history_timestamp(value: &str) -> Result<chrono::DateTime<Utc>, RunsPersisten
     })
 }
 
-fn holding_row(run: agent_run::Model, issue: &HoldingScope) -> HoldingRow {
+fn holding_row(
+    run: agent_run::Model,
+    issue: &HoldingScope,
+    terminal: Option<&session::Model>,
+) -> HoldingRow {
     HoldingRow {
         id: run.id,
         issue_id: run.issue_id,
@@ -168,6 +249,10 @@ fn holding_row(run: agent_run::Model, issue: &HoldingScope) -> HoldingRow {
         lifecycle_state: run.lifecycle_state,
         lifecycle_updated_at: run.lifecycle_updated_at,
         provider_session_id: run.provider_session_id,
+        launch_state: run.launch_state,
+        launch_model: run.launch_model,
+        output_sequence: terminal.map(|row| row.output_sequence).unwrap_or(0),
+        last_output_at: terminal.and_then(|row| row.last_output_at.clone()),
     }
 }
 

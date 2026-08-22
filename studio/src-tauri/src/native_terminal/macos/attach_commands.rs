@@ -11,10 +11,12 @@ pub fn native_terminal_available() -> bool {
 /// gate until it timed out. The individual main-thread hops below stay as
 /// `run_on_main_thread` round-trips.
 #[tauri::command(async)]
-pub fn native_terminal_attach(
+pub(crate) fn native_terminal_attach(
     window: tauri::WebviewWindow,
     state: tauri::State<'_, NativeTerminalState>,
+    launch: tauri::State<'_, crate::desktop::launch_runtime::DesktopLaunchRuntime>,
     run_id: String,
+    viewer_id: String,
     frame: NativeTerminalFrame,
 ) -> Result<NativeTerminalStatus, String> {
     if window.label() != "main" {
@@ -22,8 +24,7 @@ pub fn native_terminal_attach(
     }
     ensure_preparation_thread()?;
     validate_native_frame(frame)?;
-    let reservation =
-        NativeAttachReservation::acquire(&state.entries, &state.attaching, &run_id)?;
+    let reservation = NativeAttachReservation::acquire(&state.entries, &state.attaching, &run_id)?;
     let preparation_phase = Arc::clone(&reservation.phase);
 
     let handle = new_handle();
@@ -285,6 +286,33 @@ pub fn native_terminal_attach(
     // changes travel through the handle-based frame/show paths rather than
     // published preparation geometry.
     state.pending_frames.discard(&run_id);
+    let ownership = launch.viewer_ownership()?;
+    let lease = crate::viewer_ownership::CreateViewerLease {
+        agent_run_id: run_id.clone(),
+        viewer_id,
+        transport: "native".to_owned(),
+    };
+    if let Err(error) = ownership.stage_prepared(
+        &lease,
+        Arc::new(NativePreparedViewerMechanics {
+            window: window.clone(),
+            entries: Arc::clone(&state.entries),
+            handle: handle.clone(),
+        }),
+    ) {
+        let _ = detach_native_handle(&window, &state.entries, &handle);
+        return Err(error.to_string());
+    }
+    if let Ok(output_activity) = launch.output_activity() {
+        let observed_run_id = run_id.clone();
+        tokio::spawn(async move {
+            if let Err(error) = output_activity.observe(&observed_run_id).await {
+                eprintln!(
+                    "Terminal output observation failed for {observed_run_id}: {error}"
+                );
+            }
+        });
+    }
     Ok(NativeTerminalStatus {
         handle,
         run_id,
@@ -307,4 +335,3 @@ pub fn native_terminal_reconcile_frame(
     state.pending_frames.publish(&run_id, frame);
     Ok(())
 }
-

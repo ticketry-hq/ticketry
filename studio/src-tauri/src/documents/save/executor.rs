@@ -36,9 +36,9 @@ use super::document_locks::DocumentLocks;
 use super::error::DocumentSaveError;
 use super::identity::SaveIntent;
 use super::pending_bodies::PendingBodies;
+use super::settlement;
 use super::staging;
 use super::target::{self, SaveTarget};
-use super::settlement;
 
 /// The typed conflict a caller turns back into "your draft is still yours, and
 /// here is the version that is actually on disk".

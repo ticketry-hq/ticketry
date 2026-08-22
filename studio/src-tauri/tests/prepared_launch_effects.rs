@@ -64,6 +64,19 @@ async fn adopted() -> (tempfile::TempDir, sea_orm::DatabaseConnection, RunsServi
     let database = Database::connect(format!("sqlite:{}?mode=rw", path.display()))
         .await
         .unwrap();
+    database
+        .execute_unprepared(
+            "CREATE TABLE IF NOT EXISTS agent_terminal_sessions (
+                agent_run_id TEXT PRIMARY KEY, tmux_session_name TEXT NOT NULL,
+                task_id TEXT NOT NULL, module_id TEXT NOT NULL, project_id TEXT NOT NULL,
+                created_at TEXT NOT NULL, terminated_at TEXT, scope TEXT NOT NULL,
+                doc_rel_path TEXT, runtime_cleanup_pending BOOL NOT NULL DEFAULT 0,
+                runtime_namespace TEXT, output_identity TEXT,
+                output_sequence INTEGER NOT NULL DEFAULT 0, last_output_at TEXT, agent TEXT
+            )",
+        )
+        .await
+        .unwrap();
     let services = RunsServices::new(database.clone());
     (directory, database, services)
 }
@@ -83,7 +96,7 @@ fn intent(seed: u128, base: u128, attempt: Option<String>) -> LaunchIntent {
         project_id: id(base + 1),
         issue_id: id(base + 4),
         scope: "task".to_owned(),
-        provider: PROVIDER.to_owned(),
+        provider: Some(PROVIDER.to_owned()),
         target_kind: "task".to_owned(),
         target_id: id(base + 4),
         policy_reference: None,
@@ -95,6 +108,8 @@ fn request(intent: LaunchIntent) -> PrepareLaunchRequest {
         intent,
         snapshot: RunSnapshot {
             model: Some("gpt-5".to_owned()),
+            launch_state: Some("Implement".to_owned()),
+            launch_model: Some("gpt-5".to_owned()),
             ..RunSnapshot::default()
         },
     }
@@ -191,8 +206,10 @@ async fn preparation_commits_run_effect_lifecycle_and_event_together() {
     assert_eq!(run.status, "running");
     assert_eq!(run.lifecycle_state.as_deref(), Some("starting"));
     assert_eq!(run.lifecycle_updated_at, Some(run.started_at.clone()));
-    assert_eq!(run.agent, PROVIDER);
+    assert_eq!(run.agent.as_deref(), Some(PROVIDER));
     assert_eq!(run.model.as_deref(), Some("gpt-5"));
+    assert_eq!(run.launch_state.as_deref(), Some("Implement"));
+    assert_eq!(run.launch_model.as_deref(), Some("gpt-5"));
 
     // The launch is visible as authoritative status the moment it is durable,
     // before any terminal exists.
@@ -203,7 +220,35 @@ async fn preparation_commits_run_effect_lifecycle_and_event_together() {
         .unwrap();
     assert_eq!(holdings.len(), 1);
     assert_eq!(holdings[0].state, "starting");
+    assert_eq!(holdings[0].launch_state.as_deref(), Some("Implement"));
+    assert_eq!(holdings[0].launch_model.as_deref(), Some("gpt-5"));
     assert_eq!(count(&database, "runs_status_events").await, 1);
+}
+
+#[tokio::test]
+async fn launch_snapshots_are_immutable_when_a_retry_carries_new_policy_values() {
+    let (_directory, _database, services) = adopted().await;
+    let launch = intent(899, 800, None);
+    services
+        .effects()
+        .prepare_launch(request(launch.clone()))
+        .await
+        .unwrap();
+
+    let mut changed = request(launch);
+    changed.snapshot.launch_state = Some("Review".to_owned());
+    changed.snapshot.launch_model = Some("future-model".to_owned());
+    services.effects().prepare_launch(changed).await.unwrap();
+
+    let run = services
+        .queries()
+        .runs()
+        .find("run-899")
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(run.launch_state.as_deref(), Some("Implement"));
+    assert_eq!(run.launch_model.as_deref(), Some("gpt-5"));
 }
 
 #[tokio::test]
@@ -316,7 +361,7 @@ async fn conflicting_reuse_of_a_launch_identity_returns_a_typed_conflict() {
 
     // Same effect identity, different provider identity.
     let mut reprovisioned = intent(904, 800, None);
-    reprovisioned.provider = "claude".to_owned();
+    reprovisioned.provider = Some("claude".to_owned());
     assert_eq!(
         services
             .effects()

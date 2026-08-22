@@ -147,9 +147,7 @@ impl From<WorkspaceOperationError> for DocumentSaveError {
             }
             WorkspaceOperationErrorCode::Busy
             | WorkspaceOperationErrorCode::LeaseNotHeld
-            | WorkspaceOperationErrorCode::AlreadySettled => {
-                DocumentSaveErrorCode::OperationBusy
-            }
+            | WorkspaceOperationErrorCode::AlreadySettled => DocumentSaveErrorCode::OperationBusy,
             WorkspaceOperationErrorCode::Storage => DocumentSaveErrorCode::Storage,
             _ => DocumentSaveErrorCode::OperationInvalid,
         };

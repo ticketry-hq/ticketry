@@ -76,5 +76,9 @@ export function statusStreamTransport() {
 }
 
 export function terminalWebSocketUrl(): string {
-  return runtimeConfiguration().endpoints.terminalWebSocket;
+  const endpoint = runtimeConfiguration().endpoints.terminalWebSocket;
+  if (!endpoint) {
+    throw new Error("The terminal WebSocket is unavailable in desktop Studio.");
+  }
+  return endpoint;
 }

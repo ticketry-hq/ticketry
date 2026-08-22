@@ -1,0 +1,37 @@
+query ExecutionGraphRunHolding($rootId: String!) {
+  graph_run_holding: graphRuns(
+    filters: { rootId: { eq: $rootId } }
+    pagination: { offset: { limit: 1, offset: 0 } }
+  ) {
+    nodes {
+      root_id: rootId
+      execution_mode: executionMode
+    }
+  }
+}
+
+mutation CreateExecutionGraphRun($rootId: String!, $executionMode: String) {
+  graph_run_result: graph_run_create(
+    root_id: $rootId
+    execution_mode: $executionMode
+  ) {
+    graph_run {
+      root_id: rootId
+      execution_mode: executionMode
+    }
+    launched: prepared_child_ids
+  }
+}
+
+mutation UpdateExecutionGraphRun($rootId: String!, $executionMode: String) {
+  graph_run_result: graph_run_update(
+    root_id: $rootId
+    execution_mode: $executionMode
+  ) {
+    graph_run {
+      root_id: rootId
+      execution_mode: executionMode
+    }
+    launched: prepared_child_ids
+  }
+}

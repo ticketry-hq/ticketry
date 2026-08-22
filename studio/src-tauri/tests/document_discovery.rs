@@ -10,9 +10,7 @@ use muxed_studio_lib::documents::{
     registry_refresh, DocumentsService, TaskRegistryScope, SCRATCH_TASK_ID,
 };
 use muxed_studio_lib::graphql_foundation::initialize_with_worktracker_commands_and_install;
-use muxed_studio_lib::settings_persistence::{
-    ModuleLink, Profile, ProfileCatalog, ProfileStore,
-};
+use muxed_studio_lib::settings_persistence::{ModuleLink, Profile, ProfileCatalog, ProfileStore};
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection};
 use tauri_graphql::{TransportApi, TransportApiImpl};
 
@@ -115,7 +113,7 @@ async fn fixture() -> Fixture {
             model TEXT, reasoning TEXT, status TEXT NOT NULL, started_at TEXT NOT NULL,
             ended_at TEXT, exit_code INTEGER, error TEXT, cwd TEXT, provider_session_id TEXT,
             lifecycle_state TEXT, lifecycle_updated_at TEXT, design_dir TEXT, resumed_from TEXT,
-            scope TEXT NOT NULL
+            scope TEXT NOT NULL, launch_state TEXT, launch_model TEXT
         );
         INSERT INTO worktracker_issue (id, project_id, type, module_id, name, sequence_id) VALUES
             ('{MODULE}','{PROJECT}','module',NULL,'Platform Runtime',12),
@@ -148,7 +146,11 @@ async fn install(fixture: &Fixture) -> TransportApiImpl {
     api
 }
 
-async fn execute(api: &TransportApiImpl, query: &str, variables: serde_json::Value) -> serde_json::Value {
+async fn execute(
+    api: &TransportApiImpl,
+    query: &str,
+    variables: serde_json::Value,
+) -> serde_json::Value {
     let response = api
         .clone()
         .graphql_execute(serde_json::json!({ "query": query, "variables": variables }).to_string())
@@ -214,7 +216,11 @@ async fn a_task_rescan_discovers_nested_documents_case_insensitively() {
     let fixture = fixture().await;
     let root = canonical_task_dir(&fixture);
     write(&root, "SPEC.MD", "# spec");
-    write(&root, "notes/Design.HTML", "<html><img src=\"logo.png\"></html>");
+    write(
+        &root,
+        "notes/Design.HTML",
+        "<html><img src=\"logo.png\"></html>",
+    );
     write(&root, "notes/logo.png", "not a document");
     let api = install(&fixture).await;
 
@@ -377,7 +383,10 @@ async fn a_rescan_over_an_unchanged_directory_changes_no_row() {
         module_id: Some(PUBLIC_MODULE.to_owned()),
     };
 
-    let first = service.refresh_task(scope.clone()).await.expect("first pass");
+    let first = service
+        .refresh_task(scope.clone())
+        .await
+        .expect("first pass");
     let second = service.refresh_task(scope).await.expect("second pass");
 
     assert_eq!(first.len(), 1);
@@ -398,14 +407,19 @@ async fn a_removed_file_prunes_its_row_and_a_new_file_is_registered() {
         project_id: Some(PUBLIC_PROJECT.to_owned()),
         module_id: Some(PUBLIC_MODULE.to_owned()),
     };
-    service.refresh_task(scope.clone()).await.expect("first pass");
+    service
+        .refresh_task(scope.clone())
+        .await
+        .expect("first pass");
 
     std::fs::remove_file(root.join("SPEC.md")).expect("remove the document");
     write(&root, "notes/LATER.md", "# later");
     let rows = service.refresh_task(scope).await.expect("second pass");
 
     assert_eq!(
-        rows.iter().map(|row| row.rel_path.as_str()).collect::<Vec<_>>(),
+        rows.iter()
+            .map(|row| row.rel_path.as_str())
+            .collect::<Vec<_>>(),
         vec!["notes/LATER.md"],
     );
 }
@@ -495,13 +509,11 @@ async fn traversal_symlink_escapes_and_unknown_documents_are_all_the_same_absenc
             "{refused} must not be servable",
         );
     }
-    assert!(
-        service
-            .read_asset("no-such-document", "SPEC.md")
-            .await
-            .expect("an unknown document is data rather than an error")
-            .is_none(),
-    );
+    assert!(service
+        .read_asset("no-such-document", "SPEC.md")
+        .await
+        .expect("an unknown document is data rather than an error")
+        .is_none(),);
     assert!(
         !rows.iter().any(|row| row.rel_path == "escape.md"),
         "a symlink escaping the boundary is never registered as a document",

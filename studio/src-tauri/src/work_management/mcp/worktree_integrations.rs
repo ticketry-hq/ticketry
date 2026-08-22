@@ -25,7 +25,9 @@ pub(super) async fn compose(
         return None;
     }
     if !crate::runs_persistence::outbox_adopted(database).await {
-        eprintln!("Ticketry left worktree integration uncomposed: the status outbox is not available.");
+        eprintln!(
+            "Ticketry left worktree integration uncomposed: the status outbox is not available."
+        );
         return None;
     }
     Some(WorktreeIntegrateService::new(

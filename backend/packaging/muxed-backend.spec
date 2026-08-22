@@ -12,6 +12,19 @@ hiddenimports = []
 binaries = []
 database_filename_markers = (".db", ".sqlite", ".sqlite3")
 
+# Rust owns terminal schema adoption. No Python terminal package is part of
+# the sidecar artifact.
+terminal_package = Path(SPECPATH).parents[1] / "backend" / "apps" / "terminals"
+terminal_runtime_excludes = ["apps.terminals"]
+for source_path in terminal_package.rglob("*.py"):
+    relative = source_path.relative_to(terminal_package).with_suffix("")
+    module_parts = relative.parts[:-1] if relative.parts[-1] == "__init__" else relative.parts
+    if module_parts:
+        terminal_runtime_excludes.append("apps.terminals." + ".".join(module_parts))
+terminal_runtime_excludes += [
+    "apps.execution",
+]
+
 
 def include_source_package(source_root, package_name):
     """Bundle local editable packages that PyInstaller cannot discover."""
@@ -115,7 +128,7 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=terminal_runtime_excludes,
     noarchive=False,
 )
 pyz = PYZ(a.pure)

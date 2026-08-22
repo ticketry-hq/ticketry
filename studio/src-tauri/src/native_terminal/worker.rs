@@ -4,7 +4,7 @@
 //! through one channel and applied to its direct tmux controls. Keyboard and
 //! mouse input stay entirely inside libghostty's PTY.
 
-use crate::terminal_runtime::{
+use crate::terminal_viewer::attachment::{
     AttachmentOutcome, TerminalAttachmentError, TerminalCommandAttachmentControl,
     TerminalScrollDirection,
 };

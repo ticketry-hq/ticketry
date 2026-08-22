@@ -4,10 +4,10 @@
 use tauri::Manager;
 
 use crate::desktop::commands;
-use crate::desktop::document_protocol;
 use crate::desktop::data_directory::{
     data_directory_ownership_for_startup, release_data_directory_ownership,
 };
+use crate::desktop::document_protocol;
 use crate::desktop::environment::smoke_startup_exit_requested;
 use crate::desktop::launch_runtime::DesktopLaunchRuntime;
 use crate::desktop::lifecycle::{
@@ -16,7 +16,9 @@ use crate::desktop::lifecycle::{
 };
 use crate::desktop::service_state::DesktopServiceState;
 use crate::desktop::startup::initialize_services;
-use crate::{graphql_foundation, native_terminal, native_terminal_focus_trace, viewer_commands};
+use crate::native_terminal::focus_trace;
+use crate::terminal_viewer::webview_commands;
+use crate::{graphql_foundation, native_terminal};
 
 pub fn run() {
     let ownership = data_directory_ownership_for_startup();
@@ -30,7 +32,7 @@ pub fn run() {
         .manage(ownership)
         .manage(DesktopServiceState::new())
         .manage(DesktopLaunchRuntime::new())
-        .manage(viewer_commands::ViewerCommandState::new())
+        .manage(webview_commands::ViewerCommandState::new())
         .manage(native_terminal::NativeTerminalState::new())
         .invoke_handler(graphql_foundation::combine_with_native_handler(
             tauri::generate_handler![
@@ -41,12 +43,12 @@ pub fn run() {
                 commands::desktop_pick_folder,
                 commands::desktop_preflight_report,
                 commands::desktop_approve_executable_path,
-                viewer_commands::viewer_attach,
-                viewer_commands::viewer_input,
-                viewer_commands::viewer_resize,
-                viewer_commands::viewer_scroll,
-                viewer_commands::viewer_detach,
-                viewer_commands::viewer_status,
+                webview_commands::viewer_attach,
+                webview_commands::viewer_input,
+                webview_commands::viewer_resize,
+                webview_commands::viewer_scroll,
+                webview_commands::viewer_detach,
+                webview_commands::viewer_status,
                 native_terminal::native_terminal_available,
                 native_terminal::native_terminal_attach,
                 native_terminal::native_terminal_reconcile_frame,
@@ -55,7 +57,7 @@ pub fn run() {
                 native_terminal::native_terminal_show,
                 native_terminal::native_terminal_focus,
                 native_terminal::native_terminal_detach,
-                native_terminal_focus_trace::native_terminal_trace
+                focus_trace::native_terminal_trace
             ],
             graphql_api,
         ))
@@ -103,8 +105,8 @@ pub fn run() {
                 Some(DesktopLifecycleEvent::MainWindowCloseRequested)
             }
             tauri::RunEvent::Exit => {
-                detach_transient_viewers(application);
                 shutdown_packaged_backend(application);
+                detach_transient_viewers(application);
                 release_data_directory_ownership(application);
                 Some(DesktopLifecycleEvent::ApplicationShutdown)
             }

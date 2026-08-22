@@ -3,7 +3,7 @@ pub struct AgentRunRecord {
     pub id: String,
     pub issue_id: String,
     pub ticket_seq: Option<i32>,
-    pub agent: String,
+    pub agent: Option<String>,
     pub model: Option<String>,
     pub reasoning: Option<String>,
     pub status: String,
@@ -18,6 +18,8 @@ pub struct AgentRunRecord {
     pub design_dir: Option<String>,
     pub resumed_from: Option<String>,
     pub scope: String,
+    pub launch_state: Option<String>,
+    pub launch_model: Option<String>,
 }
 
 /// Scope-safe public projection. Persistence-only paths, prompts, errors, and
@@ -28,12 +30,17 @@ pub struct AgentRunHolding {
     pub project_id: String,
     pub task_id: Option<String>,
     pub module_id: String,
-    pub agent: String,
+    pub agent: Option<String>,
     pub scope: String,
+    pub launch_state: Option<String>,
+    pub launch_model: Option<String>,
     pub started_at: String,
     pub state: String,
+    pub effective_state: String,
     pub updated_at: String,
     pub provider_session_id: Option<String>,
+    pub output_sequence: i64,
+    pub last_output_at: Option<String>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -137,7 +144,7 @@ pub struct LaunchEffectRecord {
     pub project_id: String,
     pub issue_id: String,
     pub scope: String,
-    pub provider: String,
+    pub provider: Option<String>,
     pub target_kind: String,
     pub target_id: String,
     pub policy_reference: Option<String>,

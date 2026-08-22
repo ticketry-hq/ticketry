@@ -4,11 +4,12 @@ pub mod adoption;
 pub mod commands;
 pub mod database;
 pub use crate::entities::work_management as entities;
+pub(crate) mod graphql;
 pub mod launch_policy;
 pub mod mcp;
 pub mod ownership_manifest;
 pub mod read_queries;
-pub use crate::query_root::types as read_types;
+pub mod read_types;
 mod transition_occurrences;
 
 pub use database::{

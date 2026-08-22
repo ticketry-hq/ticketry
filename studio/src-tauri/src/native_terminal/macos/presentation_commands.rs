@@ -68,7 +68,7 @@ pub fn native_terminal_hide(
         let entry = registry
             .get(&handle)
             .ok_or_else(|| "native terminal handle was not found".to_owned())?;
-        crate::native_terminal_focus_trace::trace(
+        crate::native_terminal::focus_trace::trace(
             "command hide",
             &format!("run={} handle={handle}", entry.run_id),
         );
@@ -182,7 +182,7 @@ pub fn native_terminal_show(
             .map_err(str::to_owned)?;
         entry.visibility.take_focus_restoration()
     };
-    crate::native_terminal_focus_trace::trace(
+    crate::native_terminal::focus_trace::trace(
         "command show",
         &format!("run={run_id} handle={handle} restoresFocus={restore_focus}"),
     );
@@ -218,13 +218,13 @@ pub fn native_terminal_focus(
             .get(&handle)
             .ok_or_else(|| "native terminal handle was not found".to_owned())?;
         if !entry.visibility.accepts_input() {
-            crate::native_terminal_focus_trace::trace(
+            crate::native_terminal::focus_trace::trace(
                 "command focus REJECTED (viewer not presented)",
                 &format!("run={} handle={handle}", entry.run_id),
             );
             return Err("hidden native terminal cannot receive focus".to_owned());
         }
-        crate::native_terminal_focus_trace::trace(
+        crate::native_terminal::focus_trace::trace(
             "command focus",
             &format!("run={} handle={handle}", entry.run_id),
         );
@@ -243,14 +243,5 @@ pub fn native_terminal_detach(
     state: tauri::State<'_, NativeTerminalState>,
     handle: String,
 ) -> Result<(), String> {
-    let entry = state
-        .entries
-        .lock()
-        .expect("native terminal registry poisoned")
-        .remove(&handle)
-        .ok_or_else(|| "native terminal handle was not found".to_owned())?;
-    entry.stop_accepting_events();
-    let _ = entry.worker.send(NativeViewerCommand::Detach);
-    let released = free_view(&window, entry.view, entry.contexts);
-    released.map_err(|error| error.to_string())
+    detach_native_handle(&window, &state.entries, &handle)
 }

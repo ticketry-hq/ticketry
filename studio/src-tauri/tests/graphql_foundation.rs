@@ -55,7 +55,16 @@ async fn migration_probes_are_only_composed_into_the_isolated_foundation_schema(
 
     assert!(probe_schema.contains("migrationProbes"));
     assert!(probe_schema.contains("migrationProbesCreateOne"));
+    for operation in ["CreateBatch", "Update", "Delete"] {
+        assert!(
+            !probe_schema.contains(&format!("migrationProbes{operation}")),
+            "isolated schema exposed unused migrationProbes{operation}"
+        );
+    }
+    assert!(!probe_schema.contains("MigrationProbesUpdateInput"));
+    assert!(!probe_schema.contains("worktrackerIssuetypeCreateOne"));
     assert!(!product_schema.contains("migrationProbes"));
+    assert!(product_schema.contains("worktrackerIssuetypeCreateOne"));
 }
 
 #[tokio::test]

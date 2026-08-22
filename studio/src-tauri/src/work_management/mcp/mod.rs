@@ -10,6 +10,7 @@ mod run_termination;
 mod runs_lifecycle;
 mod scope;
 mod service;
+mod terminal_launch_ingress;
 mod workflow_tools;
 mod worktree_integrations;
 
@@ -46,6 +47,39 @@ pub struct McpRuntime {
 
 impl McpRuntime {
     pub async fn start(configuration: McpConfiguration) -> Result<Self, String> {
+        Self::start_with_services(
+            configuration,
+            std::sync::Arc::new(crate::terminal_cleanup::TmuxCleanupRuntime),
+            None,
+        )
+        .await
+    }
+
+    pub async fn start_with_terminal_launch(
+        configuration: McpConfiguration,
+        terminal_launch: crate::terminal_launch::TerminalLaunchService,
+    ) -> Result<Self, String> {
+        Self::start_with_services(
+            configuration,
+            std::sync::Arc::new(crate::terminal_cleanup::TmuxCleanupRuntime),
+            Some(terminal_launch),
+        )
+        .await
+    }
+
+    #[cfg(test)]
+    pub async fn start_for_test(
+        configuration: McpConfiguration,
+        cleanup_runtime: std::sync::Arc<dyn crate::terminal_cleanup::TerminalCleanupRuntime>,
+    ) -> Result<Self, String> {
+        Self::start_with_services(configuration, cleanup_runtime, None).await
+    }
+
+    async fn start_with_services(
+        configuration: McpConfiguration,
+        cleanup_runtime: std::sync::Arc<dyn crate::terminal_cleanup::TerminalCleanupRuntime>,
+        terminal_launch: Option<crate::terminal_launch::TerminalLaunchService>,
+    ) -> Result<Self, String> {
         if !configuration.address.ip().is_loopback() {
             return Err("WorkTracker MCP must bind to a loopback address.".to_owned());
         }
@@ -55,7 +89,6 @@ impl McpRuntime {
             configuration.backend_base_url,
             configuration.backend_api_key,
         );
-        backend.verify_launch_policy_readiness().await?;
         let database = open_for_commands(&configuration.database_path)
             .await
             .map_err(|error| format!("could not open WorkTracker commands for MCP: {error}"))?;
@@ -83,14 +116,25 @@ impl McpRuntime {
             ingress_credential.clone(),
         );
         let integrations = worktree_integrations::compose(&database, &profiles).await;
+        let launch_policy = crate::work_management::launch_policy::LaunchPolicyResolver::new(
+            database.clone(),
+            profiles.clone(),
+        );
+        let graph_runs = terminal_launch.clone().map(|terminal_launch| {
+            crate::graph_run_service::GraphRunService::production(
+                database.clone(),
+                launch_policy.clone(),
+                terminal_launch,
+            )
+        });
         let service_state = WorktrackerMcpService::new(
             database.clone(),
             AttachmentStorage::new(configuration.media_root),
             backend,
-            crate::work_management::launch_policy::LaunchPolicyResolver::new(
-                database,
-                profiles.clone(),
-            ),
+            launch_policy,
+            graph_runs,
+            crate::terminal_cleanup::TerminalCleanupService::new(database, cleanup_runtime),
+            terminal_launch.clone(),
             integrations,
         );
         let reconciliation_state = service_state.clone();
@@ -108,37 +152,16 @@ impl McpRuntime {
         // opening a second one. It is not an MCP tool: it is the seam the
         // Python hook adapter forwards a normalized fact through, so the
         // durable write happens before its caller is acknowledged.
-        let router = Router::new()
+        let mut router = Router::new()
             .nest_service("/mcp", service)
             .route(
                 "/runs/lifecycle",
                 axum::routing::post(runs_lifecycle::ingest),
             )
-            .route("/runs/launch", axum::routing::post(runs_lifecycle::launch))
-            .route(
-                "/runs/terminal-outcome",
-                axum::routing::post(runs_lifecycle::terminal_outcome),
-            )
-            .route(
-                "/runs/prepare-launch",
-                axum::routing::post(runs_lifecycle::prepare_launch),
-            )
-            .route(
-                "/runs/settle-launch",
-                axum::routing::post(runs_lifecycle::settle_launch),
-            )
-            .route(
-                "/runs/attempt",
-                axum::routing::post(runs_lifecycle::materialize_attempt),
-            )
-            .route(
-                "/runs/attempt-outcome",
-                axum::routing::post(runs_lifecycle::record_attempt_outcome),
-            )
             .with_state(runs_lifecycle::RunsIngressState::new(
                 ingress_database,
                 ingress_backend_base_url,
-                ingress_credential,
+                ingress_credential.clone(),
             ))
             // The launch-path boundary carries its own state, so it is merged
             // rather than folded into the Runs ingress: nothing it can reach
@@ -151,10 +174,22 @@ impl McpRuntime {
                     )
                     .with_state(launch_paths_state),
             );
+        if let Some(terminal_launch) = terminal_launch {
+            router = router.merge(
+                Router::new()
+                    .route(
+                        "/terminal/launch",
+                        axum::routing::post(terminal_launch_ingress::launch),
+                    )
+                    .with_state(terminal_launch_ingress::TerminalLaunchIngressState::new(
+                        terminal_launch,
+                        ingress_credential,
+                    )),
+            );
+        }
         let reconciliation_shutdown = cancellation.clone();
         let reconciler = tokio::spawn(async move {
             loop {
-                reconciliation_state.reconcile_launch_policy().await;
                 reconciliation_state.reconcile_worktree_integrations().await;
                 tokio::select! {
                     _ = reconciliation_shutdown.cancelled() => break,

@@ -39,11 +39,7 @@ impl WorktreeUse {
         }
     }
 
-    pub(super) fn absent(
-        top_level_task_id: String,
-        is_shared: bool,
-        reason: &'static str,
-    ) -> Self {
+    pub(super) fn absent(top_level_task_id: String, is_shared: bool, reason: &'static str) -> Self {
         Self {
             used: false,
             top_level_task_id: Some(top_level_task_id),

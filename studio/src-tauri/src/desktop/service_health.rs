@@ -3,7 +3,7 @@
 use serde::Serialize;
 use std::path::Path;
 
-use crate::supervisor::{self, SupervisorError};
+use crate::sidecar_supervision::{self, SupervisorError};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -67,7 +67,7 @@ impl ServiceHealth {
 
     pub(crate) fn failed(error: &SupervisorError, log_path: &Path) -> Self {
         let message = match error.kind {
-            supervisor::FailureKind::Migration => {
+            sidecar_supervision::FailureKind::Migration => {
                 "The state database could not be migrated.".to_owned()
             }
             _ => error.message.clone(),
@@ -91,7 +91,7 @@ mod tests {
         let log_path = env::temp_dir().join("muxed-sidecar.log");
         let error = SupervisorError {
             service: "backend".to_owned(),
-            kind: supervisor::FailureKind::Crash,
+            kind: sidecar_supervision::FailureKind::Crash,
             message: "restart allowance exhausted".to_owned(),
         };
 
@@ -123,7 +123,7 @@ mod tests {
         let health = ServiceHealth::failed(
             &SupervisorError {
                 service: "backend".to_owned(),
-                kind: supervisor::FailureKind::Migration,
+                kind: sidecar_supervision::FailureKind::Migration,
                 message: "internal migration detail".to_owned(),
             },
             &log_path,

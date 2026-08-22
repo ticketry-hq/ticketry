@@ -8,12 +8,10 @@ INSTALLED_APPS = [
     "rest_framework",
     "drf_spectacular",
     "apps.runs",
-    "apps.terminals",
     "apps.documents",
     "apps.settings_store",
     "worktracker",
     "apps.worktrees",
-    "apps.execution",
 ]
 
 DATABASES = {
@@ -46,8 +44,4 @@ SPECTACULAR_SETTINGS = {
     "SCHEMA_PATH_PREFIX": r"^/api",
     "SCHEMA_PATH_PREFIX_TRIM": True,
     "SERVERS": [{"url": "/api"}],
-    # Name the graph-run scheduling enum for what it is, not for its field.
-    "ENUM_NAME_OVERRIDES": {
-        "GraphRunExecutionModeEnum": "apps.execution.execution_mode.EXECUTION_MODE_CHOICES",
-    },
 }

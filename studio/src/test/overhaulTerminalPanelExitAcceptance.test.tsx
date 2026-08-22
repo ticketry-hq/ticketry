@@ -26,7 +26,12 @@ import {
   selectTaskLifecycleChips,
   selectTaskRunCount,
 } from "../features/agents/status/selectors";
-import { dispatchStatusFrame } from "../features/agents/status/testing/legacyStatusFrameTestDriver";
+import { applyRunStatusFrame } from "../features/agents/status/stream/runStatusHolding";
+import { applySnapshotFrame } from "../features/agents/status/stream/statusSnapshot";
+import {
+  statusRunHolding,
+  terminalStatusFrame,
+} from "../features/agents/status/testing/durableStatusFrames";
 import type { RunRecord } from "../features/agents/status/types";
 import { useTerminalForegroundStore } from "../features/agents/terminal/internal/foregroundStore";
 import { useTerminalStore } from "../features/agents/terminal/internal/sessionStore";
@@ -160,11 +165,17 @@ function shellRun(runId: string, overrides: Partial<RunRecord> = {}): RunRecord 
 /** Announce a live shell run exactly as its launch does. */
 function announceShell(runId: string): void {
   act(() => {
-    dispatchStatusFrame({
-      v: 1,
-      type: "agent_lifecycle",
+    const status = useAgentStatusStore.getState();
+    applySnapshotFrame({
+      __typename: "RunStatusSnapshot",
+      project_id: "project-1",
+      cursor: 1,
       at: AT,
-      run: shellRun(runId),
+      runs: [
+        ...Object.values(status.runs).map(statusRunHolding),
+        statusRunHolding(shellRun(runId)),
+      ],
+      automation_attempts: [],
     });
   });
 }
@@ -172,14 +183,13 @@ function announceShell(runId: string): void {
 /** Push the completion state reconciliation publishes for a dead session. */
 function announceExit(runId: string, exitCode: number | null): void {
   act(() => {
-    dispatchStatusFrame({
-      v: 1,
-      type: "backend_session",
-      agent_run_id: runId,
-      status: "exited",
+    applyRunStatusFrame(terminalStatusFrame({
+      projectId: "project-1",
+      agentRunId: runId,
+      state: "exited",
       at: "2026-08-15T10:05:00.000Z",
-      exit_code: exitCode,
-    });
+      exitCode,
+    }));
   });
 }
 
@@ -322,21 +332,20 @@ describe("terminal panel shell exit acceptance", () => {
     // accident: a real task id, a lifecycle state a module badge counts, and a
     // session sitting in a task's own slot in the cycle.
     act(() => {
-      dispatchStatusFrame({
-        v: 1,
-        type: "agent_lifecycle",
+      applySnapshotFrame({
+        __typename: "RunStatusSnapshot",
+        project_id: "project-1",
+        cursor: 2,
         at: AT,
-        run: shellRun("run-shell-1", { task_id: "task-1", state: "working" }),
-      });
-      dispatchStatusFrame({
-        v: 1,
-        type: "agent_lifecycle",
-        at: AT,
-        run: {
+        runs: [statusRunHolding(shellRun("run-shell-1", {
+          task_id: "task-1",
+          state: "working",
+        })), statusRunHolding({
           ...shellRun("run-agent-1", { task_id: "task-1", state: "working" }),
           agent: "codex",
           scope: "task",
-        },
+        })],
+        automation_attempts: [],
       });
     });
 

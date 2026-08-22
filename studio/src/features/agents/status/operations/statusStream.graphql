@@ -12,10 +12,15 @@ subscription RunStatusStream($projectId: String!, $afterCursor: Int) {
         module_id
         agent
         scope
+        launch_state
+        launch_model
         started_at
         state
+        effective_state
         updated_at
         provider_session_id
+        output_sequence
+        last_output_at
       }
       automation_attempts {
         attempt_id

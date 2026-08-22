@@ -3,6 +3,12 @@ import type {
   ResumableTerminalSession,
 } from "../types";
 import { authenticatedHostFetch } from "../../../shared/api/authenticatedHostFetch";
+import {
+  createTerminalSession,
+  resumeTerminalSession,
+  terminateTerminalSession,
+  type ResumeTerminalRunInput,
+} from "../terminal/internal/mutationTransport";
 
 export class ApiError extends Error {
   constructor(
@@ -60,13 +66,9 @@ export const getScratchTerminals = (
   const url = `/api/terminals/scratch?project_id=${encodeURIComponent(projectId)}${moduleId ? `&module_id=${encodeURIComponent(moduleId)}` : ""}`;
   return request<PersistedTerminalSession[]>(url, { signal });
 };
-export const terminateTerminal = (agentRunId: string) =>
-  request<{ agent_run_id: string; terminated: boolean }>(`/api/terminals?agent_run_id=${encodeURIComponent(agentRunId)}`, { method: "DELETE" });
-export const resumeTerminal = (agentRunId: string) =>
-  request<{ agent_run_id: string; resumed_from: string }>(
-    `/api/terminals/resume?agent_run_id=${encodeURIComponent(agentRunId)}`,
-    { method: "POST" },
-  );
+export const terminateTerminal = terminateTerminalSession;
+export const resumeTerminal = (input: ResumeTerminalRunInput) =>
+  resumeTerminalSession(input);
 export interface CreateTerminalRunRequest {
   agent: "claude" | "agy" | "codex" | "gemini";
   project_id: string;
@@ -79,7 +81,12 @@ export interface CreateTerminalRunRequest {
 }
 
 export const createTerminalRun = (body: CreateTerminalRunRequest) =>
-  request<{ agent_run_id: string }>("/api/terminals", {
-    method: "POST",
-    body: JSON.stringify(body),
+  createTerminalSession({
+    agent: body.agent,
+    projectId: body.project_id,
+    moduleId: body.module_id,
+    taskId: body.task_id,
+    initialPrompt: body.is_instant ? body.instant_prompt : body.initial_prompt,
+    isPlanning: body.is_planning,
+    isInstant: body.is_instant,
   });

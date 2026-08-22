@@ -4,7 +4,7 @@
 use serde::Serialize;
 
 use crate::desktop::mcp_runtime::WORKTRACKER_MCP_PORT;
-use crate::supervisor::{self, SupervisorEvent};
+use crate::sidecar_supervision::{self, SupervisorEvent};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -43,7 +43,7 @@ fn mcp_unavailable_notice(event: &SupervisorEvent) -> Option<UserNotice> {
         return None;
     }
 
-    let recovery = if *kind == supervisor::FailureKind::Bind {
+    let recovery = if *kind == sidecar_supervision::FailureKind::Bind {
         format!(
             "Port {WORKTRACKER_MCP_PORT} is already in use. Stop the service using that port and restart Ticketry to restore external MCP connections."
         )
@@ -97,11 +97,12 @@ mod tests {
 
     #[test]
     fn mcp_rollover_notice_has_the_exact_manual_recovery_meaning() {
-        let notice = mcp_port_rollover_notice(&supervisor::SupervisorEvent::McpPortRollover {
-            previous_port: 43_101,
-            active_port: 43_219,
-        })
-        .expect("changed MCP port produces a notice");
+        let notice =
+            mcp_port_rollover_notice(&sidecar_supervision::SupervisorEvent::McpPortRollover {
+                previous_port: 43_101,
+                active_port: 43_219,
+            })
+            .expect("changed MCP port produces a notice");
 
         assert_eq!(notice.title, "MCP connection changed");
         assert_eq!(notice.severity, UserNoticeSeverity::Warning);
@@ -124,9 +125,9 @@ mod tests {
 
     #[test]
     fn mcp_bind_failure_notice_keeps_the_desktop_usable() {
-        let notice = mcp_unavailable_notice(&supervisor::SupervisorEvent::Failed {
+        let notice = mcp_unavailable_notice(&sidecar_supervision::SupervisorEvent::Failed {
             service: "mcp".to_owned(),
-            kind: supervisor::FailureKind::Bind,
+            kind: sidecar_supervision::FailureKind::Bind,
             message: "could not reserve a loopback port after the configured retries".to_owned(),
         })
         .expect("MCP failure becomes a user notice");
@@ -142,9 +143,9 @@ mod tests {
     #[test]
     fn backend_failure_does_not_become_an_optional_mcp_notice() {
         assert!(
-            mcp_unavailable_notice(&supervisor::SupervisorEvent::Failed {
+            mcp_unavailable_notice(&sidecar_supervision::SupervisorEvent::Failed {
                 service: "backend".to_owned(),
-                kind: supervisor::FailureKind::Bind,
+                kind: sidecar_supervision::FailureKind::Bind,
                 message: "backend bind failed".to_owned(),
             })
             .is_none()
@@ -153,14 +154,14 @@ mod tests {
 
     #[test]
     fn unchanged_ports_and_unrelated_supervisor_facts_are_silent() {
-        let unchanged = supervisor::SupervisorEvent::McpPortRollover {
+        let unchanged = sidecar_supervision::SupervisorEvent::McpPortRollover {
             previous_port: 43_219,
             active_port: 43_219,
         };
 
         assert!(mcp_port_rollover_notice(&unchanged).is_none());
         assert!(
-            mcp_port_rollover_notice(&supervisor::SupervisorEvent::Ready {
+            mcp_port_rollover_notice(&sidecar_supervision::SupervisorEvent::Ready {
                 service: "mcp".to_owned(),
                 port: 43_219,
             })

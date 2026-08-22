@@ -20,6 +20,30 @@ try {
   for (const name of ["migration_probes.rs", "mod.rs", "prelude.rs"]) {
     await copyFile(join(scratch, "entities", name), join(entityTarget, name));
   }
+  const executionEntityTarget = join(
+    studioRoot,
+    "src-tauri/src/entities/execution",
+  );
+  await mkdir(executionEntityTarget, { recursive: true });
+  for (const name of ["graph_run.rs", "launch_claim.rs"]) {
+    await copyFile(
+      join(scratch, "execution-entities", name),
+      join(executionEntityTarget, name),
+    );
+  }
+  const terminalEntityTarget = join(
+    studioRoot,
+    "src-tauri/src/entities/terminals",
+  );
+  await mkdir(terminalEntityTarget, { recursive: true });
+  await copyFile(
+    join(scratch, "terminal-entities/agent_run.rs"),
+    join(studioRoot, "src-tauri/src/entities/runs/agent_run.rs"),
+  );
+  await copyFile(
+    join(scratch, "terminal-entities/session.rs"),
+    join(terminalEntityTarget, "session.rs"),
+  );
   for (const name of ["schema.graphql", "taurpc.ts", "operations.ts"]) {
     await copyFile(join(scratch, name), join(frontendTarget, name));
   }
@@ -60,6 +84,20 @@ try {
   for (const name of ["documentRegistry.ts", "documentSave.ts"]) {
     await copyFile(join(scratch, "documents", name), join(documentTarget, name));
   }
+  const terminalTarget = join(
+    studioRoot,
+    "src/features/agents/terminal/generated",
+  );
+  await mkdir(terminalTarget, { recursive: true });
+  for (const name of ["terminalSessions.ts", "viewerLeases.ts"]) {
+    await copyFile(join(scratch, "terminals", name), join(terminalTarget, name));
+  }
+  const executionTarget = join(studioRoot, "src/features/execution/generated");
+  await mkdir(executionTarget, { recursive: true });
+  await copyFile(
+    join(scratch, "execution/graphRuns.ts"),
+    join(executionTarget, "graphRuns.ts"),
+  );
   console.log("generated GraphQL foundation entities, SDL, TauRPC, and operations");
 } finally {
   await rm(scratch, { recursive: true, force: true });

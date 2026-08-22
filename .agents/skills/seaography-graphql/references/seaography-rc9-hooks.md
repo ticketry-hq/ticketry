@@ -23,8 +23,9 @@ version-specific. Re-audit upstream source when either dependency changes.
 - rc.9 `MultiLifecycleHooks` does not forward
   `before_active_model_save`. Use one Ticketry-owned composite hook that
   dispatches it explicitly, or fix/pin the framework before composing hooks.
-- Mutation registration is all-or-nothing per entity. There is no supported
-  create/update/delete registration switch in rc.9.
+- Upstream mutation registration is all-or-nothing per entity. Ticketry's
+  `graphql_foundation::generated_mutations` module selectively assembles the
+  same public rc.9 field builders without changing their resolver behavior.
 - Generated mutation inputs are flat columns. Relation reads are generated;
   nested/aggregate relation writes are not.
 

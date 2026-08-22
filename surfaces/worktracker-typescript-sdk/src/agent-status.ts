@@ -1,6 +1,6 @@
 import type { FetchAPI } from "./generated/index.js";
 import type { State } from "./generated/models/State.js";
-import { createWorkTrackerClient } from "./client.js";
+import { createAuthenticatedFetch } from "./client.js";
 
 export type RawLifecycleState =
   | "starting"
@@ -226,19 +226,8 @@ export interface AgentStatusClientOptions {
   fetch?: FetchAPI;
 }
 
-export interface LaunchedAgent {
-  target_id: string;
-  agent: string;
-  agent_run_id: string;
-}
-
-export interface LaunchAgentRequest {
-  issueId: string;
-}
-
 export interface AgentStatusClient {
   getAgentStatus(request: GetAgentStatusRequest): Promise<AgentStatusSnapshot>;
-  launchAgent(request: LaunchAgentRequest): Promise<LaunchedAgent>;
   retryAutomationAttempt(request: {
     attemptId: string;
   }): Promise<AutomationAttemptRecord>;
@@ -247,25 +236,24 @@ export interface AgentStatusClient {
 export function createAgentStatusClient(
   options: AgentStatusClientOptions,
 ): AgentStatusClient {
-  const client = createWorkTrackerClient(options);
+  const fetchApi = createAuthenticatedFetch(options);
+  const base = options.baseUrl.replace(/\/+$/, "");
+  const json = async <T>(path: string, init?: RequestInit): Promise<T> => {
+    const response = await fetchApi(`${base}${path}`, init);
+    return await response.json() as T;
+  };
 
   return {
     async getAgentStatus({ projectId, taskId, signal }) {
-      return (await client.runs.runsAgentStatusRetrieve(
-        { projectId, taskId },
-        signal ? { signal } : undefined,
-      )) as AgentStatusSnapshot;
-    },
-    async launchAgent({ issueId }) {
-      return (await client.execution.workItemsLaunchAgentCreate({
-        issueId,
-        agentOverride: {},
-      })) as LaunchedAgent;
+      const query = new URLSearchParams({ project_id: projectId });
+      if (taskId) query.set("task_id", taskId);
+      return json<AgentStatusSnapshot>(`/runs/agent-status?${query}`, { signal });
     },
     async retryAutomationAttempt({ attemptId }) {
-      return (await client.runs.automationAttemptsRetryCreate({
-        attemptId,
-      })) as AutomationAttemptRecord;
+      return json<AutomationAttemptRecord>(
+        `/automation-attempts/${encodeURIComponent(attemptId)}/retry`,
+        { method: "POST" },
+      );
     },
   };
 }

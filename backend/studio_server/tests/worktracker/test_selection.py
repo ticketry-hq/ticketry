@@ -52,23 +52,3 @@ def test_no_configuration_selected_preserves_http_error_contract():
             "message": "No profile selected.",
         }
     }
-
-
-def test_terminal_profile_index_uses_settings_selector(tmp_path, monkeypatch):
-    from apps.terminals import prompt_builder
-
-    config_dir = tmp_path / "settings"
-    config_file = config_dir / "profiles.json"
-    monkeypatch.setattr(config_module, "CONFIG_DIR", config_dir)
-    monkeypatch.setattr(config_module, "CONFIG_FILE", config_file)
-    config_dir.mkdir()
-    config_file.write_text(
-        json.dumps(
-            {
-                "recent_profile_index": 0,
-                "profiles": [{"name": "First", "workspace_slug": "meml"}],
-            }
-        )
-    )
-
-    assert prompt_builder._resolve_profile_index() == 0

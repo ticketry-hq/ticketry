@@ -69,10 +69,15 @@ function run(overrides: Record<string, unknown> = {}) {
     module_id: "module-1",
     agent: "codex",
     scope: "task",
+    launch_state: "Implement",
+    launch_model: "gpt-5",
     started_at: "2026-08-16T09:00:00+00:00",
     state: "working",
+    effective_state: "working",
     updated_at: "2026-08-16T09:00:00+00:00",
     provider_session_id: null,
+    output_sequence: 0,
+    last_output_at: "2026-08-16T09:00:00+00:00",
     ...overrides,
   };
 }
@@ -196,6 +201,7 @@ describe("snapshot reconciliation", () => {
 
   it("prefers a terminal outcome over a stale live state", async () => {
     const transport = harness();
+    const invalidate = vi.spyOn(queryClient, "invalidateQueries");
     statusStreamFeed.start(PROJECT, { createProxy: transport.createProxy });
     await vi.advanceTimersByTimeAsync(0);
     transport.send(snapshot(10, [run()]));
@@ -214,6 +220,40 @@ describe("snapshot reconciliation", () => {
     );
 
     expect(useAgentStatusStore.getState().runs["run-1"].state).toBe("exited");
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: ["terminal-sessions"],
+      refetchType: "active",
+    });
+  });
+
+  it("applies a changed-output projection without waiting for a snapshot", async () => {
+    const transport = harness();
+    statusStreamFeed.start(PROJECT, { createProxy: transport.createProxy });
+    await vi.advanceTimersByTimeAsync(0);
+    transport.send(snapshot(10, [run()]));
+
+    transport.send(
+      event(
+        11,
+        "agent_run.terminal_activity",
+        {
+          type: "terminal_activity",
+          at: "2026-08-16T10:01:00+00:00",
+          run: run({
+            output_sequence: 1,
+            last_output_at: "2026-08-16T10:01:00+00:00",
+            updated_at: "2026-08-16T10:01:00+00:00",
+          }),
+        },
+        { subject_kind: "agent_run", agent_run_id: "run-1" },
+      ),
+    );
+
+    expect(useAgentStatusStore.getState().runs["run-1"]).toMatchObject({
+      output_sequence: 1,
+      last_output_at: "2026-08-16T10:01:00+00:00",
+      effective_state: "working",
+    });
   });
 
   it("restores authoritative Automation Attempt lineage from the snapshot", async () => {
@@ -466,6 +506,7 @@ describe("connection lifecycle", () => {
       queryKeys.workflows.catalog(PROJECT),
       queryKeys.states.byProject(PROJECT),
       ["documents", "registry"],
+      ["terminal-sessions"],
       queryKeys.worktrees.all,
     ]);
     // Only now is the server's high-water cursor trusted as a baseline.

@@ -5,6 +5,8 @@
 //! the native surface is only a transient viewer. Other builds expose the same
 //! command surface as an unavailable implementation.
 
+pub mod chords;
+pub mod focus_trace;
 pub mod frames;
 mod preparation;
 pub mod scroll;
@@ -54,10 +56,12 @@ mod imp {
     }
 
     #[tauri::command]
-    pub fn native_terminal_attach(
+    pub(crate) fn native_terminal_attach(
         _window: tauri::WebviewWindow,
         _state: tauri::State<'_, NativeTerminalState>,
+        _launch: tauri::State<'_, crate::desktop::launch_runtime::DesktopLaunchRuntime>,
         _run_id: String,
+        _viewer_id: String,
         _frame: NativeTerminalFrame,
     ) -> Result<NativeTerminalStatus, String> {
         Err("native libghostty support is unavailable in this build".to_owned())

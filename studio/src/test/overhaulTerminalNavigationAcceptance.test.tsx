@@ -284,7 +284,12 @@ describe("overhaul acceptance — terminals", () => {
     fireEvent.click(resume);
 
     await waitFor(() => {
-      expect(terminalApi.resumeTerminal).toHaveBeenCalledWith("run-old");
+      expect(terminalApi.resumeTerminal).toHaveBeenCalledWith({
+        source: resumableSession,
+        projectId: "project-1",
+        moduleId: "module-1",
+        taskId: "story-1",
+      });
       expect(Object.values(useTerminalStore.getState().sessions)).toContainEqual(
         expect.objectContaining({ agentRunId: "run-new" }),
       );

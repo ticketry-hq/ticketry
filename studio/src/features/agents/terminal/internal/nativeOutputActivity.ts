@@ -1,3 +1,4 @@
+import { studioRuntime } from "../../../../runtime";
 import { authenticatedHostFetch } from "../../../../shared/api/authenticatedHostFetch";
 
 /**
@@ -40,9 +41,10 @@ export function reportNativeViewerAttached(
   void client.report(agentRunId).catch(() => {});
 }
 
-/** Desktop's companion to the viewer lease on the same authenticated surface. */
+/** Rust reconciliation owns output observation after the terminal cutover. */
 export const desktopOutputActivity: OutputActivityClient = {
   async report(agentRunId) {
+    if (studioRuntime().platform === "desktop") return;
     await authenticatedHostFetch("/api/terminals/viewers/output", {
       method: "POST",
       body: JSON.stringify({ agent_run_id: agentRunId }),

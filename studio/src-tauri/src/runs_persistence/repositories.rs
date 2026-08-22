@@ -26,9 +26,10 @@ impl AgentRunRepository {
 
     pub async fn find(&self, id: &str) -> Result<Option<AgentRunRecord>, RunsPersistenceError> {
         Ok(agent_run_entity::Entity::find_by_id(id)
+            .filter(agent_run_entity::Column::Agent.is_not_null())
             .one(&self.0)
             .await?
-            .map(agent_run))
+            .and_then(agent_run))
     }
 }
 
@@ -333,8 +334,8 @@ impl LaunchEffectRepository {
     }
 }
 
-fn agent_run(row: agent_run_entity::Model) -> AgentRunRecord {
-    AgentRunRecord {
+fn agent_run(row: agent_run_entity::Model) -> Option<AgentRunRecord> {
+    Some(AgentRunRecord {
         id: row.id,
         issue_id: row.issue_id,
         ticket_seq: row.ticket_seq,
@@ -353,7 +354,9 @@ fn agent_run(row: agent_run_entity::Model) -> AgentRunRecord {
         design_dir: row.design_dir,
         resumed_from: row.resumed_from,
         scope: row.scope,
-    }
+        launch_state: row.launch_state,
+        launch_model: row.launch_model,
+    })
 }
 
 pub(crate) fn automation_attempt(row: automation_attempt_entity::Model) -> AutomationAttemptRecord {

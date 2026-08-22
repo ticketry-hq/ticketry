@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SelectedTicketContent } from "../app/shell/ticket-workspace/selected-ticket/SelectedTicketContent";
 import { useStudioStore } from "../features/projects/store";
 import { useAgentStatusStore } from "../features/agents/status";
-import { dispatchStatusFrame } from "../features/agents/status/testing/legacyStatusFrameTestDriver";
+import { statusStreamFeed } from "../features/agents/status/stream/statusStreamFeed";
 import {
   useTerminalStore,
   type SessionMeta,
@@ -23,6 +23,31 @@ const documentRegistry = vi.hoisted(() => ({
   listTaskDocuments: vi.fn(),
   listScratchDocuments: vi.fn(),
 }));
+
+function statusTransport() {
+  let deliver: ((encoded: string) => void) | null = null;
+  const proxy = {
+    graphql_execute: vi.fn(async () => "{}"),
+    graphql_subscribe: vi.fn(async (
+      _id: string,
+      _request: string,
+      onEvent: (value: string) => void,
+    ) => {
+      deliver = onEvent;
+      return '{"type":"accepted"}';
+    }),
+    graphql_unsubscribe: vi.fn(async () => true),
+  };
+  return {
+    createProxy: () => proxy as never,
+    send(frame: unknown) {
+      deliver?.(JSON.stringify({
+        type: "next",
+        payload: { data: { run_status_stream: frame } },
+      }));
+    },
+  };
+}
 
 vi.mock("../features/documents", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../features/documents")>()),
@@ -109,9 +134,13 @@ describe("overhaul acceptance — terminals", () => {
     documentRegistry.listScratchDocuments.mockResolvedValue([]);
     terminalApi.getTerminals.mockResolvedValue([]);
     terminalApi.listResumableTerminals.mockResolvedValue([]);
+    statusStreamFeed.resetCursors("project-1");
   });
 
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    statusStreamFeed.stop();
+    vi.unstubAllGlobals();
+  });
 
   it("[overhaul-135] opens a document tab discovered by the backend watcher", async () => {
     render(
@@ -127,14 +156,33 @@ describe("overhaul acceptance — terminals", () => {
     );
     await waitFor(() => expect(documentRegistry.listTaskDocuments).toHaveBeenCalled());
 
-    act(() => dispatchStatusFrame({
-      v: 1,
-      type: "document",
-      at: "2026-08-14T12:00:00Z",
-      task_id: "story-1",
-      module_id: "module-1",
-      event: "created",
-      doc: { id: "spec", rel_path: "SPEC.html", label: "Spec" },
+    documentRegistry.listTaskDocuments.mockResolvedValue([
+      { id: "spec", rel_path: "SPEC.html", label: "Spec" },
+    ]);
+    const feed = statusTransport();
+    statusStreamFeed.start("project-1", { createProxy: feed.createProxy });
+    await Promise.resolve();
+    act(() => feed.send({
+      __typename: "RunStatusEvent",
+      cursor: 1,
+      event_id: "document-created-1",
+      project_id: "project-1",
+      event_kind: "document.changed",
+      payload_version: 1,
+      subject_kind: "design_document",
+      subject_id: "spec",
+      agent_run_id: null,
+      automation_attempt_id: null,
+      work_item_id: "story-1",
+      payload: {
+        documentId: "spec",
+        scope: "task",
+        ownerId: "story-1",
+        moduleId: "module-1",
+        relPath: "SPEC.html",
+        changeKind: "created",
+      },
+      committed_at: "2026-08-14T12:00:00Z",
     }));
 
     expect(await screen.findByRole("tab", { name: "Spec" })).toHaveAttribute(

@@ -164,6 +164,7 @@ describe("native viewer attachment acceptance", () => {
     await waitFor(() => {
       expect(tauri.invoke).toHaveBeenCalledWith("native_terminal_attach", {
         runId: "run-1",
+        viewerId: expect.any(String),
         frame: {
           x: 0,
           y: 0,

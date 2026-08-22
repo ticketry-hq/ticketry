@@ -1,12 +1,13 @@
 use sea_orm::DbErr;
 use serde::{Deserialize, Serialize};
 
-pub const DECISION_VERSION: i32 = 1;
+pub const DECISION_VERSION: i32 = 2;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CallerScope {
     Interactive,
+    RunNow,
     AutoStart,
     Subtree,
     /// One explicitly requested retry of a failed Automation Attempt. The
@@ -19,6 +20,7 @@ impl CallerScope {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Interactive => "interactive",
+            Self::RunNow => "run_now",
             Self::AutoStart => "auto_start",
             Self::Subtree => "subtree",
             Self::Retry => "retry",
@@ -26,7 +28,7 @@ impl CallerScope {
     }
 
     pub fn unattended(self) -> bool {
-        !matches!(self, Self::Interactive)
+        !matches!(self, Self::Interactive | Self::RunNow)
     }
 }
 
@@ -64,6 +66,8 @@ pub struct LaunchPolicyDecision {
     pub project_id: String,
     pub issue_type_id: String,
     pub state_id: String,
+    #[serde(default)]
+    pub state_name: Option<String>,
     pub prompt: String,
     pub required_skills: Vec<String>,
     pub provider: String,

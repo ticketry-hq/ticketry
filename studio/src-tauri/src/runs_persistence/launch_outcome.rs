@@ -5,6 +5,7 @@
 //! Automation Attempt and Agent Run, so no crash can leave the effect and its
 //! projections disagreeing about what happened.
 
+use async_trait::async_trait;
 use chrono::Utc;
 use sea_orm::{
     sea_query::Expr, ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter, TransactionTrait,
@@ -53,12 +54,55 @@ pub struct RecordedLaunch {
     pub settled: bool,
 }
 
+/// A model row that must settle in the same transaction as an applied launch.
+#[async_trait]
+pub(crate) trait LaunchSettlementParticipant: Send + Sync {
+    async fn settle_applied_in(
+        &self,
+        transaction: &DatabaseTransaction,
+        effect: &LaunchEffectRecord,
+        settled_at: &str,
+        runtime_evidence: &Value,
+    ) -> Result<(), RunsPersistenceError>;
+}
+
+struct NoLaunchSettlementParticipant;
+
+#[async_trait]
+impl LaunchSettlementParticipant for NoLaunchSettlementParticipant {
+    async fn settle_applied_in(
+        &self,
+        _transaction: &DatabaseTransaction,
+        _effect: &LaunchEffectRecord,
+        _settled_at: &str,
+        _runtime_evidence: &Value,
+    ) -> Result<(), RunsPersistenceError> {
+        Ok(())
+    }
+}
+
 impl EffectService {
     pub async fn record_outcome(
         &self,
         effect_id: &str,
         lease_owner: &str,
         outcome: LaunchOutcome,
+    ) -> Result<RecordedLaunch, RunsPersistenceError> {
+        self.record_outcome_with(
+            effect_id,
+            lease_owner,
+            outcome,
+            &NoLaunchSettlementParticipant,
+        )
+        .await
+    }
+
+    pub(crate) async fn record_outcome_with(
+        &self,
+        effect_id: &str,
+        lease_owner: &str,
+        outcome: LaunchOutcome,
+        participant: &dyn LaunchSettlementParticipant,
     ) -> Result<RecordedLaunch, RunsPersistenceError> {
         validate_owner(lease_owner)?;
         validate_outcome(&outcome)?;
@@ -81,15 +125,25 @@ impl EffectService {
         let attempt = match &outcome {
             LaunchOutcome::Applied { runtime_evidence } => {
                 apply(&transaction, &effect_id, runtime_evidence, &settled_at).await?;
-                self.project_attempt(
-                    &transaction,
-                    &current,
-                    AttemptOutcome::Succeeded {
-                        agent: current.provider.clone(),
-                        agent_run_id: current.agent_run_id.clone(),
-                    },
-                )
-                .await?
+                participant
+                    .settle_applied_in(&transaction, &current, &settled_at, runtime_evidence)
+                    .await?;
+                if current.automation_attempt_id.is_some() {
+                    let agent = current.provider.clone().ok_or_else(|| {
+                        invalid("An automation launch effect must bind a provider.")
+                    })?;
+                    self.project_attempt(
+                        &transaction,
+                        &current,
+                        AttemptOutcome::Succeeded {
+                            agent,
+                            agent_run_id: current.agent_run_id.clone(),
+                        },
+                    )
+                    .await?
+                } else {
+                    None
+                }
             }
             LaunchOutcome::Failed {
                 code,

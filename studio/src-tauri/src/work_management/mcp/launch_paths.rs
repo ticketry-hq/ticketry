@@ -61,10 +61,7 @@ pub(super) async fn resolve(
         );
     };
     match state.service.resolve(request).await {
-        Ok(view) => (
-            StatusCode::OK,
-            Json(json!({ "ok": true, "paths": view })),
-        ),
+        Ok(view) => (StatusCode::OK, Json(json!({ "ok": true, "paths": view }))),
         Err(error) => (
             StatusCode::BAD_REQUEST,
             Json(json!({"ok": false, "code": error.code_str()})),

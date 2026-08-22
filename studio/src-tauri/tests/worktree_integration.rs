@@ -396,9 +396,8 @@ impl Fixture {
             "resourceKind": "worktree",
         });
         let canonical = canonical_json(&intent);
-        let evidence = checkpoint.map(|checkpoint| {
-            serde_json::json!({ "checkpoint": checkpoint }).to_string()
-        });
+        let evidence = checkpoint
+            .map(|checkpoint| serde_json::json!({ "checkpoint": checkpoint }).to_string());
         self.database()
             .await
             .execute_raw(Statement::from_sql_and_values(
@@ -537,6 +536,7 @@ async fn fixture() -> Fixture {
                 to_state_id char(32) NOT NULL, from_group varchar(32) NOT NULL,
                 to_group varchar(32) NOT NULL, work_item_revision bigint NOT NULL,
                 workflow_revision integer NOT NULL, destination_auto_start bool NOT NULL,
+                run_now_decision_id char(32),
                 committed_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
             CREATE TABLE runs_status_events (
@@ -668,9 +668,15 @@ async fn a_base_that_is_not_checked_out_is_moved_to_the_merged_tip() {
         DeliveryOutcome::Integrated
     );
 
-    assert_eq!(git(&["rev-parse", "main"], &fixture.repository_root), landed);
     assert_eq!(
-        git(&["rev-parse", "--abbrev-ref", "HEAD"], &fixture.repository_root),
+        git(&["rev-parse", "main"], &fixture.repository_root),
+        landed
+    );
+    assert_eq!(
+        git(
+            &["rev-parse", "--abbrev-ref", "HEAD"],
+            &fixture.repository_root
+        ),
         "elsewhere",
         "the primary checkout is left exactly where it was"
     );
@@ -690,7 +696,11 @@ async fn completing_a_child_lands_nothing() {
     assert!(fixture.deliver().await.is_empty());
     assert!(checkout.exists());
     assert_eq!(fixture.rows().await.len(), 1);
-    assert!(fixture.operations().await.iter().all(|operation| operation.kind != "worktree_integrate"));
+    assert!(fixture
+        .operations()
+        .await
+        .iter()
+        .all(|operation| operation.kind != "worktree_integrate"));
 }
 
 #[tokio::test]
@@ -779,7 +789,10 @@ async fn a_dirty_checkout_refuses_integration_without_losing_work() {
         "uncommitted work is untouched"
     );
     assert_eq!(
-        git(&["rev-parse", "wt/CODIN-881-parent-story"], &fixture.repository_root),
+        git(
+            &["rev-parse", "wt/CODIN-881-parent-story"],
+            &fixture.repository_root
+        ),
         committed,
         "nothing was merged"
     );
@@ -858,7 +871,12 @@ async fn a_detached_base_is_refused_rather_than_turned_into_a_ref() {
 async fn diverged(fixture: &Fixture) -> PathBuf {
     let checkout = fixture.create_worktree().await;
     commit(&checkout, "README.md", "task side\n", "task edit");
-    commit(&fixture.repository_root, "README.md", "base side\n", "base edit");
+    commit(
+        &fixture.repository_root,
+        "README.md",
+        "base side\n",
+        "base edit",
+    );
     checkout
 }
 
@@ -942,7 +960,10 @@ async fn a_committed_resolution_lands_on_the_next_completion() {
         }),
         "the first completion keeps its durable outcome: {outcomes:?}"
     );
-    assert_eq!(git(&["rev-parse", "main"], &fixture.repository_root), resolved);
+    assert_eq!(
+        git(&["rev-parse", "main"], &fixture.repository_root),
+        resolved
+    );
     assert!(!checkout.exists());
     assert!(fixture.rows().await.is_empty());
 }
@@ -967,11 +988,16 @@ async fn merged_but_unsettled(fixture: &Fixture) -> (PathBuf, String, String) {
 async fn a_merge_that_already_happened_is_never_merged_again() {
     let mut fixture = fixture().await;
     let (checkout, landed, occurrence) = merged_but_unsettled(&fixture).await;
-    let operation = fixture.prepared_integration(&occurrence, "main", None).await;
+    let operation = fixture
+        .prepared_integration(&occurrence, "main", None)
+        .await;
 
     fixture.restart().await;
 
-    assert_eq!(git(&["rev-parse", "main"], &fixture.repository_root), landed);
+    assert_eq!(
+        git(&["rev-parse", "main"], &fixture.repository_root),
+        landed
+    );
     assert!(!checkout.exists());
     assert!(fixture.rows().await.is_empty());
     let settled = fixture.integration().await;
@@ -1003,12 +1029,20 @@ async fn an_interrupted_base_advance_is_completed_rather_than_repeated() {
     let mut fixture = fixture().await;
     let (checkout, landed, occurrence) = merged_but_unsettled(&fixture).await;
     // The crash window: the base already points at the merged tip.
-    git(&["merge", "--ff-only", "wt/CODIN-881-parent-story"], &fixture.repository_root);
-    fixture.prepared_integration(&occurrence, "main", None).await;
+    git(
+        &["merge", "--ff-only", "wt/CODIN-881-parent-story"],
+        &fixture.repository_root,
+    );
+    fixture
+        .prepared_integration(&occurrence, "main", None)
+        .await;
 
     fixture.restart().await;
 
-    assert_eq!(git(&["rev-parse", "main"], &fixture.repository_root), landed);
+    assert_eq!(
+        git(&["rev-parse", "main"], &fixture.repository_root),
+        landed
+    );
     assert!(!checkout.exists());
     assert!(!branches(&fixture.repository_root)
         .iter()
@@ -1021,16 +1055,24 @@ async fn an_interrupted_base_advance_is_completed_rather_than_repeated() {
 async fn an_interrupted_checkout_removal_is_completed() {
     let mut fixture = fixture().await;
     let (checkout, landed, occurrence) = merged_but_unsettled(&fixture).await;
-    git(&["merge", "--ff-only", "wt/CODIN-881-parent-story"], &fixture.repository_root);
+    git(
+        &["merge", "--ff-only", "wt/CODIN-881-parent-story"],
+        &fixture.repository_root,
+    );
     git(
         &["worktree", "remove", &checkout.display().to_string()],
         &fixture.repository_root,
     );
-    fixture.prepared_integration(&occurrence, "main", None).await;
+    fixture
+        .prepared_integration(&occurrence, "main", None)
+        .await;
 
     fixture.restart().await;
 
-    assert_eq!(git(&["rev-parse", "main"], &fixture.repository_root), landed);
+    assert_eq!(
+        git(&["rev-parse", "main"], &fixture.repository_root),
+        landed
+    );
     assert!(!branches(&fixture.repository_root)
         .iter()
         .any(|branch| branch.starts_with("wt/")));
@@ -1042,12 +1084,18 @@ async fn an_interrupted_checkout_removal_is_completed() {
 async fn a_deleted_branch_is_completed_only_from_its_recorded_evidence() {
     let mut fixture = fixture().await;
     let (checkout, landed, occurrence) = merged_but_unsettled(&fixture).await;
-    git(&["merge", "--ff-only", "wt/CODIN-881-parent-story"], &fixture.repository_root);
+    git(
+        &["merge", "--ff-only", "wt/CODIN-881-parent-story"],
+        &fixture.repository_root,
+    );
     git(
         &["worktree", "remove", &checkout.display().to_string()],
         &fixture.repository_root,
     );
-    git(&["branch", "-d", "wt/CODIN-881-parent-story"], &fixture.repository_root);
+    git(
+        &["branch", "-d", "wt/CODIN-881-parent-story"],
+        &fixture.repository_root,
+    );
     // The evidence the executor records before it deletes the branch is the
     // only thing that can prove what landed.
     fixture
@@ -1083,11 +1131,21 @@ async fn a_missing_branch_and_row_are_never_read_as_a_successful_landing() {
     // Everything the landing would have removed is gone, but the base never
     // advanced and nothing recorded what the branch contained.
     git(
-        &["worktree", "remove", "--force", &checkout.display().to_string()],
+        &[
+            "worktree",
+            "remove",
+            "--force",
+            &checkout.display().to_string(),
+        ],
         &fixture.repository_root,
     );
-    git(&["branch", "-D", "wt/CODIN-881-parent-story"], &fixture.repository_root);
-    fixture.prepared_integration(&occurrence, "main", None).await;
+    git(
+        &["branch", "-D", "wt/CODIN-881-parent-story"],
+        &fixture.repository_root,
+    );
+    fixture
+        .prepared_integration(&occurrence, "main", None)
+        .await;
 
     fixture.restart().await;
 
@@ -1123,7 +1181,10 @@ async fn a_settled_landing_is_untouched_by_a_second_restart() {
     fixture.restart().await;
     fixture.restart().await;
 
-    assert_eq!(git(&["rev-parse", "main"], &fixture.repository_root), landed);
+    assert_eq!(
+        git(&["rev-parse", "main"], &fixture.repository_root),
+        landed
+    );
     assert!(fixture.rows().await.is_empty());
     assert_eq!(fixture.integration().await.state, "applied");
     assert_eq!(
@@ -1138,7 +1199,11 @@ async fn a_settled_landing_is_untouched_by_a_second_restart() {
     );
     assert!(
         !git_status(
-            &["rev-parse", "--verify", "refs/heads/wt/CODIN-881-parent-story"],
+            &[
+                "rev-parse",
+                "--verify",
+                "refs/heads/wt/CODIN-881-parent-story"
+            ],
             &fixture.repository_root
         ),
         "the task branch stays deleted"

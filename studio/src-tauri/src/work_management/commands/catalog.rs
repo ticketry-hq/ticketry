@@ -19,7 +19,6 @@ use crate::work_management::entities::{
 const REVIEWED_DEFAULTS: &str =
     include_str!("../../../../../backend/worktracker/reviewed_defaults.json");
 const GROUPS: &[&str] = &["backlog", "unstarted", "started", "completed", "cancelled"];
-const LEVELS: &[&str] = &["module", "task"];
 const PALETTE: &[&str] = &[
     "#8A3FFC", "#33B1FF", "#007D79", "#FF7EB6", "#FA4D56", "#FFF1F1", "#6FDC8C", "#4589FF",
     "#D12771", "#D2A106", "#08BDBA", "#BAE6FF", "#BA4E00", "#D4BBFF",
@@ -38,14 +37,6 @@ pub struct CreateState {
     pub project_id: String,
     pub name: String,
     pub group: String,
-    pub color: Option<String>,
-}
-
-#[derive(Debug, Clone)]
-pub struct CreateIssueType {
-    pub project_id: String,
-    pub name: String,
-    pub level: String,
     pub color: Option<String>,
 }
 
@@ -390,52 +381,6 @@ pub async fn create_state(
     Ok(id)
 }
 
-pub async fn create_issue_type(
-    database: &DatabaseConnection,
-    input: CreateIssueType,
-) -> Result<String, CommandError> {
-    let project_id = require_project(database, &input.project_id).await?;
-    let name = valid_text(&input.name, "name", 255)?;
-    if !LEVELS.contains(&input.level.as_str()) {
-        return Err(CommandError::validation(format!(
-            "Unknown level '{}'.",
-            input.level
-        )));
-    }
-    let existing = issue_type::Entity::find()
-        .filter(issue_type::Column::ProjectId.eq(&project_id))
-        .all(database)
-        .await?;
-    if existing.iter().any(|row| row.name == name) {
-        return Err(CommandError::Conflict(format!(
-            "Issue type '{name}' already exists."
-        )));
-    }
-    let max_order = existing
-        .iter()
-        .filter(|row| row.level == input.level)
-        .map(|row| row.sort_order)
-        .max();
-    let id = new_database_uuid();
-    let now = super::timestamp::now();
-    issue_type::ActiveModel {
-        id: Set(id.clone()),
-        project_id: Set(project_id),
-        name: Set(name),
-        level: Set(input.level),
-        color: Set(input.color.unwrap_or_default()),
-        sort_order: Set(max_order.map_or(0, |value| value + 1)),
-        start_state_id: Set(None),
-        workflow_revision: Set(0),
-        is_pathfind: Set(false),
-        created_at: Set(now),
-        updated_at: Set(now),
-    }
-    .insert(database)
-    .await?;
-    Ok(id)
-}
-
 pub async fn update_issue_type(
     database: &DatabaseConnection,
     input: UpdateIssueType,
@@ -718,21 +663,6 @@ async fn reorder_catalogue(
         facts.wake();
     }
     Ok(())
-}
-
-async fn require_project(
-    database: &DatabaseConnection,
-    value: &str,
-) -> Result<String, CommandError> {
-    let id = database_uuid(value, "project_id")?;
-    if project::Entity::find_by_id(&id)
-        .one(database)
-        .await?
-        .is_none()
-    {
-        return Err(CommandError::NotFound("Project not found.".to_owned()));
-    }
-    Ok(id)
 }
 
 fn valid_text(value: &str, field: &'static str, max: usize) -> Result<String, CommandError> {

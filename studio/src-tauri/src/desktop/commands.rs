@@ -5,6 +5,7 @@
 use std::path::PathBuf;
 use tauri_plugin_dialog::DialogExt;
 
+use crate::data_directory::established_data_directory;
 use crate::desktop::folder_selection::absolute_folder_path;
 use crate::desktop::frontend_log::frontend_log_line;
 use crate::desktop::launch_runtime::DesktopLaunchRuntime;
@@ -15,9 +16,8 @@ use crate::desktop::runtime_configuration::{
 };
 use crate::desktop::service_health::ServiceHealth;
 use crate::desktop::service_state::DesktopServiceState;
-use crate::ownership::established_data_directory;
-use crate::supervisor::{self, SupervisorError};
-use crate::{discovery, work_management};
+use crate::sidecar_supervision::{self, SupervisorError};
+use crate::{tool_discovery as discovery, work_management};
 
 #[tauri::command]
 pub(crate) fn desktop_runtime_configuration(
@@ -82,7 +82,7 @@ pub(crate) fn desktop_retry_services(
     application: tauri::AppHandle,
     state: tauri::State<'_, DesktopServiceState>,
 ) -> Result<(), String> {
-    let fallback_log_path = supervisor::sidecar_log_path(
+    let fallback_log_path = sidecar_supervision::sidecar_log_path(
         established_data_directory().map_err(|error| error.to_string())?,
     );
     let mut supervisor_guard = state.supervisor.lock().expect("supervisor lock poisoned");
@@ -105,10 +105,10 @@ pub(crate) fn desktop_retry_services(
                     .lock()
                     .expect("runtime configuration lock poisoned") =
                     Some(sidecar_runtime_configuration(port, supervisor.credential()));
-                if let Err(message) = ensure_in_process_mcp(&state, supervisor) {
+                if let Err(message) = ensure_in_process_mcp(&application, &state, supervisor) {
                     result = Err(SupervisorError {
                         service: "mcp".to_owned(),
-                        kind: supervisor::FailureKind::Crash,
+                        kind: sidecar_supervision::FailureKind::Crash,
                         message,
                     });
                 }
@@ -118,7 +118,7 @@ pub(crate) fn desktop_retry_services(
         None => (
             Err(SupervisorError {
                 service: "backend".to_owned(),
-                kind: supervisor::FailureKind::Crash,
+                kind: sidecar_supervision::FailureKind::Crash,
                 message: "desktop service supervision is unavailable".to_owned(),
             }),
             fallback_log_path,

@@ -14,10 +14,8 @@ from worktracker.rest.views import (
 BACKEND_ROOT = Path(__file__).parents[2]
 APPLICATION_OPERATION_MODULES = (
     "apps/documents/api.py",
-    "apps/execution/api.py",
     "apps/runs/api.py",
     "apps/settings_store/api.py",
-    "apps/terminals/api.py",
     "apps/worktrees/api.py",
 )
 

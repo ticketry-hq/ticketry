@@ -701,7 +701,10 @@ async fn concurrent_discards_of_one_checkout_converge_on_one_removal() {
 
     for response in [&first, &second] {
         assert_eq!(response["errors"], serde_json::Value::Null, "{response}");
-        assert_eq!(response["data"]["worktree_discard"]["status"]["kind"], "none");
+        assert_eq!(
+            response["data"]["worktree_discard"]["status"]["kind"],
+            "none"
+        );
     }
     assert!(fixture.rows().await.is_empty());
     assert!(!fixture.parent_checkout().exists());

@@ -28,7 +28,8 @@ pub async fn open() -> (tempfile::TempDir, DatabaseConnection) {
             model TEXT, reasoning TEXT,
             status TEXT NOT NULL, started_at TEXT NOT NULL, ended_at TEXT, exit_code INTEGER,
             error TEXT, cwd TEXT, provider_session_id TEXT, lifecycle_state TEXT,
-            lifecycle_updated_at TEXT, design_dir TEXT, resumed_from TEXT, scope TEXT NOT NULL
+            lifecycle_updated_at TEXT, design_dir TEXT, resumed_from TEXT, scope TEXT NOT NULL,
+            launch_state TEXT, launch_model TEXT
         );
         CREATE TABLE runs_status_events (
             cursor INTEGER PRIMARY KEY AUTOINCREMENT, event_id TEXT NOT NULL UNIQUE,
@@ -36,6 +37,14 @@ pub async fn open() -> (tempfile::TempDir, DatabaseConnection) {
             subject_kind TEXT NOT NULL, subject_id TEXT NOT NULL, agent_run_id TEXT,
             automation_attempt_id TEXT, work_item_id TEXT, payload TEXT NOT NULL,
             committed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE agent_terminal_sessions (
+            agent_run_id TEXT PRIMARY KEY, tmux_session_name TEXT NOT NULL,
+            task_id TEXT NOT NULL, module_id TEXT NOT NULL, project_id TEXT NOT NULL,
+            created_at TEXT NOT NULL, terminated_at TEXT, scope TEXT NOT NULL,
+            doc_rel_path TEXT, runtime_cleanup_pending BOOL NOT NULL DEFAULT 0,
+            runtime_namespace TEXT, output_identity TEXT,
+            output_sequence INTEGER NOT NULL DEFAULT 0, last_output_at TEXT, agent TEXT
         );
         CREATE INDEX idx_runs_status_events_project_cursor
             ON runs_status_events(project_id, cursor);
@@ -78,6 +87,32 @@ pub async fn insert_run(database: &DatabaseConnection, id: &str, issue: &str, st
             r#"INSERT INTO agent_runs (id, issue_id, agent, status, started_at, scope)
                VALUES (?, ?, 'codex', 'running', ?, 'task')"#,
             [id.into(), issue.into(), started.into()],
+        ))
+        .await
+        .unwrap();
+}
+
+pub async fn insert_run_with_launch_snapshot(
+    database: &DatabaseConnection,
+    id: &str,
+    issue: &str,
+    started: &str,
+    launch_state: &str,
+    launch_model: &str,
+) {
+    database
+        .execute_raw(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
+            r#"INSERT INTO agent_runs
+               (id, issue_id, agent, status, started_at, scope, launch_state, launch_model)
+               VALUES (?, ?, 'codex', 'running', ?, 'task', ?, ?)"#,
+            [
+                id.into(),
+                issue.into(),
+                started.into(),
+                launch_state.into(),
+                launch_model.into(),
+            ],
         ))
         .await
         .unwrap();

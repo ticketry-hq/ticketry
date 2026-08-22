@@ -13,17 +13,11 @@
 
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
 
 use sea_orm::DatabaseConnection;
 use tauri_graphql::TransportApi;
 
-use crate::runs_persistence::{
-    self, CompactionSchedule, ReconciliationDecision, RunsPersistenceError, RunsServices,
-    Slice3Readiness,
-};
-
-use crate::runs_effect_port::RunsEffectPort;
+use crate::runs_persistence::{self, CompactionSchedule, RunsPersistenceError, Slice3Readiness};
 
 /// Publish the closed gate. Called at startup, at every backend launch, and at
 /// shutdown, so a stale `ready: true` record can never outlive its runtime.
@@ -37,10 +31,7 @@ pub(crate) fn close_gate(data_directory: &Path) -> Result<(), RunsPersistenceErr
 pub(crate) async fn reopen_gate(
     data_directory: &Path,
     database: &DatabaseConnection,
-    effect_port: &RunsEffectPort,
 ) -> Result<(), String> {
-    effect_port.verify_health().await?;
-    reconcile(database, effect_port).await?;
     compact(database).await;
     runs_persistence::publish_readiness(data_directory, &Slice3Readiness::complete())
         .map_err(|error| format!("could not publish Slice 3 readiness: {error}"))
@@ -71,50 +62,14 @@ async fn compact(database: &DatabaseConnection) {
 
 /// Drain the durable launch backlog. A conflicting runtime is surfaced rather
 /// than swallowed: it needs a person, and it is never overwritten or retried.
-async fn reconcile(
-    database: &DatabaseConnection,
-    effect_port: &RunsEffectPort,
-) -> Result<(), String> {
-    let services = RunsServices::new(database.clone());
-    let port = Arc::new(effect_port.clone());
-    let report = services
-        .effects()
-        .reconcile_with(port.clone(), port)
-        .reconcile()
-        .await
-        .map_err(|error| {
-            format!(
-                "launch-effect reconciliation failed ({}): {error}",
-                error.code_str()
-            )
-        })?;
-    // An effect nobody could decide is not a reason to refuse startup — the
-    // next pass sees it again — but a conflict is a durable non-retryable
-    // failure that must reach an operator.
-    match report
-        .reconciled
-        .iter()
-        .find(|effect| matches!(effect.decision, ReconciliationDecision::Conflicted { .. }))
-    {
-        Some(conflicted) => Err(format!(
-            "launch effect {} conflicts with a foreign terminal runtime and needs operator attention",
-            conflicted.effect_id
-        )),
-        None => Ok(()),
-    }
-}
-
 /// Complete the handoff once the sidecar answers: prove the temporary executor
 /// gave up its Runs writers, drain the durable launch backlog, prove the status
 /// surface is registered, and only then open the gate.
 pub(crate) async fn open_gate(
     data_directory: &Path,
     database: &DatabaseConnection,
-    effect_port: &RunsEffectPort,
     api: &tauri_graphql::TransportApiImpl,
 ) -> Result<(), String> {
-    effect_port.verify_health().await?;
-    reconcile(database, effect_port).await?;
     compact(database).await;
     verify_status_surface(api).await?;
 

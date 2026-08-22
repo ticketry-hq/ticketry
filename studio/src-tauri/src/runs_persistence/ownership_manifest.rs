@@ -5,7 +5,7 @@
 //! validates the adopted schema against it, and the Python boundary refuses to
 //! write anything it lists.
 
-use super::schema::{AGENT_RUN_COLUMNS, ATTEMPT_BASE_COLUMNS};
+use super::schema::AGENT_RUN_COLUMNS;
 
 /// Version of the checked Slice 3 ownership contract.
 pub const VERSION: i32 = 1;
@@ -100,11 +100,14 @@ pub fn owned_tables() -> Vec<&'static str> {
         .collect()
 }
 
-/// The only Python modules allowed to touch Runs behaviour in shipping. Each
-/// is an effect executor or a read projection; none is a Runs-table writer.
+/// The only Python modules allowed to touch Runs behaviour in shipping. They
+/// provide one read projection, two Rust-forwarding authorization seams, and
+/// the fail-closed ownership guard; none is a Runs-table writer.
 pub const DJANGO_COMPATIBILITY_PORTS: &[&str] = &[
+    "apps.runs.api",
+    "apps.runs.authorization",
+    "apps.runs.dao.activity",
     "apps.runs.write_ownership",
-    "apps.terminals.runs_effect_port",
 ];
 
 /// The Django environment flag that installs the refusal at the Python
@@ -116,6 +119,7 @@ mod tests {
     use std::collections::BTreeSet;
 
     use super::*;
+    use crate::runs_persistence::schema::ATTEMPT_BASE_COLUMNS;
 
     #[test]
     fn manifest_has_one_unique_entry_for_every_owned_resource() {

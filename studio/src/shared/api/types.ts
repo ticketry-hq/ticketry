@@ -1,7 +1,5 @@
 import type {
   Attachment as GeneratedAttachment,
-  GraphRunExecutionModeEnum as GeneratedGraphRunExecutionMode,
-  GraphRunResult as GeneratedGraphRunResult,
   Module as GeneratedModule,
   Project as GeneratedProject,
   PatchedProject as GeneratedProjectPatch,
@@ -64,15 +62,6 @@ export interface ProviderCatalog {
   global_default: GlobalLaunchDefault | null;
 }
 export type SubtreeRunCapabilityMap = Record<string, string[]>;
-
-// Scheduling mode of one graph-run campaign. Omitting it on the wire keeps the
-// historical parallel fan-out, so callers only pass it to opt into serial.
-export type GraphRunExecutionMode = `${GeneratedGraphRunExecutionMode}`;
-
-// What one graph-run press actually did. `launched` carries the work items the
-// press started, so an empty list is a press that changed nothing rather than a
-// failure.
-export type GraphRunResult = GeneratedGraphRunResult;
 
 export type Module = GeneratedModule;
 

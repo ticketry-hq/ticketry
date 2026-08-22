@@ -12,9 +12,7 @@ use serde_json::json;
 
 use crate::entities::worktrees::worktree;
 use crate::runs_persistence::StatusEventRepository;
-use crate::worktree_facts::{
-    record_worktree, WorktreeChange, WorktreeFact, WorktreeFactScope,
-};
+use crate::worktree_facts::{record_worktree, WorktreeChange, WorktreeFact, WorktreeFactScope};
 
 use super::error::{WorktreeCreateError, WorktreeCreateErrorCode};
 use super::plan::CreatePlan;

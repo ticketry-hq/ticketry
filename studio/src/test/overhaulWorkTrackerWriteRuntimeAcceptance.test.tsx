@@ -35,11 +35,15 @@ const state = { id: "state-1", project: "project-1", name: "Todo", group: "unsta
 const issueType = { id: "type-1", project: "project-1", name: "Story", level: "task", color: "", sort_order: 0, start_state: "state-1", workflow_revision: 1, is_pathfind: false, created_at: "", updated_at: "" };
 
 describe("WorkTracker write runtime acceptance", () => {
-  it("[overhaul-74] sends user-visible WorkTracker mutations through authored desktop GraphQL commands", async () => {
+  it("[overhaul-74] sends user-visible WorkTracker mutations through the desktop GraphQL contract", async () => {
     const operations: string[] = [];
     const graphqlExecute = vi.fn(async (encoded: string) => {
-      const { operationName } = JSON.parse(encoded) as { operationName: string };
+      const { operationName, query } = JSON.parse(encoded) as { operationName: string; query: string };
       operations.push(operationName);
+      if (operationName === "CreateWorkTrackerIssueType") {
+        expect(query).toContain("worktrackerIssuetypeCreateOne");
+        expect(query).not.toContain("create_issue_type(project_id:");
+      }
       const field = ({
         CreateWorkTrackerProject: ["create_project", { id: "project-1", name: "Project", slug: "PRJ", description: "", manual_module_order: false }],
         CreateWorkTrackerWorkItem: ["create_work_item", issue], UpdateWorkTrackerWorkItem: ["update_work_item", issue],

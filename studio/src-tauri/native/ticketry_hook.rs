@@ -7,7 +7,7 @@
 //! backend-owned spool directory.  The backend normalizes and ingests it.
 
 use std::env;
-use std::fs::{self, OpenOptions};
+use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -89,6 +89,13 @@ fn create_private_file(path: &Path) -> io::Result<std::fs::File> {
 }
 
 fn spool(invocation: &HookInvocation, input: impl Read) -> io::Result<()> {
+    let root_metadata = fs::symlink_metadata(&invocation.spool_dir)?;
+    if root_metadata.file_type().is_symlink() || !root_metadata.is_dir() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "hook spool root must be a real directory",
+        ));
+    }
     let mut payload = Vec::new();
     input.take(MAX_HOOK_BYTES + 1).read_to_end(&mut payload)?;
     if payload.len() as u64 > MAX_HOOK_BYTES {
@@ -112,7 +119,10 @@ fn spool(invocation: &HookInvocation, input: impl Read) -> io::Result<()> {
         output.write_all(&payload)?;
         output.sync_data()?;
         drop(output);
-        fs::rename(&temporary_path, &final_path)
+        fs::rename(&temporary_path, &final_path)?;
+        // Persist the directory entry as well as the file contents. The
+        // ingester must never observe a name whose payload was only buffered.
+        File::open(&invocation.spool_dir)?.sync_data()
     })();
     if result.is_err() {
         let _ = fs::remove_file(temporary_path);
@@ -213,6 +223,51 @@ mod tests {
             fs::read(&entries[0]).expect("read event"),
             br#"{"hook_event_name":"SessionStart","session_id":"provider-1"}"#
         );
+        fs::remove_dir_all(root).expect("remove spool");
+    }
+
+    #[test]
+    fn rejects_payloads_above_one_megabyte_without_publishing_a_file() {
+        let root = env::temp_dir().join(format!(
+            "ticketry-hook-limit-test-{}",
+            unique_stem().expect("unique test path")
+        ));
+        fs::create_dir(&root).expect("create spool");
+        let invocation = HookInvocation {
+            agent: "codex".to_owned(),
+            agent_run_id: "run-123".to_owned(),
+            spool_dir: root.clone(),
+        };
+
+        let error = spool(
+            &invocation,
+            vec![b'x'; MAX_HOOK_BYTES as usize + 1].as_slice(),
+        )
+        .expect_err("oversized hook must fail");
+
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+        assert_eq!(fs::read_dir(&root).expect("read spool").count(), 0);
+        fs::remove_dir_all(root).expect("remove spool");
+    }
+
+    #[test]
+    fn accepts_a_payload_at_the_one_megabyte_boundary() {
+        let root = env::temp_dir().join(format!(
+            "ticketry-hook-boundary-test-{}",
+            unique_stem().expect("unique test path")
+        ));
+        fs::create_dir(&root).expect("create spool");
+        let invocation = HookInvocation {
+            agent: "gemini".to_owned(),
+            agent_run_id: "run-456".to_owned(),
+            spool_dir: root.clone(),
+        };
+
+        spool(&invocation, vec![b'x'; MAX_HOOK_BYTES as usize].as_slice())
+            .expect("boundary payload");
+
+        let entries = fs::read_dir(&root).expect("read spool").collect::<Vec<_>>();
+        assert_eq!(entries.len(), 1);
         fs::remove_dir_all(root).expect("remove spool");
     }
 }

@@ -10,7 +10,9 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use muxed_studio_lib::launch_paths::{LaunchPathsErrorCode, LaunchPathsRequest, LaunchPathsService};
+use muxed_studio_lib::launch_paths::{
+    LaunchPathsErrorCode, LaunchPathsRequest, LaunchPathsService,
+};
 use muxed_studio_lib::settings_persistence::ProfileStore;
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection};
 
@@ -255,8 +257,7 @@ async fn fixture() -> Fixture {
     )
     .expect("write the profile catalog");
 
-    let service =
-        LaunchPathsService::new(database.clone(), ProfileStore::new(profiles_path));
+    let service = LaunchPathsService::new(database.clone(), ProfileStore::new(profiles_path));
     Fixture {
         directory,
         service,
@@ -297,8 +298,10 @@ async fn a_task_without_a_worktree_launches_in_its_module_folder() {
 
     let paths = fixture.resolve(task_request(PARENT_TASK)).await;
 
-    // No cwd override: the launch keeps the module folder it already resolved.
-    assert_eq!(paths["working_directory"], serde_json::Value::Null);
+    assert_eq!(
+        paths["working_directory"],
+        fixture.module_folder().display().to_string()
+    );
     assert_eq!(paths["design_directory_relative"], PARENT_DESIGN_DIR);
     assert_eq!(paths["worktree"]["used"], false);
     assert_eq!(paths["worktree"]["reason"], "none");
@@ -367,7 +370,10 @@ async fn a_worktree_row_whose_checkout_is_gone_falls_back_to_the_module_folder()
 
     let paths = fixture.resolve(task_request(PARENT_TASK)).await;
 
-    assert_eq!(paths["working_directory"], serde_json::Value::Null);
+    assert_eq!(
+        paths["working_directory"],
+        fixture.module_folder().display().to_string()
+    );
     assert_eq!(paths["worktree"]["used"], false);
     assert_eq!(paths["worktree"]["reason"], "checkout_missing");
     assert!(fixture.module_folder().join(PARENT_DESIGN_DIR).is_dir());
@@ -401,7 +407,10 @@ async fn a_planning_run_keeps_its_run_scoped_design_directory() {
 
     let paths = fixture.resolve(scratch_request("plan")).await;
 
-    assert_eq!(paths["working_directory"], serde_json::Value::Null);
+    assert_eq!(
+        paths["working_directory"],
+        fixture.module_folder().display().to_string()
+    );
     assert_eq!(paths["design_directory_relative"], PLANNING_DESIGN_DIR);
     assert_eq!(paths["module_directory_name"], "ticketry--20000000");
     // A scratch run is module-scoped: the parent story's checkout is not

@@ -19,9 +19,9 @@ pub mod workspace;
 
 pub mod prelude;
 
-/// Register the generated WorkTracker read graph without exposing Seaography's
-/// all-or-nothing mutation bundle. Writes remain behind the restricted seams
-/// until their invariants are audited independently.
+/// Register the generated WorkTracker read graph. Audited writes are installed
+/// separately by `work_management::graphql`, one operation at a time; every
+/// other generated mutation remains private.
 pub fn register_entity_modules(mut builder: seaography::Builder) -> seaography::Builder {
     seaography::register_entity!(builder, workspace, mutation: false);
     seaography::register_entity!(builder, project, mutation: false);

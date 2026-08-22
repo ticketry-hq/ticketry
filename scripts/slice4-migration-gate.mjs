@@ -64,7 +64,7 @@ try {
     [
       "-q",
       "backend/apps/documents/tests/test_workspace_write_ownership.py",
-      "backend/apps/terminals/tests/test_workspace_write_ownership.py",
+      "backend/studio_server/tests/test_terminal_retirement.py",
     ],
     { ...process.env, MUXED_DATA_DIR: isolatedData },
   );

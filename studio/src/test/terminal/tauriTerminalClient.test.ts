@@ -22,6 +22,7 @@ class FakeTauriViewerBridge implements TauriViewerBridge {
 
   attach(
     params: TerminalClientAttachParams,
+    _viewerId: string,
     onChannelEvent: (event: FakeViewerChannelEvent) => void,
   ) {
     this.onChannelEvent = onChannelEvent;
@@ -140,9 +141,14 @@ describe("Tauri terminal client adapter", () => {
     const bridge = new FakeTauriViewerBridge();
     const calls: string[] = [];
     const lease: ViewerLeaseClient = {
-      acquire: async (runId, viewerId) => { calls.push(`acquire:${runId}:${viewerId}`); },
+      acquire: async (runId, viewerId, transport) => {
+        calls.push(`acquire:${runId}:${viewerId}:${transport}`);
+        return { generation: "generation-1" };
+      },
       renew: async () => {},
-      release: async (runId, viewerId) => { calls.push(`release:${runId}:${viewerId}`); },
+      release: async (runId, viewerId, generation) => {
+        calls.push(`release:${runId}:${viewerId}:${generation}`);
+      },
     };
     const events: import("../../features/agents/terminal/internal/terminalClient").TerminalClientEvent[] = [];
     const client = openTauriTerminalClient(
@@ -155,8 +161,8 @@ describe("Tauri terminal client adapter", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     client.detach();
 
-    expect(calls[0]).toMatch(/^acquire:run-lease:desktop-/);
-    expect(calls[1]).toMatch(/^release:run-lease:desktop-/);
+    expect(calls[0]).toMatch(/^acquire:run-lease:desktop-.*:xterm$/);
+    expect(calls[1]).toMatch(/^release:run-lease:desktop-.*:generation-1$/);
     expect(events).toContainEqual({ type: "ready", sessionId: "viewer-1", agentRunId: "run-1" });
   });
 
@@ -172,6 +178,7 @@ describe("Tauri terminal client adapter", () => {
       acquire: async () => {
         calls.push("acquire");
         await acquireCommitted;
+        return { generation: "generation-race" };
       },
       renew: async () => {},
       release: async () => { calls.push("release"); },
@@ -190,7 +197,7 @@ describe("Tauri terminal client adapter", () => {
     commitAcquire();
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(calls).toEqual(["acquire", "release"]);
-    expect(attach).not.toHaveBeenCalled();
+    expect(attach).toHaveBeenCalledOnce();
   });
 
   it("surfaces replacement by another viewer from the durable lease", async () => {
@@ -198,7 +205,7 @@ describe("Tauri terminal client adapter", () => {
     try {
       const bridge = new FakeTauriViewerBridge();
       const lease: ViewerLeaseClient = {
-        acquire: async () => {},
+        acquire: async () => ({ generation: "generation-replaced" }),
         renew: async () => {
           throw Object.assign(new Error("replaced_by_another_viewer"), {
             code: "replaced_by_another_viewer",

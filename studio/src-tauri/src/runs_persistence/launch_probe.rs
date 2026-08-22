@@ -18,7 +18,7 @@ pub struct RuntimeIdentity {
     pub project_id: String,
     pub issue_id: String,
     pub scope: String,
-    pub provider: String,
+    pub provider: Option<String>,
     pub target_kind: String,
     pub target_id: String,
     /// Durable diagnostics the probe may use to bound its own work. They are

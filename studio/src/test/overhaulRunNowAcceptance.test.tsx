@@ -102,6 +102,7 @@ describe("overhaul acceptance — Run Now", () => {
       http,
       selectedTaskId: "click-idea",
       children: <RunNowAcceptanceSurface />,
+      graphQlExecution: true,
     });
 
     const details = await screen.findByRole("region", { name: "Details" });
@@ -160,18 +161,14 @@ describe("overhaul acceptance — Run Now", () => {
       committed_state: null,
       run: null,
       code: "required_skill_unavailable",
-      provider: "codex",
-      skill: "research",
-      reason: "unknown",
       detail: "The required skill is not packaged.",
-      remediation: "Choose a packaged skill, then retry.",
+      remedy: "Choose a packaged skill, then retry.",
     });
     fireEvent.click(refusalRunNow);
     await waitFor(() =>
       expect(hasToast(
         "error",
-        "Required skill 'research' is unavailable for codex (unknown): "
-          + "The required skill is not packaged. "
+        "The required skill is not packaged. "
           + "Next action: Choose a packaged skill, then retry.",
       )).toBe(true),
     );

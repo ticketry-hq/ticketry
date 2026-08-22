@@ -39,7 +39,6 @@ def test_issue_changeform_reachable_for_staff(client):
     "path",
     [
         "/wt-admin/runs/agentrun/",
-        "/wt-admin/terminals/agentterminalsession/",
         "/wt-admin/documents/designdocument/",
     ],
 )

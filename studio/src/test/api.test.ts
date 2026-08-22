@@ -11,7 +11,6 @@ import {
   deleteIssueType,
   deleteState,
   deleteWorkItem,
-  executeTaskSubtree,
   listIssueTypes,
   listModules,
   listProjectWorkItems,
@@ -316,22 +315,6 @@ describe("S2 fetchers", () => {
       state_id: "review",
       origin: "human",
     });
-  });
-
-  it("omits the execution mode when arming a graph run without one", async () => {
-    fetchMock.mockResolvedValue(jsonResponse({ root_id: "w1", launched: [] }, 201));
-    await executeTaskSubtree("w1");
-    const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe("/api/work-tracker/work-items/w1/graph-run");
-    expect(init.method).toBe("POST");
-    expect(JSON.parse(init.body)).toEqual({});
-  });
-
-  it("sends the requested execution mode when arming a graph run", async () => {
-    fetchMock.mockResolvedValue(jsonResponse({ root_id: "w1", launched: [] }, 201));
-    await executeTaskSubtree("w1", "serial");
-    const [, init] = fetchMock.mock.calls[0];
-    expect(JSON.parse(init.body)).toEqual({ mode: "serial" });
   });
 
   it("DELETEs a work item and resolves on an empty 204 body", async () => {

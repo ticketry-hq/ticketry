@@ -1,6 +1,6 @@
 use sea_orm::{
     sea_query::{ColumnDef, Expr, Index, Table},
-    ActiveModelTrait, ConnectionTrait, DatabaseTransaction, NotSet, Set,
+    ActiveModelTrait, ConnectionTrait, DatabaseTransaction, DbBackend, NotSet, Set, Statement,
 };
 
 use crate::work_management::commands::CommandError;
@@ -71,6 +71,7 @@ pub(crate) async fn ensure_schema(database: &impl ConnectionTrait) -> Result<(),
                 .boolean()
                 .not_null(),
         )
+        .col(ColumnDef::new(transition_occurrence::Column::RunNowDecisionId).string())
         .col(
             ColumnDef::new(transition_occurrence::Column::CommittedAt)
                 .date_time()
@@ -79,6 +80,23 @@ pub(crate) async fn ensure_schema(database: &impl ConnectionTrait) -> Result<(),
         )
         .to_owned();
     database.execute(&table).await?;
+    let columns = database
+        .query_all_raw(Statement::from_string(
+            DbBackend::Sqlite,
+            "PRAGMA table_info(worktracker_transitionoccurrence)".to_owned(),
+        ))
+        .await?;
+    let has_run_now_claim = columns.iter().any(|row| {
+        row.try_get::<String>("", "name")
+            .is_ok_and(|name| name == "run_now_decision_id")
+    });
+    if !has_run_now_claim {
+        database
+            .execute_unprepared(
+                "ALTER TABLE worktracker_transitionoccurrence ADD COLUMN run_now_decision_id varchar",
+            )
+            .await?;
+    }
     let index = Index::create()
         .name("idx_transition_occurrence_pending")
         .table(transition_occurrence::Entity)
@@ -88,6 +106,14 @@ pub(crate) async fn ensure_schema(database: &impl ConnectionTrait) -> Result<(),
         .if_not_exists()
         .to_owned();
     database.execute(&index).await?;
+    let claim_index = Index::create()
+        .name("idx_transition_occurrence_run_now_claim")
+        .table(transition_occurrence::Entity)
+        .col(transition_occurrence::Column::RunNowDecisionId)
+        .unique()
+        .if_not_exists()
+        .to_owned();
+    database.execute(&claim_index).await?;
     Ok(())
 }
 
@@ -102,6 +128,7 @@ pub(crate) struct NewTransitionOccurrence<'a> {
     pub work_item_revision: i64,
     pub workflow_revision: i32,
     pub destination_auto_start: bool,
+    pub run_now_decision_id: Option<&'a str>,
 }
 
 pub(crate) async fn append(
@@ -122,6 +149,7 @@ pub(crate) async fn append(
         work_item_revision: Set(occurrence.work_item_revision),
         workflow_revision: Set(occurrence.workflow_revision),
         destination_auto_start: Set(occurrence.destination_auto_start),
+        run_now_decision_id: Set(occurrence.run_now_decision_id.map(str::to_owned)),
         committed_at: NotSet,
     }
     .insert(transaction)

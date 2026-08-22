@@ -4,6 +4,7 @@
 
 use tauri::Manager;
 
+use crate::data_directory::established_data_directory;
 use crate::desktop::environment::{
     optional_port, smoke_startup_exit_requested, DEVELOPMENT_BACKEND_PORT_ENV,
     DEVELOPMENT_MCP_PORT_ENV, PACKAGED_HOOK_RUNNER_ENV,
@@ -14,16 +15,22 @@ use crate::desktop::mcp_runtime::{
 };
 use crate::desktop::packaged_binaries::{hook_runner_binary, sidecar_binary};
 use crate::desktop::runs_handoff;
-use crate::desktop::workspace_handoff;
 use crate::desktop::runtime_configuration::sidecar_runtime_configuration;
 use crate::desktop::service_health::ServiceHealth;
 use crate::desktop::service_state::DesktopServiceState;
 use crate::desktop::sidecar_probe::verify_packaged_backend;
 use crate::desktop::webview_origin::desktop_webview_origin;
-use crate::ownership::established_data_directory;
-use crate::runs_effect_port;
-use crate::supervisor::{self, CommandTable, Supervisor, SupervisorError, SupervisorOptions};
-use crate::{discovery, graphql_foundation, settings_persistence};
+use crate::desktop::workspace_handoff;
+use crate::sidecar_supervision::{
+    self, CommandTable, Supervisor, SupervisorError, SupervisorOptions,
+};
+use crate::terminal_lifecycle::{
+    hook_spool_directory, ProductionTerminalLifecycleWork, TerminalLifecycleConfig,
+    TerminalLifecycleRuntime,
+};
+use crate::{graphql_foundation, settings_persistence, tool_discovery as discovery};
+use std::sync::Arc;
+use std::time::Duration;
 
 fn development_supervisor_options() -> Result<SupervisorOptions, String> {
     let mut options = SupervisorOptions::default();
@@ -93,6 +100,9 @@ pub(crate) fn launch_packaged_backend(
             // The sidecar keeps serving unmigrated capabilities, and this is
             // how it learns it may no longer write documents or worktrees.
             environment.push(("TICKETRY_RUST_SLICE4_OWNER".to_owned(), "1".to_owned()));
+            // Rust performs the required startup pass and owns both periodic
+            // terminal recovery and provider-hook drains from this launch on.
+            environment.push(("TICKETRY_RUST_SLICE5_OWNER".to_owned(), "1".to_owned()));
             environment
         });
     let mut supervisor = Supervisor::try_new(commands, development_supervisor_options()?)
@@ -129,7 +139,7 @@ pub(crate) fn launch_packaged_backend(
                 let message = format!("fresh WorkTracker adoption failed: {}", error.message);
                 let failure = SupervisorError {
                     service: "worktracker-adoption".to_owned(),
-                    kind: supervisor::FailureKind::Migration,
+                    kind: sidecar_supervision::FailureKind::Migration,
                     message: message.clone(),
                 };
                 state.publish(
@@ -141,17 +151,40 @@ pub(crate) fn launch_packaged_backend(
             }
         }
     }
+    let launch_runtime = application.state::<DesktopLaunchRuntime>();
+    let composed = launch_runtime.composed_runtime()?.clone();
+    let runs_commands = composed.commands().clone();
+    launch_runtime.configure_terminal_authority(
+        crate::terminal_lifecycle::TerminalRuntimeAuthority {
+            database: runs_commands.clone(),
+            paths: crate::launch_paths::LaunchPathsService::new(
+                runs_commands.clone(),
+                composed.profiles().clone(),
+            ),
+            hook_runner: hook_runner.clone(),
+            hook_spool_directory: hook_spool_directory(&data_dir),
+            lifecycle_url: format!("http://127.0.0.1:{mcp_port}/runs/lifecycle"),
+            mcp_url: format!("http://127.0.0.1:{mcp_port}/mcp"),
+            backend_base_url: format!("http://127.0.0.1:{port}/api"),
+            backend_api_key: supervisor.credential().to_owned(),
+        },
+    )?;
+    let terminal_launch = crate::terminal_launch::TerminalLaunchService::new(
+        runs_commands.clone(),
+        Arc::new(composed.terminal_runtime().clone()),
+    );
     let mcp_runtime = match tauri::async_runtime::block_on(start_in_process_mcp(
         &data_dir,
         port,
         supervisor.credential(),
         mcp_port,
+        Some(terminal_launch.clone()),
     )) {
         Ok(runtime) => runtime,
         Err(message) => {
             let error = SupervisorError {
                 service: "mcp".to_owned(),
-                kind: supervisor::FailureKind::Bind,
+                kind: sidecar_supervision::FailureKind::Bind,
                 message: message.clone(),
             };
             state.publish(
@@ -167,7 +200,7 @@ pub(crate) fn launch_packaged_backend(
         if let Err(message) = verify_packaged_backend(port, supervisor.credential(), &origin) {
             let error = SupervisorError {
                 service: "backend".to_owned(),
-                kind: supervisor::FailureKind::Authentication,
+                kind: sidecar_supervision::FailureKind::Authentication,
                 message,
             };
             state.publish(
@@ -188,22 +221,14 @@ pub(crate) fn launch_packaged_backend(
     // Slice 3 opens after Slice 2 and separately: it needs the sidecar to answer
     // the effect-port health probe and to drain the durable launch backlog
     // before Studio is told that Runs status is live.
-    let launch_runtime = application.state::<DesktopLaunchRuntime>();
-    let composed = launch_runtime.composed_runtime()?.clone();
-    let runs_commands = composed.commands().clone();
-    let effect_port = runs_effect_port::RunsEffectPort::new(
-        format!("http://127.0.0.1:{port}/api"),
-        supervisor.credential().to_owned(),
-    );
     if let Err(message) = tauri::async_runtime::block_on(runs_handoff::open_gate(
         &data_dir,
         &runs_commands,
-        &effect_port,
         graphql_api,
     )) {
         let error = SupervisorError {
             service: "runs-handoff".to_owned(),
-            kind: supervisor::FailureKind::Migration,
+            kind: sidecar_supervision::FailureKind::Migration,
             message: message.clone(),
         };
         state.publish(
@@ -214,6 +239,76 @@ pub(crate) fn launch_packaged_backend(
         let _ = supervisor.shutdown();
         return Err(message);
     }
+    let spool = match crate::hook_spool::HookSpool::new(
+        hook_spool_directory(&data_dir),
+        crate::runs_persistence::RunsServices::new(runs_commands.clone())
+            .lifecycle()
+            .clone(),
+        crate::hook_spool::DEFAULT_BATCH_SIZE,
+    ) {
+        Ok(spool) => spool,
+        Err(error) => {
+            let message = format!("terminal lifecycle startup failed: {error}");
+            tauri::async_runtime::block_on(mcp_runtime.shutdown());
+            let _ = supervisor.shutdown();
+            return Err(message);
+        }
+    };
+    let launch_runtime = Arc::new(composed.terminal_runtime().clone());
+    let cleanup_runtime = Arc::new(crate::terminal_cleanup::TmuxCleanupRuntime::default());
+    let reconciliation = crate::terminal_reconciliation::TerminalReconciliationService::new(
+        runs_commands.clone(),
+        launch_runtime,
+        cleanup_runtime,
+    );
+    let viewer_ownership = composed.viewer_ownership().clone();
+    let terminal_work = ProductionTerminalLifecycleWork::new(
+        runs_commands.clone(),
+        spool,
+        reconciliation,
+        viewer_ownership,
+    );
+    let terminal_config = TerminalLifecycleConfig {
+        sweep_interval: terminal_sweep_interval(),
+        ..TerminalLifecycleConfig::default()
+    };
+    let terminal_runtime = match tauri::async_runtime::block_on(TerminalLifecycleRuntime::start(
+        Arc::new(terminal_work),
+        terminal_config,
+    )) {
+        Ok(runtime) => runtime,
+        Err(error) => {
+            let message = format!("terminal lifecycle startup failed: {error}");
+            tauri::async_runtime::block_on(mcp_runtime.shutdown());
+            let _ = supervisor.shutdown();
+            return Err(message);
+        }
+    };
+    let terminal_runtime = Arc::new(terminal_runtime);
+    let execution_service = crate::execution_reconciliation::ExecutionReconciliationService::new(
+        runs_commands.clone(),
+        crate::work_management::launch_policy::LaunchPolicyResolver::new(
+            runs_commands.clone(),
+            composed.profiles().clone(),
+        ),
+        terminal_launch,
+    );
+    let execution_runtime = match tauri::async_runtime::block_on(
+        crate::execution_reconciliation::ExecutionReconciliationRuntime::start(
+            execution_service,
+            Arc::clone(&terminal_runtime),
+            crate::execution_reconciliation::ExecutionReconciliationConfig::default(),
+        ),
+    ) {
+        Ok(runtime) => runtime,
+        Err(error) => {
+            let message = format!("execution reconciliation startup failed: {error}");
+            let _ = tauri::async_runtime::block_on(terminal_runtime.shutdown());
+            tauri::async_runtime::block_on(mcp_runtime.shutdown());
+            let _ = supervisor.shutdown();
+            return Err(message);
+        }
+    };
     // Slice 4 opens last. Unlike Runs it needs nothing from the sidecar — that
     // is what the cutover bought — but it must open after adoption has run and
     // the schema is composed, which is true for both the fresh-store and the
@@ -226,13 +321,15 @@ pub(crate) fn launch_packaged_backend(
     )) {
         let error = SupervisorError {
             service: "workspace-handoff".to_owned(),
-            kind: supervisor::FailureKind::Migration,
+            kind: sidecar_supervision::FailureKind::Migration,
             message: message.clone(),
         };
         state.publish(
             application.handle(),
             ServiceHealth::failed(&error, supervisor.log_path()),
         );
+        tauri::async_runtime::block_on(execution_runtime.shutdown());
+        let _ = tauri::async_runtime::block_on(terminal_runtime.shutdown());
         tauri::async_runtime::block_on(mcp_runtime.shutdown());
         let _ = supervisor.shutdown();
         return Err(message);
@@ -244,6 +341,32 @@ pub(crate) fn launch_packaged_backend(
         .expect("runtime configuration lock poisoned") = Some(configuration);
     *state.supervisor.lock().expect("supervisor lock poisoned") = Some(supervisor);
     *state.mcp_runtime.lock().expect("MCP runtime lock poisoned") = Some(mcp_runtime);
+    *state
+        .terminal_runtime
+        .lock()
+        .expect("terminal runtime lock poisoned") = Some(terminal_runtime);
+    *state
+        .execution_runtime
+        .lock()
+        .expect("execution runtime lock poisoned") = Some(execution_runtime);
+    *state
+        .output_sweep
+        .lock()
+        .expect("output sweep lock poisoned") = Some(
+        crate::terminal_output_activity::LiveOutputSweepRuntime::start(
+            composed.output_activity().clone(),
+            crate::terminal_output_activity::configured_sweep_interval(),
+        ),
+    );
     state.publish(application.handle(), ServiceHealth::ready());
     Ok(())
+}
+
+fn terminal_sweep_interval() -> Duration {
+    const DEFAULT_MINUTES: u64 = 30;
+    let minutes = std::env::var("MUXED_IDLE_SWEEP_MINUTES")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .unwrap_or(DEFAULT_MINUTES);
+    Duration::from_secs(minutes.saturating_mul(60))
 }

@@ -106,7 +106,7 @@ pub(crate) fn failed_runtime_configuration(health: ServiceHealth) -> RuntimeStar
 mod tests {
     use super::*;
     use crate::desktop::service_health::ServiceHealthState;
-    use crate::supervisor::{self, SupervisorError};
+    use crate::sidecar_supervision::{self, SupervisorError};
     use std::path::Path;
 
     #[test]
@@ -114,7 +114,7 @@ mod tests {
         let health = ServiceHealth::failed(
             &SupervisorError {
                 service: "backend".to_owned(),
-                kind: supervisor::FailureKind::Crash,
+                kind: sidecar_supervision::FailureKind::Crash,
                 message: "packaged skill collision".to_owned(),
             },
             Path::new("/tmp/ticketry/sidecar.log"),

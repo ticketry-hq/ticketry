@@ -10,48 +10,7 @@ from __future__ import annotations
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel
-
 from worktracker_sdk.generated.api_client import ApiClient
-
-
-class ExecuteGraphOut(BaseModel):
-    root_id: str
-    launched: list[str]
-
-
-class ResetGraphOut(BaseModel):
-    root_id: str
-    cleared: list[str]
-
-
-class DependencyGraphNodeOut(BaseModel):
-    id: str
-    state: str
-    parent_id: str | None = None
-    blocked_by: list[str]
-
-
-class DependencyGraphOut(BaseModel):
-    root_id: str
-    nodes: list[DependencyGraphNodeOut]
-
-
-class LaunchedAgentOut(BaseModel):
-    target_id: str
-    agent: str
-    agent_run_id: str
-
-
-class CommittedStateOut(BaseModel):
-    id: str
-    name: str
-
-
-class RunNowOut(BaseModel):
-    target_id: str
-    committed_state: CommittedStateOut
-    run: LaunchedAgentOut
 
 
 class _RootApi:
@@ -98,90 +57,6 @@ class _RootApi:
             response_data=response,
             response_types_map=response_types,
         ).data
-
-
-class ExecutionApi(_RootApi):
-    """Generated-client extension for root-mounted execution operations."""
-
-    def get_dependency_graph(self, root_id: str | UUID) -> DependencyGraphOut:
-        data = self._request(
-            "GET",
-            "/work-tracker/work-items/{root_id}/graph-run",
-            path_params={"root_id": root_id},
-            body=None,
-            success_status=200,
-        )
-        return DependencyGraphOut.model_validate(data)
-
-    def execute_graph(
-        self,
-        root_id: str | UUID,
-        agent: str | None = None,
-        mode: str | None = None,
-    ) -> ExecuteGraphOut:
-        """Arm a graph run; an omitted ``mode`` stays parallel on the wire."""
-
-        body: dict[str, Any] = {}
-        if agent is not None:
-            body["agent"] = agent
-        if mode is not None:
-            body["mode"] = mode
-        data = self._request(
-            "POST",
-            "/work-tracker/work-items/{root_id}/graph-run",
-            path_params={"root_id": root_id},
-            body=body,
-            success_status=201,
-        )
-        return ExecuteGraphOut.model_validate(data)
-
-    def reset_graph(self, root_id: str | UUID) -> ResetGraphOut:
-        data = self._request(
-            "DELETE",
-            "/work-tracker/work-items/{root_id}/graph-run",
-            path_params={"root_id": root_id},
-            body=None,
-            success_status=200,
-        )
-        return ResetGraphOut.model_validate(data)
-
-    def run_now(
-        self,
-        target_id: str | UUID,
-        *,
-        origin: str,
-        authorization: str | None = None,
-    ) -> RunNowOut:
-        data = self._request(
-            "POST",
-            "/work-tracker/work-items/{target_id}/run-now",
-            path_params={"target_id": target_id},
-            body={"origin": origin},
-            success_status=201,
-            error_type="RunNowRefusal",
-            headers=(
-                {"Authorization": authorization}
-                if authorization is not None
-                else None
-            ),
-        )
-        return RunNowOut.model_validate(data)
-
-
-class LaunchApi(_RootApi):
-    """Generated-client extension for the root-mounted direct launch."""
-
-    def default_coding_agent(
-        self, target_id: str | UUID, agent: str | None = None
-    ) -> LaunchedAgentOut:
-        data = self._request(
-            "POST",
-            "/work-tracker/work-items/{target_id}/launch-agent",
-            path_params={"target_id": target_id},
-            body={} if agent is None else {"agent": agent},
-            success_status=201,
-        )
-        return LaunchedAgentOut.model_validate(data)
 
 
 class RevisionedDeleteApi(_RootApi):

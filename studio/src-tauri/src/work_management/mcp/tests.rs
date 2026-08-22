@@ -209,7 +209,7 @@ pub(super) async fn start_authorizer() -> (SocketAddr, CancellationToken, JoinHa
         axum::serve(
             listener,
             Router::new()
-                .route("/api/terminals/mcp-authorize", route_post(authorize))
+                .route("/api/runs/mcp-authorize", route_post(authorize))
                 .route(
                     "/api/terminals/self-terminate",
                     route_post(forwarded_run_control),
@@ -235,7 +235,7 @@ pub(super) async fn start_authorizer() -> (SocketAddr, CancellationToken, JoinHa
 }
 
 #[tokio::test]
-async fn listener_lists_the_thirty_tools_and_recovers_on_the_same_port() {
+async fn listener_lists_the_thirty_one_tools_and_recovers_on_the_same_port() {
     let directory = tempfile::tempdir().unwrap();
     let (backend, backend_cancellation, backend_task) = start_authorizer().await;
     let first = start(&directory, 0, backend).await;
@@ -250,7 +250,7 @@ async fn listener_lists_the_thirty_tools_and_recovers_on_the_same_port() {
     .json::<Value>()
     .await
     .unwrap();
-    assert_eq!(listed["result"]["tools"].as_array().unwrap().len(), 30);
+    assert_eq!(listed["result"]["tools"].as_array().unwrap().len(), 31);
     first.shutdown().await;
 
     let second = start(&directory, port, backend).await;
@@ -341,6 +341,23 @@ async fn run_authorization_survives_restart_and_rejects_bad_or_foreign_scope() {
     assert_eq!(
         valid["result"]["structuredContent"]["result"][0]["id"],
         PROJECT
+    );
+    let run_now = post(
+        &url,
+        Some("Bearer valid"),
+        call(5, "run_now", json!({"id_or_key": "CODING-912"})),
+    )
+    .await
+    .json::<Value>()
+    .await
+    .unwrap();
+    assert_eq!(
+        run_now["result"]["structuredContent"]["code"],
+        "run_now_unavailable"
+    );
+    assert_eq!(
+        run_now["result"]["structuredContent"]["committed_state"],
+        Value::Null
     );
 
     second.shutdown().await;

@@ -9,7 +9,7 @@ use crate::desktop::readiness_publication::ReadinessPublication;
 use crate::desktop::runtime_configuration::RuntimeStartupConfiguration;
 use crate::desktop::service_health::ServiceHealth;
 use crate::desktop::user_notices::{supervisor_notice, UserNotice};
-use crate::supervisor::{Supervisor, SupervisorEvent};
+use crate::sidecar_supervision::{Supervisor, SupervisorEvent};
 use crate::work_management;
 
 pub(crate) const HEALTH_EVENT: &str = "desktop-service-health";
@@ -18,6 +18,11 @@ pub(crate) const USER_NOTICE_EVENT: &str = "desktop-user-notice";
 pub(crate) struct DesktopServiceState {
     pub(crate) supervisor: Mutex<Option<Supervisor>>,
     pub(crate) mcp_runtime: Mutex<Option<work_management::mcp::McpRuntime>>,
+    pub(crate) terminal_runtime:
+        Mutex<Option<std::sync::Arc<crate::terminal_lifecycle::TerminalLifecycleRuntime>>>,
+    pub(crate) execution_runtime:
+        Mutex<Option<crate::execution_reconciliation::ExecutionReconciliationRuntime>>,
+    pub(crate) output_sweep: Mutex<Option<crate::terminal_output_activity::LiveOutputSweepRuntime>>,
     pub(crate) configuration: Mutex<Option<RuntimeStartupConfiguration>>,
     pub(crate) health: Mutex<ServiceHealth>,
     pub(crate) notices: Mutex<Vec<UserNotice>>,
@@ -31,6 +36,9 @@ impl DesktopServiceState {
         Self {
             supervisor: Mutex::new(None),
             mcp_runtime: Mutex::new(None),
+            terminal_runtime: Mutex::new(None),
+            execution_runtime: Mutex::new(None),
+            output_sweep: Mutex::new(None),
             configuration: Mutex::new(None),
             health: Mutex::new(ServiceHealth::starting()),
             notices: Mutex::new(Vec::new()),
@@ -105,7 +113,7 @@ impl DesktopServiceState {
 mod tests {
     use super::*;
     use crate::desktop::runtime_configuration::sidecar_runtime_configuration;
-    use crate::supervisor::{self, SupervisorError};
+    use crate::sidecar_supervision::{self, SupervisorError};
     use std::path::Path;
 
     #[test]
@@ -119,7 +127,7 @@ mod tests {
         let failed = ServiceHealth::failed(
             &SupervisorError {
                 service: "backend".to_owned(),
-                kind: supervisor::FailureKind::Crash,
+                kind: sidecar_supervision::FailureKind::Crash,
                 message: "restart allowance exhausted".to_owned(),
             },
             Path::new("/tmp/muxed-sidecar.log"),
@@ -141,7 +149,7 @@ mod tests {
             43_219,
             "per-launch-credential",
         ));
-        let rollover = supervisor::SupervisorEvent::McpPortRollover {
+        let rollover = sidecar_supervision::SupervisorEvent::McpPortRollover {
             previous_port: 43_101,
             active_port: 43_219,
         };

@@ -55,12 +55,14 @@ INSTALLED_APPS = [
     "rest_framework",
     "drf_spectacular",
     "apps.runs",
-    "apps.terminals",
+    # Migration history remains installed only so fresh databases and Rust's
+    # adoption fixtures can classify every supported pre-cutover leaf. No URL,
+    # startup task, signal, admin registration, or execution path imports the
+    # Python terminal capability.
     "apps.documents",
     "apps.settings_store",
     "worktracker",
     "apps.worktrees",
-    "apps.execution",
 ]
 
 MIDDLEWARE = [

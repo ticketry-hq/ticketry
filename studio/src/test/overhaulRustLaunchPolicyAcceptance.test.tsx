@@ -4,15 +4,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { LaunchAgentAction } from "../app/shell/ticket-workspace/selected-ticket/details/LaunchAgentAction";
 
 const tauri = vi.hoisted(() => ({ invoke: vi.fn() }));
-const sdk = vi.hoisted(() => ({ launchAgent: vi.fn() }));
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: tauri.invoke,
   isTauri: () => true,
-}));
-
-vi.mock("@worktracker/typescript-sdk/agent-status", () => ({
-  createAgentStatusClient: () => ({ launchAgent: sdk.launchAgent }),
 }));
 
 vi.mock("../features/agents/terminal", () => ({
@@ -40,6 +35,5 @@ describe("Rust launch-policy acceptance", () => {
         { issueId: "task-1" },
       );
     });
-    expect(sdk.launchAgent).not.toHaveBeenCalled();
   });
 });

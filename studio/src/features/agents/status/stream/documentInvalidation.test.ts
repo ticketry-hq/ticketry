@@ -53,6 +53,9 @@ describe("reading a document fact", () => {
       ownerId: TASK,
       moduleId: MODULE,
       removed: false,
+      documentId: "doc-1",
+      relPath: "SPEC.md",
+      changeKind: "created",
     });
   });
 

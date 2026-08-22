@@ -27,11 +27,17 @@ async fn main() {
     if arguments.next().is_some() || !data_directory.is_absolute() {
         fail("verify_slice4_copy requires one absolute private data-directory path");
     }
-    let established = muxed_studio_lib::ownership::established_data_directory()
-        .unwrap_or_else(|error| fail(&format!("could not resolve the established data directory: {error}")));
-    let supplied = data_directory
-        .canonicalize()
-        .unwrap_or_else(|error| fail(&format!("could not resolve the supplied data directory: {error}")));
+    let established = muxed_studio_lib::data_directory::established_data_directory()
+        .unwrap_or_else(|error| {
+            fail(&format!(
+                "could not resolve the established data directory: {error}"
+            ))
+        });
+    let supplied = data_directory.canonicalize().unwrap_or_else(|error| {
+        fail(&format!(
+            "could not resolve the supplied data directory: {error}"
+        ))
+    });
     let established = established.canonicalize().unwrap_or(established);
     if supplied == established {
         fail("refusing to adopt the established Ticketry data directory; pass a private copy");

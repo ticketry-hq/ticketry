@@ -6,7 +6,11 @@ import { useStudioStore } from "../features/projects/store";
 import { AgentStateBadge } from "../features/agents/lifecycle";
 import { useAgentStatusStore } from "../features/agents/status";
 import { applySnapshotFrame } from "../features/agents/status/stream/statusSnapshot";
-import { dispatchStatusFrame } from "../features/agents/status/testing/legacyStatusFrameTestDriver";
+import { applyRunStatusFrame } from "../features/agents/status/stream/runStatusHolding";
+import {
+  lifecycleStatusFrame,
+  terminalStatusFrame,
+} from "../features/agents/status/testing/durableStatusFrames";
 import {
   useTerminalStore,
   type SessionMeta,
@@ -238,6 +242,11 @@ describe("overhaul acceptance — terminals", () => {
           state: "working",
           updated_at: updatedAt,
           provider_session_id: null,
+          launch_state: "Implement",
+          launch_model: "gpt-5.6",
+          effective_state: "working",
+          output_sequence: 1,
+          last_output_at: updatedAt,
         }],
         automation_attempts: [],
       });
@@ -263,16 +272,23 @@ describe("overhaul acceptance — terminals", () => {
     await waitFor(() => {
       expect(screen.queryByLabelText("Agent session has exited"))
         .not.toBeInTheDocument();
-      expect(within(screen.getByRole("tab", { name: "codex terminal" }))
-        .getByLabelText("Agent is actively working")).toBeInTheDocument();
+      expect(within(screen.getByRole("tab", { name: "Implement codex terminal" }))
+        .getByLabelText("Terminal output has not changed for 60 seconds (the session is still live)"))
+        .toBeInTheDocument();
       const workItemLifecycle = screen.getByTestId("agent-state-badge");
-      expect(workItemLifecycle).toHaveAttribute("data-state", "active");
-      expect(within(workItemLifecycle).getByLabelText("Agent is actively working"))
+      expect(workItemLifecycle).toHaveAttribute("data-state", "idle");
+      expect(within(workItemLifecycle).getByLabelText(
+        "Terminal output has not changed for 60 seconds (the session is still live)",
+      ))
         .toBeInTheDocument();
     });
     expect(useTerminalStore.getState().sessions["session-1"]?.status).toBe(
       "ready",
     );
+    expect(useAgentStatusStore.getState().runs["run-1"]).toMatchObject({
+      launch_state: "Implement",
+      launch_model: "gpt-5.6",
+    });
   });
 
   it("[overhaul-137] presents a stopped Codex run as needing input on its tab and work-item status", async () => {
@@ -316,16 +332,12 @@ describe("overhaul acceptance — terminals", () => {
     ).toBeInTheDocument();
 
     act(() => {
-      dispatchStatusFrame({
-        v: 1,
-        type: "agent_lifecycle",
+      applyRunStatusFrame(lifecycleStatusFrame({
+        projectId: "project-1",
+        agentRunId: "run-1",
+        state: projected,
         at: "2026-08-07T12:05:00Z",
-        run: {
-          ...workingRun,
-          state: projected,
-          updated_at: "2026-08-07T12:05:00Z",
-        },
-      });
+      }));
     });
 
     await waitFor(() => {
@@ -389,13 +401,12 @@ describe("overhaul acceptance — terminals", () => {
       },
     ]);
     act(() => {
-      dispatchStatusFrame({
-        v: 1,
-        type: "backend_session",
-        agent_run_id: "run-1",
-        status: "exited",
+      applyRunStatusFrame(terminalStatusFrame({
+        projectId: "project-1",
+        agentRunId: "run-1",
+        state: "exited",
         at: "2026-08-07T12:05:00Z",
-      });
+      }));
     });
 
     await waitFor(() => {

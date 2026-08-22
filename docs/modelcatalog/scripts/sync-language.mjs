@@ -14,7 +14,7 @@ const contexts = [
   {
     id: 'agent-execution',
     name: 'Agent Execution',
-    source: 'backend/apps/execution/CONTEXT.md',
+    source: 'studio/src-tauri/src/graph_run_service/CONTEXT.md',
   },
   {
     id: 'agent-sdlc',

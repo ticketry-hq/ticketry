@@ -10,7 +10,7 @@ import { launchFailureReason } from "./launchFailure";
 
 // CODIN-749 — shared terminal entry pool.
 //
-// The xterm/WebSocket *object lifecycle* extracted out of TerminalHost's former
+// The xterm/transport object lifecycle extracted out of TerminalHost's former
 // component-local `entriesRef`. A module-level singleton so the Terminal/WS
 // pair for a session exists exactly once, independent of how many surfaces
 // (workspace and drawer hosts) reference it. This is the
@@ -35,8 +35,8 @@ export interface SessionEntry {
 }
 
 // How long a session may sit with no surface presenting it before its
-// WebSocket is suspended. Long enough to absorb ownership transfers between
-// surfaces and quick tab flips; the single knob for the suspend policy.
+// viewer transport is suspended. Long enough to absorb ownership transfers
+// between surfaces and quick tab flips; the single knob for the suspend policy.
 export const SUSPEND_GRACE_MS = 30_000;
 
 const XTERM_OPTIONS = {
@@ -176,10 +176,10 @@ export function releasePooledTransport(sessionId: string): void {
   entry.ws = null;
 }
 
-// Open the WebSocket for a session that is `connecting`, or reattach a `ready`
-// durable session whose pooled handle disappeared with the last terminal host.
+// Open the viewer transport for a session that is `connecting`, or reattach a
+// `ready` durable session whose pooled handle disappeared with the last terminal host.
 // Idempotent: a second call while a handle exists is a no-op — this is what
-// makes a second WS viewer for the same live run impossible.
+// makes a second viewer for the same live run impossible.
 //
 // The caller must have seeded `entry.lastCols/lastRows` from a fit before this
 // runs so the PTY is born at the visible geometry.

@@ -1,13 +1,23 @@
 /**
  * The wire calls for a module's durable login shells (#667).
  *
- * A shell run is created and listed through `/api/terminals/shells`, which is
- * deliberately separate from the agent-run terminal routes: it resolves no
- * provider and carries no prompt. Ending one is *not* here — a shell run
- * terminates through the same terminal deletion as any other durable run.
+ * Desktop uses the Rust Terminal Session graph. Browser development keeps the
+ * compatibility shell route. Neither create call accepts a provider or prompt.
+ * Ending a shell still uses the common terminal update contract.
  */
 
 import { authenticatedHostFetch } from "../../../shared/api/authenticatedHostFetch";
+import { studioRuntime } from "../../../runtime";
+import { FoundationGraphQlError } from "../../../graphql-foundation/foundationClient";
+import { graphQlMutationError } from "../../../shared/api/graphqlError";
+import {
+  CreateModuleShellDocument,
+  ModuleShellSessionsDocument,
+} from "../../agents/terminal/generated/terminalSessions";
+
+const DEFAULT_COLUMNS = 80;
+const DEFAULT_ROWS = 24;
+const SHELL_LIST_LIMIT = 100;
 
 export interface ModuleShell {
   agent_run_id: string;
@@ -38,29 +48,74 @@ async function readEnvelope(response: Response): Promise<{ code?: string }> {
 
 /** Launches one durable login shell and returns the run that hosts it. */
 export async function createModuleShell(moduleId: string): Promise<string> {
-  const response = await authenticatedHostFetch("/api/terminals/shells", {
-    method: "POST",
-    body: JSON.stringify({ module_id: moduleId }),
+  const variables = {
+    clientRequestId: crypto.randomUUID(),
+    moduleId,
+    columns: DEFAULT_COLUMNS,
+    rows: DEFAULT_ROWS,
+  };
+  const result = await studioRuntime().writeWorkTracker({
+    rest: async () => {
+      const response = await authenticatedHostFetch("/api/terminals/shells", {
+        method: "POST",
+        body: JSON.stringify({ module_id: moduleId }),
+      });
+      if (response.status === 409) {
+        const { code } = await readEnvelope(response);
+        throw new ModuleShellRefused(code ?? "module_folder_unset");
+      }
+      if (!response.ok) {
+        throw new Error(`shell launch failed (HTTP ${response.status})`);
+      }
+      return (await response.json()) as { agent_run_id: string };
+    },
+    graphQl: async (execute) => {
+      try {
+        let response;
+        try {
+          response = await execute(CreateModuleShellDocument, variables);
+        } catch (error) {
+          if (error instanceof FoundationGraphQlError) throw error;
+          response = await execute(CreateModuleShellDocument, variables);
+        }
+        return { agent_run_id: response.terminal_session.agent_run_id };
+      } catch (error) {
+        if (
+          error instanceof FoundationGraphQlError &&
+          error.code === "module_folder_unusable"
+        ) {
+          throw new ModuleShellRefused(error.code);
+        }
+        return graphQlMutationError(error);
+      }
+    },
   });
-  if (response.status === 409) {
-    const { code } = await readEnvelope(response);
-    throw new ModuleShellRefused(code ?? "module_folder_unset");
-  }
-  if (!response.ok) {
-    throw new Error(`shell launch failed (HTTP ${response.status})`);
-  }
-  const body = (await response.json()) as { agent_run_id: string };
-  return body.agent_run_id;
+  return result.agent_run_id;
 }
 
 export async function listModuleShells(
   moduleId: string,
   signal?: AbortSignal,
 ): Promise<ModuleShell[]> {
-  const response = await authenticatedHostFetch(
-    `/api/terminals/shells?module_id=${encodeURIComponent(moduleId)}`,
-    { signal },
-  );
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  return (await response.json()) as ModuleShell[];
+  return studioRuntime().readWorkTracker({
+    rest: async () => {
+      const response = await authenticatedHostFetch(
+        `/api/terminals/shells?module_id=${encodeURIComponent(moduleId)}`,
+        { signal },
+      );
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return (await response.json()) as ModuleShell[];
+    },
+    graphQl: async (execute) => {
+      const response = await execute(ModuleShellSessionsDocument, {
+        moduleId,
+        limit: SHELL_LIST_LIMIT,
+      });
+      return response.terminal_sessions.sessions.map((session) => ({
+        agent_run_id: session.agent_run_id,
+        module_id: session.module_id,
+        created_at: session.created_at,
+      }));
+    },
+  });
 }

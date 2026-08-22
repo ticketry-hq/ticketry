@@ -19,7 +19,7 @@ use seaography::{
 };
 
 use crate::entities::documents::design_document;
-use crate::query_root::types::StringList;
+use crate::work_management::read_types::StringList;
 
 use super::directory_completion::complete_directories;
 use super::error::DocumentsError;

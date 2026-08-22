@@ -113,14 +113,15 @@ impl WorktreeDiscardService {
             .claim(operation_id, &lease_owner(), DISCARD_LEASE_SECONDS)
             .await?;
         match self.executor.perform(&claim).await {
-            WorkspaceOperationOutcome::Applied { result, .. } => Ok(WorktreeDiscardResult::settled(
-                &result,
-                self.status(task_id).await?,
-            )),
+            WorkspaceOperationOutcome::Applied { result, .. } => Ok(
+                WorktreeDiscardResult::settled(&result, self.status(task_id).await?),
+            ),
             WorkspaceOperationOutcome::Conflicted { code, message, .. } => {
                 Err(WorktreeDiscardError::external_conflict(&code, &message))
             }
-            WorkspaceOperationOutcome::Failed { code, message, .. } => Err(failure(&code, &message)),
+            WorkspaceOperationOutcome::Failed { code, message, .. } => {
+                Err(failure(&code, &message))
+            }
         }
     }
 

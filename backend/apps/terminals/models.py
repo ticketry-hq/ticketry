@@ -79,12 +79,6 @@ class TerminalLaunchRequest(models.Model):
     class Meta:
         db_table = "terminal_launch_requests"
 
-    def dimensions_tuple(self):
-        from apps.terminals.runtime import TerminalDimensions
-
-        return TerminalDimensions(columns=self.columns, rows=self.rows)
-
-
 class AgentRunViewerLease(models.Model):
     """The control-plane owner of a currently attached terminal viewer."""
 

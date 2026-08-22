@@ -11,6 +11,9 @@ from __future__ import annotations
 #: Every scope the persisted run record recognises, in wire order.
 RUN_SCOPES: tuple[str, ...] = ("task", "plan", "instant", "docchat", "shell")
 
+# Stable routing identity for planning and instant work that has no Work Item.
+SCRATCH_TASK_ID = "00000000-0000-0000-0000-000000000000"
+
 #: The scope of a run with no agent, hosting a plain interactive shell.
 SHELL_SCOPE = "shell"
 

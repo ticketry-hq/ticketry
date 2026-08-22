@@ -6,6 +6,8 @@ use super::{RunsPersistenceError, RunsPersistenceErrorCode};
 
 pub const VERSION: i32 = 1;
 pub const CURRENT_DJANGO_LEAF: &str = "0013_agentrun_launch_configuration_snapshot";
+pub const LEGACY_TERMINAL_DJANGO_LEAF: &str = "0015_agentrun_initial_prompt";
+pub const MERGED_DJANGO_LEAF: &str = "0015_merge_20260819_1521";
 
 pub const AUTHORED_TABLES: &[&str] = &[
     "agent_runs",
@@ -34,6 +36,8 @@ pub(crate) const AGENT_RUN_COLUMNS: &[&str] = &[
     "design_dir",
     "resumed_from",
     "scope",
+    "launch_state",
+    "launch_model",
 ];
 
 pub(crate) const ATTEMPT_BASE_COLUMNS: &[&str] = &[
@@ -87,6 +91,30 @@ async fn bridge(
     let Some(source_leaf) = source_leaf else {
         return Ok(());
     };
+    if source_leaf == LEGACY_TERMINAL_DJANGO_LEAF {
+        transaction
+            .execute_unprepared(
+                "ALTER TABLE agent_runs ADD COLUMN model varchar NULL;\n\
+                 ALTER TABLE agent_runs ADD COLUMN reasoning varchar NULL;\n\
+                 UPDATE agent_runs SET model=launch_model WHERE model IS NULL;",
+            )
+            .await
+            .map_err(storage)?;
+        for migration in [CURRENT_DJANGO_LEAF, MERGED_DJANGO_LEAF] {
+            transaction
+                .execute_raw(Statement::from_sql_and_values(
+                    DbBackend::Sqlite,
+                    "INSERT INTO django_migrations (app, name, applied) VALUES ('runs', ?, CURRENT_TIMESTAMP)",
+                    [migration.into()],
+                ))
+                .await
+                .map_err(storage)?;
+        }
+        return Ok(());
+    }
+    if source_leaf == MERGED_DJANGO_LEAF {
+        return Ok(());
+    }
     let source_number = migration_number(source_leaf)?;
     if source_number < 9 {
         transaction
@@ -111,22 +139,7 @@ async fn bridge(
             .await
             .map_err(storage)?;
     }
-    let agent_columns = columns(transaction, "agent_runs").await?;
-    if agent_columns.contains("run_kind") {
-        transaction
-            .execute_unprepared("ALTER TABLE agent_runs DROP COLUMN run_kind")
-            .await
-            .map_err(storage)?;
-    }
-    if source_number < 13 {
-        transaction
-            .execute_unprepared(
-                "ALTER TABLE agent_runs ADD COLUMN model varchar NULL;\n\
-                 ALTER TABLE agent_runs ADD COLUMN reasoning varchar NULL;",
-            )
-            .await
-            .map_err(storage)?;
-    }
+    rebuild_premerge_agent_runs(transaction).await?;
     for migration in DJANGO_MIGRATIONS.iter().skip(source_number as usize) {
         transaction
             .execute_raw(Statement::from_sql_and_values(
@@ -137,6 +150,52 @@ async fn bridge(
             .await
             .map_err(storage)?;
     }
+    for migration in [
+        "0013_agentrun_optional_agent",
+        "0014_agentrun_launch_metadata",
+        MERGED_DJANGO_LEAF,
+    ] {
+        transaction
+            .execute_raw(Statement::from_sql_and_values(
+                DbBackend::Sqlite,
+                "INSERT INTO django_migrations (app, name, applied) VALUES ('runs', ?, CURRENT_TIMESTAMP)",
+                [migration.into()],
+            ))
+            .await
+            .map_err(storage)?;
+    }
+    Ok(())
+}
+
+async fn rebuild_premerge_agent_runs(
+    transaction: &sea_orm::DatabaseTransaction,
+) -> Result<(), RunsPersistenceError> {
+    let installed = columns(transaction, "agent_runs").await?;
+    let select = AGENT_RUN_COLUMNS
+        .iter()
+        .map(|column| {
+            if installed.contains(*column) {
+                format!("\"{column}\"")
+            } else {
+                "NULL".to_owned()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    transaction
+        .execute_unprepared(AGENT_RUN_SCHEMA)
+        .await
+        .map_err(storage)?;
+    transaction
+        .execute_unprepared(&format!(
+            "INSERT INTO agent_runs__rust SELECT {select} FROM agent_runs;\n\
+             DROP TABLE agent_runs;\n\
+             ALTER TABLE agent_runs__rust RENAME TO agent_runs;\n\
+             CREATE INDEX agent_runs_issue_id_f02b0ea6 ON agent_runs(issue_id);\n\
+             CREATE INDEX idx_agent_runs_issue_started ON agent_runs(issue_id, started_at DESC);"
+        ))
+        .await
+        .map_err(storage)?;
     Ok(())
 }
 
@@ -232,7 +291,7 @@ CREATE TABLE runs_launch_effects (
     project_id char(32) NOT NULL,
     issue_id char(32) NOT NULL,
     scope varchar(32) NOT NULL,
-    provider varchar(64) NOT NULL,
+    provider varchar(64) NULL,
     target_kind varchar(32) NOT NULL,
     target_id varchar(255) NOT NULL,
     policy_reference varchar(255) NULL,
@@ -262,13 +321,38 @@ CREATE TRIGGER runs_launch_effect_intent_immutable
       OR OLD.project_id <> NEW.project_id
       OR OLD.issue_id <> NEW.issue_id
       OR OLD.scope <> NEW.scope
-      OR OLD.provider <> NEW.provider
+      OR OLD.provider IS NOT NEW.provider
       OR OLD.target_kind <> NEW.target_kind
       OR OLD.target_id <> NEW.target_id
       OR OLD.policy_reference IS NOT NEW.policy_reference
     BEGIN
         SELECT RAISE(ABORT, 'launch intent is immutable');
     END;
+"#;
+
+const AGENT_RUN_SCHEMA: &str = r#"
+CREATE TABLE agent_runs__rust (
+    id varchar NOT NULL PRIMARY KEY,
+    issue_id char(32) NOT NULL REFERENCES worktracker_issue(id) DEFERRABLE INITIALLY DEFERRED,
+    ticket_seq integer NULL,
+    agent varchar NULL,
+    model varchar NULL,
+    reasoning varchar NULL,
+    status varchar NOT NULL,
+    started_at varchar NOT NULL,
+    ended_at varchar NULL,
+    exit_code integer NULL,
+    error varchar NULL,
+    cwd varchar NULL,
+    provider_session_id varchar NULL,
+    lifecycle_state varchar NULL,
+    lifecycle_updated_at varchar NULL,
+    design_dir varchar NULL,
+    resumed_from varchar NULL,
+    scope varchar NOT NULL,
+    launch_state varchar NULL,
+    launch_model varchar NULL
+);
 "#;
 
 fn storage(source: sea_orm::DbErr) -> RunsPersistenceError {

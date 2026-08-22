@@ -24,7 +24,8 @@ export interface RuntimeEndpoints {
   readonly workTrackerApi: string;
   readonly agentApi: string;
   readonly statusApi: string;
-  readonly terminalWebSocket: string;
+  /** Browser-development compatibility only. Desktop terminal bytes use Tauri. */
+  readonly terminalWebSocket?: string;
 }
 
 export interface RuntimeValues {

@@ -33,11 +33,9 @@ __all__ = [
     "WorkspaceApi",
     "ConfigurationApi",
     "DocumentsApi",
-    "ExecutionApi",
     "RunsApi",
     "SettingsApi",
     "SystemApi",
-    "TerminalsApi",
     "WorktreesApi",
     "ApiResponse",
     "ApiClient",
@@ -48,20 +46,10 @@ __all__ = [
     "ApiKeyError",
     "ApiAttributeError",
     "ApiException",
-    "AgentEnum",
     "AgentModel",
-    "AgentOverride",
-    "AgentRunId",
-    "AgentRunRecord",
-    "AgentStatusResponse",
-    "AgentStatusScopeResponse",
     "Attachment",
-    "AutomationAttempt",
-    "CommittedState",
     "Config",
     "ConfigurationReorder",
-    "CreateModuleShell",
-    "CreateTerminal",
     "CreateWorktree",
     "Digest",
     "Discard",
@@ -71,29 +59,18 @@ __all__ = [
     "Features",
     "FsEntries",
     "GlobalLaunchDefault",
-    "Graph",
-    "GraphNode",
-    "GraphResetResult",
-    "GraphRunExecutionModeEnum",
-    "GraphRunRequest",
-    "GraphRunResult",
     "GroupEnum",
     "Health",
     "IssueType",
     "IssueTypeDelete",
     "IssueTypeTransition",
-    "KindEnum",
     "LaunchBinding",
-    "LaunchedAgentResponse",
     "LevelEnum",
-    "LifecycleAccepted",
-    "LifecycleEvent",
     "Module",
     "ModuleCreate",
     "ModuleFolderValidation",
     "ModuleFolderValidationResult",
     "ModuleLink",
-    "ModuleShell",
     "NullEnum",
     "Open",
     "OriginEnum",
@@ -113,28 +90,11 @@ __all__ = [
     "ProviderCatalogEnvelope",
     "ReasonEnum",
     "ReasoningLevel",
-    "ReleaseResult",
-    "ReplacedViewer",
-    "ResumableTerminal",
-    "ResumeResult",
-    "RunNowRefusal",
-    "RunNowRequest",
-    "RunNowResponse",
+    "RunAuthorization",
+    "RunAuthorizationRequest",
     "SaveDocument",
-    "ScopeEnum",
-    "SelfTerminateResult",
     "SettingValue",
-    "SourceEnum",
     "State",
-    "StatusEnum",
-    "TerminalRun",
-    "TerminateResult",
-    "TransportEnum",
-    "ViewerLease",
-    "ViewerLeaseRelease",
-    "ViewerLeaseResult",
-    "ViewerOutputReport",
-    "ViewerOutputReportResult",
     "WorkItem",
     "WorkItemBatch",
     "WorkItemCreate",
@@ -158,11 +118,9 @@ from worktracker_sdk.generated.api.workflows_api import WorkflowsApi as Workflow
 from worktracker_sdk.generated.api.workspace_api import WorkspaceApi as WorkspaceApi
 from worktracker_sdk.generated.api.configuration_api import ConfigurationApi as ConfigurationApi
 from worktracker_sdk.generated.api.documents_api import DocumentsApi as DocumentsApi
-from worktracker_sdk.generated.api.execution_api import ExecutionApi as ExecutionApi
 from worktracker_sdk.generated.api.runs_api import RunsApi as RunsApi
 from worktracker_sdk.generated.api.settings_api import SettingsApi as SettingsApi
 from worktracker_sdk.generated.api.system_api import SystemApi as SystemApi
-from worktracker_sdk.generated.api.terminals_api import TerminalsApi as TerminalsApi
 from worktracker_sdk.generated.api.worktrees_api import WorktreesApi as WorktreesApi
 
 # import ApiClient
@@ -177,20 +135,10 @@ from worktracker_sdk.generated.exceptions import ApiAttributeError as ApiAttribu
 from worktracker_sdk.generated.exceptions import ApiException as ApiException
 
 # import models into sdk package
-from worktracker_sdk.generated.models.agent_enum import AgentEnum as AgentEnum
 from worktracker_sdk.generated.models.agent_model import AgentModel as AgentModel
-from worktracker_sdk.generated.models.agent_override import AgentOverride as AgentOverride
-from worktracker_sdk.generated.models.agent_run_id import AgentRunId as AgentRunId
-from worktracker_sdk.generated.models.agent_run_record import AgentRunRecord as AgentRunRecord
-from worktracker_sdk.generated.models.agent_status_response import AgentStatusResponse as AgentStatusResponse
-from worktracker_sdk.generated.models.agent_status_scope_response import AgentStatusScopeResponse as AgentStatusScopeResponse
 from worktracker_sdk.generated.models.attachment import Attachment as Attachment
-from worktracker_sdk.generated.models.automation_attempt import AutomationAttempt as AutomationAttempt
-from worktracker_sdk.generated.models.committed_state import CommittedState as CommittedState
 from worktracker_sdk.generated.models.config import Config as Config
 from worktracker_sdk.generated.models.configuration_reorder import ConfigurationReorder as ConfigurationReorder
-from worktracker_sdk.generated.models.create_module_shell import CreateModuleShell as CreateModuleShell
-from worktracker_sdk.generated.models.create_terminal import CreateTerminal as CreateTerminal
 from worktracker_sdk.generated.models.create_worktree import CreateWorktree as CreateWorktree
 from worktracker_sdk.generated.models.digest import Digest as Digest
 from worktracker_sdk.generated.models.discard import Discard as Discard
@@ -200,29 +148,18 @@ from worktracker_sdk.generated.models.error_envelope import ErrorEnvelope as Err
 from worktracker_sdk.generated.models.features import Features as Features
 from worktracker_sdk.generated.models.fs_entries import FsEntries as FsEntries
 from worktracker_sdk.generated.models.global_launch_default import GlobalLaunchDefault as GlobalLaunchDefault
-from worktracker_sdk.generated.models.graph import Graph as Graph
-from worktracker_sdk.generated.models.graph_node import GraphNode as GraphNode
-from worktracker_sdk.generated.models.graph_reset_result import GraphResetResult as GraphResetResult
-from worktracker_sdk.generated.models.graph_run_execution_mode_enum import GraphRunExecutionModeEnum as GraphRunExecutionModeEnum
-from worktracker_sdk.generated.models.graph_run_request import GraphRunRequest as GraphRunRequest
-from worktracker_sdk.generated.models.graph_run_result import GraphRunResult as GraphRunResult
 from worktracker_sdk.generated.models.group_enum import GroupEnum as GroupEnum
 from worktracker_sdk.generated.models.health import Health as Health
 from worktracker_sdk.generated.models.issue_type import IssueType as IssueType
 from worktracker_sdk.generated.models.issue_type_delete import IssueTypeDelete as IssueTypeDelete
 from worktracker_sdk.generated.models.issue_type_transition import IssueTypeTransition as IssueTypeTransition
-from worktracker_sdk.generated.models.kind_enum import KindEnum as KindEnum
 from worktracker_sdk.generated.models.launch_binding import LaunchBinding as LaunchBinding
-from worktracker_sdk.generated.models.launched_agent_response import LaunchedAgentResponse as LaunchedAgentResponse
 from worktracker_sdk.generated.models.level_enum import LevelEnum as LevelEnum
-from worktracker_sdk.generated.models.lifecycle_accepted import LifecycleAccepted as LifecycleAccepted
-from worktracker_sdk.generated.models.lifecycle_event import LifecycleEvent as LifecycleEvent
 from worktracker_sdk.generated.models.module import Module as Module
 from worktracker_sdk.generated.models.module_create import ModuleCreate as ModuleCreate
 from worktracker_sdk.generated.models.module_folder_validation import ModuleFolderValidation as ModuleFolderValidation
 from worktracker_sdk.generated.models.module_folder_validation_result import ModuleFolderValidationResult as ModuleFolderValidationResult
 from worktracker_sdk.generated.models.module_link import ModuleLink as ModuleLink
-from worktracker_sdk.generated.models.module_shell import ModuleShell as ModuleShell
 from worktracker_sdk.generated.models.null_enum import NullEnum as NullEnum
 from worktracker_sdk.generated.models.open import Open as Open
 from worktracker_sdk.generated.models.origin_enum import OriginEnum as OriginEnum
@@ -242,28 +179,11 @@ from worktracker_sdk.generated.models.provider_catalog import ProviderCatalog as
 from worktracker_sdk.generated.models.provider_catalog_envelope import ProviderCatalogEnvelope as ProviderCatalogEnvelope
 from worktracker_sdk.generated.models.reason_enum import ReasonEnum as ReasonEnum
 from worktracker_sdk.generated.models.reasoning_level import ReasoningLevel as ReasoningLevel
-from worktracker_sdk.generated.models.release_result import ReleaseResult as ReleaseResult
-from worktracker_sdk.generated.models.replaced_viewer import ReplacedViewer as ReplacedViewer
-from worktracker_sdk.generated.models.resumable_terminal import ResumableTerminal as ResumableTerminal
-from worktracker_sdk.generated.models.resume_result import ResumeResult as ResumeResult
-from worktracker_sdk.generated.models.run_now_refusal import RunNowRefusal as RunNowRefusal
-from worktracker_sdk.generated.models.run_now_request import RunNowRequest as RunNowRequest
-from worktracker_sdk.generated.models.run_now_response import RunNowResponse as RunNowResponse
+from worktracker_sdk.generated.models.run_authorization import RunAuthorization as RunAuthorization
+from worktracker_sdk.generated.models.run_authorization_request import RunAuthorizationRequest as RunAuthorizationRequest
 from worktracker_sdk.generated.models.save_document import SaveDocument as SaveDocument
-from worktracker_sdk.generated.models.scope_enum import ScopeEnum as ScopeEnum
-from worktracker_sdk.generated.models.self_terminate_result import SelfTerminateResult as SelfTerminateResult
 from worktracker_sdk.generated.models.setting_value import SettingValue as SettingValue
-from worktracker_sdk.generated.models.source_enum import SourceEnum as SourceEnum
 from worktracker_sdk.generated.models.state import State as State
-from worktracker_sdk.generated.models.status_enum import StatusEnum as StatusEnum
-from worktracker_sdk.generated.models.terminal_run import TerminalRun as TerminalRun
-from worktracker_sdk.generated.models.terminate_result import TerminateResult as TerminateResult
-from worktracker_sdk.generated.models.transport_enum import TransportEnum as TransportEnum
-from worktracker_sdk.generated.models.viewer_lease import ViewerLease as ViewerLease
-from worktracker_sdk.generated.models.viewer_lease_release import ViewerLeaseRelease as ViewerLeaseRelease
-from worktracker_sdk.generated.models.viewer_lease_result import ViewerLeaseResult as ViewerLeaseResult
-from worktracker_sdk.generated.models.viewer_output_report import ViewerOutputReport as ViewerOutputReport
-from worktracker_sdk.generated.models.viewer_output_report_result import ViewerOutputReportResult as ViewerOutputReportResult
 from worktracker_sdk.generated.models.work_item import WorkItem as WorkItem
 from worktracker_sdk.generated.models.work_item_batch import WorkItemBatch as WorkItemBatch
 from worktracker_sdk.generated.models.work_item_create import WorkItemCreate as WorkItemCreate

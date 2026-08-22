@@ -7,6 +7,11 @@ from pathlib import Path
 from studio_server.settings import *  # noqa: F403
 
 
+# Characterization tests keep the retired Python terminal models available;
+# production settings and packaging do not install this app.
+INSTALLED_APPS = [*INSTALLED_APPS, "apps.terminals"]  # noqa: F405
+
+
 DATABASES = {  # noqa: F405
     "default": {
         "ENGINE": "django.db.backends.sqlite3",

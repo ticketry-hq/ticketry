@@ -107,3 +107,14 @@ mutation ReorderWorkTrackerWorkItem($id: String!, $beforeId: String, $afterId: S
 mutation DeleteWorkTrackerWorkItem($id: String!) {
   delete_work_item(id: $id)
 }
+
+mutation RunWorkTrackerWorkItemNow($idOrKey: String!, $requestIdentity: String!) {
+  run_now(id_or_key: $idOrKey, request_identity: $requestIdentity) {
+    target_id
+    code
+    detail
+    remedy
+    committed_state { id name }
+    run { target_id agent agent_run_id }
+  }
+}

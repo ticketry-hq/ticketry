@@ -110,12 +110,6 @@ function validateConfiguration(value: unknown): RuntimeStartupConfiguration {
     ["http:", "https:"],
     "must be a loopback HTTP(S) URL",
   );
-  const terminalWebSocket = endpoint(
-    endpoints,
-    "terminalWebSocket",
-    ["ws:", "wss:"],
-    "must be a loopback WebSocket URL",
-  );
   const workTrackerApiKey = values.workTrackerApiKey;
   if (typeof workTrackerApiKey !== "string") {
     return initializationError("workTrackerApiKey", "must be a string");
@@ -142,7 +136,6 @@ function validateConfiguration(value: unknown): RuntimeStartupConfiguration {
       workTrackerApi,
       agentApi,
       statusApi,
-      terminalWebSocket,
     }),
     values: Object.freeze({ workTrackerApiKey }),
     serviceHealth: Object.freeze({
@@ -164,7 +157,6 @@ function serviceHealth(value: unknown): ServiceHealth | null {
         workTrackerApi: "http://127.0.0.1:1/api/work-tracker",
         agentApi: "http://127.0.0.1:1/api",
         statusApi: "http://127.0.0.1:1/api",
-        terminalWebSocket: "ws://127.0.0.1:1/ws/terminal",
       },
       values: { workTrackerApiKey: "" },
       serviceHealth: recordValue,
@@ -197,7 +189,7 @@ export async function createDesktopRuntime({
     platform: "desktop" as const,
     capabilities: Object.freeze({
       statusFeed: true,
-      websocketTerminal: true,
+      websocketTerminal: false,
       nativeLifecycle: false,
       serviceSupervision: true,
       nativeTerminal: false,

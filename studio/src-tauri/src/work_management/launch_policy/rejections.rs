@@ -30,6 +30,7 @@ pub const RECOVERABLE_CODES: &[&str] = &[
     "launch_context_incomplete",
     "launch_policy_storage_failed",
     "model_required",
+    "module_folder_unusable",
     "module_not_found",
     "profile_not_configured",
     "profile_workspace_mismatch",

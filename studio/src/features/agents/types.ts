@@ -21,6 +21,8 @@ export interface PersistedTerminalSession {
   agent_run_id: string;
   doc_rel_path?: string | null;
   created_at: string;
+  launch_state?: string | null;
+  launch_model?: string | null;
 }
 
 export interface ResumableTerminalSession {

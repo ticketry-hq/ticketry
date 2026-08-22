@@ -187,7 +187,12 @@ export function useWorkspaceTabActions({
     if (!bucket || !projectId || resumingRunId) return;
     setResumingRunId(resumableSession.agent_run_id);
     try {
-      const resumed = await resumeTerminal(resumableSession.agent_run_id);
+      const resumed = await resumeTerminal({
+        source: resumableSession,
+        projectId,
+        moduleId: moduleId ?? "",
+        taskId: scratch ? null : bucket,
+      });
       const queryKey = queryKeys.terminalSessions.resumable(
         scratch ? null : bucket,
         scratch ? projectId : null,

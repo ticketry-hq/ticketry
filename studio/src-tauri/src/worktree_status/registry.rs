@@ -114,7 +114,11 @@ mod tests {
             &missing
         ));
         assert!(!same_path(
-            &directory.path().join("checkouts/other").display().to_string(),
+            &directory
+                .path()
+                .join("checkouts/other")
+                .display()
+                .to_string(),
             &missing
         ));
     }

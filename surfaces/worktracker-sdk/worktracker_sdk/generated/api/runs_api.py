@@ -18,10 +18,9 @@ from typing_extensions import Annotated
 
 from pydantic import StrictInt, StrictStr
 from typing import Dict, Optional
-from worktracker_sdk.generated.models.agent_status_response import AgentStatusResponse
-from worktracker_sdk.generated.models.automation_attempt import AutomationAttempt
-from worktracker_sdk.generated.models.lifecycle_accepted import LifecycleAccepted
-from worktracker_sdk.generated.models.lifecycle_event import LifecycleEvent
+from worktracker_sdk.generated.models.open import Open
+from worktracker_sdk.generated.models.run_authorization import RunAuthorization
+from worktracker_sdk.generated.models.run_authorization_request import RunAuthorizationRequest
 
 from worktracker_sdk.generated.api_client import ApiClient, RequestSerialized
 from worktracker_sdk.generated.api_response import ApiResponse
@@ -42,9 +41,9 @@ class RunsApi:
 
 
     @validate_call
-    def automation_attempts_retry_create(
+    def runs_authorization_create(
         self,
-        attempt_id: StrictStr,
+        run_authorization_request: RunAuthorizationRequest,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -57,12 +56,12 @@ class RunsApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> AutomationAttempt:
-        """automation_attempts_retry_create
+    ) -> RunAuthorization:
+        """runs_authorization_create
 
 
-        :param attempt_id: (required)
-        :type attempt_id: str
+        :param run_authorization_request: (required)
+        :type run_authorization_request: RunAuthorizationRequest
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -85,8 +84,8 @@ class RunsApi:
         :return: Returns the result object.
         """ # noqa: E501
 
-        _param = self._automation_attempts_retry_create_serialize(
-            attempt_id=attempt_id,
+        _param = self._runs_authorization_create_serialize(
+            run_authorization_request=run_authorization_request,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -94,9 +93,7 @@ class RunsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "AutomationAttempt",
-            '404': "Open",
-            '409': "Open",
+            '200': "RunAuthorization",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -110,9 +107,9 @@ class RunsApi:
 
 
     @validate_call
-    def automation_attempts_retry_create_with_http_info(
+    def runs_authorization_create_with_http_info(
         self,
-        attempt_id: StrictStr,
+        run_authorization_request: RunAuthorizationRequest,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -125,12 +122,12 @@ class RunsApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> ApiResponse[AutomationAttempt]:
-        """automation_attempts_retry_create
+    ) -> ApiResponse[RunAuthorization]:
+        """runs_authorization_create
 
 
-        :param attempt_id: (required)
-        :type attempt_id: str
+        :param run_authorization_request: (required)
+        :type run_authorization_request: RunAuthorizationRequest
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -153,8 +150,8 @@ class RunsApi:
         :return: Returns the result object.
         """ # noqa: E501
 
-        _param = self._automation_attempts_retry_create_serialize(
-            attempt_id=attempt_id,
+        _param = self._runs_authorization_create_serialize(
+            run_authorization_request=run_authorization_request,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -162,9 +159,7 @@ class RunsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "AutomationAttempt",
-            '404': "Open",
-            '409': "Open",
+            '200': "RunAuthorization",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -178,9 +173,9 @@ class RunsApi:
 
 
     @validate_call
-    def automation_attempts_retry_create_without_preload_content(
+    def runs_authorization_create_without_preload_content(
         self,
-        attempt_id: StrictStr,
+        run_authorization_request: RunAuthorizationRequest,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -194,11 +189,11 @@ class RunsApi:
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
     ) -> RESTResponseType:
-        """automation_attempts_retry_create
+        """runs_authorization_create
 
 
-        :param attempt_id: (required)
-        :type attempt_id: str
+        :param run_authorization_request: (required)
+        :type run_authorization_request: RunAuthorizationRequest
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -221,8 +216,8 @@ class RunsApi:
         :return: Returns the result object.
         """ # noqa: E501
 
-        _param = self._automation_attempts_retry_create_serialize(
-            attempt_id=attempt_id,
+        _param = self._runs_authorization_create_serialize(
+            run_authorization_request=run_authorization_request,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -230,9 +225,7 @@ class RunsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "AutomationAttempt",
-            '404': "Open",
-            '409': "Open",
+            '200': "RunAuthorization",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -241,273 +234,9 @@ class RunsApi:
         return response_data.response
 
 
-    def _automation_attempts_retry_create_serialize(
+    def _runs_authorization_create_serialize(
         self,
-        attempt_id,
-        _request_auth,
-        _content_type,
-        _headers,
-        _host_index,
-    ) -> RequestSerialized:
-
-        _host = None
-
-        _collection_formats: Dict[str, str] = {
-        }
-
-        _path_params: Dict[str, str] = {}
-        _query_params: List[Tuple[str, str]] = []
-        _header_params: Dict[str, Optional[str]] = _headers or {}
-        _form_params: List[Tuple[str, str]] = []
-        _files: Dict[
-            str, Union[str, bytes, List[str], List[bytes], List[Tuple[str, bytes]]]
-        ] = {}
-        _body_params: Optional[bytes] = None
-
-        # process the path parameters
-        if attempt_id is not None:
-            _path_params['attempt_id'] = attempt_id
-        # process the query parameters
-        # process the header parameters
-        # process the form parameters
-        # process the body parameter
-
-
-        # set the HTTP header `Accept`
-        if 'Accept' not in _header_params:
-            _header_params['Accept'] = self.api_client.select_header_accept(
-                [
-                    'application/json'
-                ]
-            )
-
-
-        # authentication setting
-        _auth_settings: List[str] = [
-            'ApiKeyAuth'
-        ]
-
-        return self.api_client.param_serialize(
-            method='POST',
-            resource_path='/automation-attempts/{attempt_id}/retry',
-            path_params=_path_params,
-            query_params=_query_params,
-            header_params=_header_params,
-            body=_body_params,
-            post_params=_form_params,
-            files=_files,
-            auth_settings=_auth_settings,
-            collection_formats=_collection_formats,
-            _host=_host,
-            _request_auth=_request_auth
-        )
-
-
-
-
-    @validate_call
-    def lifecycle_events_create(
-        self,
-        lifecycle_event: LifecycleEvent,
-        _request_timeout: Union[
-            None,
-            Annotated[StrictFloat, Field(gt=0)],
-            Tuple[
-                Annotated[StrictFloat, Field(gt=0)],
-                Annotated[StrictFloat, Field(gt=0)]
-            ]
-        ] = None,
-        _request_auth: Optional[Dict[StrictStr, Any]] = None,
-        _content_type: Optional[StrictStr] = None,
-        _headers: Optional[Dict[StrictStr, Any]] = None,
-        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> LifecycleAccepted:
-        """lifecycle_events_create
-
-        Lifecycle ingress for agent hooks, guarded by run-scoped authorization.  The view skips DRF's static-API-key authentication because its callers are hook subprocesses that never hold the desktop credential. Instead each launch injects a Studio-signed Bearer credential bound to exactly one run (the same scheme :class:`SelfTerminateView` uses), so an arbitrary local process cannot spoof lifecycle state or hijack another run's ``provider_session_id``.
-
-        :param lifecycle_event: (required)
-        :type lifecycle_event: LifecycleEvent
-        :param _request_timeout: timeout setting for this request. If one
-                                 number provided, it will be total request
-                                 timeout. It can also be a pair (tuple) of
-                                 (connection, read) timeouts.
-        :type _request_timeout: int, tuple(int, int), optional
-        :param _request_auth: set to override the auth_settings for an a single
-                              request; this effectively ignores the
-                              authentication in the spec for a single request.
-        :type _request_auth: dict, optional
-        :param _content_type: force content-type for the request.
-        :type _content_type: str, Optional
-        :param _headers: set to override the headers for a single
-                         request; this effectively ignores the headers
-                         in the spec for a single request.
-        :type _headers: dict, optional
-        :param _host_index: set to override the host_index for a single
-                            request; this effectively ignores the host_index
-                            in the spec for a single request.
-        :type _host_index: int, optional
-        :return: Returns the result object.
-        """ # noqa: E501
-
-        _param = self._lifecycle_events_create_serialize(
-            lifecycle_event=lifecycle_event,
-            _request_auth=_request_auth,
-            _content_type=_content_type,
-            _headers=_headers,
-            _host_index=_host_index
-        )
-
-        _response_types_map: Dict[str, Optional[str]] = {
-            '202': "LifecycleAccepted",
-            '401': "Open",
-        }
-        response_data = self.api_client.call_api(
-            *_param,
-            _request_timeout=_request_timeout
-        )
-        response_data.read()
-        return self.api_client.response_deserialize(
-            response_data=response_data,
-            response_types_map=_response_types_map,
-        ).data
-
-
-    @validate_call
-    def lifecycle_events_create_with_http_info(
-        self,
-        lifecycle_event: LifecycleEvent,
-        _request_timeout: Union[
-            None,
-            Annotated[StrictFloat, Field(gt=0)],
-            Tuple[
-                Annotated[StrictFloat, Field(gt=0)],
-                Annotated[StrictFloat, Field(gt=0)]
-            ]
-        ] = None,
-        _request_auth: Optional[Dict[StrictStr, Any]] = None,
-        _content_type: Optional[StrictStr] = None,
-        _headers: Optional[Dict[StrictStr, Any]] = None,
-        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> ApiResponse[LifecycleAccepted]:
-        """lifecycle_events_create
-
-        Lifecycle ingress for agent hooks, guarded by run-scoped authorization.  The view skips DRF's static-API-key authentication because its callers are hook subprocesses that never hold the desktop credential. Instead each launch injects a Studio-signed Bearer credential bound to exactly one run (the same scheme :class:`SelfTerminateView` uses), so an arbitrary local process cannot spoof lifecycle state or hijack another run's ``provider_session_id``.
-
-        :param lifecycle_event: (required)
-        :type lifecycle_event: LifecycleEvent
-        :param _request_timeout: timeout setting for this request. If one
-                                 number provided, it will be total request
-                                 timeout. It can also be a pair (tuple) of
-                                 (connection, read) timeouts.
-        :type _request_timeout: int, tuple(int, int), optional
-        :param _request_auth: set to override the auth_settings for an a single
-                              request; this effectively ignores the
-                              authentication in the spec for a single request.
-        :type _request_auth: dict, optional
-        :param _content_type: force content-type for the request.
-        :type _content_type: str, Optional
-        :param _headers: set to override the headers for a single
-                         request; this effectively ignores the headers
-                         in the spec for a single request.
-        :type _headers: dict, optional
-        :param _host_index: set to override the host_index for a single
-                            request; this effectively ignores the host_index
-                            in the spec for a single request.
-        :type _host_index: int, optional
-        :return: Returns the result object.
-        """ # noqa: E501
-
-        _param = self._lifecycle_events_create_serialize(
-            lifecycle_event=lifecycle_event,
-            _request_auth=_request_auth,
-            _content_type=_content_type,
-            _headers=_headers,
-            _host_index=_host_index
-        )
-
-        _response_types_map: Dict[str, Optional[str]] = {
-            '202': "LifecycleAccepted",
-            '401': "Open",
-        }
-        response_data = self.api_client.call_api(
-            *_param,
-            _request_timeout=_request_timeout
-        )
-        response_data.read()
-        return self.api_client.response_deserialize(
-            response_data=response_data,
-            response_types_map=_response_types_map,
-        )
-
-
-    @validate_call
-    def lifecycle_events_create_without_preload_content(
-        self,
-        lifecycle_event: LifecycleEvent,
-        _request_timeout: Union[
-            None,
-            Annotated[StrictFloat, Field(gt=0)],
-            Tuple[
-                Annotated[StrictFloat, Field(gt=0)],
-                Annotated[StrictFloat, Field(gt=0)]
-            ]
-        ] = None,
-        _request_auth: Optional[Dict[StrictStr, Any]] = None,
-        _content_type: Optional[StrictStr] = None,
-        _headers: Optional[Dict[StrictStr, Any]] = None,
-        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> RESTResponseType:
-        """lifecycle_events_create
-
-        Lifecycle ingress for agent hooks, guarded by run-scoped authorization.  The view skips DRF's static-API-key authentication because its callers are hook subprocesses that never hold the desktop credential. Instead each launch injects a Studio-signed Bearer credential bound to exactly one run (the same scheme :class:`SelfTerminateView` uses), so an arbitrary local process cannot spoof lifecycle state or hijack another run's ``provider_session_id``.
-
-        :param lifecycle_event: (required)
-        :type lifecycle_event: LifecycleEvent
-        :param _request_timeout: timeout setting for this request. If one
-                                 number provided, it will be total request
-                                 timeout. It can also be a pair (tuple) of
-                                 (connection, read) timeouts.
-        :type _request_timeout: int, tuple(int, int), optional
-        :param _request_auth: set to override the auth_settings for an a single
-                              request; this effectively ignores the
-                              authentication in the spec for a single request.
-        :type _request_auth: dict, optional
-        :param _content_type: force content-type for the request.
-        :type _content_type: str, Optional
-        :param _headers: set to override the headers for a single
-                         request; this effectively ignores the headers
-                         in the spec for a single request.
-        :type _headers: dict, optional
-        :param _host_index: set to override the host_index for a single
-                            request; this effectively ignores the host_index
-                            in the spec for a single request.
-        :type _host_index: int, optional
-        :return: Returns the result object.
-        """ # noqa: E501
-
-        _param = self._lifecycle_events_create_serialize(
-            lifecycle_event=lifecycle_event,
-            _request_auth=_request_auth,
-            _content_type=_content_type,
-            _headers=_headers,
-            _host_index=_host_index
-        )
-
-        _response_types_map: Dict[str, Optional[str]] = {
-            '202': "LifecycleAccepted",
-            '401': "Open",
-        }
-        response_data = self.api_client.call_api(
-            *_param,
-            _request_timeout=_request_timeout
-        )
-        return response_data.response
-
-
-    def _lifecycle_events_create_serialize(
-        self,
-        lifecycle_event,
+        run_authorization_request,
         _request_auth,
         _content_type,
         _headers,
@@ -533,8 +262,8 @@ class RunsApi:
         # process the header parameters
         # process the form parameters
         # process the body parameter
-        if lifecycle_event is not None:
-            _body_params = lifecycle_event
+        if run_authorization_request is not None:
+            _body_params = run_authorization_request
 
 
         # set the HTTP header `Accept`
@@ -563,11 +292,12 @@ class RunsApi:
 
         # authentication setting
         _auth_settings: List[str] = [
+            'ApiKeyAuth'
         ]
 
         return self.api_client.param_serialize(
             method='POST',
-            resource_path='/lifecycle/events',
+            resource_path='/runs/authorization',
             path_params=_path_params,
             query_params=_query_params,
             header_params=_header_params,
@@ -584,10 +314,8 @@ class RunsApi:
 
 
     @validate_call
-    def runs_agent_status_retrieve(
+    def runs_mcp_authorize_create(
         self,
-        project_id: StrictStr,
-        task_id: Optional[StrictStr] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -600,14 +328,10 @@ class RunsApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> AgentStatusResponse:
-        """runs_agent_status_retrieve
+    ) -> Open:
+        """runs_mcp_authorize_create
 
 
-        :param project_id: (required)
-        :type project_id: str
-        :param task_id:
-        :type task_id: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -630,9 +354,7 @@ class RunsApi:
         :return: Returns the result object.
         """ # noqa: E501
 
-        _param = self._runs_agent_status_retrieve_serialize(
-            project_id=project_id,
-            task_id=task_id,
+        _param = self._runs_mcp_authorize_create_serialize(
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -640,7 +362,7 @@ class RunsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "AgentStatusResponse",
+            '200': "Open",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -654,10 +376,8 @@ class RunsApi:
 
 
     @validate_call
-    def runs_agent_status_retrieve_with_http_info(
+    def runs_mcp_authorize_create_with_http_info(
         self,
-        project_id: StrictStr,
-        task_id: Optional[StrictStr] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -670,14 +390,10 @@ class RunsApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> ApiResponse[AgentStatusResponse]:
-        """runs_agent_status_retrieve
+    ) -> ApiResponse[Open]:
+        """runs_mcp_authorize_create
 
 
-        :param project_id: (required)
-        :type project_id: str
-        :param task_id:
-        :type task_id: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -700,9 +416,7 @@ class RunsApi:
         :return: Returns the result object.
         """ # noqa: E501
 
-        _param = self._runs_agent_status_retrieve_serialize(
-            project_id=project_id,
-            task_id=task_id,
+        _param = self._runs_mcp_authorize_create_serialize(
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -710,7 +424,7 @@ class RunsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "AgentStatusResponse",
+            '200': "Open",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -724,10 +438,8 @@ class RunsApi:
 
 
     @validate_call
-    def runs_agent_status_retrieve_without_preload_content(
+    def runs_mcp_authorize_create_without_preload_content(
         self,
-        project_id: StrictStr,
-        task_id: Optional[StrictStr] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -741,13 +453,9 @@ class RunsApi:
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
     ) -> RESTResponseType:
-        """runs_agent_status_retrieve
+        """runs_mcp_authorize_create
 
 
-        :param project_id: (required)
-        :type project_id: str
-        :param task_id:
-        :type task_id: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -770,9 +478,7 @@ class RunsApi:
         :return: Returns the result object.
         """ # noqa: E501
 
-        _param = self._runs_agent_status_retrieve_serialize(
-            project_id=project_id,
-            task_id=task_id,
+        _param = self._runs_mcp_authorize_create_serialize(
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -780,7 +486,7 @@ class RunsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "AgentStatusResponse",
+            '200': "Open",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -789,10 +495,8 @@ class RunsApi:
         return response_data.response
 
 
-    def _runs_agent_status_retrieve_serialize(
+    def _runs_mcp_authorize_create_serialize(
         self,
-        project_id,
-        task_id,
         _request_auth,
         _content_type,
         _headers,
@@ -815,14 +519,6 @@ class RunsApi:
 
         # process the path parameters
         # process the query parameters
-        if project_id is not None:
-
-            _query_params.append(('project_id', project_id))
-
-        if task_id is not None:
-
-            _query_params.append(('task_id', task_id))
-
         # process the header parameters
         # process the form parameters
         # process the body parameter
@@ -843,8 +539,8 @@ class RunsApi:
         ]
 
         return self.api_client.param_serialize(
-            method='GET',
-            resource_path='/runs/agent-status',
+            method='POST',
+            resource_path='/runs/mcp-authorize',
             path_params=_path_params,
             query_params=_query_params,
             header_params=_header_params,

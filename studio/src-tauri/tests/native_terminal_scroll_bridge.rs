@@ -9,7 +9,9 @@ use muxed_studio_lib::native_terminal::scroll::{
 use muxed_studio_lib::native_terminal::worker::{
     run_native_worker, NativeViewerCommand, NativeWorkerExit,
 };
-use muxed_studio_lib::terminal_runtime::{TerminalAttachment, TerminalCommandAttachment};
+use muxed_studio_lib::terminal_viewer::attachment::{
+    TerminalAttachment, TerminalCommandAttachment,
+};
 use std::io::Read;
 use std::sync::mpsc;
 use std::thread;
@@ -83,14 +85,7 @@ fn native_gestures_enter_history_and_return_to_the_live_prompt() {
         "an upward gesture is accepted while the viewer is attached"
     );
     await_pane_value(&server, "#{pane_in_mode}", "1");
-    assert!(
-        server
-            .pane_value("#{scroll_position}")
-            .parse::<usize>()
-            .expect("numeric scroll position")
-            > 0,
-        "an upward gesture moves into history"
-    );
+    await_positive_pane_value(&server, "#{scroll_position}");
 
     let rendered = collect_output(&output_receiver);
     assert!(
@@ -196,6 +191,21 @@ fn await_pane_value(server: &IsolatedTmux, format: &str, expected: &str) {
         assert!(
             Instant::now() < deadline,
             "tmux {format} stayed {value:?} instead of {expected:?}"
+        );
+        thread::sleep(Duration::from_millis(20));
+    }
+}
+
+fn await_positive_pane_value(server: &IsolatedTmux, format: &str) {
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        let value = server.pane_value(format);
+        if value.parse::<usize>().expect("numeric tmux pane value") > 0 {
+            return;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "tmux {format} stayed {value:?} instead of becoming positive"
         );
         thread::sleep(Duration::from_millis(20));
     }

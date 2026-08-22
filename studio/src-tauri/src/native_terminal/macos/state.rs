@@ -73,6 +73,33 @@ struct NativeEntry {
     preparation_phase: Arc<AtomicU8>,
 }
 
+struct NativePreparedViewerMechanics {
+    window: tauri::WebviewWindow,
+    entries: Arc<Mutex<HashMap<String, NativeEntry>>>,
+    handle: String,
+}
+
+impl crate::viewer_ownership::PreparedViewerMechanics for NativePreparedViewerMechanics {
+    fn detach(&self, _reason: crate::viewer_ownership::ViewerDetachReason) {
+        let _ = detach_native_handle(&self.window, &self.entries, &self.handle);
+    }
+}
+
+fn detach_native_handle(
+    window: &tauri::WebviewWindow,
+    entries: &Arc<Mutex<HashMap<String, NativeEntry>>>,
+    handle: &str,
+) -> Result<(), String> {
+    let entry = entries
+        .lock()
+        .expect("native terminal registry poisoned")
+        .remove(handle)
+        .ok_or_else(|| "native terminal handle was not found".to_owned())?;
+    entry.stop_accepting_events();
+    let _ = entry.worker.send(NativeViewerCommand::Detach);
+    free_view(window, entry.view, entry.contexts).map_err(|error| error.to_string())
+}
+
 impl NativeEntry {
     /// Viewer detachment stops accepting reported events before the native
     /// view is removed, so an event in flight cannot reach the next viewer.
@@ -156,8 +183,7 @@ impl NativeAttachReservation {
     }
 
     fn is_current(&self, registry: &NativeAttachRegistry) -> bool {
-        registry.generation == self.generation
-            && self.phase.load(Ordering::Acquire) == PREPARING
+        registry.generation == self.generation && self.phase.load(Ordering::Acquire) == PREPARING
     }
 }
 
@@ -251,4 +277,3 @@ impl NativeTerminalState {
         }
     }
 }
-

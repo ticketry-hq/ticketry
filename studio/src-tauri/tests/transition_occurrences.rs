@@ -223,3 +223,41 @@ async fn rejected_or_rolled_back_transition_publishes_no_occurrence() {
         .unwrap();
     assert_eq!(count, 0);
 }
+
+#[tokio::test]
+async fn command_open_upgrades_the_pre_claim_occurrence_schema_once() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("state.db");
+    let writer = Database::connect(format!("sqlite:{}?mode=rwc", path.display()))
+        .await
+        .unwrap();
+    writer
+        .execute_unprepared(
+            "CREATE TABLE worktracker_transitionoccurrence (\
+             occurrence_id varchar PRIMARY KEY, version integer NOT NULL, \
+             issue_id varchar NOT NULL, project_id varchar NOT NULL, \
+             issue_type_id varchar NOT NULL, from_state_id varchar NOT NULL, \
+             to_state_id varchar NOT NULL, from_group varchar NOT NULL, \
+             to_group varchar NOT NULL, work_item_revision bigint NOT NULL, \
+             workflow_revision integer NOT NULL, destination_auto_start bool NOT NULL, \
+             committed_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP)",
+        )
+        .await
+        .unwrap();
+    writer.close().await.unwrap();
+
+    let database = open_for_commands(&path).await.unwrap();
+    let columns = database
+        .query_all_raw(Statement::from_string(
+            DbBackend::Sqlite,
+            "PRAGMA table_info(worktracker_transitionoccurrence)".to_owned(),
+        ))
+        .await
+        .unwrap();
+    assert!(columns
+        .into_iter()
+        .any(|row| { row.try_get::<String>("", "name").unwrap() == "run_now_decision_id" }));
+    drop(database);
+
+    open_for_commands(&path).await.unwrap();
+}

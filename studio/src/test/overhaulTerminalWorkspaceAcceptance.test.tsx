@@ -12,10 +12,9 @@ import {
 import { seedConfig } from "../features/studio/stores/configStore";
 import { queryClient } from "../shared/query/queryClient";
 import { useClientStore } from "../state/clientStore";
+import { installDesktopGraphQlRuntime } from "./desktopGraphQlRuntime";
 
 const terminalApi = vi.hoisted(() => ({
-  getTerminals: vi.fn(),
-  listResumableTerminals: vi.fn(),
   resumeTerminal: vi.fn(),
 }));
 
@@ -58,6 +57,23 @@ vi.mock("../features/agents/api/agentApi", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../features/agents/api/agentApi")>()),
   ...terminalApi,
 }));
+
+// Terminal session reads moved to the Rust Terminal Session graph, so the seam
+// a test controls is the read transport, not a host API module.
+const terminalReads = vi.hoisted(() => {
+  const resumable = vi.fn();
+  return {
+    readTaskTerminalSessions: vi.fn(),
+    readScratchTerminalSessions: vi.fn(),
+    readTaskResumableTerminalSessions: resumable,
+    readScratchResumableTerminalSessions: resumable,
+  };
+});
+
+vi.mock(
+  "../features/agents/terminal/internal/sessionReadTransport",
+  () => terminalReads,
+);
 
 vi.mock(
   "../app/shell/ticket-workspace/selected-ticket/terminals/SelectedTicketTerminal",
@@ -108,6 +124,7 @@ function run(
 describe("overhaul acceptance — terminals", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    installDesktopGraphQlRuntime();
     localStorage.clear();
     queryClient.clear();
     seedConfig({ features: { sidebar: true, projects: true } });
@@ -132,8 +149,9 @@ describe("overhaul acceptance — terminals", () => {
     });
     documentRegistry.listTaskDocuments.mockResolvedValue([]);
     documentRegistry.listScratchDocuments.mockResolvedValue([]);
-    terminalApi.getTerminals.mockResolvedValue([]);
-    terminalApi.listResumableTerminals.mockResolvedValue([]);
+    terminalReads.readTaskTerminalSessions.mockResolvedValue([]);
+    terminalReads.readScratchTerminalSessions.mockResolvedValue([]);
+    terminalReads.readTaskResumableTerminalSessions.mockResolvedValue([]);
     statusStreamFeed.resetCursors("project-1");
   });
 
@@ -283,7 +301,7 @@ describe("overhaul acceptance — terminals", () => {
       </QueryClientProvider>,
     );
 
-    await waitFor(() => expect(terminalApi.getTerminals).toHaveBeenCalled());
+    await waitFor(() => expect(terminalReads.readTaskTerminalSessions).toHaveBeenCalled());
     expect(screen.queryByRole("tab", { name: "codex terminal" }))
       .not.toBeInTheDocument();
     expect(useTerminalStore.getState().sessions).toEqual({});

@@ -6,9 +6,6 @@ use std::env;
 use std::path::{Path, PathBuf};
 use tauri::Manager;
 
-use crate::desktop::environment::{smoke_startup_exit_requested, SMOKE_SIDECAR_BINARY};
-use crate::sidecar_supervision::release_manifest;
-
 const HOOK_RUNNER_BINARY: &str = "ticketry-hook";
 
 fn packaged_resource_binary(
@@ -58,22 +55,6 @@ fn packaged_binary_candidates(
     candidates
 }
 
-pub(crate) fn sidecar_binary(application: &tauri::App) -> Result<PathBuf, String> {
-    if smoke_startup_exit_requested() {
-        return env::var_os(SMOKE_SIDECAR_BINARY)
-            .map(PathBuf::from)
-            .filter(|path| path.is_absolute())
-            .ok_or_else(|| format!("{SMOKE_SIDECAR_BINARY} must name the absolute built sidecar"));
-    }
-
-    let binary = release_manifest::packaged_sidecar_name()?;
-    packaged_resource_binary(
-        application,
-        &binary,
-        "packaged backend sidecar is missing from application resources",
-    )
-}
-
 pub(crate) fn hook_runner_binary(application: &tauri::App) -> Result<PathBuf, String> {
     let binary = format!("{HOOK_RUNNER_BINARY}{}", env::consts::EXE_SUFFIX);
     packaged_resource_binary(
@@ -92,16 +73,16 @@ mod tests {
         let candidates = packaged_binary_candidates(
             Path::new("/Applications/Ticketry.app/Contents/Resources"),
             Path::new("/Applications/Ticketry.app/Contents/MacOS/ticketry"),
-            "muxed-backend",
+            "ticketry-hook",
         );
 
         assert_eq!(
             candidates,
             vec![
-                PathBuf::from("/Applications/Ticketry.app/Contents/MacOS/muxed-backend"),
-                PathBuf::from("/Applications/Ticketry.app/Contents/Resources/muxed-backend"),
+                PathBuf::from("/Applications/Ticketry.app/Contents/MacOS/ticketry-hook"),
+                PathBuf::from("/Applications/Ticketry.app/Contents/Resources/ticketry-hook"),
                 PathBuf::from(
-                    "/Applications/Ticketry.app/Contents/Resources/binaries/muxed-backend"
+                    "/Applications/Ticketry.app/Contents/Resources/binaries/ticketry-hook"
                 ),
             ]
         );
@@ -115,11 +96,11 @@ mod tests {
         ));
         std::fs::create_dir_all(&directory).expect("create packaged helper test directory");
         let executable = directory.join("ticketry");
-        let helper = directory.join("muxed-backend");
+        let helper = directory.join("ticketry-hook");
         std::fs::write(&helper, b"packaged helper").expect("write packaged helper");
 
         assert_eq!(
-            packaged_executable_sibling(&executable, "muxed-backend"),
+            packaged_executable_sibling(&executable, "ticketry-hook"),
             Some(helper)
         );
         let _ = std::fs::remove_dir_all(directory);

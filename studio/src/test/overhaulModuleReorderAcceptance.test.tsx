@@ -12,6 +12,14 @@ vi.mock("../shared/api/client", async () => {
     reorderWorkItem: vi.fn(),
   };
 });
+vi.mock("../features/projects/queries/readTransport", async () => {
+  const api = await import("../shared/api/client");
+  return { readModules: api.listModules, readProjects: api.listProjects, readWorkspace: vi.fn() };
+});
+vi.mock("../features/work-items/mutationTransport", async () => {
+  const api = await import("../shared/api/client");
+  return { reorderWorkItem: api.reorderWorkItem };
+});
 
 import { loadModules, loadProjects } from "../features/projects";
 import type { WorkItem } from "../shared/api/types";

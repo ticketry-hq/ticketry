@@ -45,9 +45,6 @@ function refusal(payload: RunNowPayload): RunNowRefusalError {
 export function runWorkItemNow(issueId: string): Promise<RunNowResponse> {
   const requestIdentity = crypto.randomUUID();
   return studioRuntime().writeWorkTracker({
-    rest: () => Promise.reject(
-      new Error("Run Now is available only through desktop Studio."),
-    ),
     graphQl: async (execute) => {
       const variables = {
         idOrKey: issueId,

@@ -22,6 +22,7 @@ use seaography::{
 };
 
 const RUN_ID: &str = "run-viewer-ownership";
+const OTHER_RUN_ID: &str = "run-viewer-ownership-2";
 
 #[derive(Default)]
 struct Mechanics {
@@ -142,6 +143,105 @@ async fn renewal_requires_the_exact_current_unexpired_generation() {
 
     let replacement = acquire(&service, "xterm-2", "xterm", Arc::new(Mechanics::default())).await;
     assert_eq!(lease(&database).await, replacement);
+    assert_session_live(&database).await;
+}
+
+#[tokio::test]
+async fn periodic_stale_expiry_keeps_a_renewed_viewer_and_retires_only_the_lapsed_lease() {
+    let database = fixture().await;
+    insert_second_run(&database).await;
+    let service = ViewerOwnershipService::with_ttl(database.clone(), Duration::from_secs(60));
+    let healthy = Arc::new(Mechanics::default());
+    let renewed = acquire(&service, "native-healthy", "native", healthy.clone()).await;
+    let lapsed_mechanics = Arc::new(Mechanics::default());
+    let lapsed = service
+        .create_with(
+            CreateViewerLease {
+                agent_run_id: OTHER_RUN_ID.into(),
+                viewer_id: "xterm-lapsed".into(),
+                transport: "xterm".into(),
+            },
+            || Ok(lapsed_mechanics.clone()),
+        )
+        .await
+        .unwrap();
+    let forced = "2000-01-01T00:00:00.000000Z";
+    let mut expired: viewer_lease::ActiveModel = lapsed.clone().into();
+    expired.expires_at = Set(forced.into());
+    expired.update(&database).await.unwrap();
+
+    assert_eq!(service.expire_stale().await.unwrap(), 1);
+
+    assert_eq!(lease(&database).await, renewed);
+    assert!(healthy.reasons().is_empty());
+    assert_eq!(
+        lapsed_mechanics.reasons(),
+        vec![ViewerDetachReason::Released]
+    );
+    // The renewed owner still holds durable ownership after the sweep.
+    service
+        .update(UpdateViewerLease {
+            agent_run_id: RUN_ID.into(),
+            viewer_id: renewed.viewer_id.clone(),
+            generation: renewed.generation.clone(),
+        })
+        .await
+        .unwrap();
+    // The lapsed lease survives as durable history but owns nothing.
+    let retired = viewer_lease::Entity::find_by_id(OTHER_RUN_ID)
+        .one(&database)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(retired.expires_at.as_str() > forced);
+    let error = service
+        .update(UpdateViewerLease {
+            agent_run_id: OTHER_RUN_ID.into(),
+            viewer_id: lapsed.viewer_id,
+            generation: lapsed.generation,
+        })
+        .await
+        .unwrap_err();
+    assert_eq!(error.code(), ViewerOwnershipErrorCode::LeaseNotOwned);
+    assert_session_live(&database).await;
+}
+
+#[tokio::test]
+async fn repeated_stale_expiry_never_takes_ownership_from_a_healthy_viewer() {
+    let database = fixture().await;
+    let service = ViewerOwnershipService::with_ttl(database.clone(), Duration::from_secs(60));
+    let mechanics = Arc::new(Mechanics::default());
+    let current = acquire(&service, "native-1", "native", mechanics.clone()).await;
+
+    for _ in 0..3 {
+        assert_eq!(service.expire_stale().await.unwrap(), 0);
+    }
+
+    assert_eq!(lease(&database).await, current);
+    assert!(mechanics.reasons().is_empty());
+    assert_session_live(&database).await;
+}
+
+#[tokio::test]
+async fn startup_and_shutdown_expiry_still_retires_every_lease() {
+    let database = fixture().await;
+    let service = ViewerOwnershipService::with_ttl(database.clone(), Duration::from_secs(60));
+    let mechanics = Arc::new(Mechanics::default());
+    acquire(&service, "native-1", "native", mechanics.clone()).await;
+
+    assert_eq!(service.expire_all().await.unwrap(), 1);
+
+    assert_eq!(mechanics.reasons(), vec![ViewerDetachReason::Released]);
+    let retired = lease(&database).await;
+    let error = service
+        .update(UpdateViewerLease {
+            agent_run_id: RUN_ID.into(),
+            viewer_id: retired.viewer_id,
+            generation: retired.generation,
+        })
+        .await
+        .unwrap_err();
+    assert_eq!(error.code(), ViewerOwnershipErrorCode::LeaseNotOwned);
     assert_session_live(&database).await;
 }
 
@@ -283,6 +383,28 @@ async fn assert_session_live(database: &DatabaseConnection) {
         .unwrap();
     assert!(terminal.terminated_at.is_none());
     assert!(!terminal.runtime_cleanup_pending);
+}
+
+async fn insert_second_run(database: &DatabaseConnection) {
+    let namespace = muxed_studio_lib::tmux_adapter::current_runtime_namespace().unwrap();
+    database
+        .execute_unprepared(&format!(
+            r#"
+            INSERT INTO agent_runs
+                (id, issue_id, agent, status, started_at, scope)
+                VALUES ('{OTHER_RUN_ID}', 'issue-2', 'codex', 'running',
+                        '2026-08-19T00:00:00Z', 'task');
+            INSERT INTO agent_terminal_sessions
+                (agent_run_id, tmux_session_name, task_id, module_id, project_id,
+                 created_at, scope, runtime_cleanup_pending, runtime_namespace,
+                 output_sequence)
+                VALUES ('{OTHER_RUN_ID}', 'pt-run-viewer-ownership-2', 'task-2', 'module-1',
+                        'project-1', '2026-08-19T00:00:00Z', 'task', 0,
+                        '{namespace}', 0);
+            "#
+        ))
+        .await
+        .unwrap();
 }
 
 async fn fixture() -> DatabaseConnection {

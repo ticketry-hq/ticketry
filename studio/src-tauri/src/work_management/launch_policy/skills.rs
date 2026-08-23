@@ -5,7 +5,7 @@ use serde::Deserialize;
 use super::LaunchPolicyError;
 
 const REQUIRED_SKILL_LOCK: &str =
-    include_str!("../../../../../backend/apps/terminals/agents/skills/lock.json");
+    include_str!("../../../resources/launch/skills.lock.json");
 
 pub(super) fn validate_skills(value: &str) -> Result<Vec<String>, LaunchPolicyError> {
     #[derive(Deserialize)]

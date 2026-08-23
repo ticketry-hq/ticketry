@@ -1,7 +1,6 @@
 import { FoundationGraphQlError } from "../../../../graphql-foundation/foundationClient";
 import { studioRuntime } from "../../../../runtime";
 import { graphQlMutationError } from "../../../../shared/api/graphqlError";
-import { authenticatedHostFetch } from "../../../../shared/api/authenticatedHostFetch";
 import { queryClient } from "../../../../shared/query/queryClient";
 import type { ResumableTerminalSession } from "../../types";
 import {
@@ -35,16 +34,13 @@ function compactIdentity(value: string): string {
   return value.replace(/-/g, "");
 }
 
-async function browserRequest<TResult>(
-  path: string,
-  init: RequestInit,
-): Promise<TResult> {
-  const response = await authenticatedHostFetch(path, init);
-  const body = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(`Terminal request failed with HTTP ${response.status}.`);
-  return body as TResult;
-}
-
+/**
+ * Terminal runs are created, resumed, and terminated by the Rust terminal
+ * lifecycle over the in-process GraphQL transport. The Python `/api/terminals`
+ * routes that browser development used to post to were retired with the rest
+ * of the Python terminal authority, so a platform without that transport has
+ * no terminal writer at all rather than a dead one.
+ */
 async function retryTransport<TResult>(operation: () => Promise<TResult>): Promise<TResult> {
   try {
     return await operation();
@@ -95,19 +91,6 @@ export async function createTerminalSession(
 ): Promise<{ agent_run_id: string }> {
   const variables = launchVariables(input, crypto.randomUUID());
   const result = await studioRuntime().writeWorkTracker({
-    rest: () => browserRequest<{ agent_run_id: string }>("/api/terminals", {
-      method: "POST",
-      body: JSON.stringify({
-        agent: input.agent,
-        project_id: input.projectId,
-        module_id: input.moduleId,
-        task_id: input.taskId,
-        initial_prompt: input.isInstant ? null : input.initialPrompt,
-        is_planning: input.isPlanning,
-        is_instant: input.isInstant,
-        instant_prompt: input.isInstant ? input.initialPrompt : null,
-      }),
-    }),
     graphQl: async (execute) => {
       try {
         const response = await retryTransport(() =>
@@ -147,10 +130,6 @@ export async function resumeTerminalSession(
     model: source.launch_model ?? null,
   } as const;
   const result = await studioRuntime().writeWorkTracker({
-    rest: () => browserRequest<{ agent_run_id: string; resumed_from: string }>(
-      `/api/terminals/resume?agent_run_id=${encodeURIComponent(source.agent_run_id)}`,
-      { method: "POST" },
-    ),
     graphQl: async (execute) => {
       try {
         const response = await retryTransport(() =>
@@ -177,10 +156,6 @@ export async function terminateTerminalSession(
     terminationRequestId: crypto.randomUUID(),
   };
   const result = await studioRuntime().writeWorkTracker({
-    rest: () => browserRequest<{ agent_run_id: string; terminated: boolean }>(
-      `/api/terminals?agent_run_id=${encodeURIComponent(agentRunId)}`,
-      { method: "DELETE" },
-    ),
     graphQl: async (execute) => {
       try {
         const response = await retryTransport(() =>

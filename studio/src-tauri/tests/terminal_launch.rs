@@ -4,6 +4,7 @@ use std::collections::BTreeSet;
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
+use common::submitted_launch_authority::launch_service;
 use common::terminal_lifecycle_harness::{
     TerminalLifecycleHarness, MODULE_ID, PROJECT_ID, TASK_ID,
 };
@@ -296,7 +297,7 @@ async fn one_request_prepares_executes_verifies_and_replays_one_session() {
     let harness = TerminalLifecycleHarness::start().await;
     let database = harness.database().await;
     let runtime = Arc::new(RecordingRuntime::new(database.clone()));
-    let service = TerminalLaunchService::new(database.clone(), runtime.clone());
+    let service = launch_service(database.clone(), runtime.clone());
     let launch = request("terminal-create-replay", TerminalLaunchKind::Task);
 
     let first = service.create(launch.clone()).await.unwrap();
@@ -348,7 +349,7 @@ async fn module_shell_derives_routing_and_persists_no_agent_metadata() {
     let harness = TerminalLifecycleHarness::start().await;
     let database = harness.database().await;
     let runtime = Arc::new(RecordingRuntime::new(database.clone()));
-    let service = TerminalLaunchService::new(database.clone(), runtime.clone());
+    let service = launch_service(database.clone(), runtime.clone());
 
     let first = service
         .create_module_shell(
@@ -429,7 +430,7 @@ async fn a_folder_that_becomes_unusable_before_preparation_leaves_no_launch_rows
     let before_effects = count(&database, "runs_launch_effects").await;
     let before_material = count(&database, "terminal_launch_material").await;
 
-    let error = TerminalLaunchService::new(database.clone(), Arc::new(RejectingPreflightRuntime))
+    let error = launch_service(database.clone(), Arc::new(RejectingPreflightRuntime))
         .create(request("folder-became-unusable", TerminalLaunchKind::Task))
         .await
         .unwrap_err();
@@ -451,7 +452,7 @@ async fn request_identity_rejects_rebinding_and_fresh_requests_launch_every_kind
     let harness = TerminalLifecycleHarness::start().await;
     let database = harness.database().await;
     let runtime = Arc::new(RecordingRuntime::new(database.clone()));
-    let service = TerminalLaunchService::new(database.clone(), runtime.clone());
+    let service = launch_service(database.clone(), runtime.clone());
 
     let original = request("terminal-create-conflict", TerminalLaunchKind::Task);
     service.create(original.clone()).await.unwrap();
@@ -562,7 +563,7 @@ async fn crash_boundaries_recover_one_verified_launch_without_duplicate_facts() 
         let request_id = format!("terminal-crash-{index}");
         let launch = request(&request_id, TerminalLaunchKind::Task);
         let before_runtimes = runtime.runtime_count();
-        let stopped = TerminalLaunchService::new(database.clone(), runtime.clone())
+        let stopped = launch_service(database.clone(), runtime.clone())
             .stopping_once_at(boundary)
             .create(launch.clone())
             .await;
@@ -572,7 +573,7 @@ async fn crash_boundaries_recover_one_verified_launch_without_duplicate_facts() 
         );
 
         expire_launch_leases(&database).await;
-        let recovery = TerminalLaunchService::new(database.clone(), runtime.clone());
+        let recovery = launch_service(database.clone(), runtime.clone());
         recovery.reconcile().await.unwrap();
         expire_launch_leases(&database).await;
         recovery.reconcile().await.unwrap();
@@ -626,14 +627,14 @@ async fn shell_launch_uses_the_same_crash_safe_prepare_execute_settle_matrix() {
         let request_id = format!("shell-crash-{index}");
         let launch = shell_request(&request_id);
         let before_runtimes = runtime.runtime_count();
-        let stopped = TerminalLaunchService::new(database.clone(), runtime.clone())
+        let stopped = launch_service(database.clone(), runtime.clone())
             .stopping_once_at(boundary)
             .create(launch.clone())
             .await;
         assert!(stopped.is_err(), "{boundary:?} must stop the response");
 
         expire_launch_leases(&database).await;
-        let recovery = TerminalLaunchService::new(database.clone(), runtime.clone());
+        let recovery = launch_service(database.clone(), runtime.clone());
         recovery.reconcile().await.unwrap();
         expire_launch_leases(&database).await;
         recovery.reconcile().await.unwrap();
@@ -667,7 +668,7 @@ async fn crash_after_tmux_create_keeps_cleanup_intent_and_never_overwrites_parti
     let request_id = "terminal-partial-create";
     let launch = request(request_id, TerminalLaunchKind::Task);
 
-    let stopped = TerminalLaunchService::new(database.clone(), runtime.clone())
+    let stopped = launch_service(database.clone(), runtime.clone())
         .stopping_once_at(TerminalLaunchBoundary::TmuxCreated)
         .create(launch)
         .await
@@ -677,7 +678,7 @@ async fn crash_after_tmux_create_keeps_cleanup_intent_and_never_overwrites_parti
     assert_eq!(runtime.create_count(), 1);
 
     expire_launch_leases(&database).await;
-    let recovery = TerminalLaunchService::new(database.clone(), runtime.clone());
+    let recovery = launch_service(database.clone(), runtime.clone());
     let first = recovery.reconcile().await.unwrap();
     let second = recovery.reconcile().await.unwrap();
 
@@ -702,7 +703,7 @@ async fn unavailable_observation_defers_without_creating_or_ending_the_run() {
         creates: Mutex::new(0),
     });
     let request_id = "terminal-observation-unavailable";
-    let service = TerminalLaunchService::new(database.clone(), runtime.clone());
+    let service = launch_service(database.clone(), runtime.clone());
 
     let error = service
         .create(request(request_id, TerminalLaunchKind::Task))
@@ -739,7 +740,7 @@ async fn foreign_and_ambiguous_identities_conflict_without_create() {
             creates: Mutex::new(0),
         });
         let request_id = format!("terminal-{suffix}-identity");
-        let error = TerminalLaunchService::new(database.clone(), runtime.clone())
+        let error = launch_service(database.clone(), runtime.clone())
             .create(request(&request_id, TerminalLaunchKind::Task))
             .await
             .unwrap_err();
@@ -762,7 +763,7 @@ async fn post_create_uncertainty_keeps_cleanup_intent_but_proved_absence_retries
     let uncertain = Arc::new(PostCreateUnavailableRuntime {
         created: Mutex::new(false),
     });
-    let error = TerminalLaunchService::new(database.clone(), uncertain)
+    let error = launch_service(database.clone(), uncertain)
         .create(request(uncertain_id, TerminalLaunchKind::Task))
         .await
         .unwrap_err();
@@ -777,7 +778,7 @@ async fn post_create_uncertainty_keeps_cleanup_intent_but_proved_absence_retries
         attempts: Mutex::new(0),
         run_id: Mutex::new(None),
     });
-    let retry_service = TerminalLaunchService::new(database.clone(), retry.clone());
+    let retry_service = launch_service(database.clone(), retry.clone());
     let first = retry_service
         .create(request(retry_id, TerminalLaunchKind::Task))
         .await
@@ -862,6 +863,44 @@ async fn effect_state(database: &sea_orm::DatabaseConnection, request_id: &str) 
         "value",
     )
     .await
+}
+
+#[tokio::test]
+async fn an_uncomposed_authority_refuses_agent_launches_and_still_serves_shells() {
+    let harness = TerminalLifecycleHarness::start().await;
+    let database = harness.database().await;
+    let runtime = Arc::new(RecordingRuntime::new(database.clone()));
+    // No authority: nothing can resolve what this launch may run with, and a
+    // caller-supplied provider, model, and prompt are not an answer.
+    let service = TerminalLaunchService::new(database.clone(), runtime.clone());
+    let before_material = count(&database, "terminal_launch_material").await;
+
+    for kind in [
+        TerminalLaunchKind::Task,
+        TerminalLaunchKind::Planning,
+        TerminalLaunchKind::Instant,
+    ] {
+        let error = service
+            .create(request("uncomposed-authority", kind))
+            .await
+            .unwrap_err();
+        assert_eq!(error.code_str(), "terminal_runtime_unavailable");
+    }
+    assert_eq!(
+        count(&database, "terminal_launch_material").await,
+        before_material
+    );
+
+    // A shell carries no agent material, so it is unaffected.
+    service
+        .create_module_shell(
+            "uncomposed-authority-shell".to_owned(),
+            MODULE_ID.to_owned(),
+            80,
+            24,
+        )
+        .await
+        .expect("a module shell needs no launch authority");
 }
 
 async fn run_id(database: &sea_orm::DatabaseConnection, request_id: &str) -> String {

@@ -3,11 +3,9 @@ import type { RuntimeStartupConfiguration, StudioRuntime } from "./contract";
 
 export type {
   RuntimeCapabilities,
-  RuntimeEndpoints,
   ServiceHealth,
   ServiceHealthListener,
   RuntimeStartupConfiguration,
-  RuntimeValues,
   SettingsRoutes,
   StudioPlatform,
   StudioRuntime,
@@ -29,9 +27,7 @@ let installedRuntime: StudioRuntime | null = null;
 function defaultBrowserRuntime(): StudioRuntime {
   return createBrowserRuntime({
     environment: {
-      VITE_WT_API_BASE: import.meta.env.VITE_WT_API_BASE,
-      VITE_WT_API_KEY: import.meta.env.VITE_WT_API_KEY,
-      VITE_AGENT_API_BASE: import.meta.env.VITE_AGENT_API_BASE,
+      VITE_GRAPHQL_API: import.meta.env.VITE_GRAPHQL_API,
     },
   });
 }
@@ -56,29 +52,7 @@ export function runtimeConfiguration(): RuntimeStartupConfiguration {
   return studioRuntime().startup();
 }
 
-/** Resolve an existing canonical /api path against the runtime's agent root. */
-export function agentApiUrl(path: string): string {
-  if (path.startsWith("http://") || path.startsWith("https://")) return path;
-  const base = runtimeConfiguration().endpoints.agentApi.replace(/\/$/, "");
-  const suffix = path === "/api"
-    ? ""
-    : path.startsWith("/api/")
-      ? path.slice(4)
-      : path.startsWith("/")
-        ? path
-        : `/${path}`;
-  return `${base}${suffix}`;
-}
-
 /** The transport the project status subscription opens on, if any. */
 export function statusStreamTransport() {
   return studioRuntime().statusStream();
-}
-
-export function terminalWebSocketUrl(): string {
-  const endpoint = runtimeConfiguration().endpoints.terminalWebSocket;
-  if (!endpoint) {
-    throw new Error("The terminal WebSocket is unavailable in desktop Studio.");
-  }
-  return endpoint;
 }

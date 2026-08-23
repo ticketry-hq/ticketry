@@ -1,5 +1,5 @@
 import { type FormEvent, useState } from "react";
-import { apiErrorMessage } from "../../shared/api/client";
+import { apiErrorMessage } from "../../shared/api/errors";
 import { resolveDefaultProject } from "../../features/studio/lib/defaultProject";
 import { getConfigSnapshot } from "../../features/studio/stores/configStore";
 import { useStudioStore } from "../../features/projects";

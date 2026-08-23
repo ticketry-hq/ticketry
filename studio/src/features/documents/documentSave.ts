@@ -1,4 +1,3 @@
-import { ApiError, saveDocument as saveThroughHost } from "../../shared/api/client";
 import { studioRuntime } from "../../runtime";
 import { SaveDesignDocumentDocument } from "./generated/documentSave";
 
@@ -45,7 +44,6 @@ export function saveDocument(
   request: DocumentSaveRequest,
 ): Promise<DocumentSaveResult> {
   return studioRuntime().writeWorkTracker({
-    rest: () => saveThroughLegacyHost(request),
     graphQl: async (execute) => {
       const outcome = (await execute(SaveDesignDocumentDocument, {
         documentId: request.documentId,
@@ -60,34 +58,4 @@ export function saveDocument(
       };
     },
   });
-}
-
-/**
- * Browser-only development has no in-process runtime, so it keeps talking to
- * the legacy host route. That route reports a stale save as HTTP 409 carrying
- * the current digest, which is the same answer in a different envelope.
- */
-async function saveThroughLegacyHost(
-  request: DocumentSaveRequest,
-): Promise<DocumentSaveResult> {
-  try {
-    const saved = await saveThroughHost(request.documentId, {
-      content: request.content,
-      digest: request.expectedDigest,
-    });
-    return { digest: saved.digest, saved: true, stale: false };
-  } catch (reason) {
-    const digest = staleDigest(reason);
-    if (!digest) throw reason;
-    return { digest, saved: false, stale: true };
-  }
-}
-
-function staleDigest(error: unknown): string | null {
-  if (!(error instanceof ApiError) || error.status !== 409) return null;
-  if (!error.body || typeof error.body !== "object") return null;
-  const detail = (error.body as { detail?: unknown }).detail;
-  if (!detail || typeof detail !== "object") return null;
-  const digest = (detail as { digest?: unknown }).digest;
-  return typeof digest === "string" && digest ? digest : null;
 }

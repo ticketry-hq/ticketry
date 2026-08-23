@@ -6,6 +6,7 @@
 //! first, creates only after proved absence, verifies again, then commits the
 //! authoritative Terminal Session with the effect and running fact.
 
+mod authority;
 mod checkpoint;
 mod error;
 mod execution;

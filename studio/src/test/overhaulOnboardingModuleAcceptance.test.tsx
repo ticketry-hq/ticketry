@@ -18,6 +18,10 @@ const api = vi.hoisted(() => ({
 const moduleFolderValidationApi = vi.hoisted(() => ({
   validateModuleFolder: vi.fn(),
 }));
+const providerState = vi.hoisted(() => ({
+  catalog: { activated_providers: [] as string[], global_default: null },
+  capabilities: [] as unknown[],
+}));
 
 vi.mock("../shared/api/client", async () => {
   const actual = await vi.importActual<typeof import("../shared/api/client")>(
@@ -36,6 +40,46 @@ vi.mock("../features/work-items/mutationTransport", async () => {
       api.createModule(projectId, body.name, body.issue_type_id),
   };
 });
+
+vi.mock("../features/work-items/queries/readTransport", async () => ({
+  ...(await vi.importActual("../features/work-items/queries/readTransport")),
+  readModuleTreeRecords: api.getTasks,
+}));
+
+vi.mock("../features/projects/queries/readTransport", () => ({
+  readModules: api.listModules,
+  readProjects: api.listProjects,
+  readWorkspace: vi.fn(),
+}));
+
+vi.mock("../features/workflows/queries/readTransport", async () => ({
+  ...(await vi.importActual("../features/workflows/queries/readTransport")),
+  readWorkflowIssueTypes: api.listIssueTypes,
+}));
+
+vi.mock("../features/settings/profileTransport", async () => ({
+  ...(await vi.importActual("../features/settings/profileTransport")),
+  putProfile: api.putProfile,
+}));
+
+vi.mock("../features/workflows/providerQueries", () => ({
+  setProviderCapabilities: vi.fn(),
+  loadProviderCapabilities: api.getLaunchProviderCapabilities,
+  loadConfigurableProviderCapabilities: api.getLaunchProviderCapabilities,
+  loadProviderCatalog: async () => (await api.getProviderCatalog()).value,
+  updateProviderCatalog: async (value: unknown) =>
+    (await api.putProviderCatalog(value)).value,
+  useProviderCatalogQuery: () => ({
+    data: providerState.catalog,
+    isLoading: false,
+    isError: false,
+  }),
+  useConfigurableProviderCapabilitiesQuery: () => ({
+    data: providerState.capabilities,
+    isLoading: false,
+    isError: false,
+  }),
+}));
 
 vi.mock("../features/projects/mutationTransport", async () => {
   const actual = await vi.importActual<
@@ -69,29 +113,21 @@ function folderPickerRuntime(): StudioRuntime {
     platform: "desktop",
     capabilities: {
       statusFeed: true,
-      websocketTerminal: true,
       nativeLifecycle: false,
       serviceSupervision: true,
       nativeTerminal: false,
       nativeFolderPicker: true,
     },
-    readWorkTracker: async (routes) => routes.rest(),
-    writeWorkTracker: async (routes) => routes.rest(),
-    readSettings: async (routes) => routes.rest(),
-    writeSettings: async (routes) => routes.rest(),
+    readWorkTracker: async () => { throw new Error("unused"); },
+    writeWorkTracker: async () => { throw new Error("unused"); },
+    readSettings: async () => { throw new Error("unused"); },
+    writeSettings: async () => { throw new Error("unused"); },
     statusStream: () => null,
     documentUrl: (documentId, relPath) =>
       `/api/documents/${documentId}/${relPath}`,
     pickFolder: async () => "/repos/picked",
     retryServices: async () => {},
     startup: () => ({
-      endpoints: {
-        workTrackerApi: "/api/work-tracker",
-        agentApi: "/api",
-        statusApi: "/api",
-        terminalWebSocket: "/ws/terminal",
-      },
-      values: { workTrackerApiKey: "" },
       serviceHealth: {
         state: "ready",
         service: "backend",

@@ -9,7 +9,7 @@ use sea_orm::{ConnectionTrait, DbBackend, Statement};
 mod common;
 use common::terminal_lifecycle_harness::{
     LifecycleBoundary, StopController, TerminalLifecycleHarness, DOCUMENT_PATH, DOCUMENT_RUN_ID,
-    MODULE_ID, PROJECT_ID, RUNTIME_NAMESPACE, TASK_ID, TASK_RUN_ID,
+    MODULE_ID, PROJECT_ID, TASK_ID, TASK_RUN_ID,
 };
 
 #[tokio::test]
@@ -25,7 +25,10 @@ async fn adopted_characterization_facts_and_public_graphql_survive_restart() {
     assert_eq!(task.task_id, TASK_ID.replace('-', ""));
     assert_eq!(task.module_id, MODULE_ID.replace('-', ""));
     assert_eq!(task.project_id, PROJECT_ID.replace('-', ""));
-    assert_eq!(task.runtime_namespace.as_deref(), Some(RUNTIME_NAMESPACE));
+    assert_eq!(
+        task.runtime_namespace.as_deref(),
+        Some(harness.runtime_namespace.as_str())
+    );
     assert_eq!(task.scope, "task");
     assert!(task.doc_rel_path.is_none());
     assert!(task.terminated_at.is_none());

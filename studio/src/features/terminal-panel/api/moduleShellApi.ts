@@ -1,12 +1,14 @@
 /**
  * The wire calls for a module's durable login shells (#667).
  *
- * Desktop uses the Rust Terminal Session graph. Browser development keeps the
- * compatibility shell route. Neither create call accepts a provider or prompt.
- * Ending a shell still uses the common terminal update contract.
+ * Shells are created and listed through the Rust Terminal Session graph. The
+ * `/api/terminals/shells` compatibility route browser development used went
+ * away with the Python terminal authority, so a platform without the in-process
+ * GraphQL transport has no shell surface. Neither create call accepts a
+ * provider or prompt. Ending a shell still uses the common terminal update
+ * contract.
  */
 
-import { authenticatedHostFetch } from "../../../shared/api/authenticatedHostFetch";
 import { studioRuntime } from "../../../runtime";
 import { FoundationGraphQlError } from "../../../graphql-foundation/foundationClient";
 import { graphQlMutationError } from "../../../shared/api/graphqlError";
@@ -37,15 +39,6 @@ export class ModuleShellRefused extends Error {
   }
 }
 
-async function readEnvelope(response: Response): Promise<{ code?: string }> {
-  try {
-    const body: unknown = await response.json();
-    return body && typeof body === "object" ? (body as { code?: string }) : {};
-  } catch {
-    return {};
-  }
-}
-
 /** Launches one durable login shell and returns the run that hosts it. */
 export async function createModuleShell(moduleId: string): Promise<string> {
   const variables = {
@@ -55,20 +48,6 @@ export async function createModuleShell(moduleId: string): Promise<string> {
     rows: DEFAULT_ROWS,
   };
   const result = await studioRuntime().writeWorkTracker({
-    rest: async () => {
-      const response = await authenticatedHostFetch("/api/terminals/shells", {
-        method: "POST",
-        body: JSON.stringify({ module_id: moduleId }),
-      });
-      if (response.status === 409) {
-        const { code } = await readEnvelope(response);
-        throw new ModuleShellRefused(code ?? "module_folder_unset");
-      }
-      if (!response.ok) {
-        throw new Error(`shell launch failed (HTTP ${response.status})`);
-      }
-      return (await response.json()) as { agent_run_id: string };
-    },
     graphQl: async (execute) => {
       try {
         let response;
@@ -93,19 +72,8 @@ export async function createModuleShell(moduleId: string): Promise<string> {
   return result.agent_run_id;
 }
 
-export async function listModuleShells(
-  moduleId: string,
-  signal?: AbortSignal,
-): Promise<ModuleShell[]> {
+export async function listModuleShells(moduleId: string): Promise<ModuleShell[]> {
   return studioRuntime().readWorkTracker({
-    rest: async () => {
-      const response = await authenticatedHostFetch(
-        `/api/terminals/shells?module_id=${encodeURIComponent(moduleId)}`,
-        { signal },
-      );
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      return (await response.json()) as ModuleShell[];
-    },
     graphQl: async (execute) => {
       const response = await execute(ModuleShellSessionsDocument, {
         moduleId,

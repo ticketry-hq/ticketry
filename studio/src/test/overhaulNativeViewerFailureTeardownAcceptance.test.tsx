@@ -8,6 +8,10 @@ import { useTerminalForegroundStore } from "../features/agents/terminal/internal
 import { releasePooledTransport } from "../features/agents/terminal/internal/entryPool";
 import { useTerminalStore } from "../features/agents/terminal/internal/sessionStore";
 import { useClientStore } from "../state/clientStore";
+import {
+  grantsEveryLease,
+  installDesktopGraphQlRuntime,
+} from "./desktopGraphQlRuntime";
 
 const tauri = vi.hoisted(() => ({
   invoke: vi.fn(),
@@ -42,6 +46,7 @@ describe("native viewer attachment acceptance", () => {
 
   beforeEach(() => {
     vi.resetAllMocks();
+    installDesktopGraphQlRuntime();
     vi.stubGlobal("ResizeObserver", ResizeObserverStub);
     vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
       x: 0,
@@ -119,14 +124,11 @@ describe("native viewer attachment acceptance", () => {
         return () => listeners.delete(event);
       },
     );
-    const requests: string[] = [];
-    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
-      requests.push(String(input));
-      return new Response("{}", {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    }));
+    // Viewer ownership is claimed and released on the Rust lease contract, so
+    // what a test counts is lease operations, not host requests.
+    const leaseOperations = installDesktopGraphQlRuntime();
+    const leases = (operationName: string) =>
+      leaseOperations.filter((operation) => operation.operationName === operationName);
     tauri.invoke.mockImplementation((command: string) => {
       if (command === "native_terminal_available") return Promise.resolve(true);
       if (command === "native_terminal_attach") {
@@ -188,7 +190,7 @@ describe("native viewer attachment acceptance", () => {
       );
     });
     await waitFor(() => {
-      expect(requests.filter((url) => url.endsWith("/release"))).toHaveLength(1);
+      expect(leases("DeleteViewerLease")).toHaveLength(1);
     });
     expect(tauri.invoke.mock.calls.filter(([command]) =>
       command === "native_terminal_attach"
@@ -216,14 +218,11 @@ describe("native viewer attachment acceptance", () => {
   });
 
   it("tears down terminal completion and later dismissal idempotently", async () => {
-    const requests: string[] = [];
-    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
-      requests.push(String(input));
-      return new Response("{}", {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    }));
+    // Viewer ownership is claimed and released on the Rust lease contract, so
+    // what a test counts is lease operations, not host requests.
+    const leaseOperations = installDesktopGraphQlRuntime();
+    const leases = (operationName: string) =>
+      leaseOperations.filter((operation) => operation.operationName === operationName);
     const view = render(<Terminal sessionId="session-1" />);
     await waitFor(() => {
       expect(releasePooledTransport).toHaveBeenCalledWith("session-1");
@@ -235,7 +234,7 @@ describe("native viewer attachment acceptance", () => {
     view.rerender(<Terminal sessionId={null} />);
 
     await waitFor(() => {
-      expect(requests.filter((url) => url.endsWith("/release"))).toHaveLength(1);
+      expect(leases("DeleteViewerLease")).toHaveLength(1);
     });
     expect(tauri.invoke.mock.calls.filter(([command]) =>
       command === "native_terminal_detach"
@@ -243,21 +242,16 @@ describe("native viewer attachment acceptance", () => {
   });
 
   it("treats lease-renewal failures as terminal native failures", async () => {
-    const requests: string[] = [];
-    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
-      const url = String(input);
-      requests.push(url);
-      if (url.endsWith("/renew")) {
-        return new Response(JSON.stringify({ detail: { error: "lease renewal failed" } }), {
-          status: 409,
-          headers: { "Content-Type": "application/json" },
-        });
+    // Viewer ownership is claimed and released on the Rust lease contract, so
+    // what a test counts is lease operations, not host requests.
+    const leaseOperations = installDesktopGraphQlRuntime(async (document, variables) => {
+      if (document.operationName === "UpdateViewerLease") {
+        throw new Error("lease renewal failed");
       }
-      return new Response("{}", {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    }));
+      return grantsEveryLease(document, variables);
+    });
+    const leases = (operationName: string) =>
+      leaseOperations.filter((operation) => operation.operationName === operationName);
     let renewal: (() => void) | null = null;
     let markRenewalReady!: () => void;
     const renewalReady = new Promise<void>((resolve) => {
@@ -279,7 +273,7 @@ describe("native viewer attachment acceptance", () => {
         "lease renewal failed",
       );
     });
-    expect(requests.filter((url) => url.endsWith("/release"))).toHaveLength(1);
+    expect(leases("DeleteViewerLease")).toHaveLength(1);
     interval.mockRestore();
   });
 
@@ -335,14 +329,11 @@ describe("native viewer attachment acceptance", () => {
   });
 
   it("releases a retained viewer once when the WebView lifecycle ends", async () => {
-    const requests: string[] = [];
-    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
-      requests.push(String(input));
-      return new Response("{}", {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    }));
+    // Viewer ownership is claimed and released on the Rust lease contract, so
+    // what a test counts is lease operations, not host requests.
+    const leaseOperations = installDesktopGraphQlRuntime();
+    const leases = (operationName: string) =>
+      leaseOperations.filter((operation) => operation.operationName === operationName);
     const ready = vi.fn();
     render(
       <NativeGhosttyTerminal
@@ -357,7 +348,7 @@ describe("native viewer attachment acceptance", () => {
     window.dispatchEvent(new Event("beforeunload"));
 
     await waitFor(() => {
-      expect(requests.filter((url) => url.endsWith("/release"))).toHaveLength(1);
+      expect(leases("DeleteViewerLease")).toHaveLength(1);
     });
     expect(tauri.invoke.mock.calls.filter(([command]) =>
       command === "native_terminal_detach"

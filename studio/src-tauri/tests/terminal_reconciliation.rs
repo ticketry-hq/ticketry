@@ -1,7 +1,9 @@
 mod common;
 
+use std::collections::BTreeSet;
 use std::sync::Arc;
 
+use common::submitted_launch_authority::launch_service;
 use common::terminal_lifecycle_harness::{
     TerminalLifecycleHarness, DOCUMENT_RUN_ID, MODULE_ID, PROJECT_ID, TASK_ID, TASK_RUN_ID,
 };
@@ -16,10 +18,11 @@ use muxed_studio_lib::terminal_cleanup::{
     CleanupCause, CleanupRuntimeObservation, TerminalCleanupService,
 };
 use muxed_studio_lib::terminal_launch::{
-    CreateTerminalSession, TerminalLaunchBoundary, TerminalLaunchKind, TerminalLaunchService,
+    CreateTerminalSession, TerminalLaunchBoundary, TerminalLaunchKind,
 };
 use muxed_studio_lib::terminal_reconciliation::{
     ReconciliationCheckpoint, RecordedSessionDecision, UnrecordedRuntimeDecision,
+    MAX_RECORDED_SESSION_BATCH,
 };
 use muxed_studio_lib::tmux_adapter::{InventoryConflictKind, InventoryEntry, OwnedSession};
 use sea_orm::{
@@ -203,7 +206,7 @@ async fn one_host_pass_adopts_launches_and_drains_prepared_cleanup() {
         .unwrap_err();
 
     let request = launch_request("reconcile-launch-adoption");
-    TerminalLaunchService::new(database.clone(), runtime.clone())
+    launch_service(database.clone(), runtime.clone())
         .stopping_once_at(TerminalLaunchBoundary::TmuxCreated)
         .create(request)
         .await
@@ -278,12 +281,105 @@ async fn recorded_session_scan_is_bounded_and_reports_saturation() {
 }
 
 #[tokio::test]
+async fn an_active_session_is_reconciled_ahead_of_a_saturating_settled_history() {
+    let harness = TerminalLifecycleHarness::start().await;
+    let database = harness.database().await;
+    let runtime = Arc::new(ScriptedRuntime::default());
+    for index in 0..MAX_RECORDED_SESSION_BATCH {
+        insert_session(
+            &database,
+            &format!("aged-history-{index:03}"),
+            "exited",
+            true,
+        )
+        .await;
+    }
+    // Sorts last in the scan order, so an unbounded oldest-first scan would
+    // never reach it while the settled history keeps saturating the batch.
+    insert_session(&database, "zz-active-session", "working", false).await;
+    for run_id in [TASK_RUN_ID, DOCUMENT_RUN_ID, "zz-active-session"] {
+        runtime.set(run_id, [CleanupRuntimeObservation::Running]);
+    }
+
+    let report = service(database, runtime).reconcile().await.unwrap();
+
+    assert_eq!(
+        decision(&report.sessions, "zz-active-session"),
+        RecordedSessionDecision::Running
+    );
+    assert_eq!(
+        report.sessions.len(),
+        MAX_RECORDED_SESSION_BATCH as usize,
+        "the pass stays bounded"
+    );
+    assert!(report.sessions_saturated);
+}
+
+#[tokio::test]
+async fn settled_history_advances_each_pass_until_every_row_is_inspected() {
+    let harness = TerminalLifecycleHarness::start().await;
+    let database = harness.database().await;
+    let runtime = Arc::new(ScriptedRuntime::default());
+    let history = MAX_RECORDED_SESSION_BATCH + 5;
+    for index in 0..history {
+        insert_session(
+            &database,
+            &format!("settled-cycle-{index:03}"),
+            "exited",
+            true,
+        )
+        .await;
+    }
+    for run_id in [TASK_RUN_ID, DOCUMENT_RUN_ID] {
+        runtime.set(run_id, [CleanupRuntimeObservation::Running]);
+    }
+    let reconciliation = service(database, runtime);
+
+    let first = inspected(&reconciliation.reconcile().await.unwrap());
+    let second = inspected(&reconciliation.reconcile().await.unwrap());
+
+    let tail = format!("settled-cycle-{:03}", history - 1);
+    assert!(!first.contains(&tail), "the first pass is bounded");
+    assert!(second.contains(&tail), "the next pass advances past it");
+    for index in 0..history {
+        let run_id = format!("settled-cycle-{index:03}");
+        assert!(
+            first.contains(&run_id) || second.contains(&run_id),
+            "{run_id} was never inspected"
+        );
+    }
+
+    let third = inspected(&reconciliation.reconcile().await.unwrap());
+    assert!(
+        third.contains("settled-cycle-000"),
+        "an exhausted scan restarts at the oldest row"
+    );
+}
+
+#[tokio::test]
+async fn a_saturated_pass_reports_saturation_only_while_rows_remain() {
+    let harness = TerminalLifecycleHarness::start().await;
+    let database = harness.database().await;
+    let runtime = Arc::new(ScriptedRuntime::default());
+    for index in 0..(MAX_RECORDED_SESSION_BATCH + 5) {
+        insert_session(&database, &format!("saturation-{index:03}"), "exited", true).await;
+    }
+    for run_id in [TASK_RUN_ID, DOCUMENT_RUN_ID] {
+        runtime.set(run_id, [CleanupRuntimeObservation::Running]);
+    }
+    let reconciliation = service(database, runtime);
+
+    assert!(reconciliation.reconcile().await.unwrap().sessions_saturated);
+    assert!(!reconciliation.reconcile().await.unwrap().sessions_saturated);
+}
+
+#[tokio::test]
 async fn applied_launch_without_a_session_is_adopted_once_including_legacy_namespace() {
     let harness = TerminalLifecycleHarness::start().await;
     let database = harness.database().await;
     let runtime = Arc::new(ScriptedRuntime::default());
     let request = launch_request("inventory-applied-adoption");
-    let created = TerminalLaunchService::new(database.clone(), runtime.clone())
+    let created = launch_service(database.clone(), runtime.clone())
         .create(request)
         .await
         .unwrap();
@@ -538,6 +634,16 @@ async fn terminal_events(database: &sea_orm::DatabaseConnection, run_id: &str) -
         .count(database)
         .await
         .unwrap()
+}
+
+fn inspected(
+    report: &muxed_studio_lib::terminal_reconciliation::TerminalReconciliationReport,
+) -> BTreeSet<String> {
+    report
+        .sessions
+        .iter()
+        .map(|session| session.agent_run_id.clone())
+        .collect()
 }
 
 fn decision(

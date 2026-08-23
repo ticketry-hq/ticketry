@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { apiErrorMessage } from "../../shared/api/client";
+import { apiErrorMessage } from "../../shared/api/errors";
 import type {
   ConfigurableProvider,
   ProviderCatalog,

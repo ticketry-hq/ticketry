@@ -2,8 +2,7 @@ use std::sync::Arc;
 
 use chrono::Utc;
 use sea_orm::{
-    sea_query::Expr, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder,
-    QuerySelect, TransactionTrait,
+    sea_query::Expr, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, TransactionTrait,
 };
 use serde_json::json;
 
@@ -14,13 +13,12 @@ use crate::terminal_cleanup::{
 };
 use crate::terminal_launch::{TerminalLaunchRuntime, TerminalLaunchService};
 
+use super::batch::{recorded_session_batch, RecordedSessionCursors};
 use super::{
     NoReconciliationCheckpoints, ReconciledSession, ReconciliationCheckpoint,
     ReconciliationCheckpoints, RecordedSessionDecision, TerminalReconciliationError,
     TerminalReconciliationReport,
 };
-
-pub const MAX_RECORDED_SESSION_BATCH: u64 = 200;
 
 #[derive(Clone)]
 pub struct TerminalReconciliationService {
@@ -30,6 +28,7 @@ pub struct TerminalReconciliationService {
     cleanup: TerminalCleanupService,
     pub(super) runtime: Arc<dyn TerminalCleanupRuntime>,
     pub(super) checkpoints: Arc<dyn ReconciliationCheckpoints>,
+    cursors: Arc<RecordedSessionCursors>,
 }
 
 impl TerminalReconciliationService {
@@ -45,6 +44,7 @@ impl TerminalReconciliationService {
             database,
             runtime: cleanup_runtime,
             checkpoints: Arc::new(NoReconciliationCheckpoints),
+            cursors: Arc::new(RecordedSessionCursors::default()),
         }
     }
 
@@ -55,22 +55,19 @@ impl TerminalReconciliationService {
 
     /// Reconcile effects before rows. A launch adopted in this pass is then
     /// checked as a recorded session, while a cleanup settled in this pass is
-    /// already a stable tombstone when the row scan reaches it.
+    /// already a stable tombstone when the row scan reaches it. The row scan is
+    /// a bounded batch that prefers rows whose durable state can still change
+    /// and advances a cursor, so a saturated pass reports saturation and the
+    /// next pass continues past the rows it already inspected.
     pub async fn reconcile(
         &self,
     ) -> Result<TerminalReconciliationReport, TerminalReconciliationError> {
         let launches = self.launch.reconcile().await?;
         let cleanups = self.cleanup.reconcile().await?;
-        let mut recorded = session::Entity::find()
-            .order_by_asc(session::Column::CreatedAt)
-            .order_by_asc(session::Column::AgentRunId)
-            .limit(MAX_RECORDED_SESSION_BATCH + 1)
-            .all(&self.database)
-            .await?;
-        let sessions_saturated = recorded.len() as u64 > MAX_RECORDED_SESSION_BATCH;
-        recorded.truncate(MAX_RECORDED_SESSION_BATCH as usize);
-        let mut sessions = Vec::with_capacity(recorded.len());
-        for terminal in recorded {
+        let recorded = recorded_session_batch(&self.database, &self.cursors).await?;
+        let sessions_saturated = recorded.saturated;
+        let mut sessions = Vec::with_capacity(recorded.rows.len());
+        for terminal in recorded.rows {
             let observation = self.runtime.inspect(&terminal).await;
             self.checkpoints.reached(
                 &terminal.agent_run_id,

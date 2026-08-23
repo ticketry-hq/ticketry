@@ -1,6 +1,6 @@
 //! In-process WorkTracker MCP transport owned by the desktop runtime.
 
-mod backend_port;
+mod authority;
 mod dependency_tools;
 mod dispatch;
 mod launch_paths;
@@ -17,16 +17,23 @@ mod worktree_integrations;
 use std::{io, net::SocketAddr, path::PathBuf};
 
 use axum::Router;
+use axum::{
+    extract::State,
+    http::Request,
+    middleware::Next,
+    response::{IntoResponse, Response},
+};
 use rmcp::transport::streamable_http_server::{
     session::local::LocalSessionManager, StreamableHttpServerConfig, StreamableHttpService,
 };
-use serde_json::{json, Value};
+use serde_json::json;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
 use crate::work_management::{commands::attachments::AttachmentStorage, open_for_commands};
 
-use backend_port::BackendPort;
+pub use authority::{RunAuthority, RunPrincipal};
+pub(crate) use registry::allowed_provider_operations;
 use service::WorktrackerMcpService;
 
 #[derive(Clone, Debug)]
@@ -34,8 +41,7 @@ pub struct McpConfiguration {
     pub address: SocketAddr,
     pub database_path: PathBuf,
     pub media_root: PathBuf,
-    pub backend_base_url: String,
-    pub backend_api_key: String,
+    pub ingress_credential: String,
 }
 
 pub struct McpRuntime {
@@ -43,6 +49,7 @@ pub struct McpRuntime {
     cancellation: CancellationToken,
     task: JoinHandle<()>,
     reconciler: JoinHandle<()>,
+    authority: RunAuthority,
 }
 
 impl McpRuntime {
@@ -83,15 +90,11 @@ impl McpRuntime {
         if !configuration.address.ip().is_loopback() {
             return Err("WorkTracker MCP must bind to a loopback address.".to_owned());
         }
-        let ingress_credential = configuration.backend_api_key.clone();
-        let ingress_backend_base_url = configuration.backend_base_url.clone();
-        let backend = BackendPort::new(
-            configuration.backend_base_url,
-            configuration.backend_api_key,
-        );
+        let ingress_credential = configuration.ingress_credential.clone();
         let database = open_for_commands(&configuration.database_path)
             .await
             .map_err(|error| format!("could not open WorkTracker commands for MCP: {error}"))?;
+        let authority = RunAuthority::new(database.clone());
         let listener = tokio::net::TcpListener::bind(configuration.address)
             .await
             .map_err(|error| format!("could not bind WorkTracker MCP listener: {error}"))?;
@@ -130,12 +133,17 @@ impl McpRuntime {
         let service_state = WorktrackerMcpService::new(
             database.clone(),
             AttachmentStorage::new(configuration.media_root),
-            backend,
+            authority.clone(),
             launch_policy,
             graph_runs,
             crate::terminal_cleanup::TerminalCleanupService::new(database, cleanup_runtime),
             terminal_launch.clone(),
             integrations,
+            configuration
+                .database_path
+                .parent()
+                .unwrap_or_else(|| std::path::Path::new("."))
+                .to_path_buf(),
         );
         let reconciliation_state = service_state.clone();
         let service: StreamableHttpService<WorktrackerMcpService, LocalSessionManager> =
@@ -152,17 +160,24 @@ impl McpRuntime {
         // opening a second one. It is not an MCP tool: it is the seam the
         // Python hook adapter forwards a normalized fact through, so the
         // durable write happens before its caller is acknowledged.
-        let mut router = Router::new()
-            .nest_service("/mcp", service)
+        let mcp_router = Router::new().nest_service("/mcp", service).route_layer(
+            axum::middleware::from_fn_with_state(authority.clone(), authenticate_mcp_request),
+        );
+        let lifecycle_router = Router::new()
             .route(
                 "/runs/lifecycle",
                 axum::routing::post(runs_lifecycle::ingest),
             )
+            .route_layer(axum::middleware::from_fn_with_state(
+                authority.clone(),
+                authenticate_provider_request,
+            ))
             .with_state(runs_lifecycle::RunsIngressState::new(
                 ingress_database,
-                ingress_backend_base_url,
-                ingress_credential.clone(),
-            ))
+                authority.clone(),
+            ));
+        let mut router = mcp_router
+            .merge(lifecycle_router)
             // The launch-path boundary carries its own state, so it is merged
             // rather than folded into the Runs ingress: nothing it can reach
             // is a Runs write, and nothing the Runs ingress holds is a path.
@@ -211,11 +226,9 @@ impl McpRuntime {
             cancellation,
             task,
             reconciler,
+            authority,
         };
-        if let Err(error) = verify_tool_list(address).await {
-            runtime.shutdown().await;
-            return Err(error);
-        }
+        verify_registry()?;
         Ok(runtime)
     }
 
@@ -227,6 +240,23 @@ impl McpRuntime {
         !self.task.is_finished()
     }
 
+    pub fn authority(&self) -> RunAuthority {
+        self.authority.clone()
+    }
+
+    #[cfg(test)]
+    pub async fn grant_for_test(
+        &self,
+        agent_run_id: &str,
+        token: &str,
+        allowed_tools: impl IntoIterator<Item = String>,
+        expired: bool,
+    ) -> Result<String, authority::AuthorizationFailure> {
+        self.authority
+            .grant_for_test(agent_run_id, token, allowed_tools, expired)
+            .await
+    }
+
     pub async fn shutdown(mut self) {
         self.cancellation.cancel();
         let _ = (&mut self.task).await;
@@ -234,36 +264,56 @@ impl McpRuntime {
     }
 }
 
-async fn verify_tool_list(address: SocketAddr) -> Result<(), String> {
-    let response = reqwest::Client::new()
-        .post(format!("http://{address}/mcp"))
-        .header("content-type", "application/json")
-        .header("accept", "application/json, text/event-stream")
-        .header("mcp-protocol-version", "2025-03-26")
-        .json(&json!({
-            "jsonrpc": "2.0",
-            "id": "ticketry-readiness",
-            "method": "tools/list",
-            "params": {}
-        }))
-        .send()
-        .await
-        .map_err(|error| format!("could not probe WorkTracker MCP listener: {error}"))?;
-    let body = response
-        .json::<Value>()
-        .await
-        .map_err(|error| format!("could not decode WorkTracker MCP tool list: {error}"))?;
-    let count = body["result"]["tools"]
-        .as_array()
-        .map(Vec::len)
-        .unwrap_or_default();
-    if count != registry::tools().len() {
-        return Err(format!(
-            "WorkTracker MCP readiness listed {count} tools; expected {}.",
-            registry::tools().len()
-        ));
+fn verify_registry() -> Result<(), String> {
+    let tools = registry::tools();
+    let unique = tools
+        .iter()
+        .map(|tool| tool.name.as_ref())
+        .collect::<std::collections::BTreeSet<_>>();
+    if unique.len() != tools.len() {
+        return Err("WorkTracker MCP registry contains duplicate tool names.".to_owned());
     }
     Ok(())
+}
+
+async fn authenticate_mcp_request(
+    State(authority): State<RunAuthority>,
+    request: Request<axum::body::Body>,
+    next: Next,
+) -> Response {
+    let authorization = request
+        .headers()
+        .get("authorization")
+        .and_then(|value| value.to_str().ok());
+    match authority.authenticate(authorization).await {
+        Ok(_) => next.run(request).await,
+        Err(failure) => (
+            axum::http::StatusCode::UNAUTHORIZED,
+            axum::Json(json!({
+                "jsonrpc": "2.0",
+                "id": null,
+                "result": {"structuredContent": failure.0}
+            })),
+        )
+            .into_response(),
+    }
+}
+
+async fn authenticate_provider_request(
+    State(authority): State<RunAuthority>,
+    request: Request<axum::body::Body>,
+    next: Next,
+) -> Response {
+    let authorization = request
+        .headers()
+        .get("authorization")
+        .and_then(|value| value.to_str().ok());
+    match authority.authenticate(authorization).await {
+        Ok(_) => next.run(request).await,
+        Err(failure) => {
+            (axum::http::StatusCode::UNAUTHORIZED, axum::Json(failure.0)).into_response()
+        }
+    }
 }
 
 impl Drop for McpRuntime {

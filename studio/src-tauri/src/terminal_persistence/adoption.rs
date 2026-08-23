@@ -15,6 +15,7 @@ use super::schema::{
     LAUNCH_REQUEST_COLUMNS, LEASE_COLUMNS, LEDGER_TABLE, SESSION_COLUMNS,
 };
 use super::{TerminalPersistenceError, TerminalPersistenceErrorCode};
+use crate::tmux_adapter::SESSION_PREFIX;
 
 const SNAPSHOT_GENERATIONS: usize = 3;
 const SCOPES: &[&str] = &["task", "plan", "instant", "docchat", "shell"];
@@ -858,7 +859,7 @@ async fn validate_semantics(
     let mut checks = Vec::new();
     if tables.contains_key("agent_terminal_sessions") {
         checks.extend([
-            ("Terminal Session identity", "SELECT COUNT(*) AS count FROM agent_terminal_sessions WHERE agent_run_id='' OR tmux_session_name='' OR tmux_session_name NOT LIKE 'pt-%'".to_owned()),
+            ("Terminal Session identity", format!("SELECT COUNT(*) AS count FROM agent_terminal_sessions WHERE agent_run_id='' OR tmux_session_name='' OR (tmux_session_name != agent_run_id AND tmux_session_name != ('{SESSION_PREFIX}' || agent_run_id))")),
             ("Terminal Session scope", format!("SELECT COUNT(*) AS count FROM agent_terminal_sessions WHERE scope NOT IN ({scopes}) OR ((scope='docchat') != (doc_rel_path IS NOT NULL))")),
             ("Terminal Session Agent Run", "SELECT COUNT(*) AS count FROM agent_terminal_sessions t LEFT JOIN agent_runs r ON r.id=t.agent_run_id WHERE r.id IS NULL".to_owned()),
         ]);

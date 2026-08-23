@@ -5,17 +5,15 @@
 use tauri::Manager;
 
 use crate::data_directory::established_data_directory;
-use crate::desktop::backend_launch::launch_packaged_backend;
+use crate::desktop::rust_runtime_launch::launch_rust_runtime;
 use crate::desktop::data_directory::DesktopDataDirectoryOwnership;
-use crate::desktop::environment::smoke_startup_exit_requested;
+use crate::desktop::environment::automated_startup_exit_requested;
 use crate::desktop::launch_runtime::DesktopLaunchRuntime;
 use crate::desktop::runtime_configuration::{
     development_runtime_configuration, failed_runtime_configuration,
 };
 use crate::desktop::service_health::{ServiceHealth, ServiceHealthState};
 use crate::desktop::service_state::DesktopServiceState;
-use crate::desktop::supervisor_monitor::start_supervisor_monitor;
-use crate::sidecar_supervision::{self, SupervisorError};
 use crate::{graphql_foundation, settings_persistence};
 
 pub(crate) fn initialize_services(
@@ -29,8 +27,6 @@ pub(crate) fn initialize_services(
         .lock()
         .expect("data-directory lock poisoned")
         .is_some();
-    let bootstrap_worktracker =
-        owns_data_directory && !ownership.data_directory.join("state.db").is_file();
     if startup_error.is_none() && owns_data_directory {
         let unavailable = settings_persistence::Slice2Readiness::unavailable();
         match settings_persistence::publish_readiness(&ownership.data_directory, &unavailable) {
@@ -66,12 +62,16 @@ pub(crate) fn initialize_services(
             }
         }
     }
-    if startup_error.is_none() && !bootstrap_worktracker {
+    // A first launch no longer waits for Python to create the installation:
+    // adoption provisions an empty data directory at the Rust leaf itself, so
+    // one call now handles every supported input, including an empty one.
+    if startup_error.is_none() {
         let foundation_database = ownership.data_directory.join("rust-core.sqlite3");
         match tauri::async_runtime::block_on(graphql_foundation::adopt_worktracker_and_install(
             &foundation_database,
             &ownership.data_directory,
             graphql_api,
+            graphql_foundation::InstallationOwnership::Owned,
         )) {
             Ok(adopted) => application
                 .state::<DesktopLaunchRuntime>()
@@ -90,15 +90,8 @@ pub(crate) fn initialize_services(
     }
     let state = application.state::<DesktopServiceState>();
     if let Some(message) = startup_error {
-        let log_path = sidecar_supervision::sidecar_log_path(&ownership.data_directory);
-        let health = ServiceHealth::failed(
-            &SupervisorError {
-                service: "backend".to_owned(),
-                kind: sidecar_supervision::FailureKind::Crash,
-                message,
-            },
-            &log_path,
-        );
+        let log_path = ownership.data_directory.join("ticketry.log");
+        let health = ServiceHealth::failed_runtime(message, &log_path);
         *state
             .configuration
             .lock()
@@ -106,16 +99,14 @@ pub(crate) fn initialize_services(
             Some(failed_runtime_configuration(health.clone()));
         state.publish(application.handle(), health);
     } else if owns_data_directory {
-        if let Err(message) =
-            launch_packaged_backend(application, graphql_api, bootstrap_worktracker)
-        {
+        if let Err(message) = launch_rust_runtime(application, graphql_api) {
             eprintln!("Ticketry desktop services failed to initialize: {message}");
-            if smoke_startup_exit_requested() {
+            if automated_startup_exit_requested() {
                 return Err(message.into());
             }
-            let log_path = sidecar_supervision::sidecar_log_path(
-                established_data_directory().map_err(|error| error.to_string())?,
-            );
+            let log_path = established_data_directory()
+                .map_err(|error| error.to_string())?
+                .join("ticketry.log");
             let health = {
                 let existing = state
                     .health
@@ -125,14 +116,7 @@ pub(crate) fn initialize_services(
                 if existing.state == ServiceHealthState::Failed {
                     existing
                 } else {
-                    ServiceHealth::failed(
-                        &SupervisorError {
-                            service: "backend".to_owned(),
-                            kind: sidecar_supervision::FailureKind::Crash,
-                            message,
-                        },
-                        &log_path,
-                    )
+                    ServiceHealth::failed_runtime(message, &log_path)
                 }
             };
             *state
@@ -141,8 +125,6 @@ pub(crate) fn initialize_services(
                 .expect("runtime configuration lock poisoned") =
                 Some(failed_runtime_configuration(health.clone()));
             state.publish(application.handle(), health);
-        } else {
-            start_supervisor_monitor(application.handle().clone());
         }
     } else {
         let configuration = development_runtime_configuration()?;

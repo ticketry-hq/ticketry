@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import * as api from "../api/client";
+import { readWorkflowStates } from "../../features/workflows/queries/readTransport";
 import { queryClient } from "./queryClient";
 import { queryKeys } from "./keys";
 import type { State } from "../api/types";
@@ -15,7 +15,7 @@ const bySortOrder = (rows: State[]): State[] =>
   [...rows].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
 
 async function fetchStates(projectId: string): Promise<State[]> {
-  return bySortOrder(await api.listStates(projectId));
+  return bySortOrder(await readWorkflowStates(projectId));
 }
 
 /** Cached states for a project, [] before the first load resolves. */

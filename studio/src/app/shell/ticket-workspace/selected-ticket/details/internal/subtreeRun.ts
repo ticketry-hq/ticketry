@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { toast } from "../../../../../../state/clientStore";
-import { ApiError, apiErrorMessage } from "../../../../../../shared/api/client";
+import { ApiError, apiErrorMessage } from "../../../../../../shared/api/errors";
 import {
   executeTaskSubtree,
   type GraphRunExecutionMode,

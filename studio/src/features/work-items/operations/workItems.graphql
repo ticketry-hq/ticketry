@@ -68,6 +68,20 @@ query WorkTrackerWorkItemByKey($projectSlug: String!, $sequenceId: Int!) {
   }
 }
 
+query WorkTrackerAttachments($issueId: String!) {
+  attachments: worktrackerAttachment(filters: { issueId: { eq: $issueId } }) {
+    nodes {
+      id
+      issue_id: issueId
+      file
+      filename
+      mime_type: mimeType
+      size
+      created_at: createdAt
+    }
+  }
+}
+
 mutation CreateWorkTrackerWorkItem($projectId: String!, $name: String!, $issueTypeId: String!, $description: String, $stateId: String, $parentId: String) {
   create_work_item(project_id: $projectId, name: $name, issue_type_id: $issueTypeId, description: $description, state_id: $stateId, parent_id: $parentId) {
     ...GeneratedWorkTrackerWorkItemFields

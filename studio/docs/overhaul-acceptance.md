@@ -136,6 +136,10 @@ named gate before the full Studio suite, typecheck, and build.
 | 153 | The desktop xterm fallback attaches, exchanges bytes, resizes, scrolls, suspends, resumes, and detaches through Tauri viewer commands instead of the Python terminal WebSocket. |
 | 154 | Desktop Run Now, agent and module-shell discovery and control use caller-owned GraphQL over TauRPC, deliberate launches get fresh request IDs while retries retain them, mutations refresh canonical terminal holdings, and native plus xterm viewers share generation-bound lease authority. |
 | 155 | Studio snapshots and live output events consume the same Rust run projection, including Shell scope, nullable provider, launch metadata, effective state, output sequence, and output time. |
+| 156 | Studio stays closed through adoption and names the verified snapshot recovery boundary. |
+| 157 | Startup failures distinguish unsupported, refused, snapshot, bridge, postflight, and recovery states. |
+| 158 | Browser development uses the Rust GraphQL adapter with no REST fallback. |
+| 159 | Startup failures point to the Ticketry application log and never show a retired sidecar notice. |
 
 Each executable case carries one stable `[overhaul-NN]` marker. The gate has a
 contract test that fails if a marker is missing or duplicated. When a Studio UI

@@ -1,5 +1,5 @@
 import { FoundationGraphQlError } from "../../graphql-foundation/foundationClient";
-import { ApiError } from "./client";
+import { ApiError } from "./errors";
 
 /** Preserve the established REST-shaped mutation failure contract at the UI seam. */
 export function graphQlMutationError(error: unknown): never {

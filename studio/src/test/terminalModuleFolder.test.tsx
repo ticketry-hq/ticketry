@@ -15,7 +15,6 @@ function folderPickerRuntime(
     platform: "desktop",
     capabilities: {
       statusFeed: true,
-      websocketTerminal: true,
       nativeLifecycle: false,
       serviceSupervision: true,
       nativeTerminal: false,
@@ -39,13 +38,6 @@ function folderPickerRuntime(
     pickFolder,
     retryServices: async () => {},
     startup: () => ({
-      endpoints: {
-        workTrackerApi: "/api/work-tracker",
-        agentApi: "/api",
-        statusApi: "/api",
-        terminalWebSocket: "/ws/terminal",
-      },
-      values: { workTrackerApiKey: "" },
       serviceHealth: {
         state: "ready",
         service: "backend",

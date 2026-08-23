@@ -4,18 +4,19 @@ Keep user-facing responses very concise. Lead with the direct answer or blocker;
 add detail only when the user asks for it.
 
 This repository owns the complete Ticketry desktop application: the React
-frontend, Tauri shell, supervised Python backend sidecar, MCP service, and
-generated SDKs required by that application.
+frontend, Tauri shell, in-process Rust services, MCP listener, and generated
+GraphQL contracts required by that application.
 
 Use `npm run desktop:dev` or `pnpm run dev` from the repository root for local
-desktop development. Both commands rebuild and launch the sidecar. Keep browser-
+desktop development. Both commands rebuild and launch Ticketry. Keep browser-
 only service commands as supporting development tools, not as a separate product.
 
 Code structure is a governing constraint, not a preference: keep files small
 and single-purpose, place frontend code in `studio/src/features/<domain>/`
 (with `app/` for the shell and `shared/` for cross-feature plumbing only), and
-give each backend capability its own Django app under `backend/apps/` with the
-core domain split across `worktracker/`'s `models/`, `rest/`, and `services/`.
+give each Rust backend capability its own focused module under
+`studio/src-tauri/src/`, with database-backed GraphQL composed through
+SeaORM and Seaography.
 When a file outgrows one concern, split it rather than extend it. The full
 rules live in [`CLAUDE.md`](CLAUDE.md) under "Code structure — governing
 rules"; keep the two documents consistent.
@@ -42,13 +43,9 @@ replacement CRUD, DAO/repository layers that mirror SeaORM, mirrored DTOs,
 identifies the missing behavior, rejected framework/database facilities, the
 smallest custom seam, and its drift-prevention test.
 
-Backend HTTP endpoints must use Django REST Framework's native machinery, not
-handwritten views. Before adding or changing any backend REST endpoint,
-serializer, or view, read
-[`.codex/skills/drf-rest-api/SKILL.md`](.codex/skills/drf-rest-api/SKILL.md);
-to review the backend for framework drift, follow
-[`.codex/skills/drf-rest-api-audit/SKILL.md`](.codex/skills/drf-rest-api-audit/SKILL.md).
-The same skills are exposed to Claude via symlinks in `.claude/skills/`.
+Ticketry has no product REST API. Browser development may use the Rust GraphQL
+adapter, but it must not grow into a second backend or external compatibility
+contract.
 
 Keep the Tauri/webview boundary narrow. The native terminal renderer consumes a
 pinned libghostty revision through its C API, while tmux remains responsible for
@@ -56,10 +53,10 @@ durable sessions. Preserve the existing fallback unless a deliberate migration
 removes it.
 
 Development data must remain isolated from live application data. Generated
-databases, caches, sidecars, native libraries, and build output must not be
+databases, caches, native libraries, and build output must not be
 committed.
 
-Development frontend, backend, and MCP output is persisted at
+Development frontend, Rust runtime, and MCP output is persisted at
 `.ticketry-dev/logs/ticketry.log`. Use `npm run logs` to inspect recent output,
 `npm run logs:follow` while reproducing a problem, and `npm run logs:clear` to
 start a clean capture. This directory is generated and must not be committed.

@@ -41,7 +41,7 @@ serving:
 - configures hook-spool, media, authentication, and MCP state.
 
 Those behaviors live in
-[`../backend/packaging/sidecar.py`](../backend/packaging/sidecar.py) and are
+[`../backend/sidecar_packaging/sidecar.py`](../backend/sidecar_packaging/sidecar.py) and are
 product requirements, not Python implementation details. Tauri already owns the
 data-directory lease/marker and must remain the outer authority
 ([`../studio/src-tauri/src/ownership.rs`](../studio/src-tauri/src/ownership.rs)).
@@ -145,7 +145,7 @@ For SQLite, acquire the installation lease, stop all writers, checkpoint WAL,
 copy the database and sidecars consistently, hash the snapshot, and verify the
 copy opens and passes integrity checks. Keep a rotation at least as strong as
 the current three-generation policy
-([`../backend/packaging/sidecar.py`](../backend/packaging/sidecar.py)).
+([`../backend/sidecar_packaging/sidecar.py`](../backend/sidecar_packaging/sidecar.py)).
 
 Do not duplicate bulk attachments, worktrees, or tmux state. Instead, record a
 cutover manifest of their root paths and relevant identifiers, and leave them in

@@ -314,6 +314,37 @@ async fn validation_failure_rolls_back_counters_and_typed_edits_advance_revision
 }
 
 #[tokio::test]
+async fn create_work_item_accepts_a_top_level_module_type() {
+    let (_directory, database) = fixture().await;
+    let id = work_items::create(
+        &database,
+        work_items::CreateWorkItem {
+            project_id: PROJECT.to_owned(),
+            name: "  General  ".to_owned(),
+            issue_type_id: MODULE_TYPE.to_owned(),
+            description: None,
+            state_id: None,
+            parent_id: None,
+        },
+        None,
+    )
+    .await
+    .unwrap();
+
+    let created = issue::Entity::find_by_id(id)
+        .one(&database)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(created.name, "General");
+    assert_eq!(created.r#type, "module");
+    assert_eq!(created.issue_type_id, MODULE_TYPE);
+    assert!(created.parent_id.is_none());
+    assert!(created.module_id.is_none());
+    assert!(created.state_id.is_none());
+}
+
+#[tokio::test]
 async fn hierarchy_create_reparent_detach_repairs_deep_module_ancestry_across_restart() {
     let (directory, database) = fixture().await;
     database
@@ -1286,7 +1317,7 @@ async fn graphql_exposes_only_authored_mutations_and_structured_errors() {
             .count(&command_database)
             .await
             .unwrap(),
-        24
+        15
     );
     assert!(
         issue_type_transition::Entity::find()
@@ -1295,6 +1326,18 @@ async fn graphql_exposes_only_authored_mutations_and_structured_errors() {
             .unwrap()
             > 0
     );
+
+    let created_module: serde_json::Value = serde_json::from_str(
+        &api.clone().graphql_execute(serde_json::json!({
+            "query": "mutation { create_work_item(project_id: \"10000000-0000-0000-0000-000000000000\", name: \"General\", issue_type_id: \"30000000-0000-0000-0000-000000000003\") { id type stateId moduleId parentId } }"
+        }).to_string()).await,
+    )
+    .unwrap();
+    assert!(created_module.get("errors").is_none(), "{created_module}");
+    assert_eq!(created_module["data"]["create_work_item"]["type"], "module");
+    assert!(created_module["data"]["create_work_item"]["stateId"].is_null());
+    assert!(created_module["data"]["create_work_item"]["moduleId"].is_null());
+    assert!(created_module["data"]["create_work_item"]["parentId"].is_null());
 
     let response: serde_json::Value = serde_json::from_str(
         &api.graphql_execute(serde_json::json!({

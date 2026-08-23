@@ -9,4 +9,4 @@ mod schema;
 
 pub use adoption::{adopt, preflight, AdoptionEvidence, SourceClassification, TableEvidence};
 pub use error::{ExecutionPersistenceError, ExecutionPersistenceErrorCode};
-pub use schema::{CURRENT_DJANGO_LEAF, VERSION};
+pub use schema::{CURRENT_DJANGO_LEAF, EMPTY_DJANGO_LEAF, VERSION};

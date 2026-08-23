@@ -2,7 +2,7 @@
  * Which shell each module last had in front, across restarts (#687).
  *
  * The shell *set* is rediscovered from the backend rather than remembered here:
- * the shells that survive a restart or a sidecar rebuild are the ones the
+ * the shells that survive a restart or an application rebuild are the ones the
  * server still holds a session for. But which of them was showing has no
  * backend source at all — it is a per-person, per-module choice — so without
  * this record a restart always lands on whichever shell happens to be first.

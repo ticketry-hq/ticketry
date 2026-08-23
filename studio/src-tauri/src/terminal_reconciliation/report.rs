@@ -45,6 +45,8 @@ pub struct TerminalReconciliationReport {
     pub launches: TerminalLaunchRecoveryReport,
     pub cleanups: TerminalCleanupRecoveryReport,
     pub sessions: Vec<ReconciledSession>,
+    /// The bounded batch left a recorded row uninspected. The scan cursor keeps
+    /// its place, so a later pass inspects that row.
     pub sessions_saturated: bool,
     pub unrecorded: Vec<ReconciledUnrecordedRuntime>,
     pub conflicts: Vec<RuntimeConflictDiagnostic>,

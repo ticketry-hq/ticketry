@@ -1,5 +1,6 @@
 import { studioRuntime } from "../../../../runtime";
-import { authenticatedHostFetch } from "../../../../shared/api/authenticatedHostFetch";
+import { graphQlMutationError } from "../../../../shared/api/graphqlError";
+import { ObserveTerminalOutputDocument } from "../generated/outputActivity";
 
 /**
  * The native renderer's report of the shared terminal-output observation.
@@ -41,13 +42,32 @@ export function reportNativeViewerAttached(
   void client.report(agentRunId).catch(() => {});
 }
 
-/** Rust reconciliation owns output observation after the terminal cutover. */
+/**
+ * Rust owns the observation after the terminal cutover.
+ *
+ * This used to POST `/api/terminals/viewers/output`, a route that went away
+ * with the Python terminal authority. The same capability is now the
+ * `ObserveTerminalOutput` mutation on the in-process GraphQL transport: Rust
+ * binds the live runtime, captures the pane, digests it, and decides whether
+ * anything advanced. Only the destination changed — the client still submits
+ * one Terminal Session identity and reads nothing back.
+ */
 export const desktopOutputActivity: OutputActivityClient = {
   async report(agentRunId) {
-    if (studioRuntime().platform === "desktop") return;
-    await authenticatedHostFetch("/api/terminals/viewers/output", {
-      method: "POST",
-      body: JSON.stringify({ agent_run_id: agentRunId }),
+    await studioRuntime().writeWorkTracker({
+      graphQl: async (execute) => {
+        try {
+          await execute(ObserveTerminalOutputDocument, { agentRunId });
+        } catch (error) {
+          return graphQlMutationError(error);
+        }
+      },
     });
   },
 };
+
+/**
+ * Observation reaches tmux through the desktop process. A platform without the
+ * in-process transport cannot observe anything, and the route it used to post
+ * to no longer answers.
+ */

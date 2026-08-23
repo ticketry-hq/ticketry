@@ -6,6 +6,8 @@
 //! create or terminate a tmux runtime.
 
 mod adoption;
+pub mod aggregate_seaography_audit;
+pub mod child_seaography_handoffs;
 pub mod column_policy;
 mod error;
 mod graphql_scope;

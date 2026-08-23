@@ -24,13 +24,6 @@ const CHILD = "60000000-0000-0000-0000-000000000002";
 const UNRELATED = "60000000-0000-0000-0000-000000000009";
 
 const startup = {
-  endpoints: {
-    workTrackerApi: "http://127.0.0.1:8787/api/work-tracker",
-    agentApi: "http://127.0.0.1:8787/api",
-    statusApi: "http://127.0.0.1:8787/api",
-    terminalWebSocket: "ws://127.0.0.1:8787/ws/terminal",
-  },
-  values: { workTrackerApiKey: "" },
   serviceHealth: {
     state: "ready" as const,
     service: "backend",

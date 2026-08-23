@@ -7,10 +7,6 @@ use std::env;
 use std::fs::{self, OpenOptions};
 use std::path::{Path, PathBuf};
 
-use super::development_mode::{
-    development_stack_access, development_stack_state, DevelopmentStackMarker,
-    DevelopmentStackState, DEVELOPMENT_STACK_MARKER,
-};
 use super::owner_record::{now_millis, write_owner, LOCK_FILE_NAME};
 use super::*;
 
@@ -25,19 +21,14 @@ fn temp_data_directory(name: &str) -> PathBuf {
 }
 
 fn acquire_owned(directory: &Path) -> DataDirectoryGuard {
-    match DataDirectoryGuard::acquire(directory, DevelopmentMode::Forbid, 0)
-        .expect("ownership acquisition")
-    {
-        DataDirectoryAccess::Owned(guard) => guard,
-        DataDirectoryAccess::DevelopmentStack => panic!("port zero cannot be a dev stack"),
-    }
+    DataDirectoryGuard::acquire(directory).expect("ownership acquisition")
 }
 
 #[test]
 fn two_instances_cannot_own_one_data_directory() {
     let directory = temp_data_directory("exclusive");
     let first = acquire_owned(&directory);
-    let error = DataDirectoryGuard::acquire(&directory, DevelopmentMode::Forbid, 0)
+    let error = DataDirectoryGuard::acquire(&directory)
         .expect_err("second owner must be refused");
 
     assert!(matches!(error, OwnershipError::DataDirectoryInUse { .. }));
@@ -51,7 +42,7 @@ fn two_instances_cannot_own_one_data_directory() {
 fn contended_explicit_data_directory_diagnostic_names_the_directory() {
     let directory = temp_data_directory("explicit-contention");
     let first = acquire_owned(&directory);
-    let error = DataDirectoryGuard::acquire(&directory, DevelopmentMode::Forbid, 0)
+    let error = DataDirectoryGuard::acquire(&directory)
         .expect_err("second owner must be refused");
     let diagnostic = format!(
         "could not own selected data directory {}: {error}",
@@ -88,7 +79,7 @@ fn an_uncreatable_selected_directory_is_named_in_the_error() {
     fs::write(&file, b"blocking file").expect("create blocking file");
     let selected = file.join("profile");
 
-    let error = DataDirectoryGuard::acquire(&selected, DevelopmentMode::Forbid, 0)
+    let error = DataDirectoryGuard::acquire(&selected)
         .expect_err("directory beneath a file must be rejected");
 
     assert!(error.to_string().contains(&selected.display().to_string()));
@@ -177,113 +168,4 @@ fn forced_quit_relaunches_without_manual_cleanup() {
     assert!(guard.reclaimed_stale_metadata());
     guard.release().expect("release relaunched owner");
     fs::remove_dir_all(directory).expect("clean test directory");
-}
-
-#[test]
-fn running_dev_backend_requires_explicit_connect_mode() {
-    let port = 8787;
-    let error = development_stack_access(DevelopmentMode::Forbid, true, port)
-        .expect_err("implicit dev sharing must fail");
-    assert!(matches!(
-        error,
-        OwnershipError::DevelopmentStackDetected { port: detected } if detected == port
-    ));
-    assert!(
-        development_stack_access(DevelopmentMode::Connect, true, port).expect("explicit dev mode")
-    );
-}
-
-#[test]
-fn connect_mode_without_a_verified_development_stack_fails_closed() {
-    let directory = temp_data_directory("connect-without-stack");
-    let error = DataDirectoryGuard::acquire(&directory, DevelopmentMode::Connect, 0)
-        .expect_err("connect mode must never fall through to owned sidecar mode");
-
-    assert!(matches!(
-        error,
-        OwnershipError::DevelopmentStackUnavailable { port: 0 }
-    ));
-    assert!(error.to_string().contains("start `pnpm dev`"));
-    fs::remove_dir_all(directory).expect("clean test directory");
-}
-
-#[test]
-fn matching_dev_stack_marker_allows_only_explicit_connect_mode() {
-    let directory = temp_data_directory("dev-marker");
-    let marker = DevelopmentStackMarker {
-        data_dir: directory.clone(),
-        supervisor_pid: std::process::id(),
-        backend_port: 0,
-    };
-    fs::write(
-        directory.join(DEVELOPMENT_STACK_MARKER),
-        serde_json::to_vec(&marker).expect("serialize marker"),
-    )
-    .expect("write marker");
-
-    assert_eq!(
-        development_stack_state(&directory, 0),
-        DevelopmentStackState::Verified
-    );
-    let error = DataDirectoryGuard::acquire(&directory, DevelopmentMode::Forbid, 0)
-        .expect_err("implicit dev sharing must fail");
-    assert!(matches!(
-        error,
-        OwnershipError::DevelopmentStackDetected { port: 0 }
-    ));
-    assert!(matches!(
-        DataDirectoryGuard::acquire(&directory, DevelopmentMode::Connect, 0)
-            .expect("explicit dev connect"),
-        DataDirectoryAccess::DevelopmentStack
-    ));
-    fs::remove_dir_all(directory).expect("clean test directory");
-}
-
-#[test]
-fn marker_for_another_data_directory_does_not_enable_connect_mode() {
-    let directory = temp_data_directory("dev-marker-mismatch");
-    let other_directory = temp_data_directory("dev-marker-other");
-    let marker = DevelopmentStackMarker {
-        data_dir: other_directory.clone(),
-        supervisor_pid: std::process::id(),
-        backend_port: 0,
-    };
-    fs::write(
-        directory.join(DEVELOPMENT_STACK_MARKER),
-        serde_json::to_vec(&marker).expect("serialize marker"),
-    )
-    .expect("write marker");
-
-    assert_eq!(
-        development_stack_state(&directory, 0),
-        DevelopmentStackState::Absent
-    );
-    let guard = acquire_owned(&directory);
-    guard.release().expect("release owner");
-    fs::remove_dir_all(directory).expect("clean test directory");
-    fs::remove_dir_all(other_directory).expect("clean test directory");
-}
-
-#[test]
-fn unrelated_listener_on_the_development_port_does_not_block_ownership() {
-    let directory = temp_data_directory("unrelated-development-port");
-    let listener =
-        std::net::TcpListener::bind(("127.0.0.1", 0)).expect("bind unrelated local service");
-    let port = listener.local_addr().expect("listener address").port();
-
-    let guard = DataDirectoryGuard::acquire(&directory, DevelopmentMode::Forbid, port)
-        .expect("an unrelated service on the conventional port must not own this directory");
-    assert!(matches!(guard, DataDirectoryAccess::Owned(_)));
-
-    drop(listener);
-    drop(guard);
-    fs::remove_dir_all(directory).expect("clean test directory");
-}
-
-#[test]
-fn invalid_development_mode_is_actionable() {
-    assert!(matches!(
-        DevelopmentMode::parse("true"),
-        Err(OwnershipError::InvalidDevelopmentMode(value)) if value == "true"
-    ));
 }

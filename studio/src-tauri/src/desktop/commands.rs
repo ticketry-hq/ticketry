@@ -5,19 +5,14 @@
 use std::path::PathBuf;
 use tauri_plugin_dialog::DialogExt;
 
-use crate::data_directory::established_data_directory;
 use crate::desktop::folder_selection::absolute_folder_path;
-use crate::desktop::frontend_log::frontend_log_line;
+use crate::desktop::frontend_log::{append_frontend_log, frontend_log_line};
 use crate::desktop::launch_runtime::DesktopLaunchRuntime;
 use crate::desktop::lifecycle::MAIN_WINDOW_LABEL;
-use crate::desktop::mcp_runtime::ensure_in_process_mcp;
-use crate::desktop::runtime_configuration::{
-    sidecar_runtime_configuration, RuntimeStartupConfiguration,
-};
-use crate::desktop::service_health::ServiceHealth;
+use crate::desktop::runtime_configuration::RuntimeStartupConfiguration;
 use crate::desktop::service_state::DesktopServiceState;
-use crate::sidecar_supervision::{self, SupervisorError};
 use crate::{tool_discovery as discovery, work_management};
+use serde::Serialize;
 
 #[tauri::command]
 pub(crate) fn desktop_runtime_configuration(
@@ -36,27 +31,39 @@ pub(crate) async fn desktop_launch_default_coding_agent(
     if window.label() != MAIN_WINDOW_LABEL {
         return Err("agent launch is restricted to the local main window".to_owned());
     }
-    let configuration = services.configuration()?;
     // Reuse the pool and profile store composition already opened. A pool per
     // click would re-run the launch-policy DDL and take an exclusive write
     // lock on a `state.db` several writers are already sharing.
-    work_management::launch_policy::submit_interactive(
-        launch.commands()?,
+    let database = launch.commands()?;
+    let resolver = work_management::launch_policy::LaunchPolicyResolver::new(
+        database.clone(),
         launch.profiles()?,
-        &configuration.endpoints.agent_api,
-        &configuration.values.work_tracker_api_key,
-        issue_id,
-    )
-    .await
+    );
+    let decision = resolver.resolve(work_management::launch_policy::LaunchPolicyRequest {
+        task_id: issue_id,
+        destination_state_id: None,
+        provider_override: None,
+        caller_scope: work_management::launch_policy::CallerScope::Interactive,
+        idempotency_key: uuid::Uuid::new_v4().simple().to_string(),
+    }).await.map_err(|error| error.code().to_owned())?;
+    let decision = work_management::launch_policy::record(database, &decision)
+        .await.map_err(|error| error.code().to_owned())?;
+    let terminal_launch = services.terminal_launch
+        .lock().expect("terminal launch lock poisoned").clone()
+        .ok_or_else(|| "terminal launch is unavailable".to_owned())?;
+    let session = work_management::launch_policy::execute_pending_decision(
+        database,
+        &terminal_launch,
+        &decision,
+    ).await?;
+    Ok(serde_json::json!({ "agent_run_id": session.agent_run_id }))
 }
 
-/// Development-only bridge from the local main webview to the fixed
-/// supervisor-owned log. The webview cannot select a path or bypass the
-/// supervisor's redaction and rotation policy.
+/// Development-only bridge from the local main webview to the fixed log.
 #[tauri::command]
 pub(crate) fn desktop_append_frontend_log(
     window: tauri::WebviewWindow,
-    state: tauri::State<'_, DesktopServiceState>,
+    _state: tauri::State<'_, DesktopServiceState>,
     level: String,
     message: String,
 ) -> Result<(), String> {
@@ -67,78 +74,16 @@ pub(crate) fn desktop_append_frontend_log(
         return Err("frontend logs are restricted to the local main window".to_owned());
     }
     let line = frontend_log_line(&level, &message)?;
-    let supervisor = state.supervisor.lock().expect("supervisor lock poisoned");
-    let supervisor = supervisor
-        .as_ref()
-        .ok_or_else(|| "desktop service supervision is unavailable".to_owned())?;
-    supervisor.append_log_line(&line);
-    Ok(())
+    append_frontend_log(&line)
 }
 
-/// Rearm and relaunch the fixed supervised pair. The webview supplies no
-/// program, path, argument, port, or environment value.
+/// A startup failure is retried by restarting the one in-process runtime.
 #[tauri::command]
 pub(crate) fn desktop_retry_services(
-    application: tauri::AppHandle,
-    state: tauri::State<'_, DesktopServiceState>,
+    _application: tauri::AppHandle,
+    _state: tauri::State<'_, DesktopServiceState>,
 ) -> Result<(), String> {
-    let fallback_log_path = sidecar_supervision::sidecar_log_path(
-        established_data_directory().map_err(|error| error.to_string())?,
-    );
-    let mut supervisor_guard = state.supervisor.lock().expect("supervisor lock poisoned");
-    // Keep the complete retry health sequence under the same lock used by
-    // the monitor so no stale poll result can be published after it.
-    state.publish(&application, ServiceHealth::recovering());
-    let (result, log_path) = match supervisor_guard.as_mut() {
-        Some(supervisor) => {
-            let observed_events = supervisor.events().len();
-            let mut result = supervisor.retry();
-            let events = supervisor.events();
-            let new_events = events.get(observed_events..).unwrap_or(&[]);
-            if result.is_ok() {
-                state.retain_supervisor_notices(new_events);
-                let port = supervisor
-                    .port()
-                    .expect("successful retry retains its assigned port");
-                *state
-                    .configuration
-                    .lock()
-                    .expect("runtime configuration lock poisoned") =
-                    Some(sidecar_runtime_configuration(port, supervisor.credential()));
-                if let Err(message) = ensure_in_process_mcp(&application, &state, supervisor) {
-                    result = Err(SupervisorError {
-                        service: "mcp".to_owned(),
-                        kind: sidecar_supervision::FailureKind::Crash,
-                        message,
-                    });
-                }
-            }
-            (result, supervisor.log_path().to_path_buf())
-        }
-        None => (
-            Err(SupervisorError {
-                service: "backend".to_owned(),
-                kind: sidecar_supervision::FailureKind::Crash,
-                message: "desktop service supervision is unavailable".to_owned(),
-            }),
-            fallback_log_path,
-        ),
-    };
-    match result {
-        Ok(()) => {
-            state.publish(&application, ServiceHealth::ready());
-            Ok(())
-        }
-        Err(error) => {
-            state.publish(&application, ServiceHealth::failed(&error, &log_path));
-            Err(format!(
-                "desktop {} retry failed: {}; logs: {}",
-                error.service,
-                error.message,
-                log_path.display()
-            ))
-        }
-    }
+    Err("Ticketry's in-process runtime could not recover; restart the application to retry startup".to_owned())
 }
 
 /// Open one directory-only native chooser parented to the local main window.
@@ -157,6 +102,31 @@ pub(crate) async fn desktop_pick_folder(
             .set_parent(&window)
             .blocking_pick_folder(),
     )
+}
+
+#[derive(Serialize)]
+pub(crate) struct ModuleFolderValidation {
+    valid: bool,
+    reason: Option<&'static str>,
+}
+
+/// Validate a user-selected local folder without exposing a general filesystem
+/// command to the webview.
+#[tauri::command]
+pub(crate) fn desktop_validate_module_folder(path: String) -> ModuleFolderValidation {
+    match crate::launch_paths::validate_module_folder(Some(&path)) {
+        Ok(_) => ModuleFolderValidation { valid: true, reason: None },
+        Err(error) => {
+            let reason = match error {
+                crate::launch_paths::ModuleFolderFailure::Relative
+                | crate::launch_paths::ModuleFolderFailure::Unset => "module_folder_not_absolute",
+                crate::launch_paths::ModuleFolderFailure::Missing
+                | crate::launch_paths::ModuleFolderFailure::Inaccessible => "module_folder_missing",
+                crate::launch_paths::ModuleFolderFailure::NotDirectory => "module_folder_not_a_directory",
+            };
+            ModuleFolderValidation { valid: false, reason: Some(reason) }
+        }
+    }
 }
 
 /// Read-only, zero-argument preflight.  The webview can request the fixed

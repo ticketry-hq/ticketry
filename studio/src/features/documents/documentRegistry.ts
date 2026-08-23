@@ -1,5 +1,4 @@
 import { studioRuntime } from "../../runtime";
-import * as rest from "./api/documentRestApi";
 import { documentLabel } from "./documentLabel";
 import {
   CompleteDirectoriesDocument,
@@ -34,8 +33,8 @@ export function listTaskDocuments(
   moduleId?: string,
   signal?: AbortSignal,
 ): Promise<DesignDoc[]> {
+  void signal;
   return studioRuntime().readWorkTracker({
-    rest: () => rest.listTaskDocuments(taskId, projectId, moduleId, signal),
     graphQl: async (execute) => adapt(
       (await execute(RefreshTaskDocumentRegistryDocument, {
         taskId,
@@ -50,8 +49,8 @@ export function listScratchDocuments(
   moduleId: string,
   signal?: AbortSignal,
 ): Promise<DesignDoc[]> {
+  void signal;
   return studioRuntime().readWorkTracker({
-    rest: () => rest.listScratchDocuments(moduleId, signal),
     graphQl: async (execute) => adapt(
       (await execute(RefreshScratchDocumentRegistryDocument, { moduleId }))
         .refresh_scratch_document_registry,
@@ -67,8 +66,8 @@ export function completeDirectories(
   path: string,
   signal?: AbortSignal,
 ): Promise<string[]> {
+  void signal;
   return studioRuntime().readWorkTracker({
-    rest: () => rest.completeDirectories(path, signal),
     graphQl: async (execute) => [
       ...(await execute(CompleteDirectoriesDocument, { path }))
         .directory_completions,

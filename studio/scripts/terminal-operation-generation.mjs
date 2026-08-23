@@ -10,6 +10,7 @@ export async function generateTerminalOperations({ schemaPath, sourceRoot, outpu
     "create_viewer_lease(agent_run_id: String!, viewer_id: String!, transport: String!): AgentRunViewerLeases!",
     "update_viewer_lease(agent_run_id: String!, viewer_id: String!, generation: String!): AgentRunViewerLeases!",
     "delete_viewer_lease(agent_run_id: String!, viewer_id: String!, generation: String!): AgentRunViewerLeases",
+    "terminal_output_observe(agent_run_id: String!): TerminalOutputObservation!",
     "terminal_session_create(client_request_id: String!, project_id: String, issue_id: String, module_id: String!, target_id: String, kind: String!, provider: String, working_directory_identity: String, columns: Int!, rows: Int!",
     "terminal_session_update(agent_run_id: String!, termination_request_id: String): AgentTerminalSessions!",
     "launchState: String",
@@ -230,6 +231,40 @@ const document = <TResult, TVariables>(operationName: string): TypedDocumentNode
 export const CreateViewerLeaseDocument = document<ViewerLeaseMutation, CreateViewerLeaseVariables>("CreateViewerLease");
 export const UpdateViewerLeaseDocument = document<ViewerLeaseMutation, OwnedViewerLeaseVariables>("UpdateViewerLease");
 export const DeleteViewerLeaseDocument = document<DeleteViewerLeaseMutation, OwnedViewerLeaseVariables>("DeleteViewerLease");
+`,
+    "utf8",
+  );
+
+  const activitySource = (
+    await readFile(
+      join(sourceRoot, "features/agents/terminal/operations/outputActivity.graphql"),
+      "utf8",
+    )
+  ).trim();
+  await writeFile(
+    join(target, "outputActivity.ts"),
+    `// Generated from operations/outputActivity.graphql. Do not edit manually.
+
+import type { TypedDocumentNode } from "../../../../graphql-foundation/typedDocument";
+
+export interface TerminalOutputObservationPayload {
+  readonly advanced: boolean;
+  readonly output_sequence: number;
+  readonly last_output_at: string | null;
+}
+
+export interface ObserveTerminalOutputVariables {
+  readonly agentRunId: string;
+}
+export interface ObserveTerminalOutputMutation {
+  readonly observation: TerminalOutputObservationPayload;
+}
+
+export const ObserveTerminalOutputDocument = {
+  kind: "Document",
+  operationName: "ObserveTerminalOutput",
+  source: ${JSON.stringify(activitySource)},
+} as TypedDocumentNode<ObserveTerminalOutputMutation, ObserveTerminalOutputVariables>;
 `,
     "utf8",
   );

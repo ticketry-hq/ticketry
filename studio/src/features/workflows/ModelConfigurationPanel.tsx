@@ -21,7 +21,7 @@ import {
   loadProviderCatalog,
   updateProviderCatalog,
 } from "./providerQueries";
-import { ApiError } from "../../shared/api/client";
+import { ApiError } from "../../shared/api/errors";
 import type {
   ConfigurableProvider,
   ProviderCapabilities,

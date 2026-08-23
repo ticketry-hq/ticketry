@@ -24,7 +24,7 @@ export function usePersistedTerminalSessions(
       queryKey: taskId
         ? queryKeys.terminalSessions.persisted(taskId)
         : queryKeys.terminalSessions.persisted("none"),
-      queryFn: ({ signal }) => readTaskTerminalSessions(taskId!, signal),
+      queryFn: () => readTaskTerminalSessions(taskId!),
       enabled: taskId !== null,
       staleTime: 0,
     },
@@ -44,8 +44,7 @@ export function useScratchTerminalSessions(
         projectId && moduleId
           ? queryKeys.terminalSessions.scratch(projectId, moduleId)
           : queryKeys.terminalSessions.scratch("none", null),
-      queryFn: ({ signal }) =>
-        readScratchTerminalSessions(projectId!, moduleId!, signal),
+      queryFn: () => readScratchTerminalSessions(projectId!, moduleId!),
       enabled: projectId !== null && moduleId !== null,
       staleTime: 0,
     },
@@ -68,10 +67,10 @@ export function useResumableTerminalSessions(
         taskId ? null : projectId,
         taskId ? null : moduleId,
       ),
-      queryFn: ({ signal }) =>
+      queryFn: () =>
         taskId
-          ? readTaskResumableTerminalSessions(taskId, signal)
-          : readScratchResumableTerminalSessions(projectId!, moduleId!, signal),
+          ? readTaskResumableTerminalSessions(taskId)
+          : readScratchResumableTerminalSessions(projectId!, moduleId!),
       enabled,
       staleTime: 0,
     },

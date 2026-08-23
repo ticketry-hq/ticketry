@@ -1,16 +1,16 @@
 # Agent guidance — unified Studio application
 
 **Read this before changing anything in this repository.** The repository
-contains the complete Studio application: its Django backend and `worktracker`
-app at `backend/`, API surfaces, and one frontend. The canonical frontend entry is
+contains the complete Ticketry application: its Rust services, Tauri shell,
+GraphQL and MCP contracts, and one frontend. The canonical frontend entry is
 `studio/index.html` → `studio/src/main.tsx`; its Vite development server listens
 on `127.0.0.1:5174`. Work-item planning, agent lifecycle, terminals,
 worktrees, documents, prompts, modals, and launch flows belong to this
 application.
 
-Use the application’s canonical runtime scripts. `scripts/dev.sh studio` starts
-the browser frontend; `npm run desktop:dev` and `pnpm dev` rebuild the sidecar
-and launch the desktop application.
+Use the application's canonical runtime scripts. `npm run desktop:dev` and
+`pnpm dev` rebuild and launch the desktop application. `npm run web` starts the
+frontend with the supporting Rust GraphQL adapter.
 
 ## Code structure — governing rules
 
@@ -28,15 +28,13 @@ opening any code. To keep that true:
   browser-vs-desktop contract and implementations; `state/` stays minimal.
   New UI code goes in the feature folder it belongs to — create a new
   `features/<domain>/` folder rather than growing `shared/` or `app/`.
-- **Backend layout** (`backend/`): `worktracker/` is the core domain, split
-  into `models/`, `rest/`, `services/`, `tests/` plus small single-purpose
-  modules; each surrounding capability is its own Django app under `apps/`.
-  New capabilities get a new app; new domain logic gets a new focused module.
+- **Rust service layout** (`studio/src-tauri/src/`): keep each capability in a
+  focused module. Database-backed GraphQL starts with migrations, SeaORM
+  entities, and Seaography registration. Native host commands stay narrow.
 - **Name by purpose.** File and folder names must say what the code does
-  (`ranking.py`, `desktopRuntime.ts`), not generic buckets (`utils2.ts`,
-  `helpers.py`, `misc/`).
-- **Refactor opportunistically.** When touching an oversized file (e.g.
-  `SelectedTicketContent.tsx`, `rest_api.py`), prefer extracting the piece
+  (`ranking.rs`, `desktopRuntime.ts`), not generic buckets (`utils2.ts`,
+  `helpers.rs`, `misc/`).
+- **Refactor opportunistically.** When touching an oversized file, prefer extracting the piece
   you're changing into its own module over enlarging the file.
 
 ## Database-backed GraphQL Models — governing rules

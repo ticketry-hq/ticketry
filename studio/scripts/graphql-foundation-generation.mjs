@@ -40,7 +40,7 @@ export async function generateFoundationArtifacts(outputRoot) {
 
   run(
     "cargo",
-    ["run", "--locked", "--quiet", "--bin", "prepare_foundation_generation_db", "--", databasePath],
+    ["run", "--locked", "--quiet", "--features", "development-tools", "--bin", "prepare_foundation_generation_db", "--", databasePath],
     tauriRoot,
   );
   run(
@@ -62,7 +62,7 @@ export async function generateFoundationArtifacts(outputRoot) {
   const rawTerminalEntities = join(outputRoot, "raw-terminal-entities");
   run(
     "cargo",
-    ["run", "--locked", "--quiet", "--bin", "prepare_terminal_generation_db", "--", terminalDatabasePath],
+    ["run", "--locked", "--quiet", "--features", "development-tools", "--bin", "prepare_terminal_generation_db", "--", terminalDatabasePath],
     tauriRoot,
   );
   run(
@@ -84,7 +84,7 @@ export async function generateFoundationArtifacts(outputRoot) {
   const rawExecutionEntities = join(outputRoot, "raw-execution-entities");
   run(
     "cargo",
-    ["run", "--locked", "--quiet", "--bin", "prepare_execution_generation_db", "--", executionDatabasePath],
+    ["run", "--locked", "--quiet", "--features", "development-tools", "--bin", "prepare_execution_generation_db", "--", executionDatabasePath],
     tauriRoot,
   );
   run(
@@ -107,12 +107,12 @@ export async function generateFoundationArtifacts(outputRoot) {
   const operationsPath = join(outputRoot, "operations.ts");
   run(
     "cargo",
-    ["run", "--locked", "--quiet", "--bin", "export_foundation_schema", "--", schemaPath],
+    ["run", "--locked", "--quiet", "--features", "development-tools", "--bin", "export_foundation_schema", "--", schemaPath],
     tauriRoot,
   );
   run(
     "cargo",
-    ["run", "--locked", "--quiet", "--bin", "export_foundation_bindings", "--", bindingsPath],
+    ["run", "--locked", "--quiet", "--features", "development-tools", "--bin", "export_foundation_bindings", "--", bindingsPath],
     tauriRoot,
   );
   run(

@@ -21,6 +21,7 @@ import { useTerminalForegroundStore } from "../features/agents/terminal/internal
 import { useTerminalStore } from "../features/agents/terminal/internal/sessionStore";
 import { focusTerminal } from "../features/agents/terminal/internal/terminalRegistry";
 import { useClientStore } from "../state/clientStore";
+import { installDesktopGraphQlRuntime } from "./desktopGraphQlRuntime";
 
 const tauri = vi.hoisted(() => ({
   invoke: vi.fn(),
@@ -88,6 +89,7 @@ function PanelShellStudio() {
 describe("overhaul acceptance — DialogHost confirms over a native viewer", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    installDesktopGraphQlRuntime();
     vi.stubGlobal("ResizeObserver", ResizeObserverStub);
     vi.stubGlobal(
       "fetch",

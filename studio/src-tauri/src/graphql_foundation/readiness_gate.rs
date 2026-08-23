@@ -47,10 +47,13 @@ impl Extension for Slice2CommandGateExtension {
         if contains_mutation
             && !crate::settings_persistence::published_readiness_is_complete(&self.data_directory)
         {
-            return Err(ServerError::new(
-                "Slice 2 is not ready; GraphQL commands are disabled",
-                None,
-            ));
+            let mut error =
+                ServerError::new("Slice 2 is not ready; GraphQL commands are disabled", None);
+            let mut extensions = seaography::async_graphql::ErrorExtensionValues::default();
+            extensions.set("code", "service_unavailable");
+            extensions.set("phase", "runtime-reconciliation");
+            error.extensions = Some(extensions);
+            return Err(error);
         }
         Ok(document)
     }
@@ -92,6 +95,17 @@ mod tests {
             .await
             .errors
             .is_empty());
+
+        let unavailable = schema.execute("mutation { command }").await;
+        assert_eq!(
+            unavailable.errors[0]
+                .extensions
+                .as_ref()
+                .and_then(|values| values.get("code")),
+            Some(&seaography::async_graphql::Value::from(
+                "service_unavailable"
+            ))
+        );
 
         crate::settings_persistence::publish_readiness(
             directory.path(),

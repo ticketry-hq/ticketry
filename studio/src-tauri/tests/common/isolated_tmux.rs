@@ -121,13 +121,25 @@ impl IsolatedTmux {
 
     pub fn create_hosted(&self, agent_run_id: &str, command: &str) {
         let session = format!("pt-{agent_run_id}");
-        let output = Command::new(&self.executable)
+        let mut create = Command::new(&self.executable);
+        create
             .env("TMUX_TMPDIR", &self.socket_dir)
             .env_remove("TMUX")
             .current_dir(&self.socket_dir)
             .args(["-L", SOCKET, "-f", "/dev/null", "new-session", "-d", "-s"])
             .arg(&session)
-            .arg("while :; do sleep 1; done")
+            .arg("while :; do sleep 1; done");
+        for (key, value) in [
+            ("remain-on-exit", "on"),
+            ("window-size", "manual"),
+            ("status", "off"),
+            ("@pt-owner", "ticketry-v1"),
+            ("@pt-agent-run-id", agent_run_id),
+            ("@pt-runtime-namespace", "tmux-characterization"),
+        ] {
+            create.args([";", "set-option", "-t", &session, key, value]);
+        }
+        let output = create
             .stdin(Stdio::null())
             .output()
             .expect("create isolated hosted command");
@@ -136,24 +148,6 @@ impl IsolatedTmux {
             "tmux hosted-command setup failed: {}",
             String::from_utf8_lossy(&output.stderr)
         );
-        self.command(["set-option", "-t", &session, "remain-on-exit", "on"]);
-        self.command(["set-option", "-t", &session, "window-size", "manual"]);
-        self.command(["set-option", "-t", &session, "status", "off"]);
-        self.command(["set-option", "-t", &session, "@pt-owner", "ticketry-v1"]);
-        self.command([
-            "set-option",
-            "-t",
-            &session,
-            "@pt-agent-run-id",
-            agent_run_id,
-        ]);
-        self.command([
-            "set-option",
-            "-t",
-            &session,
-            "@pt-runtime-namespace",
-            "tmux-characterization",
-        ]);
         let output = Command::new(&self.executable)
             .env("TMUX_TMPDIR", &self.socket_dir)
             .env_remove("TMUX")
@@ -226,6 +220,20 @@ impl IsolatedTmux {
             .split_once('|')
             .expect("tmux pane-state delimiter");
         (dead == "1").then(|| code.parse().expect("numeric hosted-command exit code"))
+    }
+
+    /// End one hosted runtime the way a finished agent does, leaving the
+    /// private server and every other session in place.
+    pub fn kill_agent_run(&self, agent_run_id: &str) {
+        let session = format!("pt-{agent_run_id}");
+        let _ = Command::new(&self.executable)
+            .env("TMUX_TMPDIR", &self.socket_dir)
+            .env_remove("TMUX")
+            .args(["-L", SOCKET, "kill-session", "-t", &session])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
     }
 
     pub fn set_session_option(&self, agent_run_id: &str, key: &str, value: &str) {

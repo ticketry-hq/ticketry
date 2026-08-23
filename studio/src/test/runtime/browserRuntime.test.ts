@@ -9,16 +9,9 @@ describe("browser runtime contract", () => {
 
     expect(runtime.platform).toBe("browser");
     expect(runtime.startup()).toEqual({
-      endpoints: {
-        workTrackerApi: "/api/work-tracker",
-        agentApi: "/api",
-        statusApi: "/api",
-        terminalWebSocket: "/ws/terminal",
-      },
-      values: { workTrackerApiKey: "" },
       serviceHealth: {
         state: "ready",
-        service: "backend",
+        service: "rust-graphql-adapter",
         message: null,
         logPointer: null,
       },
@@ -35,7 +28,6 @@ describe("browser runtime contract", () => {
       // The status WebSocket was retired and the browser has no in-process
       // GraphQL transport, so it honestly reports no status feed at all.
       statusFeed: false,
-      websocketTerminal: true,
       nativeLifecycle: false,
       serviceSupervision: false,
       nativeTerminal: false,
@@ -44,26 +36,17 @@ describe("browser runtime contract", () => {
     await expect(runtime.pickFolder()).resolves.toBeNull();
   });
 
-  it("derives websocket origins from valid absolute browser API configuration", () => {
+  it("accepts an absolute Rust GraphQL adapter endpoint", () => {
     const runtime = createBrowserRuntime({
       environment: {
-        VITE_WT_API_BASE: "https://tracker.example.test/work-tracker",
-        VITE_AGENT_API_BASE: "https://runtime.example.test/api",
-        VITE_WT_API_KEY: "browser-token",
+        VITE_GRAPHQL_API: "https://runtime.example.test/graphql",
       },
     });
 
     expect(runtime.startup()).toEqual({
-      endpoints: {
-        workTrackerApi: "https://tracker.example.test/work-tracker",
-        agentApi: "https://runtime.example.test/api",
-        statusApi: "https://runtime.example.test/api",
-        terminalWebSocket: "wss://runtime.example.test/ws/terminal",
-      },
-      values: { workTrackerApiKey: "browser-token" },
       serviceHealth: {
         state: "ready",
-        service: "backend",
+        service: "rust-graphql-adapter",
         message: null,
         logPointer: null,
       },
@@ -74,10 +57,10 @@ describe("browser runtime contract", () => {
   it("rejects invalid browser endpoint configuration", () => {
     expect(() =>
       createBrowserRuntime({
-        environment: { VITE_AGENT_API_BASE: "ftp://runtime.example.test/api" },
+        environment: { VITE_GRAPHQL_API: "ftp://runtime.example.test/graphql" },
       }),
     ).toThrowError(
-      "Invalid Studio runtime configuration: agentApi must be a relative path or an HTTP(S) URL",
+      "Invalid Studio runtime configuration: graphQlApi must be a relative path or an HTTP(S) URL",
     );
   });
 

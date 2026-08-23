@@ -6,6 +6,7 @@ import { useModalStore } from "../app/modal/modalStore";
 import { useTerminalForegroundStore } from "../features/agents/terminal/internal/foregroundStore";
 import { useTerminalStore } from "../features/agents/terminal/internal/sessionStore";
 import { useClientStore } from "../state/clientStore";
+import { installDesktopGraphQlRuntime } from "./desktopGraphQlRuntime";
 
 const tauri = vi.hoisted(() => ({
   invoke: vi.fn(),
@@ -40,6 +41,7 @@ describe("native viewer attachment acceptance", () => {
 
   beforeEach(() => {
     vi.resetAllMocks();
+    installDesktopGraphQlRuntime();
     vi.stubGlobal("ResizeObserver", ResizeObserverStub);
     vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
       x: 0,
@@ -231,19 +233,13 @@ describe("native viewer attachment acceptance", () => {
   });
 
   it("[overhaul-71] keeps the pooled lifecycle when the first host leaves after ownership transfers", async () => {
-    const requests: string[] = [];
+    // Viewer ownership is claimed and released on the Rust lease contract, so
+    // what a test counts is lease operations, not host requests.
+    const leaseOperations = installDesktopGraphQlRuntime();
+    const leases = (operationName: string) =>
+      leaseOperations.filter((operation) => operation.operationName === operationName);
     const unlisten = vi.fn();
     tauri.listen.mockResolvedValue(unlisten);
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
-        requests.push(String(input));
-        return new Response("{}", {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        });
-      }),
-    );
     useClientStore.setState({ activeByTask: { "task-1": "session-1" } });
 
     const drawer = (
@@ -275,12 +271,12 @@ describe("native viewer attachment acceptance", () => {
     expect(calls("native_terminal_attach")).toHaveLength(1);
     expect(calls("native_terminal_detach")).toHaveLength(0);
     expect(unlisten).not.toHaveBeenCalled();
-    expect(requests.filter((url) => url.endsWith("/lease"))).toHaveLength(1);
-    expect(requests.filter((url) => url.endsWith("/release"))).toHaveLength(0);
+    expect(leases("CreateViewerLease")).toHaveLength(1);
+    expect(leases("DeleteViewerLease")).toHaveLength(0);
 
     view.unmount();
     await waitFor(() => expect(calls("native_terminal_detach")).toHaveLength(1));
-    expect(requests.filter((url) => url.endsWith("/release"))).toHaveLength(1);
+    expect(leases("DeleteViewerLease")).toHaveLength(1);
     expect(unlisten).toHaveBeenCalledTimes(2);
   });
 

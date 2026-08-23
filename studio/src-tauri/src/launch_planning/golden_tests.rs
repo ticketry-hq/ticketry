@@ -9,8 +9,6 @@ fn authority(provider: Provider) -> ExecutionAuthority {
         PathBuf::from("/authorized/workspace"),
         PathBuf::from("/Applications/Ticketry/ticketry-hook"),
         PathBuf::from("/private/spool"),
-        "http://127.0.0.1:8787/lifecycle".into(),
-        "secret-lifecycle".into(),
         "http://127.0.0.1:8123/mcp".into(),
         "Bearer secret-mcp".into(),
         BTreeSet::from(["tdd".into()]),

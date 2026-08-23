@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { ApiError, apiErrorMessage } from "../../shared/api/client";
+import { ApiError, apiErrorMessage } from "../../shared/api/errors";
 import type { State, StateImpact } from "../../shared/api/types";
 import { STATE_GROUP_ORDER } from "../../shared/utilities/display";
 import {

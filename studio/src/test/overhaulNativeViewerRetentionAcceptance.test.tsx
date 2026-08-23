@@ -7,6 +7,10 @@ import { useTerminalForegroundStore } from "../features/agents/terminal/internal
 import { useTerminalStore } from "../features/agents/terminal/internal/sessionStore";
 import { useClientStore } from "../state/clientStore";
 import { fixture, mountStudio, workItem } from "./seam";
+import {
+  grantsEveryLease,
+  type RecordedGraphQlOperation,
+} from "./desktopGraphQlRuntime";
 
 const tauri = vi.hoisted(() => ({
   invoke: vi.fn(),
@@ -117,7 +121,9 @@ describe("native viewer attachment acceptance", () => {
   });
 
   it("[overhaul-67] retains opened native viewers across Work items and terminal tabs", async () => {
-    const requests: string[] = [];
+    const leaseOperations: RecordedGraphQlOperation[] = [];
+    const leases = (operationName: string) =>
+      leaseOperations.filter((operation) => operation.operationName === operationName);
     useTerminalStore.setState({
       sessions: {
         "session-1": useTerminalStore.getState().sessions["session-1"],
@@ -195,12 +201,14 @@ describe("native viewer attachment acceptance", () => {
       http,
       selectedTaskId: "task-1",
       children: <MountedSelectedTicketTerminal />,
+      graphQlExecute: async (document, variables) => {
+        if (document.operationName.endsWith("ViewerLease")) {
+          leaseOperations.push({ operationName: document.operationName, variables });
+          return grantsEveryLease(document, variables);
+        }
+        return http.executeGraphQl(document, variables);
+      },
     });
-    const studioFetch = globalThis.fetch;
-    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      requests.push(String(input));
-      return studioFetch(input, init);
-    }));
     const attachRuns = () => tauri.invoke.mock.calls
       .filter(([command]) => command === "native_terminal_attach")
       .map(([, args]) => (args as { runId: string }).runId);
@@ -307,8 +315,8 @@ describe("native viewer attachment acceptance", () => {
     expect(tauri.invoke.mock.calls.filter(([command]) =>
       command === "native_terminal_detach"
     )).toHaveLength(0);
-    expect(requests.filter((url) => url.endsWith("/lease"))).toHaveLength(3);
-    expect(requests.filter((url) => url.endsWith("/release"))).toHaveLength(0);
+    expect(leases("CreateViewerLease")).toHaveLength(3);
+    expect(leases("DeleteViewerLease")).toHaveLength(0);
   });
 
 });

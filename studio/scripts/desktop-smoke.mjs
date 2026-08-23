@@ -4,10 +4,6 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { resolveTauriCliPath } from "./desktop-dev.mjs";
-import {
-  assertDevelopmentEndpointAgreement,
-  buildDevelopmentSmokeConfiguration,
-} from "./desktop-smoke-config.mjs";
 
 const studioRoot = fileURLToPath(new URL("..", import.meta.url));
 const tauriCli = resolveTauriCliPath();
@@ -18,68 +14,27 @@ const executable = path.join(
   "release",
   process.platform === "win32" ? "ticketry.exe" : "ticketry",
 );
-const backendBuildScript = path.join(
-  studioRoot,
-  "..",
-  "backend",
-  "packaging",
-  "build-sidecar.sh",
-);
 const libghosttyPrepareScript = path.join(
   studioRoot,
   "scripts",
   "prepare-libghostty.sh",
 );
-const backendSidecarSmoke = path.join(
-  studioRoot,
-  "..",
-  "backend",
-  "packaging",
-  "test-built-sidecar.sh",
-);
-const targetTriples = {
-  darwin: process.arch === "arm64" ? "aarch64-apple-darwin" : null,
-  linux: process.arch === "arm64"
-    ? "aarch64-unknown-linux-gnu"
-    : "x86_64-unknown-linux-gnu",
-  win32: process.arch === "arm64"
-    ? "aarch64-pc-windows-msvc"
-    : "x86_64-pc-windows-msvc",
-};
-const targetTriple = targetTriples[process.platform];
 if (process.platform === "darwin" && process.arch !== "arm64") {
   throw new Error(
     `desktop smoke does not support macOS host architecture ${process.arch}; `
       + "Ticketry releases require macOS/arm64",
   );
 }
-if (!targetTriple) {
-  throw new Error(`desktop smoke does not support ${process.platform}/${process.arch}`);
-}
-const sidecarBinary = path.join(
-  studioRoot,
-  "src-tauri",
-  "binaries",
-  `muxed-backend-${targetTriple}${process.platform === "win32" ? ".exe" : ""}`,
-);
 const developmentPort = process.env.MUXED_DESKTOP_SMOKE_PORT ?? "15174";
-const developmentSmokeConfiguration = buildDevelopmentSmokeConfiguration(
-  developmentPort,
-);
 const developmentConfig = JSON.stringify({
   build: {
     beforeDevCommand: `npm run dev -- --host 127.0.0.1 --port ${developmentPort} --strictPort`,
-    devUrl: developmentSmokeConfiguration.webviewUrl,
+    devUrl: `http://127.0.0.1:${developmentPort}`,
   },
 });
 const smokeEnvironment = {
   ...process.env,
   MUXED_DESKTOP_SMOKE_EXIT_AFTER_STARTUP: "1",
-  MUXED_DESKTOP_SMOKE_SIDECAR_BINARY: sidecarBinary,
-};
-const developmentSmokeEnvironment = {
-  ...smokeEnvironment,
-  ...developmentSmokeConfiguration.runtimeEnvironment,
 };
 const mode = process.argv[2] ?? "all";
 if (!["all", "dev", "packaged"].includes(mode)) {
@@ -165,49 +120,24 @@ await runCommandWithTimeout(
   smokeEnvironment,
 );
 
-// Tauri validates every externalBin path while compiling the development
-// shell. A clean checkout deliberately contains no generated sidecar, so
-// produce the ignored smoke binary before either `tauri dev` or `tauri build`.
-// Packaged-only mode prepares it in its own block below.
 if (mode === "all" || mode === "dev") {
-  await runCommandWithTimeout(
-    "development backend sidecar build",
-    "bash",
-    [backendBuildScript],
-    300_000,
-    smokeEnvironment,
-  );
-}
-
-if (mode === "all" || mode === "dev") {
-  assertDevelopmentEndpointAgreement(
-    developmentSmokeConfiguration.webviewUrl,
-    developmentSmokeEnvironment,
-  );
-  if (guiSmokeSupported) {
-    await runCommandWithTimeout(
-      "desktop development startup",
-      process.execPath,
-      [tauriCli, "dev", "--no-watch", "--config", developmentConfig],
-      180_000,
-      developmentSmokeEnvironment,
-    );
-  } else {
-    console.log("Desktop development window smoke skipped: no display available.");
-  }
+  await withSmokeDataDirectory(async (developmentSmokeEnvironment) => {
+    if (guiSmokeSupported) {
+      await runCommandWithTimeout(
+        "desktop development startup",
+        process.execPath,
+        [tauriCli, "dev", "--no-watch", "--config", developmentConfig],
+        180_000,
+        developmentSmokeEnvironment,
+      );
+    } else {
+      console.log("Desktop development window smoke skipped: no display available.");
+    }
+  });
 }
 
 if (mode === "all" || mode === "packaged") {
   await withSmokeDataDirectory(async (packagedSmokeEnvironment) => {
-    if (mode === "packaged") {
-      await runCommandWithTimeout(
-        "packaged backend sidecar build",
-        "bash",
-        [backendBuildScript],
-        300_000,
-        packagedSmokeEnvironment,
-      );
-    }
     await runCommandWithTimeout(
       "desktop production build",
       process.execPath,
@@ -227,13 +157,7 @@ if (mode === "all" || mode === "packaged") {
         );
       }
     } else {
-      await runCommandWithTimeout(
-        "headless packaged backend service smoke",
-        "bash",
-        [backendSidecarSmoke, sidecarBinary],
-        120_000,
-        packagedSmokeEnvironment,
-      );
+      console.log("Packaged desktop window smoke skipped: no display available.");
     }
   });
 }

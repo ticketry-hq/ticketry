@@ -8,6 +8,10 @@ vi.mock("../shared/api/client", async () => {
   );
   return { ...actual, listModules: vi.fn(), listProjects: vi.fn() };
 });
+vi.mock("../features/projects/queries/readTransport", async () => {
+  const api = await import("../shared/api/client");
+  return { readModules: api.listModules, readProjects: api.listProjects, readWorkspace: vi.fn() };
+});
 
 import { ModuleTabStrip } from "../app/shell/ticket-workspace/ModuleTabStrip";
 import { ModulesPane } from "../app/shell/sidebar/modules/ModulesPane";

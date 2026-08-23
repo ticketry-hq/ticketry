@@ -4,7 +4,7 @@
 //! one-file PyInstaller backend from there fails during bootloader semaphore
 //! setup, and the sandbox does not allow a direct loopback POST.  This tiny
 //! dependency-free executable only writes the raw hook payload into the
-//! backend-owned spool directory.  The backend normalizes and ingests it.
+//! Rust-runtime-owned spool directory. The in-process lifecycle worker ingests it.
 
 use std::env;
 use std::fs::{self, File, OpenOptions};
@@ -44,11 +44,6 @@ where
         match argument.as_str() {
             "--agent-run-id" => agent_run_id = arguments.next(),
             "--spool-dir" => spool_dir = arguments.next().map(PathBuf::from),
-            // The source-Python reporter needs this argument.  The packaged
-            // spool transport deliberately ignores it.
-            "--lifecycle-url" => {
-                arguments.next()?;
-            }
             _ => return None,
         }
     }
@@ -154,8 +149,6 @@ mod tests {
                 "codex",
                 "--agent-run-id",
                 "run-123",
-                "--lifecycle-url",
-                "http://127.0.0.1:8787/api/lifecycle/events",
                 "--spool-dir",
                 "/tmp/ticketry-hooks",
             ]

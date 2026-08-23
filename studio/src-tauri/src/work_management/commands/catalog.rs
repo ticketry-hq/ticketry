@@ -17,7 +17,7 @@ use crate::work_management::entities::{
 };
 
 const REVIEWED_DEFAULTS: &str =
-    include_str!("../../../../../backend/worktracker/reviewed_defaults.json");
+    include_str!("../../../resources/work-management/reviewed_defaults.json");
 const GROUPS: &[&str] = &["backlog", "unstarted", "started", "completed", "cancelled"];
 const PALETTE: &[&str] = &[
     "#8A3FFC", "#33B1FF", "#007D79", "#FF7EB6", "#FA4D56", "#FFF1F1", "#6FDC8C", "#4589FF",
@@ -194,7 +194,12 @@ pub async fn create_project(
     }
 
     for type_name in &defaults.issue_types {
-        for state_seed in &defaults.states {
+        let workflow = &defaults.workflows[type_name];
+        for state_seed in defaults
+            .states
+            .iter()
+            .filter(|state| workflow.states.contains(&state.name))
+        {
             let prompt = defaults
                 .prompts
                 .get(type_name)
@@ -702,6 +707,7 @@ struct StateSeed {
 #[derive(Deserialize)]
 struct WorkflowSeed {
     start: String,
+    states: HashSet<String>,
     transitions: Vec<(String, String, TransitionSeed)>,
 }
 

@@ -24,6 +24,16 @@ vi.mock("../shared/api/client", async (importOriginal) => ({
   putProfile: vi.fn(),
 }));
 
+vi.mock("../features/settings/profileTransport", async () => ({
+  ...(await vi.importActual("../features/settings/profileTransport")),
+  putProfile: vi.fn(),
+}));
+
+vi.mock("../features/work-items/queries/readTransport", async () => ({
+  ...(await vi.importActual("../features/work-items/queries/readTransport")),
+  readModuleTreeRecords: vi.fn(),
+}));
+
 import { StudioFooter } from "../app/shell/StudioFooter";
 import { useGlobalKeymap } from "../app/navigation/useGlobalKeymap";
 import { useModalStore } from "../app/modal/modalStore";
@@ -38,7 +48,8 @@ import { useModuleShellStore } from "../features/terminal-panel/moduleShellStore
 import { PANEL_OPEN_KEY } from "../features/terminal-panel/panelOpenMemory";
 import { useTerminalPanelStore } from "../features/terminal-panel/panelStore";
 import { TerminalPanel } from "../features/terminal-panel/TerminalPanel";
-import * as api from "../shared/api/client";
+import * as profileTransport from "../features/settings/profileTransport";
+import * as workItemReadTransport from "../features/work-items/queries/readTransport";
 import { queryClient } from "../shared/query/queryClient";
 import { useClientStore } from "../state/clientStore";
 import { TERMINAL_PANEL_KEY } from "../state/persistence";
@@ -74,8 +85,8 @@ vi.mock(
   }),
 );
 
-const getTasks = api.getTasks as ReturnType<typeof vi.fn>;
-const putProfile = api.putProfile as ReturnType<typeof vi.fn>;
+const getTasks = workItemReadTransport.readModuleTreeRecords as ReturnType<typeof vi.fn>;
+const putProfile = profileTransport.putProfile as ReturnType<typeof vi.fn>;
 
 class ResizeObserverStub {
   observe() {}

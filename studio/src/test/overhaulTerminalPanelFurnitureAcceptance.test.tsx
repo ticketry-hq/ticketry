@@ -33,6 +33,7 @@ import { useGlobalKeymap } from "../app/navigation/useGlobalKeymap";
 import { useModalStore } from "../app/modal/modalStore";
 import { TERMINAL_PANEL_KEY } from "../state/persistence";
 import { useClientStore } from "../state/clientStore";
+import { installDesktopGraphQlRuntime } from "./desktopGraphQlRuntime";
 
 const runtime = vi.hoisted(() => ({ desktop: false, nativeAvailable: false }));
 
@@ -254,6 +255,7 @@ function nudgeGrip(key: "ArrowUp" | "ArrowDown"): void {
 describe("terminal panel furniture acceptance", () => {
   beforeEach(() => {
     localStorage.clear();
+    installDesktopGraphQlRuntime();
     vi.useFakeTimers();
     runtime.desktop = false;
     runtime.nativeAvailable = false;

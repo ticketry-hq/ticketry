@@ -15,6 +15,15 @@ pub use composition::{combine_with_native_handler, transport_api};
 pub use error::{FoundationInitializationError, FoundationInitializationErrorCode};
 use tauri_graphql::{GraphQlEndpoint, TransportApi};
 
+/// Whether this process owns the installation it is about to serve.
+///
+/// The desktop and browser adapter both own the installation they serve.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum InstallationOwnership {
+    /// This process holds the installation lease and adopts.
+    Owned,
+}
+
 pub struct FoundationRuntime {
     endpoint: GraphQlEndpoint,
 }
@@ -254,7 +263,13 @@ async fn initialize_with_worktracker_commands_and_install_inner(
         launch: crate::terminal_launch::TerminalLaunchService::new(
             worktracker_database.clone(),
             std::sync::Arc::new(terminal_runtime.clone()),
-        ),
+        )
+        .with_authority(std::sync::Arc::new(
+            crate::launch_authority::LaunchAuthorityService::new(
+                worktracker_database.clone(),
+                settings_stores.profiles().clone(),
+            ),
+        )),
         viewers: viewer_ownership.clone(),
         output_activity: crate::terminal_output_activity::TerminalOutputActivityService::production(
             worktracker_database.clone(),
@@ -506,7 +521,20 @@ pub async fn adopt_worktracker_and_install(
     foundation_database_path: &Path,
     data_directory: &Path,
     api: &tauri_graphql::TransportApiImpl,
+    ownership: InstallationOwnership,
 ) -> Result<AdoptedWorktracker, FoundationInitializationError> {
+    // The installation itself changes hands first. Nothing below may touch a
+    // database whose ownership has not transferred: the capability handoffs
+    // write, and a write before the verified recovery snapshot exists is the
+    // one step of this migration that cannot be undone.
+    //
+    let installation = match ownership {
+        InstallationOwnership::Owned => Some(
+            crate::installation_adoption::adopt(data_directory)
+                .await
+                .map_err(installation_adoption_error)?,
+        ),
+    };
     crate::settings_persistence::preflight(data_directory)
         .await
         .map_err(|error| {
@@ -583,6 +611,15 @@ pub async fn adopt_worktracker_and_install(
     crate::workspace_handoff::adopt(data_directory)
         .await
         .map_err(workspace_adoption_error)?;
+    // Every capability has handed over, so the durable status-event ledger the
+    // boundary is published into now exists. Readiness opens here, after the
+    // last handoff and before the endpoint is installed, because the endpoint
+    // is what makes a mutation reachable.
+    if let Some(installation) = installation {
+        crate::installation_adoption::open_readiness(data_directory, installation)
+            .await
+            .map_err(installation_adoption_error)?;
+    }
     // Build the local settings stores here, not inside composition, so the
     // adopted runtime hands out the very instance the schema mutates.
     let settings_stores = crate::settings_persistence::SettingsStores::new(data_directory);
@@ -600,6 +637,15 @@ pub async fn adopt_worktracker_and_install(
         evidence,
         runtime: ComposedCommandRuntime::new(composed, &settings_stores),
     })
+}
+
+fn installation_adoption_error(
+    error: crate::installation_adoption::AdoptionFailure,
+) -> FoundationInitializationError {
+    FoundationInitializationError::new(
+        FoundationInitializationErrorCode::WorktrackerDatabaseOpen,
+        format!("{error}. {}", error.recovery()),
+    )
 }
 
 fn workspace_adoption_error(

@@ -16,6 +16,7 @@ pub mod ownership_manifest;
 mod profile_graphql;
 mod profiles;
 mod provider_catalog;
+mod provider_catalog_provisioning;
 mod provider_catalog_read;
 mod readiness;
 pub mod schema;
@@ -34,6 +35,7 @@ pub use profiles::{ModuleLink, Profile, ProfileCatalog, ProfileStore};
 pub use provider_catalog::{
     ProviderCatalog, ProviderCatalogError, ProviderCatalogService, ProviderCatalogUpdate,
 };
+pub(crate) use provider_catalog_provisioning::provision as provision_provider_catalog;
 pub use readiness::{
     publish as publish_readiness, published_readiness_is_complete, Slice2Readiness,
 };

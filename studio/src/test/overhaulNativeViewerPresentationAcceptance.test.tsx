@@ -9,6 +9,10 @@ import { useModalStore } from "../app/modal/modalStore";
 import { useTerminalForegroundStore } from "../features/agents/terminal/internal/foregroundStore";
 import { useTerminalStore } from "../features/agents/terminal/internal/sessionStore";
 import { useClientStore } from "../state/clientStore";
+import {
+  grantsEveryLease,
+  installDesktopGraphQlRuntime,
+} from "./desktopGraphQlRuntime";
 
 const tauri = vi.hoisted(() => ({
   invoke: vi.fn(),
@@ -43,6 +47,7 @@ describe("native viewer attachment acceptance", () => {
 
   beforeEach(() => {
     vi.resetAllMocks();
+    installDesktopGraphQlRuntime();
     vi.stubGlobal("ResizeObserver", ResizeObserverStub);
     vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
       x: 0,
@@ -192,21 +197,15 @@ describe("native viewer attachment acceptance", () => {
       }
       return Promise.resolve();
     });
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
-        const url = String(input);
-        return new Response(
-          url.endsWith("/api/terminals")
-            ? JSON.stringify({ agent_run_id: "run-fresh" })
-            : "{}",
-          {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          },
-        );
-      }),
-    );
+    // The run is created on the Rust terminal graph, never on a host route.
+    const host = vi.fn();
+    vi.stubGlobal("fetch", host);
+    installDesktopGraphQlRuntime(async (document, variables) => {
+      if (document.operationName === "CreateTerminalSession") {
+        return { terminal_session: { agent_run_id: "run-fresh" } } as never;
+      }
+      return grantsEveryLease(document, variables);
+    });
     useTerminalStore.setState({
       sessions: {
         "tmp-fresh": {
@@ -244,21 +243,14 @@ describe("native viewer attachment acceptance", () => {
       );
     });
     expect(view.queryByTestId("terminal-host")).not.toBeInTheDocument();
+    expect(host).not.toHaveBeenCalled();
     view.unmount();
   });
 
   it("retains one durable native viewer while workspace surfaces are inactive", async () => {
-    const requests: string[] = [];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
-        requests.push(String(input));
-        return new Response("{}", {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        });
-      }),
-    );
+    const operations = installDesktopGraphQlRuntime();
+    const claimed = (operationName: string) =>
+      operations.filter((operation) => operation.operationName === operationName);
     const ready = vi.fn();
     const view = render(
       <NativeGhosttyTerminal
@@ -289,8 +281,8 @@ describe("native viewer attachment acceptance", () => {
     expect(tauri.invoke).not.toHaveBeenCalledWith("native_terminal_detach", {
       handle: "native-1",
     });
-    expect(requests.filter((url) => url.endsWith("/lease"))).toHaveLength(1);
-    expect(requests.filter((url) => url.endsWith("/release"))).toHaveLength(0);
+    expect(claimed("CreateViewerLease")).toHaveLength(1);
+    expect(claimed("DeleteViewerLease")).toHaveLength(0);
 
     view.rerender(
       <NativeGhosttyTerminal
@@ -316,7 +308,7 @@ describe("native viewer attachment acceptance", () => {
     expect(tauri.invoke.mock.calls.filter(([command]) =>
       command === "native_terminal_attach"
     )).toHaveLength(1);
-    expect(requests.filter((url) => url.endsWith("/lease"))).toHaveLength(1);
+    expect(claimed("CreateViewerLease")).toHaveLength(1);
     view.unmount();
   });
 

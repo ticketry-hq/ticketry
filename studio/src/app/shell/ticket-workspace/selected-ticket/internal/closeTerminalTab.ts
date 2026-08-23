@@ -3,7 +3,7 @@ import {
   useTerminalStore,
 } from "../../../../../features/agents/terminal/appNavigation";
 import { toast } from "../../../../../state/clientStore";
-import { apiErrorMessage } from "../../../../../shared/api/client";
+import { apiErrorMessage } from "../../../../../shared/api/errors";
 import { queryClient } from "../../../../../shared/query/queryClient";
 import { queryKeys } from "../../../../../shared/query/keys";
 import type { SessionId } from "../../../../../features/agents/types";

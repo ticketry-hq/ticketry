@@ -7,7 +7,7 @@ import {
 } from "react";
 import { toast } from "../../../../../state/clientStore";
 import { useOnboardingTourStore } from "../../../../onboarding/onboardingTourStore";
-import { apiErrorMessage } from "../../../../../shared/api/client";
+import { apiErrorMessage } from "../../../../../shared/api/errors";
 import { createWorkItem } from "../../../../../features/work-items";
 import { useStudioStore } from "../../../../../features/projects";
 import { loadIssueTypes } from "../../../../../features/settings";

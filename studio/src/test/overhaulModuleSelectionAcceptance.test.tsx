@@ -12,6 +12,16 @@ vi.mock("../shared/api/client", async () => {
   };
 });
 
+vi.mock("../features/settings/profileTransport", async () => ({
+  ...(await vi.importActual("../features/settings/profileTransport")),
+  putProfile: vi.fn(),
+}));
+
+vi.mock("../features/work-items/queries/readTransport", async () => ({
+  ...(await vi.importActual("../features/work-items/queries/readTransport")),
+  readModuleTreeRecords: vi.fn(),
+}));
+
 import { ModalHost, useModalStore } from "../app/modal";
 import { useStudioStore } from "../features/projects/store";
 import {
@@ -19,11 +29,12 @@ import {
   seedConfig,
 } from "../features/studio/stores/configStore";
 import { queryClient } from "../shared/query/queryClient";
-import * as api from "../shared/api/client";
+import * as profileTransport from "../features/settings/profileTransport";
+import * as workItemReadTransport from "../features/work-items/queries/readTransport";
 import { useClientStore } from "../state/clientStore";
 
-const getTasks = api.getTasks as ReturnType<typeof vi.fn>;
-const putProfile = api.putProfile as ReturnType<typeof vi.fn>;
+const getTasks = workItemReadTransport.readModuleTreeRecords as ReturnType<typeof vi.fn>;
+const putProfile = profileTransport.putProfile as ReturnType<typeof vi.fn>;
 
 function seedActiveProfile(): void {
   seedConfig({

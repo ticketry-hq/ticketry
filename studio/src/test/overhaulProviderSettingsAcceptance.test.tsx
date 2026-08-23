@@ -1,15 +1,23 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const providerApi = vi.hoisted(() => ({
+  loadProviderCapabilities: vi.fn(),
+  loadConfigurableProviderCapabilities: vi.fn(),
+  loadProviderCatalog: vi.fn(),
+  updateProviderCatalog: vi.fn(),
+  setProviderCapabilities: vi.fn(),
+  catalog: { activated_providers: ["claude", "codex", "gemini"], global_default: null },
+  capabilities: [] as unknown[],
+}));
+
+vi.mock("../features/workflows/providerQueries", () => ({
+  ...providerApi,
+  useProviderCatalogQuery: () => ({ data: providerApi.catalog, isLoading: false, isError: false }),
+  useConfigurableProviderCapabilitiesQuery: () => ({ data: providerApi.capabilities, isLoading: false, isError: false }),
+}));
+
 import { OnboardingProviders } from "../app/onboarding/OnboardingProviders";
-
-const fetchMock = vi.fn();
-
-function jsonResponse(body: unknown): Response {
-  return new Response(JSON.stringify(body), {
-    status: 200,
-    headers: { "content-type": "application/json" },
-  });
-}
 
 const providers = [
   {
@@ -34,51 +42,18 @@ const providers = [
 
 describe("provider settings acceptance", () => {
   beforeEach(() => {
-    fetchMock.mockReset().mockImplementation(
-      async (input: RequestInfo | URL, init?: RequestInit) => {
-        const url = String(input);
-        const method = init?.method ?? "GET";
-
-        if (method === "GET" && url.endsWith("/work-tracker/providers")) {
-          return jsonResponse(providers);
-        }
-        if (method === "GET" && url.endsWith("/work-tracker/models")) {
-          return jsonResponse([
-            {
-              id: "model-luna",
-              provider: "provider-codex",
-              name: "gpt-5.6-luna",
-              permitted_reasoning_levels: ["reason-medium"],
-            },
-          ]);
-        }
-        if (
-          method === "GET"
-          && url.endsWith("/work-tracker/reasoning-levels")
-        ) {
-          return jsonResponse([{ id: "reason-medium", name: "medium" }]);
-        }
-        if (method === "GET" && url.endsWith("/settings/provider-catalog")) {
-          return jsonResponse({
-            value: {
-              activated_providers: providers
-                .filter(({ activated }) => activated)
-                .map(({ slug }) => slug),
-              global_default: null,
-            },
-          });
-        }
-        if (method === "PUT" && url.endsWith("/settings/provider-catalog")) {
-          return jsonResponse({ value: JSON.parse(String(init?.body)).value });
-        }
-        throw new Error(`Unexpected ${method} request: ${url}`);
-      },
-    );
-    vi.stubGlobal("fetch", fetchMock);
-  });
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
+    providerApi.capabilities = [
+      { agent: "claude", accepts_model: true, accepts_any_model: false, model_aliases: [], model_prefixes: [], reasoning_levels: [] },
+      { agent: "codex", accepts_model: true, accepts_any_model: false, model_aliases: ["gpt-5.6-luna"], model_prefixes: [], reasoning_levels: ["medium"], model_reasoning_levels: { "gpt-5.6-luna": ["medium"] } },
+      { agent: "gemini", accepts_model: true, accepts_any_model: false, model_aliases: [], model_prefixes: [], reasoning_levels: [] },
+    ];
+    providerApi.loadConfigurableProviderCapabilities.mockReset().mockResolvedValue(providerApi.capabilities);
+    providerApi.loadProviderCapabilities.mockReset().mockResolvedValue([]);
+    providerApi.loadProviderCatalog.mockReset().mockResolvedValue({
+      activated_providers: providers.map(({ slug }) => slug),
+      global_default: null,
+    });
+    providerApi.updateProviderCatalog.mockReset().mockImplementation(async (value) => value);
   });
 
   it("[overhaul-17] saves a Luna default during fresh provider onboarding", async () => {
@@ -109,24 +84,14 @@ describe("provider settings acceptance", () => {
     fireEvent.click(screen.getByRole("button", { name: "Get started" }));
 
     await waitFor(() => expect(onContinue).toHaveBeenCalledOnce());
-    const settingsWrite = fetchMock.mock.calls.find(([url, init]) =>
-      String(url).endsWith("/settings/provider-catalog")
-      && init?.method === "PUT"
-    );
-    expect(JSON.parse(String(settingsWrite?.[1]?.body))).toEqual({
-      value: {
+    expect(providerApi.updateProviderCatalog).toHaveBeenCalledWith({
         activated_providers: ["claude", "codex"],
         global_default: {
           provider: "codex",
           model: "gpt-5.6-luna",
           reasoning: "medium",
         },
-      },
     });
-    expect(fetchMock.mock.calls.some(([url, init]) =>
-      String(url).includes("/work-tracker/providers/")
-      && init?.method === "PATCH"
-    )).toBe(false);
     expect(screen.getByRole("heading", { name: "Your agents" })).toBeVisible();
   });
 });

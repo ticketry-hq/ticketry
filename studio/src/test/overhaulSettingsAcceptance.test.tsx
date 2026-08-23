@@ -28,6 +28,18 @@ vi.mock("../shared/api/client", async (importOriginal) => ({
   ...settingsApi,
 }));
 
+vi.mock("../features/workflows/providerQueries", () => ({
+  setProviderCapabilities: vi.fn(),
+  loadProviderCapabilities: settingsApi.getLaunchProviderCapabilities,
+  loadConfigurableProviderCapabilities: async () => providerCapabilities,
+  getProviderCapabilitiesSnapshot: () => providerCapabilities,
+  loadProviderCatalog: async () => (await settingsApi.getProviderCatalog()).value,
+  updateProviderCatalog: async (value: unknown) =>
+    (await settingsApi.putProviderCatalog(value)).value,
+  useProviderCatalogQuery: () => ({ data: savedCatalog, isLoading: false, isError: false }),
+  useProviderCapabilitiesQuery: () => ({ data: providerCapabilities, isLoading: false, isError: false }),
+}));
+
 const savedCatalog = {
   activated_providers: ["claude", "codex"] as const,
   global_default: {

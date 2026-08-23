@@ -6,7 +6,7 @@ import {
   seedConfig,
 } from "../features/studio/stores/configStore";
 import { useModalStore } from "../app/modal";
-import * as studioApi from "../shared/api/client";
+import * as profileTransport from "../features/settings/profileTransport";
 
 const { selectModule } = vi.hoisted(() => ({
   selectModule: vi.fn(),
@@ -46,7 +46,7 @@ describe("module-folder selection acceptance", () => {
   });
 
   it("rejects blank folders, then trims the saved path before resuming selection", async () => {
-    const putProfile = vi.spyOn(studioApi, "putProfile").mockResolvedValue({
+    const putProfile = vi.spyOn(profileTransport, "putProfile").mockResolvedValue({
       recent_profile_index: 0,
       features: getConfigSnapshot().features,
       profiles: getConfigSnapshot().profiles,

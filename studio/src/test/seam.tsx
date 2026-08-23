@@ -23,6 +23,7 @@ import { rankBetween } from "../features/work-items/utilities/rank";
 import type { TypedDocumentNode } from "../graphql-foundation/typedDocument";
 import { FoundationGraphQlError } from "../graphql-foundation/foundationClient";
 import { createBrowserRuntime, initializeStudioRuntime } from "../runtime";
+import { compactWorktrackerId } from "../shared/api/generatedWorktracker";
 
 export interface HttpFixture {
   tree(moduleId: string, tree: ModuleTree): void;
@@ -309,7 +310,210 @@ class BoundaryFixture implements StudioFixture {
       rootId?: string;
       executionMode?: string | null;
       idOrKey?: string;
+      id?: string;
+      ids?: string[];
+      moduleId?: string;
+      projectId?: string;
+      issueTypeId?: string;
+      issueId?: string;
+      targetStateId?: string;
+      parentId?: string | null;
+      blockedByIds?: string[];
+      beforeId?: string | null;
+      afterId?: string | null;
+      projectSlug?: string;
+      sequenceId?: number;
     };
+    const fixtureKey = <T,>(rows: Map<string, T>, id: string | null | undefined) =>
+      id == null
+        ? undefined
+        : [...rows.keys()].find((key) =>
+          key === id || compactWorktrackerId(key) === compactWorktrackerId(id),
+        );
+    const fixtureItem = (id: string | null | undefined) => {
+      const key = fixtureKey(this.items, id);
+      return key ? this.items.get(key) : undefined;
+    };
+    if (this.nextFailure) {
+      const failure = this.nextFailure;
+      this.nextFailure = null;
+      const body = failure.body && typeof failure.body === "object"
+        ? failure.body as Record<string, unknown>
+        : {};
+      throw new FoundationGraphQlError(
+        failure.status === 409 ? "conflict" : "unknown",
+        typeof body.detail === "string" ? body.detail : "GraphQL request failed.",
+      );
+    }
+    const issueRow = (item: WorkItem) => {
+      const moduleId = [...this.trees].find(([, tree]) => tree.order.includes(item.id))?.[0] ?? null;
+      return {
+        ...item,
+        state_id: item.state,
+        issue_type_id: item.issue_type,
+        module_id: moduleId,
+        project: {
+          slug: item.key.split("-")[0] ?? "PROJECT",
+        },
+        children: { nodes: [...this.items.values()].filter((child) => child.parent_id === item.id).map((child) => ({ id: child.id })) },
+        blocked_by_edges: { nodes: item.blocked_by_ids.map((id) => ({ to_issue_id: id })) },
+        blocks_edges: { nodes: item.blocks_ids.map((id) => ({ from_issue_id: id })) },
+      };
+    };
+    if (document.operationName === "WorkTrackerModuleTree") {
+      const moduleKey = fixtureKey(this.trees, input.moduleId);
+      const ids = moduleKey ? this.trees.get(moduleKey)?.order ?? [] : [];
+      return {
+        work_items: { nodes: ids.flatMap((id) => this.items.has(id) ? [issueRow(this.items.get(id)!)] : []) },
+        states: { nodes: [...this.states.values()].map((state) => ({ ...state, sort_order: state.sort_order ?? 0, is_protected: state.is_protected ?? false })) },
+      } as TResult;
+    }
+    if (document.operationName === "WorkTrackerModules") {
+      return { modules: { nodes: [...this.trees.keys()].map((id, index) => ({
+        id,
+        name: `Module ${index + 1}`,
+        project_id: this.projectId(),
+        sequence_id: index + 1,
+        is_archived: false,
+        issue_type: "module",
+        rank: String(index),
+        project: { slug: "T", manual_module_order: false },
+      })) } } as TResult;
+    }
+    if (document.operationName === "WorkTrackerWorkItems") {
+      return { work_items: { nodes: [...this.items.values()].map(issueRow) } } as TResult;
+    }
+    if (document.operationName === "WorkTrackerWorkItemsByIds") {
+      return { work_items_by_ids: { nodes: (input.ids ?? []).flatMap((id) => {
+        const item = fixtureItem(id);
+        return item ? [issueRow(item)] : [];
+      }) } } as TResult;
+    }
+    if (document.operationName === "WorkTrackerWorkItem") {
+      const item = fixtureItem(input.id);
+      return { work_item: { nodes: item ? [issueRow(item)] : [] } } as TResult;
+    }
+    if (document.operationName === "WorkTrackerWorkItemByKey") {
+      const item = [...this.items.values()].find((candidate) =>
+        candidate.sequence_id === input.sequenceId
+        && candidate.key.split("-")[0]?.toUpperCase() === input.projectSlug,
+      );
+      return { work_item: { nodes: item ? [issueRow(item)] : [] } } as TResult;
+    }
+    if (document.operationName === "WorkTrackerAttachments") {
+      const issueKey = fixtureKey(this.attachmentRows, input.issueId);
+      return { attachments: { nodes: (issueKey ? this.attachmentRows.get(issueKey) ?? [] : []).map((attachment) => ({
+        id: attachment.id, issue_id: attachment.issue, file: attachment.url,
+        filename: attachment.filename, mime_type: attachment.mime_type,
+        size: attachment.size, created_at: attachment.created_at,
+      })) } } as TResult;
+    }
+    if (document.operationName === "WorkTrackerWorkflowCatalog") {
+      const createdAt = "2026-08-06T12:00:00Z";
+      return {
+        states: { nodes: [...this.states.values()].map((state) => ({
+          ...state,
+          project: this.projectId(),
+          sort_order: state.sort_order ?? 0,
+          is_protected: state.is_protected ?? false,
+          created_at: createdAt,
+          updated_at: createdAt,
+        })) },
+        issue_types: { nodes: [...this.issueTypes.values()].map((type) => ({
+          ...type,
+          project: type.project ?? this.projectId(),
+          start_state: type.start_state ?? null,
+          workflow_revision: type.workflow_revision ?? 1,
+          is_pathfind: false,
+          created_at: createdAt,
+          updated_at: createdAt,
+        })) },
+        launch_bindings: { nodes: [...this.items.values()].flatMap((item, index) =>
+          item.state && item.issue_type ? [{
+            id: index + 1,
+            issue_type: item.issue_type,
+            state: item.state,
+            prompt: null,
+            required_skills: [],
+            model: null,
+            reasoning: null,
+            auto_start: false,
+            subtree_run_enabled: this.subtreeRunEnabled,
+            created_at: createdAt,
+            updated_at: createdAt,
+            issueType: { sort_order: this.issueTypes.get(item.issue_type)?.sort_order ?? 0 },
+            state_record: { sort_order: this.states.get(item.state)?.sort_order ?? 0 },
+          }] : [],
+        ) },
+        providers: { nodes: [] },
+        agent_models: { nodes: [] },
+        reasoning_levels: { nodes: [] },
+      } as TResult;
+    }
+    if (document.operationName === "WorkTrackerIssueTypeTransitions") {
+      const ideas = [...this.states.values()].find((state) => state.name === "Ideas");
+      const implement = [...this.states.values()].find((state) => state.name === "Implement");
+      return { issue_type_transitions: { nodes: this.runNowTransitionEnabled && ideas?.id && implement?.id ? [{
+        id: 1, issue_type: input.issueTypeId ?? "story", from_state: ideas.id,
+        to_state: implement.id, agent_allowed: true,
+        fromState: { sort_order: ideas.sort_order ?? 0 }, toState: { sort_order: implement.sort_order ?? 0 },
+      }] : [] } } as TResult;
+    }
+    if (["UpdateWorkTrackerWorkItem", "TransitionWorkTrackerWorkItem", "ReparentWorkTrackerWorkItem", "SetWorkTrackerBlockers"].includes(document.operationName)) {
+      const id = fixtureKey(this.items, input.id) ?? input.id!;
+      const current = fixtureItem(id);
+      if (!current) throw new FoundationGraphQlError("not_found", "Not found");
+      const submitted = variables as Record<string, unknown>;
+      const body: Record<string, unknown> = {};
+      if (submitted.name !== undefined) body.name = submitted.name;
+      if (submitted.description !== undefined) body.description = submitted.description;
+      if (submitted.issueTypeId !== undefined) body.issue_type_id = submitted.issueTypeId;
+      if (submitted.targetStateId !== undefined) {
+        body.state_id = fixtureKey(this.states, submitted.targetStateId as string)
+          ?? submitted.targetStateId;
+        body.origin = "human";
+      }
+      if (submitted.parentId !== undefined) {
+        body.parent_id = fixtureKey(this.items, submitted.parentId as string | null)
+          ?? submitted.parentId;
+      }
+      if (submitted.blockedByIds !== undefined) {
+        body.blocked_by_ids = (submitted.blockedByIds as string[]).map((candidate) =>
+          fixtureKey(this.items, candidate) ?? candidate,
+        );
+      }
+      const updated: WorkItem = {
+        ...current,
+        ...body,
+        state: (body.state_id as string | undefined) ?? current.state,
+        issue_type: (body.issue_type_id as string | undefined) ?? current.issue_type,
+        parent_id: body.parent_id === undefined ? current.parent_id : body.parent_id as string | null,
+        blocked_by_ids: (body.blocked_by_ids as string[] | undefined) ?? current.blocked_by_ids,
+        rank: body.state_id === undefined ? current.rank : this.transitionRanks.get(id) ?? current.rank,
+      };
+      this.items.set(id, updated);
+      this.patches.push({ id, body });
+      for (const waiter of this.patchWaiters.splice(0)) {
+        if (waiter.id === id && deepEqual(waiter.body, body)) waiter.resolve(); else this.patchWaiters.push(waiter);
+      }
+      return { update_work_item: issueRow(updated) } as TResult;
+    }
+    if (document.operationName === "ReorderWorkTrackerWorkItem") {
+      const id = fixtureKey(this.items, input.id) ?? input.id!;
+      const current = this.items.get(id);
+      if (!current) throw new FoundationGraphQlError("not_found", "Not found");
+      const body = {
+        before_id: fixtureKey(this.items, input.beforeId) ?? null,
+        after_id: fixtureKey(this.items, input.afterId) ?? null,
+      };
+      const updated = { ...current, rank: rankBetween(body.before_id ? this.items.get(body.before_id)?.rank ?? null : null, body.after_id ? this.items.get(body.after_id)?.rank ?? null : null) };
+      this.items.set(updated.id, updated);
+      this.reorders.push({ id: updated.id, body });
+      for (const waiter of this.reorderWaiters.splice(0)) {
+        if (waiter.id === updated.id && deepEqual(waiter.body, body)) waiter.resolve(); else this.reorderWaiters.push(waiter);
+      }
+      return { reorder_work_item: issueRow(updated) } as TResult;
+    }
     if (document.operationName === "RunWorkTrackerWorkItemNow") {
       const id = input.idOrKey;
       if (!id) throw new Error("RunWorkTrackerWorkItemNow requires idOrKey.");
@@ -347,7 +551,7 @@ class BoundaryFixture implements StudioFixture {
           },
         } as TResult;
       }
-      this.items.set(id, { ...current, state: implement.id });
+      this.items.set(current.id, { ...current, state: implement.id });
       return {
         run_now: {
           target_id: id,
@@ -363,7 +567,7 @@ class BoundaryFixture implements StudioFixture {
         },
       } as TResult;
     }
-    const id = input.rootId;
+    const id = fixtureKey(this.items, input.rootId) ?? input.rootId;
     if (!id) throw new Error(`${document.operationName} requires rootId.`);
     if (document.operationName === "ExecutionGraphRunHolding") {
       return {
@@ -691,13 +895,15 @@ export function mountStudio({
   http,
   selectedTaskId = null,
   children,
-  graphQlExecution = false,
+  graphQlExecution = true,
+  graphQlExecute,
 }: {
   http: HttpFixture;
   route?: string;
   selectedTaskId?: string | null;
   children?: ReactNode;
   graphQlExecution?: boolean;
+  graphQlExecute?: typeof http.executeGraphQl;
 }): RenderResult {
   if (!(http instanceof BoundaryFixture)) {
     throw new Error("mountStudio requires the HTTP fixture returned by fixture().");
@@ -709,9 +915,13 @@ export function mountStudio({
   };
   if (graphQlExecution) {
     const browser = createBrowserRuntime({ environment: {} });
+    const execute = graphQlExecute ?? http.executeGraphQl.bind(http);
     initializeStudioRuntime({
       ...browser,
-      writeWorkTracker: (routes) => routes.graphQl(http.executeGraphQl.bind(http)),
+      readWorkTracker: (routes) => routes.graphQl(execute),
+      writeWorkTracker: (routes) => routes.graphQl(execute),
+      readSettings: (routes) => routes.graphQl(execute),
+      writeSettings: (routes) => routes.graphQl(execute),
     });
   }
 

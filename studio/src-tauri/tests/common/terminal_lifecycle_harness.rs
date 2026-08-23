@@ -1,17 +1,18 @@
 //! Desktop-runtime fixture for the Rust terminal lifecycle migration.
 //!
 //! The fixture owns the external resources, while product composition remains
-//! real: current Django migrations provision `state.db`, Rust adopts it, and
+//! real: Rust provisions `state.db`, composes it, and
 //! the same GraphQL initializer used by the desktop installs the endpoint.
 
 #![allow(dead_code)]
 
 use std::fs;
-use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::path::Path;
 use std::sync::MutexGuard;
 
-use muxed_studio_lib::graphql_foundation::{adopt_worktracker_and_install, ComposedCommandRuntime};
+use muxed_studio_lib::graphql_foundation::{
+    adopt_worktracker_and_install, ComposedCommandRuntime, InstallationOwnership,
+};
 use muxed_studio_lib::runs_persistence::{publish_readiness, Slice3Readiness};
 use muxed_studio_lib::tool_discovery::{approve_executable_path, SupportedTool, ToolHealth};
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection, DbBackend, Statement};
@@ -26,13 +27,13 @@ pub const TASK_ID: &str = "00000000-0000-0000-0000-000000008647";
 pub const TASK_RUN_ID: &str = "terminal-harness-task";
 pub const DOCUMENT_RUN_ID: &str = "terminal-harness-document";
 pub const DOCUMENT_PATH: &str = "T864--terminal-harness/SPEC.md";
-pub const RUNTIME_NAMESPACE: &str = "tmux-characterization-864";
 
 pub struct TerminalLifecycleHarness {
     _environment_lock: MutexGuard<'static, ()>,
     _environment: TmuxEnvironmentOverride,
     directory: tempfile::TempDir,
     pub tmux: IsolatedTmux,
+    pub runtime_namespace: String,
     api: TransportApiImpl,
     runtime: Option<ComposedCommandRuntime>,
 }
@@ -43,10 +44,10 @@ impl TerminalLifecycleHarness {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let directory = tempfile::tempdir().expect("create terminal lifecycle directory");
-        provision(directory.path());
         let tmux = IsolatedTmux::start_empty();
         let environment =
             TmuxEnvironmentOverride::set_with_data_directory(&tmux.socket_dir, directory.path());
+        let runtime_namespace = provision(directory.path()).await;
         approve_disposable_provider(directory.path());
         let (api, runtime) = compose(directory.path()).await;
         Self {
@@ -54,6 +55,7 @@ impl TerminalLifecycleHarness {
             _environment: environment,
             directory,
             tmux,
+            runtime_namespace,
             api,
             runtime: Some(runtime),
         }
@@ -111,6 +113,7 @@ impl TerminalLifecycleHarness {
             &self.directory.path().join("rust-core.sqlite3"),
             self.directory.path(),
             &self.api,
+            InstallationOwnership::Owned,
         )
         .await
         .expect("reopen adopted terminal runtime");
@@ -166,6 +169,7 @@ async fn compose(data_directory: &Path) -> (TransportApiImpl, ComposedCommandRun
         &data_directory.join("rust-core.sqlite3"),
         data_directory,
         &api,
+        InstallationOwnership::Owned,
     )
     .await
     .expect("adopt and compose terminal lifecycle fixture");
@@ -174,62 +178,47 @@ async fn compose(data_directory: &Path) -> (TransportApiImpl, ComposedCommandRun
     (api, adopted.runtime)
 }
 
-fn repository_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .expect("resolve repository root")
-}
-
-fn provision(data_directory: &Path) {
-    let script = r#"
-import os, sys
-from pathlib import Path
-db_path=Path(sys.argv[1]).resolve(); os.environ['DJANGO_SETTINGS_MODULE']='studio_server.settings'; os.environ['MUXED_STATE_DB']=str(db_path); os.environ['MUXED_DATA_DIR']=str(db_path.parent); os.environ['MUXED_FORCE_SQLITE']='true'
-from studio_server import settings
-settings.INSTALLED_APPS = [*settings.INSTALLED_APPS, 'apps.terminals']
-import django; django.setup()
-from django.core.management import call_command
-from worktracker.models import Workspace, Project, State, IssueType, Issue
-from apps.runs.models import AgentRun
-from apps.terminals.models import AgentTerminalSession
-call_command('migrate', interactive=False, verbosity=0)
-w=Workspace.objects.create(id='00000000000000000000000000008640', slug='terminal-harness', name='Terminal Harness')
-project=Project.objects.create(id='00000000000000000000000000008641', workspace=w, name='Terminal Harness', slug='T864', seq_counter=864)
-s=State.objects.create(id='00000000000000000000000000008642', project=project, name='Todo', group='unstarted', sort_order=1)
-module_type=IssueType.objects.create(id='00000000000000000000000000008643', project=project, name='Module', level='module', sort_order=1, start_state=s)
-module=Issue.objects.create(id='00000000000000000000000000008644', project=project, type='module', issue_type=module_type, state=s, name='Harness module', sequence_id=1, rank='a')
-task_type=IssueType.objects.create(id='00000000000000000000000000008645', project=project, name='Implementation', level='task', sort_order=2, start_state=s)
-task=Issue.objects.create(id='00000000000000000000000000008647', project=project, module=module, type='task', issue_type=task_type, state=s, name='Harness task', sequence_id=864, rank='b')
-for run_id, scope, doc in [('terminal-harness-task', 'task', None), ('terminal-harness-document', 'docchat', 'T864--terminal-harness/SPEC.md')]:
-    run=AgentRun.objects.create(id=run_id, issue=task, ticket_seq=864, agent='codex', status='running', started_at='2026-08-19T12:00:00Z', cwd=str(db_path.parent), lifecycle_state='working', lifecycle_updated_at='2026-08-19T12:00:00Z', scope=scope)
-    AgentTerminalSession.objects.create(agent_run=run, tmux_session_name='pt-'+run_id, task_id=str(task.id), module_id=str(module.id), project_id=str(project.id), agent='codex', created_at='2026-08-19T12:00:00Z', last_output_at='2026-08-19T12:00:00Z', runtime_namespace='tmux-characterization-864', scope=scope, doc_rel_path=doc)
-# Slice 3 owns the Runs schema at this named leaf. Newer Django-only columns
-# coexist on the branch for the temporary compatibility sidecar, but are not
-# part of the database generation Rust adopts.
-from django.db import connection
-with connection.cursor() as cursor:
-    # The compatibility backend no longer installs the retired Execution app.
-    # Model the oldest supported empty source so Rust can exercise its named
-    # adoption bridge before composing the terminal lifecycle fixture.
-    cursor.execute('CREATE TABLE engine_runs (task_id varchar(32) PRIMARY KEY)')
-    cursor.execute("INSERT INTO django_migrations (app, name, applied) VALUES ('execution', '0001_initial', CURRENT_TIMESTAMP)")
-    cursor.execute('ALTER TABLE agent_runs DROP COLUMN launch_state')
-    cursor.execute('ALTER TABLE agent_runs DROP COLUMN launch_model')
-    cursor.execute("DELETE FROM django_migrations WHERE app='runs' AND name IN ('0013_agentrun_optional_agent', '0014_agentrun_launch_metadata', '0015_merge_20260819_1521')")
-"#;
-    let output = Command::new(repository_root().join("backend/.venv/bin/python"))
-        .arg("-c")
-        .arg(script)
-        .arg(data_directory.join("state.db"))
-        .current_dir(repository_root())
-        .output()
-        .expect("run current Django migrations for terminal fixture");
-    assert!(
-        output.status.success(),
-        "terminal fixture provisioning failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
+async fn provision(data_directory: &Path) -> String {
+    muxed_studio_lib::installation_adoption::provisioning::provision(data_directory)
+        .await
+        .expect("provision the current Rust schema");
+    let database = Database::connect(format!(
+        "sqlite:{}?mode=rw",
+        data_directory.join("state.db").display()
+    ))
+    .await
+    .expect("open the Rust terminal fixture");
+    let runtime_namespace = muxed_studio_lib::tmux_adapter::current_runtime_namespace()
+        .expect("derive the isolated tmux namespace");
+    database
+        .execute_unprepared(&format!(
+            r#"
+INSERT INTO worktracker_workspace VALUES ('00000000000000000000000000008640','terminal-harness','Terminal Harness','2026-08-19T12:00:00Z','2026-08-19T12:00:00Z',0);
+INSERT INTO worktracker_provider VALUES ('00000000000000000000000000008650','agy',0,1);
+INSERT INTO worktracker_provider VALUES ('00000000000000000000000000008651','claude',0,1);
+INSERT INTO worktracker_provider VALUES ('00000000000000000000000000008652','codex',1,1);
+INSERT INTO worktracker_provider VALUES ('00000000000000000000000000008653','gemini',0,1);
+INSERT INTO worktracker_project VALUES ('00000000000000000000000000008641','Terminal Harness','T864','',864,'2026-08-19T12:00:00Z','2026-08-19T12:00:00Z','00000000000000000000000000008640',0,0);
+INSERT INTO worktracker_state VALUES ('00000000000000000000000000008642','Todo','unstarted','', '2026-08-19T12:00:00Z','2026-08-19T12:00:00Z','00000000000000000000000000008641',1,0);
+INSERT INTO worktracker_issuetype VALUES ('00000000000000000000000000008643','Module','module','',1,'2026-08-19T12:00:00Z','2026-08-19T12:00:00Z','00000000000000000000000000008641','00000000000000000000000000008642',0,0);
+INSERT INTO worktracker_issuetype VALUES ('00000000000000000000000000008645','Implementation','task','',2,'2026-08-19T12:00:00Z','2026-08-19T12:00:00Z','00000000000000000000000000008641','00000000000000000000000000008642',0,0);
+INSERT INTO worktracker_issue VALUES ('00000000000000000000000000008644','module','Harness module',1,'','2026-08-19T12:00:00Z','2026-08-19T12:00:00Z','00000000000000000000000000008641','00000000000000000000000000008642',0,'a',0,'00000000000000000000000000008643',NULL,NULL);
+INSERT INTO worktracker_issue VALUES ('00000000000000000000000000008647','task','Harness task',864,'','2026-08-19T12:00:00Z','2026-08-19T12:00:00Z','00000000000000000000000000008641','00000000000000000000000000008642',0,'b',0,'00000000000000000000000000008645',NULL,'00000000000000000000000000008644');
+INSERT INTO agent_runs (id,ticket_seq,status,started_at,cwd,lifecycle_state,lifecycle_updated_at,scope,issue_id,agent) VALUES ('{TASK_RUN_ID}',864,'running','2026-08-19T12:00:00Z','{}','working','2026-08-19T12:00:00Z','task','00000000000000000000000000008647','codex');
+INSERT INTO agent_runs (id,ticket_seq,status,started_at,cwd,lifecycle_state,lifecycle_updated_at,scope,issue_id,agent) VALUES ('{DOCUMENT_RUN_ID}',864,'running','2026-08-19T12:00:00Z','{}','working','2026-08-19T12:00:00Z','docchat','00000000000000000000000000008647','codex');
+INSERT INTO agent_terminal_sessions VALUES ('{TASK_RUN_ID}','pt-{TASK_RUN_ID}','00000000000000000000000000008647','00000000000000000000000000008644','00000000000000000000000000008641','2026-08-19T12:00:00Z',NULL,'task',NULL,0,'{runtime_namespace}',NULL,0,'2026-08-19T12:00:00Z','codex');
+INSERT INTO agent_terminal_sessions VALUES ('{DOCUMENT_RUN_ID}','pt-{DOCUMENT_RUN_ID}','00000000000000000000000000008647','00000000000000000000000000008644','00000000000000000000000000008641','2026-08-19T12:00:00Z',NULL,'docchat','{DOCUMENT_PATH}',0,'{runtime_namespace}',NULL,0,'2026-08-19T12:00:00Z','codex');
+"#,
+            data_directory.display(),
+            data_directory.display(),
+        ))
+        .await
+        .expect("seed the Rust terminal fixture");
+    database
+        .close()
+        .await
+        .expect("close the Rust terminal fixture");
+    runtime_namespace
 }
 
 fn approve_disposable_provider(data_directory: &Path) {

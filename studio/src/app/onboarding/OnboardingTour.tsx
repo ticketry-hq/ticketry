@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { apiErrorMessage } from "../../shared/api/client";
+import { apiErrorMessage } from "../../shared/api/errors";
 import { useModalStore } from "../modal/modalStore";
 import CoachMark from "./CoachMark";
 import { acknowledgeOnboarding } from "./onboardingStore";

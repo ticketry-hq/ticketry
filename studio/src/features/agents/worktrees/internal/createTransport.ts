@@ -17,7 +17,7 @@
 import { studioRuntime } from "../../../../runtime";
 import { WorktreeCreateDocument } from "../generated/worktreeCreate";
 import { adaptWorktreeStatus } from "./statusTransport";
-import { createWorktree, type WorktreeContext, type WorktreeStatus } from "./api";
+import type { WorktreeContext, WorktreeStatus } from "./api";
 
 /** A stable identity for one user intent, reused across its retries. */
 export function newOperationId(): string {
@@ -29,8 +29,8 @@ export function requestWorktreeCreate(
   operationId: string,
   ctx: WorktreeContext,
 ): Promise<WorktreeStatus> {
+  void ctx;
   return studioRuntime().writeWorkTracker({
-    rest: () => createWorktree(taskId, ctx),
     graphQl: async (execute) =>
       adaptWorktreeStatus(
         (await execute(WorktreeCreateDocument, { taskId, operationId }))

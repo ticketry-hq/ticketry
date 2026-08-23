@@ -29,9 +29,12 @@ const project = {
 };
 
 describe("WorkTracker read runtime acceptance", () => {
-  it("[overhaul-73] renders the same project hook through browser REST and desktop GraphQL", async () => {
+  it("[overhaul-73] renders the same project hook through browser and desktop GraphQL", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(
-      JSON.stringify([project]),
+      JSON.stringify({ data: { projects: { nodes: [{
+        ...project,
+        created_at: "2026-08-12T00:00:00",
+      }] } } }),
       { status: 200, headers: { "content-type": "application/json" } },
     ));
     vi.stubGlobal("fetch", fetchMock);
@@ -39,10 +42,12 @@ describe("WorkTracker read runtime acceptance", () => {
 
     const browserView = renderProjectNames();
     expect(await screen.findByText("Runtime Project")).toBeVisible();
-    expect(fetchMock).toHaveBeenCalledWith(
-      "/api/work-tracker/projects",
-      expect.anything(),
-    );
+    expect(fetchMock).toHaveBeenCalledWith("/graphql", expect.objectContaining({
+      method: "POST",
+    }));
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toMatchObject({
+      operationName: "WorkTrackerProjects",
+    });
 
     browserView.unmount();
     queryClient.clear();
@@ -65,13 +70,6 @@ describe("WorkTracker read runtime acceptance", () => {
       });
     });
     const startupInvoke = vi.fn().mockResolvedValue({
-      endpoints: {
-        workTrackerApi: "http://127.0.0.1:8787/api/work-tracker",
-        agentApi: "http://127.0.0.1:8787/api",
-        statusApi: "http://127.0.0.1:8787/api",
-        terminalWebSocket: "ws://127.0.0.1:8787/ws/terminal",
-      },
-      values: { workTrackerApiKey: "" },
       serviceHealth: {
         state: "ready",
         service: "backend",

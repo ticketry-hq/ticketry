@@ -9,6 +9,7 @@
     "allow-desktop-append-frontend-log",
     "allow-desktop-retry-services",
     "allow-desktop-pick-folder",
+    "allow-desktop-validate-module-folder",
     "allow-desktop-preflight-report",
     "allow-desktop-approve-executable-path",
     "allow-TauRPC--graphql-execute",

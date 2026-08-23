@@ -1,7 +1,8 @@
 [package]
 name = "ticketry"
+autobins = false
 default-run = "ticketry"
-version = "0.1.0"
+version = "0.2.0"
 description = "Least-privilege desktop shell for Ticketry"
 license = "MIT"
 edition = "2021"
@@ -16,7 +17,57 @@ tauri-build = { version = "=2.6.3", features = [] }
 
 [features]
 default = []
+development-tools = []
 native-libghostty = []
+
+[[bin]]
+name = "ticketry"
+path = "src/main.rs"
+
+[[bin]]
+name = "export_foundation_bindings"
+path = "src/bin/export_foundation_bindings.rs"
+required-features = ["development-tools"]
+
+[[bin]]
+name = "export_foundation_schema"
+path = "src/bin/export_foundation_schema.rs"
+required-features = ["development-tools"]
+
+[[bin]]
+name = "prepare_execution_generation_db"
+path = "src/bin/prepare_execution_generation_db.rs"
+required-features = ["development-tools"]
+
+[[bin]]
+name = "prepare_foundation_generation_db"
+path = "src/bin/prepare_foundation_generation_db.rs"
+required-features = ["development-tools"]
+
+[[bin]]
+name = "prepare_terminal_generation_db"
+path = "src/bin/prepare_terminal_generation_db.rs"
+required-features = ["development-tools"]
+
+[[bin]]
+name = "ticketry_graphql_adapter"
+path = "src/bin/ticketry_graphql_adapter.rs"
+required-features = ["development-tools"]
+
+[[bin]]
+name = "verify_slice4_copy"
+path = "src/bin/verify_slice4_copy.rs"
+required-features = ["development-tools"]
+
+[[bin]]
+name = "verify_slice5_copy"
+path = "src/bin/verify_slice5_copy.rs"
+required-features = ["development-tools"]
+
+[[bin]]
+name = "verify_slice6_copy"
+path = "src/bin/verify_slice6_copy.rs"
+required-features = ["development-tools"]
 
 [dependencies]
 async-graphql.workspace = true
@@ -37,7 +88,7 @@ process-wrap = { version = "9.1", default-features = false, features = [
 rand = "0.8"
 reqwest = { version = "=0.13.4", default-features = false, features = ["json", "rustls"] }
 rmcp = { version = "=3.0.0", features = ["transport-streamable-http-server"] }
-sea-orm = { version = "=2.0.1", features = ["runtime-tokio-rustls", "seaography", "sqlx-sqlite"] }
+sea-orm = { version = "=2.0.1", features = ["runtime-tokio-rustls", "seaography", "sqlx-postgres", "sqlx-sqlite"] }
 sea-orm-migration = { version = "=2.0.1", features = ["runtime-tokio-rustls", "sqlx-sqlite"] }
 seaography = { version = "=2.0.0-rc.9", default-features = false, features = ["field-camel-case", "macros", "with-chrono", "with-json"] }
 serde.workspace = true

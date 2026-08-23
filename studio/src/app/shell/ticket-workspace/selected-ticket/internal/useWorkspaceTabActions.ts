@@ -9,10 +9,8 @@ import {
   type ForegroundOwner,
   type SessionMeta,
 } from "../../../../../features/agents/terminal";
-import {
-  ApiError as AgentApiError,
-  resumeTerminal,
-} from "../../../../../features/agents/api/agentApi";
+import { resumeTerminal } from "../../../../../features/agents/api/agentApi";
+import { FoundationGraphQlError } from "../../../../../graphql-foundation/foundationClient";
 import {
   toast,
   useClientStore,
@@ -29,7 +27,7 @@ import type {
 } from "./WorkspaceLauncher";
 
 function resumeErrorMessage(error: unknown): string {
-  const body = error instanceof AgentApiError ? error.body : null;
+  const body = error instanceof FoundationGraphQlError ? error.extensions : null;
   const detail =
     body && typeof body === "object"
       ? (body as { detail?: unknown }).detail

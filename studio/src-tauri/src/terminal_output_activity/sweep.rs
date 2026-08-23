@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect, QueryTrait};
-use tokio::task::JoinHandle;
+use tauri::async_runtime::JoinHandle;
 use tokio::time::timeout;
 use tokio_util::sync::CancellationToken;
 
@@ -40,7 +40,7 @@ impl LiveOutputSweepRuntime {
         let cancellation = CancellationToken::new();
         let worker = interval.map(|interval| {
             let stop = cancellation.clone();
-            tokio::spawn(async move {
+            tauri::async_runtime::spawn(async move {
                 loop {
                     tokio::select! {
                         biased;

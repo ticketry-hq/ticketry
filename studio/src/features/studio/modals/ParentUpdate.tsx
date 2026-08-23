@@ -10,7 +10,7 @@ import {
   useWorkItem,
   useWorkItemsByIds,
 } from "../../work-items";
-import { apiErrorMessage } from "../../../shared/api/client";
+import { apiErrorMessage } from "../../../shared/api/errors";
 import { toast } from "../../../state/clientStore";
 import { TEMP_TASK_ID } from "../../agents/types";
 import { MODAL_ACTIONS } from "../../../app/navigation/keymapRegistry";

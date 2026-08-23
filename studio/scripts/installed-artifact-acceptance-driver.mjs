@@ -16,6 +16,8 @@ import {
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { inspectReleaseBundle } from "./release-bundle-inspection.mjs";
+
 const DEFAULT_TIMEOUT_MS = 60_000;
 const POLL_INTERVAL_MS = 100;
 const REQUIRED_DIAGNOSTIC_KINDS = ["missing_dependency", "os_permission"];
@@ -159,8 +161,8 @@ function startApp(executable, environment, cwd) {
     env: environment,
     stdio: ["ignore", "pipe", "pipe"],
   });
-  // Drain output without retaining it: sidecar output can contain internal
-  // values and acceptance diagnostics must never echo process output.
+  // Drain output without retaining it; acceptance diagnostics never echo
+  // process output because it can contain installation-local values.
   child.stdout.resume();
   child.stderr.resume();
   return child;
@@ -188,47 +190,18 @@ async function stopApp(child, timeoutMs = 10_000) {
   });
 }
 
-async function readReadyPort(logPath) {
-  const contents = await readFile(logPath, "utf8");
-  for (const line of contents.split(/\r?\n/).reverse()) {
-    if (!line.includes('"event":"ready"')) continue;
-    try {
-      const event = JSON.parse(line);
-      if (event.event === "ready"
-        && event.host === "127.0.0.1"
-        && Number.isInteger(event.port)
-        && event.port > 0
-        && event.port < 65_536) {
-        return event.port;
-      }
-    } catch {
-      // Ignore ordinary application log lines.
-    }
-  }
-  return null;
-}
-
 async function launchReadyApp(context) {
-  // A readiness line must belong to this launch, never a prior generation.
-  await rm(context.sidecarLog, { force: true });
   const child = context.startApp(
     context.executable,
     context.environment,
     context.sandboxRoot,
   );
   try {
-    const port = await context.waitFor(
+    await context.waitFor(
       async () => {
         if (child.exitCode !== null || child.signalCode !== null) {
           throw new InstalledArtifactDriverError("installed app exited before readiness");
         }
-        return readReadyPort(context.sidecarLog);
-      },
-      "installed app readiness",
-      context.timeoutMs,
-    );
-    await context.waitFor(
-      async () => {
         const count = await context.sqlite(
           context.databasePath,
           "SELECT count(*) FROM worktracker_workspace;",
@@ -238,7 +211,7 @@ async function launchReadyApp(context) {
       "workspace provisioning",
       context.timeoutMs,
     );
-    return { child, port };
+    return { child };
   } catch (error) {
     await context.stopApp(child);
     throw error;
@@ -483,7 +456,7 @@ export async function durableAgentTerminalFlowScenario(context) {
         + ");"
         + "INSERT INTO agent_terminal_sessions "
         + "(agent_run_id, tmux_session_name, task_id, module_id, project_id, agent, "
-        + "created_at, scope, runtime_cleanup_pending) VALUES ("
+        + "created_at, scope, runtime_cleanup_pending, output_sequence) VALUES ("
         + [
           runId,
           sessionName,
@@ -493,6 +466,7 @@ export async function durableAgentTerminalFlowScenario(context) {
           "codex",
           startedAt,
           "task",
+          0,
           0,
         ].map(sqlLiteral).join(",")
         + ");",
@@ -540,109 +514,33 @@ export async function uninstallPreservesDataScenario(context) {
   return true;
 }
 
-export function pendingSkillEvidence() {
+export function pendingRuntimeEvidence() {
   return {
-    offline_packaged_skill_matrix: false,
-    skill_configuration_unchanged: false,
-    skill_overlay_cleanup: false,
-    packaged_skill_providers: {},
+    rust_only_process_shape: false,
   };
 }
 
-function providerConfigurationPaths(home) {
-  return [
-    path.join(home, ".claude", "settings.json"),
-    path.join(home, ".codex", "config.toml"),
-    path.join(home, ".agy", "settings.json"),
-    path.join(home, ".gemini", "settings.json"),
-  ];
-}
-
-async function directoryIsEmpty(directory) {
-  try {
-    return (await readdir(directory)).length === 0;
-  } catch (error) {
-    if (error?.code === "ENOENT") return true;
-    throw error;
-  }
-}
-
-export async function packagedSkillEvidenceScenario(context) {
-  const sidecar = context.sidecarExecutable
-    ?? path.join(context.appPath, "Contents", "MacOS", "muxed-backend");
-  await access(sidecar);
-
-  const configuration = providerConfigurationPaths(context.environment.HOME);
-  const expectedConfiguration = new Map();
-  for (const [index, configurationPath] of configuration.entries()) {
-    await mkdir(path.dirname(configurationPath), { recursive: true });
-    const contents = `ticketry-acceptance-provider-config-${index}\n`;
-    await writeFile(configurationPath, contents, { encoding: "utf8", mode: 0o600 });
-    expectedConfiguration.set(configurationPath, contents);
-  }
-
-  const overlayRoot = path.join(context.environment.TMPDIR, "ticketry-agent-runs");
-  if (!(await directoryIsEmpty(overlayRoot))) {
-    throw new InstalledArtifactDriverError(
-      "provider smoke started with stale invocation overlays",
-    );
-  }
-  const smoke = await context.run(
-    sidecar,
-    ["skills", "smoke-providers"],
-    { cwd: context.sandboxRoot, env: context.environment },
+export async function rustOnlyProcessShapeScenario(context) {
+  const inspection = await inspectReleaseBundle(
+    context.appPath,
+    path.basename(context.executable),
   );
-  const output = smoke.stdout.trim().split(/\r?\n/).filter(Boolean).at(-1);
-  let evidence;
-  try {
-    evidence = JSON.parse(output);
-  } catch {
+  if (inspection.missingExecutables.length > 0) {
     throw new InstalledArtifactDriverError(
-      "packaged sidecar emitted invalid provider-smoke evidence",
+      `installed app is missing executables: ${inspection.missingExecutables.join(", ")}`,
     );
   }
-
-  const requiredSkills = [
-    "code-review",
-    "domain-modeling",
-    "grill-with-docs",
-    "grilling",
-    "implement",
-    "setup-matt-pocock-skills",
-    "tdd",
-    "to-spec",
-    "to-tickets",
-  ];
-  const providers = ["claude", "codex", "agy", "gemini"];
-  for (const provider of providers) {
-    const discovered = evidence.providers?.[provider];
-    if (!Array.isArray(discovered)
-      || requiredSkills.some((skill) => !discovered.includes(skill))
-      || evidence.mcp_configured?.[provider] !== true) {
-      throw new InstalledArtifactDriverError(
-        `packaged sidecar did not expose required skills and MCP for ${provider}`,
-      );
-    }
-  }
-  for (const [configurationPath, expected] of expectedConfiguration) {
-    if (await readFile(configurationPath, "utf8") !== expected) {
-      throw new InstalledArtifactDriverError(
-        `provider configuration changed during packaged skill smoke: ${configurationPath}`,
-      );
-    }
-  }
-  if (!(await directoryIsEmpty(overlayRoot))) {
+  if (inspection.unexpectedExecutables.length > 0) {
     throw new InstalledArtifactDriverError(
-      "packaged skill provider smoke left invocation overlays behind",
+      `installed app contains unexpected helpers: ${inspection.unexpectedExecutables.join(", ")}`,
     );
   }
-
-  return {
-    offline_packaged_skill_matrix: true,
-    skill_configuration_unchanged: true,
-    skill_overlay_cleanup: true,
-    packaged_skill_providers: evidence.providers,
-  };
+  if (inspection.forbiddenArtifacts.length > 0) {
+    throw new InstalledArtifactDriverError(
+      `installed app contains retired Python/REST artifacts: ${inspection.forbiddenArtifacts.join(", ")}`,
+    );
+  }
+  return { rust_only_process_shape: true };
 }
 
 function assertRedactedDiagnostics(diagnostics) {
@@ -665,7 +563,7 @@ const AVAILABLE_SCENARIOS = [
   ["missing_dependency_diagnostic", missingDependencyDiagnosticScenario],
   ["os_permission_diagnostic", osPermissionDiagnosticScenario],
   ["durable_agent_terminal_flow", durableAgentTerminalFlowScenario],
-  ["packaged_skill_evidence", packagedSkillEvidenceScenario],
+  ["rust_only_process_shape", rustOnlyProcessShapeScenario],
   ["uninstall_preserves_data", uninstallPreservesDataScenario],
 ];
 
@@ -678,20 +576,20 @@ export async function runAcceptance(context) {
     missing_dependency_diagnostic: false,
     os_permission_diagnostic: false,
     durable_agent_terminal_flow: false,
-    ...pendingSkillEvidence(),
+    ...pendingRuntimeEvidence(),
     diagnostics: context.diagnostics,
     scenario_failures: {},
   };
   for (const [name, scenario] of AVAILABLE_SCENARIOS) {
     try {
       const evidence = await scenario(context);
-      if (name === "packaged_skill_evidence") {
+      if (name === "rust_only_process_shape") {
         Object.assign(result, evidence);
       } else {
         result[name] = evidence === true;
       }
     } catch (error) {
-      if (name !== "packaged_skill_evidence") result[name] = false;
+      if (name !== "rust_only_process_shape") result[name] = false;
       const message = error instanceof Error ? error.message : "unknown scenario failure";
       result.scenario_failures[name] = CREDENTIAL_PATTERN.test(message)
         ? "scenario failure details redacted"
@@ -725,7 +623,6 @@ async function createContext(appPath, environment = process.env) {
     resultPath,
     run: runCommand,
     sandboxRoot,
-    sidecarLog: path.join(dataDirectory, "sidecar.log"),
     sqlite,
     startApp,
     stopApp,

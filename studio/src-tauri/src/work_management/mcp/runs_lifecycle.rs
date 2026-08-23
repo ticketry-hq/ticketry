@@ -1,13 +1,10 @@
 //! Authenticated loopback ingress for provider lifecycle facts.
 
-use std::sync::Arc;
-
 use axum::{
     extract::State,
     http::{HeaderMap, StatusCode},
     Json,
 };
-use sea_orm::DatabaseConnection;
 use serde::Deserialize;
 use serde_json::{json, Value};
 
@@ -16,18 +13,17 @@ use crate::runs_persistence::{LifecycleFact, RunsServices};
 #[derive(Clone)]
 pub(super) struct RunsIngressState {
     services: RunsServices,
-    credential: Arc<String>,
+    authority: super::RunAuthority,
 }
 
 impl RunsIngressState {
     pub(super) fn new(
-        database: DatabaseConnection,
-        _backend_base_url: String,
-        credential: String,
+        database: sea_orm::DatabaseConnection,
+        authority: super::RunAuthority,
     ) -> Self {
         Self {
             services: RunsServices::new(database),
-            credential: Arc::new(credential),
+            authority,
         }
     }
 }
@@ -46,11 +42,15 @@ pub(super) async fn ingest(
     headers: HeaderMap,
     Json(body): Json<LifecycleIngress>,
 ) -> (StatusCode, Json<Value>) {
-    if !authorized(&state, &headers) {
-        return (
-            StatusCode::UNAUTHORIZED,
-            Json(json!({"ok": false, "code": "lifecycle_ingress_unauthorized"})),
-        );
+    let authorization = headers
+        .get("authorization")
+        .and_then(|value| value.to_str().ok());
+    if let Err(failure) = state
+        .authority
+        .authorize_run(authorization, &body.agent_run_id)
+        .await
+    {
+        return (StatusCode::UNAUTHORIZED, Json(failure.0));
     }
     match state
         .services
@@ -80,11 +80,4 @@ pub(super) async fn ingest(
             Json(json!({"ok": false, "code": error.code_str()})),
         ),
     }
-}
-
-fn authorized(state: &RunsIngressState, headers: &HeaderMap) -> bool {
-    headers
-        .get("x-api-key")
-        .and_then(|value| value.to_str().ok())
-        .is_some_and(|value| value == state.credential.as_str())
 }

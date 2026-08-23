@@ -8,10 +8,10 @@ use crate::desktop::data_directory::{
     data_directory_ownership_for_startup, release_data_directory_ownership,
 };
 use crate::desktop::document_protocol;
-use crate::desktop::environment::smoke_startup_exit_requested;
+use crate::desktop::environment::automated_startup_exit_requested;
 use crate::desktop::launch_runtime::DesktopLaunchRuntime;
 use crate::desktop::lifecycle::{
-    detach_transient_viewers, lifecycle_action, shutdown_packaged_backend, DesktopLifecycleAction,
+    detach_transient_viewers, lifecycle_action, shutdown_rust_runtime, DesktopLifecycleAction,
     DesktopLifecycleEvent, MAIN_WINDOW_LABEL,
 };
 use crate::desktop::service_state::DesktopServiceState;
@@ -41,6 +41,7 @@ pub fn run() {
                 commands::desktop_append_frontend_log,
                 commands::desktop_retry_services,
                 commands::desktop_pick_folder,
+                commands::desktop_validate_module_folder,
                 commands::desktop_preflight_report,
                 commands::desktop_approve_executable_path,
                 webview_commands::viewer_attach,
@@ -74,7 +75,7 @@ pub fn run() {
             }
             if webview.label() == MAIN_WINDOW_LABEL
                 && payload.event() == tauri::webview::PageLoadEvent::Finished
-                && smoke_startup_exit_requested()
+                && automated_startup_exit_requested()
             {
                 webview.app_handle().exit(0);
             }
@@ -105,7 +106,7 @@ pub fn run() {
                 Some(DesktopLifecycleEvent::MainWindowCloseRequested)
             }
             tauri::RunEvent::Exit => {
-                shutdown_packaged_backend(application);
+                shutdown_rust_runtime(application);
                 detach_transient_viewers(application);
                 release_data_directory_ownership(application);
                 Some(DesktopLifecycleEvent::ApplicationShutdown)

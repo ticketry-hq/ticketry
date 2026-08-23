@@ -3,7 +3,6 @@ import {
   type WorkTrackerGraphQlExecute,
 } from "../../../../runtime";
 import { graphQlMutationError } from "../../../../shared/api/graphqlError";
-import { authenticatedHostFetch } from "../../../../shared/api/authenticatedHostFetch";
 import {
   CreateViewerLeaseDocument,
   DeleteViewerLeaseDocument,
@@ -82,31 +81,16 @@ export function createViewerLease(
   };
 }
 
-async function browserRequest(
-  path: string,
-  body: Record<string, string>,
-): Promise<void> {
-  const response = await authenticatedHostFetch(path, {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
-  if (response.ok) return;
-  const payload = await response.json().catch(() => null) as {
-    detail?: { error?: string };
-  } | null;
-  const error = new Error(
-    payload?.detail?.error ?? `HTTP ${response.status}`,
-  ) as Error & { code?: string };
-  error.code = payload?.detail?.error;
-  throw error;
-}
-
+/**
+ * Viewer ownership is arbitrated by the Rust lease contract over the in-process
+ * GraphQL transport. The `/api/terminals/viewers/lease` routes browser
+ * development used to post to went away with the Python terminal authority, so
+ * a platform without that transport holds no lease rather than a stale one.
+ */
 async function route<TResult>(
-  browser: () => Promise<TResult>,
   operation: (execute: WorkTrackerGraphQlExecute) => Promise<TResult>,
 ): Promise<TResult> {
   return studioRuntime().writeWorkTracker({
-    rest: browser,
     graphQl: async (execute) => {
       try {
         return await operation(execute);
@@ -121,39 +105,19 @@ async function route<TResult>(
 export const desktopViewerLease: ViewerLeaseClient = {
   acquire(agentRunId, viewerId, transport) {
     return route(
-      async () => {
-        await browserRequest("/api/terminals/viewers/lease", {
-          agent_run_id: agentRunId,
-          viewer_id: viewerId,
-          transport: transport === "native" ? "desktop" : "xterm",
-        });
-        return { generation: viewerId };
-      },
       async (execute) =>
         (await execute(CreateViewerLeaseDocument, { agentRunId, viewerId, transport })).viewer_lease,
     );
   },
   renew(agentRunId, viewerId, generation) {
-    return route(
-      () => browserRequest("/api/terminals/viewers/lease/renew", {
-        agent_run_id: agentRunId,
-        viewer_id: viewerId,
-      }),
-      async (execute) => {
-        await execute(UpdateViewerLeaseDocument, { agentRunId, viewerId, generation });
-      },
-    );
+    return route(async (execute) => {
+      await execute(UpdateViewerLeaseDocument, { agentRunId, viewerId, generation });
+    });
   },
   async release(agentRunId, viewerId, generation) {
-    await route(
-      () => browserRequest("/api/terminals/viewers/lease/release", {
-        agent_run_id: agentRunId,
-        viewer_id: viewerId,
-      }),
-      async (execute) => {
-        await execute(DeleteViewerLeaseDocument, { agentRunId, viewerId, generation });
-      },
-    );
+    await route(async (execute) => {
+      await execute(DeleteViewerLeaseDocument, { agentRunId, viewerId, generation });
+    });
   },
 };
 

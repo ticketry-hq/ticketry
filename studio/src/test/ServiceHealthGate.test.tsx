@@ -23,7 +23,6 @@ function runtimeHealthHarness() {
     platform: "desktop",
     capabilities: {
       statusFeed: true,
-      websocketTerminal: true,
       nativeLifecycle: false,
       serviceSupervision: true,
       nativeTerminal: false,
@@ -50,13 +49,6 @@ function runtimeHealthHarness() {
       `/api/docs/${documentId}/${relPath}`,
     pickFolder: async () => null,
     startup: () => ({
-      endpoints: {
-        workTrackerApi: "/api/work-tracker",
-        agentApi: "/api",
-        statusApi: "/api",
-        terminalWebSocket: "/ws/terminal",
-      },
-      values: { workTrackerApiKey: "" },
       serviceHealth: health("ready"),
       initialNotices: [],
     }),
@@ -134,17 +126,17 @@ describe("ServiceHealthGate", () => {
 
     harness.publish({
       state: "failed",
-      service: "backend",
-      message: "Pinned port is already in use",
-      logPointer: "desktop sidecar log buffer",
+      service: "runtime",
+      message: "Startup failed",
+      logPointer: "Ticketry application log",
     });
 
     expect(
       screen.getByRole("heading", { name: "Ticketry services could not start" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("Pinned port is already in use"))
+    expect(screen.getByText("Startup failed"))
       .toBeInTheDocument();
-    expect(screen.getByText("desktop sidecar log buffer"))
+    expect(screen.getByText("Ticketry application log"))
       .toBeInTheDocument();
     expect(screen.queryByText("Studio ready")).not.toBeInTheDocument();
 
@@ -167,9 +159,9 @@ describe("ServiceHealthGate", () => {
     );
     harness.publish({
       state: "failed",
-      service: "backend",
-      message: "Pinned port is still in use",
-      logPointer: "desktop sidecar log buffer",
+      service: "runtime",
+      message: "Startup is still unavailable",
+      logPointer: "Ticketry application log",
     });
 
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));

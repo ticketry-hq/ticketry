@@ -1,6 +1,4 @@
-import { agentApiUrl, runtimeConfiguration } from "../../runtime";
-
-/** Fetch a backend host route with the launch-scoped desktop credential. */
+/** Legacy test helper. Shipping callers use GraphQL or native commands. */
 export function authenticatedHostFetch(
   path: string,
   init?: RequestInit,
@@ -11,8 +9,5 @@ export function authenticatedHostFetch(
     headers.set("Content-Type", "application/json");
   }
 
-  const key = runtimeConfiguration().values.workTrackerApiKey;
-  if (key && !headers.has("x-api-key")) headers.set("x-api-key", key);
-
-  return fetch(agentApiUrl(path), { ...init, headers });
+  return fetch(path, { ...init, headers });
 }

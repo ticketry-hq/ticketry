@@ -1,5 +1,4 @@
 import { studioRuntime } from "../../../runtime";
-import * as rest from "../../../shared/api/client";
 import type { Module, Project, Workspace } from "../../../shared/api/types";
 import {
   compactWorktrackerId,
@@ -13,7 +12,6 @@ import {
 
 export function readProjects(): Promise<Project[]> {
   return studioRuntime().readWorkTracker({
-    rest: rest.listProjects,
     graphQl: async (execute) => (
       await execute(WorkTrackerProjectsDocument, {})
     ).projects.nodes
@@ -28,7 +26,6 @@ export function readProjects(): Promise<Project[]> {
 
 export function readModules(projectId: string): Promise<Module[]> {
   return studioRuntime().readWorkTracker({
-    rest: () => rest.listModules(projectId),
     graphQl: async (execute) => {
       const modules = (
         await execute(WorkTrackerModulesDocument, {
@@ -64,7 +61,6 @@ export function readModules(projectId: string): Promise<Module[]> {
 
 export function readWorkspace(): Promise<Workspace> {
   return studioRuntime().readWorkTracker({
-    rest: rest.getWorkspace,
     graphQl: async (execute) => {
       const workspace = (await execute(WorkTrackerWorkspaceDocument, {}))
         .workspace.nodes[0];

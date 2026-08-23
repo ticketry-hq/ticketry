@@ -1,20 +1,20 @@
 import { expect, test } from "@playwright/test";
 import {
-  CODEX_LUNA_MODEL,
-  CODEX_LUNA_REASONING,
-  ensureCodexLunaModel,
-  responseJson,
+  acknowledgeOnboarding,
+  CODEX_TEST_MODEL,
+  CODEX_TEST_REASONING,
+  ensureCodexTestModel,
+  getProviderCatalog,
+  getWorkspace,
 } from "./support";
 
-test("seeds Luna and completes first-run provider onboarding", async ({
+test("uses the provisioned model and completes first-run provider onboarding", async ({
   page,
   request,
 }) => {
-  const initialWorkspace = await responseJson<{ onboarding_required: boolean }>(
-    await request.get("/api/work-tracker/workspace"),
-  );
+  const initialWorkspace = await getWorkspace(request);
   expect(initialWorkspace.onboarding_required).toBe(true);
-  await ensureCodexLunaModel(request);
+  await ensureCodexTestModel(request);
 
   await page.goto("/");
   await expect(page.getByTestId("onboarding-welcome")).toBeVisible();
@@ -28,9 +28,9 @@ test("seeds Luna and completes first-run provider onboarding", async ({
   await expect(claude).toBeChecked();
   await page.getByRole("combobox", { name: "Agent/provider" })
     .selectOption("codex");
-  await page.getByLabel("Model").fill(CODEX_LUNA_MODEL);
+  await page.getByLabel("Model").fill(CODEX_TEST_MODEL);
   await page.getByRole("combobox", { name: "Reasoning" })
-    .selectOption(CODEX_LUNA_REASONING);
+    .selectOption(CODEX_TEST_REASONING);
   await page.getByRole("button", { name: /^(Continue|Get started)$/ }).click();
 
   const skipTour = page.getByTestId("onboarding-skip-tour");
@@ -38,31 +38,17 @@ test("seeds Luna and completes first-run provider onboarding", async ({
   if (await skipTour.isVisible()) {
     await skipTour.click();
   } else {
-    await responseJson(await request.post(
-      "/api/work-tracker/workspace/onboarding/acknowledge",
-      { data: {} },
-    ));
+    await acknowledgeOnboarding(request);
   }
 
-  const catalog = await responseJson<{
-    value: {
-      global_default: {
-        provider: string;
-        model: string | null;
-        reasoning: string | null;
-      } | null;
-    };
-  }>(await request.get("/api/settings/provider-catalog"));
-  expect(catalog.value.global_default).toEqual({
+  const catalog = await getProviderCatalog(request);
+  expect(catalog.global_default).toEqual({
     provider: "codex",
-    model: CODEX_LUNA_MODEL,
-    reasoning: CODEX_LUNA_REASONING,
+    model: CODEX_TEST_MODEL,
+    reasoning: CODEX_TEST_REASONING,
   });
 
-  const providers = await responseJson<Array<{
-    slug: string;
-    activated: boolean;
-  }>>(await request.get("/api/work-tracker/providers"));
+  const providers = catalog.configurable_providers;
   expect(providers.find((provider) => provider.slug === "codex")?.activated)
     .toBe(true);
   expect(providers.find((provider) => provider.slug === "claude")?.activated)
@@ -70,8 +56,6 @@ test("seeds Luna and completes first-run provider onboarding", async ({
   expect(providers.find((provider) => provider.slug === "gemini")?.activated)
     .toBe(false);
 
-  const finalWorkspace = await responseJson<{ onboarding_required: boolean }>(
-    await request.get("/api/work-tracker/workspace"),
-  );
+  const finalWorkspace = await getWorkspace(request);
   expect(finalWorkspace.onboarding_required).toBe(false);
 });

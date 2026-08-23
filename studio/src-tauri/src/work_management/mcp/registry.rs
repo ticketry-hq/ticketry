@@ -129,6 +129,14 @@ pub fn tools() -> Vec<Tool> {
     ]
 }
 
+pub(crate) fn allowed_provider_operations() -> Vec<String> {
+    tools()
+        .into_iter()
+        .map(|tool| tool.name.into_owned())
+        .chain(std::iter::once("provider_lifecycle".to_owned()))
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

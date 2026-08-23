@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import * as api from "../workflows";
-import { ApiError } from "../../shared/api/client";
+import { ApiError } from "../../shared/api/errors";
 import { toast } from "../../state/clientStore";
 import {
   getStatesSnapshot,

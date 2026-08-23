@@ -258,4 +258,4 @@ the application backend. The sidecar supervisor, health/readiness plumbing,
 port discovery, and Python packaging become deletion candidates only after the
 last Rust capability and MCP cut over
 ([`../studio/src-tauri/src/supervisor.rs`](../studio/src-tauri/src/supervisor.rs),
-[`../backend/packaging/sidecar.py`](../backend/packaging/sidecar.py)).
+[`../backend/sidecar_packaging/sidecar.py`](../backend/sidecar_packaging/sidecar.py)).

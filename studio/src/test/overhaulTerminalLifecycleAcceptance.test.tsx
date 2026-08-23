@@ -20,10 +20,9 @@ import { reduceLifecycle } from "../features/agents/terminal/lifecycle";
 import { seedConfig } from "../features/studio/stores/configStore";
 import { queryClient } from "../shared/query/queryClient";
 import { useClientStore } from "../state/clientStore";
+import { installDesktopGraphQlRuntime } from "./desktopGraphQlRuntime";
 
 const terminalApi = vi.hoisted(() => ({
-  getTerminals: vi.fn(),
-  listResumableTerminals: vi.fn(),
   resumeTerminal: vi.fn(),
 }));
 
@@ -41,6 +40,23 @@ vi.mock("../features/agents/api/agentApi", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../features/agents/api/agentApi")>()),
   ...terminalApi,
 }));
+
+// Terminal session reads moved to the Rust Terminal Session graph, so the seam
+// a test controls is the read transport, not a host API module.
+const terminalReads = vi.hoisted(() => {
+  const resumable = vi.fn();
+  return {
+    readTaskTerminalSessions: vi.fn(),
+    readScratchTerminalSessions: vi.fn(),
+    readTaskResumableTerminalSessions: resumable,
+    readScratchResumableTerminalSessions: resumable,
+  };
+});
+
+vi.mock(
+  "../features/agents/terminal/internal/sessionReadTransport",
+  () => terminalReads,
+);
 
 vi.mock(
   "../app/shell/ticket-workspace/selected-ticket/terminals/SelectedTicketTerminal",
@@ -91,6 +107,7 @@ function run(
 describe("overhaul acceptance — terminals", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    installDesktopGraphQlRuntime();
     localStorage.clear();
     queryClient.clear();
     seedConfig({ features: { sidebar: true, projects: true } });
@@ -115,8 +132,9 @@ describe("overhaul acceptance — terminals", () => {
     });
     documentRegistry.listTaskDocuments.mockResolvedValue([]);
     documentRegistry.listScratchDocuments.mockResolvedValue([]);
-    terminalApi.getTerminals.mockResolvedValue([]);
-    terminalApi.listResumableTerminals.mockResolvedValue([]);
+    terminalReads.readTaskTerminalSessions.mockResolvedValue([]);
+    terminalReads.readScratchTerminalSessions.mockResolvedValue([]);
+    terminalReads.readTaskResumableTerminalSessions.mockResolvedValue([]);
   });
 
   it("[overhaul-09] keeps an externally killed terminal tab and presents it as dead", () => {
@@ -387,9 +405,9 @@ describe("overhaul acceptance — terminals", () => {
       </QueryClientProvider>,
     );
     expect(screen.getByRole("tab", { name: "codex terminal" })).toBeInTheDocument();
-    await waitFor(() => expect(terminalApi.listResumableTerminals).toHaveBeenCalled());
+    await waitFor(() => expect(terminalReads.readTaskResumableTerminalSessions).toHaveBeenCalled());
 
-    terminalApi.listResumableTerminals.mockResolvedValue([
+    terminalReads.readTaskResumableTerminalSessions.mockResolvedValue([
       {
         agent_run_id: "run-1",
         agent: "codex",

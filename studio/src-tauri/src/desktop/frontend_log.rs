@@ -1,5 +1,7 @@
 //! Bounded, single-line records for the development-only frontend log bridge.
 
+use std::io::Write;
+
 const FRONTEND_LOG_MAX_BYTES: usize = 16 * 1024;
 
 pub(crate) fn frontend_log_line(level: &str, message: &str) -> Result<String, String> {
@@ -17,6 +19,17 @@ pub(crate) fn frontend_log_line(level: &str, message: &str) -> Result<String, St
         ""
     };
     Ok(format!("[frontend][{level}] {}{suffix}", &flattened[..end]))
+}
+
+pub(crate) fn append_frontend_log(line: &str) -> Result<(), String> {
+    let path = std::env::var_os("MUXED_DEVELOPMENT_LOG_PATH")
+        .ok_or_else(|| "development log path is unavailable".to_owned())?;
+    let mut log = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+        .map_err(|error| format!("could not open development log: {error}"))?;
+    writeln!(log, "{line}").map_err(|error| format!("could not append development log: {error}"))
 }
 
 #[cfg(test)]

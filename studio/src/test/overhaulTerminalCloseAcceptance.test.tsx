@@ -12,11 +12,10 @@ import { useStudioStore } from "../features/projects/store";
 import { seedConfig } from "../features/studio/stores/configStore";
 import { queryClient } from "../shared/query/queryClient";
 import { useClientStore } from "../state/clientStore";
+import { installDesktopGraphQlRuntime } from "./desktopGraphQlRuntime";
 
 const terminalApi = vi.hoisted(() => ({
   getDocuments: vi.fn(),
-  getTerminals: vi.fn(),
-  listResumableTerminals: vi.fn(),
   resumeTerminal: vi.fn(),
   terminateTerminal: vi.fn(),
 }));
@@ -25,6 +24,23 @@ vi.mock("../features/agents/api/agentApi", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../features/agents/api/agentApi")>()),
   ...terminalApi,
 }));
+
+// Terminal session reads moved to the Rust Terminal Session graph, so the seam
+// a test controls is the read transport, not a host API module.
+const terminalReads = vi.hoisted(() => {
+  const resumable = vi.fn();
+  return {
+    readTaskTerminalSessions: vi.fn(),
+    readScratchTerminalSessions: vi.fn(),
+    readTaskResumableTerminalSessions: resumable,
+    readScratchResumableTerminalSessions: resumable,
+  };
+});
+
+vi.mock(
+  "../features/agents/terminal/internal/sessionReadTransport",
+  () => terminalReads,
+);
 
 vi.mock(
   "../app/shell/ticket-workspace/selected-ticket/terminals/SelectedTicketTerminal",
@@ -102,6 +118,7 @@ function mountLiveTerminal({ keyboard = false }: { keyboard?: boolean } = {}) {
 describe("overhaul acceptance — terminal close synchronization", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    installDesktopGraphQlRuntime();
     localStorage.clear();
     queryClient.clear();
     seedConfig({ features: { sidebar: true, projects: true } });
@@ -123,12 +140,13 @@ describe("overhaul acceptance — terminal close synchronization", () => {
       automationByTask: {},
     });
     terminalApi.getDocuments.mockResolvedValue({ documents: [] });
-    terminalApi.getTerminals.mockResolvedValue([]);
-    terminalApi.listResumableTerminals.mockResolvedValue([]);
+    terminalReads.readTaskTerminalSessions.mockResolvedValue([]);
+    terminalReads.readScratchTerminalSessions.mockResolvedValue([]);
+    terminalReads.readTaskResumableTerminalSessions.mockResolvedValue([]);
   });
 
   it("refreshes resumable sessions through the shared keyboard close path", async () => {
-    terminalApi.listResumableTerminals
+    terminalReads.readTaskResumableTerminalSessions
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([{
         agent_run_id: "run-old",
@@ -146,7 +164,7 @@ describe("overhaul acceptance — terminal close synchronization", () => {
     });
     mountLiveTerminal({ keyboard: true });
     await waitFor(() => {
-      expect(terminalApi.listResumableTerminals).toHaveBeenCalledTimes(1);
+      expect(terminalReads.readTaskResumableTerminalSessions).toHaveBeenCalledTimes(1);
     });
 
     act(() => {
@@ -169,7 +187,7 @@ describe("overhaul acceptance — terminal close synchronization", () => {
     terminalApi.terminateTerminal.mockRejectedValue(new Error("refused"));
     mountLiveTerminal();
     await waitFor(() => {
-      expect(terminalApi.listResumableTerminals).toHaveBeenCalledTimes(1);
+      expect(terminalReads.readTaskResumableTerminalSessions).toHaveBeenCalledTimes(1);
     });
 
     fireEvent.click(screen.getByRole("button", {
@@ -186,7 +204,7 @@ describe("overhaul acceptance — terminal close synchronization", () => {
     });
     expect(screen.getByRole("tab", { name: "codex terminal" }))
       .toBeInTheDocument();
-    expect(terminalApi.listResumableTerminals).toHaveBeenCalledTimes(1);
+    expect(terminalReads.readTaskResumableTerminalSessions).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole("button", { name: "Resume codex terminal" }))
       .not.toBeInTheDocument();
   });

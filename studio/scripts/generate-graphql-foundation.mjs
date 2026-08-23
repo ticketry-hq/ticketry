@@ -54,6 +54,12 @@ try {
       join(scratch, "worktracker", feature, "manifest.ts"),
       join(target, "manifest.ts"),
     );
+    if (feature === "work-items") {
+      await copyFile(
+        join(scratch, "worktracker", feature, "attachments.ts"),
+        join(target, "attachments.ts"),
+      );
+    }
   }
   const settingsTarget = join(studioRoot, "src/features/settings/generated");
   await mkdir(settingsTarget, { recursive: true });
@@ -89,7 +95,7 @@ try {
     "src/features/agents/terminal/generated",
   );
   await mkdir(terminalTarget, { recursive: true });
-  for (const name of ["terminalSessions.ts", "viewerLeases.ts"]) {
+  for (const name of ["outputActivity.ts", "terminalSessions.ts", "viewerLeases.ts"]) {
     await copyFile(join(scratch, "terminals", name), join(terminalTarget, name));
   }
   const executionTarget = join(studioRoot, "src/features/execution/generated");

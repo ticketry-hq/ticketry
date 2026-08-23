@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, HashSet};
 
 use sea_orm::DatabaseConnection;
 use serde_json::{json, Value};
@@ -214,45 +214,6 @@ pub async fn scope_context(database: &DatabaseConnection, task: &WorkItem) -> Va
         )
     };
     json!({"task": as_ref(task), "depends_on": depends_on, "depended_by": depended_by, "advisory": advisory})
-}
-
-pub async fn dependency_graph(database: &DatabaseConnection, root: &WorkItem) -> Value {
-    let all = read_queries::work_items(database, Some(&root.project_id), None, None)
-        .await
-        .unwrap_or_default();
-    let states: HashMap<String, String> = read_queries::states(database, &root.project_id)
-        .await
-        .unwrap_or_default()
-        .into_iter()
-        .map(|state| (state.id, state.name))
-        .collect();
-    let mut children: HashMap<Option<String>, Vec<&WorkItem>> = HashMap::new();
-    for item in &all {
-        children
-            .entry(item.parent_id.clone())
-            .or_default()
-            .push(item);
-    }
-    let mut queue = VecDeque::from([root.id.clone()]);
-    let mut wanted = Vec::new();
-    while let Some(parent) = queue.pop_front() {
-        if let Some(rows) = children.get(&Some(parent)) {
-            for row in rows {
-                wanted.push(*row);
-                queue.push_back(row.id.clone());
-            }
-        }
-    }
-    let nodes: Vec<Value> = std::iter::once(root)
-        .chain(wanted)
-        .map(|item| json!({
-            "id": item.id,
-            "state": item.state.as_ref().and_then(|id| states.get(id)).cloned().unwrap_or_default(),
-            "parent_id": item.parent_id,
-            "blocked_by": item.blocked_by_ids.0,
-        }))
-        .collect();
-    json!({"root_id": root.id, "nodes": nodes})
 }
 
 pub async fn workflow_settings(database: &DatabaseConnection, type_id: &str) -> Value {

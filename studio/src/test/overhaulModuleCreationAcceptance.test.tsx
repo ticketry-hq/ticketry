@@ -23,6 +23,27 @@ vi.mock("../shared/api/client", async () => {
   return { ...actual, ...api };
 });
 
+vi.mock("../features/projects/queries/readTransport", () => ({
+  readModules: api.listModules,
+  readProjects: api.listProjects,
+  readWorkspace: vi.fn(),
+}));
+
+vi.mock("../features/workflows/queries/readTransport", async () => ({
+  ...(await vi.importActual("../features/workflows/queries/readTransport")),
+  readWorkflowIssueTypes: api.listIssueTypes,
+}));
+
+vi.mock("../features/settings/profileTransport", async () => ({
+  ...(await vi.importActual("../features/settings/profileTransport")),
+  putProfile: api.putProfile,
+}));
+
+vi.mock("../features/settings/queries", async () => ({
+  ...(await vi.importActual("../features/settings/queries")),
+  loadIssueTypes: api.listIssueTypes,
+}));
+
 vi.mock("../features/work-items/mutationTransport", async () => {
   const actual = await vi.importActual<
     typeof import("../features/work-items/mutationTransport")
@@ -33,6 +54,11 @@ vi.mock("../features/work-items/mutationTransport", async () => {
       api.createModule(projectId, body.name, body.issue_type_id),
   };
 });
+
+vi.mock("../features/work-items/queries/readTransport", async () => ({
+  ...(await vi.importActual("../features/work-items/queries/readTransport")),
+  readModuleTreeRecords: api.getTasks,
+}));
 
 vi.mock("../features/projects/mutationTransport", async () => {
   const actual = await vi.importActual<

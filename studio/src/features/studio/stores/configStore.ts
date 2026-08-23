@@ -1,5 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
-import * as api from "../../settings";
+import {
+  deleteProfile as deleteProfileRecord,
+  getConfig,
+  patchConfig,
+  postProfile as postProfileRecord,
+  putProfile as putProfileRecord,
+} from "../../settings/profileTransport";
 import { type ConfigPayload, type Profile } from "../lib/types";
 import { queryClient } from "../../../shared/query/queryClient";
 import { queryKeys } from "../../../shared/query/keys";
@@ -48,7 +54,7 @@ function toSnapshot(payload: ConfigPayload): ConfigSnapshot {
 }
 
 async function fetchConfig(): Promise<ConfigSnapshot> {
-  return toSnapshot(await api.getConfig());
+  return toSnapshot(await getConfig());
 }
 
 // Profile mutations return the refreshed profile list; feature flags are not
@@ -111,24 +117,24 @@ export function seedConfig(
 }
 
 export async function selectProfile(index: number): Promise<void> {
-  acceptConfig(await api.patchConfig({ recent_profile_index: index }));
+  acceptConfig(await patchConfig({ recent_profile_index: index }));
   const { loadProjects } = await import("../../projects");
   await loadProjects();
 }
 
 export async function createProfile(body: Partial<Profile>): Promise<void> {
-  acceptConfig(await api.postProfile(body));
+  acceptConfig(await postProfileRecord(body));
 }
 
 export async function updateProfile(
   index: number,
   body: Partial<Profile>,
 ): Promise<void> {
-  acceptConfig(await api.putProfile(index, body));
+  acceptConfig(await putProfileRecord(index, body));
 }
 
 export async function deleteProfile(index: number): Promise<void> {
-  acceptConfig(await api.deleteProfile(index));
+  acceptConfig(await deleteProfileRecord(index));
 }
 
 export async function setModuleFolder(

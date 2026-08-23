@@ -1,12 +1,15 @@
 // A refused launch has to say *why* it was refused. The control plane answers
-// with a stable policy code (`POST /api/terminals` → `{detail:{error}}`, or the
-// terminal socket's error frame); without this translation the surface shows
-// `HTTP 400`, which reads as "something broke" for what is really a
-// configuration decision the user can act on.
+// with a stable policy code on the terminal create mutation; without this
+// translation the surface shows `HTTP 400`, which reads as "something broke"
+// for what is really a configuration decision the user can act on.
 
 /** Codes worth a sentence. Anything else keeps its raw code. */
 const LAUNCH_FAILURE_REASONS: Record<string, string> = {
   no_profile_selected: "Select a Studio launch profile before trying again.",
+  // Terminal bytes come from the Rust tmux adapter over Tauri; browser-only
+  // development has no channel to carry them.
+  terminal_requires_desktop:
+    "Terminals are available only in desktop Studio.",
   // ADR-0015: a binding naming a deactivated provider is blocked, never
   // silently substituted, so the message names the specific cause and fix.
   provider_not_activated:

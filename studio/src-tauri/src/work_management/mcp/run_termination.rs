@@ -6,7 +6,7 @@ use crate::terminal_cleanup::{
     AuthenticatedAgentRun, TerminalCleanupError, TerminalCleanupErrorCode, TerminalCleanupService,
 };
 
-use super::backend_port::RunPrincipal;
+use super::RunPrincipal;
 
 /// Terminate only the run named by the authenticated MCP principal. The tool
 /// accepts no target argument, so no caller can widen the blast radius.

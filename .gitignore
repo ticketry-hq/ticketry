@@ -16,6 +16,7 @@ dist/
 
 # Node / Studio
 node_modules/
+.pnpm-store/
 studio/dist/
 studio/playwright-report/
 studio/test-results/

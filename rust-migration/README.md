@@ -30,7 +30,7 @@ native terminal/runtime work and replaces the supervised Django/FastMCP child,
 HTTP API, and Studio WebSockets with in-process services. This directly removes
 the port, orphan-process, and readiness problems motivating the work
 ([`../studio/src-tauri/src/supervisor.rs`](../studio/src-tauri/src/supervisor.rs),
-[`../backend/packaging/sidecar.py`](../backend/packaging/sidecar.py)).
+[`../backend/sidecar_packaging/sidecar.py`](../backend/sidecar_packaging/sidecar.py)).
 
 ## Target at a glance
 

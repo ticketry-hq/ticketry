@@ -1,7 +1,6 @@
 import { defineConfig, devices } from "@playwright/test";
 
 const frontendPort = 4173;
-const backendPort = 18787;
 
 export default defineConfig({
   testDir: "./e2e",
@@ -33,8 +32,6 @@ export default defineConfig({
     cwd: "..",
     env: {
       MUXED_FRONTEND_PORT: String(frontendPort),
-      MUXED_WEB_BACKEND_PORT: String(backendPort),
-      WORKTRACKER_DISABLE_AUTH: "true",
     },
     url: `http://127.0.0.1:${frontendPort}`,
     reuseExistingServer: false,

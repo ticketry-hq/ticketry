@@ -7,6 +7,51 @@ use muxed_studio_lib::execution_persistence::{self, SourceClassification};
 use sea_orm::{ConnectionTrait, Database, DbBackend, Statement};
 
 #[tokio::test]
+async fn fresh_database_without_execution_history_installs_rust_schema_idempotently() {
+    let directory = tempfile::tempdir().expect("create fresh Execution fixture");
+    let database = Database::connect(format!(
+        "sqlite:{}?mode=rwc",
+        directory.path().join("state.db").display()
+    ))
+    .await
+    .expect("open fresh state database");
+    database
+        .execute_unprepared(
+            "CREATE TABLE django_migrations (\
+             id integer PRIMARY KEY AUTOINCREMENT, app varchar(255) NOT NULL, \
+             name varchar(255) NOT NULL, applied datetime NOT NULL); \
+             CREATE TABLE worktracker_project (id char(32) PRIMARY KEY); \
+             CREATE TABLE worktracker_issue (id char(32) PRIMARY KEY, type varchar(16), \
+             project_id char(32), parent_id char(32)); \
+             CREATE TABLE agent_runs (id varchar(255) PRIMARY KEY)",
+        )
+        .await
+        .expect("install Django migration ledger");
+    database.close().await.expect("close fresh state database");
+
+    assert_eq!(
+        execution_persistence::preflight(directory.path())
+            .await
+            .expect("empty Execution history has a named bridge"),
+        SourceClassification::Django(execution_persistence::EMPTY_DJANGO_LEAF),
+    );
+    let first = execution_persistence::adopt(directory.path())
+        .await
+        .expect("fresh Execution history adopts");
+    let second = execution_persistence::adopt(directory.path())
+        .await
+        .expect("fresh Execution schema reopens");
+    assert_eq!(first.tables, second.tables);
+    assert!(second.tables.values().all(|table| table.row_count == 0));
+    assert_eq!(
+        execution_persistence::preflight(directory.path())
+            .await
+            .expect("installed Execution schema classifies"),
+        SourceClassification::RustOwned,
+    );
+}
+
+#[tokio::test]
 async fn every_supported_execution_leaf_adopts_twice_without_row_drift() {
     for leaf in fixture::LEAVES {
         let directory = tempfile::tempdir().expect("create Execution leaf fixture");
@@ -97,6 +142,54 @@ async fn adoption_preserves_campaign_identity_history_and_policy() {
             .len(),
         32
     );
+}
+
+#[tokio::test]
+async fn an_active_claim_is_adopted_when_its_runtime_names_the_child_in_either_form() {
+    let directory = tempfile::tempdir().expect("create active Execution fixture");
+    fixture::provision_current(directory.path());
+    muxed_studio_lib::runs_persistence::adopt(directory.path())
+        .await
+        .expect("adopt Runs before campaign claims");
+    muxed_studio_lib::terminal_persistence::adopt(directory.path())
+        .await
+        .expect("adopt Terminal before campaign claims");
+    // A real installation's Terminal Sessions carry the hyphenated Work Item
+    // identity Django wrote, while the campaign ledger carries the compact one.
+    // Both name the same child, so an active claim must still be adoptable.
+    fixture::mutate(
+        directory.path(),
+        &format!(
+            "UPDATE agent_runs SET ended_at=NULL WHERE id='{run}'; \
+             INSERT INTO agent_terminal_sessions \
+                 (agent_run_id, tmux_session_name, task_id, module_id, project_id, created_at, \
+                  scope, runtime_namespace) \
+             VALUES ('{run}', 'pt-{run}', '{child}', '{module}', '{project}', \
+                 '2026-08-19 17:30:00', 'task', 'tmux-adoption');",
+            run = fixture::CLAIMED_AGENT_RUN,
+            child = hyphenated(fixture::CLAIMED_CHILD),
+            module = hyphenated(fixture::MODULE),
+            project = hyphenated(fixture::PROJECT),
+        ),
+    );
+
+    let evidence = execution_persistence::adopt(directory.path())
+        .await
+        .expect("an active claim whose runtime names the same child is adoptable");
+    assert_eq!(evidence.tables["launched_tasks"].row_count, 1);
+    assert_eq!(
+        execution_persistence::preflight(directory.path())
+            .await
+            .unwrap(),
+        SourceClassification::RustOwned,
+    );
+}
+
+fn hyphenated(value: &str) -> String {
+    uuid::Uuid::parse_str(value)
+        .expect("fixture identities are UUIDs")
+        .hyphenated()
+        .to_string()
 }
 
 #[tokio::test]

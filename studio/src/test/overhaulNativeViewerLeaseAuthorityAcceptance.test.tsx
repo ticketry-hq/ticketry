@@ -7,6 +7,10 @@ import { useTerminalForegroundStore } from "../features/agents/terminal/internal
 import { releasePooledTransport } from "../features/agents/terminal/internal/entryPool";
 import { useTerminalStore } from "../features/agents/terminal/internal/sessionStore";
 import { useClientStore } from "../state/clientStore";
+import {
+  grantsEveryLease,
+  installDesktopGraphQlRuntime,
+} from "./desktopGraphQlRuntime";
 
 const tauri = vi.hoisted(() => ({
   invoke: vi.fn(),
@@ -41,6 +45,7 @@ describe("native viewer attachment acceptance", () => {
 
   beforeEach(() => {
     vi.resetAllMocks();
+    installDesktopGraphQlRuntime();
     vi.stubGlobal("ResizeObserver", ResizeObserverStub);
     vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
       x: 0,
@@ -110,7 +115,6 @@ describe("native viewer attachment acceptance", () => {
   });
 
   it("[overhaul-23] retires fallback before claiming and revealing a prepared native viewer", async () => {
-    vi.stubEnv("VITE_WT_API_KEY", "native-terminal-secret");
     const lifecycle: string[] = [];
     let commitLease!: () => void;
     const leaseCommitted = new Promise<void>((resolve) => {
@@ -119,28 +123,13 @@ describe("native viewer attachment acceptance", () => {
     vi.mocked(releasePooledTransport).mockImplementation(() => {
       lifecycle.push("release_fallback");
     });
-    const requests: Array<{
-      url: string;
-      body: Record<string, string>;
-      headers: Headers;
-    }> = [];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-        const operation = String(input).split("/").at(-1) ?? "request";
-        lifecycle.push(operation);
-        requests.push({
-          url: String(input),
-          body: JSON.parse(String(init?.body)) as Record<string, string>,
-          headers: new Headers(init?.headers),
-        });
-        if (operation === "lease") await leaseCommitted;
-        return new Response("{}", {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        });
-      }),
-    );
+    const host = vi.fn();
+    vi.stubGlobal("fetch", host);
+    const operations = installDesktopGraphQlRuntime(async (document, variables) => {
+      lifecycle.push(document.operationName);
+      if (document.operationName === "CreateViewerLease") await leaseCommitted;
+      return grantsEveryLease(document, variables);
+    });
     tauri.invoke.mockImplementation((command: string) => {
       lifecycle.push(command);
       if (command === "native_terminal_attach") {
@@ -192,37 +181,38 @@ describe("native viewer attachment acceptance", () => {
 
     commitLease();
     await waitFor(() => expect(ready).toHaveBeenCalled());
-    expect(requests[0].url).toContain("/api/terminals/viewers/lease");
-    expect(requests[0].body).toMatchObject({
-      agent_run_id: "run-1",
-      transport: "desktop",
+    // Ownership is claimed on the Rust lease contract, not a host route.
+    expect(operations[0]).toEqual({
+      operationName: "CreateViewerLease",
+      variables: expect.objectContaining({
+        agentRunId: "run-1",
+        transport: "native",
+      }),
     });
-    expect(requests[0].headers.get("x-api-key")).toBe("native-terminal-secret");
+    expect(host).not.toHaveBeenCalled();
     expect(lifecycle.indexOf("native_terminal_attach")).toBeLessThan(
       lifecycle.indexOf("release_fallback"),
     );
     expect(lifecycle.indexOf("release_fallback")).toBeLessThan(
-      lifecycle.indexOf("lease"),
+      lifecycle.indexOf("CreateViewerLease"),
     );
-    expect(lifecycle.indexOf("lease")).toBeLessThan(
+    expect(lifecycle.indexOf("CreateViewerLease")).toBeLessThan(
       lifecycle.indexOf("native_terminal_show"),
     );
 
     view.unmount();
 
     await waitFor(() => {
-      expect(requests.some((request) =>
-        request.url.includes("/api/terminals/viewers/lease/release"),
+      expect(operations.some((operation) =>
+        operation.operationName === "DeleteViewerLease",
       )).toBe(true);
     });
-    expect(requests.every((request) =>
-      request.headers.get("x-api-key") === "native-terminal-secret",
-    )).toBe(true);
+    expect(host).not.toHaveBeenCalled();
     expect(tauri.invoke).toHaveBeenCalledWith("native_terminal_detach", {
       handle: "native-1",
     });
     expect(lifecycle.indexOf("native_terminal_detach")).toBeLessThan(
-      lifecycle.indexOf("release"),
+      lifecycle.indexOf("DeleteViewerLease"),
     );
   });
 
@@ -231,18 +221,10 @@ describe("native viewer attachment acceptance", () => {
     const leaseCommitted = new Promise<void>((resolve) => {
       commitLease = resolve;
     });
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
-        if (String(input).endsWith("/api/terminals/viewers/lease")) {
-          await leaseCommitted;
-        }
-        return new Response("{}", {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        });
-      }),
-    );
+    installDesktopGraphQlRuntime(async (document, variables) => {
+      if (document.operationName === "CreateViewerLease") await leaseCommitted;
+      return grantsEveryLease(document, variables);
+    });
     const ready = vi.fn();
     const view = render(
       <NativeGhosttyTerminal
@@ -283,33 +265,24 @@ describe("native viewer attachment acceptance", () => {
     const acquireCommitted = new Promise<void>((resolve) => {
       commitAcquire = resolve;
     });
-    const requests: string[] = [];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
-        const url = String(input);
-        requests.push(url);
-        if (url.endsWith("/api/terminals/viewers/lease")) {
-          await acquireCommitted;
-        }
-        return new Response("{}", {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        });
-      }),
-    );
+    const operations = installDesktopGraphQlRuntime(async (document, variables) => {
+      if (document.operationName === "CreateViewerLease") await acquireCommitted;
+      return grantsEveryLease(document, variables);
+    });
+    const released = () =>
+      operations.some((operation) => operation.operationName === "DeleteViewerLease");
 
     const view = render(
       <NativeGhosttyTerminal sessionId="session-1" owner="studio" />,
     );
-    await waitFor(() => expect(requests).toHaveLength(1));
+    await waitFor(() => expect(operations).toHaveLength(1));
 
     view.unmount();
-    expect(requests.some((url) => url.endsWith("/release"))).toBe(false);
+    expect(released()).toBe(false);
 
     commitAcquire();
     await waitFor(() => {
-      expect(requests.some((url) => url.endsWith("/release"))).toBe(true);
+      expect(released()).toBe(true);
     });
     expect(tauri.invoke).toHaveBeenCalledWith(
       "native_terminal_attach",

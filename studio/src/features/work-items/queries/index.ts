@@ -1,4 +1,3 @@
-import * as api from "../../../shared/api/client";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import type {
   ModuleTree,
@@ -12,6 +11,7 @@ import {
 import { queryKeys } from "../../../shared/query/keys";
 import {
   readBatchedWorkItem,
+  readWorkItemAttachments,
   readModuleTreeRecords,
   readProjectWorkItems,
 } from "./readTransport";
@@ -118,7 +118,7 @@ export function useWorkItemAttachments(id: string | null) {
   return useQuery(
     {
       queryKey: queryKeys.workItems.attachments(id ?? "no-work-item"),
-      queryFn: ({ signal }) => api.getWorkItemAttachments(id!, signal),
+      queryFn: () => readWorkItemAttachments(id!),
       enabled: id !== null,
     },
     queryClient,

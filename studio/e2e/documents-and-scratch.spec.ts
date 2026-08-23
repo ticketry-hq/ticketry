@@ -3,26 +3,26 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import {
+  createModule,
+  createProject,
+  createWorkItem,
+  getProjects,
+  getWorkflowCatalog,
   openModule,
   openWorkItem,
-  responseJson,
+  refreshTaskDocuments,
   selectModuleForProfile,
 } from "./support";
 
-type ApiRow = {
+type ModuleRow = {
   id: string;
   name: string;
-};
-
-type ProjectRow = ApiRow & {
-  slug: string;
-};
-
-type ModuleRow = ApiRow & {
   sequence_id: number;
 };
 
-type WorkItemRow = ApiRow & {
+type WorkItemRow = {
+  id: string;
+  name: string;
   sequence_id: number;
 };
 
@@ -34,47 +34,29 @@ test.describe.serial("Documents and Local scratch workspace", () => {
   test.beforeAll(async ({ request }) => {
     moduleFolder = await mkdtemp(join(tmpdir(), "ticketry-documents-e2e-"));
 
-    const projects = await responseJson<ProjectRow[]>(await request.get(
-      "/api/work-tracker/projects",
-    ));
+    const projects = await getProjects(request);
     const project = projects.find((row) => row.slug === "CDN")
-      ?? await responseJson<ProjectRow>(await request.post(
-        "/api/work-tracker/projects",
-        {
-          data: {
-            name: "Coding",
-            slug: "CDN",
-            description: "",
-          },
-        },
-      ));
-    const issueTypes = await responseJson<ApiRow[]>(await request.get(
-      `/api/work-tracker/projects/${project.id}/issue-types`,
-    ));
+      ?? await createProject(request, {
+        name: "Coding",
+        slug: "CDN",
+        description: "",
+      });
+    const issueTypes = (await getWorkflowCatalog(request, project.id))
+      .issue_types.nodes;
     const moduleType = issueTypes.find((row) => row.name === "Module");
     const storyType = issueTypes.find((row) => row.name === "Story");
     expect(moduleType, "the seeded module issue type").toBeTruthy();
     expect(storyType, "the seeded Story issue type").toBeTruthy();
 
-    moduleRow = await responseJson<ModuleRow>(await request.post(
-      `/api/work-tracker/projects/${project.id}/modules`,
-      {
-        data: {
-          name: "Documents Module",
-          issue_type_id: moduleType!.id,
-        },
-      },
-    ));
-    workItem = await responseJson<WorkItemRow>(await request.post(
-      `/api/work-tracker/projects/${project.id}/work-items`,
-      {
-        data: {
-          name: "Document persistence task",
-          parent_id: moduleRow.id,
-          issue_type_id: storyType!.id,
-        },
-      },
-    ));
+    moduleRow = await createModule(request, project.id, {
+      name: "Documents Module",
+      issue_type_id: moduleType!.id,
+    });
+    workItem = await createWorkItem(request, project.id, {
+      name: "Document persistence task",
+      parent_id: moduleRow.id,
+      issue_type_id: storyType!.id,
+    });
 
     await selectModuleForProfile(
       request,
@@ -95,6 +77,14 @@ test.describe.serial("Documents and Local scratch workspace", () => {
       "# Canonical design\n\nInitial document body.\n",
       "utf8",
     );
+    await expect.poll(async () =>
+      (await refreshTaskDocuments(
+        request,
+        workItem.id,
+        project.id,
+        moduleRow.id,
+      )).map((row) => row.relPath)
+    ).toContain("DESIGN.md");
   });
 
   test.afterAll(async () => {

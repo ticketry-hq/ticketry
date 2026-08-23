@@ -1,28 +1,16 @@
 //! The exclusive lease itself.
 //!
-//! The guard owns no child process. The lifecycle supervisor acquires it before
-//! spawning a backend and releases it after reaping the children it owns.
+//! The desktop acquires this lease before opening its in-process database.
 
 use std::fs::{self, File, OpenOptions};
 use std::path::{Path, PathBuf};
 
 use super::advisory_lock::{owner_is_alive, try_lock_exclusive, unlock};
-use super::development_mode::{
-    development_stack_access, development_stack_state, DevelopmentMode, DevelopmentStackState,
-    DEVELOPMENT_BACKEND_PORT,
-};
 use super::error::{io_error, OwnershipError};
 use super::location::established_data_directory;
 use super::owner_record::{
     clear_owner, now_millis, random_nonce, read_owner, write_owner, OwnerIdentity, LOCK_FILE_NAME,
 };
-
-/// Result of deciding how the desktop should access the local backend.
-#[derive(Debug)]
-pub enum DataDirectoryAccess {
-    Owned(DataDirectoryGuard),
-    DevelopmentStack,
-}
 
 /// An exclusive, process-scoped lease for a directory that contains SQLite
 /// files and configuration.  Dropping this guard releases the kernel lock.
@@ -36,42 +24,17 @@ pub struct DataDirectoryGuard {
 }
 
 impl DataDirectoryGuard {
-    pub fn acquire_established(
-        mode: DevelopmentMode,
-    ) -> Result<DataDirectoryAccess, OwnershipError> {
-        Self::acquire(
-            &established_data_directory()?,
-            mode,
-            DEVELOPMENT_BACKEND_PORT,
-        )
+    pub fn acquire_established() -> Result<Self, OwnershipError> {
+        Self::acquire(&established_data_directory()?)
     }
 
-    pub fn acquire(
-        data_directory: &Path,
-        mode: DevelopmentMode,
-        development_backend_port: u16,
-    ) -> Result<DataDirectoryAccess, OwnershipError> {
+    pub fn acquire(data_directory: &Path) -> Result<Self, OwnershipError> {
         fs::create_dir_all(data_directory).map_err(|error| {
             OwnershipError::Io(format!(
                 "could not create selected data directory {}: {error}",
                 data_directory.display()
             ))
         })?;
-        match development_stack_state(data_directory, development_backend_port) {
-            DevelopmentStackState::Verified => {
-                if development_stack_access(mode, true, development_backend_port)? {
-                    return Ok(DataDirectoryAccess::DevelopmentStack);
-                }
-            }
-            DevelopmentStackState::Absent => {
-                if mode == DevelopmentMode::Connect {
-                    return Err(OwnershipError::DevelopmentStackUnavailable {
-                        port: development_backend_port,
-                    });
-                }
-            }
-        }
-
         let lock_path = data_directory.join(LOCK_FILE_NAME);
         let mut file = OpenOptions::new()
             .create(true)
@@ -102,13 +65,13 @@ impl DataDirectoryGuard {
         };
         write_owner(&mut file, &owner).map_err(io_error)?;
 
-        Ok(DataDirectoryAccess::Owned(Self {
+        Ok(Self {
             file,
             lock_path,
             owner,
             reclaimed_stale_metadata,
             released: false,
-        }))
+        })
     }
 
     pub fn owner(&self) -> &OwnerIdentity {
@@ -142,4 +105,19 @@ impl Drop for DataDirectoryGuard {
     fn drop(&mut self) {
         let _ = self.release_inner();
     }
+}
+
+/// The live process recorded as holding this installation's lease.
+///
+/// The advisory lock, not this record, decides exclusivity. Adoption reads the
+/// record anyway because it needs to *name* the conflicting owner in a refusal,
+/// and because it runs inside the process that already holds the lock — where
+/// asking the kernel again would only say "yes, you".
+pub fn live_lease_owner(data_directory: &Path) -> Option<OwnerIdentity> {
+    let mut file = OpenOptions::new()
+        .read(true)
+        .open(data_directory.join(LOCK_FILE_NAME))
+        .ok()?;
+    let owner = read_owner(&mut file)?;
+    owner_is_alive(owner.pid).then_some(owner)
 }

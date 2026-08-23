@@ -4,6 +4,7 @@ use std::collections::BTreeSet;
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
+use common::submitted_launch_authority::launch_service;
 use common::terminal_lifecycle_harness::{
     TerminalLifecycleHarness, MODULE_ID, PROJECT_ID, TASK_ID,
 };
@@ -69,7 +70,7 @@ async fn resume_creates_new_history_and_retries_idempotently() {
             .await
             .unwrap()
             .unwrap();
-    let service = TerminalLaunchService::new(
+    let service = launch_service(
         database.clone(),
         Arc::new(ResumeRuntime {
             created: Mutex::new(BTreeSet::new()),
@@ -137,7 +138,7 @@ async fn resume_rejections_have_stable_codes() {
     .await;
     insert_live_successor(&database, "already-resumed").await;
     insert_agentless_shell(&database, "agentless-shell").await;
-    let service = TerminalLaunchService::new(
+    let service = launch_service(
         database,
         Arc::new(ResumeRuntime {
             created: Mutex::new(BTreeSet::new()),
@@ -190,7 +191,7 @@ async fn scratch_resume_preserves_the_scratch_holding() {
     let harness = TerminalLifecycleHarness::start().await;
     let database = harness.database().await;
     insert_scratch_source(&database, "scratch-source").await;
-    let service = TerminalLaunchService::new(
+    let service = launch_service(
         database,
         Arc::new(ResumeRuntime {
             created: Mutex::new(BTreeSet::new()),

@@ -10,17 +10,6 @@ import {
   sanitizedDesktopEnvironment,
 } from "./installed-artifact-acceptance.mjs";
 
-const PACKAGED_SKILLS = [
-  "code-review",
-  "domain-modeling",
-  "grill-with-docs",
-  "grilling",
-  "implement",
-  "setup-matt-pocock-skills",
-  "tdd",
-  "to-spec",
-  "to-tickets",
-];
 const passingResult = {
   clean_install: true,
   upgrade_with_existing_data: true,
@@ -29,15 +18,7 @@ const passingResult = {
   missing_dependency_diagnostic: true,
   os_permission_diagnostic: true,
   durable_agent_terminal_flow: true,
-  offline_packaged_skill_matrix: true,
-  skill_configuration_unchanged: true,
-  skill_overlay_cleanup: true,
-  packaged_skill_providers: {
-    claude: PACKAGED_SKILLS,
-    codex: PACKAGED_SKILLS,
-    agy: PACKAGED_SKILLS,
-    gemini: PACKAGED_SKILLS,
-  },
+  rust_only_process_shape: true,
   diagnostics: [
     { kind: "missing_dependency", message: "tmux is required; install it or approve its executable path." },
     { kind: "os_permission", message: "Grant Ticketry access to the selected repository in System Settings." },
@@ -62,9 +43,7 @@ test("acceptance requires every installed-artifact scenario", () => {
     "missing_dependency_diagnostic",
     "os_permission_diagnostic",
     "durable_agent_terminal_flow",
-    "offline_packaged_skill_matrix",
-    "skill_configuration_unchanged",
-    "skill_overlay_cleanup",
+    "rust_only_process_shape",
   ]) {
     assert.throws(
       () => assertAcceptanceResult({ ...passingResult, [scenario]: false }),
@@ -83,23 +62,6 @@ test("acceptance reports the driver's redacted scenario failure detail", () => {
       },
     }),
     /durable_agent_terminal_flow \(tmux session was not durable\)/,
-  );
-});
-
-test("acceptance requires packaged skill provider evidence", () => {
-  assert.throws(
-    () => assertAcceptanceResult({ ...passingResult, packaged_skill_providers: undefined }),
-    /omitted packaged skill provider evidence/,
-  );
-  assert.throws(
-    () => assertAcceptanceResult({
-      ...passingResult,
-      packaged_skill_providers: {
-        ...passingResult.packaged_skill_providers,
-        codex: PACKAGED_SKILLS.filter((skill) => skill !== "domain-modeling"),
-      },
-    }),
-    /required packaged skills for codex/,
   );
 });
 
@@ -138,6 +100,7 @@ test("GUI launches get only the clean desktop environment", () => {
     HTTPS_PROXY: "http://127.0.0.1:1",
     ALL_PROXY: "http://127.0.0.1:1",
     MUXED_DATA_DIR: "/tmp/acceptance/data",
+    MUXED_DESKTOP_ACCEPTANCE_EXIT_AFTER_STARTUP: "1",
     MUXED_DESKTOP_ACCEPTANCE_RESULT: "/tmp/acceptance/result.json",
     MUXED_DESKTOP_ACCEPTANCE_NODE: process.execPath,
   });

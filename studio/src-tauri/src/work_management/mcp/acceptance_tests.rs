@@ -118,7 +118,7 @@ async fn prepare_command_database(directory: &tempfile::TempDir) {
                 started_at TEXT NOT NULL, ended_at TEXT, exit_code INTEGER, error TEXT,
                 cwd TEXT, provider_session_id TEXT, lifecycle_state TEXT,
                 lifecycle_updated_at TEXT, design_dir TEXT, resumed_from TEXT,
-                scope TEXT NOT NULL
+                scope TEXT NOT NULL, launch_state TEXT, launch_model TEXT
             );
             CREATE TABLE runs_status_events (
                 cursor INTEGER PRIMARY KEY AUTOINCREMENT, event_id TEXT NOT NULL UNIQUE,
@@ -250,19 +250,27 @@ async fn call(url: &str, id: u64, name: &str, arguments: Value) -> Value {
 async fn mcp_mutations_cover_crud_hierarchy_workflow_and_blockers_through_rust_commands() {
     let directory = tempfile::tempdir().unwrap();
     prepare_command_database(&directory).await;
-    let (backend_address, backend_shutdown, backend_task) = start_authorizer().await;
+    let (_backend_address, backend_shutdown, backend_task) = start_authorizer().await;
     let runtime = McpRuntime::start_for_test(
         McpConfiguration {
             address: loopback(0).unwrap(),
             database_path: directory.path().join("state.db"),
             media_root: directory.path().join("media"),
-            backend_base_url: format!("http://{backend_address}/api"),
-            backend_api_key: "fixture-key".to_owned(),
+            ingress_credential: "fixture-key".to_owned(),
         },
         Arc::new(MissingTerminalRuntime),
     )
     .await
     .unwrap();
+    runtime
+        .grant_for_test(
+            "run-valid",
+            "valid",
+            super::allowed_provider_operations(),
+            false,
+        )
+        .await
+        .unwrap();
     let url = format!("http://{}/mcp", runtime.address());
 
     let unauthorized = post(
@@ -536,7 +544,7 @@ async fn mcp_mutations_cover_crud_hierarchy_workflow_and_blockers_through_rust_c
         json!({"id_or_key": parent}),
     )
     .await;
-    assert_eq!(launched["agent_run_id"], "run-launched", "{launched}");
+    assert_eq!(launched["error"], "module_folder_unusable", "{launched}");
     let terminated = call(&url, 13, "terminate_current_run", json!({})).await;
     assert_eq!(terminated["agent_run_id"], "run-valid", "{terminated}");
     assert_eq!(terminated["terminated"], true);
@@ -547,10 +555,10 @@ async fn mcp_mutations_cover_crud_hierarchy_workflow_and_blockers_through_rust_c
     assert!(ended_at.is_some(), "the terminal outcome was not recorded");
     assert_eq!(events, 1);
 
-    // A second call finds a settled run: no repeated executor effect and no
-    // second durable fact.
+    // The credential becomes inactive with the Run, before a second tool body
+    // can reach termination. The durable effect remains single-shot.
     let repeated = call(&url, 14, "terminate_current_run", json!({})).await;
-    assert_eq!(repeated["already_terminated"], true, "{repeated}");
+    assert_eq!(repeated["reason"], "caller_run_inactive", "{repeated}");
     assert_eq!(terminal_record(&directory).await, (ended_at, 1));
 
     runtime.shutdown().await;

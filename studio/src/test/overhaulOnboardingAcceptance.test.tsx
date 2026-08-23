@@ -6,10 +6,33 @@ const catalogApi = vi.hoisted(() => ({
   getProviderCatalog: vi.fn(),
   putProviderCatalog: vi.fn(),
 }));
+const providerState = vi.hoisted(() => ({
+  catalog: { activated_providers: [] as string[], global_default: null },
+  capabilities: [] as unknown[],
+}));
 
 vi.mock("../shared/api/client", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../shared/api/client")>()),
   ...catalogApi,
+}));
+
+vi.mock("../features/workflows/providerQueries", () => ({
+  setProviderCapabilities: vi.fn(),
+  loadProviderCapabilities: catalogApi.getLaunchProviderCapabilities,
+  loadConfigurableProviderCapabilities: catalogApi.getLaunchProviderCapabilities,
+  loadProviderCatalog: async () => (await catalogApi.getProviderCatalog()).value,
+  updateProviderCatalog: async (value: unknown) =>
+    (await catalogApi.putProviderCatalog(value)).value,
+  useProviderCatalogQuery: () => ({
+    data: providerState.catalog,
+    isLoading: false,
+    isError: false,
+  }),
+  useConfigurableProviderCapabilitiesQuery: () => ({
+    data: providerState.capabilities,
+    isLoading: false,
+    isError: false,
+  }),
 }));
 
 import OnboardingWelcome from "../app/onboarding/OnboardingWelcome";

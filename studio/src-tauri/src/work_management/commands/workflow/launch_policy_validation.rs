@@ -6,7 +6,7 @@ use crate::settings_persistence::read_global_launch_default;
 use crate::work_management::entities::{agent_model, agent_model_reasoning_level, provider};
 
 const REQUIRED_SKILL_LOCK: &str =
-    include_str!("../../../../../../backend/apps/terminals/agents/skills/lock.json");
+    include_str!("../../../../resources/launch/skills.lock.json");
 
 pub(super) struct LaunchBindingCandidate<'a> {
     pub prompt: &'a str,

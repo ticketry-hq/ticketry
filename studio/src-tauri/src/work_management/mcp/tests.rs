@@ -28,7 +28,7 @@ pub(super) async fn post(url: &str, authorization: Option<&str>, body: Value) ->
 pub(super) async fn start(
     directory: &tempfile::TempDir,
     port: u16,
-    backend: SocketAddr,
+    _backend: SocketAddr,
 ) -> McpRuntime {
     let database_path = directory.path().join("state.db");
     let database = Database::connect(format!("sqlite:{}?mode=rwc", database_path.display()))
@@ -39,8 +39,7 @@ pub(super) async fn start(
         address: loopback(port).unwrap(),
         database_path,
         media_root: directory.path().join("media"),
-        backend_base_url: format!("http://{backend}/api"),
-        backend_api_key: "fixture-key".to_owned(),
+        ingress_credential: "fixture-key".to_owned(),
     })
     .await
     .expect("start MCP runtime")
@@ -61,11 +60,37 @@ async fn prepare_projects(directory: &tempfile::TempDir) {
                 state_revision bigint NOT NULL, manual_module_order bool NOT NULL,
                 created_at datetime NOT NULL, updated_at datetime NOT NULL
             );
+            CREATE TABLE worktracker_issue (
+                id char(32) PRIMARY KEY, project_id char(32) NOT NULL,
+                type varchar(10) NOT NULL, issue_type_id char(32) NOT NULL,
+                parent_id char(32), module_id char(32), state_id char(32),
+                state_revision bigint NOT NULL, name varchar(512) NOT NULL,
+                sequence_id integer NOT NULL, is_archived bool NOT NULL,
+                rank varchar(64) NOT NULL, description text NOT NULL,
+                created_at datetime NOT NULL, updated_at datetime NOT NULL
+            );
+            CREATE TABLE agent_runs (
+                id varchar PRIMARY KEY, issue_id char(32) NOT NULL, ticket_seq integer,
+                agent varchar, model varchar, reasoning varchar, status varchar NOT NULL,
+                started_at varchar NOT NULL, ended_at varchar, exit_code integer, error varchar,
+                cwd varchar, provider_session_id varchar, lifecycle_state varchar,
+                lifecycle_updated_at varchar, design_dir varchar, resumed_from varchar,
+                scope varchar NOT NULL, launch_state varchar, launch_model varchar
+            );
             INSERT INTO worktracker_project VALUES
                 ('10000000000000000000000000000000', '90000000000000000000000000000000',
                  'Authorized', 'AUTH', '', 0, 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
                 ('20000000000000000000000000000000', '90000000000000000000000000000000',
                  'Foreign', 'OTHER', '', 0, 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+            INSERT INTO worktracker_issue VALUES
+                ('30000000000000000000000000000000',
+                 '10000000000000000000000000000000', 'task',
+                 '40000000000000000000000000000000', NULL, NULL, NULL, 0,
+                 'Authorized caller', 1, 0, 'A', '', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+            INSERT INTO agent_runs
+                (id, issue_id, status, started_at, scope)
+                VALUES ('run-valid', '30000000000000000000000000000000',
+                        'running', CURRENT_TIMESTAMP, 'task');
             "#,
         )
         .await
@@ -237,13 +262,18 @@ pub(super) async fn start_authorizer() -> (SocketAddr, CancellationToken, JoinHa
 #[tokio::test]
 async fn listener_lists_the_thirty_one_tools_and_recovers_on_the_same_port() {
     let directory = tempfile::tempdir().unwrap();
+    prepare_projects(&directory).await;
     let (backend, backend_cancellation, backend_task) = start_authorizer().await;
     let first = start(&directory, 0, backend).await;
+    first
+        .grant_for_test("run-valid", "first", allowed_provider_operations(), false)
+        .await
+        .unwrap();
     let port = first.address().port();
     let url = format!("http://127.0.0.1:{port}/mcp");
     let listed = post(
         &url,
-        None,
+        Some("Bearer first"),
         json!({"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}),
     )
     .await
@@ -254,9 +284,13 @@ async fn listener_lists_the_thirty_one_tools_and_recovers_on_the_same_port() {
     first.shutdown().await;
 
     let second = start(&directory, port, backend).await;
+    second
+        .grant_for_test("run-valid", "second", allowed_provider_operations(), false)
+        .await
+        .unwrap();
     let pinged = post(
         &url,
-        None,
+        Some("Bearer second"),
         json!({
             "jsonrpc":"2.0","id":2,"method":"tools/call",
             "params":{"name":"mcp_ping","arguments":{}}
@@ -273,21 +307,101 @@ async fn listener_lists_the_thirty_one_tools_and_recovers_on_the_same_port() {
 }
 
 #[tokio::test]
-async fn run_authorization_survives_restart_and_rejects_bad_or_foreign_scope() {
+async fn listener_returns_structured_unavailable_until_runtime_reconciliation_finishes() {
     let directory = tempfile::tempdir().unwrap();
     prepare_projects(&directory).await;
-    let (backend_address, backend_shutdown, backend_task) = start_authorizer().await;
+    crate::settings_persistence::publish_readiness(
+        directory.path(),
+        &crate::settings_persistence::Slice2Readiness::unavailable(),
+    )
+    .expect("close readiness");
+    let (backend, backend_cancellation, backend_task) = start_authorizer().await;
+    let runtime = start(&directory, 0, backend).await;
+    runtime
+        .grant_for_test(
+            "run-valid",
+            "starting",
+            allowed_provider_operations(),
+            false,
+        )
+        .await
+        .unwrap();
+    let url = format!("http://{}/mcp", runtime.address());
+    let response = post(
+        &url,
+        Some("Bearer starting"),
+        json!({
+            "jsonrpc":"2.0","id":1,"method":"tools/call",
+            "params":{"name":"list_projects","arguments":{}}
+        }),
+    )
+    .await
+    .json::<Value>()
+    .await
+    .unwrap();
+    assert_eq!(
+        response["result"]["structuredContent"]["code"],
+        "service_unavailable"
+    );
+    assert_eq!(
+        response["result"]["structuredContent"]["phase"],
+        "runtime-reconciliation"
+    );
+
+    runtime.shutdown().await;
+    backend_cancellation.cancel();
+    backend_task.await.unwrap();
+}
+
+#[tokio::test]
+async fn run_authority_rejects_expired_stale_disallowed_and_foreign_access() {
+    let directory = tempfile::tempdir().unwrap();
+    prepare_projects(&directory).await;
+    let (_backend_address, backend_shutdown, backend_task) = start_authorizer().await;
     let configuration = |port| McpConfiguration {
         address: loopback(port).unwrap(),
         database_path: directory.path().join("state.db"),
         media_root: directory.path().join("media"),
-        backend_base_url: format!("http://{backend_address}/api"),
-        backend_api_key: "fixture-key".to_owned(),
+        ingress_credential: "fixture-key".to_owned(),
     };
     let first = McpRuntime::start(configuration(0)).await.unwrap();
+    first
+        .grant_for_test("run-valid", "valid", allowed_provider_operations(), false)
+        .await
+        .unwrap();
+    first
+        .grant_for_test("run-valid", "expired", allowed_provider_operations(), true)
+        .await
+        .unwrap();
     let port = first.address().port();
     let url = format!("http://127.0.0.1:{port}/mcp");
     let call = |id, name: &str, arguments: Value| json!({"jsonrpc":"2.0","id":id,"method":"tools/call","params":{"name":name,"arguments":arguments}});
+
+    let malformed_unauthorized = reqwest::Client::new()
+        .post(&url)
+        .header("content-type", "application/json")
+        .body("{")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(malformed_unauthorized.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        malformed_unauthorized.json::<Value>().await.unwrap()["result"]["structuredContent"]
+            ["reason"],
+        "authorization_missing"
+    );
+    let malformed_lifecycle = reqwest::Client::new()
+        .post(format!("http://127.0.0.1:{port}/runs/lifecycle"))
+        .header("content-type", "application/json")
+        .body("{")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(malformed_lifecycle.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        malformed_lifecycle.json::<Value>().await.unwrap()["reason"],
+        "authorization_missing"
+    );
 
     let missing = post(&url, None, call(1, "list_projects", json!({})))
         .await
@@ -327,12 +441,56 @@ async fn run_authorization_survives_restart_and_rejects_bad_or_foreign_scope() {
         "foreign_scope"
     );
 
+    first
+        .grant_for_test(
+            "run-valid",
+            "read-only",
+            ["list_projects".to_owned()],
+            false,
+        )
+        .await
+        .unwrap();
+    let disallowed = post(
+        &url,
+        Some("Bearer read-only"),
+        call(
+            4,
+            "update_task",
+            json!({"id_or_key": "AUTH-1", "name": "no"}),
+        ),
+    )
+    .await
+    .json::<Value>()
+    .await
+    .unwrap();
+    assert_eq!(
+        disallowed["result"]["structuredContent"]["reason"],
+        "authorization_tool_disallowed"
+    );
+
     first.shutdown().await;
     let second = McpRuntime::start(configuration(port)).await.unwrap();
-    let valid = post(
+    let stale = post(
         &url,
         Some("Bearer valid"),
-        call(4, "list_projects", json!({})),
+        call(5, "list_projects", json!({})),
+    )
+    .await
+    .json::<Value>()
+    .await
+    .unwrap();
+    assert_eq!(
+        stale["result"]["structuredContent"]["reason"],
+        "authorization_invalid"
+    );
+    second
+        .grant_for_test("run-valid", "current", allowed_provider_operations(), false)
+        .await
+        .unwrap();
+    let valid = post(
+        &url,
+        Some("Bearer current"),
+        call(6, "list_projects", json!({})),
     )
     .await
     .json::<Value>()
@@ -342,10 +500,26 @@ async fn run_authorization_survives_restart_and_rejects_bad_or_foreign_scope() {
         valid["result"]["structuredContent"]["result"][0]["id"],
         PROJECT
     );
+    let lifecycle = reqwest::Client::new()
+        .post(format!("http://127.0.0.1:{port}/runs/lifecycle"))
+        .header("authorization", "Bearer current")
+        .json(&json!({
+            "agent_run_id": "run-foreign",
+            "kind": "stop",
+            "occurred_at": "2026-08-23T00:00:00Z"
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(lifecycle.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        lifecycle.json::<Value>().await.unwrap()["reason"],
+        "authorization_foreign_run"
+    );
     let run_now = post(
         &url,
-        Some("Bearer valid"),
-        call(5, "run_now", json!({"id_or_key": "CODING-912"})),
+        Some("Bearer current"),
+        call(7, "run_now", json!({"id_or_key": "CODING-912"})),
     )
     .await
     .json::<Value>()
@@ -363,4 +537,21 @@ async fn run_authorization_survives_restart_and_rejects_bad_or_foreign_scope() {
     second.shutdown().await;
     backend_shutdown.cancel();
     backend_task.await.unwrap();
+}
+
+#[test]
+fn mcp_dispatch_has_no_backend_http_authorization_path() {
+    let module = include_str!("mod.rs");
+    let service = include_str!("service.rs");
+    let authority = include_str!("authority.rs");
+
+    assert!(!module.contains("backend_base_url"));
+    assert!(!module.contains("backend_api_key"));
+    assert!(!service.contains("reqwest"));
+    assert!(!authority.contains("reqwest"));
+    assert!(!std::path::Path::new(file!())
+        .parent()
+        .expect("MCP module directory")
+        .join("backend_port.rs")
+        .exists());
 }

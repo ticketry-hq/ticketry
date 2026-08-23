@@ -4,6 +4,7 @@ use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
+use common::submitted_launch_authority::launch_service;
 use common::terminal_lifecycle_harness::{
     TerminalLifecycleHarness, MODULE_ID, PROJECT_ID, TASK_ID,
 };
@@ -359,7 +360,7 @@ async fn committed_claim_survives_a_stopped_response_and_reconciles_the_same_gen
         .await
         .unwrap();
     let runtime = Arc::new(Runtime::default());
-    let before_commit = TerminalLaunchService::new(database.clone(), runtime.clone())
+    let before_commit = launch_service(database.clone(), runtime.clone())
         .stopping_once_at(TerminalLaunchBoundary::MaterialPrepared);
     let before_commit_service =
         service_with_terminal(&database, harness.data_directory(), before_commit);
@@ -383,7 +384,7 @@ async fn committed_claim_survives_a_stopped_response_and_reconciles_the_same_gen
         0
     );
 
-    let terminal = TerminalLaunchService::new(database.clone(), runtime.clone())
+    let terminal = launch_service(database.clone(), runtime.clone())
         .stopping_once_at(TerminalLaunchBoundary::EffectPrepared);
     let service = service_with_terminal(&database, harness.data_directory(), terminal.clone());
 
@@ -575,7 +576,7 @@ async fn durable_external_blocker_event_advances_only_its_relevant_armed_root() 
         .await
         .unwrap();
     let runtime = Arc::new(Runtime::default());
-    let terminal = TerminalLaunchService::new(database.clone(), runtime);
+    let terminal = launch_service(database.clone(), runtime);
     let policy = LaunchPolicyResolver::new(
         database.clone(),
         ProfileStore::new(harness.data_directory().join("profiles.json")),
@@ -630,7 +631,7 @@ async fn an_invalid_armed_root_does_not_starve_a_later_ready_root() {
         ))
         .await
         .unwrap();
-    let terminal = TerminalLaunchService::new(database.clone(), Arc::new(Runtime::default()));
+    let terminal = launch_service(database.clone(), Arc::new(Runtime::default()));
     let policy = LaunchPolicyResolver::new(
         database.clone(),
         ProfileStore::new(harness.data_directory().join("profiles.json")),
@@ -672,7 +673,7 @@ fn service(database: &DatabaseConnection, directory: &std::path::Path) -> GraphR
         database.clone(),
         ProfileStore::new(directory.join("profiles.json")),
     );
-    let terminal = TerminalLaunchService::new(database.clone(), Arc::new(Runtime::default()));
+    let terminal = launch_service(database.clone(), Arc::new(Runtime::default()));
     GraphRunService::new(database.clone(), policy, terminal)
 }
 

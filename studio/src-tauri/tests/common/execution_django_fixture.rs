@@ -32,7 +32,6 @@ pub const SERIAL_ROOT: &str = "00000000000000000000000000089306";
 pub const CLAIMED_CHILD: &str = "00000000000000000000000000089307";
 /// The parallel campaign root that predates the policy snapshot.
 pub const PARALLEL_ROOT: &str = "00000000000000000000000000089309";
-pub const PARALLEL_CHILD: &str = "00000000000000000000000000089310";
 pub const CLAIMED_AGENT_RUN: &str = "run-893";
 /// The claim timestamp as stored, so assertions do not move with the
 /// developer's configured Django time zone.
@@ -108,10 +107,11 @@ os.environ['MUXED_STATE_DB']=str(db)
 os.environ['MUXED_DATA_DIR']=str(db.parent)
 os.environ['MUXED_FORCE_SQLITE']='true'
 from studio_server import settings
-# The shipping capability no longer installs the retired execution app. The
-# fixture process installs its kept migration history so Rust adoption is
-# exercised against the real historical schema.
-settings.INSTALLED_APPS=[*settings.INSTALLED_APPS,'apps.execution']
+# The shipping capability no longer installs the retired execution and
+# terminals apps. The fixture process installs their kept migration history, so
+# the store it builds is the 0.1.0 installation shape an upgrade actually finds
+# rather than a hybrid no release ever produced.
+settings.INSTALLED_APPS=[*settings.INSTALLED_APPS,'apps.execution','apps.terminals']
 import django; django.setup()
 from django.core.management import call_command
 from django.db import connection
@@ -129,7 +129,7 @@ os.environ['MUXED_STATE_DB']=str(db)
 os.environ['MUXED_DATA_DIR']=str(db.parent)
 os.environ['MUXED_FORCE_SQLITE']='true'
 from studio_server import settings
-settings.INSTALLED_APPS=[*settings.INSTALLED_APPS,'apps.execution']
+settings.INSTALLED_APPS=[*settings.INSTALLED_APPS,'apps.execution','apps.terminals']
 import django; django.setup()
 from django.core.management import call_command
 from django.db import connection
@@ -137,7 +137,7 @@ from worktracker.models import Workspace, Project, State, IssueType, Issue
 from apps.runs.models import AgentRun
 call_command('migrate', interactive=False, verbosity=0)
 w=Workspace.objects.create(id='00000000000000000000000000089300',slug='execution-adoption',name='Execution Adoption')
-p=Project.objects.create(id='00000000000000000000000000089301',workspace=w,name='Execution Adoption',slug='T893',seq_counter=893)
+p=Project.objects.create(id='00000000000000000000000000089301',workspace=w,name='Execution Adoption',slug='T893',seq_counter=1000)
 s=State.objects.create(id='00000000000000000000000000089302',project=p,name='Todo',group='unstarted',sort_order=1)
 mt=IssueType.objects.create(id='00000000000000000000000000089303',project=p,name='Module',level='module',sort_order=1,start_state=s)
 tt=IssueType.objects.create(id='00000000000000000000000000089304',project=p,name='Implementation',level='task',sort_order=2,start_state=s)
@@ -179,38 +179,28 @@ pub fn provision_campaign_installation(data_directory: &Path) {
     run(CAMPAIGN_INSTALLATION, data_directory);
 }
 
-pub const CAMPAIGN_PROJECT: &str = "00000000-0000-0000-0000-000000090301";
-pub const CAMPAIGN_MODULE: &str = "00000000-0000-0000-0000-000000090305";
-pub const TODO_STATE: &str = "00000000-0000-0000-0000-000000090310";
-pub const IMPLEMENT_STATE: &str = "00000000-0000-0000-0000-000000090311";
-pub const REVIEW_STATE: &str = "00000000-0000-0000-0000-000000090312";
-pub const DONE_STATE: &str = "00000000-0000-0000-0000-000000090313";
-pub const TASK_TYPE: &str = "00000000-0000-0000-0000-000000090321";
+pub const CAMPAIGN_PROJECT: &str = "00000000000000000000000000090301";
+pub const CAMPAIGN_MODULE: &str = "00000000000000000000000000090305";
+pub const PARALLEL_CAMPAIGN_ROOT: &str = "00000000000000000000000000090330";
+pub const READY_FIRST: &str = "00000000000000000000000000090331";
+pub const READY_SECOND: &str = "00000000000000000000000000090332";
+pub const EXTERNALLY_BLOCKED: &str = "00000000000000000000000000090333";
+pub const ARCHIVED_CHILD: &str = "00000000000000000000000000090334";
+pub const GRANDCHILD: &str = "00000000000000000000000000090335";
 
-pub const PARALLEL_CAMPAIGN_ROOT: &str = "00000000-0000-0000-0000-000000090330";
-pub const READY_FIRST: &str = "00000000-0000-0000-0000-000000090331";
-pub const READY_SECOND: &str = "00000000-0000-0000-0000-000000090332";
-pub const EXTERNALLY_BLOCKED: &str = "00000000-0000-0000-0000-000000090333";
-pub const ARCHIVED_CHILD: &str = "00000000-0000-0000-0000-000000090334";
-pub const GRANDCHILD: &str = "00000000-0000-0000-0000-000000090335";
-
-pub const SERIAL_CAMPAIGN_ROOT: &str = "00000000-0000-0000-0000-000000090340";
-pub const SERIAL_FIRST: &str = "00000000-0000-0000-0000-000000090341";
-pub const SERIAL_SECOND: &str = "00000000-0000-0000-0000-000000090342";
-pub const SERIAL_THIRD: &str = "00000000-0000-0000-0000-000000090343";
+pub const SERIAL_CAMPAIGN_ROOT: &str = "00000000000000000000000000090340";
+pub const SERIAL_FIRST: &str = "00000000000000000000000000090341";
+pub const SERIAL_SECOND: &str = "00000000000000000000000000090342";
 
 /// A blocker outside every campaign subtree, so external dependencies are
 /// observed gating and releasing children.
-pub const OUTSIDE_BLOCKER: &str = "00000000-0000-0000-0000-000000090350";
+pub const OUTSIDE_BLOCKER: &str = "00000000000000000000000000090350";
 /// A task-level root with no children, so an empty graph is refused.
-pub const CHILDLESS_ROOT: &str = "00000000-0000-0000-0000-000000090360";
+pub const CHILDLESS_ROOT: &str = "00000000000000000000000000090360";
 
-pub const FOREIGN_PROJECT: &str = "00000000-0000-0000-0000-000000090401";
-pub const FOREIGN_ROOT: &str = "00000000-0000-0000-0000-000000090430";
-pub const FOREIGN_CHILD: &str = "00000000-0000-0000-0000-000000090431";
-
-pub const PROVIDER_SLUG: &str = "codex";
-pub const MODEL_NAME: &str = "slice6-model";
+pub const FOREIGN_PROJECT: &str = "00000000000000000000000000090401";
+pub const FOREIGN_MODULE: &str = "00000000000000000000000000090405";
+pub const FOREIGN_ROOT: &str = "00000000000000000000000000090430";
 
 const CAMPAIGN_INSTALLATION: &str = r#"
 import os, sys
@@ -221,11 +211,12 @@ os.environ['MUXED_STATE_DB']=str(db)
 os.environ['MUXED_DATA_DIR']=str(db.parent)
 os.environ['MUXED_FORCE_SQLITE']='true'
 from studio_server import settings
-settings.INSTALLED_APPS=[*settings.INSTALLED_APPS,'apps.execution']
+settings.INSTALLED_APPS=[*settings.INSTALLED_APPS,'apps.execution','apps.terminals']
 import django; django.setup()
 from django.core.management import call_command
 from worktracker.models import (
-    AgentModel, Issue, IssueType, LaunchBinding, Project, Provider, State, Workspace,
+    AgentModel, Issue, IssueType, IssueTypeTransition, LaunchBinding, Project, Provider,
+    State, Workspace,
 )
 call_command('migrate', interactive=False, verbosity=0)
 
@@ -238,7 +229,7 @@ def issue(identifier, kind, name, sequence, rank, *, parent=None, module=None,
     )
 
 workspace=Workspace.objects.create(id='00000000000000000000000000090300',slug='slice6-execution',name='Slice 6 Execution')
-project=Project.objects.create(id='00000000000000000000000000090301',workspace=workspace,name='Slice 6 Execution',slug='EXEC',seq_counter=900)
+project=Project.objects.create(id='00000000000000000000000000090301',workspace=workspace,name='Slice 6 Execution',slug='EXEC',seq_counter=1000)
 todo=State.objects.create(id='00000000000000000000000000090310',project=project,name='Todo',group='unstarted',sort_order=1)
 implement=State.objects.create(id='00000000000000000000000000090311',project=project,name='Implement',group='started',sort_order=2)
 review=State.objects.create(id='00000000000000000000000000090312',project=project,name='Review',group='started',sort_order=3)
@@ -255,6 +246,16 @@ model,_=AgentModel.objects.get_or_create(provider=provider,name='slice6-model',d
 # transition, so one committed move produces at most one launch.
 LaunchBinding.objects.create(issue_type=task_type,state=todo,prompt='Implement the slice.',required_skills=[],model=model,auto_start=False,subtree_run_enabled=True)
 LaunchBinding.objects.create(issue_type=task_type,state=implement,prompt='Implement the slice.',required_skills=[],model=model,auto_start=True,subtree_run_enabled=True)
+# The published workflow is what governs a move, including an agent's. Every
+# transition a case needs is declared, so a refusal in a test means the rule
+# refused rather than the fixture forgetting to publish it.
+for source, destination in [
+    (todo, implement), (todo, review), (todo, done),
+    (implement, review), (implement, done),
+    (review, done), (review, implement),
+    (done, todo),
+]:
+    IssueTypeTransition.objects.create(issue_type=task_type,from_state=source,to_state=destination,agent_allowed=True)
 
 module=issue('00000000000000000000000000090305','module','Slice 6 module',900,'a',project=project,issue_type=module_type,state=todo)
 task=dict(project=project,issue_type=task_type,module=module,state=todo)
@@ -275,7 +276,7 @@ blocked.blocked_by.add(outside)
 parallel.blocked_by.add(outside)
 
 foreign_workspace=Workspace.objects.create(id='00000000000000000000000000090400',slug='slice6-foreign',name='Slice 6 Foreign')
-foreign_project=Project.objects.create(id='00000000000000000000000000090401',workspace=foreign_workspace,name='Slice 6 Foreign',slug='FRGN',seq_counter=940)
+foreign_project=Project.objects.create(id='00000000000000000000000000090401',workspace=foreign_workspace,name='Slice 6 Foreign',slug='FRGN',seq_counter=1000)
 foreign_todo=State.objects.create(id='00000000000000000000000000090410',project=foreign_project,name='Todo',group='unstarted',sort_order=1)
 foreign_module_type=IssueType.objects.create(id='00000000000000000000000000090420',project=foreign_project,name='Module',level='module',sort_order=1,start_state=foreign_todo)
 foreign_task_type=IssueType.objects.create(id='00000000000000000000000000090421',project=foreign_project,name='Implementation',level='task',sort_order=2,start_state=foreign_todo)

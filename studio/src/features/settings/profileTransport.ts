@@ -1,5 +1,4 @@
 import { studioRuntime } from "../../runtime";
-import * as rest from "../../shared/api/client";
 import { graphQlMutationError } from "../../shared/api/graphqlError";
 import type { ConfigPayload, Profile } from "../studio/lib/types";
 import {
@@ -42,7 +41,6 @@ async function graphQl<TResult>(operation: () => Promise<TResult>): Promise<TRes
 
 export function getConfig(): Promise<ConfigPayload> {
   return studioRuntime().readWorkTracker({
-    rest: rest.getConfig,
     graphQl: async (execute) => mutablePayload(
       (await execute(LoadLocalSettingsDocument, {})).local_settings,
     ),
@@ -51,7 +49,6 @@ export function getConfig(): Promise<ConfigPayload> {
 
 export function postProfile(profile: Partial<Profile>): Promise<ConfigPayload> {
   return studioRuntime().writeWorkTracker({
-    rest: () => rest.postProfile(profile),
     graphQl: (execute) => graphQl(async () => mutablePayload(
       (await execute(AddLocalProfileDocument, { profile: input(profile) }))
         .add_local_profile,
@@ -64,7 +61,6 @@ export function putProfile(
   profile: Partial<Profile>,
 ): Promise<ConfigPayload> {
   return studioRuntime().writeWorkTracker({
-    rest: () => rest.putProfile(index, profile),
     graphQl: (execute) => graphQl(async () => mutablePayload(
       (await execute(ReplaceLocalProfileDocument, {
         index,
@@ -76,7 +72,6 @@ export function putProfile(
 
 export function deleteProfile(index: number): Promise<ConfigPayload> {
   return studioRuntime().writeWorkTracker({
-    rest: () => rest.deleteProfile(index),
     graphQl: (execute) => graphQl(async () => mutablePayload(
       (await execute(DeleteLocalProfileDocument, { index }))
         .delete_local_profile,
@@ -88,7 +83,6 @@ export function patchConfig(body: {
   recent_profile_index: number;
 }): Promise<ConfigPayload> {
   return studioRuntime().writeWorkTracker({
-    rest: () => rest.patchConfig(body),
     graphQl: (execute) => graphQl(async () => mutablePayload(
       (await execute(SelectLocalProfileDocument, {
         index: body.recent_profile_index,
@@ -102,9 +96,6 @@ export function replaceFeatureFlags(features: {
   projects: boolean;
 }): Promise<ConfigPayload> {
   return studioRuntime().writeWorkTracker({
-    rest: () => Promise.reject(
-      new Error("Feature flags are installation-owned in desktop Studio."),
-    ),
     graphQl: (execute) => graphQl(async () => mutablePayload(
       (await execute(ReplaceFeatureFlagsDocument, { features }))
         .replace_feature_flags,

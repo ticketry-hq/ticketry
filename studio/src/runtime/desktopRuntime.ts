@@ -59,60 +59,11 @@ function validatePickedFolder(value: unknown): string | null {
   );
 }
 
-function endpoint(
-  source: Record<string, unknown>,
-  field: string,
-  protocols: readonly string[],
-  expectation: string,
-): string {
-  const value = source[field];
-  if (typeof value !== "string" || value.length === 0 || value !== value.trim()) {
-    return initializationError(field, expectation);
-  }
-  try {
-    const url = new URL(value);
-    if (
-      protocols.includes(url.protocol) &&
-      (url.hostname === "127.0.0.1" || url.hostname === "localhost")
-    ) {
-      return value;
-    }
-  } catch {
-    // Fall through to the stable public initialization error.
-  }
-  return initializationError(field, expectation);
-}
-
 function validateConfiguration(value: unknown): RuntimeStartupConfiguration {
   const configuration = record(value);
-  const endpoints = record(configuration?.endpoints);
-  const values = record(configuration?.values);
   const serviceHealth = record(configuration?.serviceHealth);
-  if (!configuration || !endpoints || !values || !serviceHealth) {
-    return initializationError("configuration", "must include endpoints, values, and serviceHealth");
-  }
-
-  const workTrackerApi = endpoint(
-    endpoints,
-    "workTrackerApi",
-    ["http:", "https:"],
-    "must be a loopback HTTP(S) URL",
-  );
-  const agentApi = endpoint(
-    endpoints,
-    "agentApi",
-    ["http:", "https:"],
-    "must be a loopback HTTP(S) URL",
-  );
-  const statusApi = endpoint(
-    endpoints,
-    "statusApi",
-    ["http:", "https:"],
-    "must be a loopback HTTP(S) URL",
-  );
-  const workTrackerApiKey = values.workTrackerApiKey;
-  if (typeof workTrackerApiKey !== "string") {
-    return initializationError("workTrackerApiKey", "must be a string");
+  if (!configuration || !serviceHealth) {
+    return initializationError("configuration", "must include serviceHealth");
   }
   const state = serviceHealth.state;
   if (![
@@ -132,12 +83,6 @@ function validateConfiguration(value: unknown): RuntimeStartupConfiguration {
   }
 
   return Object.freeze({
-    endpoints: Object.freeze({
-      workTrackerApi,
-      agentApi,
-      statusApi,
-    }),
-    values: Object.freeze({ workTrackerApiKey }),
     serviceHealth: Object.freeze({
       state: state as RuntimeStartupConfiguration["serviceHealth"]["state"],
       service: serviceHealth.service as string | null,
@@ -151,19 +96,17 @@ function validateConfiguration(value: unknown): RuntimeStartupConfiguration {
 function serviceHealth(value: unknown): ServiceHealth | null {
   const recordValue = record(value);
   if (!recordValue) return null;
-  try {
-    return validateConfiguration({
-      endpoints: {
-        workTrackerApi: "http://127.0.0.1:1/api/work-tracker",
-        agentApi: "http://127.0.0.1:1/api",
-        statusApi: "http://127.0.0.1:1/api",
-      },
-      values: { workTrackerApiKey: "" },
-      serviceHealth: recordValue,
-    }).serviceHealth;
-  } catch {
-    return null;
+  const state = recordValue.state;
+  if (!["starting", "migrating", "ready", "recovering", "degraded", "failed"].includes(String(state))) return null;
+  for (const field of ["service", "message", "logPointer"] as const) {
+    if (recordValue[field] !== null && typeof recordValue[field] !== "string") return null;
   }
+  return {
+    state: state as ServiceHealth["state"],
+    service: recordValue.service as string | null,
+    message: recordValue.message as string | null,
+    logPointer: recordValue.logPointer as string | null,
+  };
 }
 
 /** Load the desktop-only startup values before the shared Studio mounts. */
@@ -189,7 +132,6 @@ export async function createDesktopRuntime({
     platform: "desktop" as const,
     capabilities: Object.freeze({
       statusFeed: true,
-      websocketTerminal: false,
       nativeLifecycle: false,
       serviceSupervision: true,
       nativeTerminal: false,

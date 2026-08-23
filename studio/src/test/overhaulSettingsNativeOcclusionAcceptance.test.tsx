@@ -24,6 +24,10 @@ import { useTerminalStore } from "../features/agents/terminal/internal/sessionSt
 import { focusTerminal } from "../features/agents/terminal/internal/terminalRegistry";
 import { useStudioStore } from "../features/projects/store";
 import { useClientStore } from "../state/clientStore";
+import {
+  installDesktopGraphQlRuntime,
+  type RecordedGraphQlOperation,
+} from "./desktopGraphQlRuntime";
 
 const tauri = vi.hoisted(() => ({
   invoke: vi.fn(),
@@ -82,6 +86,7 @@ const NATIVE_STATUS = {
 };
 
 let hostRequests: string[] = [];
+let leaseOperations: RecordedGraphQlOperation[] = [];
 
 /**
  * Stands in for the engaged native view recognising the Settings chord.
@@ -122,6 +127,7 @@ async function waitForPresentedViewer() {
 describe("overhaul acceptance — Settings over an attached native terminal", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    leaseOperations = installDesktopGraphQlRuntime();
     hostRequests = [];
     vi.stubGlobal("ResizeObserver", ResizeObserverStub);
     vi.stubGlobal(
@@ -209,11 +215,17 @@ describe("overhaul acceptance — Settings over an attached native terminal", ()
     const view = renderStudioWithAttachedTerminal();
     await waitForPresentedViewer();
 
-    const leaseAcquisitions = hostRequests.filter((url) =>
-      url.endsWith("/api/terminals/viewers/lease"),
-    ).length;
-    expect(leaseAcquisitions).toBe(1);
-    const requestsBeforeSettings = hostRequests.length;
+    const acquisitions = () =>
+      leaseOperations.filter((operation) => operation.operationName === "CreateViewerLease");
+    expect(acquisitions()).toHaveLength(1);
+    // Renewal is an ongoing heartbeat; only claiming and releasing ownership
+    // count as lease traffic a presentation change must not cause.
+    const claims = () =>
+      leaseOperations.filter((operation) =>
+        operation.operationName === "CreateViewerLease" ||
+        operation.operationName === "DeleteViewerLease",
+      );
+    const claimsBeforeSettings = claims().length;
 
     // The real footer action, not the modal store.
     fireEvent.click(screen.getByRole("button", { name: "Open Settings" }));
@@ -234,7 +246,10 @@ describe("overhaul acceptance — Settings over an attached native terminal", ()
     // lease traffic, no terminal close, and the run keeps its session.
     expect(invocations("native_terminal_detach")).toHaveLength(0);
     expect(invocations("native_terminal_attach")).toHaveLength(1);
-    expect(hostRequests).toHaveLength(requestsBeforeSettings);
+    expect(claims()).toHaveLength(claimsBeforeSettings);
+    // Occlusion reaches no host route at all — the retired terminal REST
+    // surface is not something a presentation change may fall back to.
+    expect(hostRequests.some((url) => url.includes("/terminals"))).toBe(false);
     expect(useTerminalStore.getState().sessions["session-1"]).toMatchObject({
       agentRunId: "run-1",
       status: "ready",
@@ -259,11 +274,9 @@ describe("overhaul acceptance — Settings over an attached native terminal", ()
       { handle: HANDLE, frame: FRAME },
     ]);
     expect(invocations("native_terminal_attach")).toHaveLength(1);
+    expect(acquisitions()).toHaveLength(1);
     expect(
-      hostRequests.filter((url) => url.endsWith("/api/terminals/viewers/lease")),
-    ).toHaveLength(1);
-    expect(
-      hostRequests.some((url) => url.includes("/lease/release")),
+      leaseOperations.some((operation) => operation.operationName === "DeleteViewerLease"),
     ).toBe(false);
 
     view.unmount();

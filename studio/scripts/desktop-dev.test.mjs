@@ -13,7 +13,6 @@ import test from "node:test";
 
 import {
   assertInstalledTicketryIsNotRunning,
-  buildConnectLaunch,
   createTemporarySqliteProfile,
   formatDevelopmentIdentity,
   parseDesktopDevOptions,
@@ -23,7 +22,7 @@ import {
   resolveDevelopmentLogPath,
   resolveDevelopmentTmuxSocket,
   resolveTauriCliPath,
-  selectDevelopmentServicePorts,
+  selectFrontendPort,
   stopTemporaryTmuxServer,
 } from "./desktop-dev.mjs";
 import { addLinkedWorktree, createRepository } from "./git-fixtures.mjs";
@@ -97,51 +96,31 @@ test("resolution outside a Git worktree fails closed with the launch directory",
   );
 });
 
-test("development services select distinct available ports for each launch", async () => {
-  const firstOccupied = new Set([8787, 8123]);
-  const first = await selectDevelopmentServicePorts({
-    environment: {},
-    isAvailable: async (port) => !firstOccupied.has(port),
-  });
-  const secondOccupied = new Set([...firstOccupied, first.backend, first.mcp]);
-  const second = await selectDevelopmentServicePorts({
-    environment: {},
-    isAvailable: async (port) => !secondOccupied.has(port),
-  });
-
-  assert.deepEqual(first, { backend: 8788, mcp: 8124 });
-  assert.deepEqual(second, { backend: 8789, mcp: 8125 });
-});
-
-test("explicit development service ports fail instead of shifting", async () => {
+test("explicit frontend ports fail instead of shifting", async () => {
   await assert.rejects(
-    selectDevelopmentServicePorts({
-      environment: { MUXED_DESKTOP_BACKEND_PORT: "43210" },
+    selectFrontendPort({
+      requestedPort: 43210,
       isAvailable: async (port) => port !== 43210,
     }),
-    /Requested backend port 43210 is unavailable/,
+    /Requested frontend port 43210 is unavailable/,
   );
 });
 
-test("temporary SQLite desktop selects a free MCP port for concurrent launches", async () => {
+test("desktop development selects the first free frontend port", async () => {
   const checked = [];
-  const ports = await selectDevelopmentServicePorts({
-    environment: {},
-    temporarySqlite: true,
+  const port = await selectFrontendPort({
     isAvailable: async (port) => {
       checked.push(port);
-      return port !== 8223;
+      return port !== 5174;
     },
   });
 
-  assert.deepEqual(ports, { backend: 8877, mcp: 8224 });
-  assert.deepEqual(checked, [8877, 8223, 8224]);
+  assert.equal(port, 5175);
+  assert.deepEqual(checked, [5174, 5175]);
 });
 
-test("desktop development accepts connect or temporary SQLite mode", () => {
+test("desktop development accepts temporary SQLite mode", () => {
   assert.equal(parseDesktopDevMode([]), "isolated");
-  assert.equal(parseDesktopDevMode(["--connect"]), "connect");
-  assert.equal(parseDesktopDevMode(["--", "--connect"]), "connect");
   assert.deepEqual(parseDesktopDevOptions(["--temp-sqlite"]), {
     mode: "isolated",
     temporarySqlite: true,
@@ -152,7 +131,7 @@ test("desktop development accepts connect or temporary SQLite mode", () => {
   });
   assert.throws(
     () => parseDesktopDevMode(["--unknown"]),
-    /usage: pnpm --filter @worktracker\/studio desktop:dev -- \[--connect \| --temp-sqlite\]/,
+    /usage: pnpm --filter @worktracker\/studio desktop:dev -- \[--temp-sqlite\]/,
   );
 });
 
@@ -254,64 +233,16 @@ test("desktop development allows raw debug processes and non-macOS hosts", () =>
   }));
 });
 
-test("connect mode reuses the established pnpm dev stack without a sidecar command", () => {
-  const launch = buildConnectLaunch({
-    environment: { HOME: "/tmp/connect-home", PRESERVED: "yes" },
-  });
-
-  assert.equal(
-    launch.dataDirectory,
-    "/tmp/connect-home/.config/worktracker-studio",
-  );
-  assert.equal(launch.frontendOrigin, "http://127.0.0.1:5174");
-  assert.equal(launch.backendPort, 8787);
-  assert.deepEqual(launch.config, {
-    build: {
-      beforeDevCommand: null,
-      devUrl: "http://127.0.0.1:5174",
-    },
-  });
-  assert.equal(launch.environment.PRESERVED, "yes");
-  assert.equal(launch.environment.MUXED_DESKTOP_DEVELOPMENT_MODE, "connect");
-  assert.equal(launch.environment.MUXED_DESKTOP_BACKEND_PORT, "8787");
-  assert.equal(
-    launch.environment.MUXED_DESKTOP_WORKTRACKER_API,
-    "http://127.0.0.1:5174/api/work-tracker",
-  );
-  assert.equal(
-    launch.environment.MUXED_DESKTOP_TERMINAL_WEBSOCKET,
-    "ws://127.0.0.1:5174/ws/terminal",
-  );
-});
-
-test("connect mode pins canonical stack ports while honoring its explicit data directory", () => {
-  const launch = buildConnectLaunch({
-    environment: {
-      HOME: "/ignored",
-      MUXED_DATA_DIR: "/tmp/shared-data",
-      MUXED_FRONTEND_PORT: "5190",
-      MUXED_DESKTOP_BACKEND_PORT: "8890",
-    },
-  });
-
-  assert.equal(launch.dataDirectory, "/tmp/shared-data");
-  assert.equal(launch.frontendOrigin, "http://127.0.0.1:5174");
-  assert.equal(launch.backendPort, 8787);
-  assert.equal(launch.environment.MUXED_DESKTOP_BACKEND_PORT, "8787");
-});
-
 test("startup identity is one concise non-secret report with all selected resources", () => {
   const report = formatDevelopmentIdentity({
     frontendOrigin: "http://127.0.0.1:5175",
-    backendPort: 8788,
-    mcpPort: 8798,
     dataDirectory: "/tmp/muxed-profile",
     tmuxSocket: "muxed-dev-0123456789abcdef",
   });
 
   assert.equal(
     report,
-    "Ticketry desktop development instance: frontend=http://127.0.0.1:5175 backend=http://127.0.0.1:8788 mcp=http://127.0.0.1:8798/mcp data=/tmp/muxed-profile tmux=muxed-dev-0123456789abcdef",
+    "Ticketry desktop development instance: frontend=http://127.0.0.1:5175 runtime=in-process-rust data=/tmp/muxed-profile tmux=muxed-dev-0123456789abcdef",
   );
   assert.equal(report.split("\n").length, 1);
   assert.doesNotMatch(report, /token|credential|secret/i);

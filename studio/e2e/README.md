@@ -12,10 +12,10 @@ points every web service at it, and deletes the profile when Playwright shuts
 the server down. The suite never opens the developer or desktop application
 database.
 
-The `setup` Playwright project runs before Chromium. It creates the temporary
-catalog row for `codex / gpt-5.6-luna / medium` when necessary and completes
-the real provider-onboarding UI. Luna is test data in the disposable database,
-not a checked-in production catalog change.
+The `setup` Playwright project runs before Chromium. It uses the provisioned
+`codex / gpt-5.4 / medium` catalog entry and completes the real
+provider-onboarding UI. Test setup and verification use the same public GraphQL
+contract as the application; the suite does not depend on the removed REST API.
 
 ## Covered browser seams
 
@@ -30,8 +30,8 @@ not a checked-in production catalog change.
   and reload persistence;
 - Local scratch workspace Plan/Instant launcher-menu behavior without starting
   a real provider process;
-- optimistic rollback, external updates, reconnect replay, and expansion state
-  in the numbered overhaul regression.
+- optimistic rollback, external GraphQL updates after canonical refresh,
+  reconnect replay, and expansion state in the numbered overhaul regression.
 
 The Playwright project intentionally contains no skipped tests. Behaviors that
 need precise lifecycle state without executing a real coding agent are owned by

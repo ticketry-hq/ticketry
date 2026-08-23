@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { useIsMutating, useMutation } from "@tanstack/react-query";
-import { apiErrorMessage } from "../../shared/api/client";
+import { apiErrorMessage } from "../../shared/api/errors";
 import { queryClient } from "../../shared/query/queryClient";
 import { queryKeys } from "../../shared/query/keys";
 import { toast } from "../../state/clientStore";

@@ -3,7 +3,7 @@ use std::collections::BTreeSet;
 use sea_orm::{ConnectionTrait, DbBackend, Statement};
 
 use super::adoption::SourceClassification;
-use super::schema::{self, DJANGO_MIGRATIONS};
+use super::schema::{self, DJANGO_MIGRATIONS, EMPTY_DJANGO_LEAF};
 use super::{ExecutionPersistenceError, ExecutionPersistenceErrorCode};
 
 pub(super) async fn classify(
@@ -41,18 +41,26 @@ pub(super) async fn classify(
         .into_iter()
         .map(|row| row.try_get::<String>("", "name").map_err(storage))
         .collect::<Result<Vec<_>, _>>()?;
-    let leaf = migrations
-        .last()
-        .and_then(|observed| DJANGO_MIGRATIONS.iter().find(|known| observed == *known))
-        .copied()
-        .ok_or_else(|| {
-            incompatible("unknown Execution migration history; no named bridge matches")
-        })?;
-    let expected_len = DJANGO_MIGRATIONS
-        .iter()
-        .position(|migration| *migration == leaf)
-        .expect("known leaf")
-        + 1;
+    let leaf = if migrations.is_empty() {
+        EMPTY_DJANGO_LEAF
+    } else {
+        migrations
+            .last()
+            .and_then(|observed| DJANGO_MIGRATIONS.iter().find(|known| observed == *known))
+            .copied()
+            .ok_or_else(|| {
+                incompatible("unknown Execution migration history; no named bridge matches")
+            })?
+    };
+    let expected_len = if leaf == EMPTY_DJANGO_LEAF {
+        0
+    } else {
+        DJANGO_MIGRATIONS
+            .iter()
+            .position(|migration| *migration == leaf)
+            .expect("known leaf")
+            + 1
+    };
     if migrations != DJANGO_MIGRATIONS[..expected_len] {
         return Err(incompatible(
             "Execution migration history contains a gap or unknown migration",
@@ -67,11 +75,15 @@ pub(super) async fn validate_manifest(
 ) -> Result<(), ExecutionPersistenceError> {
     let generation = match source {
         SourceClassification::Django(leaf) => {
-            DJANGO_MIGRATIONS
-                .iter()
-                .position(|migration| *migration == leaf)
-                .expect("known leaf")
-                + 1
+            if leaf == EMPTY_DJANGO_LEAF {
+                0
+            } else {
+                DJANGO_MIGRATIONS
+                    .iter()
+                    .position(|migration| *migration == leaf)
+                    .expect("known leaf")
+                    + 1
+            }
         }
         SourceClassification::RustOwned => DJANGO_MIGRATIONS.len(),
     };
@@ -268,7 +280,46 @@ async fn validate_runtime_evidence(
             "active launch ledger rows lack Terminal runtime evidence",
         ));
     }
-    require_zero(database, "ambiguous active launch", "SELECT COUNT(*) AS count FROM launched_tasks claim JOIN agent_runs run ON run.id=claim.agent_run_id LEFT JOIN agent_terminal_sessions terminal ON terminal.agent_run_id=run.id WHERE (run.ended_at IS NULL AND (terminal.agent_run_id IS NULL OR terminal.terminated_at IS NOT NULL OR terminal.task_id<>claim.task_id)) OR (run.ended_at IS NOT NULL AND terminal.agent_run_id IS NOT NULL AND terminal.terminated_at IS NULL)").await
+    // Terminal Sessions store the hyphenated Work Item identity Django wrote,
+    // while the campaign ledger stores the compact one. The two forms name the
+    // same Work Item, so this comparison normalises before deciding a runtime
+    // belongs to different work.
+    //
+    // A crash-safe claim commits before its external effect runs, so a claim
+    // whose Launch Effect has not been applied legitimately has no Terminal
+    // Session yet. That is interrupted work for launch reconciliation to
+    // settle, not an ambiguous runtime, and refusing it would make a crash
+    // between claim and runtime unrecoverable. Pre-claim Django rows have no
+    // effect identity and were only ever written after the launch returned, so
+    // they keep the stricter rule.
+    let crash_safe = schema::columns(database, "launched_tasks")
+        .await?
+        .contains("launch_effect_id");
+    let effect_join = if crash_safe {
+        " LEFT JOIN runs_launch_effects effect ON effect.effect_id=claim.launch_effect_id"
+    } else {
+        ""
+    };
+    let settled = if crash_safe {
+        " AND effect.state='applied'"
+    } else {
+        ""
+    };
+    require_zero(
+        database,
+        "ambiguous active launch",
+        &format!(
+            "SELECT COUNT(*) AS count FROM launched_tasks claim \
+             JOIN agent_runs run ON run.id=claim.agent_run_id \
+             LEFT JOIN agent_terminal_sessions terminal ON terminal.agent_run_id=run.id{effect_join} \
+             WHERE (run.ended_at IS NULL{settled} AND (terminal.agent_run_id IS NULL \
+             OR terminal.terminated_at IS NOT NULL \
+             OR replace(terminal.task_id,'-','')<>replace(claim.task_id,'-',''))) \
+             OR (run.ended_at IS NOT NULL AND terminal.agent_run_id IS NOT NULL \
+             AND terminal.terminated_at IS NULL)"
+        ),
+    )
+    .await
 }
 
 async fn require_zero(

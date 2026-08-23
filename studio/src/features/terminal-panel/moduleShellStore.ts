@@ -10,7 +10,7 @@
  * Membership and the active tab are held per module, so switching modules swaps
  * the whole strip and returns to the shell that module last had in front. The
  * set is rediscovered from the backend rather than remembered locally, because
- * the shells that actually survive a restart or a sidecar rebuild are the ones
+ * the shells that actually survive a restart or an application rebuild are the ones
  * the server still holds a session for. Which of them was in front has no such
  * source — it is nobody's business but this person's — so that one fact is
  * remembered per module in {@link ./activeShellMemory} (#687).
@@ -24,7 +24,7 @@
 import { create } from "zustand";
 
 import { useTerminalStore } from "../agents/terminal";
-import { apiErrorMessage } from "../../shared/api/client";
+import { apiErrorMessage } from "../../shared/api/errors";
 import { toast } from "../../state/clientStore";
 import { readActiveShell, rememberActiveShell } from "./activeShellMemory";
 import {

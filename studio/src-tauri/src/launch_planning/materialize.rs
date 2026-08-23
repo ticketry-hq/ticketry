@@ -17,8 +17,6 @@ pub struct ExecutionAuthority {
     working_directory: PathBuf,
     hook_runner: PathBuf,
     hook_spool_directory: PathBuf,
-    lifecycle_url: String,
-    lifecycle_authorization: String,
     mcp_url: String,
     mcp_authorization: String,
     available_skills: BTreeSet<String>,
@@ -31,8 +29,6 @@ impl ExecutionAuthority {
         working_directory: PathBuf,
         hook_runner: PathBuf,
         hook_spool_directory: PathBuf,
-        lifecycle_url: String,
-        lifecycle_authorization: String,
         mcp_url: String,
         mcp_authorization: String,
         available_skills: BTreeSet<String>,
@@ -42,8 +38,6 @@ impl ExecutionAuthority {
             working_directory,
             hook_runner,
             hook_spool_directory,
-            lifecycle_url,
-            lifecycle_authorization,
             mcp_url,
             mcp_authorization,
             available_skills,
@@ -142,8 +136,6 @@ fn validate_authority(
     if !authority.working_directory.is_absolute()
         || !authority.hook_runner.is_absolute()
         || !authority.hook_spool_directory.is_absolute()
-        || authority.lifecycle_url.is_empty()
-        || authority.lifecycle_authorization.is_empty()
         || authority.mcp_url.is_empty()
         || authority.mcp_authorization.is_empty()
     {
@@ -253,8 +245,6 @@ fn hook_command(provider: Provider, run_id: &str, authority: &ExecutionAuthority
         args.extend([
             "--agent-run-id".into(),
             run_id.into(),
-            "--lifecycle-url".into(),
-            authority.lifecycle_url.clone(),
         ]);
     }
     shell_join(&args)
@@ -279,8 +269,6 @@ fn provider_settings(
         Provider::Claude => json!({
             "env": {
                 "MUXED_AGENT_RUN_ID": run_id,
-                "MUXED_LIFECYCLE_URL": authority.lifecycle_url,
-                "MUXED_LIFECYCLE_TOKEN": authority.lifecycle_authorization,
             },
             "hooks": hooks,
         }),

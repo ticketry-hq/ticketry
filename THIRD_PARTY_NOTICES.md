@@ -22,7 +22,7 @@ license text.
 ## Vendored agent skills (Matt Pocock)
 
 The agent skill definitions vendored under
-`backend/apps/terminals/agents/skills/` are derived from upstream work by
+`studio/src-tauri/resources/launch/` are derived from upstream work by
 Matt Pocock and are distributed under the MIT License,
 Copyright (c) 2026 Matt Pocock. The full upstream license text is included
-at [`backend/apps/terminals/agents/skills/UPSTREAM_LICENSE`](backend/apps/terminals/agents/skills/UPSTREAM_LICENSE).
+at [`studio/src-tauri/resources/launch/UPSTREAM_LICENSE`](studio/src-tauri/resources/launch/UPSTREAM_LICENSE).

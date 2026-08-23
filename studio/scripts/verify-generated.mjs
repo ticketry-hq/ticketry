@@ -88,6 +88,11 @@ try {
     );
   }
   await assertSameFile(
+    join(first, "worktracker/work-items/attachments.ts"),
+    join(studioRoot, "src/features/work-items/generated/attachments.ts"),
+    "work-items attachment operation drift",
+  );
+  await assertSameFile(
     join(first, "settings/keybindings.ts"),
     join(studioRoot, "src/features/settings/generated/keybindings.ts"),
     "settings keybinding operation drift",
@@ -141,6 +146,11 @@ try {
     join(first, "terminals/terminalSessions.ts"),
     join(studioRoot, "src/features/agents/terminal/generated/terminalSessions.ts"),
     "terminal session operation drift",
+  );
+  await assertSameFile(
+    join(first, "terminals/outputActivity.ts"),
+    join(studioRoot, "src/features/agents/terminal/generated/outputActivity.ts"),
+    "terminal output activity operation drift",
   );
   await assertSameFile(
     join(first, "terminals/viewerLeases.ts"),

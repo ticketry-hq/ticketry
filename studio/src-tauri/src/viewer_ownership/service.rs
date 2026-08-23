@@ -61,34 +61,34 @@ pub struct DeleteViewerLease {
 
 #[derive(Clone)]
 pub struct ViewerOwnershipService {
-    database: DatabaseConnection,
+    pub(super) database: DatabaseConnection,
     ttl: Duration,
     run_locks: Arc<Mutex<HashMap<String, Arc<AsyncMutex<()>>>>>,
-    viewers: Arc<Mutex<ViewerRegistry>>,
+    pub(super) viewers: Arc<Mutex<ViewerRegistry>>,
 }
 
 #[derive(Default)]
-struct ViewerRegistry {
-    prepared: HashMap<ViewerIdentity, PreparedViewer>,
-    active: HashMap<String, ActiveViewer>,
+pub(super) struct ViewerRegistry {
+    pub(super) prepared: HashMap<ViewerIdentity, PreparedViewer>,
+    pub(super) active: HashMap<String, ActiveViewer>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-struct ViewerIdentity {
+pub(super) struct ViewerIdentity {
     agent_run_id: String,
     viewer_id: String,
 }
 
-struct PreparedViewer {
+pub(super) struct PreparedViewer {
     transport: String,
     generation: String,
     mechanics: Arc<dyn PreparedViewerMechanics>,
 }
 
-struct ActiveViewer {
-    viewer_id: String,
-    generation: String,
-    mechanics: Arc<dyn PreparedViewerMechanics>,
+pub(super) struct ActiveViewer {
+    pub(super) viewer_id: String,
+    pub(super) generation: String,
+    pub(super) mechanics: Arc<dyn PreparedViewerMechanics>,
 }
 
 impl ViewerOwnershipService {
@@ -321,31 +321,6 @@ impl ViewerOwnershipService {
         Ok(Some(model))
     }
 
-    /// Expire every transient lease without deleting durable terminal history.
-    /// Startup and normal shutdown use this after mutations have been gated.
-    pub async fn expire_all(&self) -> Result<u64, ViewerOwnershipError> {
-        let result = viewer_lease::Entity::update_many()
-            .col_expr(
-                viewer_lease::Column::ExpiresAt,
-                sea_orm::sea_query::Expr::value(timestamp(Utc::now())),
-            )
-            .exec(&self.database)
-            .await
-            .map_err(ViewerOwnershipError::storage)?;
-        let viewers = {
-            let mut registry = self
-                .viewers
-                .lock()
-                .expect("viewer ownership registry poisoned");
-            registry.prepared.clear();
-            std::mem::take(&mut registry.active)
-        };
-        for viewer in viewers.into_values() {
-            viewer.mechanics.detach(ViewerDetachReason::Released);
-        }
-        Ok(result.rows_affected)
-    }
-
     async fn create_transaction(
         &self,
         input: &CreateViewerLease,
@@ -389,7 +364,7 @@ impl ViewerOwnershipService {
         Ok(model)
     }
 
-    fn run_lock(&self, agent_run_id: &str) -> Arc<AsyncMutex<()>> {
+    pub(super) fn run_lock(&self, agent_run_id: &str) -> Arc<AsyncMutex<()>> {
         self.run_locks
             .lock()
             .expect("viewer Agent Run lock registry poisoned")
@@ -446,11 +421,11 @@ fn expires_at(ttl: Duration) -> String {
     timestamp(Utc::now() + chrono::Duration::from_std(ttl).unwrap())
 }
 
-fn timestamp(value: chrono::DateTime<Utc>) -> String {
+pub(super) fn timestamp(value: chrono::DateTime<Utc>) -> String {
     value.to_rfc3339_opts(SecondsFormat::Micros, true)
 }
 
-fn parse_timestamp(value: &str) -> Option<chrono::DateTime<Utc>> {
+pub(super) fn parse_timestamp(value: &str) -> Option<chrono::DateTime<Utc>> {
     chrono::DateTime::parse_from_rfc3339(value)
         .map(|value| value.with_timezone(&Utc))
         .ok()

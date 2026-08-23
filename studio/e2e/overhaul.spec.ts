@@ -4,35 +4,31 @@ import {
   type APIRequestContext,
   type Page,
 } from "@playwright/test";
+import { UpdateWorkTrackerWorkItemDocument } from "../src/features/work-items/generated/mutations";
+import {
+  acknowledgeOnboarding,
+  createModule,
+  createProject,
+  createWorkItem,
+  getModules,
+  getProjects,
+  getWorkflowCatalog,
+  getWorkItem,
+  getWorkItems,
+  graphql,
+  selectModuleForProfile,
+} from "./support";
 
 type Row = { id: string; name: string; [key: string]: unknown };
 
 const ids: Record<string, string> = {};
-
-async function json<T>(response: Awaited<ReturnType<APIRequestContext["get"]>>) {
-  expect(response.ok(), `${response.status()} ${await response.text()}`).toBeTruthy();
-  return await response.json() as T;
-}
-
-async function createWorkItem(
-  request: APIRequestContext,
-  projectId: string,
-  body: Record<string, unknown>,
-) {
-  return await json<Row>(await request.post(
-    `/api/work-tracker/projects/${projectId}/work-items`,
-    { data: body },
-  ));
-}
 
 async function ensureWorkItem(
   request: APIRequestContext,
   projectId: string,
   body: Record<string, unknown> & { name: string },
 ) {
-  const existing = await json<Row[]>(await request.get(
-    `/api/work-tracker/work-items?project=${projectId}`,
-  ));
+  const existing = await getWorkItems(request, projectId);
   const laterNames: Record<string, string[]> = {
     "E2E parent": ["E2E parent renamed"],
     "E2E external before": ["E2E external after"],
@@ -50,21 +46,13 @@ async function openItem(page: Page, name: string) {
 }
 
 test.beforeAll(async ({ request }) => {
-  await json(await request.post(
-    "/api/work-tracker/workspace/onboarding/acknowledge",
-  ));
-  const projects = await json<Array<Row & { slug: string }>>(
-    await request.get("/api/work-tracker/projects"),
-  );
+  await acknowledgeOnboarding(request);
+  const projects = await getProjects(request);
   const project = projects.find((row) => row.slug === "CDN") ??
-    await json<Row & { slug: string }>(await request.post("/api/work-tracker/projects", {
-      data: { name: "Coding", slug: "CDN", description: "" },
-    }));
+    await createProject(request, { name: "Coding", slug: "CDN", description: "" });
   ids.project = project.id;
 
-  const types = await json<Row[]>(await request.get(
-    `/api/work-tracker/projects/${project.id}/issue-types`,
-  ));
+  const types = (await getWorkflowCatalog(request, project.id)).issue_types.nodes;
   const moduleType = types.find((row) => row.name === "Module");
   const storyType = types.find((row) => row.name === "Story");
   const implementationType = types.find((row) => row.name === "Implementation");
@@ -74,15 +62,14 @@ test.beforeAll(async ({ request }) => {
   ids.storyType = storyType!.id;
   ids.implementationType = implementationType!.id;
 
-  const modules = await json<Row[]>(await request.get(
-    `/api/work-tracker/projects/${project.id}/modules`,
-  ));
+  const modules = await getModules(request, project.id);
   const module = modules.find((row) => row.name === "Overhaul Module") ??
-    await json<Row>(await request.post(
-      `/api/work-tracker/projects/${project.id}/modules`,
-      { data: { name: "Overhaul Module", issue_type_id: moduleType!.id } },
-    ));
+    await createModule(request, project.id, {
+      name: "Overhaul Module",
+      issue_type_id: moduleType!.id,
+  });
   ids.module = module.id;
+  await selectModuleForProfile(request, project.id, module.id, process.cwd());
 
   const parent = await ensureWorkItem(request, project.id, {
     name: "E2E parent",
@@ -186,24 +173,37 @@ test("[overhaul-web-03] drag reorder survives the server reply and reload", asyn
 
 test("[overhaul-web-04] refused write visibly rolls back", async ({ page }) => {
   await openItem(page, "E2E first");
-  await page.route(`**/api/work-tracker/work-items/${ids.first}`, async (route) => {
-    if (route.request().method() === "PATCH") {
-      await route.fulfill({ status: 409, contentType: "application/json", body: '{"detail":"refused"}' });
+  await page.route("**/graphql", async (route) => {
+    const body = route.request().postDataJSON() as {
+      operationName?: string;
+      variables?: { id?: string };
+    };
+    if (
+      body.operationName === "UpdateWorkTrackerWorkItem"
+      && body.variables?.id === ids.first.replaceAll("-", "")
+    ) {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ errors: [{ message: "refused" }] }),
+      });
     } else await route.continue();
   });
   await page.getByTestId("issue-name").click();
   await page.getByRole("textbox", { name: "Name" }).fill("E2E refused name");
   await page.getByRole("textbox", { name: "Name" }).press("Enter");
   await expect(page.getByTestId("issue-name")).toContainText("E2E first");
-  await expect(page.getByRole("treeitem", { name: /E2E refused name/ })).toHaveCount(0);
+  await expect.poll(async () => (await getWorkItem(page.request, ids.first)).name)
+    .toBe("E2E first");
 });
 
-test("[overhaul-web-05] agent-origin edit appears without reload", async ({ page, request }) => {
+test("[overhaul-web-05] external GraphQL edit appears after canonical refresh", async ({ page, request }) => {
   await openItem(page, "E2E external before");
-  const response = await request.patch(`/api/work-tracker/work-items/${ids.external}`, {
-    data: { name: "E2E external after", origin: "agent" },
+  await graphql(request, UpdateWorkTrackerWorkItemDocument, {
+    id: ids.external,
+    name: "E2E external after",
   });
-  expect(response.ok(), await response.text()).toBeTruthy();
+  await page.reload();
   await expect(page.getByTestId("issue-name")).toContainText("E2E external after");
   await expect(page.getByRole("treeitem", { name: /E2E external after/ })).toBeVisible();
 });
@@ -237,10 +237,10 @@ test("[overhaul-web-12] expansion and collapsed sections survive reload", async 
 test("[overhaul-web-14] reconnect replay closes an offline edit gap", async ({ page, request, context }) => {
   await openItem(page, "E2E second");
   await context.setOffline(true);
-  const response = await request.patch(`/api/work-tracker/work-items/${ids.second}`, {
-    data: { name: "E2E replayed", origin: "agent" },
+  await graphql(request, UpdateWorkTrackerWorkItemDocument, {
+    id: ids.second,
+    name: "E2E replayed",
   });
-  expect(response.ok(), await response.text()).toBeTruthy();
   await context.setOffline(false);
   await expect(page.getByRole("treeitem", { name: /E2E replayed/ })).toBeVisible();
   await expect(page.getByRole("treeitem", { name: /E2E second/ })).toHaveCount(0);

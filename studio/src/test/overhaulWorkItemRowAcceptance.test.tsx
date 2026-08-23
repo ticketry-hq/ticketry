@@ -140,10 +140,10 @@ describe("overhaul acceptance — work-item rows", () => {
     expect(child).toHaveStyle({ paddingLeft: "2ch" });
 
     const search = within(stories).getByRole("textbox", { name: "Search stories" });
-    fireEvent.change(search, { target: { value: "MEML-CANONICAL-IMPLEMENTATION" } });
+    fireEvent.change(search, { target: { value: "MEML-34" } });
     expect(await within(stories).findByText("Implementation child")).toBeVisible();
     expect(within(stories).getByText("T-34")).toBeVisible();
-    expect(stories).not.toHaveTextContent("MEML-CANONICAL-IMPLEMENTATION");
+    expect(stories).not.toHaveTextContent("MEML-34");
 
     fireEvent.change(search, { target: { value: "34" } });
     expect(await within(stories).findByText("Implementation child")).toBeVisible();

@@ -1,5 +1,4 @@
 import { studioRuntime } from "../../runtime";
-import * as rest from "../../shared/api/client";
 import { graphQlMutationError } from "../../shared/api/graphqlError";
 import type { Project, ProjectCreate, ProjectPatch, Workspace } from "../../shared/api/types";
 import {
@@ -19,7 +18,6 @@ async function graphQl<TResult>(operation: () => Promise<TResult>): Promise<TRes
 
 export function acknowledgeOnboarding(): Promise<Workspace> {
   return studioRuntime().writeWorkTracker({
-    rest: rest.acknowledgeOnboarding,
     graphQl: (execute) => graphQl(async () => (
       await execute(AcknowledgeWorkTrackerOnboardingDocument, {})
     ).acknowledge_onboarding as Workspace),
@@ -28,7 +26,6 @@ export function acknowledgeOnboarding(): Promise<Workspace> {
 
 export function createProject(body: ProjectCreate): Promise<Project> {
   return studioRuntime().writeWorkTracker({
-    rest: () => rest.createProject(body),
     graphQl: (execute) => graphQl(async () => (
       await execute(CreateWorkTrackerProjectDocument, {
         name: body.name,
@@ -41,7 +38,6 @@ export function createProject(body: ProjectCreate): Promise<Project> {
 
 export function updateProject(id: string, patch: ProjectPatch): Promise<Project> {
   return studioRuntime().writeWorkTracker({
-    rest: () => rest.updateProject(id, patch),
     graphQl: (execute) => graphQl(async () => (
       await execute(UpdateWorkTrackerProjectDocument, {
         id,
@@ -54,7 +50,6 @@ export function updateProject(id: string, patch: ProjectPatch): Promise<Project>
 
 export function deleteProject(id: string): Promise<void> {
   return studioRuntime().writeWorkTracker({
-    rest: () => rest.deleteProject(id),
     graphQl: (execute) => graphQl(async () => {
       await execute(DeleteWorkTrackerProjectDocument, { id });
     }),

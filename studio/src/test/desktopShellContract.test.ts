@@ -1,9 +1,5 @@
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
-import {
-  assertDevelopmentEndpointAgreement,
-  buildDevelopmentSmokeConfiguration,
-} from "../../scripts/desktop-smoke-config.mjs";
 
 async function json(relativePath: string): Promise<Record<string, unknown>> {
   return JSON.parse(
@@ -39,7 +35,7 @@ function snakeCase(value: string): string {
 
 describe("desktop shell security contract", () => {
   it("keeps Rust and TypeScript service-health states in agreement", async () => {
-    const rust = await text("../../src-tauri/src/lib.rs");
+    const rust = await text("../../src-tauri/src/desktop/service_health.rs");
     const typescript = await text("../../src/runtime/contract.ts");
     const rustStates = rust
       .match(/enum ServiceHealthState \{(?<states>[^}]+)\}/s)
@@ -75,6 +71,7 @@ describe("desktop shell security contract", () => {
         "allow-desktop-append-frontend-log",
         "allow-desktop-retry-services",
         "allow-desktop-pick-folder",
+        "allow-desktop-validate-module-folder",
         "allow-desktop-preflight-report",
         "allow-desktop-approve-executable-path",
         "allow-TauRPC--graphql-execute",
@@ -142,12 +139,15 @@ describe("desktop shell security contract", () => {
 
   it("launches tmux directly in libghostty without a Ticketry byte bridge", async () => {
     const nativeTerminal = await nativeTerminalSources();
-    const tmuxViewer = await text("../../src-tauri/src/tmux_viewer.rs");
+    const tmuxViewer = await text(
+      "../../src-tauri/src/terminal_viewer/tmux_client.rs",
+    );
+    const tmuxAdapter = await text("../../src-tauri/src/tmux_adapter.rs");
     const main = await text("../../src-tauri/src/main.rs");
 
     expect(nativeTerminal).toContain("TerminalCommandAttachment::prepare");
-    expect(tmuxViewer).toContain('"attach-session"');
-    expect(tmuxViewer).toContain('format!("/usr/bin/env {arguments}")');
+    expect(tmuxAdapter).toContain('"attach-session"');
+    expect(tmuxViewer).toContain('"/usr/bin/env {}"');
     expect(nativeTerminal).not.toContain("UnixStream");
     expect(nativeTerminal).not.toContain("io::copy");
     expect(main).not.toContain("--muxed-ghostty-bridge");
@@ -186,7 +186,7 @@ describe("desktop shell security contract", () => {
     const attachCommands = await text(
       "../../src-tauri/src/native_terminal/macos/attach_commands.rs",
     );
-    const desktop = await text("../../src-tauri/src/lib.rs");
+    const desktop = await text("../../src-tauri/src/desktop/run.rs");
     const build = await text("../../src-tauri/build.rs");
 
     expect(build).toContain('"native_terminal_hide"');
@@ -203,7 +203,7 @@ describe("desktop shell security contract", () => {
       bridge.indexOf("muxed_ghostty_view_present(opaque)"),
     );
     const attach = attachCommands.match(
-      /pub fn native_terminal_attach[\s\S]*?pub fn native_terminal_reconcile_frame/,
+      /pub(?:\(crate\))? fn native_terminal_attach[\s\S]*?pub(?:\(crate\))? fn native_terminal_reconcile_frame/,
     )?.[0];
     expect(attach).toContain("visibility: NativeTerminalVisibility::hidden()");
     expect(attach).not.toContain("muxed_ghostty_view_present");
@@ -234,7 +234,7 @@ describe("desktop shell security contract", () => {
   });
 
   it("keeps the service retry command free of webview-supplied values", async () => {
-    const rust = await text("../../src-tauri/src/lib.rs");
+    const rust = await text("../../src-tauri/src/desktop/commands.rs");
     const build = await text("../../src-tauri/build.rs");
     const command = rust.match(
       /fn desktop_retry_services\((?<parameters>[^)]*)\)[^{]*\{/s,
@@ -253,7 +253,7 @@ describe("desktop shell security contract", () => {
 
     expect(rootPackage.scripts).toMatchObject({
       "dev": "npm run desktop:dev",
-      "desktop:dev": "npm run desktop:dev --workspace @worktracker/studio",
+      "desktop:dev": "npm run desktop:dev --workspace @worktracker/studio --",
       "desktop:build": "npm run desktop:build --workspace @worktracker/studio",
       "desktop:deploy": "npm run desktop:deploy --workspace @worktracker/studio",
       "deploy": "npm run desktop:deploy --workspace @worktracker/studio",
@@ -286,7 +286,7 @@ describe("desktop shell security contract", () => {
         "native/ticketry-ghostty.conf": "ticketry-ghostty.conf",
         "vendor/libghostty/resources/": "",
       },
-      externalBin: ["binaries/muxed-backend", "binaries/ticketry-hook"],
+      externalBin: ["binaries/ticketry-hook"],
       macOS: {
         minimumSystemVersion: "11.0",
         hardenedRuntime: true,
@@ -295,26 +295,13 @@ describe("desktop shell security contract", () => {
     });
   });
 
-  it("keeps development smoke runtime endpoints on the smoke webview port", () => {
-    const configuration = buildDevelopmentSmokeConfiguration("15174");
+  it("keeps desktop smoke free of retired Python service endpoints", async () => {
+    const smoke = await text("../../scripts/desktop-smoke.mjs");
 
-    expect(configuration.runtimeEnvironment).toEqual({
-      MUXED_DESKTOP_WORKTRACKER_API: "http://127.0.0.1:15174/api/work-tracker",
-      MUXED_DESKTOP_AGENT_API: "http://127.0.0.1:15174/api",
-      MUXED_DESKTOP_STATUS_API: "http://127.0.0.1:15174/api",
-      MUXED_DESKTOP_TERMINAL_WEBSOCKET: "ws://127.0.0.1:15174/ws/terminal",
-    });
-    expect(() =>
-      assertDevelopmentEndpointAgreement(
-        configuration.webviewUrl,
-        configuration.runtimeEnvironment,
-      ),
-    ).not.toThrow();
-    expect(() =>
-      assertDevelopmentEndpointAgreement(configuration.webviewUrl, {
-        ...configuration.runtimeEnvironment,
-        MUXED_DESKTOP_STATUS_API: "http://127.0.0.1:5174/api",
-      }),
-    ).toThrow("MUXED_DESKTOP_STATUS_API does not match the webview");
+    expect(smoke).not.toContain("MUXED_DESKTOP_WORKTRACKER_API");
+    expect(smoke).not.toContain("MUXED_DESKTOP_AGENT_API");
+    expect(smoke).not.toContain("MUXED_DESKTOP_STATUS_API");
+    expect(smoke).not.toContain("assertDevelopmentEndpointAgreement");
+    expect(smoke).toContain("MUXED_DATA_DIR");
   });
 });

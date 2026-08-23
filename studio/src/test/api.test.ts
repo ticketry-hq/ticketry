@@ -25,10 +25,7 @@ import {
   reorderIssueTypes,
   reorderStates,
 } from "../shared/api/client";
-import {
-  getTerminals,
-  terminateTerminal,
-} from "../features/agents/api/agentApi";
+import { terminateTerminal } from "../features/agents/api/agentApi";
 import type { ProviderCatalog } from "../shared/api/types";
 
 const fetchMock = vi.fn();
@@ -66,41 +63,16 @@ describe("api client", () => {
     expect(agentApiBase()).toBe("https://agents.example.com/api");
   });
 
-  it("terminates a run on the canonical terminal collection route", async () => {
+  it("refuses to terminate a run without the desktop terminal writer", async () => {
     vi.stubEnv("VITE_WT_API_KEY", "terminal-secret");
-    fetchMock.mockResolvedValue(jsonResponse({
-      agent_run_id: "run/1",
-      terminated: true,
-    }));
 
-    await terminateTerminal("run/1");
-
-    const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe("/api/terminals?agent_run_id=run%2F1");
-    expect(init.method).toBe("DELETE");
-    expect(new Headers(init.headers).get("x-api-key")).toBe("terminal-secret");
-  });
-
-  it("authenticates terminal discovery with the runtime API key", async () => {
-    vi.stubEnv("VITE_WT_API_KEY", "desktop-terminal-secret");
-    fetchMock.mockResolvedValue(jsonResponse([]));
-
-    await getTerminals("task/1");
-
-    const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe("/api/terminals?task_id=task%2F1");
-    expect(new Headers(init.headers).get("x-api-key")).toBe(
-      "desktop-terminal-secret",
+    // The `/api/terminals` collection this used to DELETE against went away
+    // with the Python terminal authority. A platform without the in-process
+    // GraphQL transport must say so rather than call a route that 404s.
+    await expect(terminateTerminal("run/1")).rejects.toThrow(
+      "Terminal runs require the desktop GraphQL runtime.",
     );
-  });
-
-  it("omits authentication from terminal discovery when the runtime key is empty", async () => {
-    fetchMock.mockResolvedValue(jsonResponse([]));
-
-    await getTerminals("task-1");
-
-    const [, init] = fetchMock.mock.calls[0];
-    expect(new Headers(init.headers).has("x-api-key")).toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("sends x-api-key on every request and hits the projects path", async () => {

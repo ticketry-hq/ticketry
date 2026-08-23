@@ -13,23 +13,10 @@ export interface RuntimeCapabilities {
    * feed rather than a second, weaker one.
    */
   readonly statusFeed: boolean;
-  readonly websocketTerminal: boolean;
   readonly nativeLifecycle: boolean;
   readonly serviceSupervision: boolean;
   readonly nativeTerminal: boolean;
   readonly nativeFolderPicker: boolean;
-}
-
-export interface RuntimeEndpoints {
-  readonly workTrackerApi: string;
-  readonly agentApi: string;
-  readonly statusApi: string;
-  /** Browser-development compatibility only. Desktop terminal bytes use Tauri. */
-  readonly terminalWebSocket?: string;
-}
-
-export interface RuntimeValues {
-  readonly workTrackerApiKey: string;
 }
 
 /** Process-independent desktop service state, including actionable failures. */
@@ -55,15 +42,12 @@ export type WorkTrackerGraphQlExecute = <TResult, TVariables>(
 ) => Promise<TResult>;
 
 export interface WorkTrackerReadRoutes<TResult> {
-  readonly rest: () => Promise<TResult>;
   readonly graphQl: (execute: WorkTrackerGraphQlExecute) => Promise<TResult>;
 }
 
 export type SettingsRoutes<TResult> = WorkTrackerReadRoutes<TResult>;
 
 export interface RuntimeStartupConfiguration {
-  readonly endpoints: RuntimeEndpoints;
-  readonly values: RuntimeValues;
   readonly serviceHealth: ServiceHealth;
   readonly initialNotices: readonly UserNotice[];
 }

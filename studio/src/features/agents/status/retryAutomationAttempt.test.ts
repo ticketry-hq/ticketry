@@ -28,13 +28,6 @@ async function useStatusRuntime(
 ) {
   const graphqlExecute = vi.fn(execute);
   const invoke = vi.fn().mockResolvedValue({
-    endpoints: {
-      workTrackerApi: "http://127.0.0.1:8787/api/work-tracker",
-      agentApi: "http://127.0.0.1:8787/api",
-      statusApi: "http://127.0.0.1:8787/api",
-      terminalWebSocket: "ws://127.0.0.1:8787/ws/terminal",
-    },
-    values: { workTrackerApiKey: "" },
     serviceHealth: {
       state: "ready",
       service: "backend",

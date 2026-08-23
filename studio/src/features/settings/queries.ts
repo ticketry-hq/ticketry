@@ -1,5 +1,4 @@
 import { useQuery } from "@tanstack/react-query";
-import * as api from "../../shared/api/client";
 import { queryClient } from "../../shared/query/queryClient";
 import { queryKeys } from "../../shared/query/keys";
 import type { IssueType, SubtreeRunCapabilityMap } from "../../shared/api/types";
@@ -24,7 +23,7 @@ const capabilitiesKey = (projectId: string) =>
 
 async function fetchIssueTypes(projectId: string): Promise<IssueType[]> {
   return bySortOrder(
-    await readWorkflowIssueTypes(projectId, api.listIssueTypes),
+    await readWorkflowIssueTypes(projectId),
   );
 }
 
@@ -122,7 +121,7 @@ export async function loadSettings(projectId: string): Promise<void> {
     queryClient.fetchQuery({
       queryKey: queryKeys.states.byProject(projectId),
       queryFn: () =>
-        readWorkflowStates(projectId, api.listStates).then(bySortOrder),
+        readWorkflowStates(projectId).then(bySortOrder),
       staleTime: 0,
     }),
     queryClient.fetchQuery({
@@ -143,7 +142,7 @@ export async function ensureSettings(projectId: string): Promise<void> {
     queryClient.ensureQueryData({
       queryKey: queryKeys.states.byProject(projectId),
       queryFn: () =>
-        readWorkflowStates(projectId, api.listStates).then(bySortOrder),
+        readWorkflowStates(projectId).then(bySortOrder),
     }),
     queryClient.ensureQueryData({
       queryKey: capabilitiesKey(projectId),

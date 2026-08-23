@@ -288,7 +288,9 @@ async fn rebuild_leases(
     if !installed.is_empty() {
         transaction.execute_unprepared(
             "INSERT INTO agent_run_viewer_leases__rust \
-             SELECT agent_run_id, viewer_id, transport, substr('imported-' || agent_run_id, 1, 64), \
+             SELECT agent_run_id, viewer_id, \
+                    CASE transport WHEN 'desktop' THEN 'native' WHEN 'browser' THEN 'xterm' ELSE transport END, \
+                    substr('imported-' || agent_run_id, 1, 64), \
                     acquired_at, CASE WHEN expires_at > CURRENT_TIMESTAMP THEN CURRENT_TIMESTAMP ELSE expires_at END \
              FROM agent_run_viewer_leases; DROP TABLE agent_run_viewer_leases; \
              ALTER TABLE agent_run_viewer_leases__rust RENAME TO agent_run_viewer_leases;"

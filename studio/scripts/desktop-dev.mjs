@@ -11,12 +11,6 @@ const studioRoot = fileURLToPath(new URL("..", import.meta.url));
 const require = createRequire(import.meta.url);
 const defaultFrontendPort = 5174;
 const frontendPortCandidates = 10;
-const defaultBackendPort = 8787;
-const defaultMcpPort = 8123;
-const temporaryBackendPort = 8877;
-const temporaryMcpPort = 8223;
-const servicePortCandidates = 10;
-const connectMode = "connect";
 const isolatedMode = "isolated";
 const temporarySqlitePrefix = "ticketry-temp-sqlite-";
 const workspaceRoot = path.resolve(studioRoot, "..");
@@ -126,49 +120,16 @@ export async function selectFrontendPort({
   );
 }
 
-async function selectServicePort({
-  name,
-  requestedPort,
-  firstPort,
-  excluded = [],
-  isAvailable = canListen,
-}) {
-  if (requestedPort !== undefined) {
-    const port = parsePort(name, String(requestedPort));
-    if (excluded.includes(port) || !await isAvailable(port)) {
-      throw new Error(`Requested ${name} port ${port} is unavailable`);
-    }
-    return port;
-  }
-  for (let offset = 0; offset < servicePortCandidates; offset += 1) {
-    const port = firstPort + offset;
-    if (!excluded.includes(port) && await isAvailable(port)) return port;
-  }
-  throw new Error(
-    `No ${name} port is available in ${firstPort}-${firstPort + servicePortCandidates - 1}`,
-  );
-}
-
-function parsePort(name, value) {
-  if (!/^\d+$/.test(value ?? "") || Number(value) < 1 || Number(value) > 65_535) {
-    throw new Error(`${name} port must be a valid TCP port (1-65535)`);
-  }
-  return Number(value);
-}
-
 export function parseDesktopDevOptions(args = []) {
   const normalized = args[0] === "--" ? args.slice(1) : args;
   if (normalized.length === 0) {
     return { mode: isolatedMode, temporarySqlite: false };
   }
-  if (normalized.length === 1 && normalized[0] === "--connect") {
-    return { mode: connectMode, temporarySqlite: false };
-  }
   if (normalized.length === 1 && normalized[0] === "--temp-sqlite") {
     return { mode: isolatedMode, temporarySqlite: true };
   }
   throw new Error(
-    "usage: pnpm --filter @worktracker/studio desktop:dev -- [--connect | --temp-sqlite]",
+    "usage: pnpm --filter @worktracker/studio desktop:dev -- [--temp-sqlite]",
   );
 }
 
@@ -209,27 +170,6 @@ export function stopTemporaryTmuxServer(
   }
 }
 
-export async function selectDevelopmentServicePorts({
-  environment = process.env,
-  isAvailable = canListen,
-  temporarySqlite = false,
-} = {}) {
-  const backend = await selectServicePort({
-    name: "backend",
-    requestedPort: environment.MUXED_DESKTOP_BACKEND_PORT,
-    firstPort: temporarySqlite ? temporaryBackendPort : defaultBackendPort,
-    isAvailable,
-  });
-  const mcp = await selectServicePort({
-    name: "MCP",
-    requestedPort: environment.MUXED_DESKTOP_MCP_PORT,
-    firstPort: temporarySqlite ? temporaryMcpPort : defaultMcpPort,
-    excluded: [backend],
-    isAvailable,
-  });
-  return { backend, mcp };
-}
-
 export function buildTauriDevelopmentConfig(port) {
   const origin = `http://127.0.0.1:${port}`;
   return {
@@ -240,53 +180,15 @@ export function buildTauriDevelopmentConfig(port) {
   };
 }
 
-export function buildConnectLaunch({ environment = process.env } = {}) {
-  const dataDirectory = environment.MUXED_DATA_DIR ||
-    (environment.HOME
-      ? path.join(environment.HOME, ".config", "worktracker-studio")
-      : null);
-  if (!dataDirectory) {
-    throw new Error("could not determine HOME for the established data directory");
-  }
-
-  const frontendOrigin = `http://127.0.0.1:${defaultFrontendPort}`;
-  const frontendWebSocketOrigin = `ws://127.0.0.1:${defaultFrontendPort}`;
-  return {
-    backendPort: defaultBackendPort,
-    dataDirectory,
-    frontendOrigin,
-    config: {
-      build: {
-        beforeDevCommand: null,
-        devUrl: frontendOrigin,
-      },
-    },
-    environment: {
-      ...environment,
-      MUXED_DATA_DIR: dataDirectory,
-      MUXED_DESKTOP_DEVELOPMENT_MODE: connectMode,
-      MUXED_DESKTOP_ORIGIN: frontendOrigin,
-      MUXED_DESKTOP_BACKEND_PORT: String(defaultBackendPort),
-      MUXED_DESKTOP_WORKTRACKER_API: `${frontendOrigin}/api/work-tracker`,
-      MUXED_DESKTOP_AGENT_API: `${frontendOrigin}/api`,
-      MUXED_DESKTOP_STATUS_API: `${frontendOrigin}/api`,
-      MUXED_DESKTOP_TERMINAL_WEBSOCKET: `${frontendWebSocketOrigin}/ws/terminal`,
-    },
-  };
-}
-
 export function formatDevelopmentIdentity({
   frontendOrigin,
-  backendPort,
-  mcpPort,
   dataDirectory,
   tmuxSocket,
 }) {
   return [
     "Ticketry desktop development instance:",
     `frontend=${frontendOrigin}`,
-    `backend=http://127.0.0.1:${backendPort}`,
-    `mcp=http://127.0.0.1:${mcpPort}/mcp`,
+    "runtime=in-process-rust",
     `data=${dataDirectory}`,
     `tmux=${tmuxSocket}`,
   ].join(" ");
@@ -365,28 +267,6 @@ export async function main() {
   assertInstalledTicketryIsNotRunning({
     allowConcurrentInstalledApp: options.temporarySqlite,
   });
-  if (options.mode === connectMode) {
-    const launch = buildConnectLaunch();
-    console.log(
-      [
-        "Ticketry desktop development connection:",
-        `frontend=${launch.frontendOrigin}`,
-        `backend=http://127.0.0.1:${launch.backendPort}`,
-        `data=${launch.dataDirectory}`,
-      ].join(" "),
-    );
-    await run(process.execPath, [
-      resolveTauriCliPath(),
-      "dev",
-      "--no-watch",
-      "--features",
-      "native-libghostty",
-      "--config",
-      JSON.stringify(launch.config),
-    ], launch.environment);
-    return;
-  }
-
   const dataDirectory = options.temporarySqlite
     ? createTemporarySqliteProfile()
     : resolveDevelopmentDataDirectory();
@@ -403,32 +283,17 @@ export async function main() {
     buildEnvironment.MUXED_FORCE_SQLITE = "true";
   }
   try {
-    await run(
-      "bash",
-      [path.join(studioRoot, "..", "backend", "packaging", "build-sidecar.sh")],
-      buildEnvironment,
-    );
-    // Select ports after the comparatively slow sidecar build so another
-    // Ticketry instance cannot claim them during that build window.
     const frontendPort = await selectFrontendPort({
       requestedPort: process.env.MUXED_FRONTEND_PORT,
-    });
-    const { backend: backendPort, mcp: mcpPort } = await selectDevelopmentServicePorts({
-      temporarySqlite: options.temporarySqlite,
     });
     const frontendOrigin = `http://127.0.0.1:${frontendPort}`;
     const environment = {
       ...buildEnvironment,
       MUXED_DESKTOP_ORIGIN: frontendOrigin,
-      MUXED_DESKTOP_BACKEND_PORT: String(backendPort),
-      MUXED_DESKTOP_MCP_PORT: String(mcpPort),
-      MUXED_VITE_BACKEND_ORIGIN: `http://127.0.0.1:${backendPort}`,
     };
     const config = JSON.stringify(buildTauriDevelopmentConfig(frontendPort));
     console.log(formatDevelopmentIdentity({
       frontendOrigin,
-      backendPort,
-      mcpPort,
       dataDirectory,
       tmuxSocket,
     }));

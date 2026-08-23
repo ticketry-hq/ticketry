@@ -3,21 +3,19 @@ import type {
   ServiceHealthListener,
   StudioRuntime,
 } from "./contract";
+import { executeFoundationOperation } from "../graphql-foundation/foundationClient";
+import type { GraphQlTransportProxy } from "../graphql-foundation/generated/taurpc";
 import { encodeDocumentPath } from "./documentAssetUrl";
 
 export interface BrowserRuntimeEnvironment {
-  readonly VITE_WT_API_BASE?: string;
-  readonly VITE_WT_API_KEY?: string;
-  readonly VITE_AGENT_API_BASE?: string;
+  readonly VITE_GRAPHQL_API?: string;
 }
 
 export interface BrowserRuntimeOptions {
   readonly environment: BrowserRuntimeEnvironment;
 }
 
-const DEFAULT_WORKTRACKER_API = "/api/work-tracker";
-const DEFAULT_AGENT_API = "/api";
-const DEFAULT_TERMINAL_WEBSOCKET = "/ws/terminal";
+const DEFAULT_GRAPHQL_API = "/graphql";
 
 function invalid(field: string, expectation: string): never {
   throw new Error(
@@ -39,69 +37,73 @@ function validateHttpEndpoint(field: string, value: string): string {
   return invalid(field, "must be a relative path or an HTTP(S) URL");
 }
 
-function websocketEndpoint(apiEndpoint: string, path: string): string {
-  if (apiEndpoint.startsWith("/")) return path;
-  const url = new URL(path, new URL(apiEndpoint).origin);
-  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
-  return url.toString();
+function browserGraphQlProxy(endpoint: string): GraphQlTransportProxy {
+  return {
+    graphql_execute: async (requestJson) => {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: requestJson,
+      });
+      if (!response.ok) {
+        throw new Error(`Rust GraphQL development adapter returned HTTP ${response.status}.`);
+      }
+      return response.text();
+    },
+    graphql_subscribe: async () => {
+      throw new Error("Browser development does not support GraphQL subscriptions.");
+    },
+    graphql_unsubscribe: async () => false,
+  };
 }
 
 /** Browser implementation of the shared Studio runtime boundary. */
 export function createBrowserRuntime({
   environment,
 }: BrowserRuntimeOptions): StudioRuntime {
-  const workTrackerApi = validateHttpEndpoint(
-    "workTrackerApi",
-    environment.VITE_WT_API_BASE || DEFAULT_WORKTRACKER_API,
-  );
-  const agentApi = validateHttpEndpoint(
-    "agentApi",
-    environment.VITE_AGENT_API_BASE || DEFAULT_AGENT_API,
+  const graphQlApi = validateHttpEndpoint(
+    "graphQlApi",
+    environment.VITE_GRAPHQL_API || DEFAULT_GRAPHQL_API,
   );
   const startup: RuntimeStartupConfiguration = Object.freeze({
-    endpoints: Object.freeze({
-      workTrackerApi,
-      agentApi,
-      statusApi: agentApi,
-      terminalWebSocket: websocketEndpoint(agentApi, DEFAULT_TERMINAL_WEBSOCKET),
-    }),
-    values: Object.freeze({
-      workTrackerApiKey: environment.VITE_WT_API_KEY || "",
-    }),
     serviceHealth: Object.freeze({
       state: "ready",
-      service: "backend",
+      service: "rust-graphql-adapter",
       message: null,
       logPointer: null,
     }),
     initialNotices: Object.freeze([]),
   });
   const readWorkTracker: StudioRuntime["readWorkTracker"] = (routes) =>
-    routes.rest();
+    routes.graphQl((document, variables) => executeFoundationOperation(
+      document,
+      variables,
+      () => browserGraphQlProxy(graphQlApi),
+    ));
 
   return Object.freeze({
     platform: "browser" as const,
     capabilities: Object.freeze({
-      // Browser development has no in-process GraphQL transport, and the
-      // status WebSocket it used to fall back to no longer exists.
+      // Browser development has no in-process GraphQL transport, and neither
+      // the status WebSocket nor the terminal WebSocket it used to fall back
+      // to still exists.
       statusFeed: false,
-      websocketTerminal: true,
       nativeLifecycle: false,
       serviceSupervision: false,
       nativeTerminal: false,
       nativeFolderPicker: false,
     }),
     readWorkTracker,
-    // Browser-only development remains a supporting tool while the shipping
-    // desktop path uses in-process GraphQL as the single WorkTracker writer.
+    // Browser development uses the same owned GraphQL operations through the
+    // Rust development adapter. It has no REST fallback.
     writeWorkTracker: readWorkTracker,
     readSettings: readWorkTracker,
     writeSettings: readWorkTracker,
     statusStream: () => null,
-    // Browser development has no desktop protocol, so document bytes keep
-    // coming from the legacy host route it already talks to.
+    // Browser development has no desktop protocol, so the Rust development
+    // adapter exposes the same registered, read-only document assets over HTTP.
     documentUrl: (documentId: string, relPath: string) =>
-      `${agentApi.replace(/\/$/, "")}/docs/${encodeURIComponent(documentId)}/${
+      `${graphQlApi.replace(/\/graphql\/?$/, "")}/documents/${encodeURIComponent(documentId)}/${
         encodeDocumentPath(relPath)
       }`,
     pickFolder: async () => null,

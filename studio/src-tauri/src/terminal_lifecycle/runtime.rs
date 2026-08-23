@@ -99,7 +99,10 @@ impl TerminalLifecycleRuntime {
             .required("initial terminal reconciliation", runtime.work.reconcile())
             .await?;
         runtime
-            .required("viewer lease expiry", runtime.work.expire_viewer_leases())
+            .required(
+                "startup viewer lease expiry",
+                runtime.work.expire_viewer_leases(),
+            )
             .await?;
 
         runtime.ready.store(true, Ordering::Release);
@@ -215,7 +218,7 @@ async fn request_sweep(
         let pass = async {
             work.drain_spool().await?;
             work.reconcile().await?;
-            work.expire_viewer_leases().await?;
+            work.expire_stale_viewer_leases().await?;
             Ok::<(), String>(())
         };
         if let Ok(Err(error)) = timeout(deadline, pass).await {
@@ -254,6 +257,8 @@ mod tests {
     struct FakeWork {
         events: std::sync::Mutex<Vec<&'static str>>,
         drains: AtomicUsize,
+        all_lease_expiries: AtomicUsize,
+        stale_lease_expiries: AtomicUsize,
         reconciliations: AtomicUsize,
         active_reconciliations: AtomicUsize,
         max_reconciliations: AtomicUsize,
@@ -320,7 +325,14 @@ mod tests {
 
         async fn expire_viewer_leases(&self) -> Result<u64, String> {
             self.event("leases");
+            self.all_lease_expiries.fetch_add(1, Ordering::SeqCst);
             Ok(1)
+        }
+
+        async fn expire_stale_viewer_leases(&self) -> Result<u64, String> {
+            self.event("stale-leases");
+            self.stale_lease_expiries.fetch_add(1, Ordering::SeqCst);
+            Ok(0)
         }
     }
 
@@ -427,6 +439,33 @@ mod tests {
             .shutdown()
             .await
             .expect("shutdown terminal lifecycle");
+    }
+
+    #[tokio::test]
+    async fn periodic_passes_expire_only_stale_leases() {
+        let work = Arc::new(FakeWork::default());
+        let runtime =
+            TerminalLifecycleRuntime::start(work.clone(), config(Duration::from_millis(5)))
+                .await
+                .expect("start terminal lifecycle");
+        assert_eq!(work.all_lease_expiries.load(Ordering::SeqCst), 1);
+        assert_eq!(work.stale_lease_expiries.load(Ordering::SeqCst), 0);
+
+        runtime.request_sweep().await;
+        tokio::time::sleep(Duration::from_millis(30)).await;
+
+        assert!(work.stale_lease_expiries.load(Ordering::SeqCst) >= 2);
+        assert_eq!(
+            work.all_lease_expiries.load(Ordering::SeqCst),
+            1,
+            "no periodic pass may retire every viewer lease"
+        );
+
+        runtime
+            .shutdown()
+            .await
+            .expect("shutdown terminal lifecycle");
+        assert_eq!(work.all_lease_expiries.load(Ordering::SeqCst), 2);
     }
 
     #[tokio::test]

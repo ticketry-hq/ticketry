@@ -4,19 +4,12 @@ import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { validateFinalizedDefaults } from "../../backend/worktracker/reviewed_defaults_validator.mjs";
+import { inspectReleaseBundle } from "./release-bundle-inspection.mjs";
 
 const studioRoot = fileURLToPath(new URL("..", import.meta.url));
 const manifestPath = path.join(studioRoot, "release", "manifest.v1.json");
 
 export class ReleaseManifestError extends Error {}
-
-export class ReleaseDefaultsArtifactError extends ReleaseManifestError {
-  constructor(message, options) {
-    super(message, options);
-    this.name = "ReleaseDefaultsArtifactError";
-  }
-}
 
 function requireValue(value, label) {
   if (value === undefined || value === null || value === "") {
@@ -49,12 +42,6 @@ export function validateManifest(manifest) {
   }
   requireValue(artifacts.tauri?.binary_name, "artifacts.tauri.binary_name");
   requireArray(artifacts.tauri?.bundle_formats, "artifacts.tauri.bundle_formats");
-  requireValue(artifacts.sidecar?.build_script, "artifacts.sidecar.build_script");
-  requireValue(artifacts.sidecar?.defaults_artifact, "artifacts.sidecar.defaults_artifact");
-  requireArray(artifacts.sidecar?.migration_directories, "artifacts.sidecar.migration_directories");
-  requireValue(artifacts.sidecar?.dependency_policy?.python_lock, "sidecar dependency policy python_lock");
-  requireValue(artifacts.sidecar?.dependency_policy?.python_project, "sidecar dependency policy python_project");
-  requireValue(artifacts.sidecar?.dependency_policy?.node_lock, "sidecar dependency policy node_lock");
   requireArray(artifacts.runtime_resources, "artifacts.runtime_resources");
   const policy = requireValue(manifest.release_policy, "release_policy");
   requireValue(policy.macos?.signing?.identity_environment, "release policy macOS signing identity environment");
@@ -88,17 +75,12 @@ export function validateManifest(manifest) {
     requireValue(target.architecture, `target ${id}.architecture`);
     requireValue(target.build_architecture, `target ${id}.build_architecture`);
     requireValue(target.rust_target, `target ${id}.rust_target`);
-    requireValue(target.sidecar?.target_triple, `target ${id}.sidecar.target_triple`);
-    requireValue(target.sidecar?.bundle_binary_name, `target ${id}.sidecar.bundle_binary_name`);
     requireValue(target.compatibility?.minimum_os, `target ${id}.compatibility.minimum_os`);
     requireValue(target.compatibility?.tmux, `target ${id}.compatibility.tmux`);
     requireValue(target.compatibility?.runtime_protocol, `target ${id}.compatibility.runtime_protocol`);
     requireValue(target.compatibility?.database_schema, `target ${id}.compatibility.database_schema`);
     if (target.compatibility?.app_version !== manifest.release_version) {
       throw new ReleaseManifestError(`target ${id}.compatibility.app_version must match release_version`);
-    }
-    if (target.compatibility?.sidecar_version !== manifest.release_version) {
-      throw new ReleaseManifestError(`target ${id}.compatibility.sidecar_version must match release_version`);
     }
   }
   return manifest;
@@ -173,6 +155,20 @@ export function macosTauriBuildEnvironment(environment = process.env, { allowUns
   return { ...environment, CI: "true" };
 }
 
+export function tauriBuildArguments(manifest, target, environment = process.env, { allowUnsigned = false } = {}) {
+  const [, ...tauriArgs] = manifest.artifacts.tauri.command;
+  return [
+    ...tauriArgs,
+    "--target",
+    target.rust_target,
+    "--config",
+    macosTauriSigningConfig(manifest, environment, { allowUnsigned }),
+    "--",
+    "--bin",
+    manifest.artifacts.tauri.binary_name,
+  ];
+}
+
 export function selectTargets(manifest, requestedTarget = "all") {
   validateManifest(manifest);
   if (requestedTarget === "all") return manifest.targets;
@@ -196,49 +192,6 @@ async function requireFile(root, relativePath, label) {
   return absolutePath;
 }
 
-async function requireMigrationDirectory(root, relativePath) {
-  const absolutePath = path.resolve(root, relativePath);
-  let entries;
-  try {
-    entries = await readdir(absolutePath);
-  } catch {
-    throw new ReleaseManifestError(`declared migration directory is missing: ${relativePath}`);
-  }
-  if (!entries.some((entry) => /^\d+_.+\.py$/.test(entry))) {
-    throw new ReleaseManifestError(`declared migration directory has no migrations: ${relativePath}`);
-  }
-}
-
-async function validateDefaultsArtifact(root, relativePath) {
-  const absolutePath = path.resolve(root, relativePath);
-  let source;
-  try {
-    source = await readFile(absolutePath, "utf8");
-  } catch (error) {
-    throw new ReleaseDefaultsArtifactError(
-      `release defaults artifact is missing or unreadable: ${relativePath}`,
-      { cause: error },
-    );
-  }
-
-  let artifact;
-  try {
-    artifact = JSON.parse(source);
-  } catch (error) {
-    throw new ReleaseDefaultsArtifactError(
-      `release defaults artifact is not parseable JSON (${relativePath}): ${error.message}`,
-      { cause: error },
-    );
-  }
-
-  const errors = validateFinalizedDefaults(artifact);
-  if (errors.length > 0) {
-    throw new ReleaseDefaultsArtifactError(
-      `release defaults artifact is invalid (${relativePath}):\n- ${errors.join("\n- ")}`,
-    );
-  }
-}
-
 async function validateFrontendOutputs(manifest, root = studioRoot) {
   await Promise.all(
     manifest.artifacts.frontend.required_outputs.map((asset) =>
@@ -254,12 +207,7 @@ export async function validateReleaseInputs(
 ) {
   validateManifest(manifest);
   const { artifacts } = manifest;
-  await validateDefaultsArtifact(root, artifacts.sidecar.defaults_artifact);
-  await requireFile(root, artifacts.sidecar.build_script, "sidecar build script");
   await Promise.all([
-    requireFile(root, artifacts.sidecar.dependency_policy.python_lock, "Python dependency lock"),
-    requireFile(root, artifacts.sidecar.dependency_policy.python_project, "Python dependency policy"),
-    requireFile(root, artifacts.sidecar.dependency_policy.node_lock, "Node dependency lock"),
     ...(includeFrontendOutputs
       ? artifacts.frontend.required_outputs.map((asset) => requireFile(root, asset, "frontend asset"))
       : []),
@@ -268,7 +216,6 @@ export async function validateReleaseInputs(
       ? []
       : [requireFile(root, manifest.release_policy.macos.signing.entitlements, "macOS signing entitlements")]),
     requireFile(root, manifest.release_policy.rollback.recovery_document, "rollback recovery document"),
-    ...artifacts.sidecar.migration_directories.map((directory) => requireMigrationDirectory(root, directory)),
   ]);
   let tauriConfiguration;
   let cargoToml;
@@ -386,7 +333,6 @@ export async function verifyMacOSBundle(
   } = {},
 ) {
   const appExecutable = path.join(artifacts.app, "Contents", "MacOS", manifest.artifacts.tauri.binary_name);
-  const embeddedSidecar = await findFileWithin(artifacts.app, target.sidecar.bundle_binary_name);
   const embeddedHookRunner = await findFileWithin(artifacts.app, "ticketry-hook");
   const ghosttyTerminfo = path.join(
     artifacts.app,
@@ -408,9 +354,6 @@ export async function verifyMacOSBundle(
   if (!(await exists(appExecutable))) {
     throw new ReleaseManifestError(`macOS bundle for ${target.id} is missing its app executable: ${appExecutable}`);
   }
-  if (!embeddedSidecar) {
-    throw new ReleaseManifestError(`macOS bundle for ${target.id} is missing embedded sidecar ${target.sidecar.bundle_binary_name}`);
-  }
   if (!embeddedHookRunner) {
     throw new ReleaseManifestError(`macOS bundle for ${target.id} is missing embedded hook runner ticketry-hook`);
   }
@@ -419,9 +362,27 @@ export async function verifyMacOSBundle(
       `macOS bundle for ${target.id} is missing pinned libghostty runtime resources`,
     );
   }
+  const inspection = await inspectReleaseBundle(
+    artifacts.app,
+    manifest.artifacts.tauri.binary_name,
+  );
+  if (inspection.missingExecutables.length > 0) {
+    throw new ReleaseManifestError(
+      `macOS bundle for ${target.id} is missing executables: ${inspection.missingExecutables.join(", ")}`,
+    );
+  }
+  if (inspection.unexpectedExecutables.length > 0) {
+    throw new ReleaseManifestError(
+      `macOS bundle for ${target.id} contains unexpected helpers: ${inspection.unexpectedExecutables.join(", ")}`,
+    );
+  }
+  if (inspection.forbiddenArtifacts.length > 0) {
+    throw new ReleaseManifestError(
+      `macOS bundle for ${target.id} contains retired Python/REST artifacts: ${inspection.forbiddenArtifacts.join(", ")}`,
+    );
+  }
   for (const [label, binary] of [
     ["app", appExecutable],
-    ["embedded sidecar", embeddedSidecar],
     ["embedded hook runner", embeddedHookRunner],
   ]) {
     const architectures = await capture("lipo", ["-archs", binary], `${label} architecture check for ${target.id}`);
@@ -505,7 +466,6 @@ export function releaseMetadata(manifest, target, { allowUnsigned = false } = {}
     notarized: !allowUnsigned,
     components: {
       app_version: target.compatibility.app_version,
-      sidecar_version: target.compatibility.sidecar_version,
       runtime_protocol: target.compatibility.runtime_protocol,
       database_schema: target.compatibility.database_schema,
     },
@@ -540,21 +500,6 @@ export async function stageTarget(
   return destination;
 }
 
-async function verifySidecarArchitecture(target) {
-  if (process.platform !== "darwin") {
-    throw new ReleaseManifestError(
-      `Cannot build ${target.id} on ${process.platform}: this manifest currently declares macOS targets only.`,
-    );
-  }
-  const sidecar = path.join(studioRoot, "src-tauri", "binaries", `${target.sidecar.bundle_binary_name}-${target.sidecar.target_triple}`);
-  const architectures = await runCapture("lipo", ["-archs", sidecar], `sidecar architecture check for ${target.id}`);
-  if (!architectures.split(/\s+/).includes(target.build_architecture)) {
-    throw new ReleaseManifestError(
-      `sidecar for ${target.id} has architectures "${architectures}", expected ${target.build_architecture}`,
-    );
-  }
-}
-
 export async function buildRelease(
   manifest,
   targets,
@@ -569,22 +514,14 @@ export async function buildRelease(
   await execute(frontendCommand, frontendArgs, "frontend build");
   await validateFrontendOutputs(manifest);
   for (const target of targets) {
-    await execute(
-      "arch",
-      [`-${target.build_architecture}`, "bash", manifest.artifacts.sidecar.build_script, target.sidecar.target_triple],
-      `sidecar build for ${target.id}`,
+    await rm(
+      path.join(studioRoot, "src-tauri", "target", target.rust_target, "release", "bundle"),
+      { recursive: true, force: true },
     );
-    await verifySidecarArchitecture(target);
-    const [tauriCommand, ...tauriArgs] = manifest.artifacts.tauri.command;
+    const [tauriCommand] = manifest.artifacts.tauri.command;
     await execute(
       tauriCommand,
-      [
-        ...tauriArgs,
-        "--target",
-        target.rust_target,
-        "--config",
-        macosTauriSigningConfig(manifest, process.env, { allowUnsigned }),
-      ],
+      tauriBuildArguments(manifest, target, process.env, { allowUnsigned }),
       `Tauri build for ${target.id}`,
       { environment: macosTauriBuildEnvironment(process.env, { allowUnsigned }) },
     );

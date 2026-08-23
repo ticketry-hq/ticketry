@@ -4,7 +4,7 @@
 //! for the installed GraphQL schema. Opening them again per launch click adds
 //! a second pool plus a full `CREATE TABLE IF NOT EXISTS` pass, and every one
 //! of those DDL statements takes an exclusive write lock on `state.db` that
-//! the GraphQL, settings, MCP, and Django writers are already contending for.
+//! process-local GraphQL, settings, and MCP tasks already share.
 //! Composition records what it built here, and the launch command reads it.
 
 use std::sync::OnceLock;
@@ -57,6 +57,16 @@ impl DesktopLaunchRuntime {
     ) -> Result<(), String> {
         self.composed()?.terminal_runtime().configure(authority);
         Ok(())
+    }
+
+    pub(crate) fn replace_terminal_mcp_authority(
+        &self,
+        mcp_url: String,
+        authority: crate::work_management::mcp::RunAuthority,
+    ) -> Result<(), String> {
+        self.composed()?
+            .terminal_runtime()
+            .replace_mcp_authority(mcp_url, authority)
     }
 
     pub(crate) fn viewer_ownership(

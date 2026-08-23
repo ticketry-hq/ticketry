@@ -28,6 +28,10 @@ import { useStudioStore } from "../features/projects/store";
 import { seedConfig } from "../features/studio/stores/configStore";
 import { queryClient } from "../shared/query/queryClient";
 import { useClientStore } from "../state/clientStore";
+import {
+  installDesktopGraphQlRuntime,
+  type RecordedGraphQlOperation,
+} from "./desktopGraphQlRuntime";
 
 const tauri = vi.hoisted(() => ({
   desktop: true,
@@ -64,8 +68,6 @@ vi.mock("../shared/api/client", async (importOriginal) => ({
 
 const terminalApi = vi.hoisted(() => ({
   getDocuments: vi.fn(),
-  getTerminals: vi.fn(),
-  listResumableTerminals: vi.fn(),
   resumeTerminal: vi.fn(),
 }));
 
@@ -73,6 +75,23 @@ vi.mock("../features/agents/api/agentApi", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../features/agents/api/agentApi")>()),
   ...terminalApi,
 }));
+
+// Terminal session reads moved to the Rust Terminal Session graph, so the seam
+// a test controls is the read transport, not a host API module.
+const terminalReads = vi.hoisted(() => {
+  const resumable = vi.fn();
+  return {
+    readTaskTerminalSessions: vi.fn(),
+    readScratchTerminalSessions: vi.fn(),
+    readTaskResumableTerminalSessions: resumable,
+    readScratchResumableTerminalSessions: resumable,
+  };
+});
+
+vi.mock(
+  "../features/agents/terminal/internal/sessionReadTransport",
+  () => terminalReads,
+);
 
 class ResizeObserverStub {
   observe() {}
@@ -90,6 +109,15 @@ const FRAME = {
 };
 
 let hostRequests: string[] = [];
+let leaseOperations: RecordedGraphQlOperation[] = [];
+
+// Renewal is an ongoing heartbeat; only claiming and releasing ownership count
+// as lease traffic a presentation change must not cause.
+const leaseClaims = () =>
+  leaseOperations.filter((operation) =>
+    operation.operationName === "CreateViewerLease" ||
+    operation.operationName === "DeleteViewerLease",
+  );
 
 function invocations(command: string): unknown[][] {
   return tauri.invoke.mock.calls
@@ -160,6 +188,7 @@ function mountTaskWorkspace() {
 describe("overhaul acceptance — Task workspace Settings occlusion", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    leaseOperations = installDesktopGraphQlRuntime();
     localStorage.clear();
     queryClient.clear();
     hostRequests = [];
@@ -224,8 +253,9 @@ describe("overhaul acceptance — Task workspace Settings occlusion", () => {
       },
     });
     terminalApi.getDocuments.mockResolvedValue({ documents: [] });
-    terminalApi.getTerminals.mockResolvedValue([]);
-    terminalApi.listResumableTerminals.mockResolvedValue([]);
+    terminalReads.readTaskTerminalSessions.mockResolvedValue([]);
+    terminalReads.readScratchTerminalSessions.mockResolvedValue([]);
+    terminalReads.readTaskResumableTerminalSessions.mockResolvedValue([]);
     tauri.listen.mockResolvedValue(() => {});
     tauri.invoke.mockImplementation(
       (command: string, input?: { runId?: string }) => {
@@ -263,7 +293,7 @@ describe("overhaul acceptance — Task workspace Settings occlusion", () => {
     await waitFor(() =>
       expect(invocations("native_terminal_show")).toHaveLength(1),
     );
-    const requestsBeforeSettings = hostRequests.length;
+    const claimsBeforeSettings = leaseClaims().length;
 
     fireEvent.click(screen.getByRole("button", { name: "Open Settings" }));
     const dialog = await screen.findByRole("dialog", { name: "Studio settings" });
@@ -276,7 +306,10 @@ describe("overhaul acceptance — Task workspace Settings occlusion", () => {
     });
     expect(invocations("native_terminal_detach")).toHaveLength(0);
     expect(invocations("native_terminal_attach")).toHaveLength(1);
-    expect(hostRequests).toHaveLength(requestsBeforeSettings);
+    expect(leaseClaims()).toHaveLength(claimsBeforeSettings);
+    // Occlusion reaches no host route at all — the retired terminal REST
+    // surface is not something a presentation change may fall back to.
+    expect(hostRequests.some((url) => url.includes("/terminals"))).toBe(false);
     expect(useTerminalStore.getState().sessions["session-792"]).toMatchObject({
       agentRunId: "run-792",
       status: "ready",
@@ -291,11 +324,13 @@ describe("overhaul acceptance — Task workspace Settings occlusion", () => {
     ]);
     expect(invocations("native_terminal_attach")).toHaveLength(1);
     expect(
-      hostRequests.filter((url) =>
-        url.endsWith("/api/terminals/viewers/lease"),
+      leaseOperations.filter((operation) =>
+        operation.operationName === "CreateViewerLease",
       ),
     ).toHaveLength(1);
-    expect(hostRequests.some((url) => url.includes("/lease/release"))).toBe(false);
+    expect(
+      leaseOperations.some((operation) => operation.operationName === "DeleteViewerLease"),
+    ).toBe(false);
 
     nativeView.unmount();
     await waitFor(() =>

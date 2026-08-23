@@ -12,10 +12,13 @@ use std::process::{Command, Output, Stdio};
 
 mod inventory;
 mod runtime_namespace;
+mod session_naming;
 mod session_records;
 mod types;
 
 pub use runtime_namespace::current_runtime_namespace;
+use session_naming::session_name;
+pub use session_naming::{PersistedSessionName, SESSION_PREFIX};
 use session_records::{observe_records, SessionRecord};
 use types::{validate_geometry, validate_identifier};
 pub use types::{
@@ -24,7 +27,6 @@ pub use types::{
 };
 
 const DEFAULT_SOCKET: &str = "muxed";
-const SESSION_PREFIX: &str = "pt-";
 const OWNER_KEY: &str = "@pt-owner";
 const OWNER_VALUE: &str = "ticketry-v1";
 const RUN_KEY: &str = "@pt-agent-run-id";
@@ -91,7 +93,6 @@ impl TmuxAdapter {
             .arg("--")
             .arg(&request.command.executable)
             .args(&request.command.arguments);
-        checked(command, "create detached session")?;
         for (key, value) in [
             ("remain-on-exit", "on"),
             ("window-size", "manual"),
@@ -100,8 +101,13 @@ impl TmuxAdapter {
             (RUN_KEY, request.identity.agent_run_id()),
             (NAMESPACE_KEY, request.identity.runtime_namespace()),
         ] {
-            self.set_option(&session, key, value)?;
+            command.args([";", "set-option", "-t", &session, key, value]);
         }
+        // Keep creation and ownership publication in one tmux command queue.
+        // A concurrent reconciliation client can otherwise observe the new
+        // session between `new-session` and the first `set-option` and treat
+        // the incomplete identity as an orphan.
+        checked(command, "create detached session")?;
         match self.observe(&request.identity) {
             RuntimeObservation::Running | RuntimeObservation::Exited { .. } => {
                 Ok(CreateOutcome::Created)
@@ -315,14 +321,6 @@ impl TmuxAdapter {
             .collect()
     }
 
-    fn set_option(&self, session: &str, key: &str, value: &str) -> Result<(), TmuxAdapterError> {
-        checked(
-            self.command_with(["set-option", "-t", session, key, value]),
-            "set session option",
-        )?;
-        Ok(())
-    }
-
     fn command(&self) -> Command {
         let mut command = Command::new(&self.executable);
         command
@@ -370,9 +368,6 @@ pub(crate) fn approved_tool_path(tool: SupportedTool) -> Result<PathBuf, TmuxAda
         })
 }
 
-fn session_name(run_id: &str) -> String {
-    format!("{SESSION_PREFIX}{run_id}")
-}
 fn shell_quote(value: &str) -> String {
     format!("'{}'", value.replace('\'', "'\"'\"'"))
 }

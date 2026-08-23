@@ -3,11 +3,11 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 
-import { validateFinalizedDefaults } from "../backend/worktracker/reviewed_defaults_validator.mjs";
+import { validateFinalizedDefaults } from "./reviewed_defaults_validator.mjs";
 
 const trackedArtifact = JSON.parse(
   await readFile(
-    new URL("../backend/worktracker/reviewed_defaults.json", import.meta.url),
+    new URL("../studio/src-tauri/resources/work-management/reviewed_defaults.json", import.meta.url),
     "utf8",
   ),
 );
@@ -118,7 +118,8 @@ test("edits and republishes the fetched artifact", async () => {
   await import(`./app.js?finalize-test=${Date.now()}`);
 
   assert.equal(document.querySelector("h1").textContent, "Agent prompt");
-  assert.equal(document.querySelectorAll("[data-state]").length, 7);
+  assert.equal(document.querySelectorAll("[data-state]").length, 8);
+  document.querySelector('[data-state="Grill"]').click();
   assert.match(
     document.querySelector("#prompt-editor").value,
     /This task is in `Grill`/,

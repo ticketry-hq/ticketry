@@ -2,27 +2,35 @@
 //! optional: the desktop stays usable when its port cannot be bound.
 
 use std::path::Path;
-use tauri::Manager;
-
-use crate::data_directory::established_data_directory;
 use crate::desktop::environment::{optional_port, DEVELOPMENT_MCP_PORT_ENV};
-use crate::desktop::launch_runtime::DesktopLaunchRuntime;
-use crate::desktop::service_state::DesktopServiceState;
-use crate::sidecar_supervision::Supervisor;
 use crate::work_management;
 
-/// External MCP clients get one stable endpoint in both development and
-/// packaged launches.
-pub(crate) const WORKTRACKER_MCP_PORT: u16 = 8123;
-
 pub(crate) fn configured_mcp_port() -> Result<u16, String> {
-    optional_port(DEVELOPMENT_MCP_PORT_ENV).map(|port| port.unwrap_or(WORKTRACKER_MCP_PORT))
+    if cfg!(debug_assertions) {
+        optional_port(DEVELOPMENT_MCP_PORT_ENV).map(selected_mcp_port)
+    } else {
+        Ok(0)
+    }
+}
+
+fn selected_mcp_port(development_override: Option<u16>) -> u16 {
+    development_override.unwrap_or(0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::selected_mcp_port;
+
+    #[test]
+    fn production_requests_an_os_assigned_port() {
+        assert_eq!(selected_mcp_port(None), 0);
+        assert_eq!(selected_mcp_port(Some(43_219)), 43_219);
+    }
 }
 
 pub(crate) async fn start_in_process_mcp(
     data_directory: &Path,
-    backend_port: u16,
-    backend_api_key: &str,
+    ingress_credential: &str,
     mcp_port: u16,
     terminal_launch: Option<crate::terminal_launch::TerminalLaunchService>,
 ) -> Result<work_management::mcp::McpRuntime, String> {
@@ -30,8 +38,7 @@ pub(crate) async fn start_in_process_mcp(
         address: work_management::mcp::loopback(mcp_port).map_err(|error| error.to_string())?,
         database_path: data_directory.join("state.db"),
         media_root: data_directory.join("media"),
-        backend_base_url: format!("http://127.0.0.1:{backend_port}/api"),
-        backend_api_key: backend_api_key.to_owned(),
+        ingress_credential: ingress_credential.to_owned(),
     };
     match terminal_launch {
         Some(service) => {
@@ -40,44 +47,4 @@ pub(crate) async fn start_in_process_mcp(
         }
         None => work_management::mcp::McpRuntime::start(configuration).await,
     }
-}
-
-/// Restart the listener if it stopped while the backend kept serving. The
-/// caller already holds the supervisor lock.
-pub(crate) fn ensure_in_process_mcp(
-    application: &tauri::AppHandle,
-    state: &DesktopServiceState,
-    supervisor: &Supervisor,
-) -> Result<(), String> {
-    let mut runtime = state.mcp_runtime.lock().expect("MCP runtime lock poisoned");
-    if runtime
-        .as_ref()
-        .is_some_and(work_management::mcp::McpRuntime::is_running)
-    {
-        return Ok(());
-    }
-    if let Some(stopped) = runtime.take() {
-        tauri::async_runtime::block_on(stopped.shutdown());
-    }
-    let data_directory = established_data_directory().map_err(|error| error.to_string())?;
-    let backend_port = supervisor
-        .port()
-        .ok_or_else(|| "backend is unavailable for WorkTracker MCP".to_owned())?;
-    let mcp_port = configured_mcp_port()?;
-    let composed = application
-        .state::<DesktopLaunchRuntime>()
-        .composed_runtime()?
-        .clone();
-    let terminal_launch = crate::terminal_launch::TerminalLaunchService::new(
-        composed.commands().clone(),
-        std::sync::Arc::new(composed.terminal_runtime().clone()),
-    );
-    *runtime = Some(tauri::async_runtime::block_on(start_in_process_mcp(
-        &data_directory,
-        backend_port,
-        supervisor.credential(),
-        mcp_port,
-        Some(terminal_launch),
-    ))?);
-    Ok(())
 }

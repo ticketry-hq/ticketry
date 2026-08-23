@@ -4,8 +4,7 @@
   "private": true,
   "version": "0.1.0",
   "workspaces": [
-    "studio",
-    "surfaces/worktracker-typescript-sdk"
+    "studio"
   ],
   "scripts": {
     "catalog:build": "npm --prefix docs/eventcatalog run build",
@@ -16,18 +15,10 @@
     "catalog:preview": "npm --prefix docs/eventcatalog run preview",
     "catalog:sync": "npm --prefix docs/eventcatalog run sync",
     "dev": "npm run desktop:dev",
-    "db:setup": "bash scripts/local-postgres.sh setup",
-    "db:status": "bash scripts/local-postgres.sh status",
-    "db:disable": "bash scripts/local-postgres.sh disable",
     "web": "node scripts/web-dev.mjs",
     "web:dev": "npm run web",
-    "openapi:export": "node scripts/export-openapi.mjs",
-    "sdk:generate": "node scripts/generate-typescript-sdk.mjs",
-    "python-sdk:generate": "node scripts/generate-python-sdk.mjs",
-    "contract:generate": "npm run openapi:export && npm run sdk:generate && npm run python-sdk:generate",
-    "contract:check": "node scripts/check-contract-drift.mjs",
     "boundary:check": "node scripts/check-boundary.mjs",
-    "prototype:supabase": "node backend/prototypes/supabase-migration/tui.mjs",
+    "caller:check": "node scripts/shipping-caller-gate.mjs",
     "desktop:build": "npm run desktop:build --workspace @worktracker/studio",
     "desktop:deploy": "npm run desktop:deploy --workspace @worktracker/studio",
     "deploy": "npm run desktop:deploy --workspace @worktracker/studio",
@@ -41,16 +32,9 @@
     "logs:follow": "node scripts/dev-logs.mjs follow",
     "logs:clear": "node scripts/dev-logs.mjs clear",
     "serve:dmg": "node scripts/serve-dmg.mjs",
-    "test:sdk": "npm run test --workspace @worktracker/typescript-sdk",
-    "test:slice4": "node scripts/slice4-migration-gate.mjs",
-    "test:slice4:packaged": "node scripts/slice4-migration-gate.mjs --packaged",
-    "test:slice5": "node scripts/slice5-migration-gate.mjs",
-    "test:slice5:packaged": "node scripts/slice5-migration-gate.mjs --packaged",
-    "verify:slice5-copy": "cargo run --locked --manifest-path studio/src-tauri/Cargo.toml --bin verify_slice5_copy --",
-    "typecheck": "npm run typecheck --workspace @worktracker/typescript-sdk && npm run typecheck --workspace @worktracker/studio",
-    "build": "npm run build --workspace @worktracker/typescript-sdk && npm run build --workspace @worktracker/studio"
-  },
-  "devDependencies": {
-    "@openapitools/openapi-generator-cli": "2.39.0"
+    "verify:slice5-copy": "cargo run --locked --manifest-path studio/src-tauri/Cargo.toml --features development-tools --bin verify_slice5_copy --",
+    "verify:slice6-copy": "cargo run --locked --manifest-path studio/src-tauri/Cargo.toml --features development-tools --bin verify_slice6_copy --",
+    "typecheck": "npm run typecheck --workspace @worktracker/studio",
+    "build": "npm run build --workspace @worktracker/studio"
   }
 }

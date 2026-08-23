@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { ApiError } from "../../shared/api/client";
+import { ApiError } from "../../shared/api/errors";
 import * as recentProjects from "./utilities/recentProjects";
 import { toast } from "../../state/clientStore";
 import { useClientStore } from "../../state/clientStore";
@@ -13,7 +13,7 @@ import {
   updateProjectRecord,
 } from "./queries";
 import { markModuleCreated } from "./internal/newlyCreatedModules";
-import { createWorkItem } from "../work-items";
+import { createWorkItem } from "../work-items/mutationTransport";
 import type {
   Module,
   Project,

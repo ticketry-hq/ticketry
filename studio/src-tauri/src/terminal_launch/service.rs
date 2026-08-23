@@ -3,6 +3,7 @@ use std::sync::Arc;
 use sea_orm::{DatabaseConnection, EntityTrait};
 
 use crate::entities::{terminals::session, work_management::issue};
+use crate::launch_authority::InteractiveLaunchAuthority;
 use crate::runs_persistence::LaunchPreparationParticipant;
 use crate::runs_persistence::RunsServices;
 
@@ -24,6 +25,10 @@ pub struct TerminalLaunchService {
     pub(super) database: DatabaseConnection,
     pub(super) runs: RunsServices,
     pub(super) runtime: Arc<dyn TerminalLaunchRuntime>,
+    /// Resolves the launch material an interactive request is allowed to run
+    /// with. A service composed without one cannot accept an interactive
+    /// agent launch at all: there is no caller-supplied fallback.
+    pub(super) authority: Option<Arc<dyn InteractiveLaunchAuthority>>,
     pub(super) lease_owner: String,
     pub(super) checkpoints: LaunchCheckpoints,
 }
@@ -34,9 +39,18 @@ impl TerminalLaunchService {
             runs: RunsServices::new(database.clone()),
             database,
             runtime,
+            authority: None,
             lease_owner: uuid::Uuid::new_v4().simple().to_string(),
             checkpoints: LaunchCheckpoints::default(),
         }
+    }
+
+    /// Compose the interactive launch authority. Without it the service still
+    /// serves policy-resolved launches, recovery, and module shells, but
+    /// refuses every interactive agent launch.
+    pub fn with_authority(mut self, authority: Arc<dyn InteractiveLaunchAuthority>) -> Self {
+        self.authority = Some(authority);
+        self
     }
 
     #[doc(hidden)]
@@ -149,6 +163,15 @@ impl TerminalLaunchService {
         crate::terminal_resume::validate_resume_request(&self.database, &request).await?;
         self.validate_scope(&request).await?;
         self.runtime.preflight(&request).await?;
+        // A launch that did not arrive with resolved policy is interactive:
+        // its provider, model, reasoning, prompt, required skills, and
+        // document identity are rebuilt from authority before anything is
+        // persisted, so the caller's copies never reach durable material.
+        let request = if participant.is_none() && policy_launch_state.is_none() {
+            self.resolve_material(request).await?
+        } else {
+            request
+        };
         self.checkpoints
             .checkpoint(TerminalLaunchBoundary::RequestValidated)
             .await?;

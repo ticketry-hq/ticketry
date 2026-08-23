@@ -48,7 +48,7 @@ pub(crate) fn detach_transient_viewers(application: &tauri::AppHandle) {
         .detach_all();
 }
 
-pub(crate) fn shutdown_packaged_backend(application: &tauri::AppHandle) {
+pub(crate) fn shutdown_rust_runtime(application: &tauri::AppHandle) {
     let state = application.state::<DesktopServiceState>();
     state.stopping.store(true, Ordering::Release);
     // Live document discovery is the first thing to stop: a watcher settling
@@ -101,16 +101,6 @@ pub(crate) fn shutdown_packaged_backend(application: &tauri::AppHandle) {
         .take();
     if let Some(runtime) = mcp_runtime {
         tauri::async_runtime::block_on(runtime.shutdown());
-    }
-    let supervisor = state
-        .supervisor
-        .lock()
-        .expect("supervisor lock poisoned")
-        .take();
-    if let Some(mut supervisor) = supervisor {
-        if let Err(error) = supervisor.shutdown() {
-            eprintln!("Ticketry could not stop its backend sidecar: {error}");
-        }
     }
 }
 

@@ -1,5 +1,4 @@
 import { studioRuntime } from "../../runtime";
-import * as rest from "../../shared/api/client";
 import { graphQlMutationError } from "../../shared/api/graphqlError";
 import type { WorkItem, WorkItemCreate } from "../../shared/api/types";
 import { compactWorktrackerId } from "../../shared/api/generatedWorktracker";
@@ -28,7 +27,6 @@ export function createWorkItem(projectId: string, body: WorkItemCreate): Promise
     return Promise.reject(new Error("A work-item type is required."));
   }
   return studioRuntime().writeWorkTracker({
-    rest: () => rest.createWorkItem(projectId, body),
     graphQl: (execute) => graphQl(async () => workItemFromIssue((await execute(
       CreateWorkTrackerWorkItemDocument,
       {
@@ -48,7 +46,6 @@ export function updateWorkItem(
   patch: { name?: string; description?: string | null; issue_type_id?: string },
 ): Promise<WorkItem> {
   return studioRuntime().writeWorkTracker({
-    rest: () => rest.patchWorkItem(id, patch),
     graphQl: (execute) => graphQl(async () => workItemFromIssue((await execute(
       UpdateWorkTrackerWorkItemDocument,
       { id: compactWorktrackerId(id), name: patch.name, description: patch.description, issueTypeId: patch.issue_type_id ? compactWorktrackerId(patch.issue_type_id) : undefined },
@@ -58,7 +55,6 @@ export function updateWorkItem(
 
 export function transitionWorkItem(id: string, stateId: string): Promise<WorkItem> {
   return studioRuntime().writeWorkTracker({
-    rest: () => rest.patchWorkItem(id, { state_id: stateId }),
     graphQl: (execute) => graphQl(async () => workItemFromIssue((await execute(
       TransitionWorkTrackerWorkItemDocument,
       { id: compactWorktrackerId(id), targetStateId: compactWorktrackerId(stateId) },
@@ -68,7 +64,6 @@ export function transitionWorkItem(id: string, stateId: string): Promise<WorkIte
 
 export function reparentWorkItem(id: string, parentId: string | null): Promise<WorkItem> {
   return studioRuntime().writeWorkTracker({
-    rest: () => rest.patchWorkItem(id, { parent_id: parentId }),
     graphQl: (execute) => graphQl(async () => workItemFromIssue((await execute(
       ReparentWorkTrackerWorkItemDocument,
       { id: compactWorktrackerId(id), parentId: parentId ? compactWorktrackerId(parentId) : null },
@@ -78,7 +73,6 @@ export function reparentWorkItem(id: string, parentId: string | null): Promise<W
 
 export function setWorkItemBlockers(id: string, blockedByIds: string[]): Promise<WorkItem> {
   return studioRuntime().writeWorkTracker({
-    rest: () => rest.patchWorkItem(id, { blocked_by_ids: blockedByIds }),
     graphQl: (execute) => graphQl(async () => workItemFromIssue((await execute(
       SetWorkTrackerBlockersDocument,
       { id: compactWorktrackerId(id), blockedByIds: blockedByIds.map(compactWorktrackerId) },
@@ -91,7 +85,6 @@ export function reorderWorkItem(
   neighbors: { before_id: string | null; after_id: string | null; initial_order_ids?: string[] | null },
 ): Promise<WorkItem> {
   return studioRuntime().writeWorkTracker({
-    rest: () => rest.reorderWorkItem(id, neighbors),
     graphQl: (execute) => graphQl(async () => workItemFromIssue((await execute(
       ReorderWorkTrackerWorkItemDocument,
       {
@@ -106,7 +99,6 @@ export function reorderWorkItem(
 
 export function deleteWorkItem(id: string): Promise<void> {
   return studioRuntime().writeWorkTracker({
-    rest: () => rest.deleteWorkItem(id),
     graphQl: (execute) => graphQl(async () => {
       await execute(DeleteWorkTrackerWorkItemDocument, { id: compactWorktrackerId(id) });
     }),

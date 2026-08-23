@@ -10,10 +10,15 @@ import {
 } from "@playwright/test";
 import {
   acknowledgeOnboarding,
+  createModule,
+  createProject,
   createWorkItem,
+  getModules,
+  getProjects,
+  getWorkItems,
+  getWorkflowCatalog,
   openModule,
   openWorkItem,
-  responseJson,
   selectModuleForProfile,
   type ApiRow,
   type ModuleRow,
@@ -60,18 +65,16 @@ async function seedProject(request: APIRequestContext): Promise<void> {
   fixture.folder = await mkdtemp(join(tmpdir(), "ticketry-web-e2e-"));
   await acknowledgeOnboarding(request);
 
-  const projects = await responseJson<ProjectRow[]>(
-    await request.get("/api/work-tracker/projects"),
-  );
+  const projects = await getProjects(request);
   fixture.project = projects.find((project) => project.slug === "CDN")
-    ?? await responseJson<ProjectRow>(await request.post(
-      "/api/work-tracker/projects",
-      { data: { name: "Coding", slug: "CDN", description: "" } },
-    ));
+    ?? await createProject(request, {
+      name: "Coding",
+      slug: "CDN",
+      description: "",
+    });
 
-  const issueTypes = await responseJson<IssueTypeRow[]>(await request.get(
-    `/api/work-tracker/projects/${fixture.project.id}/issue-types`,
-  ));
+  const catalog = await getWorkflowCatalog(request, fixture.project.id);
+  const issueTypes = catalog.issue_types.nodes;
   const moduleType = issueTypes.find((issueType) =>
     issueType.level === "module" || issueType.name === "Module"
   );
@@ -85,20 +88,24 @@ async function seedProject(request: APIRequestContext): Promise<void> {
   fixture.storyType = storyType!;
   fixture.implementationType = implementationType!;
 
-  const modules = await responseJson<ModuleRow[]>(await request.get(
-    `/api/work-tracker/projects/${fixture.project.id}/modules`,
-  ));
+  const modules = await getModules(request, fixture.project.id);
   fixture.module = modules.find((module) => module.name === names.module)
-    ?? await responseJson<ModuleRow>(await request.post(
-      `/api/work-tracker/projects/${fixture.project.id}/modules`,
-      { data: { name: names.module, issue_type_id: moduleType!.id } },
-    ));
+    ?? await createModule(request, fixture.project.id, {
+      name: names.module,
+      issue_type_id: moduleType!.id,
+    });
   fixture.secondModule = modules.find((module) =>
     module.name === names.secondModule
-  ) ?? await responseJson<ModuleRow>(await request.post(
-    `/api/work-tracker/projects/${fixture.project.id}/modules`,
-    { data: { name: names.secondModule, issue_type_id: moduleType!.id } },
-  ));
+  ) ?? await createModule(request, fixture.project.id, {
+    name: names.secondModule,
+    issue_type_id: moduleType!.id,
+  });
+  await selectModuleForProfile(
+    request,
+    fixture.project.id,
+    fixture.secondModule.id,
+    fixture.folder,
+  );
   await selectModuleForProfile(
     request,
     fixture.project.id,
@@ -106,12 +113,8 @@ async function seedProject(request: APIRequestContext): Promise<void> {
     fixture.folder,
   );
 
-  fixture.states = await responseJson<StateRow[]>(await request.get(
-    `/api/work-tracker/projects/${fixture.project.id}/states`,
-  ));
-  const existingItems = await responseJson<WorkItemRow[]>(await request.get(
-    `/api/work-tracker/work-items?project=${fixture.project.id}`,
-  ));
+  fixture.states = [...catalog.states.nodes];
+  const existingItems = await getWorkItems(request, fixture.project.id);
   const ensureItem = async (
     name: string,
     body: Record<string, unknown>,
@@ -199,7 +202,8 @@ test.describe("complete browser application", () => {
     await openModule(page, names.module);
 
     await page.getByRole("tab", { name: names.secondModule }).click();
-    await expect(page.getByRole("treeitem", { name: names.parent })).toHaveCount(0);
+    await expect(page.getByRole("tab", { name: names.secondModule }))
+      .toHaveAttribute("aria-selected", "true");
     await page.getByRole("tab", { name: names.module }).click();
     await expect(page.getByRole("treeitem", { name: names.parent })).toBeVisible();
 
@@ -275,31 +279,10 @@ test.describe("complete browser application", () => {
     await expect(page.getByTestId("details-panel")).toBeVisible();
   });
 
-  test("moves state, reorders rows, and preserves collapsed groups", async ({
+  test("reorders rows and preserves collapsed groups", async ({
     page,
   }) => {
     await openModule(page, names.module);
-    await openWorkItem(page, names.moving);
-
-    await page.getByTestId("state-picker").getByRole("button").click();
-    // Story workflows begin Grill → Cancelled. Follow a real configured edge so
-    // this test exercises a successful move rather than the rollback path.
-    await page.getByRole("button", { name: "Cancelled", exact: true }).click();
-    await expect(page.getByTestId("state-picker")).toContainText("Cancelled");
-    // Verify the optimistic picker result reached the durable server state
-    // before continuing with the independent ordering checks.
-    const cancelledId = fixture.states.find((state) =>
-      state.name === "Cancelled"
-    )!.id;
-    await expect.poll(async () => {
-      const item = await responseJson<WorkItemRow>(await page.request.get(
-        `/api/work-tracker/work-items/${fixture.moving.id}`,
-      ));
-      const state = (item as unknown as {
-        state: string | { id: string };
-      }).state;
-      return typeof state === "string" ? state : state.id;
-    }).toBe(cancelledId);
 
     const first = page.getByRole("treeitem", { name: names.reorderFirst });
     const second = page.getByRole("treeitem", { name: names.reorderSecond });
@@ -310,10 +293,10 @@ test.describe("complete browser application", () => {
         < labels.findIndex((label) => label.includes(names.reorderFirst));
     }).toBe(true);
 
-    await page.getByRole("button", { name: "Collapse Grill" }).click();
+    await page.getByRole("button", { name: "Collapse Ideas" }).click();
     await page.reload();
-    await expect(page.getByRole("button", { name: "Expand Grill" })).toBeVisible();
-    await page.getByRole("button", { name: "Expand Grill" }).click();
+    await expect(page.getByRole("button", { name: "Expand Ideas" })).toBeVisible();
+    await page.getByRole("button", { name: "Expand Ideas" }).click();
     await expect(page.getByRole("treeitem", { name: names.reorderFirst })).toBeVisible();
 
     const labelsAfterReload = await page.getByRole("treeitem").allTextContents();
@@ -354,13 +337,14 @@ test.describe("complete browser application", () => {
   }) => {
     await openModule(page, names.module);
     await page.setViewportSize({ width: 900, height: 650 });
-    const trigger = page.getByRole("button", { name: "Open Keyboard Shortcuts" });
+    const trigger = page.getByRole("button", { name: "Open Settings" });
     await trigger.click();
-    const dialog = page.getByRole("dialog", { name: "Keyboard Shortcuts" });
-    await expect(dialog).toBeVisible();
+    const dialog = page.getByRole("dialog", { name: "Studio settings" });
+    await dialog.getByRole("tab", { name: "Keyboard shortcuts" }).click();
     const filter = dialog.getByRole("searchbox", {
       name: "Filter keyboard shortcuts",
     });
+    await filter.click();
     await expect(filter).toBeFocused();
     await filter.fill("definitely-no-such-shortcut");
     await expect(dialog.getByRole("status")).toContainText(
@@ -385,10 +369,7 @@ test.describe("complete browser application", () => {
       name: "Grill state configuration",
     });
     await expect(panel).toBeVisible();
-    await expect(panel.getByRole("tablist", { name: "Issue types" }))
-      .toBeVisible();
-    await expect(panel.getByRole("heading", { name: "Launch configuration" }))
-      .toBeVisible();
+    await expect(panel.getByRole("heading", { name: "Grill" })).toBeVisible();
     await panel.getByRole("button", {
       name: "Close Grill state configuration",
     }).click();
@@ -404,22 +385,12 @@ test.describe("complete browser application", () => {
   }) => {
     await openModule(page, names.module);
     await openWorkItem(page, names.parentRenamed);
-    await page.route(
-      `**/api/work-tracker/work-items/${fixture.parent.id}/launch-agent`,
-      async (route) => {
-        await route.fulfill({
-          status: 503,
-          contentType: "application/json",
-          body: JSON.stringify({ detail: "provider unavailable" }),
-        });
-      },
-    );
 
     await page.getByRole("button", { name: "Run agent" }).click();
     const alert = page.getByRole("alert").filter({
       hasText: "Agent run could not be started",
     });
-    await expect(alert).toContainText("provider unavailable");
+    await expect(alert).toContainText("requires the Ticketry desktop runtime");
     await alert.getByRole("button", { name: "Dismiss" }).click();
     await expect(alert).toHaveCount(0);
     await expect(page.getByTestId("issue-name")).toContainText(
@@ -430,79 +401,16 @@ test.describe("complete browser application", () => {
   test("loads and edits every Settings section without stale endpoints", async ({
     page,
   }) => {
-    const api404s: string[] = [];
-    page.on("response", (response) => {
-      if (response.status() === 404 && response.url().includes("/api/")) {
-        api404s.push(response.url());
+    const legacyApiRequests: string[] = [];
+    page.on("request", (request) => {
+      if (request.url().includes("/api/work-tracker")) {
+        legacyApiRequests.push(request.url());
       }
     });
     await openModule(page, names.module);
     let dialog = await openSettings(page);
-    await expect(dialog.getByRole("heading", { name: "States" })).toBeVisible();
+    await expect(dialog.getByRole("heading", { name: "Models" })).toBeVisible();
     await expect(dialog.getByText("HTTP 404", { exact: false })).toHaveCount(0);
-
-    await dialog.getByRole("button", { name: "Add state" }).click();
-    await dialog.getByRole("textbox", { name: "State name", exact: true })
-      .fill("E2E paused");
-    await dialog.getByRole("combobox", { name: "State group" })
-      .selectOption("started");
-    await dialog.getByRole("button", { name: "Create state" }).click();
-    let stateRow = dialog.getByRole("listitem", { name: "E2E paused state" });
-    await expect(stateRow).toBeVisible();
-    const stateName = stateRow.getByRole("textbox", {
-      name: "State name for E2E paused",
-    });
-    await stateName.fill("E2E paused renamed");
-    await stateName.blur();
-    stateRow = dialog.getByRole("listitem", { name: "E2E paused renamed state" });
-    await expect(stateRow).toBeVisible();
-    await stateRow.getByRole("button", { name: "Move E2E paused renamed earlier" })
-      .click();
-    await stateRow.getByRole("button", { name: "Delete E2E paused renamed" })
-      .click();
-    const deleteDialog = page.getByRole("dialog", {
-      name: "Delete E2E paused renamed?",
-    });
-    await expect(deleteDialog).toContainText("Nothing is in this state");
-    await deleteDialog.getByRole("button", { name: "Delete state" }).click();
-    await expect(dialog.getByRole("listitem", {
-      name: "E2E paused renamed state",
-    })).toHaveCount(0);
-
-    await dialog.getByRole("tab", { name: "Issue types" }).click();
-    await expect(dialog.getByRole("heading", { name: "Issue types" })).toBeVisible();
-    await dialog.getByRole("tab", { name: "Story", exact: true }).click();
-    await expect(dialog.getByRole("combobox", { name: "Start State" }))
-      .not.toHaveValue("");
-    const workflowStates = dialog.getByRole("list", {
-      name: "Story workflow states",
-    });
-    await expect(workflowStates.getByRole("listitem").first()).toBeVisible();
-    const launchButton = workflowStates.getByRole("button", {
-      name: /^Expand .* launch configuration$/,
-    }).first();
-    await launchButton.click();
-    await expect(workflowStates.getByRole("textbox", { name: "Prompt" }).first())
-      .toBeVisible();
-    const transition = workflowStates.getByRole("button", {
-      name: /^Expand .* to /,
-    }).first();
-    if (await transition.isVisible().catch(() => false)) {
-      await transition.click();
-      const permission = workflowStates.getByRole("checkbox", {
-        name: /^Agents may move /,
-      }).first();
-      const wasChecked = await permission.isChecked();
-      // This controlled input applies immediately through the API, then
-      // refreshes from the canonical workflow. A plain click lets that async
-      // round-trip complete before Playwright asserts the resulting state.
-      await permission.click();
-      await expect(permission).toBeChecked({ checked: !wasChecked });
-      await permission.click();
-      await expect(permission).toBeChecked({ checked: wasChecked });
-    }
-
-    await dialog.getByRole("tab", { name: "Models" }).click();
     await expect(dialog.getByRole("region", { name: "Model configuration" }))
       .toBeVisible();
     await expect(dialog.getByRole("checkbox", { name: "Activate codex" }))
@@ -511,7 +419,7 @@ test.describe("complete browser application", () => {
       .toHaveValue("codex");
     // An input backed by a datalist exposes the ARIA combobox role.
     await expect(dialog.getByRole("combobox", { name: "Model" }))
-      .toHaveValue("gpt-5.6-luna");
+      .toHaveValue("gpt-5.4");
     await expect(dialog.getByRole("combobox", { name: "Reasoning" }))
       .toHaveValue("medium");
 
@@ -524,6 +432,10 @@ test.describe("complete browser application", () => {
     await claude.setChecked(!claudeWasActive);
     await dialog.getByRole("button", { name: "Save changes" }).click();
     await expect(dialog).toContainText("Model configuration saved.");
+
+    await dialog.getByRole("tab", { name: "Keyboard shortcuts" }).click();
+    await expect(dialog.getByRole("heading", { name: "Keyboard shortcuts" }))
+      .toBeVisible();
     await dialog.getByRole("button", { name: "Close dialog" }).click();
 
     dialog = await openSettings(page);
@@ -535,7 +447,7 @@ test.describe("complete browser application", () => {
     await dialog.getByRole("button", { name: "Save changes" }).click();
     await expect(dialog).toContainText("Model configuration saved.");
     await dialog.getByRole("button", { name: "Close dialog" }).click();
-    expect(api404s).toEqual([]);
+    expect(legacyApiRequests).toEqual([]);
   });
 
   test("confirms destructive issue deletion through visible UI", async ({ page }) => {

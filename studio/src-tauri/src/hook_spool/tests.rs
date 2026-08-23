@@ -273,3 +273,28 @@ async fn runtime_performs_startup_periodic_and_final_drains() {
     let final_report = runtime.shutdown().await;
     assert_eq!(final_report.accepted, 1);
 }
+
+#[tokio::test]
+async fn a_required_drain_needs_the_root_startup_prepares_for_a_clean_profile() {
+    let data_directory = TempDir::new().expect("data directory");
+    let root = crate::terminal_lifecycle::hook_spool_directory(data_directory.path());
+    let _ = fs::remove_dir_all(&root);
+    let spool = HookSpool::new(root.clone(), FakeSink::default(), DEFAULT_BATCH_SIZE)
+        .expect("absolute spool");
+
+    // A clean profile reaches startup with no root at all, so the required
+    // initial drain cannot run until the launch sequence has prepared one.
+    let unavailable = spool
+        .drain_required()
+        .await
+        .expect_err("an unprepared spool root");
+    assert_eq!(unavailable.diagnostic(), HookDiagnostic::SpoolUnavailable);
+
+    crate::terminal_lifecycle::ensure_hook_spool_directory(data_directory.path())
+        .expect("prepare the spool root");
+
+    let report = spool.drain_required().await.expect("a prepared spool root");
+    assert_eq!(report.scanned, 0);
+    assert!(report.diagnostics.is_empty(), "{:?}", report.diagnostics);
+    let _ = fs::remove_dir_all(&root);
+}

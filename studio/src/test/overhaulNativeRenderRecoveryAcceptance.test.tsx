@@ -21,6 +21,7 @@ import {
   type SessionStatus,
 } from "../features/agents/terminal/internal/sessionStore";
 import { useClientStore } from "../state/clientStore";
+import { installDesktopGraphQlRuntime } from "./desktopGraphQlRuntime";
 
 const runtime = vi.hoisted(() => ({
   invoke: vi.fn(),
@@ -113,6 +114,7 @@ describe("native render recovery acceptance", () => {
 
   beforeEach(() => {
     vi.resetAllMocks();
+    installDesktopGraphQlRuntime();
     // `shouldAdvanceTime` keeps Testing Library's own polling alive — it does
     // not detect Vitest's fake timers — while every recovery delay in this
     // suite is stepped explicitly through `elapse`.
@@ -318,14 +320,11 @@ describe("native render recovery acceptance", () => {
     // campaign is one attempt in and owes a one second wait, not 500 ms.
     writeNativeRenderRecoveryAttempt(1);
     seed(session("session-h", "run-h"), session("session-i", "run-i"));
-    const requests: string[] = [];
-    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
-      requests.push(String(input));
-      return new Response("{}", {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    }));
+    // Viewer ownership is claimed and released on the Rust lease contract, so
+    // what a test counts is lease operations, not host requests.
+    const leaseOperations = installDesktopGraphQlRuntime();
+    const leases = (operationName: string) =>
+      leaseOperations.filter((operation) => operation.operationName === operationName);
 
     failingNativeTerminal("terminal attachment failed");
     const failedAgain = render(<Terminal sessionId="session-h" active />);
@@ -354,11 +353,11 @@ describe("native render recovery acceptance", () => {
       );
     });
     const claims = useTerminalForegroundStore.getState().claims;
-    requests.length = 0;
+    leaseOperations.length = 0;
     window.dispatchEvent(new Event("pagehide"));
     window.dispatchEvent(new Event("beforeunload"));
     await waitFor(() => {
-      expect(requests.filter((url) => url.endsWith("/release"))).toHaveLength(1);
+      expect(leases("DeleteViewerLease")).toHaveLength(1);
     });
     expect(runtime.invoke.mock.calls.filter(([command]) =>
       command === "native_terminal_detach"

@@ -6,7 +6,7 @@ import { useClientStore } from "../../../state/clientStore";
 import { useCachedStates } from "../../../shared/query/stateCatalog";
 import { MODAL_ACTIONS } from "../../../app/navigation/keymapRegistry";
 import { useSetWorkItemState } from "../../work-items";
-import { apiErrorMessage, isNoOpTransition } from "../../../shared/api/client";
+import { apiErrorMessage, isNoOpTransition } from "../../../shared/api/errors";
 import { toast } from "../../../state/clientStore";
 
 export function StatusUpdate() {

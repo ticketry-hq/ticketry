@@ -2,7 +2,8 @@ use async_trait::async_trait;
 
 use crate::entities::terminals::session;
 use crate::tmux_adapter::{
-    InventoryEntry, KillOutcome, RuntimeIdentity, RuntimeObservation, TmuxAdapter,
+    InventoryEntry, KillOutcome, PersistedSessionName, RuntimeIdentity, RuntimeObservation,
+    TmuxAdapter,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -47,7 +48,7 @@ impl TmuxCleanupRuntime {
     fn adapter_and_identity(
         terminal: &session::Model,
     ) -> Result<(TmuxAdapter, RuntimeIdentity), CleanupRuntimeObservation> {
-        if terminal.tmux_session_name != format!("pt-{}", terminal.agent_run_id) {
+        if !PersistedSessionName::records(&terminal.tmux_session_name, &terminal.agent_run_id) {
             return Err(CleanupRuntimeObservation::Ambiguous);
         }
         let namespace = terminal

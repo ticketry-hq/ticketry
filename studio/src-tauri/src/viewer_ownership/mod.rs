@@ -6,6 +6,7 @@
 //! viewer. None of these operations can terminate the hosted tmux session.
 
 mod error;
+mod expiry;
 mod graphql;
 mod service;
 

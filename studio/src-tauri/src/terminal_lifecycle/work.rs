@@ -17,8 +17,8 @@ use crate::terminal_reconciliation::{
     RecordedSessionDecision, TerminalReconciliationReport, TerminalReconciliationService,
 };
 use crate::tmux_adapter::{
-    ApprovedArgv, CreateOutcome, CreateSession, RuntimeIdentity, RuntimeObservation,
-    TerminalGeometry, TmuxAdapter,
+    ApprovedArgv, CreateOutcome, CreateSession, PersistedSessionName, RuntimeIdentity,
+    RuntimeObservation, TerminalGeometry, TmuxAdapter,
 };
 use crate::viewer_ownership::ViewerOwnershipService;
 
@@ -27,7 +27,11 @@ pub trait TerminalLifecycleWork: Send + Sync + 'static {
     async fn verify_schema(&self) -> Result<(), String>;
     async fn drain_spool(&self) -> Result<DrainReport, String>;
     async fn reconcile(&self) -> Result<TerminalReconciliationReport, String>;
+    /// Retire every lease. Reserved for the gated startup and shutdown passes.
     async fn expire_viewer_leases(&self) -> Result<u64, String>;
+    /// Retire only lapsed leases, so periodic passes leave renewed viewers
+    /// holding their ownership.
+    async fn expire_stale_viewer_leases(&self) -> Result<u64, String>;
 }
 
 /// The existing terminal services composed over the schema's one writable pool.
@@ -92,6 +96,13 @@ impl TerminalLifecycleWork for ProductionTerminalLifecycleWork {
             .await
             .map_err(|error| error.to_string())
     }
+
+    async fn expire_stale_viewer_leases(&self) -> Result<u64, String> {
+        self.viewers
+            .expire_stale()
+            .await
+            .map_err(|error| error.to_string())
+    }
 }
 
 /// Recovery can inspect and adopt existing runtimes before the interactive
@@ -118,7 +129,7 @@ impl TerminalLaunchRuntime for RecoveryTerminalLaunchRuntime {
         match adapter.observe(&identity) {
             RuntimeObservation::Running => {
                 TerminalRuntimeObservation::Running(VerifiedTerminalRuntime {
-                    tmux_session_name: format!("pt-{agent_run_id}"),
+                    tmux_session_name: PersistedSessionName::for_identity(&identity).into_string(),
                     runtime_namespace: namespace,
                 })
             }
@@ -150,28 +161,57 @@ pub struct TerminalRuntimeAuthority {
     pub paths: crate::launch_paths::LaunchPathsService,
     pub hook_runner: PathBuf,
     pub hook_spool_directory: PathBuf,
-    pub lifecycle_url: String,
     pub mcp_url: String,
-    pub backend_base_url: String,
-    pub backend_api_key: String,
+    pub run_authority: crate::work_management::mcp::RunAuthority,
 }
 
 /// Interactive launches materialize approved provider argv in Rust and create
 /// the verified tmux runtime directly.
 #[derive(Clone)]
 pub struct InteractiveTerminalLaunchRuntime {
-    authority: Arc<std::sync::OnceLock<TerminalRuntimeAuthority>>,
+    authority: Arc<std::sync::RwLock<Option<TerminalRuntimeAuthority>>>,
 }
 
 impl InteractiveTerminalLaunchRuntime {
     pub fn new() -> Self {
         Self {
-            authority: Arc::new(std::sync::OnceLock::new()),
+            authority: Arc::new(std::sync::RwLock::new(None)),
         }
     }
 
     pub fn configure(&self, authority: TerminalRuntimeAuthority) {
-        let _ = self.authority.set(authority);
+        *self
+            .authority
+            .write()
+            .expect("terminal authority lock poisoned") = Some(authority);
+    }
+
+    pub fn clear_authority(&self) {
+        if let Some(authority) = self
+            .authority
+            .write()
+            .expect("terminal authority lock poisoned")
+            .as_mut()
+        {
+            authority.mcp_url.clear();
+        }
+    }
+
+    pub fn replace_mcp_authority(
+        &self,
+        mcp_url: String,
+        run_authority: crate::work_management::mcp::RunAuthority,
+    ) -> Result<(), String> {
+        let mut authority = self
+            .authority
+            .write()
+            .expect("terminal authority lock poisoned");
+        let current = authority
+            .as_mut()
+            .ok_or_else(|| "the terminal launch authority is unavailable".to_owned())?;
+        current.mcp_url = mcp_url;
+        current.run_authority = run_authority;
+        Ok(())
     }
 }
 
@@ -187,12 +227,18 @@ impl TerminalLaunchRuntime for InteractiveTerminalLaunchRuntime {
         &self,
         request: &crate::terminal_launch::CreateTerminalSession,
     ) -> Result<(), TerminalLaunchError> {
-        let authority = self.authority.get().ok_or_else(|| {
-            TerminalLaunchError::new(
-                TerminalLaunchErrorCode::RuntimeUnavailable,
-                "The Rust terminal launch authority is not ready.",
-            )
-        })?;
+        let authority = self
+            .authority
+            .read()
+            .expect("terminal authority lock poisoned")
+            .clone()
+            .ok_or_else(|| {
+                TerminalLaunchError::new(
+                    TerminalLaunchErrorCode::RuntimeUnavailable,
+                    "The Rust terminal launch authority is not ready.",
+                )
+            })?;
+        require_provider_control(request.kind, &authority.mcp_url)?;
         authority
             .paths
             .preflight_module_folder(&request.module_id)
@@ -211,12 +257,17 @@ impl TerminalLaunchRuntime for InteractiveTerminalLaunchRuntime {
         material: &crate::entities::terminals::launch_material::Model,
         checkpoint: &dyn TerminalLaunchCheckpoint,
     ) -> Result<(), TerminalLaunchError> {
-        let authority = self.authority.get().ok_or_else(|| {
-            TerminalLaunchError::new(
-                TerminalLaunchErrorCode::RuntimeUnavailable,
-                "The Rust terminal launch authority is not ready.",
-            )
-        })?;
+        let authority = self
+            .authority
+            .read()
+            .expect("terminal authority lock poisoned")
+            .clone()
+            .ok_or_else(|| {
+                TerminalLaunchError::new(
+                    TerminalLaunchErrorCode::RuntimeUnavailable,
+                    "The Rust terminal launch authority is not ready.",
+                )
+            })?;
         if material.scope == "shell" {
             if material.provider.is_some()
                 || material.model.is_some()
@@ -335,7 +386,7 @@ impl TerminalLaunchRuntime for InteractiveTerminalLaunchRuntime {
             workspace,
             material.design_directory_identity.clone(),
         );
-        let authorization = issue_run_authorization(authority, &material.agent_run_id).await?;
+        let authorization = issue_run_authorization(&authority, &material.agent_run_id).await?;
         let tool = provider_tool(provider);
         let executable = crate::tmux_adapter::approved_tool_path(tool)
             .map_err(|_| invalid_launch("The approved provider executable is unavailable."))?;
@@ -344,8 +395,6 @@ impl TerminalLaunchRuntime for InteractiveTerminalLaunchRuntime {
             working_directory,
             authority.hook_runner.clone(),
             authority.hook_spool_directory.clone(),
-            authority.lifecycle_url.clone(),
-            authorization.clone(),
             authority.mcp_url.clone(),
             authorization,
             available_skills(),
@@ -373,6 +422,36 @@ impl TerminalLaunchRuntime for InteractiveTerminalLaunchRuntime {
         )
         .map_err(|_| invalid_launch("The provider command is unavailable."))?;
         create_tmux_runtime(material, checkpoint, command).await
+    }
+}
+
+fn require_provider_control(
+    kind: crate::terminal_launch::TerminalLaunchKind,
+    mcp_url: &str,
+) -> Result<(), TerminalLaunchError> {
+    if kind != crate::terminal_launch::TerminalLaunchKind::Shell && mcp_url.is_empty() {
+        return Err(TerminalLaunchError::new(
+            TerminalLaunchErrorCode::RuntimeUnavailable,
+            "WorkTracker MCP is unavailable. Provider launch is blocked.",
+        ));
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod provider_control_tests {
+    use super::require_provider_control;
+    use crate::terminal_launch::TerminalLaunchKind;
+
+    #[test]
+    fn missing_listener_blocks_providers_but_not_local_shells() {
+        assert!(require_provider_control(TerminalLaunchKind::Task, "").is_err());
+        assert!(require_provider_control(TerminalLaunchKind::Planning, "").is_err());
+        assert!(require_provider_control(TerminalLaunchKind::Shell, "").is_ok());
+        assert!(
+            require_provider_control(TerminalLaunchKind::Task, "http://127.0.0.1:43219/mcp")
+                .is_ok()
+        );
     }
 }
 
@@ -454,7 +533,7 @@ fn provider_tool(
 
 fn available_skills() -> BTreeSet<String> {
     serde_json::from_str::<serde_json::Value>(include_str!(
-        "../../../../backend/apps/terminals/agents/skills/lock.json"
+        "../../resources/launch/skills.lock.json"
     ))
     .ok()
     .and_then(|value| value.get("selected_packages").cloned())
@@ -466,36 +545,12 @@ async fn issue_run_authorization(
     authority: &TerminalRuntimeAuthority,
     agent_run_id: &str,
 ) -> Result<String, TerminalLaunchError> {
-    let response = reqwest::Client::new()
-        .post(format!("{}/runs/authorization", authority.backend_base_url))
-        .header("x-api-key", &authority.backend_api_key)
-        .json(&serde_json::json!({"agent_run_id": agent_run_id}))
-        .send()
+    authority
+        .run_authority
+        .issue(
+            agent_run_id,
+            crate::work_management::mcp::allowed_provider_operations(),
+        )
         .await
-        .map_err(|_| invalid_launch("Run authorization is unavailable."))?;
-    if !response.status().is_success() {
-        return Err(invalid_launch("Run authorization was refused."));
-    }
-    response
-        .json::<serde_json::Value>()
-        .await
-        .ok()
-        .and_then(|value| {
-            value
-                .get("authorization")
-                .and_then(|value| value.as_str())
-                .map(str::to_owned)
-        })
-        .ok_or_else(|| invalid_launch("Run authorization returned an invalid response."))
-}
-
-pub fn hook_spool_directory(data_directory: &Path) -> PathBuf {
-    use sha2::{Digest, Sha256};
-
-    let digest = Sha256::digest(data_directory.to_string_lossy().as_bytes());
-    let identity = digest[..8]
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect::<String>();
-    std::env::temp_dir().join(format!("ticketry-hook-spool-{identity}"))
+        .map_err(|_| invalid_launch("Run authorization was refused."))
 }

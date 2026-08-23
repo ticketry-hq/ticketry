@@ -3,9 +3,7 @@ use serde_json::{json, Map, Value};
 
 use crate::work_management::commands::{blockers, hierarchy, CommandError};
 
-use super::{
-    backend_port::RunPrincipal, dispatch::DispatchOutput, projection, scope, workflow_tools::string,
-};
+use super::{dispatch::DispatchOutput, projection, scope, workflow_tools::string, RunPrincipal};
 
 pub async fn dispatch(
     database: &DatabaseConnection,

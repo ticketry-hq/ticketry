@@ -1,21 +1,22 @@
-import type {
-  Attachment as GeneratedAttachment,
-  Module as GeneratedModule,
-  Project as GeneratedProject,
-  PatchedProject as GeneratedProjectPatch,
-  WorkItem as GeneratedWorkItem,
-  WorkItemCreate as GeneratedWorkItemCreate,
-  PatchedWorkItemPatch as GeneratedWorkItemPatch,
-  Workspace as GeneratedWorkspace,
-} from "@worktracker/typescript-sdk";
-
-export type Project = GeneratedProject;
+export interface Project {
+  readonly id: string;
+  name: string;
+  slug: string;
+  description?: string;
+  workspace_slug?: string;
+  readonly manual_module_order: boolean;
+}
 // `manual_module_order` joins `id` as server-owned: a project's module
 // ordering mode is set by the module reorder domain operation, never by a
 // create or update body.
-export type ProjectCreate = Omit<GeneratedProject, "id" | "manual_module_order">;
-export type ProjectPatch = GeneratedProjectPatch;
-export type Workspace = GeneratedWorkspace;
+export type ProjectCreate = Omit<Project, "id" | "manual_module_order">;
+export type ProjectPatch = Partial<Omit<Project, "id" | "manual_module_order">>;
+export interface Workspace {
+  readonly id: string;
+  readonly slug: string;
+  readonly name: string;
+  readonly onboarding_required: boolean;
+}
 export interface LaunchBinding extends LaunchBindingInput {
   id: number;
   issue_type_id: string;
@@ -63,7 +64,15 @@ export interface ProviderCatalog {
 }
 export type SubtreeRunCapabilityMap = Record<string, string[]>;
 
-export type Module = GeneratedModule;
+export interface Module {
+  readonly id: string;
+  name: string;
+  readonly project_id: string;
+  readonly sequence_id: number;
+  readonly key: string;
+  readonly is_archived: boolean;
+  readonly issue_type: string;
+}
 
 export type IssueLevel = "module" | "task";
 export interface IssueType {
@@ -87,7 +96,25 @@ export interface State {
   is_protected?: boolean;
 }
 
-export type WorkItem = GeneratedWorkItem;
+export interface WorkItem {
+  readonly id: string;
+  readonly name: string;
+  readonly project_id: string;
+  readonly sequence_id: number;
+  readonly state: string | null;
+  readonly state_revision: number;
+  readonly description: string;
+  readonly parent_id: string | null;
+  readonly sub_issues_count: number;
+  readonly key: string;
+  readonly is_archived: boolean;
+  readonly created_at: string;
+  readonly updated_at: string;
+  readonly rank: string;
+  readonly issue_type: string;
+  readonly blocked_by_ids: string[];
+  readonly blocks_ids: string[];
+}
 
 export interface ModuleTree {
   rootIds: string[];
@@ -97,30 +124,38 @@ export interface ModuleTree {
   order: string[];
 }
 
-export type Attachment = Omit<
-  GeneratedAttachment,
-  "mime_type" | "size"
-> & {
+export interface Attachment {
+  readonly id: string;
+  readonly issue: string;
+  readonly filename: string;
   mime_type: string;
   size: number | null;
-};
+  readonly url: string;
+  readonly created_at: string;
+}
 
 export interface WorkItemDetail {
   task: WorkItem;
   attachments: Attachment[];
 }
 
-export type WorkItemCreate = GeneratedWorkItemCreate;
-export type ModuleWorkItemCreate = GeneratedWorkItemCreate;
+export interface WorkItemCreate {
+  name: string;
+  description?: string | null;
+  issue_type_id?: string | null;
+  state_id?: string | null;
+  parent_id?: string | null;
+}
+export type ModuleWorkItemCreate = WorkItemCreate;
 
-export type WorkItemPatch = Omit<
-  GeneratedWorkItemPatch,
-  "blocked_by_ids" | "name" | "origin"
-> & {
+export interface WorkItemPatch {
   blocked_by_ids?: string[];
   name?: string;
+  description?: string | null;
+  parent_id?: string | null;
+  state_id?: string | null;
   issue_type_id?: string;
-};
+}
 
 export interface IssueTypeCreate {
   name: string;

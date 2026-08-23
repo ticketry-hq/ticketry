@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { ApiError } from "../../shared/api/client";
+import { ApiError } from "../../shared/api/errors";
 import type {
   IssueType,
   LaunchBindingInput,

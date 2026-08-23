@@ -38,9 +38,16 @@ pub struct GraphRunService {
     guarded: bool,
 }
 
+/// The stored Graph Run policy snapshot's own format version. Adoption
+/// preflight validates this, and it is deliberately not the workflow revision
+/// the policy was resolved at: the launch-policy decision carries that under
+/// its own name, and a campaign armed at any revision must still reopen.
+const POLICY_SNAPSHOT_VERSION: i32 = 1;
+
 #[derive(Serialize)]
 struct GraphRunPolicySnapshot<'a> {
     policy_version: i32,
+    workflow_revision: i32,
     policy_identity: &'a str,
     decision_id: &'a str,
     prompt: &'a str,
@@ -198,7 +205,8 @@ impl GraphRunService {
             ));
         }
         let policy_snapshot = serde_json::to_string(&GraphRunPolicySnapshot {
-            policy_version: decision.policy_version,
+            policy_version: POLICY_SNAPSHOT_VERSION,
+            workflow_revision: decision.policy_version,
             policy_identity: &decision.policy_identity,
             decision_id: &decision.decision_id,
             prompt: &decision.prompt,

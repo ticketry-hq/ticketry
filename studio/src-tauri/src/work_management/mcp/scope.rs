@@ -2,7 +2,7 @@ use sea_orm::DatabaseConnection;
 
 use crate::work_management::{commands::CommandError, read_queries, read_types::WorkItem};
 
-use super::{backend_port::RunPrincipal, projection};
+use super::{projection, RunPrincipal};
 
 pub async fn project(
     database: &DatabaseConnection,

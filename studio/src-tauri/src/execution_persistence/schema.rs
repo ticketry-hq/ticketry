@@ -5,6 +5,7 @@ use sea_orm::{ConnectionTrait, DbBackend, Statement, TransactionTrait};
 use super::{ExecutionPersistenceError, ExecutionPersistenceErrorCode};
 
 pub const VERSION: i32 = 1;
+pub const EMPTY_DJANGO_LEAF: &str = "0000_no_execution_history";
 pub const CURRENT_DJANGO_LEAF: &str = "0007_graph_run_launch_configuration";
 pub const DJANGO_MIGRATIONS: [&str; 7] = [
     "0001_initial",
@@ -83,10 +84,12 @@ async fn bridge(
             .execute_unprepared(LAUNCH_LEDGER_TABLE)
             .await
             .map_err(storage)?;
-        transaction
-            .execute_unprepared("DROP TABLE engine_runs")
-            .await
-            .map_err(storage)?;
+        if table_exists(transaction, "engine_runs").await? {
+            transaction
+                .execute_unprepared("DROP TABLE engine_runs")
+                .await
+                .map_err(storage)?;
+        }
     }
     if source < 6 {
         transaction
@@ -174,6 +177,9 @@ async fn row_count(
 }
 
 fn migration_number(leaf: &str) -> Result<usize, ExecutionPersistenceError> {
+    if leaf == EMPTY_DJANGO_LEAF {
+        return Ok(0);
+    }
     leaf.get(..4)
         .and_then(|number| number.parse::<usize>().ok())
         .filter(|number| (1..=DJANGO_MIGRATIONS.len()).contains(number))

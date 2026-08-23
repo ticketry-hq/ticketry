@@ -3,7 +3,7 @@ import { readFile, rename, stat, writeFile } from "node:fs/promises";
 import { extname, join, normalize, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { validateFinalizedDefaults } from "../backend/worktracker/reviewed_defaults_validator.mjs";
+import { validateFinalizedDefaults } from "./reviewed_defaults_validator.mjs";
 
 const root = fileURLToPath(new URL(".", import.meta.url));
 const port = Number.parseInt(process.env.TICKETRY_REVIEW_PORT ?? "4174", 10);
@@ -65,8 +65,10 @@ export function createReviewHandler({
   productionDefaultsPath = join(
     root,
     "..",
-    "backend",
-    "worktracker",
+    "studio",
+    "src-tauri",
+    "resources",
+    "work-management",
     "reviewed_defaults.json",
   ),
   agentsPath = join(root, "..", "AGENTS.md"),

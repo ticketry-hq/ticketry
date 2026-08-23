@@ -90,5 +90,19 @@ export async function generateWorkTrackerOperationManifests({
         `export const operationSource = ${JSON.stringify(source)};\n`,
       "utf8",
     );
+    if (feature === "work-items") {
+      const attachmentSource = operationDocuments(source).WorkTrackerAttachments;
+      if (!attachmentSource) throw new Error("WorkTrackerAttachments is missing");
+      await writeFile(
+        join(targetDirectory, "attachments.ts"),
+        `// Generated from operations/${fileName}. Do not edit manually.\n\n` +
+          `import type { TypedDocumentNode } from "../../../graphql-foundation/typedDocument";\n\n` +
+          `export interface WorkTrackerAttachmentRow { readonly id: string; readonly issue_id: string; readonly file: string; readonly filename: string; readonly mime_type: string; readonly size: number | null; readonly created_at: string }\n` +
+          `export interface WorkTrackerAttachmentsQuery { readonly attachments: { readonly nodes: ReadonlyArray<WorkTrackerAttachmentRow> } }\n` +
+          `export interface WorkTrackerAttachmentsVariables { readonly issueId: string }\n` +
+          `export const WorkTrackerAttachmentsDocument: TypedDocumentNode<WorkTrackerAttachmentsQuery, WorkTrackerAttachmentsVariables> = { kind: "Document", operationName: "WorkTrackerAttachments", source: ${JSON.stringify(attachmentSource)} };\n`,
+        "utf8",
+      );
+    }
   }
 }

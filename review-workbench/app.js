@@ -407,7 +407,7 @@ function renderAgents() {
       </section>
       <aside class="review-notes">
         <span class="kicker">Review checklist</span>
-        ${checkRow("App boundary", text.includes("Tauri") && text.includes("sidecar"))}
+        ${checkRow("App boundary", text.includes("Tauri") && text.includes("Seaography"))}
         ${checkRow("Desktop dev command", text.includes("desktop:dev"))}
         ${checkRow("Native terminal contract", text.includes("libghostty") && text.includes("tmux"))}
         ${checkRow("Data isolation", text.toLowerCase().includes("development data"))}

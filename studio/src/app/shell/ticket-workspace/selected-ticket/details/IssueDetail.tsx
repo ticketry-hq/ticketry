@@ -19,7 +19,7 @@ import { dialog, toast, useClientStore } from "../../../../../state/clientStore"
 import { useStudioStore } from "../../../../../features/projects";
 import { useModulesQuery, useProjectsQuery } from "../../../../../features/projects";
 import type { Module, Project } from "../../../../../shared/api/types";
-import { apiErrorMessage, isNoOpTransition } from "../../../../../shared/api/client";
+import { apiErrorMessage, isNoOpTransition } from "../../../../../shared/api/errors";
 import { deleteWorkItem } from "../../../../../features/work-items";
 import { queryClient } from "../../../../../shared/query/queryClient";
 import { queryKeys } from "../../../../../shared/query/keys";

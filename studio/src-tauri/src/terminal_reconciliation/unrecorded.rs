@@ -11,7 +11,9 @@ use crate::entities::{
     work_management::issue,
 };
 use crate::terminal_cleanup::{CleanupCause, CleanupEffectIdentity, RuntimeInventory};
-use crate::tmux_adapter::{InventoryConflictKind, InventoryEntry, OwnedSession};
+use crate::tmux_adapter::{
+    InventoryConflictKind, InventoryEntry, OwnedSession, PersistedSessionName,
+};
 
 use super::service::TerminalReconciliationService;
 use super::{
@@ -180,7 +182,9 @@ impl TerminalReconciliationService {
         {
             session::ActiveModel {
                 agent_run_id: Set(runtime.agent_run_id.clone()),
-                tmux_session_name: Set(format!("pt-{}", runtime.agent_run_id)),
+                tmux_session_name: Set(
+                    PersistedSessionName::for_owned_session(runtime).into_string()
+                ),
                 task_id: Set(work_item.id),
                 module_id: Set(module_id),
                 project_id: Set(work_item.project_id),
@@ -243,7 +247,7 @@ fn session_model(
 ) -> session::ActiveModel {
     session::ActiveModel {
         agent_run_id: Set(material.agent_run_id.clone()),
-        tmux_session_name: Set(format!("pt-{}", material.agent_run_id)),
+        tmux_session_name: Set(PersistedSessionName::for_owned_session(runtime).into_string()),
         task_id: Set(material.task_id.clone()),
         module_id: Set(material.module_id.clone()),
         project_id: Set(material.project_id.clone()),

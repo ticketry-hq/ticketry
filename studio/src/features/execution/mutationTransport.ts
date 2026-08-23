@@ -17,16 +17,11 @@ export interface GraphRunResult {
 export const graphRunHoldingKey = (rootId: string) =>
   ["execution", "graph-run", rootId] as const;
 
-function unavailableInBrowser(): never {
-  throw new Error("Subtree execution requires the desktop GraphQL runtime.");
-}
-
 export async function executeTaskSubtree(
   rootId: string,
   mode?: GraphRunExecutionMode,
 ): Promise<GraphRunResult> {
   return studioRuntime().writeWorkTracker({
-    rest: async () => unavailableInBrowser(),
     graphQl: async (execute) => {
       try {
         const holding = await execute(ExecutionGraphRunHoldingDocument, { rootId });

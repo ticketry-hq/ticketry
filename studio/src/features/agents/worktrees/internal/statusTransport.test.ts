@@ -30,7 +30,6 @@ function desktopRuntime(
     platform: "desktop",
     capabilities: {
       statusFeed: true,
-      websocketTerminal: true,
       nativeLifecycle: false,
       serviceSupervision: true,
       nativeTerminal: false,
@@ -46,13 +45,6 @@ function desktopRuntime(
     pickFolder: async () => null,
     retryServices: async () => {},
     startup: () => ({
-      endpoints: {
-        workTrackerApi: "/api/work-tracker",
-        agentApi: "/api",
-        statusApi: "/api",
-        terminalWebSocket: "/ws/terminal",
-      },
-      values: { workTrackerApiKey: "" },
       serviceHealth: {
         state: "ready",
         service: "backend",

@@ -1,8 +1,4 @@
 import {
-  getKeybindingOverrides,
-  putKeybindingOverrides,
-} from "../../shared/api/client";
-import {
   LoadKeybindingSettingDocument,
   UpdateKeybindingSettingDocument,
 } from "../../features/settings/generated/keybindings";
@@ -15,7 +11,6 @@ import {
 export async function loadKeybindingOverrides(): Promise<void> {
   try {
     const { value } = await studioRuntime().readSettings({
-      rest: getKeybindingOverrides,
       graphQl: async (execute) => ({
         value: (await execute(LoadKeybindingSettingDocument, {}))
           .keybinding_setting?.value ?? null,
@@ -32,7 +27,6 @@ export async function saveKeybindingOverrides(
   overrides: BindingOverride[],
 ): Promise<void> {
   const { value } = await studioRuntime().writeSettings({
-    rest: () => putKeybindingOverrides(overrides),
     graphQl: async (execute) => ({
       value: (await execute(UpdateKeybindingSettingDocument, {
         value: overrides,

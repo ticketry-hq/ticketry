@@ -7,7 +7,6 @@ import type {
 } from "../../shared/api/types";
 import { queryClient } from "../../shared/query/queryClient";
 import { queryKeys } from "../../shared/query/keys";
-import * as rest from "../../shared/api/client";
 import {
   LoadProviderCatalogDocument,
   UpdateProviderCatalogDocument,
@@ -73,17 +72,6 @@ function holdingFromGraphQl(payload: ProviderCatalogPayload): ProviderHolding {
 
 async function fetchProviderHolding(): Promise<ProviderHolding> {
   return studioRuntime().readSettings({
-    rest: async () => {
-      const [catalog, capabilities] = await Promise.all([
-        rest.getProviderCatalog(),
-        rest.getLaunchProviderCapabilities(),
-      ]);
-      return {
-        catalog: catalog.value,
-        capabilities,
-        configurableCapabilities: capabilities,
-      };
-    },
     graphQl: async (execute) => holdingFromGraphQl(
       (await execute(LoadProviderCatalogDocument, {})).provider_catalog,
     ),
@@ -124,15 +112,6 @@ export async function updateProviderCatalog(
   catalog: ProviderCatalog,
 ): Promise<ProviderCatalog> {
   const holding = await studioRuntime().writeSettings({
-    rest: async () => {
-      const value = (await rest.putProviderCatalog(catalog)).value;
-      const capabilities = await rest.getLaunchProviderCapabilities();
-      return {
-        catalog: value,
-        capabilities,
-        configurableCapabilities: capabilities,
-      };
-    },
     graphQl: async (execute) => holdingFromGraphQl(
       (await execute(UpdateProviderCatalogDocument, {
         activatedProviders: catalog.activated_providers,

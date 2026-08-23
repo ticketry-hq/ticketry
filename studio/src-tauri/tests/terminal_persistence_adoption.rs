@@ -60,7 +60,7 @@ async fn adoption_preserves_history_expires_leases_and_is_idempotent() {
     runs_persistence::adopt(directory.path()).await.unwrap();
 
     let first = terminal_persistence::adopt(directory.path()).await.unwrap();
-    assert_eq!(first.stale_viewer_leases_expired, 1);
+    assert_eq!(first.stale_viewer_leases_expired, 2);
     assert_eq!(first.tables["agent_terminal_sessions"].row_count, 2);
     assert_eq!(first.tables["terminal_launch_requests"].row_count, 1);
     assert_eq!(first.tables["terminal_launch_material"].row_count, 0);
@@ -80,27 +80,45 @@ async fn adoption_preserves_history_expires_leases_and_is_idempotent() {
     let rows = database
         .query_all_raw(Statement::from_string(
             DbBackend::Sqlite,
-            "SELECT agent_run_id, runtime_cleanup_pending, terminated_at FROM agent_terminal_sessions ORDER BY agent_run_id".to_owned(),
+            "SELECT agent_run_id, tmux_session_name, runtime_cleanup_pending, terminated_at FROM agent_terminal_sessions ORDER BY agent_run_id".to_owned(),
         ))
         .await
         .unwrap();
     assert_eq!(rows.len(), 2);
+    assert_eq!(
+        rows[0].try_get::<String>("", "tmux_session_name").unwrap(),
+        "run-active"
+    );
+    assert_eq!(
+        rows[1].try_get::<String>("", "tmux_session_name").unwrap(),
+        "pt-run-ended"
+    );
     assert!(rows[0]
         .try_get::<bool>("", "runtime_cleanup_pending")
         .unwrap());
-    let lease = database
-        .query_one_raw(Statement::from_string(
+    let leases = database
+        .query_all_raw(Statement::from_string(
             DbBackend::Sqlite,
-            "SELECT generation, expires_at <= CURRENT_TIMESTAMP AS expired FROM agent_run_viewer_leases".to_owned(),
+            "SELECT agent_run_id, transport, generation, expires_at <= CURRENT_TIMESTAMP AS expired FROM agent_run_viewer_leases ORDER BY agent_run_id".to_owned(),
         ))
         .await
-        .unwrap()
         .unwrap();
-    assert!(lease
-        .try_get::<String>("", "generation")
-        .unwrap()
-        .starts_with("imported-"));
-    assert_eq!(lease.try_get::<i32>("", "expired").unwrap(), 1);
+    assert_eq!(leases.len(), 2);
+    assert_eq!(
+        leases[0].try_get::<String>("", "transport").unwrap(),
+        "native"
+    );
+    assert_eq!(
+        leases[1].try_get::<String>("", "transport").unwrap(),
+        "xterm"
+    );
+    for lease in leases {
+        assert!(lease
+            .try_get::<String>("", "generation")
+            .unwrap()
+            .starts_with("imported-"));
+        assert_eq!(lease.try_get::<i32>("", "expired").unwrap(), 1);
+    }
 }
 
 #[tokio::test]
@@ -210,9 +228,11 @@ t=IssueType.objects.create(id='00000000000000000000000000086503',project=p,name=
 i=Issue.objects.create(id='00000000000000000000000000086504',project=p,type='task',issue_type=t,state=s,name='Adopt',sequence_id=865,rank='a')
 for n, ended in [('run-active',None),('run-ended','2026-08-19T13:00:00Z')]:
  r=AgentRun.objects.create(id=n,issue=i,agent='codex',status='running' if ended is None else 'completed',started_at='2026-08-19T12:00:00Z',ended_at=ended,cwd=str(db.parent),scope='task')
- AgentTerminalSession.objects.create(agent_run=r,tmux_session_name='pt-'+n,task_id=str(i.id),module_id=str(i.id),project_id=str(p.id),agent='codex',created_at='2026-08-19T12:00:00Z',terminated_at=ended,runtime_namespace='ticketry',runtime_cleanup_pending=(n=='run-active'),scope='task',last_output_at='2026-08-19T12:00:00Z')
+ AgentTerminalSession.objects.create(agent_run=r,tmux_session_name=n if n=='run-active' else 'pt-'+n,task_id=str(i.id),module_id=str(i.id),project_id=str(p.id),agent='codex',created_at='2026-08-19T12:00:00Z',terminated_at=ended,runtime_namespace='ticketry',runtime_cleanup_pending=(n=='run-active'),scope='task',last_output_at='2026-08-19T12:00:00Z')
 active=AgentRun.objects.get(id='run-active')
-AgentRunViewerLease.objects.create(agent_run=active,viewer_id='viewer-1',transport='native',acquired_at=timezone.now(),expires_at=timezone.now()+timedelta(hours=1))
+AgentRunViewerLease.objects.create(agent_run=active,viewer_id='viewer-1',transport='desktop',acquired_at=timezone.now(),expires_at=timezone.now()+timedelta(hours=1))
+ended=AgentRun.objects.get(id='run-ended')
+AgentRunViewerLease.objects.create(agent_run=ended,viewer_id='viewer-2',transport='browser',acquired_at=timezone.now(),expires_at=timezone.now()+timedelta(hours=1))
 TerminalLaunchRequest.objects.create(effect_id='legacy-effect',agent_run_id='run-active',issue_id=str(i.id),project_id=str(p.id),module_id=str(i.id),task_id=str(i.id),agent='codex',scope='task',command='legacy command',working_directory=str(db.parent),environment={'LEGACY':'1'},columns=80,rows=24,created_at='2026-08-19T12:00:00Z')
 from django.db import connection
 with connection.cursor() as c:

@@ -1,5 +1,4 @@
 import { studioRuntime } from "../../../runtime";
-import * as rest from "../../../shared/api/client";
 import type {
   IssueType,
   ScopedWorkflowSettings,
@@ -10,13 +9,24 @@ import { compactWorktrackerId, publicWorktrackerId } from "../../../shared/api/g
 import { WorkTrackerIssueTypeTransitionsDocument } from "../generated/operations";
 import { LoadProviderCatalogDocument } from "../../settings/generated/providerCatalog";
 import { issueType, readWorkflowCatalog } from "./catalogTransport";
+import { assembleScopedWorkflowSettings } from "./scopedWorkflowSettings";
+
+export function readWorkflowTransitions(issueTypeId: string): Promise<ScopedWorkflowSettings["transitions"]> {
+  return studioRuntime().readWorkTracker({
+    graphQl: async (execute) => (await execute(WorkTrackerIssueTypeTransitionsDocument, {
+      issueTypeId: compactWorktrackerId(issueTypeId),
+    })).issue_type_transitions.nodes.map((transition) => ({
+      from_state_id: publicWorktrackerId(transition.from_state),
+      to_state_id: publicWorktrackerId(transition.to_state),
+      agent_allowed: transition.agent_allowed,
+    })),
+  });
+}
 
 export function readWorkflowStates(
   projectId: string,
-  restReader: (projectId: string) => Promise<State[]> = rest.getStates,
 ): Promise<State[]> {
   return studioRuntime().readWorkTracker({
-    rest: () => restReader(projectId),
     graphQl: async (execute) =>
       (await readWorkflowCatalog(execute, projectId)).states,
   });
@@ -24,10 +34,8 @@ export function readWorkflowStates(
 
 export function readWorkflowIssueTypes(
   projectId: string,
-  restReader: (projectId: string) => Promise<IssueType[]> = rest.getIssueTypes,
 ): Promise<IssueType[]> {
   return studioRuntime().readWorkTracker({
-    rest: () => restReader(projectId),
     graphQl: async (execute) =>
       (await readWorkflowCatalog(execute, projectId)).issueTypes.map(issueType),
   });
@@ -37,7 +45,6 @@ export function readSubtreeRunCapabilities(
   projectId: string,
 ): Promise<SubtreeRunCapabilityMap> {
   return studioRuntime().readWorkTracker({
-    rest: () => rest.listSubtreeRunCapabilities(projectId),
     graphQl: async (execute) => {
       const { launchBindings } = await readWorkflowCatalog(execute, projectId);
       const capabilities: SubtreeRunCapabilityMap = {};
@@ -58,7 +65,6 @@ export function readWorkflowSettings(
   issueTypeId: string,
 ): Promise<ScopedWorkflowSettings> {
   return studioRuntime().readWorkTracker({
-    rest: () => rest.getIssueTypeWorkflowSettings(projectId, issueTypeId),
     graphQl: async (execute) => {
       const [normalized, transitionResult, providerCatalog] = await Promise.all([
         readWorkflowCatalog(execute, projectId),
@@ -71,7 +77,7 @@ export function readWorkflowSettings(
         (candidate) => publicWorktrackerId(candidate.id) === issueTypeId,
       );
       if (!selectedType) throw new Error("Work-item type not found.");
-      return rest.assembleScopedWorkflowSettings(
+      return assembleScopedWorkflowSettings(
         issueType(selectedType),
         normalized.states,
         transitionResult.issue_type_transitions.nodes.map((transition) => ({

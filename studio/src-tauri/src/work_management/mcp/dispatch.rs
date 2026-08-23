@@ -16,9 +16,9 @@ use crate::work_management::launch_policy::{
 };
 
 use super::{
-    backend_port::RunPrincipal,
     dependency_tools, projection, run_termination, scope,
     workflow_tools::{self, optional_string, string},
+    RunPrincipal,
 };
 
 /// The MCP transport publishes through the same durable outbox as the GraphQL
@@ -157,8 +157,27 @@ async fn dispatch_checked(
         }
         "get_dependency_graph" => {
             let task = scope::task(database, principal, string(arguments, "root_task_id")?).await?;
+            // One factual read serves every caller. Execution owns the rule
+            // that the plan is the non-archived subtree and that only blocker
+            // edges inside it are returned; MCP must not restate it.
+            let access = GraphAccess::caller_roots(&principal.project_id, [&task.id]);
             Ok(DispatchOutput::direct(
-                projection::dependency_graph(database, &task).await,
+                match crate::execution_graph::dependency_graph(database, &task.id, &access).await {
+                    Ok(graph) => json!({
+                        "root_id": graph.root_id,
+                        "nodes": graph
+                            .nodes
+                            .into_iter()
+                            .map(|node| json!({
+                                "id": node.id,
+                                "state": node.state,
+                                "parent_id": node.parent_id,
+                                "blocked_by": node.blocked_by,
+                            }))
+                            .collect::<Vec<_>>(),
+                    }),
+                    Err(error) => json!({"root_id": task.id, "error": error.code().as_str()}),
+                },
             ))
         }
         "get_issue_type_workflow_settings" => {

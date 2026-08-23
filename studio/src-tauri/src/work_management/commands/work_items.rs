@@ -40,10 +40,33 @@ pub async fn create(
     let project_id = database_uuid(&input.project_id, "project_id")?;
     let issue_type_id = database_uuid(&input.issue_type_id, "issue_type_id")?;
     let name = valid_name(&input.name)?;
-    let selected_type = resolve_type(database, &project_id, &issue_type_id, "task").await?;
-    let state_id =
-        resolve_birth_state(database, &project_id, &selected_type, input.state_id).await?;
-    let (parent_id, module_id) = resolve_parent(database, &project_id, input.parent_id).await?;
+    let selected_type = resolve_create_type(database, &project_id, &issue_type_id).await?;
+    let item_type = selected_type.level.clone();
+    let (state_id, parent_id, module_id) = match item_type.as_str() {
+        "task" => {
+            let state_id =
+                resolve_birth_state(database, &project_id, &selected_type, input.state_id).await?;
+            let (parent_id, module_id) =
+                resolve_parent(database, &project_id, input.parent_id).await?;
+            (state_id, parent_id, module_id)
+        }
+        "module" => {
+            if input.state_id.is_some() {
+                return Err(CommandError::field(
+                    "state_id",
+                    "A module does not have a workflow state.",
+                ));
+            }
+            if input.parent_id.is_some() {
+                return Err(CommandError::field(
+                    "parent_id",
+                    "A module must be a top-level work item.",
+                ));
+            }
+            (None, None, None)
+        }
+        _ => unreachable!("resolve_create_type accepts only task and module levels"),
+    };
 
     let transaction = database.begin().await?;
     // This is deliberately the transaction's first statement. SQLite obtains
@@ -81,7 +104,7 @@ pub async fn create(
     issue::ActiveModel {
         id: Set(id.clone()),
         project_id: Set(project_id.clone()),
-        r#type: Set("task".to_owned()),
+        r#type: Set(item_type),
         issue_type_id: Set(issue_type_id),
         parent_id: Set(parent_id.clone()),
         module_id: Set(module_id.clone()),
@@ -339,6 +362,25 @@ async fn resolve_type(
         return Err(CommandError::validation(format!(
             "Issue type '{}' is level '{}', not '{}'.",
             selected.name, selected.level, level
+        )));
+    }
+    Ok(selected)
+}
+
+async fn resolve_create_type(
+    database: &DatabaseConnection,
+    project_id: &str,
+    id: &str,
+) -> Result<issue_type::Model, CommandError> {
+    let selected = issue_type::Entity::find_by_id(id)
+        .filter(issue_type::Column::ProjectId.eq(project_id))
+        .one(database)
+        .await?
+        .ok_or_else(|| CommandError::NotFound("Issue type not found.".to_owned()))?;
+    if !matches!(selected.level.as_str(), "task" | "module") {
+        return Err(CommandError::validation(format!(
+            "Issue type '{}' has unsupported level '{}'.",
+            selected.name, selected.level
         )));
     }
     Ok(selected)

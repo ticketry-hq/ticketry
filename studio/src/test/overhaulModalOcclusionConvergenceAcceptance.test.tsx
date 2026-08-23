@@ -30,6 +30,7 @@ import { useTerminalStore } from "../features/agents/terminal/internal/sessionSt
 import { focusTerminal } from "../features/agents/terminal/internal/terminalRegistry";
 import { useStudioStore } from "../features/projects/store";
 import { useClientStore } from "../state/clientStore";
+import { installDesktopGraphQlRuntime } from "./desktopGraphQlRuntime";
 
 const tauri = vi.hoisted(() => ({
   invoke: vi.fn(),
@@ -187,6 +188,7 @@ async function closeSettings(dialog: HTMLElement): Promise<void> {
 describe("overhaul acceptance — modal occlusion convergence", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    installDesktopGraphQlRuntime();
     gates = {};
     deferredCommands = new Set();
     failingCommands = new Set();

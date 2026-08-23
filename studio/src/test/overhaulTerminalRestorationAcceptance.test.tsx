@@ -12,10 +12,9 @@ import {
 import { seedConfig } from "../features/studio/stores/configStore";
 import { queryClient } from "../shared/query/queryClient";
 import { useClientStore } from "../state/clientStore";
+import { installDesktopGraphQlRuntime } from "./desktopGraphQlRuntime";
 
 const terminalApi = vi.hoisted(() => ({
-  getTerminals: vi.fn(),
-  listResumableTerminals: vi.fn(),
   resumeTerminal: vi.fn(),
 }));
 
@@ -33,6 +32,23 @@ vi.mock("../features/agents/api/agentApi", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../features/agents/api/agentApi")>()),
   ...terminalApi,
 }));
+
+// Terminal session reads moved to the Rust Terminal Session graph, so the seam
+// a test controls is the read transport, not a host API module.
+const terminalReads = vi.hoisted(() => {
+  const resumable = vi.fn();
+  return {
+    readTaskTerminalSessions: vi.fn(),
+    readScratchTerminalSessions: vi.fn(),
+    readTaskResumableTerminalSessions: resumable,
+    readScratchResumableTerminalSessions: resumable,
+  };
+});
+
+vi.mock(
+  "../features/agents/terminal/internal/sessionReadTransport",
+  () => terminalReads,
+);
 
 vi.mock(
   "../app/shell/ticket-workspace/selected-ticket/terminals/SelectedTicketTerminal",
@@ -89,6 +105,7 @@ function run(
 describe("overhaul acceptance — terminals", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    installDesktopGraphQlRuntime();
     localStorage.clear();
     queryClient.clear();
     seedConfig({ features: { sidebar: true, projects: true } });
@@ -113,8 +130,9 @@ describe("overhaul acceptance — terminals", () => {
     });
     documentRegistry.listTaskDocuments.mockResolvedValue([]);
     documentRegistry.listScratchDocuments.mockResolvedValue([]);
-    terminalApi.getTerminals.mockResolvedValue([]);
-    terminalApi.listResumableTerminals.mockResolvedValue([]);
+    terminalReads.readTaskTerminalSessions.mockResolvedValue([]);
+    terminalReads.readScratchTerminalSessions.mockResolvedValue([]);
+    terminalReads.readTaskResumableTerminalSessions.mockResolvedValue([]);
   });
 
   it("[overhaul-35] labels task-bound terminal tabs with their captured launch state", async () => {
@@ -191,7 +209,7 @@ describe("overhaul acceptance — terminals", () => {
   });
 
   it("[overhaul-49] restores a persisted terminal when its run projection arrives later", async () => {
-    terminalApi.getTerminals.mockResolvedValue([{
+    terminalReads.readTaskTerminalSessions.mockResolvedValue([{
       agent_run_id: "run-late",
       created_at: "2026-08-07T12:00:00Z",
     }]);
@@ -208,7 +226,7 @@ describe("overhaul acceptance — terminals", () => {
       </QueryClientProvider>,
     );
 
-    await waitFor(() => expect(terminalApi.getTerminals).toHaveBeenCalled());
+    await waitFor(() => expect(terminalReads.readTaskTerminalSessions).toHaveBeenCalled());
     expect(useTerminalStore.getState().sessions).toEqual({});
 
     act(() => {
@@ -233,7 +251,7 @@ describe("overhaul acceptance — terminals", () => {
   it("[overhaul-111] gives dormant terminal chips the same launch identity as the tab for the same run", async () => {
     // A resumable conversation and a terminated one are the same kind of thing
     // the strip is showing, so they read the same way (#695).
-    terminalApi.listResumableTerminals.mockResolvedValue([
+    terminalReads.readTaskResumableTerminalSessions.mockResolvedValue([
       {
         agent_run_id: "run-resumable",
         agent: "codex",
@@ -330,7 +348,7 @@ describe("overhaul acceptance — terminals", () => {
     // A reload starts with no client-side session state at all: the terminals
     // listing and the run projection are the only inputs, and they must be
     // enough to reproduce exactly the tabs that were on screen before.
-    terminalApi.getTerminals.mockResolvedValue([
+    terminalReads.readTaskTerminalSessions.mockResolvedValue([
       { agent_run_id: "run-first", created_at: "2026-08-07T12:00:00Z" },
       { agent_run_id: "run-second", created_at: "2026-08-07T12:05:00Z" },
       { agent_run_id: "run-gone", created_at: "2026-08-07T12:10:00Z" },
@@ -348,7 +366,7 @@ describe("overhaul acceptance — terminals", () => {
       </QueryClientProvider>,
     );
 
-    await waitFor(() => expect(terminalApi.getTerminals).toHaveBeenCalled());
+    await waitFor(() => expect(terminalReads.readTaskTerminalSessions).toHaveBeenCalled());
 
     act(() => {
       useAgentStatusStore.setState({

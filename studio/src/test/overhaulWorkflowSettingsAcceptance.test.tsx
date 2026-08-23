@@ -5,6 +5,14 @@ import { useWorkflowEditorStore } from "../features/workflows/workflowEditorStor
 import { queryClient } from "../shared/query/queryClient";
 
 const fetchMock = vi.fn();
+const workflowReads = vi.hoisted(() => ({
+  readWorkflowSettings: vi.fn(),
+}));
+
+vi.mock("../features/workflows/queries/readTransport", async () => ({
+  ...(await vi.importActual("../features/workflows/queries/readTransport")),
+  readWorkflowSettings: workflowReads.readWorkflowSettings,
+}));
 
 const states = [
   { id: "todo", name: "Todo", group: "unstarted", color: null, sort_order: 0 },
@@ -77,6 +85,7 @@ describe("workflow settings acceptance", () => {
       },
     );
     vi.stubGlobal("fetch", fetchMock);
+    workflowReads.readWorkflowSettings.mockReset().mockResolvedValue(workflow);
     useWorkflowEditorStore.setState({
       projectId: "project-1",
       issueTypes: [
@@ -113,8 +122,7 @@ describe("workflow settings acceptance", () => {
     expect(screen.queryByRole("button", { name: "Delete state" })).toBeNull();
 
     const urls = fetchMock.mock.calls.map(([input]) => String(input));
-    expect(urls).toContain("/api/work-tracker/issue-types/story/transitions");
-    expect(urls).toContain("/api/work-tracker/projects/project-1/launch-bindings");
+    expect(workflowReads.readWorkflowSettings).toHaveBeenCalledWith("project-1", "story");
     expect(urls.some((url) => url.includes("/states/review/impact"))).toBe(false);
     expect(urls.some((url) => url.endsWith("/workflow-settings"))).toBe(false);
   });

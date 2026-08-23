@@ -13,15 +13,16 @@ import {
   WorktreeStatusDocument,
   type WorktreeStatusPayload,
 } from "../generated/worktreeStatus";
-import { getWorktree, type WorktreeContext, type WorktreeStatus } from "./api";
+import type { WorktreeContext, WorktreeStatus } from "./api";
 
 export function readWorktreeStatus(
   taskId: string,
   ctx: WorktreeContext,
   signal?: AbortSignal,
 ): Promise<WorktreeStatus> {
+  void ctx;
+  void signal;
   return studioRuntime().readWorkTracker({
-    rest: () => getWorktree(taskId, ctx, signal),
     graphQl: async (execute) =>
       adaptWorktreeStatus(
         (await execute(WorktreeStatusDocument, { taskId })).worktree_status,

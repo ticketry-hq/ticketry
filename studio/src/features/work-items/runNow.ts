@@ -3,7 +3,6 @@ import { useSyncExternalStore } from "react";
 import { useTerminalStore, type SessionMeta } from "../agents/terminal/appNavigation";
 import { launchFailureMessage } from "../agents/terminal";
 import { toast, useClientStore } from "../../state/clientStore";
-import * as api from "../../shared/api/client";
 import type {
   IssueType,
   ScopedWorkflowSettings,
@@ -19,6 +18,7 @@ import {
   runWorkItemNow,
   type RunNowResponse,
 } from "./internal/runNowTransport";
+import { readWorkflowTransitions } from "../workflows/queries/readTransport";
 
 type WorkflowTransitions = ScopedWorkflowSettings["transitions"];
 
@@ -55,7 +55,7 @@ export function useRunNowTransitions(
   return useQuery(
     {
       queryKey: queryKeys.workflows.transitionsByIssueType(issueTypeId ?? "none"),
-      queryFn: () => api.listIssueTypeTransitions(issueTypeId!),
+      queryFn: () => readWorkflowTransitions(issueTypeId!),
       enabled: enabled && issueTypeId !== null,
     },
     queryClient,

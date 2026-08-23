@@ -13,6 +13,7 @@ fn main() {
             "desktop_append_frontend_log",
             "desktop_retry_services",
             "desktop_pick_folder",
+            "desktop_validate_module_folder",
             "desktop_preflight_report",
             "desktop_approve_executable_path",
             "viewer_attach",

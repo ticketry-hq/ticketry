@@ -1,5 +1,4 @@
 import { studioRuntime } from "../../runtime";
-import * as rest from "../../shared/api/client";
 import { graphQlMutationError } from "../../shared/api/graphqlError";
 import { compactWorktrackerId } from "../../shared/api/generatedWorktracker";
 import type {
@@ -38,7 +37,6 @@ const issueType = (row: WorkTrackerIssueType): IssueType => ({
 
 export function createIssueType(projectId: string, body: IssueTypeCreate): Promise<IssueType> {
   return studioRuntime().writeWorkTracker({
-    rest: () => rest.createIssueType(projectId, body),
     graphQl: (execute) => graphQl(async () => issueType((await execute(CreateWorkTrackerIssueTypeDocument, {
       projectId, name: body.name, level: body.level, color: body.color,
     })).create_issue_type)),
@@ -47,7 +45,6 @@ export function createIssueType(projectId: string, body: IssueTypeCreate): Promi
 
 export function updateIssueType(id: string, patch: IssueTypePatch): Promise<IssueType> {
   return studioRuntime().writeWorkTracker({
-    rest: () => rest.patchIssueType(id, patch),
     graphQl: (execute) => graphQl(async () => issueType((await execute(UpdateWorkTrackerIssueTypeDocument, {
       id, name: patch.name, color: patch.color, sortOrder: patch.sort_order,
     })).update_issue_type)),
@@ -56,21 +53,18 @@ export function updateIssueType(id: string, patch: IssueTypePatch): Promise<Issu
 
 export function deleteIssueType(id: string, reassignTo?: string): Promise<void> {
   return studioRuntime().writeWorkTracker({
-    rest: () => rest.deleteIssueType(id, reassignTo),
     graphQl: (execute) => graphQl(async () => { await execute(DeleteWorkTrackerIssueTypeDocument, { id, reassignTo }); }),
   });
 }
 
 export function reorderIssueTypes(projectId: string, orderedIds: string[]): Promise<IssueType[]> {
   return studioRuntime().writeWorkTracker({
-    rest: () => rest.reorderIssueTypes(projectId, orderedIds),
     graphQl: (execute) => graphQl(async () => (await execute(ReorderWorkTrackerIssueTypesDocument, { projectId, orderedIds })).reorder_issue_types.map(issueType)),
   });
 }
 
 export function createState(projectId: string, body: StateCreate): Promise<State> {
   return studioRuntime().writeWorkTracker({
-    rest: () => rest.createState(projectId, body),
     graphQl: (execute) => graphQl(async () => ({ ...(await execute(CreateWorkTrackerStateDocument, {
       projectId, name: body.name, group: body.group, color: body.color,
     })).create_state })),
@@ -79,7 +73,6 @@ export function createState(projectId: string, body: StateCreate): Promise<State
 
 export function updateState(id: string, patch: StatePatch): Promise<State> {
   return studioRuntime().writeWorkTracker({
-    rest: () => rest.updateState(id, patch),
     graphQl: (execute) => graphQl(async () => ({ ...(await execute(UpdateWorkTrackerStateDocument, {
       id, name: patch.name, group: patch.group, color: patch.color, sortOrder: patch.sort_order,
     })).update_state })),
@@ -87,33 +80,32 @@ export function updateState(id: string, patch: StatePatch): Promise<State> {
 }
 
 export function deleteState(id: string, reassignTo?: string): Promise<void> {
+  void reassignTo;
   return studioRuntime().writeWorkTracker({
-    rest: () => rest.deleteState(id, reassignTo),
     graphQl: (execute) => graphQl(async () => { await execute(DeleteWorkTrackerStateDocument, { id }); }),
   });
 }
 
 export function reorderStates(projectId: string, orderedIds: string[]): Promise<State[]> {
   return studioRuntime().writeWorkTracker({
-    rest: () => rest.reorderStates(projectId, orderedIds),
     graphQl: (execute) => graphQl(async () => (await execute(ReorderWorkTrackerStatesDocument, { projectId, orderedIds })).reorder_states.map((row) => ({ ...row }))),
   });
 }
 
 export function setIssueTypeWorkflowStartState(typeId: string, stateId: string, revision: number): Promise<unknown> {
-  return studioRuntime().writeWorkTracker<unknown>({ rest: () => rest.setIssueTypeWorkflowStartState(typeId, stateId, revision), graphQl: (execute) => graphQl(() => execute(SetWorkTrackerStartStateDocument, { id: typeId, startStateId: stateId, workflowRevision: revision })) });
+  return studioRuntime().writeWorkTracker<unknown>({ graphQl: (execute) => graphQl(() => execute(SetWorkTrackerStartStateDocument, { id: typeId, startStateId: stateId, workflowRevision: revision })) });
 }
 export function addIssueTypeWorkflowTransition(typeId: string, input: { from_state_id: string; to_state_id: string; agent_allowed: boolean; workflow_revision: number }): Promise<unknown> {
-  return studioRuntime().writeWorkTracker({ rest: () => rest.addIssueTypeWorkflowTransition(typeId, input), graphQl: (execute) => graphQl(() => execute(CreateWorkTrackerTransitionDocument, { issueTypeId: typeId, fromStateId: input.from_state_id, toStateId: input.to_state_id, agentAllowed: input.agent_allowed, workflowRevision: input.workflow_revision })) });
+  return studioRuntime().writeWorkTracker({ graphQl: (execute) => graphQl(() => execute(CreateWorkTrackerTransitionDocument, { issueTypeId: typeId, fromStateId: input.from_state_id, toStateId: input.to_state_id, agentAllowed: input.agent_allowed, workflowRevision: input.workflow_revision })) });
 }
 export function removeIssueTypeWorkflowTransition(typeId: string, fromStateId: string, toStateId: string, revision: number): Promise<unknown> {
-  return studioRuntime().writeWorkTracker<unknown>({ rest: () => rest.removeIssueTypeWorkflowTransition(typeId, fromStateId, toStateId, revision), graphQl: (execute) => graphQl(() => execute(DeleteWorkTrackerTransitionDocument, { issueTypeId: typeId, fromStateId, toStateId, workflowRevision: revision })) });
+  return studioRuntime().writeWorkTracker<unknown>({ graphQl: (execute) => graphQl(() => execute(DeleteWorkTrackerTransitionDocument, { issueTypeId: typeId, fromStateId, toStateId, workflowRevision: revision })) });
 }
 export function removeIssueTypeWorkflowState(typeId: string, stateId: string, revision: number): Promise<unknown> {
-  return studioRuntime().writeWorkTracker<unknown>({ rest: () => rest.removeIssueTypeWorkflowState(typeId, stateId, revision), graphQl: (execute) => graphQl(() => execute(RemoveWorkTrackerWorkflowStateDocument, { issueTypeId: typeId, stateId, workflowRevision: revision })) });
+  return studioRuntime().writeWorkTracker<unknown>({ graphQl: (execute) => graphQl(() => execute(RemoveWorkTrackerWorkflowStateDocument, { issueTypeId: typeId, stateId, workflowRevision: revision })) });
 }
 export function setIssueTypeWorkflowTransitionPermission(typeId: string, fromStateId: string, toStateId: string, agentAllowed: boolean, revision: number): Promise<unknown> {
-  return studioRuntime().writeWorkTracker({ rest: () => rest.setIssueTypeWorkflowTransitionPermission(typeId, fromStateId, toStateId, agentAllowed, revision), graphQl: (execute) => graphQl(() => execute(UpdateWorkTrackerTransitionDocument, { issueTypeId: typeId, fromStateId, toStateId, agentAllowed, workflowRevision: revision })) });
+  return studioRuntime().writeWorkTracker({ graphQl: (execute) => graphQl(() => execute(UpdateWorkTrackerTransitionDocument, { issueTypeId: typeId, fromStateId, toStateId, agentAllowed, workflowRevision: revision })) });
 }
 
 export function upsertIssueTypeWorkflowLaunchBinding(
@@ -121,7 +113,6 @@ export function upsertIssueTypeWorkflowLaunchBinding(
   workflowRevision: number, autoStart: boolean, subtreeRunEnabled: boolean,
 ): Promise<unknown> {
   return studioRuntime().writeWorkTracker({
-    rest: () => rest.upsertIssueTypeWorkflowLaunchBinding(typeId, stateId, binding, workflowRevision),
     graphQl: (execute) => graphQl(async () => {
       const catalog = await execute(WorkTrackerWorkflowCatalogDocument, {
         projectId: compactWorktrackerId(projectId),
@@ -142,8 +133,8 @@ export function upsertIssueTypeWorkflowLaunchBinding(
   });
 }
 export function setIssueTypeWorkflowAutoStart(typeId: string, stateId: string, autoStart: boolean, revision: number): Promise<unknown> {
-  return studioRuntime().writeWorkTracker({ rest: () => rest.setIssueTypeWorkflowAutoStart(typeId, stateId, autoStart, revision), graphQl: (execute) => graphQl(() => execute(SetWorkTrackerAutoStartDocument, { issueTypeId: typeId, stateId, workflowRevision: revision, autoStart })) });
+  return studioRuntime().writeWorkTracker({ graphQl: (execute) => graphQl(() => execute(SetWorkTrackerAutoStartDocument, { issueTypeId: typeId, stateId, workflowRevision: revision, autoStart })) });
 }
 export function setIssueTypeWorkflowSubtreeRun(typeId: string, stateId: string, enabled: boolean, revision: number): Promise<unknown> {
-  return studioRuntime().writeWorkTracker({ rest: () => rest.setIssueTypeWorkflowSubtreeRun(typeId, stateId, enabled, revision), graphQl: (execute) => graphQl(() => execute(SetWorkTrackerSubtreeRunDocument, { issueTypeId: typeId, stateId, workflowRevision: revision, enabled })) });
+  return studioRuntime().writeWorkTracker({ graphQl: (execute) => graphQl(() => execute(SetWorkTrackerSubtreeRunDocument, { issueTypeId: typeId, stateId, workflowRevision: revision, enabled })) });
 }

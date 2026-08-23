@@ -1,4 +1,4 @@
-import { authenticatedHostFetch } from "../../../shared/api/authenticatedHostFetch";
+import { invoke, isTauri } from "@tauri-apps/api/core";
 
 export type ModuleFolderRefusal =
   | "module_folder_not_absolute"
@@ -13,12 +13,10 @@ export interface ModuleFolderValidation {
 export async function validateModuleFolder(
   path: string,
 ): Promise<ModuleFolderValidation> {
-  const response = await authenticatedHostFetch("/api/config/folders/validate", {
-    method: "POST",
-    body: JSON.stringify({ path }),
-  });
-  if (!response.ok) {
-    throw new Error(`module folder validation failed (HTTP ${response.status})`);
+  if (isTauri()) {
+    return invoke<ModuleFolderValidation>("desktop_validate_module_folder", { path });
   }
-  return (await response.json()) as ModuleFolderValidation;
+  return path.startsWith("/")
+    ? { valid: true, reason: null }
+    : { valid: false, reason: "module_folder_not_absolute" };
 }

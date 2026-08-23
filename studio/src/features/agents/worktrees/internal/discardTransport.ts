@@ -16,19 +16,15 @@
 import { studioRuntime } from "../../../../runtime";
 import { WorktreeDiscardDocument } from "../generated/worktreeDiscard";
 import { adaptWorktreeStatus } from "./statusTransport";
-import {
-  discardWorktree,
-  type DiscardResult,
-  type WorktreeContext,
-} from "./api";
+import type { DiscardResult, WorktreeContext } from "./api";
 
 export function requestWorktreeDiscard(
   taskId: string,
   operationId: string,
   ctx: WorktreeContext,
 ): Promise<DiscardResult> {
+  void ctx;
   return studioRuntime().writeWorkTracker({
-    rest: () => discardWorktree(taskId, ctx),
     graphQl: async (execute) => {
       const payload = (
         await execute(WorktreeDiscardDocument, { taskId, operationId })

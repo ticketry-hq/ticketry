@@ -10,10 +10,10 @@ from __future__ import annotations
 import shutil
 
 import pytest
-from django.test import Client
-from django.test import override_settings
+from django.test import Client, override_settings
 
 from apps.worktrees import service
+from apps.worktrees.models import Worktree
 
 
 pytestmark = [
@@ -35,6 +35,9 @@ class HostClient(Client):
 client = HostClient()
 
 MODULE_ID = "mod-1"
+PROJECT_UUID = "11111111-1111-4111-8111-111111111111"
+MODULE_UUID = "22222222-2222-4222-8222-222222222222"
+OTHER_MODULE_UUID = "33333333-3333-4333-8333-333333333333"
 
 
 @pytest.fixture(autouse=True)
@@ -63,6 +66,76 @@ def _create_record(task_id: str, repo) -> service.WorktreeStatus:
     )
     assert not isinstance(result, service.NoWorktree)
     return result
+
+
+def _indexed_worktree(
+    *,
+    task_id: str,
+    created_at: str,
+    module_id: str = MODULE_UUID,
+    project_id: str = PROJECT_UUID,
+    status: str = "active",
+    ephemeral: bool = False,
+) -> Worktree:
+    return Worktree.objects.create(
+        id=f"worktree-{task_id}",
+        task_id=task_id,
+        project_id=project_id,
+        module_id=module_id,
+        ticket_seq=int(task_id.removeprefix("task-")),
+        repo_root="/repo",
+        path=f"/worktrees/{task_id}",
+        branch=f"wt/CODING-{task_id.removeprefix('task-')}",
+        base_branch="main",
+        base_commit="a" * 40,
+        status=status,
+        ephemeral=ephemeral,
+        created_at=created_at,
+        updated_at=created_at,
+    )
+
+
+def test_list_module_worktrees_is_scoped_ordered_and_carries_anchor_identity():
+    _indexed_worktree(task_id="task-2", created_at="2026-08-24T10:00:00+00:00")
+    _indexed_worktree(task_id="task-1", created_at="2026-08-24T09:00:00+00:00")
+    _indexed_worktree(
+        task_id="task-3",
+        created_at="2026-08-24T11:00:00+00:00",
+        status="conflict",
+    )
+    _indexed_worktree(
+        task_id="task-4",
+        created_at="2026-08-24T12:00:00+00:00",
+        module_id=OTHER_MODULE_UUID,
+    )
+    _indexed_worktree(
+        task_id="task-5",
+        created_at="2026-08-24T13:00:00+00:00",
+        ephemeral=True,
+    )
+
+    response = client.get(
+        f"/work-tracker/projects/{PROJECT_UUID}/modules/{MODULE_UUID}/worktrees"
+    )
+
+    assert response.status_code == 200
+    assert [row["task_id"] for row in response.json()] == [
+        "task-1",
+        "task-2",
+        "task-3",
+    ]
+    assert response.json()[0] == {
+        "id": "worktree-task-1",
+        "task_id": "task-1",
+        "project_id": PROJECT_UUID,
+        "module_id": MODULE_UUID,
+        "ticket_seq": 1,
+        "path": "/worktrees/task-1",
+        "branch": "wt/CODING-1",
+        "base_branch": "main",
+        "status": "active",
+        "created_at": "2026-08-24T09:00:00+00:00",
+    }
 
 
 # --------------------------------------------------------------------------- status

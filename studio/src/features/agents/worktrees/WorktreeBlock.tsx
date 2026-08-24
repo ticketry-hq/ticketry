@@ -75,7 +75,14 @@ export function WorktreeBlock({
     setBusy(true);
     setMutationError(null);
     try {
-      queryClient.setQueryData(statusKey, await createWorktree(taskId, ctx));
+      const createdWorktree = await createWorktree(taskId, ctx);
+      queryClient.setQueryData(statusKey, createdWorktree);
+      if (projectId && moduleId) {
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.worktrees.byModule(projectId, moduleId),
+          exact: true,
+        });
+      }
     } catch {
       setMutationError("Create failed");
     } finally {
@@ -89,6 +96,12 @@ export function WorktreeBlock({
     try {
       await discardWorktree(taskId, { parentId, moduleId });
       setConfirming(false);
+      if (projectId && moduleId) {
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.worktrees.byModule(projectId, moduleId),
+          exact: true,
+        });
+      }
       await statusQuery.refetch();
     } catch {
       setMutationError("Discard failed");

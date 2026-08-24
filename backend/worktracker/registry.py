@@ -85,6 +85,16 @@ MODEL_ROUTES = {
                 "/api/work-tracker/projects/{project_id}/modules",
                 "List a project's module rows in its Canonical module order.",
             ),
+            RouteDeclaration(
+                "GET",
+                "/api/work-tracker/projects/{project_id}/modules/{module_id}/worktrees",
+                "List one module's live task worktrees in authoritative order.",
+            ),
+            RouteDeclaration(
+                "GET",
+                "/api/work-tracker/projects/{project_id}/modules/{module_id}/ship-records",
+                "List one module's durable source-control ship records newest first.",
+            ),
         ),
         "writes": (
             RouteDeclaration(
@@ -209,6 +219,11 @@ MODEL_ROUTES = {
                 "POST",
                 "/api/work-tracker/work-items/batch",
                 "Retrieve up to one hundred bare work items by exact id.",
+            ),
+            RouteDeclaration(
+                "GET",
+                "/api/work-tracker/projects/{project_id}/work-items/{task_id}/ship-records",
+                "List one task's durable ship records newest first.",
             ),
         ),
         "writes": (
@@ -345,6 +360,11 @@ MODEL_ROUTES = {
 DOMAIN_OPERATIONS = (
     RouteDeclaration(
         "POST",
+        "/api/work-tracker/projects/{project_id}/modules/{module_id}/ship-records/{record_id}/refresh-pr-state",
+        "Refresh one stored pull request state through one bounded GitHub lookup.",
+    ),
+    RouteDeclaration(
+        "POST",
         "/api/work-tracker/module-presentations/{module_id}/reorder",
         "The server seeds and allocates presentation ranks under one project lock.",
     ),
@@ -464,6 +484,74 @@ HOST_ROUTES = (
     ),
     RouteDeclaration("GET", "/api/fs/complete", "Complete local directory names."),
     RouteDeclaration("GET", "/api/worktrees", "Read live worktree status."),
+    RouteDeclaration(
+        "GET",
+        "/api/worktrees/changes",
+        "List a task worktree's working-tree changes.",
+    ),
+    RouteDeclaration(
+        "GET",
+        "/api/worktrees/changes/file-diff",
+        "Read one changed file's worktree diff.",
+    ),
+    RouteDeclaration(
+        "GET",
+        "/api/worktrees/changes/push-preview",
+        "Describe a task worktree push before it runs.",
+    ),
+    RouteDeclaration(
+        "POST",
+        "/api/worktrees/changes/commit",
+        "Commit a task worktree and persist its ship record.",
+    ),
+    RouteDeclaration(
+        "POST",
+        "/api/worktrees/changes/commit-push",
+        "Commit and push a task worktree and persist its ship record.",
+    ),
+    RouteDeclaration(
+        "POST",
+        "/api/worktrees/changes/commit-push-pr",
+        "Commit, push, open a pull request, and persist its ship record.",
+    ),
+    RouteDeclaration(
+        "POST",
+        "/api/worktrees/changes/pull-request",
+        "Open a pull request for an already-pushed task worktree.",
+    ),
+    RouteDeclaration(
+        "GET", "/api/modules/changes", "List a module checkout's changes."
+    ),
+    RouteDeclaration(
+        "GET",
+        "/api/modules/changes/file-diff",
+        "Read one changed file's module-checkout diff.",
+    ),
+    RouteDeclaration(
+        "GET",
+        "/api/modules/changes/push-preview",
+        "Describe a module-checkout push before it runs.",
+    ),
+    RouteDeclaration(
+        "POST",
+        "/api/modules/changes/commit",
+        "Commit a module checkout and persist its ship record.",
+    ),
+    RouteDeclaration(
+        "POST",
+        "/api/modules/changes/commit-push",
+        "Commit and push a module checkout and persist its ship record.",
+    ),
+    RouteDeclaration(
+        "POST",
+        "/api/modules/changes/commit-push-pr",
+        "Commit, push, open a pull request, and persist its ship record.",
+    ),
+    RouteDeclaration(
+        "POST",
+        "/api/modules/changes/pull-request",
+        "Open a pull request for an already-pushed module checkout.",
+    ),
     RouteDeclaration(
         "POST", "/api/worktrees/{task_id}/create", "Create an opt-in worktree."
     ),

@@ -535,6 +535,690 @@
                 }
             }
         },
+        "/modules/changes": {
+            "get": {
+                "operationId": "source_control_module_changes_retrieve",
+                "description": "Read a module base checkout's change set and one file's diff.",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "module_id",
+                        "schema": {
+                            "type": "string",
+                            "minLength": 1
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "source-control"
+                ],
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorktreeChanges"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "413": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "502": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "504": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/modules/changes/commit": {
+            "post": {
+                "operationId": "source_control_module_commit_create",
+                "description": "Commit everything a module base checkout changed, with hooks enabled.",
+                "tags": [
+                    "source-control"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ModuleCommitRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ModuleCommitRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ModuleCommitRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorktreeCommit"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "413": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "502": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "504": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "500": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ShipRecordPersistenceError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/modules/changes/commit-push": {
+            "post": {
+                "operationId": "source_control_module_commit_push_create",
+                "description": "Publish a module base checkout's branch, and describe the push first.\n\nThe module checkout's terminal action (ADR 0013): a base checkout normally\nsits on the default branch, where a pull request is refused, so committing\nand publishing is the whole flow rather than a stop on the way to one.",
+                "tags": [
+                    "source-control"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ModuleActionRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ModuleActionRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ModuleActionRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorktreeCommitPush"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "413": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "502": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "504": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "500": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ShipRecordPersistenceError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/modules/changes/commit-push-pr": {
+            "post": {
+                "operationId": "source_control_module_commit_push_pr_create",
+                "description": "Open a GitHub pull request for a module base checkout.\n\nOffered for the case that makes it meaningful — a base checkout sitting on\na feature branch. On the default branch the pull request's own precondition\nrefuses the action before it writes anything, which is why the module\nsurface offers this action without making it the primary one.",
+                "tags": [
+                    "source-control"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ModulePullRequestRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ModulePullRequestRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ModulePullRequestRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorktreePullRequest"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "413": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "502": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "504": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "500": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ShipRecordPersistenceError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/modules/changes/file-diff": {
+            "get": {
+                "operationId": "source_control_module_file_diff_retrieve",
+                "description": "Read a module base checkout's change set and one file's diff.",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "module_id",
+                        "schema": {
+                            "type": "string",
+                            "minLength": 1
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "path",
+                        "schema": {
+                            "type": "string",
+                            "minLength": 1
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "source-control"
+                ],
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/FileDiff"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "502": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "504": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/modules/changes/pull-request": {
+            "post": {
+                "operationId": "source_control_module_pull_request_create",
+                "description": "Open a GitHub pull request for a module base checkout.\n\nOffered for the case that makes it meaningful — a base checkout sitting on\na feature branch. On the default branch the pull request's own precondition\nrefuses the action before it writes anything, which is why the module\nsurface offers this action without making it the primary one.",
+                "tags": [
+                    "source-control"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ModulePullRequestRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ModulePullRequestRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ModulePullRequestRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorktreePullRequest"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "413": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "502": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "504": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "500": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ShipRecordPersistenceError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/modules/changes/push-preview": {
+            "get": {
+                "operationId": "source_control_module_push_preview_retrieve",
+                "description": "Publish a module base checkout's branch, and describe the push first.\n\nThe module checkout's terminal action (ADR 0013): a base checkout normally\nsits on the default branch, where a pull request is refused, so committing\nand publishing is the whole flow rather than a stop on the way to one.",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "module_id",
+                        "schema": {
+                            "type": "string",
+                            "minLength": 1
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "source-control"
+                ],
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorktreePushPreview"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "413": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "502": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "504": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "500": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ShipRecordPersistenceError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/settings/keybindings": {
             "get": {
                 "operationId": "settings_keybindings_retrieve",
@@ -2728,6 +3412,219 @@
                 }
             }
         },
+        "/work-tracker/projects/{project_id}/modules/{module_id}/ship-records": {
+            "get": {
+                "operationId": "listModuleShipRecords",
+                "description": "List one module's durable ship records, newest action first.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "module_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "project_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "source-control"
+                ],
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/ShipRecord"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/work-tracker/projects/{project_id}/modules/{module_id}/ship-records/{record_id}/refresh-pr-state": {
+            "post": {
+                "operationId": "refreshShipRecordPullRequestState",
+                "description": "Refresh one stored GitHub pull request state without polling.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "module_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "project_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "record_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "source-control"
+                ],
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ShipRecord"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ShipRecordRefreshError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ShipRecordRefreshError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "422": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ShipRecordRefreshError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "502": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ShipRecordRefreshError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ShipRecordRefreshError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "504": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ShipRecordRefreshError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/work-tracker/projects/{project_id}/modules/{module_id}/worktrees": {
+            "get": {
+                "operationId": "listModuleWorktrees",
+                "description": "List one module's active task worktrees.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "module_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "project_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "worktrees"
+                ],
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/ActiveWorktree"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/work-tracker/projects/{project_id}/onboarding/acknowledge": {
             "post": {
                 "operationId": "acknowledgeProjectOnboarding",
@@ -2969,6 +3866,55 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/WorkItem"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/work-tracker/projects/{project_id}/work-items/{task_id}/ship-records": {
+            "get": {
+                "operationId": "listTaskShipRecords",
+                "description": "List one task's ship records, newest action first.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "project_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "task_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "source-control"
+                ],
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/ShipRecord"
+                                    }
                                 }
                             }
                         },
@@ -4311,10 +5257,838 @@
                     }
                 }
             }
+        },
+        "/worktrees/changes": {
+            "get": {
+                "operationId": "source_control_worktree_changes_retrieve",
+                "description": "Read a task worktree's change set and one file's working-tree diff.",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "module_id",
+                        "schema": {
+                            "type": "string",
+                            "nullable": true,
+                            "minLength": 1
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "parent_id",
+                        "schema": {
+                            "type": "string",
+                            "nullable": true,
+                            "minLength": 1
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "task_id",
+                        "schema": {
+                            "type": "string",
+                            "minLength": 1
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "source-control"
+                ],
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorktreeChanges"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "413": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "502": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "504": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/worktrees/changes/commit": {
+            "post": {
+                "operationId": "source_control_worktree_commit_create",
+                "description": "Commit everything a task worktree changed, with hooks enabled.",
+                "tags": [
+                    "source-control"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/WorktreeCommitRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/WorktreeCommitRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/WorktreeCommitRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorktreeCommit"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "413": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "502": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "504": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "500": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ShipRecordPersistenceError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/worktrees/changes/commit-push": {
+            "post": {
+                "operationId": "source_control_worktree_commit_push_create",
+                "description": "Publish a task worktree's branch, and describe the push beforehand.",
+                "tags": [
+                    "source-control"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/WorktreeActionRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/WorktreeActionRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/WorktreeActionRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorktreeCommitPush"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "413": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "502": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "504": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "500": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ShipRecordPersistenceError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/worktrees/changes/commit-push-pr": {
+            "post": {
+                "operationId": "source_control_worktree_commit_push_pr_create",
+                "description": "Open a GitHub pull request for a task worktree, through the user's ``gh``.",
+                "tags": [
+                    "source-control"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/WorktreePullRequestRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/WorktreePullRequestRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/WorktreePullRequestRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorktreePullRequest"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "413": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "502": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "504": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "500": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ShipRecordPersistenceError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/worktrees/changes/file-diff": {
+            "get": {
+                "operationId": "source_control_worktree_file_diff_retrieve",
+                "description": "Read a task worktree's change set and one file's working-tree diff.",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "module_id",
+                        "schema": {
+                            "type": "string",
+                            "nullable": true,
+                            "minLength": 1
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "parent_id",
+                        "schema": {
+                            "type": "string",
+                            "nullable": true,
+                            "minLength": 1
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "path",
+                        "schema": {
+                            "type": "string",
+                            "minLength": 1
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "task_id",
+                        "schema": {
+                            "type": "string",
+                            "minLength": 1
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "source-control"
+                ],
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/FileDiff"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "502": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "504": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/worktrees/changes/pull-request": {
+            "post": {
+                "operationId": "source_control_worktree_pull_request_create",
+                "description": "Open a GitHub pull request for a task worktree, through the user's ``gh``.",
+                "tags": [
+                    "source-control"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/WorktreePullRequestRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/WorktreePullRequestRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/WorktreePullRequestRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorktreePullRequest"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "413": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "502": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "504": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "500": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ShipRecordPersistenceError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/worktrees/changes/push-preview": {
+            "get": {
+                "operationId": "source_control_worktree_push_preview_retrieve",
+                "description": "Publish a task worktree's branch, and describe the push beforehand.",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "module_id",
+                        "schema": {
+                            "type": "string",
+                            "nullable": true,
+                            "minLength": 1
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "parent_id",
+                        "schema": {
+                            "type": "string",
+                            "nullable": true,
+                            "minLength": 1
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "task_id",
+                        "schema": {
+                            "type": "string",
+                            "minLength": 1
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "source-control"
+                ],
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorktreePushPreview"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "413": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "502": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "504": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "500": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ShipRecordPersistenceError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
         }
     },
     "components": {
         "schemas": {
+            "ActionStep": {
+                "type": "object",
+                "description": "One step's typed outcome, in the order the steps ran.\n\nThe enums are the whole vocabulary rather than the subset a particular\naction can emit: which steps a given action runs is that action's contract,\ndocumented on its own response, and narrowing this per endpoint would mean\na step could not be moved between actions without a schema break.",
+                "properties": {
+                    "name": {
+                        "$ref": "#/components/schemas/NameEnum"
+                    },
+                    "status": {
+                        "$ref": "#/components/schemas/ActionStepStatusEnum"
+                    },
+                    "detail": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "detail",
+                    "name",
+                    "status"
+                ]
+            },
+            "ActionStepStatusEnum": {
+                "enum": [
+                    "ok",
+                    "skipped",
+                    "failed"
+                ],
+                "type": "string",
+                "description": "* `ok` - ok\n* `skipped` - skipped\n* `failed` - failed"
+            },
+            "ActiveWorktree": {
+                "type": "object",
+                "description": "Read-only identity and checkout facts for one live task worktree.",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "task_id": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "project_id": {
+                        "type": "string",
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "module_id": {
+                        "type": "string",
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "ticket_seq": {
+                        "type": "integer",
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "path": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "branch": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "base_branch": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "status": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "base_branch",
+                    "branch",
+                    "created_at",
+                    "id",
+                    "module_id",
+                    "path",
+                    "project_id",
+                    "status",
+                    "task_id",
+                    "ticket_seq"
+                ]
+            },
             "AgentEnum": {
                 "enum": [
                     "claude",
@@ -4487,6 +6261,69 @@
                     "updated_at",
                     "work_item_id"
                 ]
+            },
+            "ChangedFile": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string"
+                    },
+                    "status": {
+                        "$ref": "#/components/schemas/ChangedFileStatusEnum"
+                    },
+                    "original_path": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "binary": {
+                        "type": "boolean"
+                    },
+                    "insertions": {
+                        "type": "integer",
+                        "nullable": true
+                    },
+                    "deletions": {
+                        "type": "integer",
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "binary",
+                    "deletions",
+                    "insertions",
+                    "original_path",
+                    "path",
+                    "status"
+                ]
+            },
+            "ChangedFileStatusEnum": {
+                "enum": [
+                    "untracked",
+                    "added",
+                    "modified",
+                    "deleted",
+                    "renamed",
+                    "copied",
+                    "conflicted"
+                ],
+                "type": "string",
+                "description": "* `untracked` - Untracked\n* `added` - Added\n* `modified` - Modified\n* `deleted` - Deleted\n* `renamed` - Renamed\n* `copied` - Copied\n* `conflicted` - Conflicted"
+            },
+            "CheckoutEnum": {
+                "enum": [
+                    "worktree",
+                    "module"
+                ],
+                "type": "string",
+                "description": "* `worktree` - worktree\n* `module` - module"
+            },
+            "CheckoutKindEnum": {
+                "enum": [
+                    "base",
+                    "worktree"
+                ],
+                "type": "string",
+                "description": "* `base` - Base checkout\n* `worktree` - Task worktree"
             },
             "CommittedState": {
                 "type": "object",
@@ -4703,6 +6540,41 @@
                 },
                 "required": [
                     "detail"
+                ]
+            },
+            "FailureCodeEnum": {
+                "enum": [
+                    "diverged",
+                    "rejected"
+                ],
+                "type": "string",
+                "description": "* `diverged` - diverged\n* `rejected` - rejected"
+            },
+            "FileDiff": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string"
+                    },
+                    "status": {
+                        "type": "string"
+                    },
+                    "binary": {
+                        "type": "boolean"
+                    },
+                    "patch": {
+                        "type": "string"
+                    },
+                    "truncated": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "binary",
+                    "patch",
+                    "path",
+                    "status",
+                    "truncated"
                 ]
             },
             "FsEntries": {
@@ -5258,6 +7130,34 @@
                     "sequence_id"
                 ]
             },
+            "ModuleActionRequest": {
+                "type": "object",
+                "description": "Which module's base checkout the action runs in.\n\nA retry may echo the action identifier from an earlier response. Force,\nremote, and base-branch overrides remain unavailable.",
+                "properties": {
+                    "module_id": {
+                        "type": "string"
+                    },
+                    "action_id": {
+                        "type": "string",
+                        "format": "uuid"
+                    }
+                },
+                "required": [
+                    "module_id"
+                ]
+            },
+            "ModuleCommitRequest": {
+                "type": "object",
+                "description": "Which module's base checkout to commit.\n\nA separate request shape rather than the worktree's with an unused field:\nthe checkout a mutation writes to is then fixed by the route it arrived on,\nand no combination of identifiers can make one action write the other's\ncheckout.",
+                "properties": {
+                    "module_id": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "module_id"
+                ]
+            },
             "ModuleCreate": {
                 "type": "object",
                 "description": "Input for the project-scoped module create.",
@@ -5415,6 +7315,22 @@
                     "tab_hidden"
                 ]
             },
+            "ModulePullRequestRequest": {
+                "type": "object",
+                "description": "Which module's base checkout the pull-request action runs in.\n\nA retry may echo the action identifier from an earlier response.",
+                "properties": {
+                    "module_id": {
+                        "type": "string"
+                    },
+                    "action_id": {
+                        "type": "string",
+                        "format": "uuid"
+                    }
+                },
+                "required": [
+                    "module_id"
+                ]
+            },
             "ModuleShell": {
                 "type": "object",
                 "description": "Read-only public projection of a durable login shell.",
@@ -5437,6 +7353,17 @@
                     "created_at",
                     "module_id"
                 ]
+            },
+            "NameEnum": {
+                "enum": [
+                    "stage",
+                    "generate_message",
+                    "commit",
+                    "push",
+                    "pull_request"
+                ],
+                "type": "string",
+                "description": "* `stage` - stage\n* `generate_message` - generate_message\n* `commit` - commit\n* `push` - push\n* `pull_request` - pull_request"
             },
             "Open": {
                 "type": "object",
@@ -5694,6 +7621,15 @@
                         "$ref": "#/components/schemas/OriginEnum"
                     }
                 }
+            },
+            "PrStateEnum": {
+                "enum": [
+                    "open",
+                    "merged",
+                    "closed"
+                ],
+                "type": "string",
+                "description": "* `open` - Open\n* `merged` - Merged\n* `closed` - Closed"
             },
             "Project": {
                 "type": "object",
@@ -6055,6 +7991,204 @@
                     "value"
                 ]
             },
+            "ShipRecord": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "action_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "module_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "task_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "nullable": true,
+                        "readOnly": true
+                    },
+                    "checkout_kind": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/CheckoutKindEnum"
+                            }
+                        ],
+                        "readOnly": true
+                    },
+                    "checkout_name": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "branch": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "commit_shas": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "pattern": "^[0-9a-f]{40}$"
+                        },
+                        "readOnly": true
+                    },
+                    "commit_outcome": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/ShipStepOutcome"
+                            }
+                        ],
+                        "readOnly": true
+                    },
+                    "push_outcome": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/ShipStepOutcome"
+                            }
+                        ],
+                        "readOnly": true
+                    },
+                    "create_pr_outcome": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/ShipStepOutcome"
+                            }
+                        ],
+                        "readOnly": true
+                    },
+                    "pr_url": {
+                        "type": "string",
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "pr_number": {
+                        "type": "integer",
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "pr_state": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/PrStateEnum"
+                            }
+                        ],
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "action_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    },
+                    "pr_refreshed_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "action_at",
+                    "action_id",
+                    "branch",
+                    "checkout_kind",
+                    "checkout_name",
+                    "commit_outcome",
+                    "commit_shas",
+                    "create_pr_outcome",
+                    "id",
+                    "module_id",
+                    "pr_number",
+                    "pr_refreshed_at",
+                    "pr_state",
+                    "pr_url",
+                    "push_outcome",
+                    "task_id"
+                ]
+            },
+            "ShipRecordPersistenceError": {
+                "type": "object",
+                "properties": {
+                    "detail": {
+                        "type": "string"
+                    },
+                    "code": {
+                        "$ref": "#/components/schemas/ShipRecordPersistenceErrorCodeEnum"
+                    },
+                    "action_result": {}
+                },
+                "required": [
+                    "action_result",
+                    "code",
+                    "detail"
+                ]
+            },
+            "ShipRecordPersistenceErrorCodeEnum": {
+                "enum": [
+                    "ship_record_persistence_failed"
+                ],
+                "type": "string",
+                "description": "* `ship_record_persistence_failed` - ship_record_persistence_failed"
+            },
+            "ShipRecordRefreshError": {
+                "type": "object",
+                "properties": {
+                    "detail": {
+                        "type": "string"
+                    },
+                    "code": {
+                        "$ref": "#/components/schemas/ShipRecordRefreshErrorCodeEnum"
+                    }
+                },
+                "required": [
+                    "detail"
+                ]
+            },
+            "ShipRecordRefreshErrorCodeEnum": {
+                "enum": [
+                    "provider_unavailable",
+                    "provider_not_authenticated",
+                    "provider_timeout",
+                    "provider_response_malformed",
+                    "provider_lookup_failed",
+                    "pull_request_not_found",
+                    "pull_request_url_unsupported"
+                ],
+                "type": "string",
+                "description": "* `provider_unavailable` - provider_unavailable\n* `provider_not_authenticated` - provider_not_authenticated\n* `provider_timeout` - provider_timeout\n* `provider_response_malformed` - provider_response_malformed\n* `provider_lookup_failed` - provider_lookup_failed\n* `pull_request_not_found` - pull_request_not_found\n* `pull_request_url_unsupported` - pull_request_url_unsupported"
+            },
+            "ShipStepOutcome": {
+                "type": "object",
+                "properties": {
+                    "status": {
+                        "$ref": "#/components/schemas/ShipStepOutcomeStatusEnum"
+                    },
+                    "message": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 512
+                    }
+                },
+                "required": [
+                    "status"
+                ]
+            },
+            "ShipStepOutcomeStatusEnum": {
+                "enum": [
+                    "done",
+                    "skipped",
+                    "failed"
+                ],
+                "type": "string",
+                "description": "* `done` - Done\n* `skipped` - Skipped\n* `failed` - Failed"
+            },
             "SourceEnum": {
                 "enum": [
                     "hook",
@@ -6118,6 +8252,18 @@
                     "sort_order",
                     "updated_at"
                 ]
+            },
+            "StateEnum": {
+                "enum": [
+                    "ready",
+                    "up_to_date",
+                    "diverged",
+                    "detached_head",
+                    "unborn_branch",
+                    "no_remote"
+                ],
+                "type": "string",
+                "description": "* `ready` - ready\n* `up_to_date` - up_to_date\n* `diverged` - diverged\n* `detached_head` - detached_head\n* `unborn_branch` - unborn_branch\n* `no_remote` - no_remote"
             },
             "StatusEnum": {
                 "enum": [
@@ -6504,6 +8650,488 @@
                 },
                 "required": [
                     "order"
+                ]
+            },
+            "WorktreeActionRequest": {
+                "type": "object",
+                "description": "Which task's worktree the action runs in.\n\nA retry may echo the action identifier from an earlier response. No other\naction options are accepted: the push publishes the current branch to its\nconfigured remote, or it refuses.",
+                "properties": {
+                    "task_id": {
+                        "type": "string"
+                    },
+                    "parent_id": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "module_id": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "action_id": {
+                        "type": "string",
+                        "format": "uuid"
+                    }
+                },
+                "required": [
+                    "task_id"
+                ]
+            },
+            "WorktreeChanges": {
+                "type": "object",
+                "properties": {
+                    "kind": {
+                        "$ref": "#/components/schemas/WorktreeChangesKindEnum"
+                    },
+                    "checkout": {
+                        "$ref": "#/components/schemas/CheckoutEnum"
+                    },
+                    "task_id": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "top_level_task_id": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "module_id": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "path": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "branch": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "base_branch": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "dirty": {
+                        "type": "boolean"
+                    },
+                    "file_count": {
+                        "type": "integer"
+                    },
+                    "insertions": {
+                        "type": "integer"
+                    },
+                    "deletions": {
+                        "type": "integer"
+                    },
+                    "files": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ChangedFile"
+                        }
+                    },
+                    "reason": {
+                        "type": "string",
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "base_branch",
+                    "branch",
+                    "checkout",
+                    "deletions",
+                    "dirty",
+                    "file_count",
+                    "files",
+                    "insertions",
+                    "kind",
+                    "module_id",
+                    "path",
+                    "reason",
+                    "task_id",
+                    "top_level_task_id"
+                ]
+            },
+            "WorktreeChangesKindEnum": {
+                "enum": [
+                    "changes",
+                    "no_worktree",
+                    "no_checkout"
+                ],
+                "type": "string",
+                "description": "* `changes` - changes\n* `no_worktree` - no_worktree\n* `no_checkout` - no_checkout"
+            },
+            "WorktreeCommit": {
+                "type": "object",
+                "description": "The mutation's result, discriminated on ``status``.\n\nShared by both checkout kinds: what a commit did is the same story whether\nit ran in a task worktree or a module base checkout, so the response\ncontract is one shape and only the request says which checkout ran.\n\nA failed step never appears here — a failure aborts the action and leaves\nthrough the error envelope instead, carrying the hook output that explains\nit. What this shape reports is which steps ran and which were skipped.",
+                "properties": {
+                    "status": {
+                        "$ref": "#/components/schemas/WorktreeCommitStatusEnum"
+                    },
+                    "steps": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ActionStep"
+                        }
+                    },
+                    "branch": {
+                        "type": "string"
+                    },
+                    "commit_sha": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "subject": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "message_source": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "file_count": {
+                        "type": "integer"
+                    },
+                    "insertions": {
+                        "type": "integer"
+                    },
+                    "deletions": {
+                        "type": "integer"
+                    },
+                    "commit_shas": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "action_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "nullable": true
+                    },
+                    "ship_record": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/ShipRecord"
+                            }
+                        ],
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "action_id",
+                    "branch",
+                    "commit_sha",
+                    "commit_shas",
+                    "deletions",
+                    "file_count",
+                    "insertions",
+                    "message_source",
+                    "ship_record",
+                    "status",
+                    "steps",
+                    "subject"
+                ]
+            },
+            "WorktreeCommitPush": {
+                "type": "object",
+                "description": "The commit-and-push action's result, discriminated on ``status``.\n\nA ``push_failed`` status arrives as a 200, not an error: the commit before\nit may well have landed, and ``commit_sha`` is the only record of that.\nThe step whose ``status`` is ``failed`` carries the sentence explaining it.\n\nA commit the repository's hooks refused is different — nothing was written,\nso that one still leaves through the error envelope with the hook output.",
+                "properties": {
+                    "status": {
+                        "$ref": "#/components/schemas/WorktreeCommitPushStatusEnum"
+                    },
+                    "steps": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ActionStep"
+                        }
+                    },
+                    "branch": {
+                        "type": "string"
+                    },
+                    "remote": {
+                        "type": "string"
+                    },
+                    "commit_sha": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "subject": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "message_source": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "file_count": {
+                        "type": "integer"
+                    },
+                    "insertions": {
+                        "type": "integer"
+                    },
+                    "deletions": {
+                        "type": "integer"
+                    },
+                    "pushed_sha": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "failure_code": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/FailureCodeEnum"
+                            }
+                        ],
+                        "nullable": true
+                    },
+                    "commit_shas": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "action_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "nullable": true
+                    },
+                    "ship_record": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/ShipRecord"
+                            }
+                        ],
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "action_id",
+                    "branch",
+                    "commit_sha",
+                    "commit_shas",
+                    "deletions",
+                    "failure_code",
+                    "file_count",
+                    "insertions",
+                    "message_source",
+                    "pushed_sha",
+                    "remote",
+                    "ship_record",
+                    "status",
+                    "steps",
+                    "subject"
+                ]
+            },
+            "WorktreeCommitPushStatusEnum": {
+                "enum": [
+                    "committed_and_pushed",
+                    "pushed",
+                    "up_to_date",
+                    "push_failed"
+                ],
+                "type": "string",
+                "description": "* `committed_and_pushed` - committed_and_pushed\n* `pushed` - pushed\n* `up_to_date` - up_to_date\n* `push_failed` - push_failed"
+            },
+            "WorktreeCommitRequest": {
+                "type": "object",
+                "description": "Which task's worktree to commit.\n\nThere is no path list: the action commits every change in the checkout, so\nthe only thing a caller chooses is the checkout (CODING-961 HLD).",
+                "properties": {
+                    "task_id": {
+                        "type": "string"
+                    },
+                    "parent_id": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "module_id": {
+                        "type": "string",
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "task_id"
+                ]
+            },
+            "WorktreeCommitStatusEnum": {
+                "enum": [
+                    "committed",
+                    "nothing_to_commit"
+                ],
+                "type": "string",
+                "description": "* `committed` - committed\n* `nothing_to_commit` - nothing_to_commit"
+            },
+            "WorktreePullRequest": {
+                "type": "object",
+                "description": "The pull-request action's result, discriminated on ``status``.\n\n``push_failed`` arrives as a 200 for the same reason it does on the\ncommit-and-push action: the commit before it may well have landed, and\n``commit_sha`` is the only record of that. The pull request then reports as\nan explicit skip rather than being absent from the list.\n\n``pull_request_url`` is what a client acts on. Studio opens it in the\nsystem browser, which is the only reason the action is worth running from a\nreview surface rather than a terminal.",
+                "properties": {
+                    "status": {
+                        "$ref": "#/components/schemas/WorktreePullRequestStatusEnum"
+                    },
+                    "steps": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ActionStep"
+                        }
+                    },
+                    "branch": {
+                        "type": "string"
+                    },
+                    "base_branch": {
+                        "type": "string"
+                    },
+                    "remote": {
+                        "type": "string"
+                    },
+                    "pull_request_url": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "pull_request_title": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "pull_request_text_source": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "commit_sha": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "subject": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "message_source": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "file_count": {
+                        "type": "integer"
+                    },
+                    "insertions": {
+                        "type": "integer"
+                    },
+                    "deletions": {
+                        "type": "integer"
+                    },
+                    "pushed_sha": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "failure_code": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/FailureCodeEnum"
+                            }
+                        ],
+                        "nullable": true
+                    },
+                    "commit_shas": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "action_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "nullable": true
+                    },
+                    "ship_record": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/ShipRecord"
+                            }
+                        ],
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "action_id",
+                    "base_branch",
+                    "branch",
+                    "commit_sha",
+                    "commit_shas",
+                    "deletions",
+                    "failure_code",
+                    "file_count",
+                    "insertions",
+                    "message_source",
+                    "pull_request_text_source",
+                    "pull_request_title",
+                    "pull_request_url",
+                    "pushed_sha",
+                    "remote",
+                    "ship_record",
+                    "status",
+                    "steps",
+                    "subject"
+                ]
+            },
+            "WorktreePullRequestRequest": {
+                "type": "object",
+                "description": "Which task's worktree the action runs in.\n\nA retry may echo the action identifier from an earlier response. There is\nno title, body, base branch, or reviewer list: the action generates the text\nand resolves the base from the repository.",
+                "properties": {
+                    "task_id": {
+                        "type": "string"
+                    },
+                    "parent_id": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "module_id": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "action_id": {
+                        "type": "string",
+                        "format": "uuid"
+                    }
+                },
+                "required": [
+                    "task_id"
+                ]
+            },
+            "WorktreePullRequestStatusEnum": {
+                "enum": [
+                    "opened",
+                    "already_open",
+                    "push_failed",
+                    "pull_request_failed"
+                ],
+                "type": "string",
+                "description": "* `opened` - opened\n* `already_open` - already_open\n* `push_failed` - push_failed\n* `pull_request_failed` - pull_request_failed"
+            },
+            "WorktreePushPreview": {
+                "type": "object",
+                "description": "What the confirmation step shows.\n\nBranch, remote, and commit count — and no generated commit text, which is\nnot omitted here so much as not yet in existence: the message is generated\ninside the action, after this read.",
+                "properties": {
+                    "state": {
+                        "$ref": "#/components/schemas/StateEnum"
+                    },
+                    "branch": {
+                        "type": "string"
+                    },
+                    "remote": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "commit_count": {
+                        "type": "integer"
+                    },
+                    "dirty": {
+                        "type": "boolean"
+                    },
+                    "detail": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "branch",
+                    "commit_count",
+                    "detail",
+                    "dirty",
+                    "remote",
+                    "state"
                 ]
             },
             "WorktreeStatus": {

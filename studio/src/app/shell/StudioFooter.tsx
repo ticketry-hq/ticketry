@@ -9,6 +9,7 @@ import {
 } from "../../state/clientStore";
 import { IconPanelLeft, IconSettings } from "../../shared/ui/icons";
 import { FooterTerminalToggle } from "../../features/terminal-panel";
+import { RightDockFooterToggles } from "./right-dock/RightDockFooterToggles";
 
 // Warm the model-only Settings composition before the modal opens.
 const preloadSettings = () => {
@@ -83,6 +84,7 @@ export function StudioFooter() {
           panel has no header of its own to restore it from. */}
       <div className="flex min-w-0 items-center justify-end gap-3">
         <FooterTerminalToggle />
+        <RightDockFooterToggles />
         <button
           type="button"
           onClick={openSettings}

@@ -186,6 +186,11 @@ named gate before the full Studio suite, typecheck, and build.
 | 177 | Enter on an active Hidden module choice closes the picker, restores its tab, and selects that Module. |
 | 178 | Moving focus from the Module picker to a Module tab closes the picker and leaves focus on the tab. |
 | 179 | With the Modules pane closed, the onboarding Module step does not anchor to or highlight the Module picker's trigger as though it opened Module creation. |
+| 180 | The Worktrees footer toggle opens one accessible right-dock view beside the workspace and terminal, preserves the Base checkout row through live-module and history loading or errors, groups newest-first ship records under only their base or live anchor-task checkout, names every outcome and PR state, replaces both reads on module changes, removes a discarded worktree row without dropping its cached history, retains a practical resized width, and restores the workspace when closed. |
+| 181 | Details shows an archived task's newest renderable PR-bearing ship record with relative action time and a safe external link, skips newer records with partial PR facts, unsafe URLs, invalid action times, or no PR, ignores older valid PRs, and omits the line when no record has a PR. |
+| 182 | Switching Modules aborts the previous Module's ship-history read, and even a late old response cannot paint the new Module's Worktrees view. |
+| 183 | Refreshing one PR-bearing ship record makes one request, disables only that record's control, prevents a double click, keeps other records and links usable, replaces the query-owned record from a successful response, and preserves the visible prior state beside a focused error when refresh fails. |
+| 184 | Creating a task worktree from Details while the Worktrees dock is open refreshes the selected Module's active-worktree list and adds the new task row without closing or reopening the dock. |
 
 Each executable case carries one stable `[overhaul-NN]` marker. The gate has a
 contract test that fails if a marker is missing or duplicated. When a Studio UI

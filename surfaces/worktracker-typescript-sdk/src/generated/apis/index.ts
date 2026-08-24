@@ -16,6 +16,7 @@ export * from './ProvidersApi.js';
 export * from './ReasoningLevelsApi.js';
 export * from './RunsApi.js';
 export * from './SettingsApi.js';
+export * from './SourceControlApi.js';
 export * from './StatesApi.js';
 export * from './SystemApi.js';
 export * from './TerminalsApi.js';

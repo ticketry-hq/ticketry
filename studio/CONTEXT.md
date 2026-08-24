@@ -494,6 +494,38 @@ such as a deep link into an unloaded module; it is never correct for cycling
 through a loaded list.
 _Avoid_: Detail load, panel fetch, loading the selected task
 
+**Right dock**:
+The collapsible surface along the right edge of the Studio workspace that hosts
+one visible view at a time from a set of registered views, toggled from the
+status bar. It is a shell, not a feature: views own their content, the dock owns
+visibility and extent.
+_Avoid_: Right panel, sidebar, worktrees panel
+
+**Worktrees view**:
+The right-dock view that lists the selected module's base checkout and its live
+task worktrees, each row carrying that checkout's ship history. Rows exist only
+while their checkout exists; a discarded worktree's history leaves the view.
+_Avoid_: Worktree drawer, WorktreeBlock, git panel
+
+**Base checkout row**:
+The permanent first row of the Worktrees view, standing for the module's own
+checkout rather than any task's worktree. Ships made from it are recorded and
+shown there like any other row's.
+_Avoid_: Main row, module worktree
+
+**Ship record**:
+The durable receipt of one stacked source-control action: which module, which
+task if any, which branch and worktree, what each step did (done, skipped,
+failed), the commit identities, the PR link, and when. Written whenever the
+commit step ran, kept after the worktree or task is gone, and its PR state
+changes only when a person asks for a refresh.
+_Avoid_: PR tracker, ship event, git history entry
+
+**Task ship line**:
+The compact line on a task's Details surface naming its most recent ship with a
+link to the PR. It is the trace that outlives the worktree.
+_Avoid_: Ship badge, PR status chip
+
 **State configuration panel**:
 The workspace-pane surface that presents one workflow state's agent policy for
 one issue type — what launches there, and which moves lead in and out. It is

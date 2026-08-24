@@ -13,11 +13,27 @@ from apps.settings_store.rest_views import (
     ModuleLinkViewSet,
     SettingsViewSet,
 )
+from apps.source_control.commit_views import (
+    ModuleCommitViewSet,
+    WorktreeCommitViewSet,
+)
+from apps.source_control.pull_request_views import (
+    ModulePullRequestViewSet,
+    WorktreePullRequestViewSet,
+)
+from apps.source_control.push_views import ModulePushViewSet, WorktreePushViewSet
+from apps.source_control.rest_views import (
+    ModuleChangesViewSet,
+    WorktreeChangesViewSet,
+)
+from apps.source_control.ship_record_views import (
+    ModuleShipRecordViewSet,
+    TaskShipRecordViewSet,
+)
 from apps.system_rest import SystemViewSet
 from apps.terminals.rest_authentication import RunScopedAuthentication
 from apps.terminals.rest_views import TerminalViewSet
 from apps.worktrees.rest_views import WorktreeViewSet
-
 
 health = SystemViewSet.as_view({"get": "health"})
 lifecycle_events = RunViewSet.as_view({"post": "lifecycle_events"})
@@ -32,9 +48,7 @@ terminal_shells = TerminalViewSet.as_view(
     {"get": "list_shells", "post": "create_shell"}
 )
 terminal_viewer_lease = TerminalViewSet.as_view({"post": "acquire_viewer_lease"})
-terminal_viewer_lease_renew = TerminalViewSet.as_view(
-    {"post": "renew_viewer_lease"}
-)
+terminal_viewer_lease_renew = TerminalViewSet.as_view({"post": "renew_viewer_lease"})
 terminal_viewer_lease_release = TerminalViewSet.as_view(
     {"post": "release_viewer_lease"}
 )
@@ -54,10 +68,28 @@ filesystem_complete = DocumentViewSet.as_view({"get": "complete"})
 settings_keybindings = KeybindingsViewSet.as_view({"get": "retrieve", "put": "update"})
 module_folder_validation = SettingsViewSet.as_view({"post": "validate_folder"})
 module_link_collection = ModuleLinkViewSet.as_view({"get": "list"})
-module_link_detail = ModuleLinkViewSet.as_view(
-    {"put": "update", "delete": "destroy"}
-)
+module_link_detail = ModuleLinkViewSet.as_view({"put": "update", "delete": "destroy"})
 worktree_status = WorktreeViewSet.as_view({"get": "status"})
+module_worktrees = WorktreeViewSet.as_view({"get": "module_worktrees"})
+module_ship_records = ModuleShipRecordViewSet.as_view({"get": "list"})
+ship_record_pr_state_refresh = ModuleShipRecordViewSet.as_view(
+    {"post": "refresh_pr_state"}
+)
+worktree_changes = WorktreeChangesViewSet.as_view({"get": "changes"})
+worktree_file_diff = WorktreeChangesViewSet.as_view({"get": "file_diff"})
+worktree_commit = WorktreeCommitViewSet.as_view({"post": "commit"})
+worktree_commit_push = WorktreePushViewSet.as_view({"post": "commit_push"})
+worktree_push_preview = WorktreePushViewSet.as_view({"get": "push_preview"})
+worktree_commit_push_pr = WorktreePullRequestViewSet.as_view({"post": "commit_push_pr"})
+worktree_pull_request = WorktreePullRequestViewSet.as_view({"post": "pull_request"})
+module_changes = ModuleChangesViewSet.as_view({"get": "changes"})
+module_file_diff = ModuleChangesViewSet.as_view({"get": "file_diff"})
+module_commit = ModuleCommitViewSet.as_view({"post": "commit"})
+module_commit_push = ModulePushViewSet.as_view({"post": "commit_push"})
+module_push_preview = ModulePushViewSet.as_view({"get": "push_preview"})
+module_commit_push_pr = ModulePullRequestViewSet.as_view({"post": "commit_push_pr"})
+module_pull_request = ModulePullRequestViewSet.as_view({"post": "pull_request"})
+task_ship_records = TaskShipRecordViewSet.as_view({"get": "list"})
 worktree_create = WorktreeViewSet.as_view({"post": "create_worktree"})
 worktree_discard = WorktreeViewSet.as_view({"post": "discard"})
 graph_run = GraphRunViewSet.as_view(
@@ -150,6 +182,82 @@ urlpatterns = [
     path("docs/<str:doc_id>/<path:asset_path>", document_asset, name="document-asset"),
     path("fs/complete", filesystem_complete, name="fs-complete"),
     path("worktrees", worktree_status, name="worktree"),
+    path("worktrees/changes", worktree_changes, name="worktree-changes"),
+    path(
+        "worktrees/changes/file-diff",
+        worktree_file_diff,
+        name="worktree-file-diff",
+    ),
+    path("worktrees/changes/commit", worktree_commit, name="worktree-commit"),
+    path(
+        "worktrees/changes/commit-push",
+        worktree_commit_push,
+        name="worktree-commit-push",
+    ),
+    path(
+        "worktrees/changes/push-preview",
+        worktree_push_preview,
+        name="worktree-push-preview",
+    ),
+    path(
+        "worktrees/changes/commit-push-pr",
+        worktree_commit_push_pr,
+        name="worktree-commit-push-pr",
+    ),
+    path(
+        "worktrees/changes/pull-request",
+        worktree_pull_request,
+        name="worktree-pull-request",
+    ),
+    path("modules/changes", module_changes, name="module-changes"),
+    path(
+        "modules/changes/file-diff",
+        module_file_diff,
+        name="module-file-diff",
+    ),
+    path("modules/changes/commit", module_commit, name="module-commit"),
+    path(
+        "modules/changes/commit-push",
+        module_commit_push,
+        name="module-commit-push",
+    ),
+    path(
+        "modules/changes/push-preview",
+        module_push_preview,
+        name="module-push-preview",
+    ),
+    path(
+        "modules/changes/commit-push-pr",
+        module_commit_push_pr,
+        name="module-commit-push-pr",
+    ),
+    path(
+        "modules/changes/pull-request",
+        module_pull_request,
+        name="module-pull-request",
+    ),
+    path(
+        "work-tracker/projects/<uuid:project_id>/modules/<uuid:module_id>/worktrees",
+        module_worktrees,
+        name="module-worktrees",
+    ),
+    path(
+        "work-tracker/projects/<uuid:project_id>/modules/<uuid:module_id>/ship-records",
+        module_ship_records,
+        name="module-ship-records",
+    ),
+    path(
+        "work-tracker/projects/<uuid:project_id>/modules/<uuid:module_id>/"
+        "ship-records/<uuid:record_id>/refresh-pr-state",
+        ship_record_pr_state_refresh,
+        name="ship-record-pr-state-refresh",
+    ),
+    path(
+        "work-tracker/projects/<uuid:project_id>/work-items/"
+        "<uuid:task_id>/ship-records",
+        task_ship_records,
+        name="task-ship-records",
+    ),
     path(
         "worktrees/<str:task_id>/create",
         worktree_create,

@@ -1,5 +1,21 @@
 # Worktree operation DRF override records
 
+## Module live-worktree list
+
+- DRF-native capability attempted: a model-backed list using `ActiveWorktreeSerializer` over the existing worktree index.
+- Exact missing behavior: the established ViewSet already uses its collection URL for one task's computed status, while this read needs project and module identity in the URL and returns an ordered collection.
+- Why a frontend adapter over the generated SDK is insufficient: Studio cannot read the sidecar's persisted live-worktree index and must not issue one status request per task.
+- Why a serializer field / `validate` / `read_only_fields` is insufficient: the ModelSerializer defines the response allowlist, but it cannot select the project- and module-scoped rows.
+- Why `permission_classes` and `get_queryset` scoping are insufficient: default API-key authentication applies, but the existing resource has no conventional detail or collection route that carries both scope identifiers.
+- Why a database constraint/default is insufficient: constraints protect stored rows; they do not define this scoped read or exclude scratch worktrees.
+- Why an existing service function is insufficient: `service.list_worktrees` owns authoritative ordering, but it needs a thin HTTP action and a generated response contract.
+- Smallest custom seam: `WorktreeViewSet.module_worktrees`.
+- Service module / `transaction.atomic` used: `apps.worktrees.api.list_active_worktrees` delegates the ordered read to `apps.worktrees.service.list_worktrees`; the read needs no transaction.
+- Protected fields excluded from the request schema: the action has no request body; repository root, base commit, lifecycle timestamps, and write-owned flags are absent from the response.
+- Identity/scope binding (URL kwarg + queryset filter): UUID `project_id` and `module_id` URL kwargs both constrain the service query; each row carries its stable anchor `task_id`.
+- Contract-drift and regression test: `apps/worktrees/tests/test_api.py` covers ordering, stable task identity, active-row filtering, and exact project/module scoping; generated contract checks cover both SDKs.
+- Registry entry, if this is genuinely non-CRUD: `GET /api/work-tracker/projects/{project_id}/modules/{module_id}/worktrees` in `worktracker.registry.MODEL_ROUTES["Module"]`.
+
 ## Live worktree status
 
 - DRF-native capability attempted: a serializer-backed read action on `WorktreeViewSet`.

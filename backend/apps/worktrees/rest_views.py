@@ -7,6 +7,7 @@ from rest_framework.response import Response
 
 from apps.worktrees import api as worktrees
 from apps.worktrees.rest_serializers import (
+    ActiveWorktreeSerializer,
     CreateWorktreeSerializer,
     DiscardSerializer,
     WorktreeContextQuerySerializer,
@@ -19,6 +20,21 @@ class WorktreeViewSet(viewsets.GenericViewSet):
     """Read, create, and discard task-scoped git worktrees."""
 
     serializer_class = WorktreeStatusSerializer
+
+    @extend_schema(
+        operation_id="listModuleWorktrees",
+        tags=["worktrees"],
+        responses=ActiveWorktreeSerializer(many=True),
+    )
+    @action(detail=False, methods=["get"])
+    def module_worktrees(self, request, project_id=None, module_id=None):
+        """List one module's active task worktrees."""
+
+        worktree_rows = worktrees.list_active_worktrees(
+            project_id=str(project_id),
+            module_id=str(module_id),
+        )
+        return Response(ActiveWorktreeSerializer(worktree_rows, many=True).data)
 
     @extend_schema(
         operation_id="worktrees_retrieve",

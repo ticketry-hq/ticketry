@@ -13,6 +13,7 @@ INSTALLED_APPS = [
     "apps.settings_store",
     "worktracker",
     "apps.worktrees",
+    "apps.source_control",
     "apps.execution",
 ]
 
@@ -47,8 +48,12 @@ SPECTACULAR_SETTINGS = {
     "SCHEMA_PATH_PREFIX_TRIM": True,
     "ENUM_ADD_EXPLICIT_BLANK_NULL_CHOICE": False,
     "SERVERS": [{"url": "/api"}],
-    # Name the graph-run scheduling enum for what it is, not for its field.
+    # Name shared enums for what they are, not for whichever serializer field
+    # drf-spectacular encounters first.
     "ENUM_NAME_OVERRIDES": {
         "GraphRunExecutionModeEnum": "apps.execution.execution_mode.EXECUTION_MODE_CHOICES",
+        "ChangedFileStatusEnum": "apps.source_control.change_status.CHANGE_STATUS_CHOICES",
+        "ShipStepOutcomeStatusEnum": "apps.source_control.models.SHIP_STEP_STATUS_CHOICES",
+        "StatusEnum": "apps.runs.models.AutomationAttempt.Status",
     },
 }

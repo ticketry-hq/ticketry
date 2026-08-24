@@ -2,12 +2,11 @@
 
 import json
 import os
-from pathlib import Path
 import subprocess
 import sys
+from pathlib import Path
 
 from worktracker.registry import declared_public_route_keys, declared_route_keys
-
 
 ROOT = Path(__file__).resolve().parents[3]
 BACKEND = ROOT / "backend"
@@ -181,6 +180,112 @@ def test_module_archived_filter_and_issue_type_reassignment_body_are_declared():
         parameter["name"] == "reassign_to"
         for parameter in issue_type_delete.get("parameters", [])
     )
+
+
+def test_module_worktrees_is_a_scoped_generated_read_contract():
+    schema = _schema()
+    operation = schema["paths"][
+        "/work-tracker/projects/{project_id}/modules/{module_id}/worktrees"
+    ]["get"]
+    response = operation["responses"]["200"]["content"]["application/json"]["schema"]
+    worktree = schema["components"]["schemas"]["ActiveWorktree"]
+
+    assert operation["operationId"] == "listModuleWorktrees"
+    assert response == {
+        "type": "array",
+        "items": {"$ref": "#/components/schemas/ActiveWorktree"},
+    }
+    assert {parameter["name"] for parameter in operation["parameters"]} == {
+        "project_id",
+        "module_id",
+    }
+    assert worktree["required"] == [
+        "base_branch",
+        "branch",
+        "created_at",
+        "id",
+        "module_id",
+        "path",
+        "project_id",
+        "status",
+        "task_id",
+        "ticket_seq",
+    ]
+    assert set(worktree["properties"]) == set(worktree["required"])
+    assert all(
+        property_schema["readOnly"] is True
+        for property_schema in worktree["properties"].values()
+    )
+    assert worktree["properties"]["ticket_seq"]["type"] == "integer"
+    assert {
+        name
+        for name, property_schema in worktree["properties"].items()
+        if property_schema.get("nullable")
+    } == {"project_id", "module_id", "ticket_seq"}
+
+
+def test_module_ship_history_is_a_scoped_generated_read_contract():
+    schema = _schema()
+    operation = schema["paths"][
+        "/work-tracker/projects/{project_id}/modules/{module_id}/ship-records"
+    ]["get"]
+    response = operation["responses"]["200"]["content"]["application/json"]["schema"]
+
+    assert operation["operationId"] == "listModuleShipRecords"
+    assert response == {
+        "type": "array",
+        "items": {"$ref": "#/components/schemas/ShipRecord"},
+    }
+    assert {parameter["name"] for parameter in operation["parameters"]} == {
+        "project_id",
+        "module_id",
+    }
+
+
+def test_task_ship_history_is_a_scoped_generated_read_contract():
+    schema = _schema()
+    operation = schema["paths"][
+        "/work-tracker/projects/{project_id}/work-items/{task_id}/ship-records"
+    ]["get"]
+    response = operation["responses"]["200"]["content"]["application/json"]["schema"]
+
+    assert operation["operationId"] == "listTaskShipRecords"
+    assert response == {
+        "type": "array",
+        "items": {"$ref": "#/components/schemas/ShipRecord"},
+    }
+    assert {parameter["name"] for parameter in operation["parameters"]} == {
+        "project_id",
+        "task_id",
+    }
+
+
+def test_ship_record_pr_refresh_is_a_scoped_generated_action_contract():
+    schema = _schema()
+    operation = schema["paths"][
+        "/work-tracker/projects/{project_id}/modules/{module_id}/ship-records/"
+        "{record_id}/refresh-pr-state"
+    ]["post"]
+
+    assert operation["operationId"] == "refreshShipRecordPullRequestState"
+    assert "requestBody" not in operation
+    assert operation["responses"]["200"]["content"]["application/json"]["schema"] == {
+        "$ref": "#/components/schemas/ShipRecord"
+    }
+    assert {parameter["name"] for parameter in operation["parameters"]} == {
+        "project_id",
+        "module_id",
+        "record_id",
+    }
+    assert set(operation["responses"]) == {
+        "200",
+        "404",
+        "409",
+        "422",
+        "502",
+        "503",
+        "504",
+    }
 
 
 def test_module_presentation_contract_owns_rank_and_first_drag_baseline():

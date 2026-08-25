@@ -5,6 +5,7 @@ import uuid
 import pytest
 from django.core.exceptions import ValidationError
 from django.utils import timezone
+from worktracker.models import Issue, IssueType, Project
 
 from apps.source_control.models import (
     CHECKOUT_BASE,
@@ -16,7 +17,6 @@ from apps.source_control.models import (
     ShipRecord,
 )
 from apps.source_control.tests.conftest import MODULE_ID, TASK_ID
-from worktracker.models import Issue, IssueType, Project
 
 pytestmark = pytest.mark.django_db(transaction=True)
 

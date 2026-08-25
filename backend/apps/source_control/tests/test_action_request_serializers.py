@@ -4,11 +4,11 @@ import uuid
 
 import pytest
 
-from apps.source_control.pull_request_serializers import (
+from apps.source_control.rest.serializers.pull_request import (
     ModulePullRequestRequestSerializer,
     WorktreePullRequestRequestSerializer,
 )
-from apps.source_control.push_serializers import (
+from apps.source_control.rest.serializers.push import (
     ModuleActionRequestSerializer,
     WorktreeActionRequestSerializer,
 )

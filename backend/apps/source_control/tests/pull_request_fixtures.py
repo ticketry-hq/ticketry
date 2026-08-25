@@ -21,7 +21,6 @@ from pathlib import Path
 
 from apps.source_control.tests.commit_fixtures import write_executable
 
-
 #: Where the fake writes what it was asked, one file per subcommand.
 ARGV_LOG = "gh-argv.log"
 BODY_LOG = "gh-body.md"

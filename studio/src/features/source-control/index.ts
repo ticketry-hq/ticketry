@@ -3,7 +3,7 @@
 // for both of them (CODING-982/983/984/985). Public interface of the feature —
 // import only here.
 export { ChangesPanel } from "./internal/ChangesPanel";
-export { TaskShipLine } from "./TaskShipLine";
+export { TaskShipLine } from "./task-ship/TaskShipLine";
 export {
   invalidateCheckoutChanges,
   invalidateWorktreeChanges,

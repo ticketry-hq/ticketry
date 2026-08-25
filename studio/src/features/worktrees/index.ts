@@ -1,2 +1,2 @@
-export { WorktreesView } from "./WorktreesView";
+export { WorktreesView } from "./internal/WorktreesView";
 export { worktreesRightDockView } from "./rightDockView";

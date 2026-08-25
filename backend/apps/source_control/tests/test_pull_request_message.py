@@ -11,14 +11,14 @@ answer.
 
 from __future__ import annotations
 
-from apps.source_control.pull_request_message import (
+from apps.source_control.messages.commit_message import SUBJECT_MAX_CHARS
+from apps.source_control.messages.pull_request_message import (
     BODY_MAX_CHARS,
     BranchSummary,
     build_prompt,
     sanitize_answer,
     template_text,
 )
-from apps.source_control.commit_message import SUBJECT_MAX_CHARS
 
 
 def summary(**overrides) -> BranchSummary:

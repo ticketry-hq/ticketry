@@ -17,9 +17,9 @@ import shutil
 import pytest
 from django.test import Client
 
-from apps.source_control import change_status, file_diff, git_cli
+from apps.source_control.changes import change_status, file_diff
+from apps.source_control.clients import git_cli
 from apps.source_control.tests.conftest import MODULE_ID, TASK_ID
-
 
 pytestmark = [
     pytest.mark.django_db(transaction=True),

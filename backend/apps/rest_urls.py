@@ -13,20 +13,20 @@ from apps.settings_store.rest_views import (
     ModuleLinkViewSet,
     SettingsViewSet,
 )
-from apps.source_control.commit_views import (
-    ModuleCommitViewSet,
-    WorktreeCommitViewSet,
-)
-from apps.source_control.pull_request_views import (
-    ModulePullRequestViewSet,
-    WorktreePullRequestViewSet,
-)
-from apps.source_control.push_views import ModulePushViewSet, WorktreePushViewSet
-from apps.source_control.rest_views import (
+from apps.source_control.rest.views.changes import (
     ModuleChangesViewSet,
     WorktreeChangesViewSet,
 )
-from apps.source_control.ship_record_views import (
+from apps.source_control.rest.views.commit import (
+    ModuleCommitViewSet,
+    WorktreeCommitViewSet,
+)
+from apps.source_control.rest.views.pull_request import (
+    ModulePullRequestViewSet,
+    WorktreePullRequestViewSet,
+)
+from apps.source_control.rest.views.push import ModulePushViewSet, WorktreePushViewSet
+from apps.source_control.rest.views.ship_records import (
     ModuleShipRecordViewSet,
     TaskShipRecordViewSet,
 )
@@ -34,7 +34,6 @@ from apps.system_rest import SystemViewSet
 from apps.terminals.rest_authentication import RunScopedAuthentication
 from apps.terminals.rest_views import TerminalViewSet
 from apps.worktrees.rest_views import WorktreeRecordViewSet, WorktreeViewSet
-
 
 health = SystemViewSet.as_view({"get": "health"})
 lifecycle_events = RunViewSet.as_view({"post": "lifecycle_events"})

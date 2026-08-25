@@ -20,7 +20,7 @@ import shutil
 import pytest
 from django.test import Client
 
-from apps.source_control.gh_cli import APPROVED_PATH_ENV
+from apps.source_control.clients.gh_cli import APPROVED_PATH_ENV
 from apps.source_control.tests.commit_fixtures import (
     install_generator,
     install_hook,
@@ -38,7 +38,6 @@ from apps.source_control.tests.push_fixtures import (
     publish_from_elsewhere,
     remote_sha,
 )
-
 
 pytestmark = [
     pytest.mark.django_db(transaction=True),

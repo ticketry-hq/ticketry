@@ -5,10 +5,14 @@ from types import SimpleNamespace
 
 import pytest
 
-from apps.source_control.action_checkout import task_checkout_for_action
-from apps.source_control.action_steps import STATUS_OK, STEP_PULL_REQUEST, ActionStep
+from apps.source_control.actions.action_checkout import task_checkout_for_action
+from apps.source_control.actions.action_steps import (
+    STATUS_OK,
+    STEP_PULL_REQUEST,
+    ActionStep,
+)
 from apps.source_control.models import PR_OPEN
-from apps.source_control.ship_records import persist_ship_record
+from apps.source_control.records.ship_records import persist_ship_record
 from apps.source_control.tests.conftest import MODULE_ID, TASK_ID
 
 pytestmark = pytest.mark.django_db(transaction=True)

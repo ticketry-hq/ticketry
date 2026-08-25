@@ -13,8 +13,9 @@ import uuid
 import pytest
 from django.test import Client
 from django.utils import timezone
+from worktracker.models import Issue, IssueType, Project
 
-from apps.source_control.gh_cli import APPROVED_PATH_ENV
+from apps.source_control.clients.gh_cli import APPROVED_PATH_ENV
 from apps.source_control.models import (
     CHECKOUT_WORKTREE,
     PR_CLOSED,
@@ -26,7 +27,6 @@ from apps.source_control.models import (
 from apps.source_control.tests.commit_fixtures import isolate_generators
 from apps.source_control.tests.pull_request_fixtures import install_gh, recorded_argv
 from apps.worktrees import service as worktrees_service
-from worktracker.models import Issue, IssueType, Project
 
 pytestmark = [
     pytest.mark.django_db(transaction=True),

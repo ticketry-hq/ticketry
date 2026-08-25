@@ -8,8 +8,8 @@ from django.test import Client
 from django.utils import timezone
 from worktracker.models import Issue, IssueType, Project
 
+from apps.source_control.clients.gh_cli import GhCompletion
 from apps.source_control.errors import ProviderTimedOut, ProviderUnavailable
-from apps.source_control.gh_cli import GhCompletion
 from apps.source_control.models import (
     CHECKOUT_WORKTREE,
     PR_CLOSED,
@@ -18,7 +18,7 @@ from apps.source_control.models import (
     STEP_DONE,
     ShipRecord,
 )
-from apps.source_control.ship_record_serializers import ShipRecordSerializer
+from apps.source_control.rest.serializers.ship_records import ShipRecordSerializer
 from apps.source_control.tests.conftest import MODULE_ID, PROJECT_ID, TASK_ID
 
 pytestmark = pytest.mark.django_db(transaction=True)
@@ -79,9 +79,9 @@ def test_refresh_performs_one_lookup_and_normalizes_only_refresh_fields(
         calls.append((args, kwargs))
         return GhCompletion(0, f'{{"state":"{provider_state}"}}', "")
 
-    monkeypatch.setattr("apps.source_control.pull_request_state.run_gh", run_gh)
+    monkeypatch.setattr("apps.source_control.records.pull_request_state.run_gh", run_gh)
     monkeypatch.setattr(
-        "apps.source_control.ship_record_refresh.timezone.now",
+        "apps.source_control.records.ship_record_refresh.timezone.now",
         lambda: refreshed_at,
     )
 
@@ -149,7 +149,7 @@ def test_refresh_failures_are_typed_sanitized_and_preserve_stored_facts(
             return GhCompletion(0, f'{{"unexpected":"{secret}"}}', "")
         return GhCompletion(1, "", secret)
 
-    monkeypatch.setattr("apps.source_control.pull_request_state.run_gh", run_gh)
+    monkeypatch.setattr("apps.source_control.records.pull_request_state.run_gh", run_gh)
 
     response = _post(record)
 
@@ -167,7 +167,7 @@ def test_refresh_rejects_a_record_without_a_pull_request_before_lookup(monkeypat
     record = _record(pr_url=None)
     calls = []
     monkeypatch.setattr(
-        "apps.source_control.pull_request_state.run_gh",
+        "apps.source_control.records.pull_request_state.run_gh",
         lambda *args, **kwargs: calls.append((args, kwargs)),
     )
 
@@ -185,7 +185,7 @@ def test_refresh_rejects_records_outside_project_and_module_scope(monkeypatch):
     record = _record()
     calls = []
     monkeypatch.setattr(
-        "apps.source_control.pull_request_state.run_gh",
+        "apps.source_control.records.pull_request_state.run_gh",
         lambda *args, **kwargs: calls.append((args, kwargs)),
     )
     foreign_project = Project.objects.create(

@@ -13,10 +13,10 @@ import uuid
 from pathlib import Path
 
 import pytest
+from worktracker.models import Issue, IssueType, Project
 
 from apps.settings_store.models import ModuleLink
 from apps.worktrees import service as worktrees_service
-from worktracker.models import Issue, IssueType, Project
 
 PROJECT_ID = "f1f8d941-7680-41b4-8d82-3e2f1579cd5e"
 MODULE_ID = "73ba5597-a0a9-4f63-a791-c19252cbe6a6"

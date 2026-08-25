@@ -1,6 +1,6 @@
 import { IconDependency } from "../../shared/ui/icons";
 import type { RightDockViewRegistration } from "../../app/shell/right-dock/types";
-import { WorktreesView } from "./WorktreesView";
+import { WorktreesView } from "./internal/WorktreesView";
 
 export const worktreesRightDockView: RightDockViewRegistration = {
   id: "worktrees",

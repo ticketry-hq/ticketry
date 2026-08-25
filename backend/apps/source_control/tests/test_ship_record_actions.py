@@ -8,8 +8,9 @@ import pytest
 from django.test import Client
 from worktracker.models import Issue, IssueType
 
-from apps.source_control.action_checkout import task_checkout_for_action
-from apps.source_control.commit import commit_worktree_changes
+from apps.source_control.actions.action_checkout import task_checkout_for_action
+from apps.source_control.actions.commit import commit_worktree_changes
+from apps.source_control.actions.stacked_action import commit_and_push
 from apps.source_control.models import (
     CHECKOUT_BASE,
     CHECKOUT_WORKTREE,
@@ -19,7 +20,6 @@ from apps.source_control.models import (
     STEP_SKIPPED,
     ShipRecord,
 )
-from apps.source_control.stacked_action import commit_and_push
 from apps.source_control.tests.commit_fixtures import (
     install_hook,
     isolate_generators,

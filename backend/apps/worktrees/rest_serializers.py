@@ -56,3 +56,23 @@ class WorktreeStatusSerializer(serializers.Serializer):
 class DiscardSerializer(serializers.Serializer):
     removed = serializers.BooleanField()
     reason = serializers.CharField()
+
+
+class ActiveWorktreeSerializer(serializers.ModelSerializer):
+    """Read-only identity and checkout facts for one live task worktree."""
+
+    class Meta:
+        model = Worktree
+        fields = (
+            "id",
+            "task_id",
+            "project_id",
+            "module_id",
+            "ticket_seq",
+            "path",
+            "branch",
+            "base_branch",
+            "status",
+            "created_at",
+        )
+        read_only_fields = fields

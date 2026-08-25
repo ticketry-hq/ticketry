@@ -78,13 +78,25 @@ export function useModuleWorktrees(
   };
 }
 
-export async function invalidateTaskWorktree(taskId: string): Promise<void> {
-  await Promise.all([
+export async function invalidateTaskWorktree(
+  taskId: string,
+  projectId?: string | null,
+  moduleId?: string | null,
+): Promise<void> {
+  const invalidations = [
     queryClient.invalidateQueries({
       queryKey: queryKeys.worktrees.byTask(taskId),
     }),
     queryClient.invalidateQueries({
       queryKey: [...queryKeys.worktrees.all, "records"],
     }),
-  ]);
+  ];
+  if (projectId && moduleId) {
+    invalidations.push(
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.worktrees.byModule(projectId, moduleId),
+      }),
+    );
+  }
+  await Promise.all(invalidations);
 }

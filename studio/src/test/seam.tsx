@@ -1,6 +1,7 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import { render, type RenderResult } from "@testing-library/react";
 import type { ReactNode } from "react";
+import type { ShipRecord } from "@worktracker/typescript-sdk/models";
 import { afterEach } from "vitest";
 import { TasksPane } from "../app/shell/ticket-workspace/tasks/TasksPane";
 import { SelectedTicketDetails } from "../app/shell/ticket-workspace/selected-ticket/details/SelectedTicketDetails";
@@ -27,6 +28,7 @@ export interface HttpFixture {
   runs(issueId: string, runs: RunRecord[]): void;
   documents(issueId: string, docs: DesignDoc[]): void;
   attachments(issueId: string, attachments: Attachment[]): void;
+  shipRecords(taskId: string, records: ShipRecord[]): void;
   transitionRank(id: string, rank: string): void;
   expectPatch(id: string, body: unknown): Promise<void>;
   expectReorder(
@@ -101,6 +103,7 @@ class BoundaryFixture implements StudioFixture {
   readonly runRows = new Map<string, RunRecord[]>();
   readonly documentRows = new Map<string, DesignDoc[]>();
   readonly attachmentRows = new Map<string, Attachment[]>();
+  readonly shipRecordRows = new Map<string, ShipRecord[]>();
   readonly patches: PatchCall[] = [];
   readonly reorders: ReorderCall[] = [];
   readonly graphRuns: GraphRunCall[] = [];
@@ -201,6 +204,10 @@ class BoundaryFixture implements StudioFixture {
 
   attachments(issueId: string, attachments: Attachment[]): void {
     this.attachmentRows.set(issueId, attachments);
+  }
+
+  shipRecords(taskId: string, records: ShipRecord[]): void {
+    this.shipRecordRows.set(taskId, records);
   }
 
   transitionRank(id: string, rank: string): void {
@@ -449,6 +456,13 @@ class BoundaryFixture implements StudioFixture {
     if (method === "GET" && attachmentMatch) {
       const id = decodeURIComponent(attachmentMatch[1]);
       return json(this.attachmentRows.get(id) ?? []);
+    }
+    const taskShipRecordsMatch = path.match(
+      /\/work-tracker\/projects\/[^/]+\/work-items\/([^/]+)\/ship-records$/,
+    );
+    if (method === "GET" && taskShipRecordsMatch) {
+      const taskId = decodeURIComponent(taskShipRecordsMatch[1]);
+      return json(this.shipRecordRows.get(taskId) ?? []);
     }
     const itemMatch = path.match(/\/work-tracker\/work-items\/([^/]+)$/);
     if (method === "PATCH" && itemMatch) {

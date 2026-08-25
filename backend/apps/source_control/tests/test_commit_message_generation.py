@@ -13,13 +13,12 @@ import pytest
 from django.test import Client
 
 from apps.settings_store.models import AppSetting
-from apps.source_control.commit_message import PREFERENCE_KEY, PREFERENCE_SCOPE
+from apps.source_control.messages.commit_message import PREFERENCE_KEY, PREFERENCE_SCOPE
 from apps.source_control.tests.commit_fixtures import (
     install_generator,
     isolate_generators,
 )
 from apps.source_control.tests.conftest import MODULE_ID, TASK_ID, git
-
 
 pytestmark = [
     pytest.mark.django_db(transaction=True),

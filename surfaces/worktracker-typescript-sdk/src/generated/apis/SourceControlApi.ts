@@ -41,6 +41,21 @@ import {
     ModulePullRequestRequestToJSON,
 } from '../models/ModulePullRequestRequest.js';
 import {
+    type ShipRecord,
+    ShipRecordFromJSON,
+    ShipRecordToJSON,
+} from '../models/ShipRecord.js';
+import {
+    type ShipRecordPersistenceError,
+    ShipRecordPersistenceErrorFromJSON,
+    ShipRecordPersistenceErrorToJSON,
+} from '../models/ShipRecordPersistenceError.js';
+import {
+    type ShipRecordRefreshError,
+    ShipRecordRefreshErrorFromJSON,
+    ShipRecordRefreshErrorToJSON,
+} from '../models/ShipRecordRefreshError.js';
+import {
     type WorktreeActionRequest,
     WorktreeActionRequestFromJSON,
     WorktreeActionRequestToJSON,
@@ -80,6 +95,22 @@ import {
     WorktreePushPreviewFromJSON,
     WorktreePushPreviewToJSON,
 } from '../models/WorktreePushPreview.js';
+
+export interface ListModuleShipRecordsRequest {
+    moduleId: string;
+    projectId: string;
+}
+
+export interface ListTaskShipRecordsRequest {
+    projectId: string;
+    taskId: string;
+}
+
+export interface RefreshShipRecordPullRequestStateRequest {
+    moduleId: string;
+    projectId: string;
+    recordId: string;
+}
 
 export interface SourceControlModuleChangesRetrieveRequest {
     moduleId: string;
@@ -152,6 +183,80 @@ export interface SourceControlWorktreePushPreviewRetrieveRequest {
  * @interface SourceControlApiInterface
  */
 export interface SourceControlApiInterface {
+    /**
+     * Creates request options for listModuleShipRecords without sending the request
+     * @param {string} moduleId
+     * @param {string} projectId
+     * @throws {RequiredError}
+     * @memberof SourceControlApiInterface
+     */
+    listModuleShipRecordsRequestOpts(requestParameters: ListModuleShipRecordsRequest): Promise<runtime.RequestOpts>;
+
+    /**
+     * List one module\'s durable ship records, newest action first.
+     * @param {string} moduleId
+     * @param {string} projectId
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof SourceControlApiInterface
+     */
+    listModuleShipRecordsRaw(requestParameters: ListModuleShipRecordsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Array<ShipRecord>>>;
+
+    /**
+     * List one module\'s durable ship records, newest action first.
+     */
+    listModuleShipRecords(requestParameters: ListModuleShipRecordsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Array<ShipRecord>>;
+
+    /**
+     * Creates request options for listTaskShipRecords without sending the request
+     * @param {string} projectId
+     * @param {string} taskId
+     * @throws {RequiredError}
+     * @memberof SourceControlApiInterface
+     */
+    listTaskShipRecordsRequestOpts(requestParameters: ListTaskShipRecordsRequest): Promise<runtime.RequestOpts>;
+
+    /**
+     * List one task\'s ship records, newest action first.
+     * @param {string} projectId
+     * @param {string} taskId
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof SourceControlApiInterface
+     */
+    listTaskShipRecordsRaw(requestParameters: ListTaskShipRecordsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Array<ShipRecord>>>;
+
+    /**
+     * List one task\'s ship records, newest action first.
+     */
+    listTaskShipRecords(requestParameters: ListTaskShipRecordsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Array<ShipRecord>>;
+
+    /**
+     * Creates request options for refreshShipRecordPullRequestState without sending the request
+     * @param {string} moduleId
+     * @param {string} projectId
+     * @param {string} recordId
+     * @throws {RequiredError}
+     * @memberof SourceControlApiInterface
+     */
+    refreshShipRecordPullRequestStateRequestOpts(requestParameters: RefreshShipRecordPullRequestStateRequest): Promise<runtime.RequestOpts>;
+
+    /**
+     * Refresh one stored GitHub pull request state without polling.
+     * @param {string} moduleId
+     * @param {string} projectId
+     * @param {string} recordId
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof SourceControlApiInterface
+     */
+    refreshShipRecordPullRequestStateRaw(requestParameters: RefreshShipRecordPullRequestStateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ShipRecord>>;
+
+    /**
+     * Refresh one stored GitHub pull request state without polling.
+     */
+    refreshShipRecordPullRequestState(requestParameters: RefreshShipRecordPullRequestStateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ShipRecord>;
+
     /**
      * Creates request options for sourceControlModuleChangesRetrieve without sending the request
      * @param {string} moduleId
@@ -482,6 +587,185 @@ export interface SourceControlApiInterface {
  *
  */
 export class SourceControlApi extends runtime.BaseAPI implements SourceControlApiInterface {
+
+    /**
+     * Creates request options for listModuleShipRecords without sending the request
+     */
+    async listModuleShipRecordsRequestOpts(requestParameters: ListModuleShipRecordsRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['moduleId'] == null) {
+            throw new runtime.RequiredError(
+                'moduleId',
+                'Required parameter "moduleId" was null or undefined when calling listModuleShipRecords().'
+            );
+        }
+
+        if (requestParameters['projectId'] == null) {
+            throw new runtime.RequiredError(
+                'projectId',
+                'Required parameter "projectId" was null or undefined when calling listModuleShipRecords().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.apiKey) {
+            headerParameters["x-api-key"] = await this.configuration.apiKey("x-api-key"); // ApiKeyAuth authentication
+        }
+
+
+        let urlPath = `/work-tracker/projects/{project_id}/modules/{module_id}/ship-records`;
+        urlPath = urlPath.replace('{module_id}', encodeURIComponent(String(requestParameters['moduleId'])));
+        urlPath = urlPath.replace('{project_id}', encodeURIComponent(String(requestParameters['projectId'])));
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * List one module\'s durable ship records, newest action first.
+     */
+    async listModuleShipRecordsRaw(requestParameters: ListModuleShipRecordsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Array<ShipRecord>>> {
+        const requestOptions = await this.listModuleShipRecordsRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => jsonValue.map(ShipRecordFromJSON));
+    }
+
+    /**
+     * List one module\'s durable ship records, newest action first.
+     */
+    async listModuleShipRecords(requestParameters: ListModuleShipRecordsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Array<ShipRecord>> {
+        const response = await this.listModuleShipRecordsRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for listTaskShipRecords without sending the request
+     */
+    async listTaskShipRecordsRequestOpts(requestParameters: ListTaskShipRecordsRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['projectId'] == null) {
+            throw new runtime.RequiredError(
+                'projectId',
+                'Required parameter "projectId" was null or undefined when calling listTaskShipRecords().'
+            );
+        }
+
+        if (requestParameters['taskId'] == null) {
+            throw new runtime.RequiredError(
+                'taskId',
+                'Required parameter "taskId" was null or undefined when calling listTaskShipRecords().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.apiKey) {
+            headerParameters["x-api-key"] = await this.configuration.apiKey("x-api-key"); // ApiKeyAuth authentication
+        }
+
+
+        let urlPath = `/work-tracker/projects/{project_id}/work-items/{task_id}/ship-records`;
+        urlPath = urlPath.replace('{project_id}', encodeURIComponent(String(requestParameters['projectId'])));
+        urlPath = urlPath.replace('{task_id}', encodeURIComponent(String(requestParameters['taskId'])));
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * List one task\'s ship records, newest action first.
+     */
+    async listTaskShipRecordsRaw(requestParameters: ListTaskShipRecordsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Array<ShipRecord>>> {
+        const requestOptions = await this.listTaskShipRecordsRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => jsonValue.map(ShipRecordFromJSON));
+    }
+
+    /**
+     * List one task\'s ship records, newest action first.
+     */
+    async listTaskShipRecords(requestParameters: ListTaskShipRecordsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Array<ShipRecord>> {
+        const response = await this.listTaskShipRecordsRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for refreshShipRecordPullRequestState without sending the request
+     */
+    async refreshShipRecordPullRequestStateRequestOpts(requestParameters: RefreshShipRecordPullRequestStateRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['moduleId'] == null) {
+            throw new runtime.RequiredError(
+                'moduleId',
+                'Required parameter "moduleId" was null or undefined when calling refreshShipRecordPullRequestState().'
+            );
+        }
+
+        if (requestParameters['projectId'] == null) {
+            throw new runtime.RequiredError(
+                'projectId',
+                'Required parameter "projectId" was null or undefined when calling refreshShipRecordPullRequestState().'
+            );
+        }
+
+        if (requestParameters['recordId'] == null) {
+            throw new runtime.RequiredError(
+                'recordId',
+                'Required parameter "recordId" was null or undefined when calling refreshShipRecordPullRequestState().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.apiKey) {
+            headerParameters["x-api-key"] = await this.configuration.apiKey("x-api-key"); // ApiKeyAuth authentication
+        }
+
+
+        let urlPath = `/work-tracker/projects/{project_id}/modules/{module_id}/ship-records/{record_id}/refresh-pr-state`;
+        urlPath = urlPath.replace('{module_id}', encodeURIComponent(String(requestParameters['moduleId'])));
+        urlPath = urlPath.replace('{project_id}', encodeURIComponent(String(requestParameters['projectId'])));
+        urlPath = urlPath.replace('{record_id}', encodeURIComponent(String(requestParameters['recordId'])));
+
+        return {
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * Refresh one stored GitHub pull request state without polling.
+     */
+    async refreshShipRecordPullRequestStateRaw(requestParameters: RefreshShipRecordPullRequestStateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ShipRecord>> {
+        const requestOptions = await this.refreshShipRecordPullRequestStateRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => ShipRecordFromJSON(jsonValue));
+    }
+
+    /**
+     * Refresh one stored GitHub pull request state without polling.
+     */
+    async refreshShipRecordPullRequestState(requestParameters: RefreshShipRecordPullRequestStateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ShipRecord> {
+        const response = await this.refreshShipRecordPullRequestStateRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
 
     /**
      * Creates request options for sourceControlModuleChangesRetrieve without sending the request

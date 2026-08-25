@@ -110,6 +110,22 @@ class CommitRefused(ApplicationError):
         )
 
 
+class ShipRecordPersistenceFailed(ApplicationError):
+    """The Git action settled, but its durable receipt could not be saved."""
+
+    def __init__(self, *, action_result: dict):
+        super().__init__(
+            500,
+            "The source-control action finished, but Ticketry could not save its ship record.",
+            code="ship_record_persistence_failed",
+            body={
+                "detail": "The source-control action finished, but Ticketry could not save its ship record.",
+                "code": "ship_record_persistence_failed",
+                "action_result": action_result,
+            },
+        )
+
+
 class DetachedHeadCannotPush(ApplicationError):
     """A push was asked of a checkout that is not on a branch.
 
@@ -133,8 +149,7 @@ class UnbornBranchCannotPush(ApplicationError):
     def __init__(self, *, branch: str):
         super().__init__(
             409,
-            f"Branch {branch} has no commits yet, so there is nothing to "
-            "push.",
+            f"Branch {branch} has no commits yet, so there is nothing to push.",
             code="push_unborn_branch",
             metadata={"branch": branch},
         )
@@ -146,8 +161,7 @@ class NoRemoteToPush(ApplicationError):
     def __init__(self, *, branch: str):
         super().__init__(
             409,
-            f"Branch {branch} has no remote to push to. Add one in a terminal "
-            "first.",
+            f"Branch {branch} has no remote to push to. Add one in a terminal first.",
             code="push_no_remote",
             metadata={"branch": branch},
         )
@@ -197,6 +211,50 @@ class ProviderTimedOut(ApplicationError):
             "and the attempt was stopped.",
             code="provider_timeout",
             metadata={"operation": operation, "timeout_seconds": timeout_seconds},
+        )
+
+
+class PullRequestUrlUnsupported(ApplicationError):
+    """A stored URL cannot be sent through Ticketry's GitHub boundary."""
+
+    def __init__(self):
+        super().__init__(
+            422,
+            "This ship record does not have a supported GitHub pull request URL.",
+            code="pull_request_url_unsupported",
+        )
+
+
+class PullRequestNotFound(ApplicationError):
+    """GitHub cannot find the pull request named by the stored URL."""
+
+    def __init__(self):
+        super().__init__(
+            404,
+            "GitHub could not find this pull request.",
+            code="pull_request_not_found",
+        )
+
+
+class ProviderResponseMalformed(ApplicationError):
+    """GitHub answered, but not with the bounded state contract requested."""
+
+    def __init__(self):
+        super().__init__(
+            502,
+            "GitHub returned an unreadable pull request state.",
+            code="provider_response_malformed",
+        )
+
+
+class ProviderLookupFailed(ApplicationError):
+    """GitHub refused a state lookup for a reason safe output cannot identify."""
+
+    def __init__(self):
+        super().__init__(
+            502,
+            "GitHub could not refresh this pull request state.",
+            code="provider_lookup_failed",
         )
 
 

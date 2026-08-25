@@ -223,6 +223,11 @@ named gate before the full Studio suite, typecheck, and build.
 | 214 | A task with no ship record and a failed provider lookup both keep the Changes tab readable without a pull-request banner or provider error. |
 | 215 | A clean merged worktree opens an explicit cleanup confirmation, cancellation leaves it untouched, and the prompt remains available. |
 | 216 | A dirty merged worktree's confirmation states the Changes response's uncommitted-file and unpushed-commit counts before one confirmed discard removes it from the Changes tab. |
+| 217 | The Worktrees footer toggle opens one accessible right-dock view beside the workspace and terminal, preserves the Base checkout row through live-module and history loading or errors, groups newest-first ship records under only their base or live anchor-task checkout, names every outcome and PR state, replaces both reads on module changes, removes a discarded worktree row without dropping its cached history, retains a practical resized width, and restores the workspace when closed. |
+| 218 | Details shows an archived task's newest renderable PR-bearing ship record with relative action time and a safe external link, skips newer records with partial PR facts, unsafe URLs, invalid action times, or no PR, ignores older valid PRs, and omits the line when no record has a PR. |
+| 219 | Switching Modules aborts the previous Module's ship-history read, and even a late old response cannot paint the new Module's Worktrees view. |
+| 220 | Refreshing one PR-bearing ship record makes one request, disables only that record's control, prevents a double click, keeps other records and links usable, replaces the query-owned record from a successful response, and preserves the visible prior state beside a focused error when refresh fails. |
+| 221 | Creating a task worktree from Details while the Worktrees dock is open refreshes the selected Module's active-worktree list and adds the new task row without closing or reopening the dock. |
 
 Each executable case carries one stable `[overhaul-NN]` marker. The gate has a
 contract test that fails if a marker is missing or duplicated. When a Studio UI

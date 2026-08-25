@@ -23,7 +23,6 @@ from apps.source_control.tests.push_fixtures import (
     remote_sha,
 )
 
-
 pytestmark = [
     pytest.mark.django_db(transaction=True),
     pytest.mark.skipif(shutil.which("git") is None, reason="git not on PATH"),

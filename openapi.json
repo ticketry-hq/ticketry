@@ -704,6 +704,16 @@
                             }
                         },
                         "description": ""
+                    },
+                    "500": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ShipRecordPersistenceError"
+                                }
+                            }
+                        },
+                        "description": ""
                     }
                 }
             }
@@ -800,6 +810,16 @@
                             }
                         },
                         "description": ""
+                    },
+                    "500": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ShipRecordPersistenceError"
+                                }
+                            }
+                        },
+                        "description": ""
                     }
                 }
             }
@@ -892,6 +912,16 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "500": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ShipRecordPersistenceError"
                                 }
                             }
                         },
@@ -1078,6 +1108,16 @@
                             }
                         },
                         "description": ""
+                    },
+                    "500": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ShipRecordPersistenceError"
+                                }
+                            }
+                        },
+                        "description": ""
                     }
                 }
             }
@@ -1161,6 +1201,16 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "500": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ShipRecordPersistenceError"
                                 }
                             }
                         },
@@ -3362,6 +3412,219 @@
                 }
             }
         },
+        "/work-tracker/projects/{project_id}/modules/{module_id}/ship-records": {
+            "get": {
+                "operationId": "listModuleShipRecords",
+                "description": "List one module's durable ship records, newest action first.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "module_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "project_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "source-control"
+                ],
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/ShipRecord"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/work-tracker/projects/{project_id}/modules/{module_id}/ship-records/{record_id}/refresh-pr-state": {
+            "post": {
+                "operationId": "refreshShipRecordPullRequestState",
+                "description": "Refresh one stored GitHub pull request state without polling.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "module_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "project_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "record_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "source-control"
+                ],
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ShipRecord"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ShipRecordRefreshError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ShipRecordRefreshError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "422": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ShipRecordRefreshError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "502": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ShipRecordRefreshError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ShipRecordRefreshError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "504": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ShipRecordRefreshError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/work-tracker/projects/{project_id}/modules/{module_id}/worktrees": {
+            "get": {
+                "operationId": "listModuleWorktrees",
+                "description": "List one module's active task worktrees.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "module_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "project_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "worktrees"
+                ],
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/ActiveWorktree"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/work-tracker/projects/{project_id}/onboarding/acknowledge": {
             "post": {
                 "operationId": "acknowledgeProjectOnboarding",
@@ -3603,6 +3866,55 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/WorkItem"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/work-tracker/projects/{project_id}/work-items/{task_id}/ship-records": {
+            "get": {
+                "operationId": "listTaskShipRecords",
+                "description": "List one task's ship records, newest action first.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "project_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "task_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "source-control"
+                ],
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/ShipRecord"
+                                    }
                                 }
                             }
                         },
@@ -5133,6 +5445,16 @@
                             }
                         },
                         "description": ""
+                    },
+                    "500": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ShipRecordPersistenceError"
+                                }
+                            }
+                        },
+                        "description": ""
                     }
                 }
             }
@@ -5229,6 +5551,16 @@
                             }
                         },
                         "description": ""
+                    },
+                    "500": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ShipRecordPersistenceError"
+                                }
+                            }
+                        },
+                        "description": ""
                     }
                 }
             }
@@ -5321,6 +5653,16 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "500": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ShipRecordPersistenceError"
                                 }
                             }
                         },
@@ -5525,6 +5867,16 @@
                             }
                         },
                         "description": ""
+                    },
+                    "500": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ShipRecordPersistenceError"
+                                }
+                            }
+                        },
+                        "description": ""
                     }
                 }
             }
@@ -5630,6 +5982,16 @@
                             }
                         },
                         "description": ""
+                    },
+                    "500": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ShipRecordPersistenceError"
+                                }
+                            }
+                        },
+                        "description": ""
                     }
                 }
             }
@@ -5705,6 +6067,67 @@
                 ],
                 "type": "string",
                 "description": "* `ok` - ok\n* `skipped` - skipped\n* `failed` - failed"
+            },
+            "ActiveWorktree": {
+                "type": "object",
+                "description": "Read-only identity and checkout facts for one live task worktree.",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "task_id": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "project_id": {
+                        "type": "string",
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "module_id": {
+                        "type": "string",
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "ticket_seq": {
+                        "type": "integer",
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "path": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "branch": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "base_branch": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "status": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "base_branch",
+                    "branch",
+                    "created_at",
+                    "id",
+                    "module_id",
+                    "path",
+                    "project_id",
+                    "status",
+                    "task_id",
+                    "ticket_seq"
+                ]
             },
             "AgentEnum": {
                 "enum": [
@@ -5933,6 +6356,14 @@
                 ],
                 "type": "string",
                 "description": "* `worktree` - worktree\n* `module` - module"
+            },
+            "CheckoutKindEnum": {
+                "enum": [
+                    "base",
+                    "worktree"
+                ],
+                "type": "string",
+                "description": "* `base` - Base checkout\n* `worktree` - Task worktree"
             },
             "CommittedState": {
                 "type": "object",
@@ -6741,10 +7172,14 @@
             },
             "ModuleActionRequest": {
                 "type": "object",
-                "description": "Which module's base checkout the action runs in.\n\nNamed by module and nothing else — no force, no remote, and no base branch,\nexactly as on the worktree's request.",
+                "description": "Which module's base checkout the action runs in.\n\nA retry may echo the action identifier from an earlier response. Force,\nremote, and base-branch overrides remain unavailable.",
                 "properties": {
                     "module_id": {
                         "type": "string"
+                    },
+                    "action_id": {
+                        "type": "string",
+                        "format": "uuid"
                     }
                 },
                 "required": [
@@ -6922,10 +7357,14 @@
             },
             "ModulePullRequestRequest": {
                 "type": "object",
-                "description": "Which module's base checkout the pull-request action runs in.\n\nThe same \"checkout and nothing else\" shape as every other request here.",
+                "description": "Which module's base checkout the pull-request action runs in.\n\nA retry may echo the action identifier from an earlier response.",
                 "properties": {
                     "module_id": {
                         "type": "string"
+                    },
+                    "action_id": {
+                        "type": "string",
+                        "format": "uuid"
                     }
                 },
                 "required": [
@@ -7222,6 +7661,15 @@
                         "$ref": "#/components/schemas/OriginEnum"
                     }
                 }
+            },
+            "PrStateEnum": {
+                "enum": [
+                    "open",
+                    "merged",
+                    "closed"
+                ],
+                "type": "string",
+                "description": "* `open` - Open\n* `merged` - Merged\n* `closed` - Closed"
             },
             "Project": {
                 "type": "object",
@@ -7612,6 +8060,204 @@
                 "required": [
                     "value"
                 ]
+            },
+            "ShipRecord": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "action_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "module_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "task_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "nullable": true,
+                        "readOnly": true
+                    },
+                    "checkout_kind": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/CheckoutKindEnum"
+                            }
+                        ],
+                        "readOnly": true
+                    },
+                    "checkout_name": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "branch": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "commit_shas": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "pattern": "^[0-9a-f]{40}$"
+                        },
+                        "readOnly": true
+                    },
+                    "commit_outcome": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/ShipStepOutcome"
+                            }
+                        ],
+                        "readOnly": true
+                    },
+                    "push_outcome": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/ShipStepOutcome"
+                            }
+                        ],
+                        "readOnly": true
+                    },
+                    "create_pr_outcome": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/ShipStepOutcome"
+                            }
+                        ],
+                        "readOnly": true
+                    },
+                    "pr_url": {
+                        "type": "string",
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "pr_number": {
+                        "type": "integer",
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "pr_state": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/PrStateEnum"
+                            }
+                        ],
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "action_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    },
+                    "pr_refreshed_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "action_at",
+                    "action_id",
+                    "branch",
+                    "checkout_kind",
+                    "checkout_name",
+                    "commit_outcome",
+                    "commit_shas",
+                    "create_pr_outcome",
+                    "id",
+                    "module_id",
+                    "pr_number",
+                    "pr_refreshed_at",
+                    "pr_state",
+                    "pr_url",
+                    "push_outcome",
+                    "task_id"
+                ]
+            },
+            "ShipRecordPersistenceError": {
+                "type": "object",
+                "properties": {
+                    "detail": {
+                        "type": "string"
+                    },
+                    "code": {
+                        "$ref": "#/components/schemas/ShipRecordPersistenceErrorCodeEnum"
+                    },
+                    "action_result": {}
+                },
+                "required": [
+                    "action_result",
+                    "code",
+                    "detail"
+                ]
+            },
+            "ShipRecordPersistenceErrorCodeEnum": {
+                "enum": [
+                    "ship_record_persistence_failed"
+                ],
+                "type": "string",
+                "description": "* `ship_record_persistence_failed` - ship_record_persistence_failed"
+            },
+            "ShipRecordRefreshError": {
+                "type": "object",
+                "properties": {
+                    "detail": {
+                        "type": "string"
+                    },
+                    "code": {
+                        "$ref": "#/components/schemas/ShipRecordRefreshErrorCodeEnum"
+                    }
+                },
+                "required": [
+                    "detail"
+                ]
+            },
+            "ShipRecordRefreshErrorCodeEnum": {
+                "enum": [
+                    "provider_unavailable",
+                    "provider_not_authenticated",
+                    "provider_timeout",
+                    "provider_response_malformed",
+                    "provider_lookup_failed",
+                    "pull_request_not_found",
+                    "pull_request_url_unsupported"
+                ],
+                "type": "string",
+                "description": "* `provider_unavailable` - provider_unavailable\n* `provider_not_authenticated` - provider_not_authenticated\n* `provider_timeout` - provider_timeout\n* `provider_response_malformed` - provider_response_malformed\n* `provider_lookup_failed` - provider_lookup_failed\n* `pull_request_not_found` - pull_request_not_found\n* `pull_request_url_unsupported` - pull_request_url_unsupported"
+            },
+            "ShipStepOutcome": {
+                "type": "object",
+                "properties": {
+                    "status": {
+                        "$ref": "#/components/schemas/ShipStepOutcomeStatusEnum"
+                    },
+                    "message": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 512
+                    }
+                },
+                "required": [
+                    "status"
+                ]
+            },
+            "ShipStepOutcomeStatusEnum": {
+                "enum": [
+                    "done",
+                    "skipped",
+                    "failed"
+                ],
+                "type": "string",
+                "description": "* `done` - Done\n* `skipped` - Skipped\n* `failed` - Failed"
             },
             "SourceEnum": {
                 "enum": [
@@ -8067,7 +8713,7 @@
             },
             "WorktreeActionRequest": {
                 "type": "object",
-                "description": "Which task's worktree the action runs in.\n\nThe same shape as the commit-only action's request, and for the same\nreason: the checkout is the only choice a caller makes. In particular\nthere is no ``force`` and no ``remote`` — the push publishes the current\nbranch to the remote that branch is configured for, or it refuses.",
+                "description": "Which task's worktree the action runs in.\n\nA retry may echo the action identifier from an earlier response. No other\naction options are accepted: the push publishes the current branch to its\nconfigured remote, or it refuses.",
                 "properties": {
                     "task_id": {
                         "type": "string"
@@ -8079,6 +8725,10 @@
                     "module_id": {
                         "type": "string",
                         "nullable": true
+                    },
+                    "action_id": {
+                        "type": "string",
+                        "format": "uuid"
                     }
                 },
                 "required": [
@@ -8216,15 +8866,37 @@
                     },
                     "deletions": {
                         "type": "integer"
+                    },
+                    "commit_shas": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "action_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "nullable": true
+                    },
+                    "ship_record": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/ShipRecord"
+                            }
+                        ],
+                        "nullable": true
                     }
                 },
                 "required": [
+                    "action_id",
                     "branch",
                     "commit_sha",
+                    "commit_shas",
                     "deletions",
                     "file_count",
                     "insertions",
                     "message_source",
+                    "ship_record",
                     "status",
                     "steps",
                     "subject"
@@ -8281,11 +8953,32 @@
                             }
                         ],
                         "nullable": true
+                    },
+                    "commit_shas": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "action_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "nullable": true
+                    },
+                    "ship_record": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/ShipRecord"
+                            }
+                        ],
+                        "nullable": true
                     }
                 },
                 "required": [
+                    "action_id",
                     "branch",
                     "commit_sha",
+                    "commit_shas",
                     "deletions",
                     "failure_code",
                     "file_count",
@@ -8293,6 +8986,7 @@
                     "message_source",
                     "pushed_sha",
                     "remote",
+                    "ship_record",
                     "status",
                     "steps",
                     "subject"
@@ -8402,12 +9096,33 @@
                             }
                         ],
                         "nullable": true
+                    },
+                    "commit_shas": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "action_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "nullable": true
+                    },
+                    "ship_record": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/ShipRecord"
+                            }
+                        ],
+                        "nullable": true
                     }
                 },
                 "required": [
+                    "action_id",
                     "base_branch",
                     "branch",
                     "commit_sha",
+                    "commit_shas",
                     "deletions",
                     "failure_code",
                     "file_count",
@@ -8418,6 +9133,7 @@
                     "pull_request_url",
                     "pushed_sha",
                     "remote",
+                    "ship_record",
                     "status",
                     "steps",
                     "subject"
@@ -8425,7 +9141,7 @@
             },
             "WorktreePullRequestRequest": {
                 "type": "object",
-                "description": "Which task's worktree the action runs in.\n\nThe same shape as every other action's request on this surface: the\ncheckout is the only choice a caller makes. There is no title, no body, no\nbase branch, and no reviewer list — the text is generated inside the action\nand the base is resolved from the repository, so nothing a client sends\ncould disagree with what the pull request ends up saying.",
+                "description": "Which task's worktree the action runs in.\n\nA retry may echo the action identifier from an earlier response. There is\nno title, body, base branch, or reviewer list: the action generates the text\nand resolves the base from the repository.",
                 "properties": {
                     "task_id": {
                         "type": "string"
@@ -8437,6 +9153,10 @@
                     "module_id": {
                         "type": "string",
                         "nullable": true
+                    },
+                    "action_id": {
+                        "type": "string",
+                        "format": "uuid"
                     }
                 },
                 "required": [

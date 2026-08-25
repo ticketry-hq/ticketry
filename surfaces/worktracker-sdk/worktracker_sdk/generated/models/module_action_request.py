@@ -19,17 +19,19 @@ import re  # noqa: F401
 import json
 
 from pydantic import BaseModel, ConfigDict, StrictStr
-from typing import Any, ClassVar, Dict, List
+from typing import Any, ClassVar, Dict, List, Optional
+from uuid import UUID
 from typing import Optional, Set
 from typing_extensions import Self
 from pydantic_core import to_jsonable_python
 
 class ModuleActionRequest(BaseModel):
     """
-    Which module's base checkout the action runs in.  Named by module and nothing else — no force, no remote, and no base branch, exactly as on the worktree's request.
+    Which module's base checkout the action runs in.  A retry may echo the action identifier from an earlier response. Force, remote, and base-branch overrides remain unavailable.
     """ # noqa: E501
     module_id: StrictStr
-    __properties: ClassVar[List[str]] = ["module_id"]
+    action_id: Optional[UUID] = None
+    __properties: ClassVar[List[str]] = ["module_id", "action_id"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -82,6 +84,7 @@ class ModuleActionRequest(BaseModel):
             return cls.model_validate(obj)
 
         _obj = cls.model_validate({
-            "module_id": obj.get("module_id")
+            "module_id": obj.get("module_id"),
+            "action_id": obj.get("action_id")
         })
         return _obj

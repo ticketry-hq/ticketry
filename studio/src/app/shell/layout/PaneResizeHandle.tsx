@@ -24,16 +24,22 @@ disableGlobalCursorStyles();
 
 interface PaneResizeHandleProps {
   id?: string;
+  ariaLabel?: string;
+  testId?: string;
 }
 
-export function PaneResizeHandle({ id }: PaneResizeHandleProps) {
+export function PaneResizeHandle({
+  id,
+  ariaLabel = "Resize adjacent panes",
+  testId = "pane-resize-handle",
+}: PaneResizeHandleProps) {
   return (
     <PanelResizeHandle
       id={id}
-      aria-label="Resize adjacent panes"
+      aria-label={ariaLabel}
       aria-orientation="vertical"
       className={RESIZE_HANDLE_CLASS}
-      data-testid="pane-resize-handle"
+      data-testid={testId}
       style={RESIZE_HANDLE_STYLE}
     >
       <span aria-hidden="true" style={HOVER_TARGET_STYLE} />

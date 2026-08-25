@@ -13,24 +13,27 @@ from apps.settings_store.rest_views import (
     ModuleLinkViewSet,
     SettingsViewSet,
 )
-from apps.source_control.commit_views import (
+from apps.source_control.rest.views.changes import (
+    ModuleChangesViewSet,
+    WorktreeChangesViewSet,
+)
+from apps.source_control.rest.views.commit import (
     ModuleCommitViewSet,
     WorktreeCommitViewSet,
 )
-from apps.source_control.pull_request_views import (
+from apps.source_control.rest.views.pull_request import (
     ModulePullRequestViewSet,
     WorktreePullRequestViewSet,
 )
-from apps.source_control.push_views import ModulePushViewSet, WorktreePushViewSet
-from apps.source_control.rest_views import (
-    ModuleChangesViewSet,
-    WorktreeChangesViewSet,
+from apps.source_control.rest.views.push import ModulePushViewSet, WorktreePushViewSet
+from apps.source_control.rest.views.ship_records import (
+    ModuleShipRecordViewSet,
+    TaskShipRecordViewSet,
 )
 from apps.system_rest import SystemViewSet
 from apps.terminals.rest_authentication import RunScopedAuthentication
 from apps.terminals.rest_views import TerminalViewSet
 from apps.worktrees.rest_views import WorktreeRecordViewSet, WorktreeViewSet
-
 
 health = SystemViewSet.as_view({"get": "health"})
 lifecycle_events = RunViewSet.as_view({"post": "lifecycle_events"})
@@ -72,6 +75,12 @@ module_link_detail = ModuleLinkViewSet.as_view(
 )
 worktree_status = WorktreeViewSet.as_view({"get": "status"})
 worktree_records = WorktreeRecordViewSet.as_view({"get": "list"})
+module_worktrees = WorktreeViewSet.as_view({"get": "module_worktrees"})
+module_ship_records = ModuleShipRecordViewSet.as_view({"get": "list"})
+ship_record_pr_state_refresh = ModuleShipRecordViewSet.as_view(
+    {"post": "refresh_pr_state"}
+)
+task_ship_records = TaskShipRecordViewSet.as_view({"get": "list"})
 worktree_changes = WorktreeChangesViewSet.as_view({"get": "changes"})
 worktree_file_diff = WorktreeChangesViewSet.as_view({"get": "file_diff"})
 worktree_commit = WorktreeCommitViewSet.as_view({"post": "commit"})
@@ -238,6 +247,28 @@ urlpatterns = [
         "modules/changes/pull-request",
         module_pull_request,
         name="module-pull-request",
+    ),
+    path(
+        "work-tracker/projects/<uuid:project_id>/modules/<uuid:module_id>/worktrees",
+        module_worktrees,
+        name="module-worktrees",
+    ),
+    path(
+        "work-tracker/projects/<uuid:project_id>/modules/<uuid:module_id>/ship-records",
+        module_ship_records,
+        name="module-ship-records",
+    ),
+    path(
+        "work-tracker/projects/<uuid:project_id>/modules/<uuid:module_id>/"
+        "ship-records/<uuid:record_id>/refresh-pr-state",
+        ship_record_pr_state_refresh,
+        name="ship-record-pr-state-refresh",
+    ),
+    path(
+        "work-tracker/projects/<uuid:project_id>/work-items/"
+        "<uuid:task_id>/ship-records",
+        task_ship_records,
+        name="task-ship-records",
     ),
     path(
         "worktrees/<str:task_id>/create",

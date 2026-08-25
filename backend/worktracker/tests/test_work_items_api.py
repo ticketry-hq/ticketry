@@ -75,6 +75,11 @@ def test_declared_work_item_reads_validate_against_the_generated_schema(
         url = declaration.path
     elif declaration.path.endswith("/{issue_id}"):
         url = declaration.path.format(issue_id=work_item["id"])
+    elif declaration.path.endswith("/{task_id}/ship-records"):
+        url = declaration.path.format(
+            project_id=project.id,
+            task_id=work_item["id"],
+        )
     else:
         url = f"{declaration.path}?project={project.id}"
 

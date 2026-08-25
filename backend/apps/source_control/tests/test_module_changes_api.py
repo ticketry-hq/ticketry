@@ -17,7 +17,6 @@ from django.test import Client
 from apps.settings_store.models import ModuleLink
 from apps.source_control.tests.conftest import MODULE_ID, TASK_ID, git
 
-
 pytestmark = [
     pytest.mark.django_db(transaction=True),
     pytest.mark.skipif(shutil.which("git") is None, reason="git not on PATH"),
@@ -239,7 +238,7 @@ def test_a_module_change_set_past_the_output_cap_is_refused_not_truncated(
 ):
     """AC 3: the module read inherits the same caps, not a looser path."""
 
-    from apps.source_control import git_cli
+    from apps.source_control.clients import git_cli
 
     monkeypatch.setattr(git_cli, "DEFAULT_OUTPUT_LIMIT_BYTES", 64)
     for index in range(20):

@@ -116,9 +116,15 @@ export type ActionStep = Omit<ApiActionStep, "name" | "status"> & {
 };
 
 /** The commit-only action's result. Discriminated on `status`. */
-export type CommitOutcome = Omit<ApiWorktreeCommit, "status" | "steps"> & {
+export type CommitOutcome = Omit<
+  ApiWorktreeCommit,
+  "status" | "steps" | "commit_shas" | "action_id" | "ship_record"
+> & {
   status: "committed" | "nothing_to_commit";
   steps: ActionStep[];
+  commit_shas?: string[];
+  action_id?: string;
+  ship_record?: ApiWorktreeCommit["ship_record"];
 };
 
 /**
@@ -135,11 +141,19 @@ export type CommitPushStatus =
 
 export type CommitPushOutcome = Omit<
   ApiWorktreeCommitPush,
-  "status" | "steps" | "failure_code"
+  | "status"
+  | "steps"
+  | "failure_code"
+  | "commit_shas"
+  | "action_id"
+  | "ship_record"
 > & {
   status: CommitPushStatus;
   steps: ActionStep[];
   failure_code: "diverged" | "rejected" | null;
+  commit_shas?: string[];
+  action_id?: string;
+  ship_record?: ApiWorktreeCommitPush["ship_record"];
 };
 
 /** Whether the push can run at all, and why not when it cannot. */
@@ -178,9 +192,17 @@ export type PullRequestStatus =
 
 export type PullRequestOutcome = Omit<
   ApiWorktreePullRequest,
-  "status" | "steps" | "failure_code"
+  | "status"
+  | "steps"
+  | "failure_code"
+  | "commit_shas"
+  | "action_id"
+  | "ship_record"
 > & {
   status: PullRequestStatus;
   steps: ActionStep[];
   failure_code: "diverged" | "rejected" | null;
+  commit_shas?: string[];
+  action_id?: string;
+  ship_record?: ApiWorktreePullRequest["ship_record"];
 };

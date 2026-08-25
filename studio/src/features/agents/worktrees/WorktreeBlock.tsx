@@ -79,7 +79,7 @@ export function WorktreeBlock({
     setMutationError(null);
     try {
       queryClient.setQueryData(statusKey, await createWorktree(taskId, ctx));
-      await invalidateTaskWorktree(taskId);
+      await invalidateTaskWorktree(taskId, projectId, moduleId);
     } catch {
       setMutationError("Create failed");
     } finally {

@@ -20,7 +20,9 @@ import json
 
 from pydantic import BaseModel, ConfigDict, StrictInt, StrictStr
 from typing import Any, ClassVar, Dict, List, Optional
+from uuid import UUID
 from worktracker_sdk.generated.models.action_step import ActionStep
+from worktracker_sdk.generated.models.ship_record import ShipRecord
 from worktracker_sdk.generated.models.worktree_commit_status_enum import WorktreeCommitStatusEnum
 from typing import Optional, Set
 from typing_extensions import Self
@@ -39,7 +41,10 @@ class WorktreeCommit(BaseModel):
     file_count: StrictInt
     insertions: StrictInt
     deletions: StrictInt
-    __properties: ClassVar[List[str]] = ["status", "steps", "branch", "commit_sha", "subject", "message_source", "file_count", "insertions", "deletions"]
+    commit_shas: List[StrictStr]
+    action_id: Optional[UUID]
+    ship_record: Optional[ShipRecord]
+    __properties: ClassVar[List[str]] = ["status", "steps", "branch", "commit_sha", "subject", "message_source", "file_count", "insertions", "deletions", "commit_shas", "action_id", "ship_record"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -87,6 +92,9 @@ class WorktreeCommit(BaseModel):
                 if _item_steps:
                     _items.append(_item_steps.to_dict())
             _dict['steps'] = _items
+        # override the default output from pydantic by calling `to_dict()` of ship_record
+        if self.ship_record:
+            _dict['ship_record'] = self.ship_record.to_dict()
         # set to None if commit_sha (nullable) is None
         # and model_fields_set contains the field
         if self.commit_sha is None and "commit_sha" in self.model_fields_set:
@@ -101,6 +109,16 @@ class WorktreeCommit(BaseModel):
         # and model_fields_set contains the field
         if self.message_source is None and "message_source" in self.model_fields_set:
             _dict['message_source'] = None
+
+        # set to None if action_id (nullable) is None
+        # and model_fields_set contains the field
+        if self.action_id is None and "action_id" in self.model_fields_set:
+            _dict['action_id'] = None
+
+        # set to None if ship_record (nullable) is None
+        # and model_fields_set contains the field
+        if self.ship_record is None and "ship_record" in self.model_fields_set:
+            _dict['ship_record'] = None
 
         return _dict
 
@@ -122,6 +140,9 @@ class WorktreeCommit(BaseModel):
             "message_source": obj.get("message_source"),
             "file_count": obj.get("file_count"),
             "insertions": obj.get("insertions"),
-            "deletions": obj.get("deletions")
+            "deletions": obj.get("deletions"),
+            "commit_shas": obj.get("commit_shas"),
+            "action_id": obj.get("action_id"),
+            "ship_record": ShipRecord.from_dict(obj["ship_record"]) if obj.get("ship_record") is not None else None
         })
         return _obj

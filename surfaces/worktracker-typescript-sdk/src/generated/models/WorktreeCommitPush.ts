@@ -22,6 +22,13 @@ import {
     ActionStepToJSON,
     ActionStepToJSONTyped,
 } from './ActionStep.js';
+import type { ShipRecord } from './ShipRecord.js';
+import {
+    ShipRecordFromJSON,
+    ShipRecordFromJSONTyped,
+    ShipRecordToJSON,
+    ShipRecordToJSONTyped,
+} from './ShipRecord.js';
 import type { FailureCodeEnum } from './FailureCodeEnum.js';
 import {
     FailureCodeEnumFromJSON,
@@ -122,6 +129,24 @@ export interface WorktreeCommitPush {
      * @memberof WorktreeCommitPush
      */
     failure_code: FailureCodeEnum | null;
+    /**
+     *
+     * @type {Array<string>}
+     * @memberof WorktreeCommitPush
+     */
+    commit_shas: Array<string>;
+    /**
+     *
+     * @type {string}
+     * @memberof WorktreeCommitPush
+     */
+    action_id: string | null;
+    /**
+     *
+     * @type {ShipRecord}
+     * @memberof WorktreeCommitPush
+     */
+    ship_record: ShipRecord | null;
 }
 
 
@@ -142,6 +167,9 @@ export function instanceOfWorktreeCommitPush(value: object): value is WorktreeCo
     if (!('deletions' in value) || value['deletions'] === undefined) return false;
     if (!('pushed_sha' in value) || value['pushed_sha'] === undefined) return false;
     if (!('failure_code' in value) || value['failure_code'] === undefined) return false;
+    if (!('commit_shas' in value) || value['commit_shas'] === undefined) return false;
+    if (!('action_id' in value) || value['action_id'] === undefined) return false;
+    if (!('ship_record' in value) || value['ship_record'] === undefined) return false;
     return true;
 }
 
@@ -167,6 +195,9 @@ export function WorktreeCommitPushFromJSONTyped(json: any, ignoreDiscriminator: 
         'deletions': json['deletions'],
         'pushed_sha': json['pushed_sha'],
         'failure_code': FailureCodeEnumFromJSON(json['failure_code']),
+        'commit_shas': json['commit_shas'],
+        'action_id': json['action_id'],
+        'ship_record': ShipRecordFromJSON(json['ship_record']),
     };
 }
 
@@ -193,5 +224,8 @@ export function WorktreeCommitPushToJSONTyped(value?: WorktreeCommitPush | null,
         'deletions': value['deletions'],
         'pushed_sha': value['pushed_sha'],
         'failure_code': FailureCodeEnumToJSON(value['failure_code']),
+        'commit_shas': value['commit_shas'],
+        'action_id': value['action_id'],
+        'ship_record': ShipRecordToJSON(value['ship_record']),
     };
 }

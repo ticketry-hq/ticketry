@@ -17,7 +17,7 @@ import shutil
 import stat
 from pathlib import Path
 
-from apps.source_control.message_generators import GENERATORS
+from apps.source_control.messages.message_generators import GENERATORS
 
 
 def write_executable(path: Path, body: str) -> Path:

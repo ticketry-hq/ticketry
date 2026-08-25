@@ -13,6 +13,7 @@ import {
   FooterWorktreesToggle,
   type WorktreeRevealRuntime,
 } from "../../features/agents/worktrees";
+import { RightDockFooterToggles } from "./right-dock/RightDockFooterToggles";
 
 // Warm the model-only Settings composition before the modal opens.
 const preloadSettings = () => {
@@ -92,6 +93,7 @@ export function StudioFooter({
       <div className="flex min-w-0 items-center justify-end gap-3">
         <FooterTerminalToggle />
         <FooterWorktreesToggle runtime={worktreesRuntime} />
+        <RightDockFooterToggles />
         <button
           type="button"
           onClick={openSettings}

@@ -17,12 +17,14 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 from typing_extensions import Annotated
 
 from pydantic import Field
-from typing import Optional
+from typing import List, Optional
 from typing_extensions import Annotated
+from uuid import UUID
 from worktracker_sdk.generated.models.file_diff import FileDiff
 from worktracker_sdk.generated.models.module_action_request import ModuleActionRequest
 from worktracker_sdk.generated.models.module_commit_request import ModuleCommitRequest
 from worktracker_sdk.generated.models.module_pull_request_request import ModulePullRequestRequest
+from worktracker_sdk.generated.models.ship_record import ShipRecord
 from worktracker_sdk.generated.models.worktree_action_request import WorktreeActionRequest
 from worktracker_sdk.generated.models.worktree_changes import WorktreeChanges
 from worktracker_sdk.generated.models.worktree_commit import WorktreeCommit
@@ -48,6 +50,867 @@ class SourceControlApi:
         if api_client is None:
             api_client = ApiClient.get_default()
         self.api_client = api_client
+
+
+    @validate_call
+    def list_module_ship_records(
+        self,
+        module_id: UUID,
+        project_id: UUID,
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> List[ShipRecord]:
+        """list_module_ship_records
+
+        List one module's durable ship records, newest action first.
+
+        :param module_id: (required)
+        :type module_id: UUID
+        :param project_id: (required)
+        :type project_id: UUID
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._list_module_ship_records_serialize(
+            module_id=module_id,
+            project_id=project_id,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '200': "List[ShipRecord]",
+        }
+        response_data = self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        response_data.read()
+        return self.api_client.response_deserialize(
+            response_data=response_data,
+            response_types_map=_response_types_map,
+        ).data
+
+
+    @validate_call
+    def list_module_ship_records_with_http_info(
+        self,
+        module_id: UUID,
+        project_id: UUID,
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> ApiResponse[List[ShipRecord]]:
+        """list_module_ship_records
+
+        List one module's durable ship records, newest action first.
+
+        :param module_id: (required)
+        :type module_id: UUID
+        :param project_id: (required)
+        :type project_id: UUID
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._list_module_ship_records_serialize(
+            module_id=module_id,
+            project_id=project_id,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '200': "List[ShipRecord]",
+        }
+        response_data = self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        response_data.read()
+        return self.api_client.response_deserialize(
+            response_data=response_data,
+            response_types_map=_response_types_map,
+        )
+
+
+    @validate_call
+    def list_module_ship_records_without_preload_content(
+        self,
+        module_id: UUID,
+        project_id: UUID,
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> RESTResponseType:
+        """list_module_ship_records
+
+        List one module's durable ship records, newest action first.
+
+        :param module_id: (required)
+        :type module_id: UUID
+        :param project_id: (required)
+        :type project_id: UUID
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._list_module_ship_records_serialize(
+            module_id=module_id,
+            project_id=project_id,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '200': "List[ShipRecord]",
+        }
+        response_data = self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        return response_data.response
+
+
+    def _list_module_ship_records_serialize(
+        self,
+        module_id,
+        project_id,
+        _request_auth,
+        _content_type,
+        _headers,
+        _host_index,
+    ) -> RequestSerialized:
+
+        _host = None
+
+        _collection_formats: Dict[str, str] = {
+        }
+
+        _path_params: Dict[str, str] = {}
+        _query_params: List[Tuple[str, str]] = []
+        _header_params: Dict[str, Optional[str]] = _headers or {}
+        _form_params: List[Tuple[str, str]] = []
+        _files: Dict[
+            str, Union[str, bytes, List[str], List[bytes], List[Tuple[str, bytes]]]
+        ] = {}
+        _body_params: Optional[bytes] = None
+
+        # process the path parameters
+        if module_id is not None:
+            _path_params['module_id'] = module_id
+        if project_id is not None:
+            _path_params['project_id'] = project_id
+        # process the query parameters
+        # process the header parameters
+        # process the form parameters
+        # process the body parameter
+
+
+        # set the HTTP header `Accept`
+        if 'Accept' not in _header_params:
+            _header_params['Accept'] = self.api_client.select_header_accept(
+                [
+                    'application/json'
+                ]
+            )
+
+
+        # authentication setting
+        _auth_settings: List[str] = [
+            'ApiKeyAuth'
+        ]
+
+        return self.api_client.param_serialize(
+            method='GET',
+            resource_path='/work-tracker/projects/{project_id}/modules/{module_id}/ship-records',
+            path_params=_path_params,
+            query_params=_query_params,
+            header_params=_header_params,
+            body=_body_params,
+            post_params=_form_params,
+            files=_files,
+            auth_settings=_auth_settings,
+            collection_formats=_collection_formats,
+            _host=_host,
+            _request_auth=_request_auth
+        )
+
+
+
+
+    @validate_call
+    def list_task_ship_records(
+        self,
+        project_id: UUID,
+        task_id: UUID,
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> List[ShipRecord]:
+        """list_task_ship_records
+
+        List one task's ship records, newest action first.
+
+        :param project_id: (required)
+        :type project_id: UUID
+        :param task_id: (required)
+        :type task_id: UUID
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._list_task_ship_records_serialize(
+            project_id=project_id,
+            task_id=task_id,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '200': "List[ShipRecord]",
+        }
+        response_data = self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        response_data.read()
+        return self.api_client.response_deserialize(
+            response_data=response_data,
+            response_types_map=_response_types_map,
+        ).data
+
+
+    @validate_call
+    def list_task_ship_records_with_http_info(
+        self,
+        project_id: UUID,
+        task_id: UUID,
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> ApiResponse[List[ShipRecord]]:
+        """list_task_ship_records
+
+        List one task's ship records, newest action first.
+
+        :param project_id: (required)
+        :type project_id: UUID
+        :param task_id: (required)
+        :type task_id: UUID
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._list_task_ship_records_serialize(
+            project_id=project_id,
+            task_id=task_id,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '200': "List[ShipRecord]",
+        }
+        response_data = self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        response_data.read()
+        return self.api_client.response_deserialize(
+            response_data=response_data,
+            response_types_map=_response_types_map,
+        )
+
+
+    @validate_call
+    def list_task_ship_records_without_preload_content(
+        self,
+        project_id: UUID,
+        task_id: UUID,
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> RESTResponseType:
+        """list_task_ship_records
+
+        List one task's ship records, newest action first.
+
+        :param project_id: (required)
+        :type project_id: UUID
+        :param task_id: (required)
+        :type task_id: UUID
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._list_task_ship_records_serialize(
+            project_id=project_id,
+            task_id=task_id,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '200': "List[ShipRecord]",
+        }
+        response_data = self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        return response_data.response
+
+
+    def _list_task_ship_records_serialize(
+        self,
+        project_id,
+        task_id,
+        _request_auth,
+        _content_type,
+        _headers,
+        _host_index,
+    ) -> RequestSerialized:
+
+        _host = None
+
+        _collection_formats: Dict[str, str] = {
+        }
+
+        _path_params: Dict[str, str] = {}
+        _query_params: List[Tuple[str, str]] = []
+        _header_params: Dict[str, Optional[str]] = _headers or {}
+        _form_params: List[Tuple[str, str]] = []
+        _files: Dict[
+            str, Union[str, bytes, List[str], List[bytes], List[Tuple[str, bytes]]]
+        ] = {}
+        _body_params: Optional[bytes] = None
+
+        # process the path parameters
+        if project_id is not None:
+            _path_params['project_id'] = project_id
+        if task_id is not None:
+            _path_params['task_id'] = task_id
+        # process the query parameters
+        # process the header parameters
+        # process the form parameters
+        # process the body parameter
+
+
+        # set the HTTP header `Accept`
+        if 'Accept' not in _header_params:
+            _header_params['Accept'] = self.api_client.select_header_accept(
+                [
+                    'application/json'
+                ]
+            )
+
+
+        # authentication setting
+        _auth_settings: List[str] = [
+            'ApiKeyAuth'
+        ]
+
+        return self.api_client.param_serialize(
+            method='GET',
+            resource_path='/work-tracker/projects/{project_id}/work-items/{task_id}/ship-records',
+            path_params=_path_params,
+            query_params=_query_params,
+            header_params=_header_params,
+            body=_body_params,
+            post_params=_form_params,
+            files=_files,
+            auth_settings=_auth_settings,
+            collection_formats=_collection_formats,
+            _host=_host,
+            _request_auth=_request_auth
+        )
+
+
+
+
+    @validate_call
+    def refresh_ship_record_pull_request_state(
+        self,
+        module_id: UUID,
+        project_id: UUID,
+        record_id: UUID,
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> ShipRecord:
+        """refresh_ship_record_pull_request_state
+
+        Refresh one stored GitHub pull request state without polling.
+
+        :param module_id: (required)
+        :type module_id: UUID
+        :param project_id: (required)
+        :type project_id: UUID
+        :param record_id: (required)
+        :type record_id: UUID
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._refresh_ship_record_pull_request_state_serialize(
+            module_id=module_id,
+            project_id=project_id,
+            record_id=record_id,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '200': "ShipRecord",
+            '404': "ShipRecordRefreshError",
+            '409': "ShipRecordRefreshError",
+            '422': "ShipRecordRefreshError",
+            '502': "ShipRecordRefreshError",
+            '503': "ShipRecordRefreshError",
+            '504': "ShipRecordRefreshError",
+        }
+        response_data = self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        response_data.read()
+        return self.api_client.response_deserialize(
+            response_data=response_data,
+            response_types_map=_response_types_map,
+        ).data
+
+
+    @validate_call
+    def refresh_ship_record_pull_request_state_with_http_info(
+        self,
+        module_id: UUID,
+        project_id: UUID,
+        record_id: UUID,
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> ApiResponse[ShipRecord]:
+        """refresh_ship_record_pull_request_state
+
+        Refresh one stored GitHub pull request state without polling.
+
+        :param module_id: (required)
+        :type module_id: UUID
+        :param project_id: (required)
+        :type project_id: UUID
+        :param record_id: (required)
+        :type record_id: UUID
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._refresh_ship_record_pull_request_state_serialize(
+            module_id=module_id,
+            project_id=project_id,
+            record_id=record_id,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '200': "ShipRecord",
+            '404': "ShipRecordRefreshError",
+            '409': "ShipRecordRefreshError",
+            '422': "ShipRecordRefreshError",
+            '502': "ShipRecordRefreshError",
+            '503': "ShipRecordRefreshError",
+            '504': "ShipRecordRefreshError",
+        }
+        response_data = self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        response_data.read()
+        return self.api_client.response_deserialize(
+            response_data=response_data,
+            response_types_map=_response_types_map,
+        )
+
+
+    @validate_call
+    def refresh_ship_record_pull_request_state_without_preload_content(
+        self,
+        module_id: UUID,
+        project_id: UUID,
+        record_id: UUID,
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> RESTResponseType:
+        """refresh_ship_record_pull_request_state
+
+        Refresh one stored GitHub pull request state without polling.
+
+        :param module_id: (required)
+        :type module_id: UUID
+        :param project_id: (required)
+        :type project_id: UUID
+        :param record_id: (required)
+        :type record_id: UUID
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._refresh_ship_record_pull_request_state_serialize(
+            module_id=module_id,
+            project_id=project_id,
+            record_id=record_id,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '200': "ShipRecord",
+            '404': "ShipRecordRefreshError",
+            '409': "ShipRecordRefreshError",
+            '422': "ShipRecordRefreshError",
+            '502': "ShipRecordRefreshError",
+            '503': "ShipRecordRefreshError",
+            '504': "ShipRecordRefreshError",
+        }
+        response_data = self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        return response_data.response
+
+
+    def _refresh_ship_record_pull_request_state_serialize(
+        self,
+        module_id,
+        project_id,
+        record_id,
+        _request_auth,
+        _content_type,
+        _headers,
+        _host_index,
+    ) -> RequestSerialized:
+
+        _host = None
+
+        _collection_formats: Dict[str, str] = {
+        }
+
+        _path_params: Dict[str, str] = {}
+        _query_params: List[Tuple[str, str]] = []
+        _header_params: Dict[str, Optional[str]] = _headers or {}
+        _form_params: List[Tuple[str, str]] = []
+        _files: Dict[
+            str, Union[str, bytes, List[str], List[bytes], List[Tuple[str, bytes]]]
+        ] = {}
+        _body_params: Optional[bytes] = None
+
+        # process the path parameters
+        if module_id is not None:
+            _path_params['module_id'] = module_id
+        if project_id is not None:
+            _path_params['project_id'] = project_id
+        if record_id is not None:
+            _path_params['record_id'] = record_id
+        # process the query parameters
+        # process the header parameters
+        # process the form parameters
+        # process the body parameter
+
+
+        # set the HTTP header `Accept`
+        if 'Accept' not in _header_params:
+            _header_params['Accept'] = self.api_client.select_header_accept(
+                [
+                    'application/json'
+                ]
+            )
+
+
+        # authentication setting
+        _auth_settings: List[str] = [
+            'ApiKeyAuth'
+        ]
+
+        return self.api_client.param_serialize(
+            method='POST',
+            resource_path='/work-tracker/projects/{project_id}/modules/{module_id}/ship-records/{record_id}/refresh-pr-state',
+            path_params=_path_params,
+            query_params=_query_params,
+            header_params=_header_params,
+            body=_body_params,
+            post_params=_form_params,
+            files=_files,
+            auth_settings=_auth_settings,
+            collection_formats=_collection_formats,
+            _host=_host,
+            _request_auth=_request_auth
+        )
+
+
 
 
     @validate_call
@@ -385,6 +1248,7 @@ class SourceControlApi:
             '502': "ErrorEnvelope",
             '503': "ErrorEnvelope",
             '504': "ErrorEnvelope",
+            '500': "ShipRecordPersistenceError",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -457,6 +1321,7 @@ class SourceControlApi:
             '502': "ErrorEnvelope",
             '503': "ErrorEnvelope",
             '504': "ErrorEnvelope",
+            '500': "ShipRecordPersistenceError",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -529,6 +1394,7 @@ class SourceControlApi:
             '502': "ErrorEnvelope",
             '503': "ErrorEnvelope",
             '504': "ErrorEnvelope",
+            '500': "ShipRecordPersistenceError",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -676,6 +1542,7 @@ class SourceControlApi:
             '502': "ErrorEnvelope",
             '503': "ErrorEnvelope",
             '504': "ErrorEnvelope",
+            '500': "ShipRecordPersistenceError",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -748,6 +1615,7 @@ class SourceControlApi:
             '502': "ErrorEnvelope",
             '503': "ErrorEnvelope",
             '504': "ErrorEnvelope",
+            '500': "ShipRecordPersistenceError",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -820,6 +1688,7 @@ class SourceControlApi:
             '502': "ErrorEnvelope",
             '503': "ErrorEnvelope",
             '504': "ErrorEnvelope",
+            '500': "ShipRecordPersistenceError",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -967,6 +1836,7 @@ class SourceControlApi:
             '502': "ErrorEnvelope",
             '503': "ErrorEnvelope",
             '504': "ErrorEnvelope",
+            '500': "ShipRecordPersistenceError",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -1039,6 +1909,7 @@ class SourceControlApi:
             '502': "ErrorEnvelope",
             '503': "ErrorEnvelope",
             '504': "ErrorEnvelope",
+            '500': "ShipRecordPersistenceError",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -1111,6 +1982,7 @@ class SourceControlApi:
             '502': "ErrorEnvelope",
             '503': "ErrorEnvelope",
             '504': "ErrorEnvelope",
+            '500': "ShipRecordPersistenceError",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -1550,6 +2422,7 @@ class SourceControlApi:
             '502': "ErrorEnvelope",
             '503': "ErrorEnvelope",
             '504': "ErrorEnvelope",
+            '500': "ShipRecordPersistenceError",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -1622,6 +2495,7 @@ class SourceControlApi:
             '502': "ErrorEnvelope",
             '503': "ErrorEnvelope",
             '504': "ErrorEnvelope",
+            '500': "ShipRecordPersistenceError",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -1694,6 +2568,7 @@ class SourceControlApi:
             '502': "ErrorEnvelope",
             '503': "ErrorEnvelope",
             '504': "ErrorEnvelope",
+            '500': "ShipRecordPersistenceError",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -1841,6 +2716,7 @@ class SourceControlApi:
             '502': "ErrorEnvelope",
             '503': "ErrorEnvelope",
             '504': "ErrorEnvelope",
+            '500': "ShipRecordPersistenceError",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -1913,6 +2789,7 @@ class SourceControlApi:
             '502': "ErrorEnvelope",
             '503': "ErrorEnvelope",
             '504': "ErrorEnvelope",
+            '500': "ShipRecordPersistenceError",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -1985,6 +2862,7 @@ class SourceControlApi:
             '502': "ErrorEnvelope",
             '503': "ErrorEnvelope",
             '504': "ErrorEnvelope",
+            '500': "ShipRecordPersistenceError",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -2428,6 +3306,7 @@ class SourceControlApi:
             '502': "ErrorEnvelope",
             '503': "ErrorEnvelope",
             '504': "ErrorEnvelope",
+            '500': "ShipRecordPersistenceError",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -2500,6 +3379,7 @@ class SourceControlApi:
             '502': "ErrorEnvelope",
             '503': "ErrorEnvelope",
             '504': "ErrorEnvelope",
+            '500': "ShipRecordPersistenceError",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -2572,6 +3452,7 @@ class SourceControlApi:
             '502': "ErrorEnvelope",
             '503': "ErrorEnvelope",
             '504': "ErrorEnvelope",
+            '500': "ShipRecordPersistenceError",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -2719,6 +3600,7 @@ class SourceControlApi:
             '502': "ErrorEnvelope",
             '503': "ErrorEnvelope",
             '504': "ErrorEnvelope",
+            '500': "ShipRecordPersistenceError",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -2791,6 +3673,7 @@ class SourceControlApi:
             '502': "ErrorEnvelope",
             '503': "ErrorEnvelope",
             '504': "ErrorEnvelope",
+            '500': "ShipRecordPersistenceError",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -2863,6 +3746,7 @@ class SourceControlApi:
             '502': "ErrorEnvelope",
             '503': "ErrorEnvelope",
             '504': "ErrorEnvelope",
+            '500': "ShipRecordPersistenceError",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -3010,6 +3894,7 @@ class SourceControlApi:
             '502': "ErrorEnvelope",
             '503': "ErrorEnvelope",
             '504': "ErrorEnvelope",
+            '500': "ShipRecordPersistenceError",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -3082,6 +3967,7 @@ class SourceControlApi:
             '502': "ErrorEnvelope",
             '503': "ErrorEnvelope",
             '504': "ErrorEnvelope",
+            '500': "ShipRecordPersistenceError",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -3154,6 +4040,7 @@ class SourceControlApi:
             '502': "ErrorEnvelope",
             '503': "ErrorEnvelope",
             '504': "ErrorEnvelope",
+            '500': "ShipRecordPersistenceError",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -3627,6 +4514,7 @@ class SourceControlApi:
             '502': "ErrorEnvelope",
             '503': "ErrorEnvelope",
             '504': "ErrorEnvelope",
+            '500': "ShipRecordPersistenceError",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -3699,6 +4587,7 @@ class SourceControlApi:
             '502': "ErrorEnvelope",
             '503': "ErrorEnvelope",
             '504': "ErrorEnvelope",
+            '500': "ShipRecordPersistenceError",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -3771,6 +4660,7 @@ class SourceControlApi:
             '502': "ErrorEnvelope",
             '503': "ErrorEnvelope",
             '504': "ErrorEnvelope",
+            '500': "ShipRecordPersistenceError",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -3926,6 +4816,7 @@ class SourceControlApi:
             '502': "ErrorEnvelope",
             '503': "ErrorEnvelope",
             '504': "ErrorEnvelope",
+            '500': "ShipRecordPersistenceError",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -4006,6 +4897,7 @@ class SourceControlApi:
             '502': "ErrorEnvelope",
             '503': "ErrorEnvelope",
             '504': "ErrorEnvelope",
+            '500': "ShipRecordPersistenceError",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -4086,6 +4978,7 @@ class SourceControlApi:
             '502': "ErrorEnvelope",
             '503': "ErrorEnvelope",
             '504': "ErrorEnvelope",
+            '500': "ShipRecordPersistenceError",
         }
         response_data = self.api_client.call_api(
             *_param,

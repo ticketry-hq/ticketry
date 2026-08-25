@@ -18,10 +18,9 @@ import { mapValues } from '../runtime.js';
 /**
  * Which task's worktree the action runs in.
  *
- * The same shape as the commit-only action's request, and for the same
- * reason: the checkout is the only choice a caller makes. In particular
- * there is no ``force`` and no ``remote`` — the push publishes the current
- * branch to the remote that branch is configured for, or it refuses.
+ * A retry may echo the action identifier from an earlier response. No other
+ * action options are accepted: the push publishes the current branch to its
+ * configured remote, or it refuses.
  * @export
  * @interface WorktreeActionRequest
  */
@@ -44,6 +43,12 @@ export interface WorktreeActionRequest {
      * @memberof WorktreeActionRequest
      */
     module_id?: string | null;
+    /**
+     *
+     * @type {string}
+     * @memberof WorktreeActionRequest
+     */
+    action_id?: string;
 }
 
 /**
@@ -67,6 +72,7 @@ export function WorktreeActionRequestFromJSONTyped(json: any, ignoreDiscriminato
         'task_id': json['task_id'],
         'parent_id': json['parent_id'] == null ? undefined : json['parent_id'],
         'module_id': json['module_id'] == null ? undefined : json['module_id'],
+        'action_id': json['action_id'] == null ? undefined : json['action_id'],
     };
 }
 
@@ -84,5 +90,6 @@ export function WorktreeActionRequestToJSONTyped(value?: WorktreeActionRequest |
         'task_id': value['task_id'],
         'parent_id': value['parent_id'],
         'module_id': value['module_id'],
+        'action_id': value['action_id'],
     };
 }

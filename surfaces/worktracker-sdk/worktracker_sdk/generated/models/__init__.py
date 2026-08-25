@@ -16,6 +16,7 @@
 # import models into model package
 from worktracker_sdk.generated.models.action_step import ActionStep
 from worktracker_sdk.generated.models.action_step_status_enum import ActionStepStatusEnum
+from worktracker_sdk.generated.models.active_worktree import ActiveWorktree
 from worktracker_sdk.generated.models.agent_enum import AgentEnum
 from worktracker_sdk.generated.models.agent_model import AgentModel
 from worktracker_sdk.generated.models.agent_override import AgentOverride
@@ -25,6 +26,7 @@ from worktracker_sdk.generated.models.automation_attempt import AutomationAttemp
 from worktracker_sdk.generated.models.changed_file import ChangedFile
 from worktracker_sdk.generated.models.changed_file_status_enum import ChangedFileStatusEnum
 from worktracker_sdk.generated.models.checkout_enum import CheckoutEnum
+from worktracker_sdk.generated.models.checkout_kind_enum import CheckoutKindEnum
 from worktracker_sdk.generated.models.committed_state import CommittedState
 from worktracker_sdk.generated.models.configuration_reorder import ConfigurationReorder
 from worktracker_sdk.generated.models.create_module_shell import CreateModuleShell
@@ -83,6 +85,7 @@ from worktracker_sdk.generated.models.patched_provider import PatchedProvider
 from worktracker_sdk.generated.models.patched_reasoning_level import PatchedReasoningLevel
 from worktracker_sdk.generated.models.patched_state import PatchedState
 from worktracker_sdk.generated.models.patched_work_item_patch import PatchedWorkItemPatch
+from worktracker_sdk.generated.models.pr_state_enum import PrStateEnum
 from worktracker_sdk.generated.models.project import Project
 from worktracker_sdk.generated.models.provider import Provider
 from worktracker_sdk.generated.models.provider_catalog import ProviderCatalog
@@ -102,6 +105,13 @@ from worktracker_sdk.generated.models.save_document import SaveDocument
 from worktracker_sdk.generated.models.scope_enum import ScopeEnum
 from worktracker_sdk.generated.models.self_terminate_result import SelfTerminateResult
 from worktracker_sdk.generated.models.setting_value import SettingValue
+from worktracker_sdk.generated.models.ship_record import ShipRecord
+from worktracker_sdk.generated.models.ship_record_persistence_error import ShipRecordPersistenceError
+from worktracker_sdk.generated.models.ship_record_persistence_error_code_enum import ShipRecordPersistenceErrorCodeEnum
+from worktracker_sdk.generated.models.ship_record_refresh_error import ShipRecordRefreshError
+from worktracker_sdk.generated.models.ship_record_refresh_error_code_enum import ShipRecordRefreshErrorCodeEnum
+from worktracker_sdk.generated.models.ship_step_outcome import ShipStepOutcome
+from worktracker_sdk.generated.models.ship_step_outcome_status_enum import ShipStepOutcomeStatusEnum
 from worktracker_sdk.generated.models.source_enum import SourceEnum
 from worktracker_sdk.generated.models.state import State
 from worktracker_sdk.generated.models.status_enum import StatusEnum

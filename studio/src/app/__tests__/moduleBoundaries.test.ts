@@ -8,9 +8,11 @@ const PRODUCT_ROOTS = [
   "features/studio",
   "features/projects",
   "features/settings",
+  "features/source-control",
   "features/work-items",
   "features/workflows",
   "features/terminal-panel",
+  "features/worktrees",
 ] as const;
 
 // Deliberately small product interfaces. Heavy UI files are also explicit
@@ -51,6 +53,7 @@ const PUBLIC_ENTRYPOINTS = new Set([
   "features/settings",
   "features/settings/changeLedger",
   "features/settings/store",
+  "features/source-control",
   "features/work-items",
   "features/work-items/queries",
   "state/clientStore",
@@ -66,6 +69,7 @@ const PUBLIC_ENTRYPOINTS = new Set([
   // The panel's furniture (open state, height, shell focus) is what the edit
   // view's zone cycle needs; the panel's UI is deliberately not on that path.
   "features/terminal-panel/panelStore",
+  "features/worktrees",
 ]);
 
 function walk(dir: string, out: string[] = []): string[] {
@@ -99,6 +103,7 @@ describe("module boundaries", () => {
       "app/StudioApp.tsx": ["./shell/StudioShell"],
       "app/shell/StudioShell.tsx": ["./StudioLayout"],
       "app/shell/StudioLayout.tsx": [
+        "./right-dock/RightDockLayout",
         "./sidebar/StudioSidebar",
         "./ticket-workspace/TicketWorkspace",
       ],

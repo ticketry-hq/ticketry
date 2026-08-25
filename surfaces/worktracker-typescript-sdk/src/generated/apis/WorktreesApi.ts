@@ -16,6 +16,11 @@
 
 import * as runtime from '../runtime.js';
 import {
+    type ActiveWorktree,
+    ActiveWorktreeFromJSON,
+    ActiveWorktreeToJSON,
+} from '../models/ActiveWorktree.js';
+import {
     type CreateWorktree,
     CreateWorktreeFromJSON,
     CreateWorktreeToJSON,
@@ -35,6 +40,11 @@ import {
     WorktreeStatusFromJSON,
     WorktreeStatusToJSON,
 } from '../models/WorktreeStatus.js';
+
+export interface ListModuleWorktreesRequest {
+    moduleId: string;
+    projectId: string;
+}
 
 export interface WorktreesCreateCreateRequest {
     taskId: string;
@@ -64,6 +74,30 @@ export interface WorktreesRetrieveRequest {
  * @interface WorktreesApiInterface
  */
 export interface WorktreesApiInterface {
+    /**
+     * Creates request options for listModuleWorktrees without sending the request
+     * @param {string} moduleId
+     * @param {string} projectId
+     * @throws {RequiredError}
+     * @memberof WorktreesApiInterface
+     */
+    listModuleWorktreesRequestOpts(requestParameters: ListModuleWorktreesRequest): Promise<runtime.RequestOpts>;
+
+    /**
+     * List one module\'s active task worktrees.
+     * @param {string} moduleId
+     * @param {string} projectId
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof WorktreesApiInterface
+     */
+    listModuleWorktreesRaw(requestParameters: ListModuleWorktreesRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Array<ActiveWorktree>>>;
+
+    /**
+     * List one module\'s active task worktrees.
+     */
+    listModuleWorktrees(requestParameters: ListModuleWorktreesRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Array<ActiveWorktree>>;
+
     /**
      * Creates request options for worktreesCreateCreate without sending the request
      * @param {string} taskId
@@ -168,6 +202,63 @@ export interface WorktreesApiInterface {
  *
  */
 export class WorktreesApi extends runtime.BaseAPI implements WorktreesApiInterface {
+
+    /**
+     * Creates request options for listModuleWorktrees without sending the request
+     */
+    async listModuleWorktreesRequestOpts(requestParameters: ListModuleWorktreesRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['moduleId'] == null) {
+            throw new runtime.RequiredError(
+                'moduleId',
+                'Required parameter "moduleId" was null or undefined when calling listModuleWorktrees().'
+            );
+        }
+
+        if (requestParameters['projectId'] == null) {
+            throw new runtime.RequiredError(
+                'projectId',
+                'Required parameter "projectId" was null or undefined when calling listModuleWorktrees().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.apiKey) {
+            headerParameters["x-api-key"] = await this.configuration.apiKey("x-api-key"); // ApiKeyAuth authentication
+        }
+
+
+        let urlPath = `/work-tracker/projects/{project_id}/modules/{module_id}/worktrees`;
+        urlPath = urlPath.replace('{module_id}', encodeURIComponent(String(requestParameters['moduleId'])));
+        urlPath = urlPath.replace('{project_id}', encodeURIComponent(String(requestParameters['projectId'])));
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * List one module\'s active task worktrees.
+     */
+    async listModuleWorktreesRaw(requestParameters: ListModuleWorktreesRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Array<ActiveWorktree>>> {
+        const requestOptions = await this.listModuleWorktreesRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => jsonValue.map(ActiveWorktreeFromJSON));
+    }
+
+    /**
+     * List one module\'s active task worktrees.
+     */
+    async listModuleWorktrees(requestParameters: ListModuleWorktreesRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Array<ActiveWorktree>> {
+        const response = await this.listModuleWorktreesRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
 
     /**
      * Creates request options for worktreesCreateCreate without sending the request

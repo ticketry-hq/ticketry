@@ -85,6 +85,16 @@ MODEL_ROUTES = {
                 "/api/work-tracker/projects/{project_id}/modules",
                 "List a project's module rows in its Canonical module order.",
             ),
+            RouteDeclaration(
+                "GET",
+                "/api/work-tracker/projects/{project_id}/modules/{module_id}/worktrees",
+                "List one module's live task worktrees in authoritative order.",
+            ),
+            RouteDeclaration(
+                "GET",
+                "/api/work-tracker/projects/{project_id}/modules/{module_id}/ship-records",
+                "List one module's durable source-control ship records newest first.",
+            ),
         ),
         "writes": (
             RouteDeclaration(
@@ -209,6 +219,11 @@ MODEL_ROUTES = {
                 "POST",
                 "/api/work-tracker/work-items/batch",
                 "Retrieve up to one hundred bare work items by exact id.",
+            ),
+            RouteDeclaration(
+                "GET",
+                "/api/work-tracker/projects/{project_id}/work-items/{task_id}/ship-records",
+                "List one task's durable ship records newest first.",
             ),
         ),
         "writes": (
@@ -343,6 +358,11 @@ MODEL_ROUTES = {
 }
 
 DOMAIN_OPERATIONS = (
+    RouteDeclaration(
+        "POST",
+        "/api/work-tracker/projects/{project_id}/modules/{module_id}/ship-records/{record_id}/refresh-pr-state",
+        "Refresh one stored pull request state through one bounded GitHub lookup.",
+    ),
     RouteDeclaration(
         "POST",
         "/api/work-tracker/module-presentations/{module_id}/reorder",

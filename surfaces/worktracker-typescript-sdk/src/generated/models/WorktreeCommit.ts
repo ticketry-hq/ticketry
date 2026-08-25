@@ -22,6 +22,13 @@ import {
     ActionStepToJSON,
     ActionStepToJSONTyped,
 } from './ActionStep.js';
+import type { ShipRecord } from './ShipRecord.js';
+import {
+    ShipRecordFromJSON,
+    ShipRecordFromJSONTyped,
+    ShipRecordToJSON,
+    ShipRecordToJSONTyped,
+} from './ShipRecord.js';
 import type { WorktreeCommitStatusEnum } from './WorktreeCommitStatusEnum.js';
 import {
     WorktreeCommitStatusEnumFromJSON,
@@ -98,6 +105,24 @@ export interface WorktreeCommit {
      * @memberof WorktreeCommit
      */
     deletions: number;
+    /**
+     *
+     * @type {Array<string>}
+     * @memberof WorktreeCommit
+     */
+    commit_shas: Array<string>;
+    /**
+     *
+     * @type {string}
+     * @memberof WorktreeCommit
+     */
+    action_id: string | null;
+    /**
+     *
+     * @type {ShipRecord}
+     * @memberof WorktreeCommit
+     */
+    ship_record: ShipRecord | null;
 }
 
 
@@ -115,6 +140,9 @@ export function instanceOfWorktreeCommit(value: object): value is WorktreeCommit
     if (!('file_count' in value) || value['file_count'] === undefined) return false;
     if (!('insertions' in value) || value['insertions'] === undefined) return false;
     if (!('deletions' in value) || value['deletions'] === undefined) return false;
+    if (!('commit_shas' in value) || value['commit_shas'] === undefined) return false;
+    if (!('action_id' in value) || value['action_id'] === undefined) return false;
+    if (!('ship_record' in value) || value['ship_record'] === undefined) return false;
     return true;
 }
 
@@ -137,6 +165,9 @@ export function WorktreeCommitFromJSONTyped(json: any, ignoreDiscriminator: bool
         'file_count': json['file_count'],
         'insertions': json['insertions'],
         'deletions': json['deletions'],
+        'commit_shas': json['commit_shas'],
+        'action_id': json['action_id'],
+        'ship_record': ShipRecordFromJSON(json['ship_record']),
     };
 }
 
@@ -160,5 +191,8 @@ export function WorktreeCommitToJSONTyped(value?: WorktreeCommit | null, ignoreD
         'file_count': value['file_count'],
         'insertions': value['insertions'],
         'deletions': value['deletions'],
+        'commit_shas': value['commit_shas'],
+        'action_id': value['action_id'],
+        'ship_record': ShipRecordToJSON(value['ship_record']),
     };
 }

@@ -3,6 +3,7 @@ import { outerPanelLayout, splitWorkArea } from "./layout/layoutMath";
 import { StudioSidebar } from "./sidebar/StudioSidebar";
 import { useStudioPanelLayout } from "./layout/useStudioPanelLayout";
 import { TicketWorkspace } from "./ticket-workspace/TicketWorkspace";
+import { RightDockLayout } from "./right-dock/RightDockLayout";
 
 export function StudioLayout() {
   const {
@@ -38,12 +39,14 @@ export function StudioLayout() {
         minSize={30}
         order={3}
       >
-        <TicketWorkspace
-          tasksSize={tasksSize}
-          workspaceSize={workspaceSize}
-          groupRef={workAreaGroupRef}
-          onLayout={handleWorkAreaLayout}
-        />
+        <RightDockLayout>
+          <TicketWorkspace
+            tasksSize={tasksSize}
+            workspaceSize={workspaceSize}
+            groupRef={workAreaGroupRef}
+            onLayout={handleWorkAreaLayout}
+          />
+        </RightDockLayout>
       </Panel>
     </PanelGroup>
   );

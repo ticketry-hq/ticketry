@@ -13,14 +13,54 @@ import uuid
 from pathlib import Path
 
 import pytest
+from worktracker.models import Issue, IssueType, Project
 
 from apps.settings_store.models import ModuleLink
 from apps.worktrees import service as worktrees_service
-from worktracker.models import Issue, IssueType, Project
+
+PROJECT_ID = "f1f8d941-7680-41b4-8d82-3e2f1579cd5e"
+MODULE_ID = "73ba5597-a0a9-4f63-a791-c19252cbe6a6"
+TASK_ID = "298ebfb0-f0a5-438d-87fc-95c5c807df14"
 
 
-MODULE_ID = "mod-source-control"
-TASK_ID = "task-980"
+@pytest.fixture(autouse=True)
+def source_control_owners(db):
+    """Give action tests the server-owned module and anchor-task context."""
+
+    project, _ = Project.objects.get_or_create(
+        id=PROJECT_ID,
+        defaults={"name": "Source control actions", "slug": "SCA"},
+    )
+    module_type, _ = IssueType.objects.get_or_create(
+        id="7acc08e7-e392-49c1-86d7-1990b6a304b2",
+        defaults={"project": project, "name": "Module", "level": "module"},
+    )
+    task_type, _ = IssueType.objects.get_or_create(
+        id="e49a84db-2188-4f48-a83d-fc5475fe715d",
+        defaults={"project": project, "name": "Story", "level": "task"},
+    )
+    module, _ = Issue.objects.get_or_create(
+        id=MODULE_ID,
+        defaults={
+            "project": project,
+            "type": "module",
+            "issue_type": module_type,
+            "name": "Source control module",
+            "sequence_id": 1,
+        },
+    )
+    Issue.objects.get_or_create(
+        id=TASK_ID,
+        defaults={
+            "project": project,
+            "type": "task",
+            "issue_type": task_type,
+            "parent": module,
+            "module": module,
+            "name": "Review worktree changes",
+            "sequence_id": 2,
+        },
+    )
 
 
 def git(args: list[str], cwd, *, check: bool = True) -> subprocess.CompletedProcess:

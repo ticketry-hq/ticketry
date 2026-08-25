@@ -81,6 +81,15 @@ export const queryKeys = {
     byTask: (taskId: string) => ["worktrees", taskId] as const,
     status: (taskId: string, parentId?: string | null, moduleId?: string | null) =>
       [...queryKeys.worktrees.byTask(taskId), { parentId: parentId ?? null, moduleId: moduleId ?? null }] as const,
+    byModule: (projectId: string, moduleId: string) =>
+      ["worktrees", "project", projectId, "module", moduleId] as const,
+  },
+
+  shipRecords: {
+    byModule: (projectId: string, moduleId: string) =>
+      ["ship-records", "project", projectId, "module", moduleId] as const,
+    byTask: (projectId: string, taskId: string) =>
+      ["ship-records", "project", projectId, "task", taskId] as const,
   },
 
   // Source-control review reads. The checkout kind is part of every key, so a

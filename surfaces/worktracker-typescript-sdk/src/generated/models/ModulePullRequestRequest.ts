@@ -18,7 +18,7 @@ import { mapValues } from '../runtime.js';
 /**
  * Which module's base checkout the pull-request action runs in.
  *
- * The same "checkout and nothing else" shape as every other request here.
+ * A retry may echo the action identifier from an earlier response.
  * @export
  * @interface ModulePullRequestRequest
  */
@@ -29,6 +29,12 @@ export interface ModulePullRequestRequest {
      * @memberof ModulePullRequestRequest
      */
     module_id: string;
+    /**
+     *
+     * @type {string}
+     * @memberof ModulePullRequestRequest
+     */
+    action_id?: string;
 }
 
 /**
@@ -50,6 +56,7 @@ export function ModulePullRequestRequestFromJSONTyped(json: any, ignoreDiscrimin
     return {
 
         'module_id': json['module_id'],
+        'action_id': json['action_id'] == null ? undefined : json['action_id'],
     };
 }
 
@@ -65,5 +72,6 @@ export function ModulePullRequestRequestToJSONTyped(value?: ModulePullRequestReq
     return {
 
         'module_id': value['module_id'],
+        'action_id': value['action_id'],
     };
 }

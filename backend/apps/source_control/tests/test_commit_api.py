@@ -21,7 +21,6 @@ from apps.source_control.tests.commit_fixtures import (
 )
 from apps.source_control.tests.conftest import MODULE_ID, TASK_ID, git
 
-
 pytestmark = [
     pytest.mark.django_db(transaction=True),
     pytest.mark.skipif(shutil.which("git") is None, reason="git not on PATH"),

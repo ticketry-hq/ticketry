@@ -18,11 +18,9 @@ import { mapValues } from '../runtime.js';
 /**
  * Which task's worktree the action runs in.
  *
- * The same shape as every other action's request on this surface: the
- * checkout is the only choice a caller makes. There is no title, no body, no
- * base branch, and no reviewer list — the text is generated inside the action
- * and the base is resolved from the repository, so nothing a client sends
- * could disagree with what the pull request ends up saying.
+ * A retry may echo the action identifier from an earlier response. There is
+ * no title, body, base branch, or reviewer list: the action generates the text
+ * and resolves the base from the repository.
  * @export
  * @interface WorktreePullRequestRequest
  */
@@ -45,6 +43,12 @@ export interface WorktreePullRequestRequest {
      * @memberof WorktreePullRequestRequest
      */
     module_id?: string | null;
+    /**
+     *
+     * @type {string}
+     * @memberof WorktreePullRequestRequest
+     */
+    action_id?: string;
 }
 
 /**
@@ -68,6 +72,7 @@ export function WorktreePullRequestRequestFromJSONTyped(json: any, ignoreDiscrim
         'task_id': json['task_id'],
         'parent_id': json['parent_id'] == null ? undefined : json['parent_id'],
         'module_id': json['module_id'] == null ? undefined : json['module_id'],
+        'action_id': json['action_id'] == null ? undefined : json['action_id'],
     };
 }
 
@@ -85,5 +90,6 @@ export function WorktreePullRequestRequestToJSONTyped(value?: WorktreePullReques
         'task_id': value['task_id'],
         'parent_id': value['parent_id'],
         'module_id': value['module_id'],
+        'action_id': value['action_id'],
     };
 }

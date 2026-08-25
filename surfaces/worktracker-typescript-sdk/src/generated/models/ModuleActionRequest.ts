@@ -18,8 +18,8 @@ import { mapValues } from '../runtime.js';
 /**
  * Which module's base checkout the action runs in.
  *
- * Named by module and nothing else — no force, no remote, and no base branch,
- * exactly as on the worktree's request.
+ * A retry may echo the action identifier from an earlier response. Force,
+ * remote, and base-branch overrides remain unavailable.
  * @export
  * @interface ModuleActionRequest
  */
@@ -30,6 +30,12 @@ export interface ModuleActionRequest {
      * @memberof ModuleActionRequest
      */
     module_id: string;
+    /**
+     *
+     * @type {string}
+     * @memberof ModuleActionRequest
+     */
+    action_id?: string;
 }
 
 /**
@@ -51,6 +57,7 @@ export function ModuleActionRequestFromJSONTyped(json: any, ignoreDiscriminator:
     return {
 
         'module_id': json['module_id'],
+        'action_id': json['action_id'] == null ? undefined : json['action_id'],
     };
 }
 
@@ -66,5 +73,6 @@ export function ModuleActionRequestToJSONTyped(value?: ModuleActionRequest | nul
     return {
 
         'module_id': value['module_id'],
+        'action_id': value['action_id'],
     };
 }

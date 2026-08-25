@@ -20,18 +20,20 @@ import json
 
 from pydantic import BaseModel, ConfigDict, StrictStr
 from typing import Any, ClassVar, Dict, List, Optional
+from uuid import UUID
 from typing import Optional, Set
 from typing_extensions import Self
 from pydantic_core import to_jsonable_python
 
 class WorktreeActionRequest(BaseModel):
     """
-    Which task's worktree the action runs in.  The same shape as the commit-only action's request, and for the same reason: the checkout is the only choice a caller makes. In particular there is no ``force`` and no ``remote`` — the push publishes the current branch to the remote that branch is configured for, or it refuses.
+    Which task's worktree the action runs in.  A retry may echo the action identifier from an earlier response. No other action options are accepted: the push publishes the current branch to its configured remote, or it refuses.
     """ # noqa: E501
     task_id: StrictStr
     parent_id: Optional[StrictStr] = None
     module_id: Optional[StrictStr] = None
-    __properties: ClassVar[List[str]] = ["task_id", "parent_id", "module_id"]
+    action_id: Optional[UUID] = None
+    __properties: ClassVar[List[str]] = ["task_id", "parent_id", "module_id", "action_id"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -96,6 +98,7 @@ class WorktreeActionRequest(BaseModel):
         _obj = cls.model_validate({
             "task_id": obj.get("task_id"),
             "parent_id": obj.get("parent_id"),
-            "module_id": obj.get("module_id")
+            "module_id": obj.get("module_id"),
+            "action_id": obj.get("action_id")
         })
         return _obj

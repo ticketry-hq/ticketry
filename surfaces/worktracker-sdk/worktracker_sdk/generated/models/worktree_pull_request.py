@@ -20,8 +20,10 @@ import json
 
 from pydantic import BaseModel, ConfigDict, StrictInt, StrictStr
 from typing import Any, ClassVar, Dict, List, Optional
+from uuid import UUID
 from worktracker_sdk.generated.models.action_step import ActionStep
 from worktracker_sdk.generated.models.failure_code_enum import FailureCodeEnum
+from worktracker_sdk.generated.models.ship_record import ShipRecord
 from worktracker_sdk.generated.models.worktree_pull_request_status_enum import WorktreePullRequestStatusEnum
 from typing import Optional, Set
 from typing_extensions import Self
@@ -47,7 +49,10 @@ class WorktreePullRequest(BaseModel):
     deletions: StrictInt
     pushed_sha: Optional[StrictStr]
     failure_code: Optional[FailureCodeEnum]
-    __properties: ClassVar[List[str]] = ["status", "steps", "branch", "base_branch", "remote", "pull_request_url", "pull_request_title", "pull_request_text_source", "commit_sha", "subject", "message_source", "file_count", "insertions", "deletions", "pushed_sha", "failure_code"]
+    commit_shas: List[StrictStr]
+    action_id: Optional[UUID]
+    ship_record: Optional[ShipRecord]
+    __properties: ClassVar[List[str]] = ["status", "steps", "branch", "base_branch", "remote", "pull_request_url", "pull_request_title", "pull_request_text_source", "commit_sha", "subject", "message_source", "file_count", "insertions", "deletions", "pushed_sha", "failure_code", "commit_shas", "action_id", "ship_record"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -95,6 +100,9 @@ class WorktreePullRequest(BaseModel):
                 if _item_steps:
                     _items.append(_item_steps.to_dict())
             _dict['steps'] = _items
+        # override the default output from pydantic by calling `to_dict()` of ship_record
+        if self.ship_record:
+            _dict['ship_record'] = self.ship_record.to_dict()
         # set to None if pull_request_url (nullable) is None
         # and model_fields_set contains the field
         if self.pull_request_url is None and "pull_request_url" in self.model_fields_set:
@@ -135,6 +143,16 @@ class WorktreePullRequest(BaseModel):
         if self.failure_code is None and "failure_code" in self.model_fields_set:
             _dict['failure_code'] = None
 
+        # set to None if action_id (nullable) is None
+        # and model_fields_set contains the field
+        if self.action_id is None and "action_id" in self.model_fields_set:
+            _dict['action_id'] = None
+
+        # set to None if ship_record (nullable) is None
+        # and model_fields_set contains the field
+        if self.ship_record is None and "ship_record" in self.model_fields_set:
+            _dict['ship_record'] = None
+
         return _dict
 
     @classmethod
@@ -162,6 +180,9 @@ class WorktreePullRequest(BaseModel):
             "insertions": obj.get("insertions"),
             "deletions": obj.get("deletions"),
             "pushed_sha": obj.get("pushed_sha"),
-            "failure_code": obj.get("failure_code")
+            "failure_code": obj.get("failure_code"),
+            "commit_shas": obj.get("commit_shas"),
+            "action_id": obj.get("action_id"),
+            "ship_record": ShipRecord.from_dict(obj["ship_record"]) if obj.get("ship_record") is not None else None
         })
         return _obj

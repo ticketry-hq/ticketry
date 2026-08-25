@@ -22,6 +22,13 @@ import {
     ActionStepToJSON,
     ActionStepToJSONTyped,
 } from './ActionStep.js';
+import type { ShipRecord } from './ShipRecord.js';
+import {
+    ShipRecordFromJSON,
+    ShipRecordFromJSONTyped,
+    ShipRecordToJSON,
+    ShipRecordToJSONTyped,
+} from './ShipRecord.js';
 import type { FailureCodeEnum } from './FailureCodeEnum.js';
 import {
     FailureCodeEnumFromJSON,
@@ -148,6 +155,24 @@ export interface WorktreePullRequest {
      * @memberof WorktreePullRequest
      */
     failure_code: FailureCodeEnum | null;
+    /**
+     *
+     * @type {Array<string>}
+     * @memberof WorktreePullRequest
+     */
+    commit_shas: Array<string>;
+    /**
+     *
+     * @type {string}
+     * @memberof WorktreePullRequest
+     */
+    action_id: string | null;
+    /**
+     *
+     * @type {ShipRecord}
+     * @memberof WorktreePullRequest
+     */
+    ship_record: ShipRecord | null;
 }
 
 
@@ -172,6 +197,9 @@ export function instanceOfWorktreePullRequest(value: object): value is WorktreeP
     if (!('deletions' in value) || value['deletions'] === undefined) return false;
     if (!('pushed_sha' in value) || value['pushed_sha'] === undefined) return false;
     if (!('failure_code' in value) || value['failure_code'] === undefined) return false;
+    if (!('commit_shas' in value) || value['commit_shas'] === undefined) return false;
+    if (!('action_id' in value) || value['action_id'] === undefined) return false;
+    if (!('ship_record' in value) || value['ship_record'] === undefined) return false;
     return true;
 }
 
@@ -201,6 +229,9 @@ export function WorktreePullRequestFromJSONTyped(json: any, ignoreDiscriminator:
         'deletions': json['deletions'],
         'pushed_sha': json['pushed_sha'],
         'failure_code': FailureCodeEnumFromJSON(json['failure_code']),
+        'commit_shas': json['commit_shas'],
+        'action_id': json['action_id'],
+        'ship_record': ShipRecordFromJSON(json['ship_record']),
     };
 }
 
@@ -231,5 +262,8 @@ export function WorktreePullRequestToJSONTyped(value?: WorktreePullRequest | nul
         'deletions': value['deletions'],
         'pushed_sha': value['pushed_sha'],
         'failure_code': FailureCodeEnumToJSON(value['failure_code']),
+        'commit_shas': value['commit_shas'],
+        'action_id': value['action_id'],
+        'ship_record': ShipRecordToJSON(value['ship_record']),
     };
 }

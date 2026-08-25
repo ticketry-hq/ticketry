@@ -161,6 +161,19 @@ def get_worktree(
     )
 
 
+def list_active_worktrees(*, project_id: str, module_id: str):
+    """Return the selected module's live task worktrees in server order."""
+
+    return [
+        worktree
+        for worktree in service.list_worktrees(
+            project_id=project_id,
+            module_id=module_id,
+        )
+        if not worktree.ephemeral and worktree.status in {"active", "conflict"}
+    ]
+
+
 def create_worktree(
     task_id: str,
     *,

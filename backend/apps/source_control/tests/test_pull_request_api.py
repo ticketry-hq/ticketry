@@ -18,8 +18,8 @@ import shutil
 import pytest
 from django.test import Client
 
-from apps.source_control.gh_cli import APPROVED_PATH_ENV
-from apps.source_control.message_generators import GENERATORS
+from apps.source_control.clients.gh_cli import APPROVED_PATH_ENV
+from apps.source_control.messages.message_generators import GENERATORS
 from apps.source_control.tests.commit_fixtures import (
     install_generator,
     isolate_generators,
@@ -37,7 +37,6 @@ from apps.source_control.tests.push_fixtures import (
     publish_from_elsewhere,
     remote_sha,
 )
-
 
 pytestmark = [
     pytest.mark.django_db(transaction=True),
@@ -458,8 +457,10 @@ def test_the_generator_preference_is_honoured_over_the_fallback_order(
     checkout, remote, gh_logs, gh, bin_dir
 ):
     from apps.settings_store.models import AppSetting
-
-    from apps.source_control.commit_message import PREFERENCE_KEY, PREFERENCE_SCOPE
+    from apps.source_control.messages.commit_message import (
+        PREFERENCE_KEY,
+        PREFERENCE_SCOPE,
+    )
 
     for name in GENERATORS:
         install_generator(bin_dir, name, prints=f"Title from {name}\n\nBody.")

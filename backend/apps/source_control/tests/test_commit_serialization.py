@@ -18,14 +18,13 @@ from pathlib import Path
 
 import pytest
 
-from apps.source_control.checkout import TaskCheckout
-from apps.source_control.commit import commit_all_changes
+from apps.source_control.actions.commit import commit_all_changes
+from apps.source_control.checkouts.checkout import TaskCheckout
 from apps.source_control.tests.commit_fixtures import (
     install_hook,
     isolate_generators,
 )
 from apps.source_control.tests.conftest import git
-
 
 pytestmark = [
     # Real threads read the generator preference, so the database has to be

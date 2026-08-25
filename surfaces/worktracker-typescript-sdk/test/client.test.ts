@@ -189,6 +189,97 @@ describe("createWorkTrackerClient", () => {
       client.projects.listProjects({ signal: controller.signal }),
     ).rejects.toMatchObject({ name: "AbortError" });
   });
+
+  it("reads module worktrees through the generated scoped contract", async () => {
+    const worktree = {
+      id: "worktree-task-589",
+      task_id: "task-589",
+      project_id: "project-1",
+      module_id: "module-1",
+      ticket_seq: 589,
+      path: "/worktrees/task-589",
+      branch: "wt/CODING-589",
+      base_branch: "main",
+      status: "active",
+      created_at: "2026-08-24T09:00:00+00:00",
+    };
+    const fetch = vi.fn().mockResolvedValue(response([worktree]));
+    const client = createWorkTrackerClient({ baseUrl: "/api/work-tracker", fetch });
+    const controller = new AbortController();
+
+    await expect(
+      client.worktrees.listModuleWorktrees(
+        { projectId: "project/1", moduleId: "module/1" },
+        { signal: controller.signal },
+      ),
+    ).resolves.toEqual([worktree]);
+    expect(fetch.mock.calls[0][0]).toBe(
+      "/api/work-tracker/projects/project%2F1/modules/module%2F1/worktrees",
+    );
+    expect(fetch.mock.calls[0][1].signal).toBe(controller.signal);
+  });
+
+  it("reads and refreshes ship history through the generated scoped contract", async () => {
+    const record = {
+      id: "11111111-1111-4111-8111-111111111111",
+      action_id: "22222222-2222-4222-8222-222222222222",
+      module_id: "33333333-3333-4333-8333-333333333333",
+      task_id: null,
+      checkout_kind: "base",
+      checkout_name: "Base checkout",
+      branch: "main",
+      commit_shas: ["a".repeat(40)],
+      commit_outcome: { status: "done" },
+      push_outcome: { status: "failed", message: "Push was rejected." },
+      create_pr_outcome: { status: "skipped" },
+      pr_url: null,
+      pr_number: null,
+      pr_state: null,
+      action_at: "2026-08-24T10:00:00Z",
+      pr_refreshed_at: null,
+    };
+    const refreshed = {
+      ...record,
+      pr_url: "https://github.com/ticketry-hq/ticketry/pull/42",
+      pr_number: 42,
+      pr_state: "merged",
+      pr_refreshed_at: "2026-08-24T11:00:00Z",
+    };
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(response([record]))
+      .mockResolvedValueOnce(response([record]))
+      .mockResolvedValueOnce(response(refreshed));
+    const client = createWorkTrackerClient({ baseUrl: "/api/work-tracker", fetch });
+    const controller = new AbortController();
+
+    await expect(
+      client.sourceControl.listModuleShipRecords(
+        { projectId: "project/1", moduleId: "module/1" },
+        { signal: controller.signal },
+      ),
+    ).resolves.toEqual([record]);
+    await expect(
+      client.sourceControl.listTaskShipRecords(
+        { projectId: "project/1", taskId: "task/1" },
+        { signal: controller.signal },
+      ),
+    ).resolves.toEqual([record]);
+    await expect(
+      client.sourceControl.refreshShipRecordPullRequestState({
+        projectId: "project/1",
+        moduleId: "module/1",
+        recordId: "record/1",
+      }),
+    ).resolves.toEqual(refreshed);
+    expect(fetch.mock.calls.map(([url]) => url)).toEqual([
+      "/api/work-tracker/projects/project%2F1/modules/module%2F1/ship-records",
+      "/api/work-tracker/projects/project%2F1/work-items/task%2F1/ship-records",
+      "/api/work-tracker/projects/project%2F1/modules/module%2F1/ship-records/record%2F1/refresh-pr-state",
+    ]);
+    expect(fetch.mock.calls[0][1].signal).toBe(controller.signal);
+    expect(fetch.mock.calls[1][1].signal).toBe(controller.signal);
+    expect(fetch.mock.calls[2][1].method).toBe("POST");
+  });
 });
 
 describe("createAgentStatusClient", () => {

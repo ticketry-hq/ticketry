@@ -3,8 +3,16 @@ import type { WorkspaceTabOrder as ApiWorkspaceTabOrder } from "../../shared/api
 
 export type WorkspaceTabIdentity =
   | { kind: "details" }
+  | { kind: "changes" }
   | { kind: "doc"; id: string }
   | { kind: "terminal"; id: string };
+
+/** Tabs the workspace owns itself, so they carry no record id. */
+export function isPinnedWorkspaceTab(
+  identity: WorkspaceTabIdentity,
+): identity is { kind: "details" } | { kind: "changes" } {
+  return identity.kind === "details" || identity.kind === "changes";
+}
 
 export interface WorkspaceTabOrder {
   order: WorkspaceTabIdentity[];
@@ -27,8 +35,8 @@ export function workspaceTabOrderFromApi(
 ): WorkspaceTabOrder {
   const order: WorkspaceTabIdentity[] = [];
   for (const identity of value.order) {
-    if (identity.kind === "details") {
-      order.push({ kind: "details" });
+    if (identity.kind === "details" || identity.kind === "changes") {
+      order.push({ kind: identity.kind });
     } else if (identity.id) {
       order.push({ kind: identity.kind, id: identity.id });
     }

@@ -39,8 +39,12 @@ describe("browser runtime contract", () => {
       serviceSupervision: false,
       nativeTerminal: false,
       nativeFolderPicker: false,
+      nativeFileManager: false,
     });
     await expect(runtime.pickFolder()).resolves.toBeNull();
+    await expect(runtime.revealInFileManager("/repos/worktree")).rejects.toThrow(
+      "The system file manager is available only in desktop Studio",
+    );
   });
 
   it("derives websocket origins from valid absolute browser API configuration", () => {

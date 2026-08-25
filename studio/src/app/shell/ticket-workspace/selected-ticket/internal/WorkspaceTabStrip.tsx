@@ -143,17 +143,22 @@ export function WorkspaceTabStrip({
       }`}
     >
       {orderedTabs.map((identity) => {
-        if (identity.kind === "details") {
+        // Details and Changes are the workspace's own pinned surfaces: one
+        // label each, no id, and no close control.
+        if (identity.kind === "details" || identity.kind === "changes") {
+          const pinnedKind = identity.kind;
           return (
             <WorkspaceTab
-              key="details"
-              label="Details"
-              active={activeKind === "details"}
-              highlighted={showTabHighlight && highlightedTab.kind === "details"}
+              key={pinnedKind}
+              label={pinnedKind === "details" ? "Details" : "Changes"}
+              active={activeKind === pinnedKind}
+              highlighted={
+                showTabHighlight && highlightedTab.kind === pinnedKind
+              }
               allowHoverEmphasis={allowTabHoverEmphasis}
               onClick={() => {
                 if (!reorderDrag.consumePostDropClick()) {
-                  onSelectTab({ kind: "details" });
+                  onSelectTab({ kind: pinnedKind });
                 }
               }}
               dropIntent={reorderDrag.dropIntentFor(identity)}

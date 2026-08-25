@@ -38,6 +38,8 @@ class LaunchRecords:
     # workflow state or no resolved model; never a substituted default.
     launch_state: str | None = None
     launch_model: str | None = None
+    launch_reasoning: str | None = None
+    launch_unattended: bool = False
 
 
 @dataclass(frozen=True)
@@ -57,6 +59,8 @@ class ResumeLaunchFacts:
     # even if the work item has since moved on (#693).
     launch_state: str | None = None
     launch_model: str | None = None
+    launch_reasoning: str | None = None
+    launch_unattended: bool = False
 
 
 @dataclass(frozen=True)
@@ -123,6 +127,8 @@ def persist_launch(records: LaunchRecords) -> LaunchRouting:
                 initial_prompt=records.initial_prompt,
                 launch_state=records.launch_state,
                 launch_model=records.launch_model,
+                launch_reasoning=records.launch_reasoning,
+                launch_unattended=records.launch_unattended,
                 scope=records.scope,
             )
             AgentTerminalSession.objects.create(
@@ -165,6 +171,8 @@ def load_resume_launch(agent_run_id: str) -> ResumeLaunchFacts | None:
                 "scope",
                 "launch_state",
                 "launch_model",
+                "launch_reasoning",
+                "launch_unattended",
             )
             .first()
         )
@@ -180,6 +188,8 @@ def load_resume_launch(agent_run_id: str) -> ResumeLaunchFacts | None:
             scope=row["scope"],
             launch_state=row["launch_state"],
             launch_model=row["launch_model"],
+            launch_reasoning=row["launch_reasoning"],
+            launch_unattended=bool(row["launch_unattended"]),
         )
     finally:
         close_old_connections()

@@ -76,8 +76,64 @@ export const queryKeys = {
   },
 
   worktrees: {
+    all: ["worktrees"] as const,
+    records: (moduleId: string) => ["worktrees", "records", moduleId] as const,
+    byTask: (taskId: string) => ["worktrees", taskId] as const,
     status: (taskId: string, parentId?: string | null, moduleId?: string | null) =>
-      ["worktrees", taskId, { parentId: parentId ?? null, moduleId: moduleId ?? null }] as const,
+      [...queryKeys.worktrees.byTask(taskId), { parentId: parentId ?? null, moduleId: moduleId ?? null }] as const,
+  },
+
+  // Source-control review reads. The checkout kind is part of every key, so a
+  // module base checkout and a task worktree can never serve each other's
+  // cached answer. Invalidating a checkout's `changes` key is the single
+  // refresh point every commit/push mutation has to hit; the per-file diffs
+  // hang off it so one invalidation clears both.
+  sourceControl: {
+    worktreeChanges: (
+      taskId: string,
+      parentId?: string | null,
+      moduleId?: string | null,
+    ) =>
+      [
+        "source-control",
+        "changes",
+        "worktree",
+        taskId,
+        { parentId: parentId ?? null, moduleId: moduleId ?? null },
+      ] as const,
+    worktreeFileDiff: (
+      taskId: string,
+      path: string,
+      parentId?: string | null,
+      moduleId?: string | null,
+    ) =>
+      [
+        ...queryKeys.sourceControl.worktreeChanges(taskId, parentId, moduleId),
+        "file-diff",
+        path,
+      ] as const,
+    worktreePushPreview: (
+      taskId: string,
+      parentId?: string | null,
+      moduleId?: string | null,
+    ) =>
+      [
+        ...queryKeys.sourceControl.worktreeChanges(taskId, parentId, moduleId),
+        "push-preview",
+      ] as const,
+    moduleChanges: (moduleId: string) =>
+      ["source-control", "changes", "module", moduleId] as const,
+    moduleFileDiff: (moduleId: string, path: string) =>
+      [
+        ...queryKeys.sourceControl.moduleChanges(moduleId),
+        "file-diff",
+        path,
+      ] as const,
+    modulePushPreview: (moduleId: string) =>
+      [
+        ...queryKeys.sourceControl.moduleChanges(moduleId),
+        "push-preview",
+      ] as const,
   },
 
   documents: {

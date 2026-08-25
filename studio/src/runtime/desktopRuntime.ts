@@ -13,9 +13,14 @@ import {
 type DesktopCommand =
   | "desktop_runtime_configuration"
   | "desktop_retry_services"
-  | "desktop_pick_folder";
+  | "desktop_pick_folder"
+  | "desktop_open_external_url"
+  | "desktop_reveal_in_file_manager";
 
-export type DesktopInvoke = <T>(command: DesktopCommand) => Promise<T>;
+export type DesktopInvoke = <T>(
+  command: DesktopCommand,
+  args?: Record<string, unknown>,
+) => Promise<T>;
 export type DesktopRuntimeListen = (
   event: "desktop-service-health" | "desktop-user-notice",
   handler: (event: { payload: unknown }) => void,
@@ -196,9 +201,20 @@ export async function createDesktopRuntime({
       serviceSupervision: true,
       nativeTerminal: false,
       nativeFolderPicker: true,
+      nativeFileManager: true,
     }),
     pickFolder: async () =>
       validatePickedFolder(await invoke<unknown>("desktop_pick_folder")),
+    openExternalUrl: async (url: string) => {
+      // The URL is not validated here on purpose. A check in the webview is
+      // advice; the check that decides whether a process is spawned belongs on
+      // the side that spawns it, and Rust does it before ever reaching a
+      // platform opener.
+      await invoke<void>("desktop_open_external_url", { url });
+    },
+    revealInFileManager: async (path: string) => {
+      await invoke<void>("desktop_reveal_in_file_manager", { path });
+    },
     retryServices: async () => {
       await invoke<void>("desktop_retry_services");
     },

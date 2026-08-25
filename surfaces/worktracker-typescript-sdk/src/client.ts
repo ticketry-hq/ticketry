@@ -21,6 +21,7 @@ import { ProvidersApi } from "./generated/apis/ProvidersApi.js";
 import { ReasoningLevelsApi } from "./generated/apis/ReasoningLevelsApi.js";
 import { RunsApi } from "./generated/apis/RunsApi.js";
 import { SettingsApi } from "./generated/apis/SettingsApi.js";
+import { SourceControlApi } from "./generated/apis/SourceControlApi.js";
 import { StatesApi } from "./generated/apis/StatesApi.js";
 import { WorkflowsApi } from "./generated/apis/WorkflowsApi.js";
 import { WorkItemsApi } from "./generated/apis/WorkItemsApi.js";
@@ -51,6 +52,7 @@ export interface WorkTrackerClient {
   reasoningLevels: ReasoningLevelsApi;
   runs: RunsApi;
   settings: SettingsApi;
+  sourceControl: SourceControlApi;
   states: StatesApi;
   workflows: WorkflowsApi;
   workItems: WorkItemsApi;
@@ -116,6 +118,7 @@ export function createWorkTrackerClient(
     reasoningLevels: new ReasoningLevelsApi(configuration),
     runs: new RunsApi(configuration),
     settings: new SettingsApi(configuration),
+    sourceControl: new SourceControlApi(configuration),
     states: new StatesApi(configuration),
     workflows: new WorkflowsApi(configuration),
     workItems: new WorkItemsApi(configuration),

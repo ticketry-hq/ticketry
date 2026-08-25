@@ -36,6 +36,7 @@ studio/src-tauri/binaries/
 !.env.example
 /.ticketry-dev/
 /spec/
+/.superdesign/
 
 # Editor / OS
 .DS_Store

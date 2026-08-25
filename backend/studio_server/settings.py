@@ -64,6 +64,7 @@ INSTALLED_APPS = [
     "apps.settings_store",
     "worktracker",
     "apps.worktrees",
+    "apps.source_control",
     "apps.execution",
 ]
 

@@ -154,6 +154,9 @@ export function buildWebRuntimeEnvironment({
     STUDIO_RUN_CONTROL_URL: `${backendOrigin}/api/terminals/self-terminate`,
     WORKTRACKER_BASE_URL: `${backendOrigin}/api/work-tracker`,
   };
+  if (runtimeEnvironment.FORCE_COLOR !== undefined) {
+    delete runtimeEnvironment.NO_COLOR;
+  }
   if (mcpPort === null) {
     delete runtimeEnvironment.MCP_HOST;
     delete runtimeEnvironment.MCP_PORT;

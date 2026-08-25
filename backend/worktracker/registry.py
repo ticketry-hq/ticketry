@@ -465,6 +465,36 @@ HOST_ROUTES = (
     RouteDeclaration("GET", "/api/fs/complete", "Complete local directory names."),
     RouteDeclaration("GET", "/api/worktrees", "Read live worktree status."),
     RouteDeclaration(
+        "GET",
+        "/api/worktrees/records",
+        "List persisted worktree owners for one module.",
+    ),
+    RouteDeclaration(
+        "GET",
+        "/api/worktrees/changes",
+        "List a task worktree's working-tree changes with per-file counts.",
+    ),
+    RouteDeclaration(
+        "GET",
+        "/api/worktrees/changes/file-diff",
+        "Read the working-tree diff for one changed file in a task worktree.",
+    ),
+    RouteDeclaration(
+        "POST",
+        "/api/worktrees/changes/commit",
+        "Commit every change in a task worktree, with hooks enabled.",
+    ),
+    RouteDeclaration(
+        "POST",
+        "/api/worktrees/changes/commit-push-pr",
+        "Commit, push, and open a GitHub pull request for a task worktree.",
+    ),
+    RouteDeclaration(
+        "POST",
+        "/api/worktrees/changes/pull-request",
+        "Open a GitHub pull request for an already-pushed task worktree branch.",
+    ),
+    RouteDeclaration(
         "POST", "/api/worktrees/{task_id}/create", "Create an opt-in worktree."
     ),
     RouteDeclaration(

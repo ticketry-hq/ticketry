@@ -11,7 +11,9 @@ import asyncio
 
 import pytest
 from asgiref.sync import sync_to_async
+from worktracker.tests.factories import fixture_issue_id
 
+from apps.runs import dao
 from apps.terminals import launch, viewer_attachments
 from apps.terminals.models import AgentTerminalSession
 from apps.terminals.output_activity import live_sweep, observation
@@ -27,8 +29,6 @@ from apps.terminals.runtime import (
     InMemoryTerminalRuntime,
     TerminalDimensions,
 )
-from worktracker.tests.factories import fixture_issue_id
-
 
 pytestmark = pytest.mark.django_db(transaction=True)
 
@@ -56,13 +56,18 @@ def published(monkeypatch):
     return frames
 
 
-def _launch(agent_run_id: str, *, runtime_namespace: str = "memory") -> str:
+def _launch(
+    agent_run_id: str,
+    *,
+    runtime_namespace: str = "memory",
+    started_at: str = CREATED_AT,
+) -> str:
     routing = persist_launch(
         LaunchRecords(
             agent_run_id=agent_run_id,
             issue_id=fixture_issue_id(project_id="p1", module_id="m1", task_id="t1"),
             agent="codex",
-            started_at=CREATED_AT,
+            started_at=started_at,
             cwd="/tmp",
             design_dir=None,
             resumed_from=None,
@@ -166,6 +171,47 @@ async def test_one_uncapturable_session_never_starves_the_rest(runtime, publishe
 
     assert await observe_live_sessions() == 1
     assert (await _asession("run-healthy")).output_sequence == 1
+
+
+@pytest.mark.asyncio
+async def test_one_stuck_session_cannot_stall_a_newer_unwatched_codex_run(
+    runtime, published, monkeypatch
+):
+    """A dead capture path must not hold newer sessions behind it."""
+
+    await _alaunch("run-old-stuck", started_at="2026-08-09T11:00:00+00:00")
+    project_id = await _alaunch("run-codex-unwatched")
+    await _create_terminal(runtime, "run-old-stuck")
+    await _create_terminal(runtime, "run-codex-unwatched")
+    runtime.feed_output("run-codex-unwatched", b"still working\n")
+
+    before = await dao.agent_status_record("run-codex-unwatched")
+    assert before is not None
+    assert before.effective_state == "stalled"
+
+    original_observe = live_sweep.observe_terminal_output
+
+    async def observe(agent_run_id: str) -> bool:
+        if agent_run_id == "run-old-stuck":
+            await asyncio.Event().wait()
+        return await original_observe(agent_run_id)
+
+    monkeypatch.setattr(live_sweep, "observe_terminal_output", observe)
+    monkeypatch.setattr(
+        live_sweep,
+        "OBSERVATION_TIMEOUT_SECONDS",
+        0.05,
+        raising=False,
+    )
+
+    assert await asyncio.wait_for(observe_live_sessions(), timeout=0.5) == 1
+
+    session = await _asession("run-codex-unwatched")
+    record = await dao.agent_status_record("run-codex-unwatched")
+    assert session.output_sequence == 1
+    assert record is not None
+    assert record.project_id == project_id
+    assert record.effective_state != "stalled"
 
 
 @pytest.mark.asyncio

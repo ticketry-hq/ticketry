@@ -9,6 +9,10 @@ import {
 } from "../../state/clientStore";
 import { IconPanelLeft, IconSettings } from "../../shared/ui/icons";
 import { FooterTerminalToggle } from "../../features/terminal-panel";
+import {
+  FooterWorktreesToggle,
+  type WorktreeRevealRuntime,
+} from "../../features/agents/worktrees";
 
 // Warm the model-only Settings composition before the modal opens.
 const preloadSettings = () => {
@@ -16,7 +20,11 @@ const preloadSettings = () => {
   void import("../../features/workflows/ModelConfigurationPanel");
 };
 
-export function StudioFooter() {
+export function StudioFooter({
+  worktreesRuntime,
+}: {
+  worktreesRuntime?: WorktreeRevealRuntime;
+} = {}) {
   useSyncExternalStore(
     studioKeymapRegistry.subscribe,
     studioKeymapRegistry.getRevision,
@@ -40,7 +48,7 @@ export function StudioFooter() {
     // Three tracks, not a flex row: the two 1fr edges are always equal, so the
     // hints sit at the true centre of the footer instead of drifting with the
     // width of the controls beside them.
-    <div className="grid h-6 shrink-0 grid-cols-[1fr_auto_1fr] items-center overflow-hidden whitespace-nowrap border-t border-pane-border bg-pane-title px-3 text-xs text-text-primary">
+    <div className="grid h-6 shrink-0 grid-cols-[1fr_auto_1fr] items-center whitespace-nowrap border-t border-pane-border bg-pane-title px-3 text-xs text-text-primary">
       <div className="flex min-w-0 items-center justify-start">
         {sidebarBinding ? (
           <button
@@ -83,6 +91,7 @@ export function StudioFooter() {
           panel has no header of its own to restore it from. */}
       <div className="flex min-w-0 items-center justify-end gap-3">
         <FooterTerminalToggle />
+        <FooterWorktreesToggle runtime={worktreesRuntime} />
         <button
           type="button"
           onClick={openSettings}

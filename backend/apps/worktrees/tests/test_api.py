@@ -7,14 +7,14 @@ under ``tmp_path``. Each AC maps to at least one test here.
 
 from __future__ import annotations
 
+import os
 import shutil
 
 import pytest
-from django.test import Client
-from django.test import override_settings
+from django.test import Client, override_settings
 
 from apps.worktrees import service
-
+from apps.worktrees.tests.conftest import git
 
 pytestmark = [
     pytest.mark.django_db(transaction=True),
@@ -53,16 +53,88 @@ def profile(monkeypatch, repo):
     return repo
 
 
-def _create_record(task_id: str, repo) -> service.WorktreeStatus:
+def _create_record(
+    task_id: str,
+    repo,
+    *,
+    module_id: str = MODULE_ID,
+    ticket_seq: int = 589,
+) -> service.WorktreeStatus:
     result = service.create(
         task_id=task_id,
         working_path=str(repo),
         task_name="Worktree UI",
-        ticket_seq=589,
-        module_id=MODULE_ID,
+        ticket_seq=ticket_seq,
+        module_id=module_id,
     )
     assert not isinstance(result, service.NoWorktree)
     return result
+
+
+def _published_worktree(repo, tmp_path, *, task_id: str, ticket_seq: int):
+    remote = tmp_path / f"{task_id}-remote.git"
+    git(["init", "--bare", str(remote)], tmp_path)
+    git(["remote", "add", "origin", str(remote)], repo)
+    git(["push", "-u", "origin", "main"], repo)
+    worktree = _create_record(task_id, repo, ticket_seq=ticket_seq)
+    work_path = worktree.path
+    work_file = f"{task_id}.txt"
+    with open(f"{work_path}/{work_file}", "w") as handle:
+        handle.write("published\n")
+    git(["add", work_file], work_path)
+    git(["commit", "-m", "published task work"], work_path)
+    git(["push", "-u", "origin", worktree.branch], work_path)
+    return worktree, remote
+
+
+def _publish_sibling_branch(repo, worktree) -> str:
+    """Publish a *different* branch whose name ends with ``worktree.branch``.
+
+    Guards the discard prune against suffix matching: ``sibling/<branch>`` is
+    its own branch, so its remote-tracking ref must outlive the discard.
+    """
+
+    sibling = f"sibling/{worktree.branch}"
+    git(["branch", sibling, "main"], repo)
+    git(["push", "-u", "origin", sibling], repo)
+    assert git(
+        ["rev-parse", "--verify", f"refs/remotes/origin/{sibling}"],
+        repo,
+        check=False,
+    ).returncode == 0
+    return sibling
+
+
+def _assert_sibling_ref_survives(repo, sibling: str) -> None:
+    assert git(
+        ["rev-parse", "--verify", f"refs/remotes/origin/{sibling}"],
+        repo,
+        check=False,
+    ).returncode == 0
+    assert git(
+        ["rev-parse", "--verify", f"refs/heads/{sibling}"],
+        repo,
+        check=False,
+    ).returncode == 0
+
+
+def _assert_complete_local_cleanup(repo, worktree, remote):
+    assert not os.path.isdir(worktree.path)
+    assert git(
+        ["rev-parse", "--verify", f"refs/heads/{worktree.branch}"],
+        repo,
+        check=False,
+    ).returncode != 0
+    assert git(
+        ["rev-parse", "--verify", f"refs/remotes/origin/{worktree.branch}"],
+        repo,
+        check=False,
+    ).returncode != 0
+    assert git(
+        ["rev-parse", "--verify", f"refs/heads/{worktree.branch}"],
+        remote,
+        check=False,
+    ).returncode == 0
 
 
 # --------------------------------------------------------------------------- status
@@ -87,6 +159,27 @@ def test_get_status_requires_task_id():
 
     assert resp.status_code == 400
     assert "task_id" in resp.json()
+
+
+def test_list_records_returns_only_persisted_module_owners(profile, repo, monkeypatch):
+    _create_record("t1", repo)
+    _create_record("t2", repo, module_id="mod-2", ticket_seq=590)
+    monkeypatch.setattr(
+        "apps.worktrees.service.status",
+        lambda _task_id: pytest.fail("record listing must not inspect live git status"),
+    )
+
+    resp = client.get(f"/worktrees/records?module_id={MODULE_ID}")
+
+    assert resp.status_code == 200
+    assert resp.json() == [{"task_id": "t1"}]
+
+
+def test_list_records_requires_module_id():
+    resp = client.get("/worktrees/records")
+
+    assert resp.status_code == 400
+    assert "module_id" in resp.json()
 
 
 def test_get_status_with_malformed_module_id_returns_no_repo():
@@ -116,7 +209,9 @@ def test_get_status_no_repo(monkeypatch, tmp_path):
 
     bare = tmp_path / "not-a-repo"
     bare.mkdir()
-    monkeypatch.setattr("apps.worktrees.api.resolve_module_path", lambda _module_id: str(bare))
+    monkeypatch.setattr(
+        "apps.worktrees.api.resolve_module_path", lambda _module_id: str(bare)
+    )
 
     resp = client.get(f"/worktrees?task_id=t1&module_id={MODULE_ID}")
     assert resp.status_code == 200
@@ -191,7 +286,9 @@ def test_create_idempotent(profile, repo):
 def test_create_no_folder(monkeypatch):
     """No configured local folder → kind=no_repo, never a 500."""
 
-    monkeypatch.setattr("apps.worktrees.api.resolve_module_path", lambda _module_id: None)
+    monkeypatch.setattr(
+        "apps.worktrees.api.resolve_module_path", lambda _module_id: None
+    )
 
     resp = client.post("/worktrees/t1/create", json={"module_id": MODULE_ID})
     assert resp.status_code == 200
@@ -211,6 +308,59 @@ def test_discard(profile, repo):
 
     after = client.get(f"/worktrees?task_id=t1&module_id={MODULE_ID}").json()
     assert after["kind"] == "none"
+
+
+def test_discard_clean_removes_checkout_and_local_refs_but_keeps_remote_branch(
+    profile, repo, tmp_path
+):
+    worktree, remote = _published_worktree(
+        repo, tmp_path, task_id="clean", ticket_seq=1036
+    )
+    sibling = _publish_sibling_branch(repo, worktree)
+
+    response = client.post(f"/worktrees/clean/discard?module_id={MODULE_ID}")
+
+    assert response.status_code == 200
+    assert response.json()["removed"] is True
+    _assert_complete_local_cleanup(repo, worktree, remote)
+    _assert_sibling_ref_survives(repo, sibling)
+
+
+def test_discard_dirty_removes_checkout_and_local_refs_but_keeps_remote_branch(
+    profile, repo, tmp_path
+):
+    worktree, remote = _published_worktree(
+        repo, tmp_path, task_id="dirty", ticket_seq=1037
+    )
+    with open(f"{worktree.path}/local-commit.txt", "w") as handle:
+        handle.write("local commit\n")
+    git(["add", "local-commit.txt"], worktree.path)
+    git(["commit", "-m", "unpushed local commit"], worktree.path)
+    with open(f"{worktree.path}/uncommitted.txt", "w") as handle:
+        handle.write("uncommitted\n")
+
+    response = client.post(f"/worktrees/dirty/discard?module_id={MODULE_ID}")
+
+    assert response.status_code == 200
+    assert response.json()["removed"] is True
+    _assert_complete_local_cleanup(repo, worktree, remote)
+
+
+def test_discard_finishes_cleanup_after_out_of_band_worktree_removal(
+    profile, repo, tmp_path
+):
+    worktree, remote = _published_worktree(
+        repo, tmp_path, task_id="out-of-band", ticket_seq=1038
+    )
+    git(["worktree", "remove", "--force", worktree.path], repo)
+
+    response = client.post(
+        f"/worktrees/out-of-band/discard?module_id={MODULE_ID}"
+    )
+
+    assert response.status_code == 200
+    assert response.json()["removed"] is True
+    _assert_complete_local_cleanup(repo, worktree, remote)
 
 
 def test_discard_missing(profile, repo):

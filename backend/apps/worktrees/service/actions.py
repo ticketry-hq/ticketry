@@ -22,6 +22,39 @@ from apps.worktrees.service.git import (
 logger = logging.getLogger(__name__)
 
 
+def _remote_tracking_refs(repo_root: str, branch: str) -> list[str]:
+    """Local remote-tracking refs whose branch name exactly matches ``branch``.
+
+    Branch names contain slashes, so a suffix match on ``/<branch>`` would also
+    hit a *different* branch (``refs/remotes/origin/feature/foo`` for ``foo``).
+    Each configured remote gives exactly one candidate ref name; only those are
+    considered, and only the ones that actually exist are returned.
+    """
+
+    remotes = _git(["remote"], repo_root, check=False)
+    if remotes.returncode != 0:
+        return []
+    candidates = {
+        f"refs/remotes/{remote.strip()}/{branch}"
+        for remote in remotes.stdout.splitlines()
+        if remote.strip()
+    }
+    if not candidates:
+        return []
+    listed = _git(
+        ["for-each-ref", "--format=%(refname)", "refs/remotes"],
+        repo_root,
+        check=False,
+    )
+    if listed.returncode != 0:
+        return []
+    return [
+        ref.strip()
+        for ref in listed.stdout.splitlines()
+        if ref.strip() in candidates
+    ]
+
+
 def top_level_task_id(
     *,
     task_id: str,
@@ -224,7 +257,7 @@ def integrate(task_id: str) -> IntegrateResult:
 
 
 def discard(task_id: str) -> DiscardResult:
-    """Remove a worktree without integrating (also the scratch/ephemeral path)."""
+    """Remove a worktree and every local ref for its branch."""
 
     record = dao.get_by_task(task_id)
     if record is None:
@@ -236,6 +269,11 @@ def discard(task_id: str) -> DiscardResult:
         _git(["worktree", "prune"], record.repo_root, check=False)
     # -D: dirty / un-merged is expected on discard.
     _git(["branch", "-D", record.branch], record.repo_root, check=False)
+    # Drop local knowledge of the published task branch without sending a
+    # delete refspec to its provider. Provider-side branch policy stays with
+    # the provider.
+    for ref in _remote_tracking_refs(record.repo_root, record.branch):
+        _git(["update-ref", "-d", ref], record.repo_root, check=False)
     dao.delete(task_id)
     logger.info("worktree discarded task=%s branch=%s", task_id, record.branch)
     return DiscardResult(task_id, removed=True)

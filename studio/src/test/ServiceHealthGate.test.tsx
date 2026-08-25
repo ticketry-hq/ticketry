@@ -28,8 +28,11 @@ function runtimeHealthHarness() {
       serviceSupervision: true,
       nativeTerminal: false,
       nativeFolderPicker: true,
+      nativeFileManager: true,
     },
     pickFolder: async () => null,
+    openExternalUrl: async () => {},
+    revealInFileManager: async () => {},
     startup: () => ({
       endpoints: {
         workTrackerApi: "/api/work-tracker",

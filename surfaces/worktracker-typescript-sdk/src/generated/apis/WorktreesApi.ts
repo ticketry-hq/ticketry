@@ -26,6 +26,11 @@ import {
     DiscardToJSON,
 } from '../models/Discard.js';
 import {
+    type WorktreeRecord,
+    WorktreeRecordFromJSON,
+    WorktreeRecordToJSON,
+} from '../models/WorktreeRecord.js';
+import {
     type WorktreeStatus,
     WorktreeStatusFromJSON,
     WorktreeStatusToJSON,
@@ -40,6 +45,10 @@ export interface WorktreesDiscardCreateRequest {
     taskId: string;
     moduleId?: string | null;
     parentId?: string | null;
+}
+
+export interface WorktreesRecordsListRequest {
+    moduleId: string;
 }
 
 export interface WorktreesRetrieveRequest {
@@ -104,6 +113,28 @@ export interface WorktreesApiInterface {
      * Read, create, and discard task-scoped git worktrees.
      */
     worktreesDiscardCreate(requestParameters: WorktreesDiscardCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Discard>;
+
+    /**
+     * Creates request options for worktreesRecordsList without sending the request
+     * @param {string} moduleId
+     * @throws {RequiredError}
+     * @memberof WorktreesApiInterface
+     */
+    worktreesRecordsListRequestOpts(requestParameters: WorktreesRecordsListRequest): Promise<runtime.RequestOpts>;
+
+    /**
+     * List persisted worktree owners for one module.
+     * @param {string} moduleId
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof WorktreesApiInterface
+     */
+    worktreesRecordsListRaw(requestParameters: WorktreesRecordsListRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Array<WorktreeRecord>>>;
+
+    /**
+     * List persisted worktree owners for one module.
+     */
+    worktreesRecordsList(requestParameters: WorktreesRecordsListRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Array<WorktreeRecord>>;
 
     /**
      * Creates request options for worktreesRetrieve without sending the request
@@ -244,6 +275,58 @@ export class WorktreesApi extends runtime.BaseAPI implements WorktreesApiInterfa
      */
     async worktreesDiscardCreate(requestParameters: WorktreesDiscardCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Discard> {
         const response = await this.worktreesDiscardCreateRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for worktreesRecordsList without sending the request
+     */
+    async worktreesRecordsListRequestOpts(requestParameters: WorktreesRecordsListRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['moduleId'] == null) {
+            throw new runtime.RequiredError(
+                'moduleId',
+                'Required parameter "moduleId" was null or undefined when calling worktreesRecordsList().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        if (requestParameters['moduleId'] != null) {
+            queryParameters['module_id'] = requestParameters['moduleId'];
+        }
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.apiKey) {
+            headerParameters["x-api-key"] = await this.configuration.apiKey("x-api-key"); // ApiKeyAuth authentication
+        }
+
+
+        let urlPath = `/worktrees/records`;
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * List persisted worktree owners for one module.
+     */
+    async worktreesRecordsListRaw(requestParameters: WorktreesRecordsListRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Array<WorktreeRecord>>> {
+        const requestOptions = await this.worktreesRecordsListRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => jsonValue.map(WorktreeRecordFromJSON));
+    }
+
+    /**
+     * List persisted worktree owners for one module.
+     */
+    async worktreesRecordsList(requestParameters: WorktreesRecordsListRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Array<WorktreeRecord>> {
+        const response = await this.worktreesRecordsListRaw(requestParameters, initOverrides);
         return await response.value();
     }
 

@@ -36,6 +36,7 @@ __all__ = [
     "ModuleLinksApi",
     "RunsApi",
     "SettingsApi",
+    "SourceControlApi",
     "SystemApi",
     "TerminalsApi",
     "WorktreesApi",
@@ -48,12 +49,17 @@ __all__ = [
     "ApiKeyError",
     "ApiAttributeError",
     "ApiException",
+    "ActionStep",
+    "ActionStepStatusEnum",
     "AgentEnum",
     "AgentModel",
     "AgentOverride",
     "AgentRunId",
     "Attachment",
     "AutomationAttempt",
+    "ChangedFile",
+    "ChangedFileStatusEnum",
+    "CheckoutEnum",
     "CommittedState",
     "ConfigurationReorder",
     "CreateModuleShell",
@@ -65,6 +71,8 @@ __all__ = [
     "DocumentConflict",
     "DocumentList",
     "ErrorEnvelope",
+    "FailureCodeEnum",
+    "FileDiff",
     "FsEntries",
     "GlobalLaunchDefault",
     "Graph",
@@ -87,6 +95,8 @@ __all__ = [
     "LifecycleEvent",
     "LifecycleEventKindEnum",
     "Module",
+    "ModuleActionRequest",
+    "ModuleCommitRequest",
     "ModuleCreate",
     "ModuleFolderValidation",
     "ModuleFolderValidationResult",
@@ -95,7 +105,9 @@ __all__ = [
     "ModulePresentation",
     "ModulePresentationReorder",
     "ModulePresentationWrite",
+    "ModulePullRequestRequest",
     "ModuleShell",
+    "NameEnum",
     "Open",
     "OriginEnum",
     "PatchedAgentModel",
@@ -110,6 +122,8 @@ __all__ = [
     "Provider",
     "ProviderCatalog",
     "ProviderCatalogEnvelope",
+    "PullRequestVerdict",
+    "PullRequestVerdictStateEnum",
     "ReasonEnum",
     "ReasoningLevel",
     "ReleaseResult",
@@ -142,6 +156,20 @@ __all__ = [
     "WorkspaceTabIdentity",
     "WorkspaceTabIdentityKindEnum",
     "WorkspaceTabOrder",
+    "WorktreeActionRequest",
+    "WorktreeChanges",
+    "WorktreeChangesKindEnum",
+    "WorktreeCommit",
+    "WorktreeCommitPush",
+    "WorktreeCommitPushStatusEnum",
+    "WorktreeCommitRequest",
+    "WorktreeCommitStatusEnum",
+    "WorktreePullRequest",
+    "WorktreePullRequestRequest",
+    "WorktreePullRequestStatusEnum",
+    "WorktreePushPreview",
+    "WorktreePushPreviewStateEnum",
+    "WorktreeRecord",
     "WorktreeStatus",
 ]
 
@@ -163,6 +191,7 @@ from worktracker_sdk.generated.api.execution_api import ExecutionApi as Executio
 from worktracker_sdk.generated.api.module_links_api import ModuleLinksApi as ModuleLinksApi
 from worktracker_sdk.generated.api.runs_api import RunsApi as RunsApi
 from worktracker_sdk.generated.api.settings_api import SettingsApi as SettingsApi
+from worktracker_sdk.generated.api.source_control_api import SourceControlApi as SourceControlApi
 from worktracker_sdk.generated.api.system_api import SystemApi as SystemApi
 from worktracker_sdk.generated.api.terminals_api import TerminalsApi as TerminalsApi
 from worktracker_sdk.generated.api.worktrees_api import WorktreesApi as WorktreesApi
@@ -179,12 +208,17 @@ from worktracker_sdk.generated.exceptions import ApiAttributeError as ApiAttribu
 from worktracker_sdk.generated.exceptions import ApiException as ApiException
 
 # import models into sdk package
+from worktracker_sdk.generated.models.action_step import ActionStep as ActionStep
+from worktracker_sdk.generated.models.action_step_status_enum import ActionStepStatusEnum as ActionStepStatusEnum
 from worktracker_sdk.generated.models.agent_enum import AgentEnum as AgentEnum
 from worktracker_sdk.generated.models.agent_model import AgentModel as AgentModel
 from worktracker_sdk.generated.models.agent_override import AgentOverride as AgentOverride
 from worktracker_sdk.generated.models.agent_run_id import AgentRunId as AgentRunId
 from worktracker_sdk.generated.models.attachment import Attachment as Attachment
 from worktracker_sdk.generated.models.automation_attempt import AutomationAttempt as AutomationAttempt
+from worktracker_sdk.generated.models.changed_file import ChangedFile as ChangedFile
+from worktracker_sdk.generated.models.changed_file_status_enum import ChangedFileStatusEnum as ChangedFileStatusEnum
+from worktracker_sdk.generated.models.checkout_enum import CheckoutEnum as CheckoutEnum
 from worktracker_sdk.generated.models.committed_state import CommittedState as CommittedState
 from worktracker_sdk.generated.models.configuration_reorder import ConfigurationReorder as ConfigurationReorder
 from worktracker_sdk.generated.models.create_module_shell import CreateModuleShell as CreateModuleShell
@@ -196,6 +230,8 @@ from worktracker_sdk.generated.models.document import Document as Document
 from worktracker_sdk.generated.models.document_conflict import DocumentConflict as DocumentConflict
 from worktracker_sdk.generated.models.document_list import DocumentList as DocumentList
 from worktracker_sdk.generated.models.error_envelope import ErrorEnvelope as ErrorEnvelope
+from worktracker_sdk.generated.models.failure_code_enum import FailureCodeEnum as FailureCodeEnum
+from worktracker_sdk.generated.models.file_diff import FileDiff as FileDiff
 from worktracker_sdk.generated.models.fs_entries import FsEntries as FsEntries
 from worktracker_sdk.generated.models.global_launch_default import GlobalLaunchDefault as GlobalLaunchDefault
 from worktracker_sdk.generated.models.graph import Graph as Graph
@@ -218,6 +254,8 @@ from worktracker_sdk.generated.models.lifecycle_accepted import LifecycleAccepte
 from worktracker_sdk.generated.models.lifecycle_event import LifecycleEvent as LifecycleEvent
 from worktracker_sdk.generated.models.lifecycle_event_kind_enum import LifecycleEventKindEnum as LifecycleEventKindEnum
 from worktracker_sdk.generated.models.module import Module as Module
+from worktracker_sdk.generated.models.module_action_request import ModuleActionRequest as ModuleActionRequest
+from worktracker_sdk.generated.models.module_commit_request import ModuleCommitRequest as ModuleCommitRequest
 from worktracker_sdk.generated.models.module_create import ModuleCreate as ModuleCreate
 from worktracker_sdk.generated.models.module_folder_validation import ModuleFolderValidation as ModuleFolderValidation
 from worktracker_sdk.generated.models.module_folder_validation_result import ModuleFolderValidationResult as ModuleFolderValidationResult
@@ -226,7 +264,9 @@ from worktracker_sdk.generated.models.module_link_write import ModuleLinkWrite a
 from worktracker_sdk.generated.models.module_presentation import ModulePresentation as ModulePresentation
 from worktracker_sdk.generated.models.module_presentation_reorder import ModulePresentationReorder as ModulePresentationReorder
 from worktracker_sdk.generated.models.module_presentation_write import ModulePresentationWrite as ModulePresentationWrite
+from worktracker_sdk.generated.models.module_pull_request_request import ModulePullRequestRequest as ModulePullRequestRequest
 from worktracker_sdk.generated.models.module_shell import ModuleShell as ModuleShell
+from worktracker_sdk.generated.models.name_enum import NameEnum as NameEnum
 from worktracker_sdk.generated.models.open import Open as Open
 from worktracker_sdk.generated.models.origin_enum import OriginEnum as OriginEnum
 from worktracker_sdk.generated.models.patched_agent_model import PatchedAgentModel as PatchedAgentModel
@@ -241,6 +281,8 @@ from worktracker_sdk.generated.models.project import Project as Project
 from worktracker_sdk.generated.models.provider import Provider as Provider
 from worktracker_sdk.generated.models.provider_catalog import ProviderCatalog as ProviderCatalog
 from worktracker_sdk.generated.models.provider_catalog_envelope import ProviderCatalogEnvelope as ProviderCatalogEnvelope
+from worktracker_sdk.generated.models.pull_request_verdict import PullRequestVerdict as PullRequestVerdict
+from worktracker_sdk.generated.models.pull_request_verdict_state_enum import PullRequestVerdictStateEnum as PullRequestVerdictStateEnum
 from worktracker_sdk.generated.models.reason_enum import ReasonEnum as ReasonEnum
 from worktracker_sdk.generated.models.reasoning_level import ReasoningLevel as ReasoningLevel
 from worktracker_sdk.generated.models.release_result import ReleaseResult as ReleaseResult
@@ -273,4 +315,18 @@ from worktracker_sdk.generated.models.workflow_revision import WorkflowRevision 
 from worktracker_sdk.generated.models.workspace_tab_identity import WorkspaceTabIdentity as WorkspaceTabIdentity
 from worktracker_sdk.generated.models.workspace_tab_identity_kind_enum import WorkspaceTabIdentityKindEnum as WorkspaceTabIdentityKindEnum
 from worktracker_sdk.generated.models.workspace_tab_order import WorkspaceTabOrder as WorkspaceTabOrder
+from worktracker_sdk.generated.models.worktree_action_request import WorktreeActionRequest as WorktreeActionRequest
+from worktracker_sdk.generated.models.worktree_changes import WorktreeChanges as WorktreeChanges
+from worktracker_sdk.generated.models.worktree_changes_kind_enum import WorktreeChangesKindEnum as WorktreeChangesKindEnum
+from worktracker_sdk.generated.models.worktree_commit import WorktreeCommit as WorktreeCommit
+from worktracker_sdk.generated.models.worktree_commit_push import WorktreeCommitPush as WorktreeCommitPush
+from worktracker_sdk.generated.models.worktree_commit_push_status_enum import WorktreeCommitPushStatusEnum as WorktreeCommitPushStatusEnum
+from worktracker_sdk.generated.models.worktree_commit_request import WorktreeCommitRequest as WorktreeCommitRequest
+from worktracker_sdk.generated.models.worktree_commit_status_enum import WorktreeCommitStatusEnum as WorktreeCommitStatusEnum
+from worktracker_sdk.generated.models.worktree_pull_request import WorktreePullRequest as WorktreePullRequest
+from worktracker_sdk.generated.models.worktree_pull_request_request import WorktreePullRequestRequest as WorktreePullRequestRequest
+from worktracker_sdk.generated.models.worktree_pull_request_status_enum import WorktreePullRequestStatusEnum as WorktreePullRequestStatusEnum
+from worktracker_sdk.generated.models.worktree_push_preview import WorktreePushPreview as WorktreePushPreview
+from worktracker_sdk.generated.models.worktree_push_preview_state_enum import WorktreePushPreviewStateEnum as WorktreePushPreviewStateEnum
+from worktracker_sdk.generated.models.worktree_record import WorktreeRecord as WorktreeRecord
 from worktracker_sdk.generated.models.worktree_status import WorktreeStatus as WorktreeStatus

@@ -105,6 +105,23 @@ const CHEVRON_DOWN_GEOMETRY = (
 );
 export const IconChevronDown = (p: IconProps) => <Icon {...p}>{CHEVRON_DOWN_GEOMETRY}</Icon>;
 
+// Source tree folder.
+const FOLDER_GEOMETRY = (
+  <>
+    <path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" />
+  </>
+);
+export const IconFolder = (p: IconProps) => <Icon {...p}>{FOLDER_GEOMETRY}</Icon>;
+
+// Source tree file.
+const FILE_GEOMETRY = (
+  <>
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
+    <path d="M14 2v6h6" />
+  </>
+);
+export const IconFile = (p: IconProps) => <Icon {...p}>{FILE_GEOMETRY}</Icon>;
+
 // Collapse / expand the nav drawer — panel-left toggle.
 const PANEL_LEFT_GEOMETRY = (
   <>

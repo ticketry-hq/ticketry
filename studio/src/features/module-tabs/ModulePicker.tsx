@@ -1,6 +1,7 @@
 import {
   type FocusEvent,
   type KeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
   useEffect,
   useRef,
   useState,
@@ -106,6 +107,10 @@ export function ModulePicker({
     restoreAndSelectModule(moduleId);
   }
 
+  function preserveSearchFocus(event: ReactPointerEvent<HTMLButtonElement>) {
+    event.preventDefault();
+  }
+
   function handlePickerKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     if (event.key === "Escape") {
       event.preventDefault();
@@ -181,6 +186,7 @@ export function ModulePicker({
               type="button"
               role="option"
               aria-selected={activeIndex === 0}
+              onPointerDown={preserveSearchFocus}
               onClick={createModule}
               className={`w-full px-2 py-1.5 text-left text-xs font-medium text-text-primary hover:bg-pane-title ${
                 activeIndex === 0 ? "bg-pane-title" : ""
@@ -196,6 +202,7 @@ export function ModulePicker({
                 role="option"
                 aria-label={`Restore ${module.name} module tab`}
                 aria-selected={activeIndex === index + 1}
+                onPointerDown={preserveSearchFocus}
                 onClick={() => restoreModule(module.id)}
                 className={`w-full truncate px-2 py-1.5 text-left text-xs text-text-muted hover:bg-pane-title hover:text-text-primary ${
                   activeIndex === index + 1

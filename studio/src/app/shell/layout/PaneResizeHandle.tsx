@@ -22,9 +22,14 @@ const HOVER_TARGET_STYLE = {
 
 disableGlobalCursorStyles();
 
-export function PaneResizeHandle() {
+interface PaneResizeHandleProps {
+  id?: string;
+}
+
+export function PaneResizeHandle({ id }: PaneResizeHandleProps) {
   return (
     <PanelResizeHandle
+      id={id}
       aria-label="Resize adjacent panes"
       aria-orientation="vertical"
       className={RESIZE_HANDLE_CLASS}

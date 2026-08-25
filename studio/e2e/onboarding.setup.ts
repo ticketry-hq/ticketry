@@ -10,10 +10,12 @@ test("seeds Luna and completes first-run provider onboarding", async ({
   page,
   request,
 }) => {
-  const initialWorkspace = await responseJson<{ onboarding_required: boolean }>(
-    await request.get("/api/work-tracker/workspace"),
+  // Onboarding readiness lives on the installation project since workspaces
+  // were removed (#803); the temporary profile provisions exactly one.
+  const projects = await responseJson<{ onboarding_required: boolean }[]>(
+    await request.get("/api/work-tracker/projects"),
   );
-  expect(initialWorkspace.onboarding_required).toBe(true);
+  expect(projects.some((project) => project.onboarding_required)).toBe(true);
   await ensureCodexLunaModel(request);
 
   await page.goto("/");
@@ -26,7 +28,8 @@ test("seeds Luna and completes first-run provider onboarding", async ({
   await claude.check();
   await page.getByRole("combobox", { name: "Agent/provider" })
     .selectOption("codex");
-  await page.getByLabel("Model").fill(CODEX_LUNA_MODEL);
+  // The onboarding model field is a catalog-backed select, not free text.
+  await page.getByLabel("Model").selectOption(CODEX_LUNA_MODEL);
   await page.getByRole("combobox", { name: "Reasoning" })
     .selectOption(CODEX_LUNA_REASONING);
   await page.getByRole("button", { name: /^(Continue|Get started)$/ }).click();
@@ -62,8 +65,8 @@ test("seeds Luna and completes first-run provider onboarding", async ({
   expect(providers.find((provider) => provider.slug === "gemini")?.activated)
     .toBe(false);
 
-  const finalWorkspace = await responseJson<{ onboarding_required: boolean }>(
-    await request.get("/api/work-tracker/workspace"),
+  const settled = await responseJson<{ onboarding_required: boolean }[]>(
+    await request.get("/api/work-tracker/projects"),
   );
-  expect(finalWorkspace.onboarding_required).toBe(false);
+  expect(settled.every((project) => !project.onboarding_required)).toBe(true);
 });

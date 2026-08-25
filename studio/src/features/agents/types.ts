@@ -48,4 +48,4 @@ export interface DesignDoc {
   label: string;
 }
 
-export type TabKind = "details" | "doc" | "terminal";
+export type TabKind = "details" | "changes" | "doc" | "terminal";

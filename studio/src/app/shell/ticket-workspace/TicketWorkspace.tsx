@@ -56,16 +56,22 @@ export function TicketWorkspace({
           </div>
         ) : (
           <PanelGroup
+            id="ticket-workspace-layout"
             ref={groupRef}
             direction="horizontal"
             className="h-full w-full"
             onLayout={onLayout}
           >
-            <Panel defaultSize={tasksSize} minSize={15} order={1}>
+            <Panel id="tasks-pane" defaultSize={tasksSize} minSize={15} order={1}>
               <TasksPane />
             </Panel>
-            <PaneResizeHandle />
-            <Panel defaultSize={workspaceSize} minSize={15} order={2}>
+            <PaneResizeHandle id="tasks-ticket-resize-handle" />
+            <Panel
+              id="selected-ticket-pane"
+              defaultSize={workspaceSize}
+              minSize={15}
+              order={2}
+            >
               {/* Kept mounted so terminal and document state survives ticket switches. */}
               <SelectedTicket />
             </Panel>

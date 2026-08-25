@@ -79,6 +79,20 @@ async function openPicker() {
   return screen.getByRole("dialog", { name: "Module picker" });
 }
 
+function activateWithDesktopPointerSequence(
+  picker: HTMLElement,
+  choice: HTMLElement,
+) {
+  const search = within(picker).getByRole("combobox", {
+    name: "Search modules",
+  });
+
+  const shouldMoveFocus = fireEvent.pointerDown(choice);
+  if (shouldMoveFocus) fireEvent.blur(search, { relatedTarget: null });
+  fireEvent.pointerUp(choice);
+  fireEvent.click(choice);
+}
+
 describe("module picker acceptance", () => {
   beforeAll(() => {
     Element.prototype.scrollIntoView = vi.fn();
@@ -112,7 +126,8 @@ describe("module picker acceptance", () => {
       "Create new module",
     );
 
-    fireEvent.click(
+    activateWithDesktopPointerSequence(
+      picker,
       within(picker).getByRole("option", { name: "Create new module" }),
     );
 
@@ -180,7 +195,8 @@ describe("module picker acceptance", () => {
     render(<PickerSurface />);
 
     const picker = await openPicker();
-    fireEvent.click(
+    activateWithDesktopPointerSequence(
+      picker,
       within(picker).getByRole("option", {
         name: "Restore Bravo module tab",
       }),
@@ -193,6 +209,8 @@ describe("module picker acceptance", () => {
         tab_hidden: false,
       }),
     );
+    expect(updatePresentation).toHaveBeenCalledTimes(1);
+    expect(selectModule).toHaveBeenCalledTimes(1);
     await waitFor(() =>
       expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual([
         "Alpha",

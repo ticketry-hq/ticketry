@@ -14,12 +14,17 @@
 """  # noqa: E501
 
 # import models into model package
+from worktracker_sdk.generated.models.action_step import ActionStep
+from worktracker_sdk.generated.models.action_step_status_enum import ActionStepStatusEnum
 from worktracker_sdk.generated.models.agent_enum import AgentEnum
 from worktracker_sdk.generated.models.agent_model import AgentModel
 from worktracker_sdk.generated.models.agent_override import AgentOverride
 from worktracker_sdk.generated.models.agent_run_id import AgentRunId
 from worktracker_sdk.generated.models.attachment import Attachment
 from worktracker_sdk.generated.models.automation_attempt import AutomationAttempt
+from worktracker_sdk.generated.models.changed_file import ChangedFile
+from worktracker_sdk.generated.models.changed_file_status_enum import ChangedFileStatusEnum
+from worktracker_sdk.generated.models.checkout_enum import CheckoutEnum
 from worktracker_sdk.generated.models.committed_state import CommittedState
 from worktracker_sdk.generated.models.configuration_reorder import ConfigurationReorder
 from worktracker_sdk.generated.models.create_module_shell import CreateModuleShell
@@ -31,6 +36,8 @@ from worktracker_sdk.generated.models.document import Document
 from worktracker_sdk.generated.models.document_conflict import DocumentConflict
 from worktracker_sdk.generated.models.document_list import DocumentList
 from worktracker_sdk.generated.models.error_envelope import ErrorEnvelope
+from worktracker_sdk.generated.models.failure_code_enum import FailureCodeEnum
+from worktracker_sdk.generated.models.file_diff import FileDiff
 from worktracker_sdk.generated.models.fs_entries import FsEntries
 from worktracker_sdk.generated.models.global_launch_default import GlobalLaunchDefault
 from worktracker_sdk.generated.models.graph import Graph
@@ -53,6 +60,8 @@ from worktracker_sdk.generated.models.lifecycle_accepted import LifecycleAccepte
 from worktracker_sdk.generated.models.lifecycle_event import LifecycleEvent
 from worktracker_sdk.generated.models.lifecycle_event_kind_enum import LifecycleEventKindEnum
 from worktracker_sdk.generated.models.module import Module
+from worktracker_sdk.generated.models.module_action_request import ModuleActionRequest
+from worktracker_sdk.generated.models.module_commit_request import ModuleCommitRequest
 from worktracker_sdk.generated.models.module_create import ModuleCreate
 from worktracker_sdk.generated.models.module_folder_validation import ModuleFolderValidation
 from worktracker_sdk.generated.models.module_folder_validation_result import ModuleFolderValidationResult
@@ -61,7 +70,9 @@ from worktracker_sdk.generated.models.module_link_write import ModuleLinkWrite
 from worktracker_sdk.generated.models.module_presentation import ModulePresentation
 from worktracker_sdk.generated.models.module_presentation_reorder import ModulePresentationReorder
 from worktracker_sdk.generated.models.module_presentation_write import ModulePresentationWrite
+from worktracker_sdk.generated.models.module_pull_request_request import ModulePullRequestRequest
 from worktracker_sdk.generated.models.module_shell import ModuleShell
+from worktracker_sdk.generated.models.name_enum import NameEnum
 from worktracker_sdk.generated.models.open import Open
 from worktracker_sdk.generated.models.origin_enum import OriginEnum
 from worktracker_sdk.generated.models.patched_agent_model import PatchedAgentModel
@@ -76,6 +87,8 @@ from worktracker_sdk.generated.models.project import Project
 from worktracker_sdk.generated.models.provider import Provider
 from worktracker_sdk.generated.models.provider_catalog import ProviderCatalog
 from worktracker_sdk.generated.models.provider_catalog_envelope import ProviderCatalogEnvelope
+from worktracker_sdk.generated.models.pull_request_verdict import PullRequestVerdict
+from worktracker_sdk.generated.models.pull_request_verdict_state_enum import PullRequestVerdictStateEnum
 from worktracker_sdk.generated.models.reason_enum import ReasonEnum
 from worktracker_sdk.generated.models.reasoning_level import ReasoningLevel
 from worktracker_sdk.generated.models.release_result import ReleaseResult
@@ -108,4 +121,18 @@ from worktracker_sdk.generated.models.workflow_revision import WorkflowRevision
 from worktracker_sdk.generated.models.workspace_tab_identity import WorkspaceTabIdentity
 from worktracker_sdk.generated.models.workspace_tab_identity_kind_enum import WorkspaceTabIdentityKindEnum
 from worktracker_sdk.generated.models.workspace_tab_order import WorkspaceTabOrder
+from worktracker_sdk.generated.models.worktree_action_request import WorktreeActionRequest
+from worktracker_sdk.generated.models.worktree_changes import WorktreeChanges
+from worktracker_sdk.generated.models.worktree_changes_kind_enum import WorktreeChangesKindEnum
+from worktracker_sdk.generated.models.worktree_commit import WorktreeCommit
+from worktracker_sdk.generated.models.worktree_commit_push import WorktreeCommitPush
+from worktracker_sdk.generated.models.worktree_commit_push_status_enum import WorktreeCommitPushStatusEnum
+from worktracker_sdk.generated.models.worktree_commit_request import WorktreeCommitRequest
+from worktracker_sdk.generated.models.worktree_commit_status_enum import WorktreeCommitStatusEnum
+from worktracker_sdk.generated.models.worktree_pull_request import WorktreePullRequest
+from worktracker_sdk.generated.models.worktree_pull_request_request import WorktreePullRequestRequest
+from worktracker_sdk.generated.models.worktree_pull_request_status_enum import WorktreePullRequestStatusEnum
+from worktracker_sdk.generated.models.worktree_push_preview import WorktreePushPreview
+from worktracker_sdk.generated.models.worktree_push_preview_state_enum import WorktreePushPreviewStateEnum
+from worktracker_sdk.generated.models.worktree_record import WorktreeRecord
 from worktracker_sdk.generated.models.worktree_status import WorktreeStatus

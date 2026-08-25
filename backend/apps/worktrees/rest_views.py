@@ -1,18 +1,41 @@
 """DRF ViewSet for live worktree operations."""
 
-from drf_spectacular.utils import extend_schema
-from rest_framework import viewsets
+from drf_spectacular.utils import extend_schema, extend_schema_view
+from rest_framework import mixins, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from apps.worktrees import api as worktrees
+from apps.worktrees.models import Worktree
 from apps.worktrees.rest_serializers import (
     CreateWorktreeSerializer,
     DiscardSerializer,
     WorktreeContextQuerySerializer,
     WorktreeQuerySerializer,
+    WorktreeRecordQuerySerializer,
+    WorktreeRecordSerializer,
     WorktreeStatusSerializer,
 )
+
+
+@extend_schema_view(
+    list=extend_schema(
+        operation_id="worktrees_records_list",
+        tags=["worktrees"],
+        parameters=[WorktreeRecordQuerySerializer],
+    )
+)
+class WorktreeRecordViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
+    """List persisted worktree owners for one module."""
+
+    serializer_class = WorktreeRecordSerializer
+
+    def get_queryset(self):
+        query = WorktreeRecordQuerySerializer(data=self.request.query_params)
+        query.is_valid(raise_exception=True)
+        return Worktree.objects.filter(
+            module_id=query.validated_data["module_id"]
+        ).order_by("created_at")
 
 
 class WorktreeViewSet(viewsets.GenericViewSet):

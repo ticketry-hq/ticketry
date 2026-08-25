@@ -101,10 +101,10 @@ export function useWorkspaceTabActions({
     if (!bucket) return;
     cancelRestoration();
     rememberPendingTerminalRef.current = false;
-    if (tab.kind === "details") {
-      setActive(bucket, "details");
+    if (tab.kind === "details" || tab.kind === "changes") {
+      setActive(bucket, tab.kind);
       if (owner === "studio") {
-        rememberStudioWorkspaceTarget(bucket, { kind: "details" });
+        rememberStudioWorkspaceTarget(bucket, { kind: tab.kind });
       }
     } else if (tab.kind === "doc") {
       setActiveDoc(bucket, tab.id);

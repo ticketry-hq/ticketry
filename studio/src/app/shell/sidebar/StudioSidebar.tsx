@@ -16,6 +16,7 @@ export function StudioSidebar({ layout }: StudioSidebarProps) {
   return (
     <>
       <Panel
+        id="modules-sidebar"
         defaultSize={moduleSize}
         minSize={10}
         order={2}
@@ -23,7 +24,7 @@ export function StudioSidebar({ layout }: StudioSidebarProps) {
       >
         <ModulesPane />
       </Panel>
-      <PaneResizeHandle />
+      <PaneResizeHandle id="modules-workspace-resize-handle" />
     </>
   );
 }

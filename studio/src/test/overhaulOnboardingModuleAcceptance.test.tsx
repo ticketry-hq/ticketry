@@ -64,8 +64,11 @@ function folderPickerRuntime(): StudioRuntime {
       serviceSupervision: true,
       nativeTerminal: false,
       nativeFolderPicker: true,
+      nativeFileManager: true,
     },
     pickFolder: async () => "/repos/picked",
+    openExternalUrl: async () => {},
+    revealInFileManager: async () => {},
     retryServices: async () => {},
     startup: () => ({
       endpoints: {

@@ -228,6 +228,16 @@ test("web services share one backend and the pinned MCP endpoint", () => {
   assert.equal(environment.WORKTRACKER_MCP_URL, "http://127.0.0.1:8123/mcp");
 });
 
+test("web development does not pass conflicting color settings to Node", () => {
+  const environment = buildWebRuntimeEnvironment({
+    environment: { FORCE_COLOR: "1", NO_COLOR: "1" },
+    backendPort: 8788,
+  });
+
+  assert.equal(environment.FORCE_COLOR, "1");
+  assert.equal(environment.NO_COLOR, undefined);
+});
+
 test("web development reuses the token written during provisioning", () => {
   const directory = mkdtempSync(path.join(tmpdir(), "ticketry-web-token-"));
   const tokenPath = path.join(directory, "worktracker_token");

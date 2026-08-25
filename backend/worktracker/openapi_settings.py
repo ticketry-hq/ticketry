@@ -13,6 +13,7 @@ INSTALLED_APPS = [
     "apps.settings_store",
     "worktracker",
     "apps.worktrees",
+    "apps.source_control",
     "apps.execution",
 ]
 
@@ -47,8 +48,14 @@ SPECTACULAR_SETTINGS = {
     "SCHEMA_PATH_PREFIX_TRIM": True,
     "ENUM_ADD_EXPLICIT_BLANK_NULL_CHOICE": False,
     "SERVERS": [{"url": "/api"}],
-    # Name the graph-run scheduling enum for what it is, not for its field.
+    # Name these enums for what they are, not for their field. Without the
+    # source-control entry, a second `status` field would rename the unrelated
+    # automation-attempt `StatusEnum` across the generated SDKs.
     "ENUM_NAME_OVERRIDES": {
         "GraphRunExecutionModeEnum": "apps.execution.execution_mode.EXECUTION_MODE_CHOICES",
+        "ChangedFileStatusEnum": "apps.source_control.change_status.CHANGE_STATUS_CHOICES",
+        # Pinned so a second `status` enum anywhere in the backend cannot
+        # rename this one out from under the generated SDKs.
+        "StatusEnum": "apps.runs.models.AutomationAttempt.Status",
     },
 }

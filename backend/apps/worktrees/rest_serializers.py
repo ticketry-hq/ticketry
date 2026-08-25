@@ -2,6 +2,19 @@
 
 from rest_framework import serializers
 
+from apps.worktrees.models import Worktree
+
+
+class WorktreeRecordQuerySerializer(serializers.Serializer):
+    module_id = serializers.CharField()
+
+
+class WorktreeRecordSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Worktree
+        fields = ("task_id",)
+        read_only_fields = fields
+
 
 class WorktreeQuerySerializer(serializers.Serializer):
     task_id = serializers.CharField()

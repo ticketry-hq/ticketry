@@ -7,8 +7,10 @@
   removed as of the #803 decision; the project is the largest thing.)
 - **Agent Execution** owns dependency-graph runs, launch readiness, retry
   attempts, and durable agent-run lifecycle.
-- **Workspace Runtime** owns tmux-backed terminal sessions, document access, and
-  task worktrees.
+- **Workspace Runtime** owns tmux-backed terminal sessions, document access,
+  task worktrees, and source-control actions (working-tree status, diffs, and
+  the stacked commit → push → pull-request action) over worktrees and the
+  module base checkout.
 - **Studio Experience** owns the human-facing workspace, navigation, local view
   projections, editing interactions, and desktop API client.
 - **Desktop Runtime** owns the Tauri/webview boundary, supervised backend

@@ -19,6 +19,7 @@ from worktracker_sdk.generated.api.execution_api import ExecutionApi
 from worktracker_sdk.generated.api.module_links_api import ModuleLinksApi
 from worktracker_sdk.generated.api.runs_api import RunsApi
 from worktracker_sdk.generated.api.settings_api import SettingsApi
+from worktracker_sdk.generated.api.source_control_api import SourceControlApi
 from worktracker_sdk.generated.api.system_api import SystemApi
 from worktracker_sdk.generated.api.terminals_api import TerminalsApi
 from worktracker_sdk.generated.api.worktrees_api import WorktreesApi

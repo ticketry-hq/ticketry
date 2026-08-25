@@ -47,3 +47,22 @@ The agent skill definitions vendored under
 Matt Pocock and are distributed under the MIT License,
 Copyright (c) 2026 Matt Pocock. The full upstream license text is included
 at [`backend/apps/terminals/agents/skills/UPSTREAM_LICENSE`](backend/apps/terminals/agents/skills/UPSTREAM_LICENSE).
+
+## Diffs, from Pierre (`@pierre/diffs`)
+
+Studio's source-control review surface renders unified diffs with
+[`@pierre/diffs`](https://www.npmjs.com/package/@pierre/diffs), pinned at
+version 1.3.5 and used stock — no patches are applied. The package is
+distributed under the Apache License 2.0, Copyright (c) The Pierre Computer
+Company. It is installed from npm rather than vendored here; its full license
+text ships in the package as `LICENSE.md`.
+
+## T3 Code
+
+Ticketry's source-control surface follows the product and safety decisions
+audited from [T3 Code](https://github.com/t3-oss), which is distributed under
+the MIT License, Copyright (c) T3 Tools, Inc. Where a small piece of T3's
+frontend behaviour is reproduced — currently the plain-text fallback used when
+the diff renderer cannot parse a patch, in
+`studio/src/features/source-control/internal/RawPatch.tsx` — the file carries
+its attribution inline. No T3 source files are vendored in this repository.

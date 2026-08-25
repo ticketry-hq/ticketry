@@ -17,6 +17,8 @@ APPLICATION_OPERATION_MODULES = (
     "apps/execution/api.py",
     "apps/runs/api.py",
     "apps/settings_store/api.py",
+    "apps/source_control/api.py",
+    "apps/source_control/commit.py",
     "apps/terminals/api.py",
     "apps/worktrees/api.py",
 )

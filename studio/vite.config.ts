@@ -1,6 +1,6 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
-import { devProxy } from "./vite.proxy";
+import { devProxy } from "./vite.proxy.ts";
 
 // Studio dev server (:5174) and its single default-entry production build.
 export default defineConfig({

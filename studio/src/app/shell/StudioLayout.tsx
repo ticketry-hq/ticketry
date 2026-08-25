@@ -24,6 +24,7 @@ export function StudioLayout() {
 
   return (
     <PanelGroup
+      id="studio-layout"
       ref={outerGroupRef}
       direction="horizontal"
       className="h-full w-full"
@@ -32,7 +33,12 @@ export function StudioLayout() {
       {sidebarVisible && paneComposition !== "absent" ? (
         <StudioSidebar layout={layout} />
       ) : null}
-      <Panel defaultSize={outerLayout.at(-1)} minSize={30} order={3}>
+      <Panel
+        id="ticket-workspace"
+        defaultSize={outerLayout.at(-1)}
+        minSize={30}
+        order={3}
+      >
         <RightDockLayout>
           <TicketWorkspace
             tasksSize={tasksSize}

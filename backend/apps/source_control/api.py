@@ -31,6 +31,11 @@ from apps.source_control.checkout import (
 )
 from apps.source_control.errors import FileNotChanged
 from apps.source_control.file_diff import FileDiff, read_file_diff
+from apps.source_control.pull_request_verdict import (
+    PullRequestVerdict,
+    read_pull_request_verdict,
+)
+from apps.source_control.unpushed_commits import count_unpushed_commits
 
 
 @dataclass(frozen=True)
@@ -62,10 +67,12 @@ class WorktreeChangesOut:
     base_branch: Optional[str] = None
     dirty: bool = False
     file_count: int = 0
+    unpushed_commit_count: int = 0
     insertions: int = 0
     deletions: int = 0
     files: tuple[ChangedFileOut, ...] = ()
     reason: Optional[str] = None
+    pull_request: Optional[PullRequestVerdict] = None
 
 
 @dataclass(frozen=True)
@@ -158,6 +165,13 @@ def get_worktree_changes(
         top_level_task_id=checkout.top_level_task_id,
         branch=checkout.branch,
         base_branch=checkout.base_branch,
+        unpushed_commit_count=count_unpushed_commits(
+            checkout.path, checkout.branch
+        ),
+        pull_request=read_pull_request_verdict(
+            task_id=checkout.top_level_task_id,
+            checkout_path=checkout.path,
+        ),
     )
 
 

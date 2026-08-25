@@ -125,6 +125,8 @@ __all__ = [
     "Provider",
     "ProviderCatalog",
     "ProviderCatalogEnvelope",
+    "PullRequestVerdict",
+    "PullRequestVerdictStateEnum",
     "ReasonEnum",
     "ReasoningLevel",
     "ReleaseResult",
@@ -147,7 +149,6 @@ __all__ = [
     "ShipStepOutcomeStatusEnum",
     "SourceEnum",
     "State",
-    "StateEnum",
     "StatusEnum",
     "TerminalRun",
     "TerminateResult",
@@ -177,6 +178,8 @@ __all__ = [
     "WorktreePullRequestRequest",
     "WorktreePullRequestStatusEnum",
     "WorktreePushPreview",
+    "WorktreePushPreviewStateEnum",
+    "WorktreeRecord",
     "WorktreeStatus",
 ]
 
@@ -291,6 +294,8 @@ from worktracker_sdk.generated.models.project import Project as Project
 from worktracker_sdk.generated.models.provider import Provider as Provider
 from worktracker_sdk.generated.models.provider_catalog import ProviderCatalog as ProviderCatalog
 from worktracker_sdk.generated.models.provider_catalog_envelope import ProviderCatalogEnvelope as ProviderCatalogEnvelope
+from worktracker_sdk.generated.models.pull_request_verdict import PullRequestVerdict as PullRequestVerdict
+from worktracker_sdk.generated.models.pull_request_verdict_state_enum import PullRequestVerdictStateEnum as PullRequestVerdictStateEnum
 from worktracker_sdk.generated.models.reason_enum import ReasonEnum as ReasonEnum
 from worktracker_sdk.generated.models.reasoning_level import ReasoningLevel as ReasoningLevel
 from worktracker_sdk.generated.models.release_result import ReleaseResult as ReleaseResult
@@ -313,7 +318,6 @@ from worktracker_sdk.generated.models.ship_step_outcome import ShipStepOutcome a
 from worktracker_sdk.generated.models.ship_step_outcome_status_enum import ShipStepOutcomeStatusEnum as ShipStepOutcomeStatusEnum
 from worktracker_sdk.generated.models.source_enum import SourceEnum as SourceEnum
 from worktracker_sdk.generated.models.state import State as State
-from worktracker_sdk.generated.models.state_enum import StateEnum as StateEnum
 from worktracker_sdk.generated.models.status_enum import StatusEnum as StatusEnum
 from worktracker_sdk.generated.models.terminal_run import TerminalRun as TerminalRun
 from worktracker_sdk.generated.models.terminate_result import TerminateResult as TerminateResult
@@ -343,4 +347,6 @@ from worktracker_sdk.generated.models.worktree_pull_request import WorktreePullR
 from worktracker_sdk.generated.models.worktree_pull_request_request import WorktreePullRequestRequest as WorktreePullRequestRequest
 from worktracker_sdk.generated.models.worktree_pull_request_status_enum import WorktreePullRequestStatusEnum as WorktreePullRequestStatusEnum
 from worktracker_sdk.generated.models.worktree_push_preview import WorktreePushPreview as WorktreePushPreview
+from worktracker_sdk.generated.models.worktree_push_preview_state_enum import WorktreePushPreviewStateEnum as WorktreePushPreviewStateEnum
+from worktracker_sdk.generated.models.worktree_record import WorktreeRecord as WorktreeRecord
 from worktracker_sdk.generated.models.worktree_status import WorktreeStatus as WorktreeStatus

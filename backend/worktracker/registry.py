@@ -486,71 +486,33 @@ HOST_ROUTES = (
     RouteDeclaration("GET", "/api/worktrees", "Read live worktree status."),
     RouteDeclaration(
         "GET",
+        "/api/worktrees/records",
+        "List persisted worktree owners for one module.",
+    ),
+    RouteDeclaration(
+        "GET",
         "/api/worktrees/changes",
-        "List a task worktree's working-tree changes.",
+        "List a task worktree's working-tree changes with per-file counts.",
     ),
     RouteDeclaration(
         "GET",
         "/api/worktrees/changes/file-diff",
-        "Read one changed file's worktree diff.",
-    ),
-    RouteDeclaration(
-        "GET",
-        "/api/worktrees/changes/push-preview",
-        "Describe a task worktree push before it runs.",
+        "Read the working-tree diff for one changed file in a task worktree.",
     ),
     RouteDeclaration(
         "POST",
         "/api/worktrees/changes/commit",
-        "Commit a task worktree and persist its ship record.",
-    ),
-    RouteDeclaration(
-        "POST",
-        "/api/worktrees/changes/commit-push",
-        "Commit and push a task worktree and persist its ship record.",
+        "Commit every change in a task worktree, with hooks enabled.",
     ),
     RouteDeclaration(
         "POST",
         "/api/worktrees/changes/commit-push-pr",
-        "Commit, push, open a pull request, and persist its ship record.",
+        "Commit, push, and open a GitHub pull request for a task worktree.",
     ),
     RouteDeclaration(
         "POST",
         "/api/worktrees/changes/pull-request",
-        "Open a pull request for an already-pushed task worktree.",
-    ),
-    RouteDeclaration(
-        "GET", "/api/modules/changes", "List a module checkout's changes."
-    ),
-    RouteDeclaration(
-        "GET",
-        "/api/modules/changes/file-diff",
-        "Read one changed file's module-checkout diff.",
-    ),
-    RouteDeclaration(
-        "GET",
-        "/api/modules/changes/push-preview",
-        "Describe a module-checkout push before it runs.",
-    ),
-    RouteDeclaration(
-        "POST",
-        "/api/modules/changes/commit",
-        "Commit a module checkout and persist its ship record.",
-    ),
-    RouteDeclaration(
-        "POST",
-        "/api/modules/changes/commit-push",
-        "Commit and push a module checkout and persist its ship record.",
-    ),
-    RouteDeclaration(
-        "POST",
-        "/api/modules/changes/commit-push-pr",
-        "Commit, push, open a pull request, and persist its ship record.",
-    ),
-    RouteDeclaration(
-        "POST",
-        "/api/modules/changes/pull-request",
-        "Open a pull request for an already-pushed module checkout.",
+        "Open a GitHub pull request for an already-pushed task worktree branch.",
     ),
     RouteDeclaration(
         "POST", "/api/worktrees/{task_id}/create", "Create an opt-in worktree."

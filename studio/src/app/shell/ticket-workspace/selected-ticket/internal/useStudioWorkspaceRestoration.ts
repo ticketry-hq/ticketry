@@ -29,7 +29,7 @@ export function useStudioWorkspaceRestoration({
 }: {
   bucket: string | null;
   owner: ForegroundOwner;
-  setActive: (bucket: string, active: "details" | "terminal") => void;
+  setActive: (bucket: string, active: "details" | "changes" | "terminal") => void;
   requestedSurfaceRef: MutableRefObject<TaskWorkspaceTabIdentity | null>;
   requestedTerminalRef: MutableRefObject<string | null>;
   rememberPendingTerminalRef: MutableRefObject<boolean>;
@@ -50,10 +50,16 @@ export function useStudioWorkspaceRestoration({
     if (!bucket || owner !== "studio") return;
     const target = readStudioWorkspaceTarget(bucket);
     if (!target) return;
-    // Keep Details visible while durable targets hydrate.
+    // Keep Details visible while durable targets hydrate. Changes needs no
+    // hydration of its own — its data loads inside the tab — so it restores
+    // straight away, like Details.
     restoreRequestRef.current = { bucket, generation, target };
+    if (target.kind === "details" || target.kind === "changes") {
+      setActive(bucket, target.kind);
+      restoreRequestRef.current = null;
+      return;
+    }
     setActive(bucket, "details");
-    if (target.kind === "details") restoreRequestRef.current = null;
   }, [
     bucket,
     owner,

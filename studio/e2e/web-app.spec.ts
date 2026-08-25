@@ -193,6 +193,27 @@ test.describe("complete browser application", () => {
     await page.getByRole("tab", { name: names.module }).click();
   });
 
+  test("restores a hidden Module through the picker", async ({ page }) => {
+    await openModule(page, names.module);
+    const hiddenTab = page.getByRole("tab", { name: names.secondModule });
+    await expect(hiddenTab).toBeVisible();
+
+    await page.getByRole("button", {
+      name: `Hide ${names.secondModule} tab`,
+    }).click();
+    await expect(hiddenTab).toHaveCount(0);
+
+    await page.getByRole("button", { name: "Open module picker" }).click();
+    await page.getByRole("option", {
+      name: `Restore ${names.secondModule} module tab`,
+    }).click();
+
+    await expect(page.getByRole("dialog", { name: "Module picker" }))
+      .toHaveCount(0);
+    await expect(page.getByRole("tab", { name: names.secondModule }))
+      .toHaveAttribute("aria-selected", "true");
+  });
+
   test("creates, switches, and searches the visible module workspace", async ({
     page,
   }) => {

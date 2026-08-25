@@ -69,6 +69,54 @@ The Studio pane for one work item, containing its Details, design-document,
 and terminal tabs regardless of whether the pane is hosted inline or in a drawer.
 _Avoid_: Drawer tabs, ticket panel
 
+**Changes tab**:
+The pinned workspace tab that reviews one checkout's changed files and starts
+its Git action. It keeps the active diff, checkout and branch identity, and the
+next safe action together. A task workspace's Changes tab
+reviews that task's worktree; a module's own workspace reviews that module's
+base checkout through the same tab and the same diff viewer, never a separate
+Git interface. Which checkout a tab reviews is carried explicitly, so the two
+never share a cached read or a command.
+_Avoid_: Git panel, source-control drawer, staging tab
+
+**Stacked Git action**:
+The current-branch Git operation started from the Changes tab. It runs commit,
+optional push, and optional pull-request creation as one ordered action with a
+single confirmation before anything leaves the machine. It always commits every
+change in the checkout: there is no file selection and no staging area, because
+curation happens upstream by having an agent fix the tree. The index is reset
+before the commit so nothing left staged elsewhere can ride along. Both checkout
+kinds run the same action and offer the same lengths of it; only which length
+leads differs — a task worktree leads with the pull-request stack, a module base
+checkout with commit & push, because a base checkout normally sits on the
+default branch where a pull request is refused.
+_Avoid_: Git workflow, staging flow, publish action
+
+**Provider login**:
+The user's own authenticated `gh` CLI, which is the only way Ticketry reaches
+GitHub. Ticketry stores no GitHub credential and supplies none: the pull
+request is created by invoking `gh` in the checkout, and a `gh` that is missing
+or logged out is a precondition failure the user resolves in a terminal, before
+anything is committed. A created pull request is identified by its URL, which
+Studio hands to the platform's own browser rather than rendering itself.
+_Avoid_: GitHub integration, connected account, stored token
+
+**Task worktree**:
+The isolated git checkout owned by one top-level work item and shared by its
+subtasks, branched from the module base checkout's committed HEAD. It is
+created deliberately, integrated automatically when its task completes, and
+removed only by an explicit, confirmed discard — the single word for that act
+everywhere it appears.
+_Avoid_: Branch copy, sandbox checkout, agent workspace, delete/remove/clear
+
+**Worktrees panel**:
+The right-side popover, opened from its own button beside the terminal button,
+listing every task worktree of the selected module's repo with live status.
+It offers exactly two acts per worktree — a confirmed discard and revealing
+the directory in the platform's file manager. It never creates worktrees;
+creation belongs to the work item's own details surface.
+_Avoid_: Worktree manager, git sidebar, worktree tab, clear-all panel
+
 **Stories pane**:
 The Studio planning pane that lists the Stories belonging to the selected module and provides their rapid-capture entry point.
 _Avoid_: Tasks pane, issues pane
@@ -116,6 +164,13 @@ The profile-to-module link carrying the local filesystem path where that
 module's code lives for that profile. The same module may link to a different
 path in another profile or have no link in a fresh profile.
 _Avoid_: Repo path, module directory, worktree, project folder
+
+**Module base checkout**:
+The git checkout at a module's module folder — the working tree module shells
+and agent launches already run in, normally sitting on the default branch. It
+is reviewed like a task worktree but compared against nothing, because it has
+no merge target of its own.
+_Avoid_: Module repo, main worktree, base worktree
 
 **Module tab strip**:
 The single module switcher row spanning the Stories and Workspace panes, listing

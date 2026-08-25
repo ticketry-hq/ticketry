@@ -43,7 +43,7 @@ function shipRecord(
 }
 
 describe("overhaul acceptance — Task ship line", () => {
-  it("[overhaul-181] keeps the latest useful shipped PR in Details", async () => {
+  it("[overhaul-218] keeps the latest useful shipped PR in Details", async () => {
     const http = fixture();
     http.tree("module-1", {
       rootIds: ["archived-task", "no-pr-task"],

@@ -44,6 +44,7 @@ def test_reads_empty_order_then_persists_interleaved_identites(
     order = [
         {"kind": "terminal", "id": "terminal-2"},
         {"kind": "details"},
+        {"kind": "changes"},
         {"kind": "doc", "id": "design-doc"},
         {"kind": "terminal", "id": "terminal-1"},
     ]
@@ -85,7 +86,9 @@ def test_unknown_work_item_returns_not_found(client, auth, method):
     [
         [{"kind": "doc"}],
         [{"kind": "details", "id": "not-allowed"}],
+        [{"kind": "changes", "id": "not-allowed"}],
         [{"kind": "details"}, {"kind": "details"}],
+        [{"kind": "changes"}, {"kind": "changes"}],
         [{"kind": "unknown", "id": "x"}],
     ],
 )

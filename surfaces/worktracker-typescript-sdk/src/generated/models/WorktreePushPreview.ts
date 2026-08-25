@@ -15,13 +15,13 @@
  */
 
 import { mapValues } from '../runtime.js';
-import type { StateEnum } from './StateEnum.js';
+import type { WorktreePushPreviewStateEnum } from './WorktreePushPreviewStateEnum.js';
 import {
-    StateEnumFromJSON,
-    StateEnumFromJSONTyped,
-    StateEnumToJSON,
-    StateEnumToJSONTyped,
-} from './StateEnum.js';
+    WorktreePushPreviewStateEnumFromJSON,
+    WorktreePushPreviewStateEnumFromJSONTyped,
+    WorktreePushPreviewStateEnumToJSON,
+    WorktreePushPreviewStateEnumToJSONTyped,
+} from './WorktreePushPreviewStateEnum.js';
 
 /**
  * What the confirmation step shows.
@@ -35,10 +35,10 @@ import {
 export interface WorktreePushPreview {
     /**
      *
-     * @type {StateEnum}
+     * @type {WorktreePushPreviewStateEnum}
      * @memberof WorktreePushPreview
      */
-    state: StateEnum;
+    state: WorktreePushPreviewStateEnum;
     /**
      *
      * @type {string}
@@ -96,7 +96,7 @@ export function WorktreePushPreviewFromJSONTyped(json: any, ignoreDiscriminator:
     }
     return {
 
-        'state': StateEnumFromJSON(json['state']),
+        'state': WorktreePushPreviewStateEnumFromJSON(json['state']),
         'branch': json['branch'],
         'remote': json['remote'],
         'commit_count': json['commit_count'],
@@ -116,7 +116,7 @@ export function WorktreePushPreviewToJSONTyped(value?: WorktreePushPreview | nul
 
     return {
 
-        'state': StateEnumToJSON(value['state']),
+        'state': WorktreePushPreviewStateEnumToJSON(value['state']),
         'branch': value['branch'],
         'remote': value['remote'],
         'commit_count': value['commit_count'],

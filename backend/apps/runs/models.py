@@ -41,6 +41,10 @@ class AgentRun(models.Model):
     # ``0003-runs-snapshot-the-state-they-launched-in``.
     launch_state = models.CharField(null=True)
     launch_model = models.CharField(null=True)
+    # Write-once launch snapshots. A resumed conversation must keep the
+    # reasoning level and interactive/unattended surface it started with.
+    launch_reasoning = models.CharField(null=True)
+    launch_unattended = models.BooleanField(default=False)
     # Hooks can report lifecycle before the terminal-session mirror exists, so
     # the run itself owns the durable routing scope.
     scope = models.CharField()

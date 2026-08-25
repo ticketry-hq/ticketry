@@ -118,7 +118,7 @@ describe("overhaul acceptance: worktree dock refresh", () => {
     vi.unstubAllGlobals();
   });
 
-  it("[overhaul-184] adds a newly created worktree to an already-open dock", async () => {
+  it("[overhaul-221] adds a newly created worktree to an already-open dock", async () => {
     render(
       <div className="flex h-[600px] flex-col">
         <div className="min-h-0 flex-1">

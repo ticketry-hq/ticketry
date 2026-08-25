@@ -42,6 +42,7 @@
     "@fontsource-variable/jetbrains-mono": "^5.2.8",
     "@lezer/highlight": "1.2.3",
     "@mdxeditor/editor": "4.2.0",
+    "@pierre/diffs": "1.3.5",
     "@tanstack/react-query": "^5.101.4",
     "@tauri-apps/api": "^2.11.1",
     "@worktracker/typescript-sdk": "file:../surfaces/worktracker-typescript-sdk",

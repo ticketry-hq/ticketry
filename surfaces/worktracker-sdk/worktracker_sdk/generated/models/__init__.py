@@ -90,6 +90,8 @@ from worktracker_sdk.generated.models.project import Project
 from worktracker_sdk.generated.models.provider import Provider
 from worktracker_sdk.generated.models.provider_catalog import ProviderCatalog
 from worktracker_sdk.generated.models.provider_catalog_envelope import ProviderCatalogEnvelope
+from worktracker_sdk.generated.models.pull_request_verdict import PullRequestVerdict
+from worktracker_sdk.generated.models.pull_request_verdict_state_enum import PullRequestVerdictStateEnum
 from worktracker_sdk.generated.models.reason_enum import ReasonEnum
 from worktracker_sdk.generated.models.reasoning_level import ReasoningLevel
 from worktracker_sdk.generated.models.release_result import ReleaseResult
@@ -112,7 +114,6 @@ from worktracker_sdk.generated.models.ship_step_outcome import ShipStepOutcome
 from worktracker_sdk.generated.models.ship_step_outcome_status_enum import ShipStepOutcomeStatusEnum
 from worktracker_sdk.generated.models.source_enum import SourceEnum
 from worktracker_sdk.generated.models.state import State
-from worktracker_sdk.generated.models.state_enum import StateEnum
 from worktracker_sdk.generated.models.status_enum import StatusEnum
 from worktracker_sdk.generated.models.terminal_run import TerminalRun
 from worktracker_sdk.generated.models.terminate_result import TerminateResult
@@ -142,4 +143,6 @@ from worktracker_sdk.generated.models.worktree_pull_request import WorktreePullR
 from worktracker_sdk.generated.models.worktree_pull_request_request import WorktreePullRequestRequest
 from worktracker_sdk.generated.models.worktree_pull_request_status_enum import WorktreePullRequestStatusEnum
 from worktracker_sdk.generated.models.worktree_push_preview import WorktreePushPreview
+from worktracker_sdk.generated.models.worktree_push_preview_state_enum import WorktreePushPreviewStateEnum
+from worktracker_sdk.generated.models.worktree_record import WorktreeRecord
 from worktracker_sdk.generated.models.worktree_status import WorktreeStatus

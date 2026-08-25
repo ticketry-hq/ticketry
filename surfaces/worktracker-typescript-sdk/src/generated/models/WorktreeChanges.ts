@@ -29,6 +29,13 @@ import {
     WorktreeChangesKindEnumToJSON,
     WorktreeChangesKindEnumToJSONTyped,
 } from './WorktreeChangesKindEnum.js';
+import type { PullRequestVerdict } from './PullRequestVerdict.js';
+import {
+    PullRequestVerdictFromJSON,
+    PullRequestVerdictFromJSONTyped,
+    PullRequestVerdictToJSON,
+    PullRequestVerdictToJSONTyped,
+} from './PullRequestVerdict.js';
 import type { ChangedFile } from './ChangedFile.js';
 import {
     ChangedFileFromJSON,
@@ -108,6 +115,12 @@ export interface WorktreeChanges {
      * @type {number}
      * @memberof WorktreeChanges
      */
+    unpushed_commit_count: number;
+    /**
+     *
+     * @type {number}
+     * @memberof WorktreeChanges
+     */
     insertions: number;
     /**
      *
@@ -127,6 +140,12 @@ export interface WorktreeChanges {
      * @memberof WorktreeChanges
      */
     reason: string | null;
+    /**
+     *
+     * @type {PullRequestVerdict}
+     * @memberof WorktreeChanges
+     */
+    pull_request?: PullRequestVerdict | null;
 }
 
 
@@ -145,6 +164,7 @@ export function instanceOfWorktreeChanges(value: object): value is WorktreeChang
     if (!('base_branch' in value) || value['base_branch'] === undefined) return false;
     if (!('dirty' in value) || value['dirty'] === undefined) return false;
     if (!('file_count' in value) || value['file_count'] === undefined) return false;
+    if (!('unpushed_commit_count' in value) || value['unpushed_commit_count'] === undefined) return false;
     if (!('insertions' in value) || value['insertions'] === undefined) return false;
     if (!('deletions' in value) || value['deletions'] === undefined) return false;
     if (!('files' in value) || value['files'] === undefined) return false;
@@ -172,10 +192,12 @@ export function WorktreeChangesFromJSONTyped(json: any, ignoreDiscriminator: boo
         'base_branch': json['base_branch'],
         'dirty': json['dirty'],
         'file_count': json['file_count'],
+        'unpushed_commit_count': json['unpushed_commit_count'],
         'insertions': json['insertions'],
         'deletions': json['deletions'],
         'files': ((json['files'] as Array<any>).map(ChangedFileFromJSON)),
         'reason': json['reason'],
+        'pull_request': json['pull_request'] == null ? undefined : PullRequestVerdictFromJSON(json['pull_request']),
     };
 }
 
@@ -200,9 +222,11 @@ export function WorktreeChangesToJSONTyped(value?: WorktreeChanges | null, ignor
         'base_branch': value['base_branch'],
         'dirty': value['dirty'],
         'file_count': value['file_count'],
+        'unpushed_commit_count': value['unpushed_commit_count'],
         'insertions': value['insertions'],
         'deletions': value['deletions'],
         'files': ((value['files'] as Array<any>).map(ChangedFileToJSON)),
         'reason': value['reason'],
+        'pull_request': PullRequestVerdictToJSON(value['pull_request']),
     };
 }

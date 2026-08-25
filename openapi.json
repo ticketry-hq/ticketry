@@ -5995,6 +5995,46 @@
                     }
                 }
             }
+        },
+        "/worktrees/records": {
+            "get": {
+                "operationId": "worktrees_records_list",
+                "description": "List persisted worktree owners for one module.",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "module_id",
+                        "schema": {
+                            "type": "string",
+                            "minLength": 1
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "worktrees"
+                ],
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/WorktreeRecord"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
         }
     },
     "components": {
@@ -7722,6 +7762,36 @@
                     "value"
                 ]
             },
+            "PullRequestVerdict": {
+                "type": "object",
+                "properties": {
+                    "url": {
+                        "type": "string",
+                        "format": "uri"
+                    },
+                    "number": {
+                        "type": "integer",
+                        "nullable": true
+                    },
+                    "state": {
+                        "$ref": "#/components/schemas/PullRequestVerdictStateEnum"
+                    }
+                },
+                "required": [
+                    "number",
+                    "state",
+                    "url"
+                ]
+            },
+            "PullRequestVerdictStateEnum": {
+                "enum": [
+                    "OPEN",
+                    "MERGED",
+                    "CLOSED"
+                ],
+                "type": "string",
+                "description": "* `OPEN` - OPEN\n* `MERGED` - MERGED\n* `CLOSED` - CLOSED"
+            },
             "ReasonEnum": {
                 "enum": [
                     "module_folder_not_absolute",
@@ -8253,18 +8323,6 @@
                     "updated_at"
                 ]
             },
-            "StateEnum": {
-                "enum": [
-                    "ready",
-                    "up_to_date",
-                    "diverged",
-                    "detached_head",
-                    "unborn_branch",
-                    "no_remote"
-                ],
-                "type": "string",
-                "description": "* `ready` - ready\n* `up_to_date` - up_to_date\n* `diverged` - diverged\n* `detached_head` - detached_head\n* `unborn_branch` - unborn_branch\n* `no_remote` - no_remote"
-            },
             "StatusEnum": {
                 "enum": [
                     "pending",
@@ -8631,11 +8689,12 @@
             "WorkspaceTabIdentityKindEnum": {
                 "enum": [
                     "details",
+                    "changes",
                     "doc",
                     "terminal"
                 ],
                 "type": "string",
-                "description": "* `details` - details\n* `doc` - doc\n* `terminal` - terminal"
+                "description": "* `details` - details\n* `changes` - changes\n* `doc` - doc\n* `terminal` - terminal"
             },
             "WorkspaceTabOrder": {
                 "type": "object",
@@ -8715,6 +8774,10 @@
                     "file_count": {
                         "type": "integer"
                     },
+                    "unpushed_commit_count": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
                     "insertions": {
                         "type": "integer"
                     },
@@ -8729,6 +8792,14 @@
                     },
                     "reason": {
                         "type": "string",
+                        "nullable": true
+                    },
+                    "pull_request": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/PullRequestVerdict"
+                            }
+                        ],
                         "nullable": true
                     }
                 },
@@ -8746,7 +8817,8 @@
                     "path",
                     "reason",
                     "task_id",
-                    "top_level_task_id"
+                    "top_level_task_id",
+                    "unpushed_commit_count"
                 ]
             },
             "WorktreeChangesKindEnum": {
@@ -9106,7 +9178,7 @@
                 "description": "What the confirmation step shows.\n\nBranch, remote, and commit count — and no generated commit text, which is\nnot omitted here so much as not yet in existence: the message is generated\ninside the action, after this read.",
                 "properties": {
                     "state": {
-                        "$ref": "#/components/schemas/StateEnum"
+                        "$ref": "#/components/schemas/WorktreePushPreviewStateEnum"
                     },
                     "branch": {
                         "type": "string"
@@ -9132,6 +9204,30 @@
                     "dirty",
                     "remote",
                     "state"
+                ]
+            },
+            "WorktreePushPreviewStateEnum": {
+                "enum": [
+                    "ready",
+                    "up_to_date",
+                    "diverged",
+                    "detached_head",
+                    "unborn_branch",
+                    "no_remote"
+                ],
+                "type": "string",
+                "description": "* `ready` - ready\n* `up_to_date` - up_to_date\n* `diverged` - diverged\n* `detached_head` - detached_head\n* `unborn_branch` - unborn_branch\n* `no_remote` - no_remote"
+            },
+            "WorktreeRecord": {
+                "type": "object",
+                "properties": {
+                    "task_id": {
+                        "type": "string",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "task_id"
                 ]
             },
             "WorktreeStatus": {

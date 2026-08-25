@@ -21,13 +21,14 @@ from typing_extensions import Self
 
 class WorkspaceTabIdentityKindEnum(str, Enum):
     """
-    * `details` - details * `doc` - doc * `terminal` - terminal
+    * `details` - details * `changes` - changes * `doc` - doc * `terminal` - terminal
     """
 
     """
     allowed enum values
     """
     DETAILS = 'details'
+    CHANGES = 'changes'
     DOC = 'doc'
     TERMINAL = 'terminal'
 

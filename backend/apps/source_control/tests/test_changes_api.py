@@ -61,8 +61,33 @@ def test_a_clean_worktree_lists_no_files(checkout):
     assert body["kind"] == "changes"
     assert body["dirty"] is False
     assert body["file_count"] == 0
+    assert body["unpushed_commit_count"] == 0
     assert body["branch"]
     assert body["path"] == str(checkout)
+
+
+def test_changes_count_commits_missing_from_the_branch_remote_ref(
+    checkout, repo, tmp_path
+):
+    remote = tmp_path / "remote.git"
+    git(["init", "--bare", str(remote)], tmp_path)
+    git(["remote", "add", "origin", str(remote)], repo)
+    git(["push", "-u", "origin", "main"], repo)
+    branch = git(["branch", "--show-current"], checkout).stdout.strip()
+    git(["push", "-u", "origin", branch], checkout)
+
+    (checkout / "first.txt").write_text("first\n")
+    git(["add", "first.txt"], checkout)
+    git(["commit", "-m", "first local commit"], checkout)
+    (checkout / "second.txt").write_text("second\n")
+    git(["add", "second.txt"], checkout)
+    git(["commit", "-m", "second local commit"], checkout)
+    (checkout / "uncommitted.txt").write_text("not committed\n")
+
+    body = read_changes()
+
+    assert body["file_count"] == 1
+    assert body["unpushed_commit_count"] == 2
 
 
 def test_tracked_untracked_modified_and_deleted_files_all_carry_counts(checkout):

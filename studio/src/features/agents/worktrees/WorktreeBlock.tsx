@@ -2,12 +2,14 @@ import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   createWorktree,
-  discardWorktree,
   getWorktree,
   type WorktreeContext,
 } from "./internal/api";
 import { queryClient } from "../../../shared/query/queryClient";
 import { queryKeys } from "../../../shared/query/keys";
+import { useWorkItem } from "../../work-items";
+import { WorktreeDiscardControl } from "./WorktreeDiscardControl";
+import { invalidateTaskWorktree } from "./queries";
 
 interface WorktreeBlockProps {
   taskId: string;
@@ -42,7 +44,6 @@ export function WorktreeBlock({
 }: WorktreeBlockProps) {
   const [busy, setBusy] = useState(false);
   const [mutationError, setMutationError] = useState<string | null>(null);
-  const [confirming, setConfirming] = useState(false);
 
   const ctx: WorktreeContext = {
     parentId,
@@ -62,12 +63,14 @@ export function WorktreeBlock({
     queryClient,
   );
   const status = statusQuery.data ?? null;
+  const sharedOwner = useWorkItem(
+    status?.is_shared ? status.top_level_task_id : null,
+  ).data;
   const error =
     mutationError ??
     (statusQuery.isError ? "Could not load worktree status" : null);
 
   useEffect(() => {
-    setConfirming(false);
     setMutationError(null);
   }, [moduleId, parentId, taskId]);
 
@@ -75,36 +78,10 @@ export function WorktreeBlock({
     setBusy(true);
     setMutationError(null);
     try {
-      const createdWorktree = await createWorktree(taskId, ctx);
-      queryClient.setQueryData(statusKey, createdWorktree);
-      if (projectId && moduleId) {
-        await queryClient.invalidateQueries({
-          queryKey: queryKeys.worktrees.byModule(projectId, moduleId),
-          exact: true,
-        });
-      }
+      queryClient.setQueryData(statusKey, await createWorktree(taskId, ctx));
+      await invalidateTaskWorktree(taskId, projectId, moduleId);
     } catch {
       setMutationError("Create failed");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const onDiscard = async () => {
-    setBusy(true);
-    setMutationError(null);
-    try {
-      await discardWorktree(taskId, { parentId, moduleId });
-      setConfirming(false);
-      if (projectId && moduleId) {
-        await queryClient.invalidateQueries({
-          queryKey: queryKeys.worktrees.byModule(projectId, moduleId),
-          exact: true,
-        });
-      }
-      await statusQuery.refetch();
-    } catch {
-      setMutationError("Discard failed");
     } finally {
       setBusy(false);
     }
@@ -127,7 +104,8 @@ export function WorktreeBlock({
   } else if (status.is_shared) {
     body = (
       <div className="text-text-muted">
-        Shares the worktree of its parent task ({status.top_level_task_id}).
+        Shares the worktree of its parent task
+        {sharedOwner ? ` (${sharedOwner.key} · ${sharedOwner.name})` : ""}.
       </div>
     );
   } else if (status.kind === "none") {
@@ -151,12 +129,15 @@ export function WorktreeBlock({
         <div className="text-lifecycle-danger">Conflict</div>
         <div className="text-text-muted">
           Auto-land hit a merge conflict. Resolve it{" "}
-          <span className="text-text-primary">in the worktree</span> and commit
-          — your primary checkout is untouched. Re-marking the task Done
-          retries.
+          <span className="text-text-primary">in the worktree</span> and commit.
+          Your primary checkout is untouched. Re-marking the task Done retries.
         </div>
         <div className={monoCls}>{status.path}</div>
-        {renderDiscard()}
+        <WorktreeDiscardControl
+          status={status}
+          parentId={parentId}
+          moduleId={moduleId}
+        />
       </div>
     );
   } else {
@@ -176,44 +157,12 @@ export function WorktreeBlock({
           <span className="text-text-muted">↓{status.behind ?? 0}</span>
           <span className="text-text-muted">· lands automatically on Done</span>
         </div>
-        {renderDiscard()}
+        <WorktreeDiscardControl
+          status={status}
+          parentId={parentId}
+          moduleId={moduleId}
+        />
       </div>
-    );
-  }
-
-  function renderDiscard(): React.ReactNode {
-    if (confirming) {
-      return (
-        <div className="flex items-center gap-2 text-xs">
-          <span className="text-text-muted">Discard — work is thrown away?</span>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={onDiscard}
-            className="border border-lifecycle-danger px-2 py-0.5 text-lifecycle-danger hover:bg-pane-bg disabled:opacity-50"
-          >
-            Yes, discard
-          </button>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => setConfirming(false)}
-            className="border border-pane-border px-2 py-0.5 text-text-muted hover:text-text-primary"
-          >
-            Cancel
-          </button>
-        </div>
-      );
-    }
-    return (
-      <button
-        type="button"
-        disabled={busy}
-        onClick={() => setConfirming(true)}
-        className="border border-pane-border px-2 py-0.5 text-xs text-text-muted hover:border-lifecycle-danger hover:text-lifecycle-danger disabled:opacity-50"
-      >
-        Discard
-      </button>
     );
   }
 

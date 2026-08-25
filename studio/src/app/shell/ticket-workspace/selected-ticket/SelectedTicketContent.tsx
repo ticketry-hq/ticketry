@@ -7,6 +7,9 @@ import {
   type ReactNode,
 } from "react";
 import { useWorkspaceDocuments } from "./documents/queries";
+// Type-only: the review surface carries a syntax-highlighting diff renderer,
+// so the shell must not pull the feature's runtime graph into its own chunk.
+import type { CheckoutRef } from "../../../../features/source-control";
 import {
   isScratchBucket,
   useTerminalStore,
@@ -62,6 +65,7 @@ export function SelectedTicketContent({
   bucket,
   projectId,
   moduleId,
+  parentId = null,
   owner,
   details,
   launchContext = null,
@@ -72,6 +76,8 @@ export function SelectedTicketContent({
   bucket: string | null;
   projectId: string | null;
   moduleId: string | null;
+  /** The task's parent, so a sub-task reviews the worktree it shares. */
+  parentId?: string | null;
   owner: ForegroundOwner;
   details: ReactNode;
   launchContext?: WorkspaceLauncherContext | null;
@@ -210,6 +216,19 @@ export function SelectedTicketContent({
   const savedTabOrder = useWorkspaceTabOrder(
     bucket && !isScratchBucket(bucket) ? bucket : null,
   );
+  // Changes is pinned for every workspace that owns a checkout, like Details:
+  // a task workspace reviews its own worktree, and a module's scratch
+  // workspace reviews that module's base checkout (ADR 0013). Nothing is read
+  // from either until the tab is actually opened, so the tab's presence costs
+  // no git.
+  const reviewedCheckout: CheckoutRef | null = !bucket
+    ? null
+    : isScratchBucket(bucket)
+      ? moduleId
+        ? { kind: "module", moduleId }
+        : null
+      : { kind: "worktree", taskId: bucket, parentId, moduleId };
+  const hasChanges = reviewedCheckout !== null;
 
   useEffect(() => {
     const request = restoreRequestRef.current;
@@ -253,6 +272,7 @@ export function SelectedTicketContent({
     activeTerminalId: activeTermId,
     resumableSessions,
     savedTabOrder: savedTabOrder.order,
+    hasChanges,
   });
 
   const toPersistentTabIdentity = useCallback(
@@ -269,6 +289,7 @@ export function SelectedTicketContent({
   const knownPersistentTabs = useMemo(() => {
     const identities: TaskWorkspaceTabIdentity[] = [
       { kind: "details" },
+      ...(hasChanges ? [{ kind: "changes" as const }] : []),
       ...documentQuery.documents.map((document) => ({
         kind: "doc" as const,
         id: document.id,
@@ -289,7 +310,13 @@ export function SelectedTicketContent({
     return [...new Map(
       identities.map((identity) => [workspaceTabIdentityKey(identity), identity]),
     ).values()];
-  }, [documentQuery.documents, persistedSessions, resumableSessions, tabs]);
+  }, [
+    documentQuery.documents,
+    hasChanges,
+    persistedSessions,
+    resumableSessions,
+    tabs,
+  ]);
   const workspaceTabReorder = useWorkspaceTabReorderDrag({
     workItemId: bucket && !isScratchBucket(bucket) ? bucket : null,
     visibleOrder: navigableTabs,
@@ -303,6 +330,7 @@ export function SelectedTicketContent({
     orderReady: savedTabOrder.isReady,
     visibleIdentities: [
       { kind: "details" },
+      ...(hasChanges ? [{ kind: "changes" as const }] : []),
       ...openDocs.map((document) => ({
         kind: "doc" as const,
         id: document.id,
@@ -443,6 +471,7 @@ export function SelectedTicketContent({
         bucket={bucket}
         owner={owner}
         details={details}
+        reviewedCheckout={reviewedCheckout}
         activeKind={effActive}
         activeDocument={activeDoc}
         openDocuments={openDocs}

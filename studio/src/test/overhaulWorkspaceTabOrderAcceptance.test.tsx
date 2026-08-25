@@ -178,6 +178,7 @@ describe("overhaul acceptance — server-owned workspace tab order", () => {
       "codex terminal",
       "Details",
       "Design",
+      "Changes",
       "Notes",
     ]));
 
@@ -189,6 +190,7 @@ describe("overhaul acceptance — server-owned workspace tab order", () => {
       "codex terminal",
       "Details",
       "Design",
+      "Changes",
       "Notes",
     ]));
     expect(api.getWorkspaceTabOrder).toHaveBeenCalledTimes(2);
@@ -200,17 +202,24 @@ describe("overhaul acceptance — server-owned workspace tab order", () => {
       "codex terminal",
       "Details",
       "Design",
+      "Changes",
       "Notes",
     ]));
 
     fireEvent.click(screen.getByRole("button", { name: "Close Design" }));
-    expect(visibleTabNames()).toEqual(["codex terminal", "Details", "Notes"]);
+    expect(visibleTabNames()).toEqual([
+      "codex terminal",
+      "Details",
+      "Changes",
+      "Notes",
+    ]);
 
     fireEvent.click(screen.getByRole("button", { name: "Reopen Design" }));
     expect(visibleTabNames()).toEqual([
       "codex terminal",
       "Details",
       "Design",
+      "Changes",
       "Notes",
     ]);
   });
@@ -240,13 +249,19 @@ describe("overhaul acceptance — server-owned workspace tab order", () => {
     const resume = await screen.findByRole("button", {
       name: /Resume codex terminal/i,
     });
-    expect(visibleTabNames()).toEqual(["Design", "Details", "Notes"]);
+    expect(visibleTabNames()).toEqual([
+      "Design",
+      "Details",
+      "Changes",
+      "Notes",
+    ]);
     fireEvent.click(resume);
 
     await waitFor(() => expect(visibleTabNames()).toEqual([
       "Design",
       "codex terminal",
       "Details",
+      "Changes",
       "Notes",
     ]));
   });
@@ -261,6 +276,7 @@ describe("overhaul acceptance — server-owned workspace tab order", () => {
           { kind: "details" },
           { kind: "doc", id: "design" },
           { kind: "doc", id: "deleted-document" },
+          { kind: "changes" },
           { kind: "doc", id: "notes" },
         ],
       },
@@ -301,7 +317,8 @@ describe("overhaul acceptance — server-owned workspace tab order", () => {
       }),
     ));
     const lastOrder = api.updateWorkspaceTabOrder.mock.calls.at(-1)?.[1].order;
-    expect(lastOrder.slice(-2)).toEqual([
+    expect(lastOrder.slice(-3)).toEqual([
+      { kind: "changes" },
       { kind: "doc", id: "notes" },
       { kind: "terminal", id: "run-2" },
     ]);
@@ -343,7 +360,7 @@ describe("overhaul acceptance — server-owned workspace tab order", () => {
     const scrolledInto: Element[] = [];
     const initialOrder = deferred<{
       order: Array<{
-        kind: "details" | "doc" | "terminal";
+        kind: "details" | "changes" | "doc" | "terminal";
         id?: string;
       }>;
     }>();
@@ -355,6 +372,7 @@ describe("overhaul acceptance — server-owned workspace tab order", () => {
 
     await waitFor(() => expect(visibleTabNames()).toEqual([
       "Details",
+      "Changes",
       "Design",
       "Notes",
       "codex terminal",
@@ -379,6 +397,7 @@ describe("overhaul acceptance — server-owned workspace tab order", () => {
       "codex terminal",
       "Details",
       "Design",
+      "Changes",
       "Notes",
     ]));
     await waitFor(() => expect(api.updateWorkspaceTabOrder).toHaveBeenCalled());
@@ -400,13 +419,14 @@ describe("overhaul acceptance — server-owned workspace tab order", () => {
       "codex terminal",
       "Details",
       "Design",
+      "Changes",
       "Notes",
     ]);
     expect(api.updateWorkspaceTabOrder).not.toHaveBeenCalled();
 
     const firstSave = deferred<{
       order: Array<{
-        kind: "details" | "doc" | "terminal";
+        kind: "details" | "changes" | "doc" | "terminal";
         id?: string;
       }>;
     }>();
@@ -422,6 +442,7 @@ describe("overhaul acceptance — server-owned workspace tab order", () => {
           { kind: "terminal", id: "run-1" },
           { kind: "details" },
           { kind: "doc", id: "design" },
+          { kind: "changes" },
         ],
       },
     ));
@@ -430,6 +451,7 @@ describe("overhaul acceptance — server-owned workspace tab order", () => {
       "codex terminal",
       "Details",
       "Design",
+      "Changes",
     ]);
     expect(
       within(screen.getByTestId("workspace-tabs"))
@@ -447,6 +469,7 @@ describe("overhaul acceptance — server-owned workspace tab order", () => {
         { kind: "terminal", id: "run-1" },
         { kind: "details" },
         { kind: "doc", id: "design" },
+        { kind: "changes" },
       ],
     });
     await waitFor(() =>
@@ -460,12 +483,14 @@ describe("overhaul acceptance — server-owned workspace tab order", () => {
       "Notes",
       "codex terminal",
       "Design",
+      "Changes",
     ]));
     await waitFor(() => expect(visibleTabNames()).toEqual([
       "Notes",
       "codex terminal",
       "Details",
       "Design",
+      "Changes",
     ]));
     expect(useClientStore.getState().toasts.at(-1)?.message).toContain(
       "Workspace tabs could not be reordered",

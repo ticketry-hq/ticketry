@@ -61,6 +61,12 @@ class ChangedFileSerializer(serializers.Serializer):
     deletions = serializers.IntegerField(allow_null=True)
 
 
+class PullRequestVerdictSerializer(serializers.Serializer):
+    url = serializers.URLField()
+    number = serializers.IntegerField(allow_null=True)
+    state = serializers.ChoiceField(choices=("OPEN", "MERGED", "CLOSED"))
+
+
 class WorktreeChangesSerializer(serializers.Serializer):
     kind = serializers.ChoiceField(
         choices=("changes", "no_worktree", "no_checkout")
@@ -75,10 +81,12 @@ class WorktreeChangesSerializer(serializers.Serializer):
     base_branch = serializers.CharField(allow_null=True)
     dirty = serializers.BooleanField()
     file_count = serializers.IntegerField()
+    unpushed_commit_count = serializers.IntegerField(min_value=0)
     insertions = serializers.IntegerField()
     deletions = serializers.IntegerField()
     files = ChangedFileSerializer(many=True)
     reason = serializers.CharField(allow_null=True)
+    pull_request = PullRequestVerdictSerializer(allow_null=True, required=False)
 
 
 class FileDiffSerializer(serializers.Serializer):

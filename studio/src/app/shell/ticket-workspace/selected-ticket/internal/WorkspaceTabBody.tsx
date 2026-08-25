@@ -6,6 +6,7 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
+import type { CheckoutRef } from "../../../../../features/source-control";
 import type {
   DesignDoc,
   TabKind,
@@ -27,12 +28,19 @@ const WorkspaceDocument = lazy(async () => ({
   default: (await import("../documents/WorkspaceDocument")).WorkspaceDocument,
 }));
 
+// The review surface carries a syntax-highlighting diff renderer; a workspace
+// whose Changes tab is never opened should not load it.
+const ChangesPanel = lazy(async () => ({
+  default: (await import("../../../../../features/source-control")).ChangesPanel,
+}));
+
 export function WorkspaceTabBody({
   bodyRef,
   detailsSurfaceRef,
   bucket,
   owner,
   details,
+  reviewedCheckout = null,
   activeKind,
   activeDocument,
   openDocuments,
@@ -56,6 +64,8 @@ export function WorkspaceTabBody({
   bucket: string;
   owner: ForegroundOwner;
   details: ReactNode;
+  /** Which checkout the Changes tab reviews, when that tab is present. */
+  reviewedCheckout?: CheckoutRef | null;
   activeKind: TabKind;
   activeDocument: DesignDoc | null;
   openDocuments: readonly DesignDoc[];
@@ -97,6 +107,12 @@ export function WorkspaceTabBody({
     },
     [],
   );
+  // The review surface reads the checkout when it mounts, so it must not
+  // mount until the reviewer opens it. Once opened it stays mounted, keeping
+  // its selected file and scroll position across tab switches.
+  const [changesOpened, setChangesOpened] = useState(false);
+  if (activeKind === "changes" && !changesOpened) setChangesOpened(true);
+
   const terminalEngaged = bodyEngaged && activeKind === "terminal";
   const terminalRingBox =
     activeKind === "terminal" ? "top-0 bottom-0 -left-2 -right-2" : "inset-0";
@@ -150,6 +166,21 @@ export function WorkspaceTabBody({
       >
         {details}
       </div>
+      {reviewedCheckout && changesOpened && (
+        <div
+          data-testid="workspace-changes-surface"
+          className={
+            activeKind === "changes" ? "absolute inset-0" : "hidden"
+          }
+        >
+          <Suspense fallback={null}>
+            <ChangesPanel
+              checkout={reviewedCheckout}
+              active={activeKind === "changes"}
+            />
+          </Suspense>
+        </div>
+      )}
       {/* One iframe per open document, kept mounted so switching docs
           or tabs never reloads them; visibility toggles per active doc. */}
       {openDocuments.map((document) => (

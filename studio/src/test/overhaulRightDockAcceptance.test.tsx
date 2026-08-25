@@ -154,7 +154,7 @@ describe("overhaul acceptance: generic right dock", () => {
     vi.unstubAllGlobals();
   });
 
-  it("[overhaul-180] opens one module-scoped Worktrees view beside the workspace and preserves the Base row", async () => {
+  it("[overhaul-217] opens one module-scoped Worktrees view beside the workspace and preserves the Base row", async () => {
     render(
       <div className="flex h-[600px] flex-col">
         <div className="min-h-0 flex-1">
@@ -352,7 +352,7 @@ describe("overhaul acceptance: generic right dock", () => {
     );
   });
 
-  it("[overhaul-183] refreshes only the selected PR record and preserves failures", async () => {
+  it("[overhaul-220] refreshes only the selected PR record and preserves failures", async () => {
     let releaseRefresh = (): void => {};
     const refreshGate = new Promise<void>((resolve) => {
       releaseRefresh = resolve;
@@ -475,7 +475,7 @@ describe("overhaul acceptance: generic right dock", () => {
     expect(failedRefreshCalls).toBe(1);
   });
 
-  it("[overhaul-182] ignores a late ship-history response after the module changes", async () => {
+  it("[overhaul-219] ignores a late ship-history response after the module changes", async () => {
     let releaseOldHistory: ((response: Response) => void) | null = null;
     let oldHistorySignal: AbortSignal | null = null;
 

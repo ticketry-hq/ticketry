@@ -76,6 +76,8 @@ describe("desktop shell security contract", () => {
         "allow-desktop-append-frontend-log",
         "allow-desktop-retry-services",
         "allow-desktop-pick-folder",
+        "allow-desktop-open-external-url",
+        "allow-desktop-reveal-in-file-manager",
         "allow-desktop-preflight-report",
         "allow-desktop-approve-executable-path",
         "allow-viewer-attach",
@@ -99,6 +101,12 @@ describe("desktop shell security contract", () => {
     expect(JSON.stringify(capability)).not.toContain("remote");
     expect(JSON.stringify(capability)).not.toContain("shell");
     expect(JSON.stringify(capability)).not.toContain("dialog:");
+
+    const desktop = await text("../../src-tauri/src/lib.rs");
+    const fileManager = await text("../../src-tauri/src/file_manager.rs");
+    expect(desktop).toContain("desktop_reveal_in_file_manager");
+    expect(fileManager).toContain('Command::new("/usr/bin/open")');
+    expect(fileManager).toContain('command.arg("--").arg(path)');
   });
 
   // Tauri defaults `dragDropEnabled` to true, which installs an OS drag

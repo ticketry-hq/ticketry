@@ -20,6 +20,8 @@ use ownership::{
 use supervisor::{CommandTable, Supervisor, SupervisorError, SupervisorEvent, SupervisorOptions};
 
 pub mod discovery;
+mod external_url;
+mod file_manager;
 pub mod native_terminal;
 pub mod native_terminal_chords;
 pub mod native_terminal_focus_trace;
@@ -986,6 +988,29 @@ async fn desktop_pick_folder(window: tauri::WebviewWindow) -> Result<Option<Stri
     )
 }
 
+/// Hand one https link to the platform's own browser. The webview supplies the
+/// link and nothing else — no program, no arguments, no environment — and Rust
+/// validates it before any process is spawned (see [`external_url`]). This is
+/// how a pull request Studio just created is opened for review.
+#[tauri::command]
+fn desktop_open_external_url(window: tauri::WebviewWindow, url: String) -> Result<(), String> {
+    if window.label() != MAIN_WINDOW_LABEL {
+        return Err("opening links is restricted to the local main window".to_owned());
+    }
+    external_url::open(&url)
+}
+
+#[tauri::command]
+fn desktop_reveal_in_file_manager(
+    window: tauri::WebviewWindow,
+    path: String,
+) -> Result<(), String> {
+    if window.label() != MAIN_WINDOW_LABEL {
+        return Err("opening worktrees is restricted to the local main window".to_owned());
+    }
+    file_manager::reveal(&path)
+}
+
 /// Read-only, zero-argument preflight.  The webview can request the fixed
 /// report but cannot name a program, path, argument, or environment value.
 #[tauri::command]
@@ -1020,6 +1045,8 @@ pub fn run() {
             desktop_append_frontend_log,
             desktop_retry_services,
             desktop_pick_folder,
+            desktop_open_external_url,
+            desktop_reveal_in_file_manager,
             desktop_preflight_report,
             desktop_approve_executable_path,
             viewer_commands::viewer_attach,

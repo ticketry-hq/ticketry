@@ -19,22 +19,19 @@ from enum import Enum
 from typing_extensions import Self
 
 
-class StateEnum(str, Enum):
+class PullRequestVerdictStateEnum(str, Enum):
     """
-    * `ready` - ready * `up_to_date` - up_to_date * `diverged` - diverged * `detached_head` - detached_head * `unborn_branch` - unborn_branch * `no_remote` - no_remote
+    * `OPEN` - OPEN * `MERGED` - MERGED * `CLOSED` - CLOSED
     """
 
     """
     allowed enum values
     """
-    READY = 'ready'
-    UP_TO_DATE = 'up_to_date'
-    DIVERGED = 'diverged'
-    DETACHED_HEAD = 'detached_head'
-    UNBORN_BRANCH = 'unborn_branch'
-    NO_REMOTE = 'no_remote'
+    OPEN = 'OPEN'
+    MERGED = 'MERGED'
+    CLOSED = 'CLOSED'
 
     @classmethod
     def from_json(cls, json_str: str) -> Self:
-        """Create an instance of StateEnum from a JSON string"""
+        """Create an instance of PullRequestVerdictStateEnum from a JSON string"""
         return cls(json.loads(json_str))

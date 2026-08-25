@@ -20,7 +20,7 @@ import json
 
 from pydantic import BaseModel, ConfigDict, StrictBool, StrictInt, StrictStr
 from typing import Any, ClassVar, Dict, List, Optional
-from worktracker_sdk.generated.models.state_enum import StateEnum
+from worktracker_sdk.generated.models.worktree_push_preview_state_enum import WorktreePushPreviewStateEnum
 from typing import Optional, Set
 from typing_extensions import Self
 from pydantic_core import to_jsonable_python
@@ -29,7 +29,7 @@ class WorktreePushPreview(BaseModel):
     """
     What the confirmation step shows.  Branch, remote, and commit count — and no generated commit text, which is not omitted here so much as not yet in existence: the message is generated inside the action, after this read.
     """ # noqa: E501
-    state: StateEnum
+    state: WorktreePushPreviewStateEnum
     branch: StrictStr
     remote: Optional[StrictStr]
     commit_count: StrictInt

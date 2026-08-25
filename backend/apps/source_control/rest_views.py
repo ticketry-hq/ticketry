@@ -21,6 +21,7 @@ from apps.source_control.rest_serializers import (
     WorktreeChangesSerializer,
 )
 
+
 _CHANGES_RESPONSES = {
     200: WorktreeChangesSerializer,
     413: ErrorEnvelopeSerializer,

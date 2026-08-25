@@ -28,8 +28,8 @@ The Changes tab owns the review state and the entry into `Commit only`,
 `Commit & push`, and `Commit, push & create PR`. The implementation must also
 add confirmation, ordered progress, success, and focused failure states; the
 selected mockup does not cover them. The module base checkout must reuse this
-review experience, but CODING-961 still needs a recorded decision for how a
-module-scoped checkout opens it.
+review experience; [ADR 0013](0013-the-module-base-checkout-opens-in-the-modules-own-workspace.md)
+records how a module-scoped checkout opens it.
 
 CODING-961 also includes the selected draft's Modules pane treatment. It
 replaces the package emoji with a monochrome Studio icon, strengthens the

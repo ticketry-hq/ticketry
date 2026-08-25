@@ -33,7 +33,8 @@ from apps.source_control.ship_record_views import (
 from apps.system_rest import SystemViewSet
 from apps.terminals.rest_authentication import RunScopedAuthentication
 from apps.terminals.rest_views import TerminalViewSet
-from apps.worktrees.rest_views import WorktreeViewSet
+from apps.worktrees.rest_views import WorktreeRecordViewSet, WorktreeViewSet
+
 
 health = SystemViewSet.as_view({"get": "health"})
 lifecycle_events = RunViewSet.as_view({"post": "lifecycle_events"})
@@ -48,7 +49,9 @@ terminal_shells = TerminalViewSet.as_view(
     {"get": "list_shells", "post": "create_shell"}
 )
 terminal_viewer_lease = TerminalViewSet.as_view({"post": "acquire_viewer_lease"})
-terminal_viewer_lease_renew = TerminalViewSet.as_view({"post": "renew_viewer_lease"})
+terminal_viewer_lease_renew = TerminalViewSet.as_view(
+    {"post": "renew_viewer_lease"}
+)
 terminal_viewer_lease_release = TerminalViewSet.as_view(
     {"post": "release_viewer_lease"}
 )
@@ -68,28 +71,37 @@ filesystem_complete = DocumentViewSet.as_view({"get": "complete"})
 settings_keybindings = KeybindingsViewSet.as_view({"get": "retrieve", "put": "update"})
 module_folder_validation = SettingsViewSet.as_view({"post": "validate_folder"})
 module_link_collection = ModuleLinkViewSet.as_view({"get": "list"})
-module_link_detail = ModuleLinkViewSet.as_view({"put": "update", "delete": "destroy"})
+module_link_detail = ModuleLinkViewSet.as_view(
+    {"put": "update", "delete": "destroy"}
+)
 worktree_status = WorktreeViewSet.as_view({"get": "status"})
+worktree_records = WorktreeRecordViewSet.as_view({"get": "list"})
 module_worktrees = WorktreeViewSet.as_view({"get": "module_worktrees"})
 module_ship_records = ModuleShipRecordViewSet.as_view({"get": "list"})
 ship_record_pr_state_refresh = ModuleShipRecordViewSet.as_view(
     {"post": "refresh_pr_state"}
 )
+task_ship_records = TaskShipRecordViewSet.as_view({"get": "list"})
 worktree_changes = WorktreeChangesViewSet.as_view({"get": "changes"})
 worktree_file_diff = WorktreeChangesViewSet.as_view({"get": "file_diff"})
 worktree_commit = WorktreeCommitViewSet.as_view({"post": "commit"})
 worktree_commit_push = WorktreePushViewSet.as_view({"post": "commit_push"})
 worktree_push_preview = WorktreePushViewSet.as_view({"get": "push_preview"})
-worktree_commit_push_pr = WorktreePullRequestViewSet.as_view({"post": "commit_push_pr"})
-worktree_pull_request = WorktreePullRequestViewSet.as_view({"post": "pull_request"})
+worktree_commit_push_pr = WorktreePullRequestViewSet.as_view(
+    {"post": "commit_push_pr"}
+)
+worktree_pull_request = WorktreePullRequestViewSet.as_view(
+    {"post": "pull_request"}
+)
 module_changes = ModuleChangesViewSet.as_view({"get": "changes"})
 module_file_diff = ModuleChangesViewSet.as_view({"get": "file_diff"})
 module_commit = ModuleCommitViewSet.as_view({"post": "commit"})
 module_commit_push = ModulePushViewSet.as_view({"post": "commit_push"})
 module_push_preview = ModulePushViewSet.as_view({"get": "push_preview"})
-module_commit_push_pr = ModulePullRequestViewSet.as_view({"post": "commit_push_pr"})
+module_commit_push_pr = ModulePullRequestViewSet.as_view(
+    {"post": "commit_push_pr"}
+)
 module_pull_request = ModulePullRequestViewSet.as_view({"post": "pull_request"})
-task_ship_records = TaskShipRecordViewSet.as_view({"get": "list"})
 worktree_create = WorktreeViewSet.as_view({"post": "create_worktree"})
 worktree_discard = WorktreeViewSet.as_view({"post": "discard"})
 graph_run = GraphRunViewSet.as_view(
@@ -182,6 +194,7 @@ urlpatterns = [
     path("docs/<str:doc_id>/<path:asset_path>", document_asset, name="document-asset"),
     path("fs/complete", filesystem_complete, name="fs-complete"),
     path("worktrees", worktree_status, name="worktree"),
+    path("worktrees/records", worktree_records, name="worktree-record-list"),
     path("worktrees/changes", worktree_changes, name="worktree-changes"),
     path(
         "worktrees/changes/file-diff",

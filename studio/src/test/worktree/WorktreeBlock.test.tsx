@@ -85,7 +85,7 @@ describe("WorktreeBlock (#589, shared CODIN-922)", () => {
     renderBlock();
 
     expect(await screen.findByText("Conflict")).toBeTruthy();
-    expect(screen.getByText(/your primary checkout is untouched/)).toBeTruthy();
+    expect(screen.getByText(/primary checkout is untouched/i)).toBeTruthy();
     expect(screen.queryByRole("button", { name: /land/i })).toBeNull();
   });
 

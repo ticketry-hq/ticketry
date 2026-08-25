@@ -27,6 +27,7 @@ import { WorkItemNotFoundError } from "../../../../../shared/api/workItemBatcher
 import { useCachedStates } from "../../../../../shared/query/stateCatalog";
 import { useModuleTree } from "../../../../../features/work-items/queries";
 import { useIssueTypesQuery } from "../../../../../features/settings";
+import { WorktreeBlock } from "../../../../../features/agents/worktrees";
 import { TaskShipLine } from "../../../../../features/source-control";
 
 const EMPTY_MODULES: Module[] = [];
@@ -279,6 +280,15 @@ export default function IssueDetail({ issueId }: { issueId: string }) {
         </div>
 
         <TaskShipLine projectId={task.project_id} taskId={task.id} />
+
+        <WorktreeBlock
+          taskId={task.id}
+          parentId={task.parent_id}
+          moduleId={epic?.id ?? selectedModuleId}
+          projectId={task.project_id}
+          ticketSeq={task.sequence_id}
+          taskName={task.name}
+        />
 
         <div className="mt-6">
           <div className="mb-1 text-xs uppercase tracking-wider text-text-secondary">Description</div>

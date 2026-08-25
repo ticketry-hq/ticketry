@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { isTypingTarget } from "../../../../../shared/utilities/keyboard";
 import { useClientStore } from "../../../../../state/clientStore";
+import { workspaceTabIdentityKey } from "../../../../../features/workspace-tabs/ordering";
 import type { WorkspaceTabIdentity } from "../../../../../features/workspace-tabs/types";
 
 export type TaskWorkspaceTabIdentity = WorkspaceTabIdentity;
@@ -9,10 +10,7 @@ function sameTab(
   left: TaskWorkspaceTabIdentity,
   right: TaskWorkspaceTabIdentity,
 ): boolean {
-  if (left.kind !== right.kind) return false;
-  if (left.kind === "details") return true;
-  if (right.kind === "details") return false;
-  return left.id === right.id;
+  return workspaceTabIdentityKey(left) === workspaceTabIdentityKey(right);
 }
 
 function isXtermInput(target: EventTarget | null): boolean {

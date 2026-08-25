@@ -9,6 +9,7 @@ export interface RuntimeCapabilities {
   readonly serviceSupervision: boolean;
   readonly nativeTerminal: boolean;
   readonly nativeFolderPicker: boolean;
+  readonly nativeFileManager: boolean;
 }
 
 export interface RuntimeEndpoints {
@@ -52,6 +53,18 @@ export interface StudioRuntime {
   readonly platform: StudioPlatform;
   readonly capabilities: RuntimeCapabilities;
   pickFolder(): Promise<string | null>;
+  /**
+   * Hand one URL to the platform's own browser.
+   *
+   * Studio never renders a third-party page itself: an opened pull request
+   * belongs in the browser the user is already logged into GitHub with, not in
+   * a webview this application owns. Both platforms can do this, so it is a
+   * method rather than a capability — what differs is only who does the
+   * opening, and on the desktop that is deliberately the Rust side, which
+   * validates the URL before any process is spawned.
+   */
+  openExternalUrl(url: string): Promise<void>;
+  revealInFileManager(path: string): Promise<void>;
   retryServices(): Promise<void>;
   startup(): RuntimeStartupConfiguration;
   subscribeServiceHealth(listener: ServiceHealthListener): () => void;

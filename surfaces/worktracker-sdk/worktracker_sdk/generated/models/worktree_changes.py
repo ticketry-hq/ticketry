@@ -18,10 +18,12 @@ import pprint
 import re  # noqa: F401
 import json
 
-from pydantic import BaseModel, ConfigDict, StrictBool, StrictInt, StrictStr
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, StrictStr
 from typing import Any, ClassVar, Dict, List, Optional
+from typing_extensions import Annotated
 from worktracker_sdk.generated.models.changed_file import ChangedFile
 from worktracker_sdk.generated.models.checkout_enum import CheckoutEnum
+from worktracker_sdk.generated.models.pull_request_verdict import PullRequestVerdict
 from worktracker_sdk.generated.models.worktree_changes_kind_enum import WorktreeChangesKindEnum
 from typing import Optional, Set
 from typing_extensions import Self
@@ -41,11 +43,13 @@ class WorktreeChanges(BaseModel):
     base_branch: Optional[StrictStr]
     dirty: StrictBool
     file_count: StrictInt
+    unpushed_commit_count: Annotated[int, Field(strict=True, ge=0)]
     insertions: StrictInt
     deletions: StrictInt
     files: List[ChangedFile]
     reason: Optional[StrictStr]
-    __properties: ClassVar[List[str]] = ["kind", "checkout", "task_id", "top_level_task_id", "module_id", "path", "branch", "base_branch", "dirty", "file_count", "insertions", "deletions", "files", "reason"]
+    pull_request: Optional[PullRequestVerdict] = None
+    __properties: ClassVar[List[str]] = ["kind", "checkout", "task_id", "top_level_task_id", "module_id", "path", "branch", "base_branch", "dirty", "file_count", "unpushed_commit_count", "insertions", "deletions", "files", "reason", "pull_request"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -93,6 +97,9 @@ class WorktreeChanges(BaseModel):
                 if _item_files:
                     _items.append(_item_files.to_dict())
             _dict['files'] = _items
+        # override the default output from pydantic by calling `to_dict()` of pull_request
+        if self.pull_request:
+            _dict['pull_request'] = self.pull_request.to_dict()
         # set to None if task_id (nullable) is None
         # and model_fields_set contains the field
         if self.task_id is None and "task_id" in self.model_fields_set:
@@ -128,6 +135,11 @@ class WorktreeChanges(BaseModel):
         if self.reason is None and "reason" in self.model_fields_set:
             _dict['reason'] = None
 
+        # set to None if pull_request (nullable) is None
+        # and model_fields_set contains the field
+        if self.pull_request is None and "pull_request" in self.model_fields_set:
+            _dict['pull_request'] = None
+
         return _dict
 
     @classmethod
@@ -150,9 +162,11 @@ class WorktreeChanges(BaseModel):
             "base_branch": obj.get("base_branch"),
             "dirty": obj.get("dirty"),
             "file_count": obj.get("file_count"),
+            "unpushed_commit_count": obj.get("unpushed_commit_count"),
             "insertions": obj.get("insertions"),
             "deletions": obj.get("deletions"),
             "files": [ChangedFile.from_dict(_item) for _item in obj["files"]] if obj.get("files") is not None else None,
-            "reason": obj.get("reason")
+            "reason": obj.get("reason"),
+            "pull_request": PullRequestVerdict.from_dict(obj["pull_request"]) if obj.get("pull_request") is not None else None
         })
         return _obj

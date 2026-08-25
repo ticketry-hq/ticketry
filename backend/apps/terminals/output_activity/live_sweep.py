@@ -32,13 +32,18 @@ from asgiref.sync import sync_to_async
 from apps.terminals.models import AgentTerminalSession
 from apps.terminals.output_activity.capture import observe_terminal_output
 
-
 logger = logging.getLogger(__name__)
 
 
 # Comfortably below the 60-second stall deadline, so an unwatched session that
 # is producing output never reaches the deadline between two passes.
 DEFAULT_SWEEP_INTERVAL_SECONDS = 10.0
+
+# One broken runtime call must finish well before the inactivity deadline and
+# must not serialize every other session behind it. The concurrency cap keeps
+# a large stale inventory from starting an unbounded number of tmux processes.
+OBSERVATION_TIMEOUT_SECONDS = 2.0
+MAX_CONCURRENT_OBSERVATIONS = 8
 
 _SWEEP_INTERVAL_ENV = "MUXED_OUTPUT_SWEEP_SECONDS"
 
@@ -77,7 +82,9 @@ def _live_session_ids() -> list[str]:
         # A launch still being compensated has no observable runtime yet;
         # reconciliation, not this pass, decides what becomes of it.
         .exclude(agent_run__status="cleanup_pending")
-        .order_by("created_at", "agent_run_id")
+        # New sessions have the least remaining time before their first stall
+        # boundary, so observe them before a large stale inventory.
+        .order_by("-created_at", "-agent_run_id")
         .values_list("agent_run_id", flat=True)
     )
 
@@ -98,11 +105,35 @@ async def observe_live_sessions() -> int:
         logger.warning("live terminal output sweep could not list sessions: %s", exc)
         return 0
 
-    advanced = 0
-    for agent_run_id in agent_run_ids:
-        if await observe_terminal_output(agent_run_id):
-            advanced += 1
-    return advanced
+    semaphore = asyncio.Semaphore(MAX_CONCURRENT_OBSERVATIONS)
+
+    async def observe_one(agent_run_id: str) -> bool:
+        async with semaphore:
+            try:
+                return await asyncio.wait_for(
+                    observe_terminal_output(agent_run_id),
+                    timeout=OBSERVATION_TIMEOUT_SECONDS,
+                )
+            except asyncio.CancelledError:
+                raise
+            except TimeoutError:
+                logger.debug(
+                    "live terminal output observation timed out agent_run_id=%s",
+                    agent_run_id,
+                )
+                return False
+            except Exception as exc:  # noqa: BLE001 - isolate best-effort telemetry
+                logger.warning(
+                    "live terminal output observation failed agent_run_id=%s: %s",
+                    agent_run_id,
+                    exc,
+                )
+                return False
+
+    results = await asyncio.gather(
+        *(observe_one(agent_run_id) for agent_run_id in agent_run_ids)
+    )
+    return sum(results)
 
 
 _sweep_task: asyncio.Task[None] | None = None

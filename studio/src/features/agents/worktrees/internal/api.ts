@@ -1,6 +1,7 @@
 import { createWorkTrackerClient } from "@worktracker/typescript-sdk/client";
 import type {
   Discard as DiscardResult,
+  WorktreeRecord,
   WorktreeStatus as GeneratedWorktreeStatus,
 } from "@worktracker/typescript-sdk/models";
 import { apiBase, apiKey } from "../../../../shared/api/client";
@@ -9,6 +10,12 @@ export type WorktreeStatus = Omit<GeneratedWorktreeStatus, "kind"> & {
   kind: "worktree" | "no_repo" | "none";
 };
 export type { DiscardResult };
+
+export const listWorktreeRecords = (
+  moduleId: string,
+  signal?: AbortSignal,
+): Promise<WorktreeRecord[]> =>
+  worktreesApi().worktreesRecordsList({ moduleId }, { signal });
 
 export interface WorktreeContext {
   parentId?: string | null;

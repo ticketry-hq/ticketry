@@ -10,17 +10,23 @@ from worktracker.models import Attachment, Issue
 class WorkspaceTabIdentitySerializer(serializers.Serializer):
     """One stable identity in a task workspace's heterogeneous tab order."""
 
-    kind = serializers.ChoiceField(choices=("details", "doc", "terminal"))
+    #: Pinned tabs are the workspace's own surfaces, so they carry no id;
+    #: doc and terminal tabs name the record they show.
+    PINNED_KINDS = ("details", "changes")
+
+    kind = serializers.ChoiceField(
+        choices=("details", "changes", "doc", "terminal")
+    )
     id = serializers.CharField(required=False)
 
     def validate(self, attrs):
         kind = attrs["kind"]
         identity = attrs.get("id")
-        if kind == "details" and identity is not None:
+        if kind in self.PINNED_KINDS and identity is not None:
             raise serializers.ValidationError(
-                {"id": "Details must not include an id."}
+                {"id": f"{kind.title()} must not include an id."}
             )
-        if kind != "details" and not identity:
+        if kind not in self.PINNED_KINDS and not identity:
             raise serializers.ValidationError(
                 {"id": f"{kind.title()} tabs require an id."}
             )

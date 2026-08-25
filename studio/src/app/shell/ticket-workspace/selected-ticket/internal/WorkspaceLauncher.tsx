@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useAnchoredOverlayPosition } from "../../../../../shared/ui/anchoredOverlayPosition";
 import type { SessionMeta } from "../../../../../features/agents/terminal";
 import { providerListPlaceholder } from "../../../../../features/workflows/launchProviderCatalog";
 import { loadSelectedTicketTerminal } from "../terminals/selectedTicketTerminalLoader";
@@ -69,6 +70,10 @@ export function WorkspaceLauncher({
           launchContext.taskId,
         ].join("\u0000")
       : [bucket, launchContext.kind].join("\u0000");
+  // The tab strip that hosts this trigger scrolls horizontally, so an in-flow
+  // dropdown is clipped at the strip's own edge no matter its z-index; the menu
+  // is anchored out of flow to the trigger instead.
+  const menuPosition = useAnchoredOverlayPosition(launchTriggerRef, launchOpen);
   const currentLauncherIdentityRef = useRef(launcherIdentity);
   const openLauncherRef = useRef<{
     identity: string;
@@ -217,7 +222,8 @@ export function WorkspaceLauncher({
           role="menu"
           aria-label="Launch agent"
           onKeyDown={onLauncherMenuKeyDown}
-          className="absolute left-0 top-full z-10 mt-1 flex min-w-[10ch] flex-col border border-pane-border bg-pane-panel py-1 shadow-lg"
+          style={menuPosition}
+          className="fixed z-50 flex min-w-[10ch] flex-col border border-pane-border bg-pane-panel py-1 shadow-lg"
         >
           {launcherNotice ? (
             <p className="px-3 py-1 text-xs text-text-muted">

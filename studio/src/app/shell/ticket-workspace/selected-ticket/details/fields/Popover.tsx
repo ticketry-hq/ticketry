@@ -1,11 +1,5 @@
-import {
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type CSSProperties,
-  type ReactNode,
-} from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useAnchoredOverlayPosition } from "../../../../../../shared/ui/anchoredOverlayPosition";
 
 interface PopoverProps {
   /** The clickable trigger; receives open, onClick, and disabled states to render the button directly. */
@@ -28,33 +22,10 @@ export default function Popover({
 }: PopoverProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState<CSSProperties>({});
-
   // The panel is position:fixed so it escapes any ancestor scroll container —
   // the pickers live inside the issue sidebar (overflow-y-auto), which would
-  // otherwise clip a shrink-to-fit panel wider than the sidebar. Anchor it to
-  // the trigger and track it through scroll/resize while open.
-  useLayoutEffect(() => {
-    if (!open) return;
-    const update = () => {
-      const r = ref.current?.getBoundingClientRect();
-      if (!r) return;
-      setPos(
-        align === "right"
-          ? { top: r.bottom + 4, right: window.innerWidth - r.right }
-          : { top: r.bottom + 4, left: r.left },
-      );
-    };
-    update();
-    window.addEventListener("resize", update);
-    // Passive: the handler only re-anchors the panel, never preventDefault,
-    // so it must not be allowed to block scrolling.
-    window.addEventListener("scroll", update, { capture: true, passive: true });
-    return () => {
-      window.removeEventListener("resize", update);
-      window.removeEventListener("scroll", update, true);
-    };
-  }, [open, align]);
+  // otherwise clip a shrink-to-fit panel wider than the sidebar.
+  const pos = useAnchoredOverlayPosition(ref, open, align);
 
   useEffect(() => {
     if (!open) return;

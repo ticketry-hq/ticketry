@@ -87,8 +87,17 @@ export function createBrowserRuntime({
       serviceSupervision: false,
       nativeTerminal: false,
       nativeFolderPicker: false,
+      nativeFileManager: false,
     }),
     pickFolder: async () => null,
+    openExternalUrl: async (url: string) => {
+      // `noopener` matters even for a page Studio trusts: without it the opened
+      // tab keeps a handle on this window and could navigate it.
+      window.open(url, "_blank", "noopener,noreferrer");
+    },
+    revealInFileManager: async () => {
+      throw new Error("The system file manager is available only in desktop Studio");
+    },
     retryServices: async () => {
       throw new Error("Service recovery is available only in desktop Studio");
     },

@@ -74,6 +74,7 @@ describe("desktop runtime contract", () => {
       serviceSupervision: true,
       nativeTerminal: false,
       nativeFolderPicker: true,
+      nativeFileManager: true,
     });
   });
 
@@ -85,6 +86,20 @@ describe("desktop runtime contract", () => {
 
     await expect(runtime.pickFolder()).resolves.toBe("/repos/picked");
     expect(invoke).toHaveBeenLastCalledWith("desktop_pick_folder");
+  });
+
+  it("passes one worktree path to the native file manager", async () => {
+    const invoke = vi.fn()
+      .mockResolvedValueOnce(startupConfiguration())
+      .mockResolvedValueOnce(undefined);
+    const runtime = await createDesktopRuntime({ invoke });
+
+    await runtime.revealInFileManager("/repos/worktrees/CODING-1004");
+
+    expect(invoke).toHaveBeenLastCalledWith(
+      "desktop_reveal_in_file_manager",
+      { path: "/repos/worktrees/CODING-1004" },
+    );
   });
 
   it("retries the supervised pair through one zero-argument native operation", async () => {

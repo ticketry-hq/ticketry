@@ -16,6 +16,7 @@
 
 /**
  * * `details` - details
+ * * `changes` - changes
  * * `doc` - doc
  * * `terminal` - terminal
  * @export
@@ -23,6 +24,7 @@
  */
 export enum WorkspaceTabIdentityKindEnum {
     details = 'details',
+    changes = 'changes',
     doc = 'doc',
     terminal = 'terminal'
 }

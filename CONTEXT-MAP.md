@@ -7,10 +7,10 @@
   removed as of the #803 decision; the project is the largest thing.)
 - **Agent Execution** owns dependency-graph runs, launch readiness, retry
   attempts, and durable agent-run lifecycle.
-- **Workspace Runtime** owns tmux-backed terminal sessions, document access, and
-  task worktrees.
-- [**Source Control**](backend/apps/source_control/CONTEXT.md) owns checkout
-  review, ship actions, and durable ship records.
+- **Workspace Runtime** owns tmux-backed terminal sessions, document access,
+  task worktrees, and source-control actions (working-tree status, diffs, and
+  the stacked commit → push → pull-request action) over worktrees and the
+  module base checkout.
 - **Studio Experience** owns the human-facing workspace, navigation, local view
   projections, editing interactions, and desktop API client.
 - **Desktop Runtime** owns the Tauri/webview boundary, supervised backend
@@ -24,9 +24,6 @@
 | Agent Execution | reads dependency and launch policy; writes execution outcomes | Work Management |
 | Agent Execution | creates and observes agent sessions | Workspace Runtime |
 | Studio Experience | opens terminals, documents, and worktrees through sidecar contracts | Workspace Runtime |
-| Source Control | resolves module and anchor-task ownership from linked checkouts and task worktrees | Work Management |
-| Source Control | reads and mutates linked checkouts while retaining receipts after worktree removal | Workspace Runtime |
-| Studio Experience | starts ship actions and reads their durable receipts through HTTP | Source Control |
 | Desktop Runtime | loads the Studio webview and supervises the Python sidecar | Studio Experience |
 | Desktop Runtime | embeds the native terminal renderer while tmux retains durable sessions | Workspace Runtime |
 

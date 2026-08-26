@@ -21,7 +21,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "mcp>=1.29,<2",
-    "pytest>=8,<9",
+    "pytest>=8,<10",
     "pytest-asyncio>=0.23",
     "pytest-django",
     "daphne>=4",

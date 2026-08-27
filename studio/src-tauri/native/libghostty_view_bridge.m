@@ -17,6 +17,7 @@ void muxed_ghostty_view_free(void *opaque) {
   MuxedGhosttyView *view = opaque;
   if (view == nil) return;
   muxed_focus_trace(view, "view freed", view->_acceptsInput);
+  muxed_ghostty_surface_owner_invalidate(&view->_surfaceOwner);
   view->_scrollCallback = NULL;
   view->_scrollContext = NULL;
   view->_resizeCallback = NULL;
@@ -217,4 +218,3 @@ void muxed_ghostty_view_disable_process_exit_callback(void *opaque) {
   view->_processExitCallback = NULL;
   view->_processExitContext = NULL;
 }
-

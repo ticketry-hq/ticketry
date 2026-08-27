@@ -11,6 +11,7 @@ static const uint16_t kMuxedEKeyCode = 0x0E;
 @interface MuxedGhosttyView : NSView {
  @public
   ghostty_surface_t _surface;
+  muxed_ghostty_surface_owner_s _surfaceOwner;
   atomic_uint_fast64_t _redrawGeneration;
   // Main-thread only: gestures are delivered and disabled on AppKit's thread,
   // so a disabled view can no longer reach its owner's callback context.
@@ -78,6 +79,7 @@ uint8_t muxed_ghostty_studio_chord(uint64_t modifier_flags, uint16_t key_code) {
   atomic_init(&_redrawGeneration, 0);
   _processExitCallback = processExitCallback;
   _processExitContext = processExitContext;
+  muxed_ghostty_surface_owner_init(&_surfaceOwner, self);
   [parent addSubview:self positioned:NSWindowAbove relativeTo:nil];
 
   // The target window is authoritative. The view must already belong to it
@@ -88,7 +90,7 @@ uint8_t muxed_ghostty_studio_chord(uint64_t modifier_flags, uint16_t key_code) {
   ghostty_surface_config_s config = ghostty_surface_config_new();
   config.platform_tag = GHOSTTY_PLATFORM_MACOS;
   config.platform.macos.nsview = self;
-  config.userdata = self;
+  config.userdata = &_surfaceOwner;
   config.scale_factor = scale;
   config.command = command;
   config.wait_after_command = true;
@@ -99,6 +101,7 @@ uint8_t muxed_ghostty_studio_chord(uint64_t modifier_flags, uint16_t key_code) {
     [self release];
     return nil;
   }
+  muxed_ghostty_surface_owner_activate(&_surfaceOwner, _surface);
 
   ghostty_surface_set_content_scale(_surface, scale, scale);
   muxed_focus_trace(self, "view created", _acceptsInput);
@@ -107,8 +110,12 @@ uint8_t muxed_ghostty_studio_chord(uint64_t modifier_flags, uint16_t key_code) {
 
 - (void)dealloc {
   if (_surface != NULL) {
-    ghostty_surface_free(_surface);
+    ghostty_surface_t surface = _surface;
     _surface = NULL;
+    // Surface teardown may synchronously ask the runtime for host services.
+    // Make every such request unavailable before libghostty begins teardown.
+    muxed_ghostty_surface_owner_invalidate(&_surfaceOwner);
+    ghostty_surface_free(surface);
   }
   [super dealloc];
 }
@@ -274,12 +281,13 @@ static bool runtime_action(ghostty_app_t app, ghostty_target_s target,
       target.tag != GHOSTTY_TARGET_SURFACE)
     return false;
 
-  MuxedGhosttyView *view = ghostty_surface_userdata(target.target.surface);
+  muxed_ghostty_surface_owner_s *owner =
+      ghostty_surface_userdata(target.target.surface);
+  MuxedGhosttyView *view = muxed_ghostty_owned_viewer(owner);
   if (view == nil) return false;
   if (view->_processExitCallback != NULL)
     view->_processExitCallback(view->_processExitContext,
                                action.action.child_exited.exit_code);
   return true;
 }
-
 

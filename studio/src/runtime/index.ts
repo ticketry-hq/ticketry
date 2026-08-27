@@ -23,13 +23,15 @@ export {
 export { createBrowserRuntime } from "./browserRuntime";
 
 let installedRuntime: StudioRuntime | null = null;
+let fallbackRuntime: StudioRuntime | null = null;
 
 function defaultBrowserRuntime(): StudioRuntime {
-  return createBrowserRuntime({
+  fallbackRuntime ??= createBrowserRuntime({
     environment: {
       VITE_GRAPHQL_API: import.meta.env.VITE_GRAPHQL_API,
     },
   });
+  return fallbackRuntime;
 }
 
 /** Install the runtime before the React application mounts. */
@@ -55,4 +57,13 @@ export function runtimeConfiguration(): RuntimeStartupConfiguration {
 /** The transport the project status subscription opens on, if any. */
 export function statusStreamTransport() {
   return studioRuntime().statusStream();
+}
+
+/** The WebSocket URL the browser terminal client attaches through. */
+export function terminalWebSocketUrl(): string {
+  const endpoint = studioRuntime().terminalWebSocketUrl?.();
+  if (!endpoint) {
+    throw new Error("This Studio platform has no browser terminal WebSocket endpoint.");
+  }
+  return endpoint;
 }

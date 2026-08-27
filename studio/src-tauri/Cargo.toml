@@ -72,7 +72,7 @@ required-features = ["development-tools"]
 [dependencies]
 async-graphql.workspace = true
 async-trait = "=0.1.92"
-axum = "=0.8.9"
+axum = { version = "=0.8.9", features = ["ws"] }
 base64 = "0.22"
 blake2 = "0.10"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }

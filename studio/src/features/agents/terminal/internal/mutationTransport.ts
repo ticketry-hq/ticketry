@@ -106,6 +106,48 @@ export async function createTerminalSession(
   return result;
 }
 
+export interface DefaultInteractiveTaskLaunchInput {
+  readonly projectId: string;
+  readonly issueId: string;
+  readonly moduleId: string;
+}
+
+/**
+ * The browser's task-launch path over the one model-shaped
+ * `terminal_session_create` seam. It carries identities only: provider, model,
+ * reasoning, and prompt are deliberately absent so the backend's interactive
+ * launch authority resolves the run's material exactly as the desktop command
+ * does.
+ */
+export async function createDefaultInteractiveTaskLaunch(
+  input: DefaultInteractiveTaskLaunchInput,
+): Promise<{ agent_run_id: string }> {
+  const result = await studioRuntime().writeWorkTracker({
+    graphQl: async (execute) => {
+      try {
+        const response = await retryTransport(() =>
+          execute(CreateTerminalSessionDocument, {
+            clientRequestId: crypto.randomUUID(),
+            projectId: input.projectId,
+            issueId: input.issueId,
+            moduleId: input.moduleId,
+            targetId: input.issueId,
+            kind: "task",
+            workingDirectoryIdentity: `task:${compactIdentity(input.issueId)}`,
+            columns: DEFAULT_COLUMNS,
+            rows: DEFAULT_ROWS,
+          })
+        );
+        return { agent_run_id: response.terminal_session.agent_run_id };
+      } catch (error) {
+        return graphQlMutationError(error);
+      }
+    },
+  });
+  await refreshTerminalHoldings();
+  return result;
+}
+
 export async function resumeTerminalSession(
   input: ResumeTerminalRunInput,
 ): Promise<{ agent_run_id: string; resumed_from: string }> {

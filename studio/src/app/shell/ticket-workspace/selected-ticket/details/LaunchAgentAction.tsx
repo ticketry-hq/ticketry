@@ -1,11 +1,21 @@
 import { useRef, useState } from "react";
 import { toast } from "../../../../../state/clientStore";
-import { launchFailureMessage } from "../../../../../features/agents/terminal";
-import { launchDefaultAgent } from "../../../../../features/agents/terminal/internal/launchDefaultAgent";
+import {
+  launchDefaultAgent,
+  launchFailureMessage,
+} from "../../../../../features/agents/terminal";
 import { IconPlay } from "../../../../../shared/ui/icons";
 
 /** Starts one task-scoped run using the work item's current-state binding. */
-export function LaunchAgentAction({ issueId }: { issueId: string }) {
+export function LaunchAgentAction({
+  issueId,
+  projectId,
+  moduleId,
+}: {
+  issueId: string;
+  projectId: string | null;
+  moduleId: string | null;
+}) {
   const [pending, setPending] = useState(false);
   const inFlightRef = useRef(false);
 
@@ -15,7 +25,8 @@ export function LaunchAgentAction({ issueId }: { issueId: string }) {
     inFlightRef.current = true;
     setPending(true);
     try {
-      await launchDefaultAgent(issueId);
+      const context = projectId && moduleId ? { projectId, moduleId } : undefined;
+      await launchDefaultAgent(issueId, context);
       toast.success("Agent run started.");
     } catch (error) {
       toast.error(`Agent run could not be started: ${launchFailureMessage(error)}`);

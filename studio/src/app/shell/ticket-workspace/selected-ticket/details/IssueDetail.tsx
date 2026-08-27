@@ -256,7 +256,11 @@ export default function IssueDetail({ issueId }: { issueId: string }) {
         />
 
         <div className="mt-4 flex items-center gap-3" data-testid="status-row">
-          <LaunchAgentAction issueId={task.id} />
+          <LaunchAgentAction
+            issueId={task.id}
+            projectId={task.project_id}
+            moduleId={epic?.id ?? selectedModuleId ?? null}
+          />
           <StatePicker
             projectId={task.project_id}
             value={task.state}

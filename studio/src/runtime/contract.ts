@@ -7,10 +7,8 @@ export type StudioPlatform = "browser" | "desktop";
 export interface RuntimeCapabilities {
   /**
    * Whether this platform can serve the project status subscription. The
-   * status WebSocket was retired at the Slice 3 handoff, so the durable
-   * GraphQL subscription over the in-process transport is the only status
-   * authority — and a platform without that transport simply has no status
-   * feed rather than a second, weaker one.
+   * desktop uses its in-process transport and browser development uses the
+   * Rust adapter's streaming HTTP transport.
    */
   readonly statusFeed: boolean;
   readonly nativeLifecycle: boolean;
@@ -66,10 +64,12 @@ export interface StudioRuntime {
   readSettings<TResult>(routes: SettingsRoutes<TResult>): Promise<TResult>;
   writeSettings<TResult>(routes: SettingsRoutes<TResult>): Promise<TResult>;
   /**
-   * The transport the project status subscription opens on, or null where this
-   * platform has none. Studio never falls back to another status source.
+   * The transport the project status subscription opens on, or null where the
+   * platform has none.
    */
   statusStream(): CreateGraphQlTransportProxy | null;
+  /** The browser terminal WebSocket endpoint, when this platform exposes one. */
+  terminalWebSocketUrl?(): string;
   /**
    * The URL a registered document or one of its relative assets is served
    * from. Sandboxed HTML navigates to it and resolves its own relative assets

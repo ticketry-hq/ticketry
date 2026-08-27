@@ -71,7 +71,10 @@ pub struct CreateTerminalSession {
 }
 
 impl CreateTerminalSession {
-    pub(crate) fn validate(&self) -> Result<(), TerminalLaunchError> {
+    /// Validate the caller-owned request shape before launch authority reads
+    /// any policy. Interactive requests may omit provider and other launch
+    /// material because authority supplies those fields in the next stage.
+    pub(crate) fn validate_identity_and_geometry(&self) -> Result<(), TerminalLaunchError> {
         for value in [
             &self.client_request_id,
             &self.project_id,
@@ -87,6 +90,12 @@ impl CreateTerminalSession {
         if !(1..=500).contains(&self.columns) || !(1..=500).contains(&self.rows) {
             return Err(invalid("The terminal launch geometry is invalid."));
         }
+        Ok(())
+    }
+
+    /// Validate the fully resolved launch before it can be persisted.
+    pub(crate) fn validate(&self) -> Result<(), TerminalLaunchError> {
+        self.validate_identity_and_geometry()?;
         if (self.kind == TerminalLaunchKind::DocumentChat) != self.document_relative_path.is_some()
         {
             return Err(invalid("Document chat requires one document identity."));
@@ -189,6 +198,18 @@ mod tests {
         let mut resume = shell();
         resume.resume_from_agent_run_id = Some("old-shell".to_owned());
         assert!(resume.validate().is_err());
+    }
+
+    #[test]
+    fn unresolved_interactive_requests_accept_identity_only_until_authority_runs() {
+        let mut request = shell();
+        request.kind = TerminalLaunchKind::Task;
+        request.issue_id = "task".to_owned();
+        request.target_id = "task".to_owned();
+        request.working_directory_identity = "task:task".to_owned();
+
+        assert!(request.validate_identity_and_geometry().is_ok());
+        assert!(request.validate().is_err());
     }
 
     #[test]

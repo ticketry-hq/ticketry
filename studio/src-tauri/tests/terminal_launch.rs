@@ -9,6 +9,9 @@ use common::terminal_lifecycle_harness::{
     TerminalLifecycleHarness, MODULE_ID, PROJECT_ID, TASK_ID,
 };
 use muxed_studio_lib::entities::terminals::launch_material;
+use muxed_studio_lib::launch_authority::{
+    InteractiveLaunchAuthority, LaunchAuthorityError, ResolvedLaunchMaterial,
+};
 use muxed_studio_lib::terminal_launch::{
     CreateTerminalSession, TerminalLaunchBoundary, TerminalLaunchCheckpoint, TerminalLaunchError,
     TerminalLaunchKind, TerminalLaunchRuntime, TerminalLaunchService, TerminalRuntimeObservation,
@@ -30,6 +33,21 @@ struct FixedObservationRuntime {
 }
 
 struct RejectingPreflightRuntime;
+
+struct DefaultingLaunchAuthority;
+
+#[async_trait]
+impl InteractiveLaunchAuthority for DefaultingLaunchAuthority {
+    async fn resolve(
+        &self,
+        _request: &CreateTerminalSession,
+    ) -> Result<ResolvedLaunchMaterial, LaunchAuthorityError> {
+        Ok(ResolvedLaunchMaterial {
+            provider: Some("codex".to_owned()),
+            ..ResolvedLaunchMaterial::default()
+        })
+    }
+}
 
 #[async_trait]
 impl TerminalLaunchRuntime for RejectingPreflightRuntime {
@@ -342,6 +360,24 @@ async fn one_request_prepares_executes_verifies_and_replays_one_session() {
     assert!(evidence.contains("verified"));
     assert!(!evidence.contains("deliberate prompt"));
     assert!(!evidence.contains("token"));
+}
+
+#[tokio::test]
+async fn interactive_identity_only_launch_resolves_provider_before_full_validation() {
+    let harness = TerminalLifecycleHarness::start().await;
+    let database = harness.database().await;
+    let runtime = Arc::new(RecordingRuntime::new(database.clone()));
+    let service = TerminalLaunchService::new(database, runtime)
+        .with_authority(Arc::new(DefaultingLaunchAuthority));
+    let mut launch = request("terminal-default-provider", TerminalLaunchKind::Task);
+    launch.provider = None;
+
+    let created = service
+        .create(launch)
+        .await
+        .expect("launch authority supplies the omitted provider");
+
+    assert_eq!(created.agent.as_deref(), Some("codex"));
 }
 
 #[tokio::test]

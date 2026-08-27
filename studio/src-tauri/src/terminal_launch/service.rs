@@ -31,6 +31,7 @@ pub struct TerminalLaunchService {
     pub(super) authority: Option<Arc<dyn InteractiveLaunchAuthority>>,
     pub(super) lease_owner: String,
     pub(super) checkpoints: LaunchCheckpoints,
+    graph_run_mutation_lock: Arc<tokio::sync::Mutex<()>>,
 }
 
 impl TerminalLaunchService {
@@ -42,7 +43,12 @@ impl TerminalLaunchService {
             authority: None,
             lease_owner: uuid::Uuid::new_v4().simple().to_string(),
             checkpoints: LaunchCheckpoints::default(),
+            graph_run_mutation_lock: Arc::new(tokio::sync::Mutex::new(())),
         }
+    }
+
+    pub(crate) fn graph_run_mutation_lock(&self) -> Arc<tokio::sync::Mutex<()>> {
+        Arc::clone(&self.graph_run_mutation_lock)
     }
 
     /// Compose the interactive launch authority. Without it the service still
@@ -159,7 +165,7 @@ impl TerminalLaunchService {
         participant: Option<&dyn LaunchPreparationParticipant>,
         policy_launch_state: Option<Option<String>>,
     ) -> Result<AcceptedTerminalLaunch, TerminalLaunchError> {
-        request.validate()?;
+        request.validate_identity_and_geometry()?;
         crate::terminal_resume::validate_resume_request(&self.database, &request).await?;
         self.validate_scope(&request).await?;
         self.runtime.preflight(&request).await?;
@@ -172,6 +178,7 @@ impl TerminalLaunchService {
         } else {
             request
         };
+        request.validate()?;
         self.checkpoints
             .checkpoint(TerminalLaunchBoundary::RequestValidated)
             .await?;

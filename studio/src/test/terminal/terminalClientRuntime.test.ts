@@ -14,16 +14,15 @@ describe("terminal client runtime selection", () => {
     vi.resetModules();
   });
 
-  it("reports the missing byte stream outside the desktop", async () => {
-    const [{ unavailableTerminalTransport }, { terminalClientTransport }] = await Promise.all([
-      import("../../features/agents/terminal/internal/unavailableTerminalTransport"),
+  it("attaches through the browser WebSocket outside the desktop", async () => {
+    const [{ browserTerminalClient }, { terminalClientTransport }] = await Promise.all([
+      import("../../features/agents/terminal/internal/browserTerminalClient"),
       import("../../features/agents/terminal/internal/terminalClientRuntime"),
     ]);
 
-    // The `/ws/terminal` socket browser development used to open was retired
-    // with the Python terminal authority, so there is no second byte stream to
-    // fall back to — only an honest refusal.
-    expect(terminalClientTransport).toBe(unavailableTerminalTransport);
+    // Browser development attaches to durable runs over the `/ws/terminal`
+    // socket on the same origin as the GraphQL adapter.
+    expect(terminalClientTransport).toBe(browserTerminalClient);
   });
 
   it("uses the Tauri viewer command adapter in the desktop", async () => {

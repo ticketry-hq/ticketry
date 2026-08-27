@@ -5,6 +5,7 @@ import test from "node:test";
 import {
   buildWebDevelopmentEnvironment,
   buildWebFrontendCommand,
+  buildWebHookRunnerCommand,
   cleanupTemporaryWebLaunch,
   parseWebDevOptions,
   selectWebPort,
@@ -48,6 +49,23 @@ test("frontend command opens a strict local Vite port", () => {
   ]);
 });
 
+test("web development builds the hook runner beside Cargo debug binaries", () => {
+  assert.deepEqual(buildWebHookRunnerCommand({
+    cwd: "/repository",
+    platform: "darwin",
+  }), {
+    command: "rustc",
+    args: [
+      "/repository/studio/src-tauri/native/ticketry_hook.rs",
+      "--edition",
+      "2021",
+      "-o",
+      "/repository/studio/src-tauri/target/debug/ticketry-hook",
+    ],
+    output: "/repository/studio/src-tauri/target/debug/ticketry-hook",
+  });
+});
+
 test("Rust adapter and frontend port selection shift independently", async () => {
   const occupied = new Set([5174, 8790]);
   const isAvailable = async (port) => !occupied.has(port);
@@ -56,5 +74,17 @@ test("Rust adapter and frontend port selection shift independently", async () =>
   await assert.rejects(
     selectWebPort({ requestedPort: 8790, firstPort: 8790, isAvailable }),
     /Requested port 8790 is unavailable/,
+  );
+});
+
+test("web development reserves the fixed MCP port", async () => {
+  const available = async (port) => port !== 8123;
+  await assert.rejects(
+    selectWebPort({ requestedPort: 8123, firstPort: 8123, isAvailable: available }),
+    /Requested port 8123 is unavailable/,
+  );
+  assert.equal(
+    await selectWebPort({ requestedPort: 8123, firstPort: 8123, isAvailable: async () => true }),
+    8123,
   );
 });

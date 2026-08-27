@@ -1,8 +1,8 @@
 import { isTauri } from "@tauri-apps/api/core";
 
+import { browserTerminalClient } from "./browserTerminalClient";
 import { tauriTerminalClient } from "./tauriTerminalClient";
-import { unavailableTerminalTransport } from "./unavailableTerminalTransport";
 
 export const terminalClientTransport = isTauri()
   ? tauriTerminalClient
-  : unavailableTerminalTransport;
+  : browserTerminalClient;

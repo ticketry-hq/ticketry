@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import net from "node:net";
@@ -86,6 +86,41 @@ export function buildWebFrontendCommand(frontendPort) {
     "--host", "127.0.0.1", "--port", String(frontendPort), "--strictPort", "--open"];
 }
 
+export function buildWebHookRunnerCommand({
+  cwd = root,
+  platform = process.platform,
+} = {}) {
+  const executable = `ticketry-hook${platform === "win32" ? ".exe" : ""}`;
+  const output = path.join(cwd, "studio", "src-tauri", "target", "debug", executable);
+  return {
+    command: "rustc",
+    args: [
+      path.join(cwd, "studio", "src-tauri", "native", "ticketry_hook.rs"),
+      "--edition",
+      "2021",
+      "-o",
+      output,
+    ],
+    output,
+  };
+}
+
+function prepareWebHookRunner() {
+  const build = buildWebHookRunnerCommand();
+  mkdirSync(path.dirname(build.output), { recursive: true });
+  const result = spawnSync(build.command, build.args, {
+    cwd: root,
+    stdio: "inherit",
+  });
+  if (result.error) {
+    throw new Error(`Could not build ticketry-hook: ${result.error.message}`);
+  }
+  if (result.status !== 0) {
+    throw new Error(`Could not build ticketry-hook: rustc exited with ${result.status}`);
+  }
+  return build.output;
+}
+
 export function buildWebDevelopmentEnvironment({
   cwd = root,
   environment = process.env,
@@ -140,14 +175,21 @@ export async function main() {
     requestedPort: process.env.TICKETRY_GRAPHQL_ADAPTER_PORT,
     firstPort: 8790,
   });
+  const mcpPort = await selectWebPort({
+    requestedPort: process.env.MUXED_DESKTOP_MCP_PORT ?? 8123,
+    firstPort: 8123,
+  });
   const frontendPort = await selectWebPort({
     requestedPort: process.env.MUXED_FRONTEND_PORT,
     firstPort: 5174,
   });
+  const hookRunner = prepareWebHookRunner();
   const logs = createDevelopmentLogCapture();
   const environment = {
     ...launch.environment,
     TICKETRY_GRAPHQL_ADAPTER_PORT: String(adapterPort),
+    TICKETRY_GRAPHQL_ADAPTER_HOOK_RUNNER: hookRunner,
+    MUXED_DESKTOP_MCP_PORT: String(mcpPort),
     MUXED_VITE_GRAPHQL_ORIGIN: `http://127.0.0.1:${adapterPort}`,
   };
   const stop = (signal) => {

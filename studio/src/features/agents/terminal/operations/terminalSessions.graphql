@@ -102,7 +102,9 @@ mutation CreateTerminalSession(
   $moduleId: String!
   $targetId: String!
   $kind: String!
-  $provider: String!
+  # Optional so a default interactive launch can omit launch material and let
+  # the backend's launch authority resolve provider, model, reasoning, prompt.
+  $provider: String
   $workingDirectoryIdentity: String!
   $columns: Int!
   $rows: Int!

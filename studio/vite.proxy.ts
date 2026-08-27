@@ -3,15 +3,17 @@ import type { ProxyOptions } from "vite";
 // Studio dev proxy table (:5174).
 // /graphql forwards same-origin to the Rust browser-development adapter.
 //
-// There is no WebSocket entry. The project status socket was retired at the
-// Slice 3 handoff and the `/ws/terminal` stream at the Slice 5 terminal
-// cutover: status is a GraphQL subscription and terminal bytes come from the
-// Rust tmux adapter, both over the desktop's in-process transport, which no
-// proxy is involved in.
+// GraphQL subscriptions use an SSE-over-fetch POST. There is
+// no WebSocket entry on that route. Terminal bytes attach through the
+// adapter's /ws/terminal socket, forwarded with WebSocket upgrades enabled.
 export function developmentProxy(
   graphQlOrigin = process.env.MUXED_VITE_GRAPHQL_ORIGIN ?? "http://127.0.0.1:8790",
 ): Record<string, ProxyOptions> {
   return {
+    "/graphql/subscribe": {
+      target: graphQlOrigin,
+      changeOrigin: false,
+    },
     "/graphql": {
       target: graphQlOrigin,
       changeOrigin: false,
@@ -19,6 +21,11 @@ export function developmentProxy(
     "/documents": {
       target: graphQlOrigin,
       changeOrigin: false,
+    },
+    "/ws/terminal": {
+      target: graphQlOrigin,
+      changeOrigin: false,
+      ws: true,
     },
   };
 }

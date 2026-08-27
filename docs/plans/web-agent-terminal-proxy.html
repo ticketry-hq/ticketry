@@ -1,0 +1,1036 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ticketry browser agent launch and terminal proxy map</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #172033;
+      --muted: #58647a;
+      --line: #d9dfeb;
+      --soft: #f5f7fb;
+      --paper: #ffffff;
+      --navy: #132a4f;
+      --blue: #2f67d8;
+      --cyan: #dff5f6;
+      --green: #196c51;
+      --amber: #965f00;
+      --red: #9a3141;
+      --shadow: 0 16px 48px rgba(19, 42, 79, .10);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body { margin: 0; background: var(--soft); color: var(--ink); line-height: 1.58; }
+    header {
+      color: white;
+      background:
+        radial-gradient(circle at 85% 10%, rgba(76, 191, 205, .34), transparent 28rem),
+        linear-gradient(135deg, #0f2445 0%, #173968 66%, #1d5172 100%);
+      padding: 4rem max(1.5rem, calc((100vw - 1180px) / 2));
+    }
+    .eyebrow { color: #aee8ed; font-size: .78rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+    h1 { max-width: 900px; margin: .65rem 0 .8rem; font-size: clamp(2.2rem, 5vw, 4.4rem); line-height: 1.02; letter-spacing: -.045em; }
+    header p { max-width: 820px; margin: 0; color: #dbe7f8; font-size: 1.08rem; }
+    .meta { display: flex; flex-wrap: wrap; gap: .65rem; margin-top: 1.6rem; }
+    .meta span { border: 1px solid rgba(255,255,255,.26); border-radius: 999px; padding: .38rem .72rem; color: #eaf2ff; font-size: .82rem; }
+    nav {
+      position: sticky; top: 0; z-index: 10; display: flex; gap: .3rem; overflow-x: auto;
+      padding: .72rem max(1rem, calc((100vw - 1180px) / 2));
+      background: rgba(255,255,255,.96); border-bottom: 1px solid var(--line); backdrop-filter: blur(10px);
+    }
+    nav a { white-space: nowrap; color: var(--navy); text-decoration: none; border-radius: 999px; padding: .45rem .72rem; font-size: .84rem; font-weight: 700; }
+    nav a:hover { background: #e9effb; }
+    main { width: min(1180px, calc(100% - 2rem)); margin: 2rem auto 5rem; }
+    section { margin: 0 0 1.5rem; padding: clamp(1.3rem, 3vw, 2.4rem); background: var(--paper); border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow); scroll-margin-top: 4.5rem; }
+    h2 { margin: 0 0 1.2rem; color: var(--navy); font-size: clamp(1.55rem, 3vw, 2.2rem); letter-spacing: -.025em; }
+    h3 { margin: 2.1rem 0 .8rem; color: #203c68; font-size: 1.16rem; }
+    h4 { margin: 0 0 .5rem; color: var(--navy); }
+    p { margin: .7rem 0 1rem; }
+    .lede { max-width: 940px; font-size: 1.08rem; color: #263651; }
+    .notice { margin: 1.2rem 0; padding: 1rem 1.1rem; border: 1px solid #9bd3d8; border-left: 5px solid #23818d; border-radius: 10px; background: var(--cyan); }
+    .scope-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+    .scope-grid article { padding: 1rem; border: 1px solid var(--line); border-radius: 12px; background: #fbfcfe; }
+    .scope-grid ul { margin-bottom: 0; padding-left: 1.15rem; }
+    .flow { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr auto 1fr auto 1fr; align-items: stretch; gap: .5rem; }
+    .flow-node { display: flex; min-height: 112px; flex-direction: column; gap: .2rem; justify-content: center; padding: .85rem; border-radius: 12px; color: white; background: linear-gradient(145deg, #193b6e, #245c86); }
+    .flow-node small { color: #aee8ed; font-weight: 800; }
+    .flow-node span { color: #dbe7f8; font-size: .83rem; }
+    .flow-arrow { align-self: center; color: var(--blue); font-size: 1.4rem; font-weight: 900; }
+    table { width: 100%; border-collapse: separate; border-spacing: 0; margin: .8rem 0 1.4rem; font-size: .9rem; }
+    th { color: #fff; background: var(--navy); text-align: left; }
+    th, td { padding: .72rem .78rem; vertical-align: top; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+    th:first-child { border-top-left-radius: 9px; }
+    th:last-child { border-top-right-radius: 9px; }
+    th:last-child, td:last-child { border-right: 0; }
+    tbody tr:nth-child(even) td { background: #f8fafe; }
+    code { border-radius: 5px; padding: .08rem .3rem; background: #edf1f8; color: #173968; font: .88em ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow-wrap: anywhere; }
+    pre { overflow-x: auto; border-radius: 12px; padding: 1rem; color: #e9f1ff; background: #12233f; }
+    pre code { padding: 0; color: inherit; background: transparent; }
+    li { margin: .28rem 0; }
+    main a { color: var(--blue); font-weight: 600; text-decoration-thickness: 1px; text-underline-offset: 2px; }
+    [data-scope] { display: inline-block; border-radius: 999px; padding: .14rem .48rem; font-size: .72rem; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; }
+    [data-scope="required"] { color: var(--green); background: #dff3e9; }
+    [data-scope="conditional"] { color: var(--amber); background: #fff0c9; }
+    [data-scope="no-change"] { color: #42516b; background: #e8edf5; }
+    .gates { counter-reset: gate; list-style: none; padding: 0; }
+    .gates li { position: relative; min-height: 3rem; margin: .7rem 0; padding: .7rem .8rem .7rem 3.1rem; border: 1px solid var(--line); border-radius: 10px; }
+    .gates li::before { content: counter(list-item); position: absolute; left: .85rem; top: .65rem; display: grid; place-items: center; width: 1.55rem; height: 1.55rem; border-radius: 50%; color: #fff; background: var(--blue); font-weight: 800; }
+    footer { color: var(--muted); text-align: center; padding: 0 1rem 3rem; font-size: .84rem; }
+    .tldr {
+      display: grid; gap: .9rem; margin: 1.2rem 0;
+      padding: 1.2rem 1.4rem; border-radius: 14px; color: #eaf2ff;
+      background: linear-gradient(135deg, #12305c, #1d5172);
+      font-size: 1.12rem; line-height: 1.5;
+    }
+    .tldr b { color: #aee8ed; }
+    .channels { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin: 1rem 0 1.6rem; }
+    .channel { display: flex; flex-direction: column; gap: .45rem; padding: 1rem 1.1rem; border-radius: 12px; border: 1px solid var(--line); }
+    .channel h4 { margin: 0; display: flex; align-items: center; justify-content: space-between; gap: .5rem; font-size: 1rem; }
+    .badge { flex-shrink: 0; border-radius: 999px; padding: .12rem .55rem; font-size: .68rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+    .badge-new { color: #fff; background: #d94f30; }
+    .badge-same { color: var(--green); background: #dff3e9; }
+    .route { font-size: .92rem; font-weight: 700; color: var(--blue); overflow-wrap: anywhere; }
+    .channel p { margin: 0; font-size: .86rem; color: var(--muted); }
+    @media (max-width: 900px) {
+      .scope-grid { grid-template-columns: 1fr; }
+      .channels { grid-template-columns: 1fr; }
+      .flow { grid-template-columns: 1fr; }
+      .flow-arrow { transform: rotate(90deg); justify-self: center; }
+      table { display: block; overflow-x: auto; }
+    }
+    @media print {
+      nav { display: none; }
+      body { background: #fff; }
+      header { padding: 2rem; }
+      main { width: 100%; margin: 1rem 0; }
+      section { break-inside: avoid; box-shadow: none; border-radius: 0; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Ticketry implementation handoff</div>
+    <h1>Browser agent launch and terminal proxy</h1>
+    <p>A file-by-file map for browser launch, existing-run visibility, and interactive PTY attachment without restoring the retired REST backend or changing desktop terminal ownership.</p>
+    <div class="meta">
+      <span>Prepared 27 August 2026</span>
+      <span>Scope: web development runtime</span>
+      <span>Status: implemented and verified</span>
+      <span>Baseline: current dirty worktree</span>
+    </div>
+  </header>
+
+  <nav aria-label="Document sections">
+    <a href="#decision-summary">Decision summary</a>
+    <a href="#frontend-map">Frontend</a>
+    <a href="#backend-map">Rust and PTY</a>
+    <a href="#verification-map">Verification</a>
+  </nav>
+
+  <main>
+    <section id="decision-summary">
+  <h2>Decision summary</h2>
+
+  <div class="tldr">
+    <span><b>Browsers get one new WebSocket</b> — <code>/ws/terminal</code> — that attaches to an
+    already-running terminal for input, output, and resize.</span>
+    <span><b>Everything else stays put:</b> launching goes through GraphQL over HTTP, live status
+    keeps streaming over SSE, and tmux and Ghostty keep their current jobs.</span>
+  </div>
+
+  <div class="notice">
+    <strong>Note:</strong> status streaming via <code>POST /graphql/subscribe</code> already exists
+    in this tree (uncommitted). It is the baseline; no <code>/ws/status</code> is added.
+  </div>
+
+  <h3>The three channels</h3>
+  <div class="channels">
+    <article class="channel" style="background:#fbfcfe">
+      <h4>Commands <span class="badge badge-same">unchanged</span></h4>
+      <span class="route">POST /graphql</span>
+      <p>Create sessions, run queries and mutations. Seaography as today.</p>
+    </article>
+    <article class="channel" style="background:#fbfcfe">
+      <h4>Status <span class="badge badge-same">unchanged</span></h4>
+      <span class="route">SSE · /graphql/subscribe</span>
+      <p>Snapshots and live run facts from <code>run_status_stream</code>.</p>
+    </article>
+    <article class="channel" style="background:#fff7f2; border-color:#e8b8a9">
+      <h4>Terminal I/O <span class="badge badge-new">new</span></h4>
+      <span class="route">WS · /ws/terminal</span>
+      <p>Attach-only PTY bytes plus resize and scroll. Never launches, never owns the process.</p>
+    </article>
+  </div>
+
+  <h3>Target flow</h3>
+  <div class="flow" aria-label="Browser launch and attachment flow">
+    <div class="flow-node"><small>1</small><b>Launch</b><span>GraphQL create</span></div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-node"><small>2</small><b>Persist</b><span>tmux session is durable</span></div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-node"><small>3</small><b>Discover</b><span>Status SSE event</span></div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-node"><small>4</small><b>Attach</b><span>WS viewer lease</span></div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-node"><small>5</small><b>Interact</b><span>Bytes + controls</span></div>
+  </div>
+
+  <h3>Scope boundary</h3>
+  <div class="scope-grid">
+    <article>
+      <h4>Build</h4>
+      <ul>
+        <li><a href="https://docs.rs/axum" target="_blank" rel="noopener">Axum</a> attach-only <code>/ws/terminal</code>.</li>
+        <li>Browser terminal client (reuses existing contract).</li>
+        <li>Vite WS forwarding and URL derivation.</li>
+        <li>Browser launch-runtime config.</li>
+        <li>Details action via approved GraphQL seam.</li>
+        <li>Tests at all three levels.</li>
+      </ul>
+    </article>
+    <article>
+      <h4>Keep as-is</h4>
+      <ul>
+        <li>Status SSE and its reader.</li>
+        <li>Session persistence and launch authority.</li>
+        <li>tmux lifecycle and cleanup.</li>
+        <li>xterm pooling and rendering.</li>
+        <li>Tauri Ghostty viewer path.</li>
+      </ul>
+    </article>
+    <article>
+      <h4>Skip</h4>
+      <ul>
+        <li>REST endpoints or a second backend.</li>
+        <li>Any WebSocket migration for GraphQL.</li>
+        <li>Spawn-over-socket mode.</li>
+        <li>Rust runtime rewrites.</li>
+        <li>Public or cross-origin access.</li>
+      </ul>
+    </article>
+  </div>
+
+  <h3>Approval gates before implementation</h3>
+  <ol class="gates">
+    <li><b>Launch contract.</b> Does <code>terminal_session_create</code> preserve the desktop Details action? Test first; add a mutation only on a real gap.</li>
+    <li><b>Wire contract.</b> Freeze route, attach-only mode, message fields, close codes, limits, reconnect rules.</li>
+    <li><b>Runtime composition.</b> Pin hook runner location, MCP port, terminal authority, runtime handles.</li>
+    <li><b>Security limits.</b> Origin/Host rules, concurrency, size caps, timeouts — all tested constants.</li>
+  </ol>
+</section>
+    <section id="frontend-map">
+  <h2>Frontend and browser PTY map</h2>
+
+  <p>This section covers the Studio-side changes for a browser terminal. It does not move the native renderer, replace the terminal pool, or turn GraphQL subscriptions into a socket transport. Agent status remains a GraphQL subscription over the existing streaming HTTP endpoint. The terminal's input and output use one dedicated WebSocket.</p>
+
+  <h3>What exists now</h3>
+
+  <table>
+    <thead>
+      <tr><th>Area</th><th>Current behavior</th><th>Consequence</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>terminalClientRuntime.ts</code></td>
+        <td>Selects <code>tauriTerminalClient</code> in Tauri and <code>unavailableTerminalTransport</code> everywhere else.</td>
+        <td>Browser xterm mounts, but its attach reports <code>terminal_requires_desktop</code> and opens no socket.</td>
+      </tr>
+      <tr>
+        <td><code>entryPool.ts</code></td>
+        <td>Owns one xterm and one <code>TerminalClient</code> per session. <code>ensureConnected</code> attaches, routes xterm input, handles output, resize, suspend, resume, and reconnect state.</td>
+        <td>The existing pool is already the right integration point. The browser adapter only needs to implement the current client contract.</td>
+      </tr>
+      <tr>
+        <td><code>browserRuntime.ts</code></td>
+        <td>Validates <code>VITE_GRAPHQL_API</code>, sends GraphQL operations to <code>/graphql</code>, and streams subscriptions from <code>/graphql/subscribe</code> using fetch plus SSE parsing.</td>
+        <td>Status is already browser-capable. Do not replace this with a status WebSocket.</td>
+      </tr>
+      <tr>
+        <td><code>vite.proxy.ts</code></td>
+        <td>Proxies <code>/graphql</code>, <code>/graphql/subscribe</code>, and <code>/documents</code>. There is no WebSocket entry.</td>
+        <td>A browser terminal needs a separate <code>/ws/terminal</code> proxy with WebSocket forwarding enabled.</td>
+      </tr>
+      <tr>
+        <td><code>launchDefaultAgent.ts</code></td>
+        <td>Calls <code>desktop_launch_default_coding_agent</code> through Tauri and rejects non-Tauri callers.</td>
+        <td>The Details action cannot launch an agent in a browser, even though browser GraphQL writes already work.</td>
+      </tr>
+      <tr>
+        <td>Terminal session writes</td>
+        <td><code>mutationTransport.ts</code> already creates, resumes, and terminates sessions through generated GraphQL operations. The Rust create service discards caller-supplied launch material and resolves policy through its interactive authority.</td>
+        <td>Prefer this existing model-shaped create seam. Add a named launch operation only if a focused parity test proves that the desktop decision-recording behavior cannot enter through <code>terminal_session_create</code>.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Browser data flow</h3>
+
+  <pre><code>Run agent button
+  -&gt; LaunchAgentAction
+  -&gt; launchDefaultAgent(issueId)
+  -&gt; existing terminal_session_create mutation over /graphql
+  -&gt; Rust launch policy + durable terminal session
+  -&gt; status subscription over /graphql/subscribe updates session state
+  -&gt; entryPool.ensureConnected(agentRunId)
+  -&gt; browserTerminalClient opens /ws/terminal
+  -&gt; ready frame binds the server session to pooled xterm
+  -&gt; binary output flows to xterm; xterm input flows back as binary
+
+  Agent picker / shell paths already create their session through GraphQL.
+  They enter the same entryPool and WebSocket attach path after creation.</code></pre>
+
+  <p>The GraphQL create is the control-plane step. The WebSocket only attaches to the resulting durable run. It must not create a second run on an attach. The existing <code>run_now</code> operation should remain reserved for its Ideas-to-Implement workflow transition unless the product explicitly changes the Details button's meaning.</p>
+
+  <h3>Files to add or change</h3>
+
+  <table>
+    <thead>
+      <tr><th>Status</th><th>File</th><th>Planned change</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span data-scope="required">required</span></td>
+        <td><code>studio/src/features/agents/terminal/internal/browserTerminalClient.ts</code></td>
+        <td>Port Rusty's browser client against Ticketry's existing <code>TerminalClient</code> contract. Construct the WebSocket, send attach init, decode text control frames and binary output, route lifecycle events, and implement bounded reconnect, suspend, resume, and detach.</td>
+      </tr>
+      <tr>
+        <td><span data-scope="required">required</span></td>
+        <td><code>studio/src/shared/api/transport/wireContract.ts</code></td>
+        <td>Add the single frame builder/parser module for attach init, resize, scroll, ready, and error. Keep frame construction out of the client so the browser and server contract has one testable TypeScript source.</td>
+      </tr>
+      <tr>
+        <td><span data-scope="required">required</span></td>
+        <td><code>studio/src/features/agents/terminal/internal/terminalClientRuntime.ts</code></td>
+        <td>Select <code>browserTerminalClient</code> when <code>isTauri()</code> is false. Keep <code>tauriTerminalClient</code> as the native choice.</td>
+      </tr>
+      <tr>
+        <td><span data-scope="required">required</span></td>
+        <td><code>studio/src/runtime/browserRuntime.ts</code></td>
+        <td>Derive and publish the terminal WebSocket URL from the validated GraphQL endpoint. The default <code>/graphql</code> endpoint maps to <code>/ws/terminal</code>. An absolute <code>http:</code> endpoint maps to <code>ws:</code>, and <code>https:</code> maps to <code>wss:</code>. Do not add a second configurable origin unless deployment proves that one is needed.</td>
+      </tr>
+      <tr>
+        <td><span data-scope="required">required</span></td>
+        <td><code>studio/src/runtime/index.ts</code> and <code>studio/src/runtime/contract.ts</code></td>
+        <td>Expose the browser terminal URL through the runtime boundary used by the client. Keep the field optional for existing desktop and test runtime fixtures, or add the smallest explicit no-op desktop value if the compiler requires a total contract.</td>
+      </tr>
+      <tr>
+        <td><span data-scope="required">required</span></td>
+        <td><code>studio/vite.proxy.ts</code></td>
+        <td>Add <code>/ws/terminal</code> targeting the same <code>graphQlOrigin</code> as the HTTP adapter, with <code>ws: true</code>. Leave <code>/graphql/subscribe</code> as ordinary streaming HTTP.</td>
+      </tr>
+      <tr>
+        <td><span data-scope="required">required</span></td>
+        <td><code>studio/src/features/agents/terminal/operations/terminalSessions.graphql</code> and <code>internal/mutationTransport.ts</code></td>
+        <td>Reuse <code>terminal_session_create</code> for the Details action. Pass the concrete project, module, issue, target, working-directory identity, geometry, and a fresh client request identity. Keep provider, prompt, model, and skills under the existing Rust launch authority.</td>
+      </tr>
+      <tr>
+        <td><span data-scope="conditional">conditional</span></td>
+        <td><code>studio/src/features/agents/terminal/operations/launchDefaultAgent.graphql</code> and generated artifacts</td>
+        <td>Add these only if backend parity tests prove the existing terminal-session create cannot preserve direct default-launch semantics. Any named operation requires a written exception and registry drift test. Never hand-edit generated output.</td>
+      </tr>
+      <tr>
+        <td><span data-scope="required">required</span></td>
+        <td><code>studio/src/features/agents/terminal/internal/launchDefaultAgent.ts</code></td>
+        <td>Call the existing terminal-session mutation transport through <code>studioRuntime().writeWorkTracker</code>, or accept the required launch identities from <code>LaunchAgentAction</code>. Preserve stable error mapping and remove the browser-only rejection. Keep the current desktop command until parity tests show both callers can share the GraphQL seam.</td>
+      </tr>
+      <tr>
+        <td><span data-scope="conditional">conditional</span></td>
+        <td><code>studio/src/runtime/desktopRuntime.ts</code> and runtime test fixtures</td>
+        <td>Change only if the shared runtime URL field is made required. The native Ghostty/Tauri path still does not use the browser WebSocket.</td>
+      </tr>
+      <tr>
+        <td><span data-scope="conditional">conditional</span></td>
+        <td><code>studio/src/features/agents/terminal/internal/unavailableTerminalTransport.ts</code></td>
+        <td>Keep it if the contract still has unsupported-platform callers. Remove it only if the browser adapter becomes the universal non-Tauri fallback and a repository search proves no other caller remains.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>WebSocket URL contract</h3>
+
+  <p>Use one URL accessor, rather than constructing a socket URL inside the terminal client. The browser runtime owns endpoint validation and origin conversion.</p>
+
+  <table>
+    <thead>
+      <tr><th>Configured GraphQL endpoint</th><th>Terminal URL</th><th>Why</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>/graphql</code></td><td><code>/ws/terminal</code></td><td>Same-origin browser URL, handled by the Vite development proxy.</td></tr>
+      <tr><td><code>http://127.0.0.1:8790/graphql</code></td><td><code>ws://127.0.0.1:8790/ws/terminal</code></td><td>Absolute development adapter origin.</td></tr>
+      <tr><td><code>https://host.example/graphql</code></td><td><code>wss://host.example/ws/terminal</code></td><td>Preserves TLS for a deployed browser adapter.</td></tr>
+    </tbody>
+  </table>
+
+  <p>The adapter must register <code>/ws/terminal</code> on the same origin that serves <code>/graphql</code>. The browser client should fail configuration early for unsupported URL schemes, just as the current GraphQL endpoint does.</p>
+
+  <h3>Wire protocol to port and verify</h3>
+
+  <table>
+    <thead>
+      <tr><th>Direction</th><th>Frame</th><th>Meaning</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Browser -&gt; server</td><td>Text JSON <code>{"type":"init","mode":"attach","agent_run_id","cols","rows"}</code></td><td>Attach the viewer to an existing durable run. Reuse this frame after every reconnect.</td></tr>
+      <tr><td>Server -&gt; browser</td><td>Text JSON <code>{"type":"ready","session_id","agent_run_id"}</code></td><td>Confirms attachment and gives the server session identity used to rekey the pooled entry.</td></tr>
+      <tr><td>Browser -&gt; server</td><td>Binary bytes</td><td>Keyboard input. Apply a size limit on the server and surface pressure as a terminal client error.</td></tr>
+      <tr><td>Server -&gt; browser</td><td>Binary bytes</td><td>PTY/tmux output, written directly to the pooled xterm.</td></tr>
+      <tr><td>Browser -&gt; server</td><td>Text JSON <code>{"type":"resize","cols","rows"}</code></td><td>Resize the attached PTY. Clamp geometry on the server.</td></tr>
+      <tr><td>Browser -&gt; server</td><td>Text JSON <code>{"type":"scroll","dir":"up|down","lines"}</code></td><td>Request tmux scrollback movement.</td></tr>
+      <tr><td>Server -&gt; browser</td><td>Text JSON <code>{"type":"error","message"}</code>, followed by a close code</td><td>Reports a stable attach, session, lease, or pressure failure.</td></tr>
+    </tbody>
+  </table>
+
+  <p>Rusty's checked-in builder names the scroll field <code>dir</code>, while its checked-in Rust consumer deserializes <code>direction</code>. Ticketry should keep the established TypeScript and Python wire name, <code>dir</code>, and make the new Rust handler and contract tests agree. Do not accept both spellings.</p>
+
+  <h3>Client lifecycle and failure behavior</h3>
+
+  <ul>
+    <li>On attach, emit <code>connecting</code>, open the URL, send the attach init on <code>open</code>, and emit <code>ready</code> only after a valid ready frame.</li>
+    <li>Set <code>binaryType = "arraybuffer"</code>. Write only binary messages to xterm. Parse text as JSON and classify malformed or unknown frames as protocol errors.</li>
+    <li>Guard input, resize, and scroll sends with <code>readyState === WebSocket.OPEN</code>. A stale xterm callback must not throw after the socket closes.</li>
+    <li>On an unclean close after a successful ready, retry the same run with bounded exponential backoff. Rusty's policy is eight attempts, a 500 ms base, a factor of two, a 10 second cap, and small jitter. Reset the attempt counter after a new ready frame.</li>
+    <li>Do not reconnect after an intentional detach. A clean viewer close emits <code>eof</code> and <code>closed</code> with <code>viewer_exit</code>.</li>
+    <li>Map <code>session_not_found</code> to <code>reattachment_required</code> with the session reason. Map lease replacement to the existing replacement reason. After retries are exhausted, emit the existing generic reattachment-required path so <code>entryPool</code> can mark the session lost.</li>
+    <li>Keep suspend and resume separate from run termination. Suspend closes the transient viewer, and resume opens a fresh attach while preserving xterm scrollback.</li>
+  </ul>
+
+  <p><code>entryPool.ts</code> already translates these events into xterm notices and session-store transitions, including reconnect banners, session-lost state, and ownership replacement. The browser client should fit that contract rather than adding a second state machine in React.</p>
+
+  <h3>Tests to add or update</h3>
+
+  <table>
+    <thead>
+      <tr><th>Status</th><th>Test file</th><th>Coverage</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span data-scope="required">required</span></td>
+        <td><code>studio/src/test/terminal/browserTerminalClient.test.ts</code></td>
+        <td>Use a fake WebSocket to assert attach init, binary input and output, resize, scroll, ready handling, malformed frames, clean detach, session-not-found, replacement, suspend/resume, and bounded reconnect.</td>
+      </tr>
+      <tr>
+        <td><span data-scope="required">required</span></td>
+        <td><code>studio/src/test/terminal/terminalClientRuntime.test.ts</code></td>
+        <td>Change the non-Tauri expectation from <code>unavailableTerminalTransport</code> to <code>browserTerminalClient</code>. Keep the Tauri selection assertion.</td>
+      </tr>
+      <tr>
+        <td><span data-scope="required">required</span></td>
+        <td><code>studio/src/test/runtime/browserRuntime.test.ts</code></td>
+        <td>Assert the default relative WebSocket URL, absolute HTTP to WS conversion, HTTPS to WSS conversion, and invalid endpoint rejection. Leave the existing SSE subscription tests in place.</td>
+      </tr>
+      <tr>
+        <td><span data-scope="required">required</span></td>
+        <td><code>studio/src/test/runtime/developmentProxy.test.ts</code></td>
+        <td>Expect <code>/ws/terminal</code> to target the adapter with <code>ws: true</code>. Continue asserting that <code>/graphql/subscribe</code> has no WebSocket flag.</td>
+      </tr>
+      <tr>
+        <td><span data-scope="required">required</span></td>
+        <td><code>studio/src/test/overhaulTerminalTransportRetirementAcceptance.test.tsx</code></td>
+        <td>Retire the contradictory assertion that all terminal WebSocket URLs are absent. Keep the assertion that the Python <code>/api/terminals</code> REST family stays absent, and assert that only the intended PTY WebSocket route exists.</td>
+      </tr>
+      <tr>
+        <td><span data-scope="required">required</span></td>
+        <td><code>studio/src/test/overhaulBrowserTerminalTransportAcceptance.test.tsx</code></td>
+        <td>Add a browser acceptance case that selects the browser transport, attaches a live run to xterm, sends input and resize, renders output, and retains the pooled entry across a presenter change.</td>
+      </tr>
+      <tr>
+        <td><span data-scope="required">required</span></td>
+        <td><code>studio/src/test/overhaulTaskAgentLaunchAcceptance.test.tsx</code> or a focused browser launch acceptance file</td>
+        <td>Assert that the Details action calls the GraphQL launch mutation in browser mode, does not call Tauri <code>invoke</code>, preserves in-flight click deduplication, and reports policy errors through the existing toast path.</td>
+      </tr>
+      <tr>
+        <td><span data-scope="required">required</span></td>
+        <td>GraphQL operation generation check</td>
+        <td>Regenerate only if the existing terminal-session operation changes. Ensure its client request identity remains stable across a transport retry so an interrupted response cannot create a duplicate run.</td>
+      </tr>
+      <tr>
+        <td><span data-scope="no-change">no change</span></td>
+        <td>Status stream acceptance tests</td>
+        <td>Keep the current SSE tests. They prove the status path and should not be rewritten around the terminal WebSocket.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Files deliberately left alone</h3>
+
+  <ul>
+    <li><code>studio/src/features/agents/terminal/internal/terminalClient.ts</code>. Its platform-neutral contract already covers the browser adapter.</li>
+    <li><code>studio/src/features/agents/terminal/internal/entryPool.ts</code>, xterm presentation, session store, terminal ownership, and retained viewer code. They already consume the client contract and own the single pooled viewer.</li>
+    <li><code>tauriTerminalClient.ts</code>, native Ghostty components, and the Tauri viewer commands. Native desktop remains the native path.</li>
+    <li><code>statusStreamClient.ts</code>, <code>statusStreamFeed.ts</code>, GraphQL status operations, and the browser SSE reader. Status and PTY traffic have different lifecycles.</li>
+    <li>REST terminal routes, REST compatibility clients, a status WebSocket, or a second browser API. None is needed for this feature.</li>
+  </ul>
+
+  <h3>Implementation boundary</h3>
+
+  <p>The frontend work is complete when a browser can launch or discover a durable run through GraphQL, attach one pooled xterm through <code>/ws/terminal</code>, exchange PTY bytes, and recover from a transient socket close. It is not complete if it merely makes the socket connect while the launch button still rejects browsers. It is also not complete if it changes status subscriptions, native rendering, terminal persistence, or the broader application runtime.</p>
+</section>
+
+<section id="backend-map">
+  <h2>02  -  Rust backend and PTY WebSocket bridge</h2>
+
+  <p>
+    This slice adds one browser terminal transport to the development GraphQL
+    adapter. It does not move terminal ownership into GraphQL subscriptions:
+    the existing status subscription remains SSE, while the PTY byte stream is
+    a dedicated WebSocket. tmux remains the durable session owner and the
+    browser connection owns only a short-lived viewer attachment.
+  </p>
+
+  <h3>Change inventory</h3>
+
+  <table>
+    <thead>
+      <tr><th>Path</th><th>Status</th><th>Change</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>studio/src-tauri/src/bin/ticketry_graphql_adapter.rs</code></td>
+        <td>Required</td>
+        <td>
+          Extend <code>AdapterState</code> with the already-composed
+          <code>ViewerOwnershipService</code>; configure the composed
+          <code>InteractiveTerminalLaunchRuntime</code> for the isolated web
+          profile; retain the in-process MCP runtime for the adapter lifetime;
+          register
+          <code>GET /ws/terminal</code> beside the existing GraphQL, SSE, and
+          document routes; keep the listener bound to loopback. Do not open a
+          new database pool or construct a second terminal service.
+        </td>
+      </tr>
+      <tr>
+        <td><code>studio/src-tauri/src/terminal_lifecycle/local_authority.rs</code></td>
+        <td>New, required for browser launch</td>
+        <td>
+          Extract the Tauri-free construction of <code>TerminalRuntimeAuthority</code>:
+          command database, profile-backed launch paths, hook runner, hook spool,
+          MCP URL, and run authority. Both desktop startup and the browser adapter
+          call this helper. The browser must use its isolated data directory and
+          tmux socket.
+        </td>
+      </tr>
+      <tr>
+        <td><code>studio/src-tauri/src/desktop/rust_runtime_launch.rs</code></td>
+        <td>Required refactor, no behavior change</td>
+        <td>
+          Replace the inline terminal-authority construction with the shared
+          helper. Desktop still discovers its packaged hook runner, owns its MCP
+          listener, and publishes the same readiness and health state.
+        </td>
+      </tr>
+      <tr>
+        <td><code>studio/src-tauri/src/terminal_viewer/browser_websocket.rs</code></td>
+        <td>New, required</td>
+        <td>
+          Own the Axum upgrade handler, loopback request validation, init and
+          control frame decoding, lease lifecycle, ready/error/close frames,
+          and the socket event loop. This is the only new public transport
+          boundary.
+        </td>
+      </tr>
+      <tr>
+        <td><code>studio/src-tauri/src/terminal_viewer/browser_bridge.rs</code></td>
+        <td>New, required</td>
+        <td>
+          Own the blocking <code>Read</code> half and serialized PTY controls.
+          Keep the WebSocket handler free of blocking tmux/PTY calls and expose
+          cancellation to the ownership lease mechanics.
+        </td>
+      </tr>
+      <tr>
+        <td><code>studio/src-tauri/src/terminal_viewer/mod.rs</code></td>
+        <td>Required</td>
+        <td>
+          Declare the focused browser modules. The existing native
+          <code>webview_commands</code>, <code>attachment</code>, and private
+          <code>tmux_client</code> layers remain intact.
+        </td>
+      </tr>
+      <tr>
+        <td><code>studio/src-tauri/src/terminal_launch/default_launch.rs</code></td>
+        <td>Conditional fallback</td>
+        <td>
+          Add only if a parity test proves <code>terminal_session_create</code>
+          cannot preserve the Details action. If required, extract the existing
+          policy-resolve, policy-record, and
+          <code>execute_pending_decision</code> sequence into a reusable
+          service method. The desktop command and the browser GraphQL resolver
+          call the same method; neither duplicates launch policy or opens a
+          competing pool.
+        </td>
+      </tr>
+      <tr>
+        <td><code>studio/src-tauri/src/terminal_launch/graphql.rs</code></td>
+        <td>Conditional fallback</td>
+        <td>
+          Prefer the existing model-shaped <code>terminal_session_create</code>
+          mutation. Register the smallest caller-specific
+          <code>launch_default_coding_agent</code> mutation, accepting a target
+          UUID/key and request identity and returning the durable run identity
+          (plus provider/agent). It must use the service above, not accept an
+          executable, argv, prompt, filesystem path, tmux name, or environment.
+        </td>
+      </tr>
+      <tr>
+        <td><code>studio/src-tauri/src/terminal_launch/operation_registry.rs</code>
+          (or the existing terminal aggregate registry)</td>
+        <td>Conditional fallback</td>
+        <td>
+          Required only when the custom mutation above is proven necessary.
+          Record its exception reason, and add a
+          test that the registry is exactly the live custom mutation surface.
+          Update the terminal Seaography audit evidence for the additional
+          custom field.
+        </td>
+      </tr>
+      <tr>
+        <td><code>studio/src-tauri/src/terminal_viewer/attachment.rs</code>,
+          <code>tmux_client.rs</code>,
+          <code>viewer_ownership/service.rs</code></td>
+        <td>No implementation change</td>
+        <td>
+          Reuse their public attachment/control and prepared-mechanics seams.
+          A WebSocket viewer must not bypass them or call <code>tmux</code>
+          directly.
+        </td>
+      </tr>
+      <tr>
+        <td>Status GraphQL subscription and its SSE adapter route</td>
+        <td>No change</td>
+        <td>
+          It serves lifecycle/status facts only. No status WebSocket and no
+          subscription-based PTY transport are in this scope.
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Adapter composition</h3>
+
+  <p>
+    <code>graphql_foundation::adopt_worktracker_and_install</code> already
+    returns a <code>ComposedCommandRuntime</code> containing the one WorkTracker
+    SeaORM connection, the profile store, viewer ownership, terminal launch
+    runtime, and output-activity service. The adapter currently retains only
+    <code>documents()</code>. The route change should retain
+    <code>adopted.runtime.viewer_ownership().clone()</code> in
+    <code>AdapterState</code>; the route never needs its own database or launch
+    pool. Before serving requests, web startup must configure
+    <code>adopted.runtime.terminal_runtime()</code> with the isolated profile's
+    launch paths, hook runner, spool directory, MCP URL, and run authority. The
+    GraphQL schema already receives the same
+    <code>ViewerOwnershipService</code> and <code>TerminalLaunchService</code>
+    through <code>TerminalServices</code>.
+  </p>
+
+  <pre><code>let state = AdapterState {
+    api,
+    documents: adopted.runtime.documents().clone(),
+    viewers: adopted.runtime.viewer_ownership().clone(),
+};
+
+let app = Router::new()
+    .route("/graphql", post(execute))
+    .route("/graphql/subscribe", post(subscribe))
+    .route("/ws/terminal", get(browser_websocket::get))
+    .route("/documents/{document_id}/{*asset_path}", get(document))
+    .with_state(state);</code></pre>
+
+  <p>
+    The exact field names are implementation guidance, not a second runtime
+    object: the handler receives a clone of the service handles that adoption
+    already created.
+  </p>
+
+  <h3>WebSocket handshake and frame contract</h3>
+
+  <ol>
+    <li>
+      Axum upgrades only a <code>GET /ws/terminal</code> request that passes
+      the Host/Origin loopback checks below. The browser sends one text init
+      frame immediately after <code>open</code>.
+    </li>
+    <li>
+      The browser path supports <code>mode: "attach"</code> only. It requires
+      <code>agent_run_id</code>, <code>cols</code>, and <code>rows</code>. Spawn
+      metadata is deliberately absent: launch is a GraphQL mutation and a
+      terminal socket attaches only after a durable run exists.
+    </li>
+    <li>
+      Rust validates the run id and clamps/rejects geometry through the same
+      attachment boundary as the native viewer, then calls
+      <code>TerminalAttachment::attach</code>. It allocates a fresh viewer id,
+      stages the prepared mechanics, and atomically creates the viewer lease.
+    </li>
+    <li>
+      After the lease commits, Rust sends a text
+      <code>{"type":"ready","session_id":"…","agent_run_id":"…"}</code>
+      frame. It must not send ready before attachment and ownership succeed.
+    </li>
+    <li>
+      Client input is binary WebSocket data and is bounded before it reaches
+      <code>write_all</code>. Text controls are JSON:
+      <code>{"type":"resize","cols":&lt;u16&gt;,"rows":&lt;u16&gt;}</code> and
+      <code>{"type":"scroll","dir":"up|down","lines":&lt;u16&gt;}</code>.
+      Use <code>dir</code> consistently; do not reproduce Rusty's stale
+      <code>direction</code>/<code>dir</code> mismatch.
+    </li>
+    <li>
+      PTY output is binary WebSocket data. Protocol failures are text
+      <code>{"type":"error","message":"…"}</code> followed by a close
+      code. Unknown text, malformed JSON, invalid control values, oversized
+      input, and unsupported modes are rejected without invoking tmux.
+    </li>
+  </ol>
+
+  <table>
+    <thead><tr><th>Condition</th><th>Wire behavior</th></tr></thead>
+    <tbody>
+      <tr><td>Malformed init / unsupported mode</td><td><code>error: bad_init</code>, close <code>1003</code></td></tr>
+      <tr><td>Missing or ended run</td><td><code>error: session_not_found</code> or <code>session_ended</code>, close <code>1008</code></td></tr>
+      <tr><td>Another viewer wins the lease</td><td><code>error: replaced_by_another_viewer</code>, close <code>4009</code></td></tr>
+      <tr><td>Input/output pressure</td><td><code>error: terminal_input_pressure</code> or <code>terminal_output_pressure</code>, close <code>1013</code></td></tr>
+      <tr><td>PTY/tmux/internal failure</td><td><code>error: terminal_read_failed</code> or a typed attachment error, close <code>1011</code></td></tr>
+      <tr><td>Normal client detach</td><td>Close <code>1000</code>; detach only the viewer client, never the durable session</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Attachment, lease, and bridge composition</h3>
+
+  <p>
+    The handler follows the native viewer's prepare-before-ownership ordering:
+  </p>
+
+  <ol>
+    <li>
+      <code>TerminalAttachment::attach(run_id, cols, rows)</code> validates the
+      identifier, verifies the durable session, resizes it, starts a transient
+      PTY client, and returns a control half plus a blocking reader via
+      <code>into_control_and_reader</code>.
+    </li>
+    <li>
+      <code>browser_bridge</code> stores the control half behind a serialized
+      command path and starts one blocking reader thread. The reader emits
+      bounded output chunks to the async handler and exits when the PTY reaches
+      EOF, the socket is gone, or the viewer is detached.
+    </li>
+    <li>
+      The bridge implements <code>PreparedViewerMechanics</code>. Its
+      <code>detach(reason)</code> cancels the socket loop and consumes the
+      control half, calling its existing detach operation. This is what lets a
+      lease replacement remove the browser viewer without killing tmux.
+    </li>
+    <li>
+      <code>ViewerOwnershipService::stage_prepared</code> is called with
+      <code>transport: "browser"</code>, followed by
+      <code>create(CreateViewerLease)</code>. The returned generation is retained
+      for renewal and exact release. A failed durable create detaches the
+      prepared viewer and sends no ready frame.
+    </li>
+    <li>
+      While the socket is live, renew the exact
+      <code>(agent_run_id, viewer_id, generation)</code> about every five
+      seconds. A failed compare-and-set renewal means the viewer was replaced;
+      report it and close. On every exit, call exact-generation delete and
+      detach; late cleanup must not release a newer viewer.
+    </li>
+  </ol>
+
+  <h3>Blocking I/O and pressure rules</h3>
+
+  <ul>
+    <li>
+      Never call <code>Read::read</code>, PTY writes, resize, scroll, or tmux
+      child polling directly on the Axum executor. The reader belongs on a
+      blocking thread; controls go through one bounded/serialized worker so
+      input order is deterministic and concurrent resize/write calls cannot
+      race the PTY writer.
+    </li>
+    <li>
+      Preserve the existing input ceiling (64 KiB) and geometry/scroll limits
+      from <code>terminal_viewer::webview_commands</code> and
+      <code>tmux_client</code>. The WebSocket frame limit must be no looser than
+      the attachment limit.
+    </li>
+    <li>
+      Use a bounded output channel (the native path uses capacity 64). If the
+      reader cannot hand off because the socket is gone, cancel the bridge. If
+      the socket cannot flush an output frame within a bounded timeout (30
+      seconds is the Rusty reference), close with
+      <code>terminal_output_pressure</code>; never grow an unbounded buffer.
+    </li>
+    <li>
+      If input cannot be accepted promptly or the bounded command queue is
+      full, close with <code>terminal_input_pressure</code> rather than block
+      the executor. Backpressure closes the transient viewer only; it does not
+      terminate or mark the Agent Run finished.
+    </li>
+    <li>
+      PTY EOF and tmux attach-client exit are viewer outcomes, not proof that
+      the durable tmux session ended. Preserve that distinction in the error
+      and close mapping.
+    </li>
+  </ul>
+
+  <h3>Loopback request checks</h3>
+
+  <p>
+    Binding to <code>127.0.0.1</code> is necessary but is not sufficient as a
+    browser boundary. Before upgrade, parse the Host authority and reject a
+    non-loopback hostname or malformed authority. Accept only
+    <code>127.0.0.1</code>, <code>localhost</code>, and <code>::1</code> (with
+    any explicit local port required by the adapter). If an Origin header is
+    present, parse it and require an <code>http</code>/<code>https</code> origin
+    whose host is the same loopback set; reject all non-loopback origins with a
+    normal HTTP forbidden response. A missing Origin may be accepted for local
+    non-browser tooling, but must not weaken the Host check. Do not use a
+    wildcard CORS or Origin allow-list.
+  </p>
+
+  <h3>Shutdown and failure behavior</h3>
+
+  <ul>
+    <li>
+      Socket close, reader EOF, lease replacement, send timeout, and handler
+      error all converge on one idempotent cleanup path: cancel bridge, detach
+      the transient PTY/tmux client, then release the exact viewer lease.
+    </li>
+    <li>
+      Adapter shutdown must stop accepting upgrades and detach all process-local
+      browser viewers before the runtime exits. It must not call tmux kill or
+      mark a durable session terminated merely because a browser disappeared.
+    </li>
+    <li>
+      A reconnect creates a new viewer id and generation and repeats attach;
+      there is no in-memory browser handle that may be trusted across process
+      restarts. The client may retry only while the durable run still exists.
+    </li>
+  </ul>
+
+  <h3>Smallest browser-capable default-launch path</h3>
+
+  <p>
+    The current <code>launchDefaultAgent</code> invokes the Tauri-only
+    <code>desktop_launch_default_coding_agent</code> command and rejects a
+    browser. The preferred browser path is the existing model-shaped
+    <code>terminal_session_create</code> mutation. Its Rust service already
+    validates project, module, issue, target, and working-directory identities,
+    discards caller-supplied provider, model, reasoning, prompt, skills, and
+    document material, and rebuilds them through
+    <code>InteractiveLaunchAuthority</code>. The Details caller must supply the
+    concrete scope identities and a stable client request id. The browser then
+    attaches the returned run over <code>/ws/terminal</code>.
+  </p>
+
+  <p>
+    Before implementation, add a parity test comparing the existing desktop
+    command with <code>terminal_session_create</code> for policy selection,
+    prompt material, decision recording, idempotency, and returned run state.
+    If the model-shaped create preserves those facts, do not add another
+    GraphQL field. If it cannot, record the missing behavior and add the narrow
+    <code>launch_default_coding_agent</code> operation described in the
+    conditional rows above. That fallback must call one extracted service used
+    by desktop and GraphQL.
+  </p>
+
+  <p>
+    This is intentionally not <code>run_now</code>. <code>run_now</code> is a
+    distinct domain operation: it requires an eligible Story, commits the
+    Ideas-to-Implement workflow transition, records the transition causation,
+    and then launches. Default coding-agent launch is a single interactive
+    task-scoped launch that does not move workflow state, start orchestration,
+    or run a dependency graph. Substituting <code>run_now</code> would change
+    product semantics.
+  </p>
+
+  <p>
+    A new named GraphQL operation is not the default. It becomes justified only
+    if the parity test proves that policy decision recording plus verified
+    terminal creation cannot enter through the restricted Terminal Session
+    create contract. In that case, add
+    <code>launch_default_coding_agent</code> to the operation registry with the
+    exact missing behavior, keep its inputs allowlisted and identity-scoped,
+    and add a test that the registry matches the schema's live custom mutation.
+    Do not expose a REST compatibility endpoint or add per-field launch RPCs.
+  </p>
+
+  <h3>Explicitly out of scope</h3>
+
+  <ul>
+    <li>GraphQL status-subscription replacement or a status WebSocket.</li>
+    <li>Rusty's REST terminal API, spawn-mode WebSocket, or backend rewrite.</li>
+    <li>A new PTY/tmux implementation, durable session model, or event system.</li>
+    <li>Changing native Tauri terminal commands, xterm presentation, or tmux cleanup semantics.</li>
+    <li>Wildcard network access, non-loopback serving, or browser authentication beyond the local adapter boundary.</li>
+  </ul>
+</section>
+
+<section id="verification-map">
+  <h2>Verification, rollout, and scope</h2>
+
+  <p>This change has two realtime channels with different jobs. The existing GraphQL status subscription stays on the Rust adapter's streaming HTTP endpoint, consumed as SSE over <code>fetch</code>. A new WebSocket route carries only terminal input, terminal output, resize, and scroll control. Launch remains a GraphQL mutation. A passing terminal socket cannot make an agent visible if the status stream is broken, and a healthy status stream cannot make a terminal interactive if the PTY route is broken, so the checks below keep those paths separate.</p>
+
+  <h3>Implementation order</h3>
+
+  <ol>
+    <li>
+      <strong>Freeze the boundary.</strong> Record the browser socket path, the WebSocket frame shapes, close-code meanings, input and output size limits, and the rule that the browser viewer uses <code>ViewerTransport::Browser</code>. Derive the socket URL from the configured GraphQL origin. Reject an invalid origin during runtime startup, before a socket is opened.
+    </li>
+    <li>
+      <strong>Build the adapter route.</strong> Add one focused WebSocket module beside the development GraphQL adapter. Register it in <code>studio/src-tauri/src/bin/ticketry_graphql_adapter.rs</code>. The route accepts an attach frame containing a validated run id and geometry, calls the existing terminal attachment boundary, stages and acquires a viewer lease, sends one ready frame, and then runs the input, output, control, renewal, and cleanup loop. It must close the attachment and release the exact lease on every exit path. It must not create a second terminal store or kill tmux when a browser viewer detaches.
+    </li>
+    <li>
+      <strong>Port the browser transport.</strong> Port the narrow Rusty client and wire builders into the existing terminal client contract. Change <code>terminalClientRuntime.ts</code> to select the browser WebSocket client outside Tauri. Keep the desktop selection on <code>tauriTerminalClient</code>. Reconnect only after a ready connection has failed, stop after the bounded retry budget, and stop sending input after session loss or viewer replacement.
+    </li>
+    <li>
+      <strong>Route browser launch through GraphQL.</strong> First prove parity between the desktop direct-launch command and the existing <code>terminal_session_create</code> mutation. If parity holds, remove the browser-only rejection in <code>launchDefaultAgent.ts</code> and enter through that model-shaped create with concrete project, module, issue, target, working-directory, geometry, and request identities. Add a named launch mutation only if the parity test identifies behavior the create contract cannot represent. Do not add REST or substitute <code>run_now</code> unless the product action is explicitly the workflow transition.
+    </li>
+    <li>
+      <strong>Compose browser launch and wire development forwarding.</strong> Configure the adopted interactive terminal runtime with the isolated web profile's launch paths, hook runner, spool directory, in-process MCP URL, and run authority. Retain the MCP runtime for the process lifetime. Add only the PTY WebSocket entry to <code>studio/vite.proxy.ts</code> with WebSocket forwarding enabled. Leave <code>/graphql/subscribe</code> as an ordinary HTTP proxy. Add the browser terminal endpoint to <code>browserRuntime.ts</code> and its tests. The adapter remains bound to loopback in web development.
+    </li>
+    <li>
+      <strong>Prove the combined flow, then preserve desktop behavior.</strong> Run focused unit tests first, Rust attachment and ownership tests second, browser acceptance tests third, and the full overhaul gate last. Only after the browser flow passes should the old structural test be changed from "no WebSocket transport" to "only the registered PTY route exists."
+    </li>
+  </ol>
+
+  <h3>Acceptance criteria</h3>
+
+  <ul>
+    <li><strong>Browser launch.</strong> In a browser development session, the Details action sends the approved GraphQL launch operation. No Tauri <code>invoke</code> is required. The isolated launch runtime has a live MCP endpoint and hook runner. A launch error reaches the UI with the same actionable error shape used by desktop launch.</li>
+    <li><strong>Existing agent visibility.</strong> On project selection, the browser opens the current GraphQL status subscription through <code>/graphql/subscribe</code>. The initial snapshot contains already persisted runs, a new launch produces the expected status event, and unsubscribe cancels the SSE reader. The implementation does not add a status WebSocket or change the subscription protocol.</li>
+    <li><strong>Terminal attachment.</strong> The browser opens the configured PTY WebSocket, sends a valid attach frame, receives one ready frame, and renders binary output. A missing, ended, malformed, or unauthorized run closes with a stable error and does not leave a lease or attachment behind.</li>
+    <li><strong>Terminal interaction.</strong> Keyboard bytes arrive at tmux, resize changes the PTY geometry, and scroll changes copy-mode history. Binary output is not decoded as JSON. Text control frames are bounded and invalid controls do not panic the adapter.</li>
+    <li><strong>Durability and ownership.</strong> Closing the browser viewer releases the lease and detaches the viewer while the hosted tmux process remains alive. A second viewer replaces the first, the first receives the replacement outcome, and a stale renewal or release cannot affect the new lease.</li>
+    <li><strong>Recovery.</strong> A transient socket close reconnects with the last geometry and emits a resumed event after ready. Reconnect attempts use a cap and jitter. A session-not-found, lease replacement, or exhausted retry budget moves the client to <code>reattachment_required</code> and disables input.</li>
+    <li><strong>Desktop non-regression.</strong> Tauri still selects the native client, native viewer ownership and output activity tests pass, and desktop launch, terminal restoration, detach, and close behavior remain unchanged. The browser route must not be reachable through the Tauri command surface.</li>
+  </ul>
+
+  <h3>Test matrix</h3>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Area</th>
+        <th>Files to add or update</th>
+        <th>Command</th>
+        <th>What must be proved</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Wire contract</td>
+        <td><code>studio/src/test/terminal/browserTerminalClient.test.ts</code><br><code>studio/src/test/wireContract.test.ts</code></td>
+        <td><code>npm run test --workspace @worktracker/studio -- src/test/terminal/browserTerminalClient.test.ts src/test/wireContract.test.ts</code></td>
+        <td>Attach, ready, error, resize, scroll, binary input, detach, reconnect, suspension, resume, and malformed frames match the single wire contract.</td>
+      </tr>
+      <tr>
+        <td>Runtime URL and selection</td>
+        <td><code>studio/src/test/terminal/terminalClientRuntime.test.ts</code><br><code>studio/src/test/runtime/browserRuntime.test.ts</code></td>
+        <td><code>npm run test --workspace @worktracker/studio -- src/test/terminal/terminalClientRuntime.test.ts src/test/runtime/browserRuntime.test.ts</code></td>
+        <td>Browser selects the WebSocket client, Tauri selects the native client, URL derivation handles relative and HTTP(S) GraphQL origins, and invalid configuration fails early.</td>
+      </tr>
+      <tr>
+        <td>Development proxy</td>
+        <td><code>studio/src/test/runtime/developmentProxy.test.ts</code></td>
+        <td><code>npm run test --workspace @worktracker/studio -- src/test/runtime/developmentProxy.test.ts</code></td>
+        <td>Only the PTY path has <code>ws: true</code>. GraphQL execution, SSE subscriptions, and documents remain HTTP forwards, with no REST terminal route.</td>
+      </tr>
+      <tr>
+        <td>Adapter protocol</td>
+        <td><code>studio/src-tauri/src/bin/ticketry_graphql_adapter.rs</code> tests, plus a focused <code>studio/src-tauri/tests/browser_terminal_proxy.rs</code></td>
+        <td><code>cargo test --manifest-path studio/src-tauri/Cargo.toml --bin ticketry_graphql_adapter</code><br><code>cargo test --manifest-path studio/src-tauri/Cargo.toml --test browser_terminal_proxy</code></td>
+        <td>Route registration, loopback serving, frame validation, error close codes, binary output, bounded input, control handling, lease renewal, and cleanup are covered without using a live product profile.</td>
+      </tr>
+      <tr>
+        <td>Terminal and tmux behavior</td>
+        <td><code>studio/src-tauri/tests/tmux_viewer.rs</code><br><code>studio/src-tauri/tests/terminal_lifecycle_harness.rs</code></td>
+        <td><code>cargo test --manifest-path studio/src-tauri/Cargo.toml --test tmux_viewer --test terminal_lifecycle_harness</code></td>
+        <td>Input, output, resize, scroll, missing sessions, detach without killing tmux, restart durability, and viewer exit versus hosted process exit remain distinct.</td>
+      </tr>
+      <tr>
+        <td>Ownership</td>
+        <td><code>studio/src-tauri/tests/viewer_ownership.rs</code></td>
+        <td><code>cargo test --manifest-path studio/src-tauri/Cargo.toml --test viewer_ownership</code></td>
+        <td>Exact run, viewer, transport, and generation identity is required for acquire, renew, replacement, and release. Stale clients cannot release or renew the current owner.</td>
+      </tr>
+      <tr>
+        <td>GraphQL launch and status</td>
+        <td><code>studio/src/test/overhaulTaskAgentLaunchAcceptance.test.tsx</code><br><code>studio/src/test/overhaulTaskAgentLaunchInteractionAcceptance.test.tsx</code><br><code>studio/src/test/overhaulStatusStreamConsumerAcceptance.test.tsx</code><br><code>studio/src-tauri/tests/run_status_subscription.rs</code></td>
+        <td><code>npm run test --workspace @worktracker/studio -- src/test/overhaulTaskAgentLaunchAcceptance.test.tsx src/test/overhaulTaskAgentLaunchInteractionAcceptance.test.tsx src/test/overhaulStatusStreamConsumerAcceptance.test.tsx</code><br><code>cargo test --manifest-path studio/src-tauri/Cargo.toml --test run_status_subscription</code></td>
+        <td>Browser launch uses GraphQL, persisted existing runs appear in the snapshot, status events arrive over SSE, and cursor reset or unsubscribe behavior is unchanged.</td>
+      </tr>
+      <tr>
+        <td>Acceptance and retirement gate</td>
+        <td><code>studio/src/test/overhaulTerminalTransportRetirementAcceptance.test.tsx</code><br><code>studio/src/test/overhaulDesktopTerminalTransportAcceptance.test.tsx</code><br>new browser terminal acceptance coverage</td>
+        <td><code>npm run test:overhaul --workspace @worktracker/studio</code></td>
+        <td>The browser PTY route is present only where intended, the desktop path still works, launch and interaction gates pass, and the old no-socket assertion no longer rejects the deliberate browser route.</td>
+      </tr>
+      <tr>
+        <td>Repository gates</td>
+        <td>All changed source and generated contract files</td>
+        <td><code>npm run typecheck</code><br><code>npm run build</code><br><code>npm run graphql:drift --workspace @worktracker/studio</code><br><code>npm run boundary:check</code><br><code>npm run caller:check</code><br><code>cargo test --manifest-path studio/src-tauri/Cargo.toml</code></td>
+        <td>Type contracts, Vite output, generated GraphQL drift, module boundaries, caller policy, and the full Rust test suite stay clean.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Observability and diagnostics</h3>
+
+  <p>Web development already captures the Rust adapter and frontend child-process output in <code>.ticketry-dev/logs/ticketry.log</code>. Use <code>npm run logs:clear</code> before a reproduction, <code>npm run logs:follow</code> while opening and closing a terminal, and <code>npm run logs</code> for the retained tail. The route should log structured, non-secret boundary facts: connection outcome, run id, viewer id, transport, close code, normalized failure code, bytes or frames rejected by a limit, lease acquire or renew failure, and cleanup result. Never log keyboard bytes, terminal output, prompts, authorization headers, or full GraphQL variables. Browser-side state should expose the existing terminal failure layer and reattachment reason so support can distinguish transport, PTY, tmux, session, renderer, and control-plane failures.</p>
+
+  <p>For a failed browser run, capture the frontend URL and adapter port, the exact launch and attach timestamps, the run id, the WebSocket close code and reason, and the relevant log slice. Confirm the SSE status stream separately with the browser network panel or the existing status-stream test. Confirm tmux durability with the isolated tmux harness rather than by attaching to a product session manually.</p>
+
+  <h3>Security and failure cases</h3>
+
+  <ul>
+    <li>Bind the development adapter to <code>127.0.0.1</code>. Do not expose a wildcard listener or add an externally documented terminal API.</li>
+    <li>Validate run identifiers, geometry, control names, scroll counts, frame types, and frame sizes before invoking tmux. Clamp geometry through the existing terminal boundary and use its input limit.</li>
+    <li>Require a durable run and its existing authorization checks before attachment. Do not accept a client-supplied project, task, or tmux session name as authority for attach mode.</li>
+    <li>Use a fresh viewer id per socket and the exact lease generation for renewal and release. A stale socket must not detach a replacement viewer or terminate a hosted run.</li>
+    <li>On malformed init, unknown run, ended session, too many sessions, tmux failure, PTY read failure, output backpressure, or input pressure, send a stable error frame and close. Do not return database paths, SQL, stack traces, prompts, or raw tmux errors to the browser.</li>
+    <li>Bound concurrent browser sockets and output send time. A slow browser must not accumulate unbounded input or output in memory, and an adapter task must not outlive its socket.</li>
+    <li>Ensure the WebSocket route cannot be mistaken for GraphQL subscription traffic. <code>/graphql/subscribe</code> remains POST plus <code>text/event-stream</code>; the PTY route has its own path, handler, and tests.</li>
+  </ul>
+
+  <h3>Rollout and rollback</h3>
+
+  <p>Roll out behind the existing browser development path first. Run the isolated temporary SQLite and tmux profile, then a product snapshot, then desktop smoke tests. Keep the browser client behind a single runtime-selection seam so a failed browser transport can be disabled by selecting the unavailable client or by removing the development WebSocket route without touching Tauri commands, terminal persistence, or SSE status delivery.</p>
+
+  <p>Rollback means reverting the adapter route, browser runtime URL, browser client selection, launch caller change, and Vite WebSocket entry as one change set. The existing desktop Tauri client and GraphQL SSE status path remain the fallback. Before rollback, close active browser sockets if possible and verify that leases are released; do not delete durable agent runs or tmux sessions merely because the viewer transport was rolled back.</p>
+
+  <h3>Open decisions before implementation</h3>
+
+  <ul>
+    <li>Confirm the canonical browser path name, for example <code>/ws/terminal</code>, and whether the GraphQL endpoint may be an absolute URL with a separate WebSocket origin.</li>
+    <li>Confirm whether browser attach is the only supported WebSocket mode for this slice. The Rusty spawn frame contains more launch fields, but the narrow Ticketry plan should prefer GraphQL launch followed by attach unless product behavior explicitly requires spawn-over-socket.</li>
+    <li>Choose the adapter-side concurrency limit and output-pressure timeout, then make both values constants covered by tests.</li>
+    <li>Choose whether browser reconnection reuses the same viewer id or creates a new viewer id. The safer default is a new id with exact lease replacement and an explicit resumed event.</li>
+    <li>Confirm the desired UI treatment for <code>reattachment_required</code>: preserve scrollback and show a retry affordance, while preventing input until a fresh attach succeeds.</li>
+    <li>Run the launch parity test and decide whether <code>terminal_session_create</code> is sufficient. A new <code>launch_default_coding_agent</code> mutation is allowed only if that test records a concrete behavior gap.</li>
+    <li>Choose how web development locates the hook runner and reserves its isolated MCP port. Both values must come from validated startup configuration, not browser input.</li>
+    <li>Decide whether the browser acceptance test runs against an in-process route fixture or a spawned <code>ticketry_graphql_adapter</code>. The latter is closer to the web workflow; the former is faster for frame and cleanup cases.</li>
+  </ul>
+
+  <h3>Out of scope</h3>
+
+  <ul>
+    <li>Changing GraphQL status subscriptions from SSE to WebSocket, adding a status WebSocket, or changing cursor and snapshot semantics.</li>
+    <li>Adding a product REST API, terminal REST endpoints, an external compatibility contract, or a second backend.</li>
+    <li>Replacing Seaography GraphQL CRUD, launch authority, run persistence, terminal lifecycle reconciliation, viewer ownership, tmux naming, or the native Tauri viewer.</li>
+    <li>Rewriting the PTY or tmux implementation, introducing a new terminal store, changing xterm presentation, or moving durable sessions into the browser.</li>
+    <li>Porting Rusty's broader runtime, event system, provider system, durable event bus, or document-chat launch model.</li>
+    <li>Changing desktop launch semantics, desktop status delivery, native lease behavior, or the existing SSE development adapter beyond route registration needed to host the PTY socket.</li>
+    <li>Deploying the adapter as a public service, adding authentication beyond the existing local development boundary, or supporting cross-origin production browser clients.</li>
+  </ul>
+</section>
+  </main>
+
+  <footer>
+    Ticketry browser terminal proxy map. The section source files are retained under
+    <code>docs/plans/web-agent-terminal-proxy/sections/</code> for review ownership.
+  </footer>
+</body>
+</html>

@@ -283,7 +283,6 @@ describe("terminal panel furniture acceptance", () => {
       sidebarVisible: false,
       editViewZone: "active-tab-body",
       editViewBodyEngaged: false,
-      modalStack: [],
     });
     useStudioStore.setState({ selectedProjectId: "project-1" });
     seedConfig({

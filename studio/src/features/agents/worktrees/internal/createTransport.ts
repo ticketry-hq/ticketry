@@ -15,9 +15,12 @@
  * cutting a second branch.
  */
 import { studioRuntime } from "../../../../runtime";
-import { WorktreeCreateDocument } from "../generated/worktreeCreate";
-import { adaptWorktreeStatus } from "./statusTransport";
-import type { WorktreeContext, WorktreeStatus } from "./api";
+import { WorktreeCreateDocument } from "../generated/worktreeCreate.documents";
+import {
+  adaptWorktreeStatus,
+  type WorktreeStatusPayload,
+} from "./statusTransport";
+import type { WorktreeContext, WorktreeStatus } from "./types";
 
 /** A stable identity for one user intent, reused across its retries. */
 export function newOperationId(): string {
@@ -34,7 +37,7 @@ export function requestWorktreeCreate(
     graphQl: async (execute) =>
       adaptWorktreeStatus(
         (await execute(WorktreeCreateDocument, { taskId, operationId }))
-          .worktree_create,
+          .worktree_create as WorktreeStatusPayload,
       ),
   });
 }

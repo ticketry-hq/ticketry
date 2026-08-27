@@ -14,13 +14,10 @@ import { TEMP_TASK_ID } from "../../../../../features/agents/types";
 import { useStudioStore } from "../../../../../features/projects";
 import { WorkItemRowLabel } from "./WorkItemRowLabel";
 import { useClientStore } from "../../../../../state/clientStore";
-import { useQuery } from "@tanstack/react-query";
 import {
-  useModuleTree,
-  workItemQuery,
+  useModuleOpen,
 } from "../../../../../features/work-items";
-import { queryClient } from "../../../../../shared/query/queryClient";
-import { stateById, useCachedStates } from "../../../../../shared/query/stateCatalog";
+import { stateById, useCachedStates } from "../../../../../features/projects";
 import type { DragSourceProps } from "../../../../../shared/dragDrop/useAxisDragAndDrop";
 
 // Warm the description-editor chunk on first row hover so it is already
@@ -30,6 +27,12 @@ const preloadDescriptionEditor = () => {
   if (editorWarmed) return;
   editorWarmed = true;
   void import("../../selected-ticket/documents/DescriptionEditor");
+};
+
+const recordSelectionProfilePoint = (point: string) => {
+  (globalThis as typeof globalThis & {
+    __ticketrySelectionProfileProbe?: (point: string) => void;
+  }).__ticketrySelectionProfileProbe?.(point);
 };
 
 interface TaskRowProps {
@@ -49,6 +52,7 @@ export const TaskRow = React.memo(function TaskRow({
   onToggleExpand,
   dragSourceProps,
 }: TaskRowProps) {
+  recordSelectionProfilePoint("task-row-render");
   return row.kind === "scratch" ? (
     <ScratchPlanningRow
       row={row}
@@ -74,11 +78,11 @@ function WorkItemPlanningRow({
   onToggleExpand,
   dragSourceProps,
 }: Omit<TaskRowProps, "row"> & { row: WorkItemRow }) {
-  const { data: task } = useQuery(workItemQuery(row.id), queryClient);
   const projectId = useStudioStore((state) => state.selectedProjectId);
   const states = useCachedStates(projectId);
   const moduleId = useClientStore((state) => state.selectedModuleId);
-  const tree = useModuleTree(projectId, moduleId);
+  const { tree, items } = useModuleOpen(moduleId);
+  const task = items.find((item) => item.id === row.id);
   const descendantIds = useMemo(() => {
     const ids: string[] = [];
     const seen = new Set([row.id]);

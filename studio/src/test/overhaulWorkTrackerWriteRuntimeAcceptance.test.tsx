@@ -18,7 +18,7 @@ const startup = {
 
 const issue = {
   id: "item-1", name: "Item", project_id: "project-1", sequence_id: 1,
-  state_id: "state-1", state_revision: 1, description: "", parent_id: null,
+  state_id: "state-1", description: "", parent_id: null,
   module_id: null, is_archived: false,
   created_at: "2026-08-12T00:00:00Z", updated_at: "2026-08-12T00:00:00Z",
   rank: "a", issue_type_id: "type-1", project: { slug: "PRJ" },

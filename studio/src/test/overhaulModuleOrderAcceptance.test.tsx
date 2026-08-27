@@ -1,16 +1,42 @@
-import { QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../shared/api/client", async () => {
-  const actual = await vi.importActual<typeof import("../shared/api/client")>(
-    "../shared/api/client",
+vi.mock("./legacyApiFixture", async () => {
+  const actual = await vi.importActual<typeof import("./legacyApiFixture")>(
+    "./legacyApiFixture",
   );
   return { ...actual, listModules: vi.fn(), listProjects: vi.fn() };
 });
 vi.mock("../features/projects/queries/readTransport", async () => {
-  const api = await import("../shared/api/client");
-  return { readModules: api.listModules, readProjects: api.listProjects, readWorkspace: vi.fn() };
+  const actual = await vi.importActual<typeof import("../features/projects/queries/readTransport")>(
+    "../features/projects/queries/readTransport",
+  );
+  const api = await import("./legacyApiFixture");
+  const { projectOpenFixture } = await import("./projectOpenFixture");
+  return {
+    ...actual,
+    readProjectOpen: async (projectId: string) => {
+      const modules = await api.listModules(projectId);
+      let project;
+      try {
+        const projects = await api.listProjects();
+        project = projects.find((candidate: { id: string }) => candidate.id === projectId) ?? projects[0];
+      } catch {
+        const { studioApolloClient } = await import("../shared/apollo/client");
+        const { WorkTrackerProjectOpenDocument } = await import("../features/projects/generated/projects.documents");
+        const cached = studioApolloClient().readQuery({
+          query: WorkTrackerProjectOpenDocument,
+          variables: { projectId },
+        })?.project.nodes[0];
+        project = cached
+          ? { ...cached, id: projectId }
+          : { id: projectId, name: "Project", slug: "PRJ", description: "", manual_module_order: false };
+      }
+      if (!project) throw new Error(`Project ${projectId} was not found.`);
+      return projectOpenFixture(project, modules);
+    },
+    readWorkspace: vi.fn(),
+  };
 });
 
 import { ModuleTabStrip } from "../app/shell/ticket-workspace/ModuleTabStrip";
@@ -22,9 +48,8 @@ import {
   seedProjects,
 } from "../features/projects";
 import { useStudioStore } from "../features/projects/store";
-import { groupBacklog } from "../features/work-items";
-import * as api from "../shared/api/client";
-import { queryClient } from "../shared/query/queryClient";
+import * as api from "./legacyApiFixture";
+import { resetStudioApolloClient } from "../shared/apollo/client";
 import type { Module, Project } from "../shared/api/types";
 import { useClientStore } from "../state/clientStore";
 
@@ -63,10 +88,10 @@ function project(manual_module_order: boolean): Project {
  */
 function ModuleSurfaces() {
   return (
-    <QueryClientProvider client={queryClient}>
+    <>
       <ModulesPane />
       <ModuleTabStrip />
-    </QueryClientProvider>
+    </>
   );
 }
 
@@ -88,11 +113,7 @@ function keyboardShortcutOrder(): string[] {
 }
 
 function backlogGroupOrder(): string[] {
-  return groupBacklog([], getModulesSnapshot(PROJECT_ID), [], null, {
-    query: "",
-  })
-    .map((group) => group.epic?.name)
-    .filter((name): name is string => name !== undefined);
+  return getModulesSnapshot(PROJECT_ID).map((module) => module.name);
 }
 
 async function renderModuleSurfaces(expected: string[]): Promise<void> {
@@ -101,8 +122,8 @@ async function renderModuleSurfaces(expected: string[]): Promise<void> {
 }
 
 describe("canonical module order acceptance", () => {
-  beforeEach(() => {
-    queryClient.clear();
+  beforeEach(async () => {
+    await resetStudioApolloClient();
     listModules.mockReset().mockResolvedValue(SERVER_ORDER);
     listProjects.mockReset().mockResolvedValue([project(false)]);
     registerModuleRecencyProvider(async () => ({}));

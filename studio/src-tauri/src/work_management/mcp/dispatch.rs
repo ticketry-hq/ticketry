@@ -124,7 +124,7 @@ async fn dispatch_checked(
                 .cloned()
                 .unwrap_or_default()
                 .into_iter()
-                .filter(|row| row["id"] == principal.project_id)
+                .filter(|row| principal.is_global() || row["id"] == principal.project_id)
                 .collect();
             Ok(DispatchOutput::result(Value::Array(scoped)))
         }
@@ -160,7 +160,7 @@ async fn dispatch_checked(
             // One factual read serves every caller. Execution owns the rule
             // that the plan is the non-archived subtree and that only blocker
             // edges inside it are returned; MCP must not restate it.
-            let access = GraphAccess::caller_roots(&principal.project_id, [&task.id]);
+            let access = GraphAccess::caller_roots(&task.project_id, [&task.id]);
             Ok(DispatchOutput::direct(
                 match crate::execution_graph::dependency_graph(database, &task.id, &access).await {
                     Ok(graph) => json!({
@@ -220,10 +220,18 @@ async fn dispatch_checked(
             );
             let result = service
                 .execute(RunNowRequest {
-                    request_identity: format!("mcp:{}:{}", principal.agent_run_id, id_or_key),
+                    request_identity: if principal.is_global() {
+                        format!("mcp:global:{id_or_key}")
+                    } else {
+                        format!("mcp:{}:{}", principal.agent_run_id, id_or_key)
+                    },
                     id_or_key,
-                    caller: RunNowCaller::Agent {
-                        authenticated_run_id: principal.agent_run_id.clone(),
+                    caller: if principal.is_global() {
+                        RunNowCaller::Human
+                    } else {
+                        RunNowCaller::Agent {
+                            authenticated_run_id: principal.agent_run_id.clone(),
+                        }
                     },
                 })
                 .await;
@@ -243,7 +251,7 @@ async fn dispatch_checked(
                     "error": "execution_reconciliation_unavailable",
                 })));
             };
-            let access = GraphAccess::caller_roots(&principal.project_id, [&task.id]);
+            let access = GraphAccess::caller_roots(&task.project_id, [&task.id]);
             let request = graph_run_request(&task.id, access, arguments);
             let result = if reset_requested(arguments) {
                 graph_runs.reset_and_execute(request).await

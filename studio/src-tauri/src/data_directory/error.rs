@@ -17,7 +17,10 @@ impl std::fmt::Display for OwnershipError {
                 owner.pid, owner.nonce
             ),
             Self::DataDirectoryInUse { owner: None } => {
-                write!(formatter, "data directory is already owned by another desktop instance")
+                write!(
+                    formatter,
+                    "data directory is already owned by another desktop instance"
+                )
             }
             Self::Io(message) => write!(formatter, "data-directory ownership failed: {message}"),
         }

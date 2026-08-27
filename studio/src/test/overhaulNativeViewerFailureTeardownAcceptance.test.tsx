@@ -12,6 +12,7 @@ import {
   grantsEveryLease,
   installDesktopGraphQlRuntime,
 } from "./desktopGraphQlRuntime";
+import { documentOperationName } from "../graphql-foundation/typedDocument";
 
 const tauri = vi.hoisted(() => ({
   invoke: vi.fn(),
@@ -245,7 +246,7 @@ describe("native viewer attachment acceptance", () => {
     // Viewer ownership is claimed and released on the Rust lease contract, so
     // what a test counts is lease operations, not host requests.
     const leaseOperations = installDesktopGraphQlRuntime(async (document, variables) => {
-      if (document.operationName === "UpdateViewerLease") {
+      if (documentOperationName(document) === "UpdateViewerLease") {
         throw new Error("lease renewal failed");
       }
       return grantsEveryLease(document, variables);
@@ -328,7 +329,10 @@ describe("native viewer attachment acceptance", () => {
     )).toHaveLength(1);
   });
 
-  it("releases a retained viewer once when the WebView lifecycle ends", async () => {
+  it("[overhaul-162] releases a retained viewer once when the WebView lifecycle ends even if Tauri rejects listener cleanup", async () => {
+    tauri.listen.mockResolvedValue(() =>
+      Promise.reject(new Error("the WebView document already unloaded")),
+    );
     // Viewer ownership is claimed and released on the Rust lease contract, so
     // what a test counts is lease operations, not host requests.
     const leaseOperations = installDesktopGraphQlRuntime();

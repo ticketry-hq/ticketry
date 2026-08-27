@@ -115,6 +115,7 @@ export function useAxisDragAndDrop<Payload, TargetId extends string>(
     useState<ControllerState<Payload, TargetId>>(initialState);
   const stateRef = useRef(state);
   const serializedPayloadRef = useRef<string | null>(null);
+  const lastResolvedDropRef = useRef<ResolvedDrop<TargetId> | null>(null);
   const disabledRef = useRef(disabled);
   const onDropRef = useRef(options.onDrop);
   /** The mounted drop targets, keyed by id, for axis placement. */
@@ -141,13 +142,15 @@ export function useAxisDragAndDrop<Payload, TargetId extends string>(
 
   const clearAll = useCallback(() => {
     serializedPayloadRef.current = null;
+    lastResolvedDropRef.current = null;
     updateState({ payload: null, targetId: null, intent: null });
   }, [updateState]);
 
   const clearResolvedTarget = useCallback(
-    (targetId?: TargetId) => {
+    (targetId?: TargetId, preserveLastResolved = false) => {
       const current = stateRef.current;
       if (targetId !== undefined && current.targetId !== targetId) return;
+      if (!preserveLastResolved) lastResolvedDropRef.current = null;
       updateState({ ...current, targetId: null, intent: null });
     },
     [updateState],
@@ -184,6 +187,31 @@ export function useAxisDragAndDrop<Payload, TargetId extends string>(
       }
     },
     [clearAll, codec],
+  );
+
+  const finishDrag = useCallback(
+    (event: ReactDragEvent<HTMLElement>) => {
+      const current = stateRef.current;
+      const resolved =
+        current.targetId !== null && current.intent !== null
+          ? { targetId: current.targetId, intent: current.intent }
+          : lastResolvedDropRef.current;
+      try {
+        // Some desktop webviews report the accepted target through dragover
+        // but finish the gesture with dragend alone. A normal drop clears the
+        // state before dragend, so this only fills that missing final event.
+        if (
+          !disabledRef.current &&
+          current.payload !== null &&
+          resolved !== null
+        ) {
+          onDropRef.current?.(current.payload, resolved, event);
+        }
+      } finally {
+        clearAll();
+      }
+    },
+    [clearAll],
   );
 
   useEffect(() => {
@@ -234,6 +262,7 @@ export function useAxisDragAndDrop<Payload, TargetId extends string>(
 
       event.preventDefault();
       if (event.dataTransfer !== null) event.dataTransfer.dropEffect = "move";
+      lastResolvedDropRef.current = placement;
       updateState({ ...stateRef.current, ...placement });
     };
 
@@ -331,7 +360,7 @@ export function useAxisDragAndDrop<Payload, TargetId extends string>(
             clearAll();
           }
         },
-        onDragEnd: clearAll,
+        onDragEnd: finishDrag,
       };
       sourceProps.set(serialized, props);
       return props;
@@ -365,12 +394,17 @@ export function useAxisDragAndDrop<Payload, TargetId extends string>(
           event.preventDefault();
           event.dataTransfer.dropEffect = "move";
           const intent = resolveIntent(axis, event);
+          lastResolvedDropRef.current = { targetId, intent };
           updateState({ ...current, targetId, intent });
         },
         onDragLeave: (event) => {
           const next = event.relatedTarget;
           if (next instanceof Node && event.currentTarget.contains(next)) return;
-          clearResolvedTarget(targetId);
+          // Chromium and desktop webviews may emit this final leave before
+          // dragend without ever emitting drop. Hide the visual seam, but keep
+          // its accepted placement until another dragover or cancellation says
+          // the pointer truly moved elsewhere.
+          clearResolvedTarget(targetId, true);
         },
         onDrop: (event) => {
           event.preventDefault();
@@ -389,6 +423,7 @@ export function useAxisDragAndDrop<Payload, TargetId extends string>(
     codec,
     commitDrop,
     disabled,
+    finishDrag,
     updateState,
   ]);
 

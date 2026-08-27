@@ -29,6 +29,7 @@ pub(super) struct Protection {
 pub(super) async fn protect(
     data_directory: &Path,
     generation: &str,
+    semantic_bridges: &[String],
     plan: &AdoptionPlan,
 ) -> Result<Protection, AdoptionFailure> {
     let database_path = data_directory.join("state.db");
@@ -64,7 +65,10 @@ pub(super) async fn protect(
     let pinned = snapshot::pin(data_directory, &created)?;
     fault(plan, Phase::SnapshotCopy)?;
     let record = snapshot::verify(&created, &source, false).await?;
-    let pinned_record = snapshot::verify(&pinned, &source, true).await?;
+    let pinned_record = match pinned {
+        Some(pinned) => Some(snapshot::verify(&pinned, &source, true).await?),
+        None => None,
+    };
     fault(plan, Phase::HashVerification)?;
     let selected_bridge = crate::installation_classification::manifest()
         .generation(generation)
@@ -72,6 +76,13 @@ pub(super) async fn protect(
         .map(|_| bridge::select(generation, &fingerprint))
         .transpose()?;
 
+    let mut bridges = selected_bridge
+        .iter()
+        .map(|bridge| bridge.id.clone())
+        .collect::<Vec<_>>();
+    bridges.extend_from_slice(semantic_bridges);
+    bridges.sort();
+    bridges.dedup();
     let manifest = snapshot_manifest::SnapshotManifest {
         manifest_version: snapshot_manifest::MANIFEST_VERSION,
         source_engine: "sqlite".to_owned(),
@@ -82,20 +93,19 @@ pub(super) async fn protect(
         rust_leaf: RUST_LEAF.to_owned(),
         created_at: now_rfc3339(),
         snapshot: record.clone(),
-        bridges: selected_bridge
-            .iter()
-            .map(|bridge| bridge.id.clone())
-            .collect(),
+        bridges,
         counts: source.counts.clone(),
         external_roots: snapshot_manifest::external_roots(data_directory),
         completed: false,
     };
     manifest.write(data_directory)?;
-    snapshot_manifest::SnapshotManifest {
-        snapshot: pinned_record,
-        ..manifest
+    if let Some(pinned_record) = pinned_record {
+        snapshot_manifest::SnapshotManifest {
+            snapshot: pinned_record,
+            ..manifest
+        }
+        .write(data_directory)?;
     }
-    .write(data_directory)?;
 
     Ok(Protection {
         record,

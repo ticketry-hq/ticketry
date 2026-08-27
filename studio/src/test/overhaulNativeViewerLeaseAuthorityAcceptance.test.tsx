@@ -11,6 +11,7 @@ import {
   grantsEveryLease,
   installDesktopGraphQlRuntime,
 } from "./desktopGraphQlRuntime";
+import { documentOperationName } from "../graphql-foundation/typedDocument";
 
 const tauri = vi.hoisted(() => ({
   invoke: vi.fn(),
@@ -126,8 +127,8 @@ describe("native viewer attachment acceptance", () => {
     const host = vi.fn();
     vi.stubGlobal("fetch", host);
     const operations = installDesktopGraphQlRuntime(async (document, variables) => {
-      lifecycle.push(document.operationName);
-      if (document.operationName === "CreateViewerLease") await leaseCommitted;
+      lifecycle.push(documentOperationName(document));
+      if (documentOperationName(document) === "CreateViewerLease") await leaseCommitted;
       return grantsEveryLease(document, variables);
     });
     tauri.invoke.mockImplementation((command: string) => {
@@ -222,7 +223,7 @@ describe("native viewer attachment acceptance", () => {
       commitLease = resolve;
     });
     installDesktopGraphQlRuntime(async (document, variables) => {
-      if (document.operationName === "CreateViewerLease") await leaseCommitted;
+      if (documentOperationName(document) === "CreateViewerLease") await leaseCommitted;
       return grantsEveryLease(document, variables);
     });
     const ready = vi.fn();
@@ -266,7 +267,7 @@ describe("native viewer attachment acceptance", () => {
       commitAcquire = resolve;
     });
     const operations = installDesktopGraphQlRuntime(async (document, variables) => {
-      if (document.operationName === "CreateViewerLease") await acquireCommitted;
+      if (documentOperationName(document) === "CreateViewerLease") await acquireCommitted;
       return grantsEveryLease(document, variables);
     });
     const released = () =>

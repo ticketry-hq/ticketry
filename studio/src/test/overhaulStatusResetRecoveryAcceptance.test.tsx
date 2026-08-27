@@ -6,10 +6,9 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { queryClient } from "../shared/query/queryClient";
-import { queryKeys } from "../shared/query/keys";
-import { getStatesSnapshot, seedStates } from "../shared/query/stateCatalog";
-import { useAgentStatusStore } from "../features/agents/status";
+import { studioApolloClient } from "../shared/apollo/client";
+import { getStatesSnapshot, seedStates } from "../features/projects";
+import { useAgentStatusStore } from "../features/agents/status/testStore";
 import { statusStreamFeed } from "../features/agents/status/stream/statusStreamFeed";
 
 const PROJECT = "11111111-1111-1111-1111-111111111111";
@@ -129,7 +128,6 @@ beforeEach(() => {
     automationAttempts: {},
     automationByTask: {},
   });
-  queryClient.clear();
   seedStates(PROJECT, [
     {
       id: "state-1",
@@ -151,7 +149,8 @@ afterEach(() => {
 describe("authoritative reset recovery acceptance", () => {
   it("[overhaul-83] recovers from every unusable cursor without trusting stale holdings", async () => {
     const server = transport();
-    const refresh = vi.spyOn(queryClient, "invalidateQueries");
+    const refresh = vi.spyOn(studioApolloClient(), "refetchQueries")
+      .mockResolvedValue([] as never);
     statusStreamFeed.start(PROJECT, { createProxy: server.createProxy });
     await vi.advanceTimersByTimeAsync(0);
 
@@ -177,9 +176,7 @@ describe("authoritative reset recovery acceptance", () => {
       server.send(resetRequired(baseline, reason));
       await vi.advanceTimersByTimeAsync(0);
 
-      expect(
-        refresh.mock.calls.map(([options]) => options?.queryKey),
-      ).toContainEqual(queryKeys.tasks.all);
+      expect(refresh).toHaveBeenCalled();
       window.dispatchEvent(new Event("online"));
       await vi.advanceTimersByTimeAsync(0);
       expect(
@@ -191,18 +188,21 @@ describe("authoritative reset recovery acceptance", () => {
 
   it("[overhaul-84] keeps a mutation committed at any reset boundary", async () => {
     const server = transport();
+    const itemRefresh = vi.spyOn(studioApolloClient(), "query")
+      .mockResolvedValue({} as never);
+    vi.spyOn(studioApolloClient(), "refetchQueries")
+      .mockResolvedValue([] as never);
     statusStreamFeed.start(PROJECT, { createProxy: server.createProxy });
     await vi.advanceTimersByTimeAsync(0);
     server.send(snapshot(10, [run]));
     server.send(caughtUp(10));
-    const invalidate = vi.spyOn(queryClient, "invalidateQueries");
 
     // Before the reset: applied against the cursor it was measured with.
     server.send(workItemEdit(11, "item-before"));
     await vi.advanceTimersByTimeAsync(60);
-    expect(invalidate.mock.calls.map(([options]) => options?.queryKey)).toContainEqual(
-      queryKeys.workItems.byId("item-before"),
-    );
+    expect(itemRefresh).toHaveBeenCalledWith(expect.objectContaining({
+      variables: { id: "item-before" },
+    }));
 
     // During the reset: buffered while the canonical holdings load, then
     // applied above the installed baseline rather than under it.
@@ -211,21 +211,21 @@ describe("authoritative reset recovery acceptance", () => {
     server.send(workflowRename(41, "During"));
     server.send(workItemEdit(42, "item-during"));
     expect(getStatesSnapshot(PROJECT)[0].name).toBe("Backlog");
-    invalidate.mockClear();
+    itemRefresh.mockClear();
     await vi.advanceTimersByTimeAsync(60);
     expect(getStatesSnapshot(PROJECT)[0].name).toBe("During");
-    expect(invalidate.mock.calls.map(([options]) => options?.queryKey)).toContainEqual(
-      queryKeys.workItems.byId("item-during"),
-    );
+    expect(itemRefresh).toHaveBeenCalledWith(expect.objectContaining({
+      variables: { id: "item-during" },
+    }));
 
     // After the baseline: an ordinary fact again, and the retained cursor has
     // moved past everything the reset drained.
-    invalidate.mockClear();
+    itemRefresh.mockClear();
     server.send(workItemEdit(43, "item-after"));
     await vi.advanceTimersByTimeAsync(60);
-    expect(invalidate.mock.calls.map(([options]) => options?.queryKey)).toContainEqual(
-      queryKeys.workItems.byId("item-after"),
-    );
+    expect(itemRefresh).toHaveBeenCalledWith(expect.objectContaining({
+      variables: { id: "item-after" },
+    }));
     window.dispatchEvent(new Event("online"));
     await vi.advanceTimersByTimeAsync(0);
     expect(

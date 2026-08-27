@@ -1,115 +1,69 @@
-import { studioRuntime } from "../../../runtime";
-import type {
-  ModuleTree,
-  State,
-  WorkItem,
-} from "../../../shared/api/types";
+import type { ModuleTree, WorkItem } from "../../../shared/api/types";
 import {
   compactWorktrackerId,
   publicWorktrackerId,
 } from "../../../shared/api/generatedWorktracker";
-import { createWorkItemBatcher } from "../../../shared/api/workItemBatcher";
+import { studioApolloClient } from "../../../shared/apollo/client";
 import {
-  WorkTrackerWorkItemDocument,
+  WorkTrackerModuleOpenDocument,
   WorkTrackerWorkItemByKeyDocument,
-  WorkTrackerModuleTreeDocument,
-  WorkTrackerWorkItemsByIdsDocument,
+  WorkTrackerWorkItemDocument,
   WorkTrackerWorkItemsDocument,
-} from "../generated/operations";
-import { WorkTrackerAttachmentsDocument } from "../generated/attachments";
+} from "../generated/workItems.documents";
 import { orderedWorkItems, workItemFromIssue } from "../issueAdapter";
-import type { Attachment } from "../../../shared/api/types";
 
-export function readWorkItemAttachments(id: string): Promise<Attachment[]> {
-  return studioRuntime().readWorkTracker({
-    graphQl: async (execute) => (await execute(WorkTrackerAttachmentsDocument, {
-      issueId: compactWorktrackerId(id),
-    })).attachments.nodes.map((attachment) => ({
-      id: publicWorktrackerId(attachment.id),
-      issue: publicWorktrackerId(attachment.issue_id),
-      filename: attachment.filename,
-      mime_type: attachment.mime_type,
-      size: attachment.size,
-      url: attachment.file,
-      created_at: attachment.created_at,
-    })),
-  });
-}
-
-export function readWorkItemsByIds(ids: readonly string[]): Promise<WorkItem[]> {
-  return studioRuntime().readWorkTracker({
-    graphQl: async (execute) => {
-      const rows = (
-        await execute(WorkTrackerWorkItemsByIdsDocument, {
-          ids: ids.map(compactWorktrackerId),
-        })
-      ).work_items_by_ids.nodes.map(workItemFromIssue);
-      const byId = new Map(rows.map((row) => [row.id, row]));
-      return ids.flatMap((id) => {
-        const row = byId.get(publicWorktrackerId(id));
-        return row ? [row] : [];
-      });
-    },
-  });
-}
-
-export function readWorkItem(id: string): Promise<WorkItem> {
-  return studioRuntime().readWorkTracker({
-    graphQl: async (execute) => {
-      const key = /^(.*)-(\d+)$/.exec(id);
-      const result = key
-        ? await execute(WorkTrackerWorkItemByKeyDocument, {
-            projectSlug: key[1]!.toUpperCase(),
-            sequenceId: Number(key[2]),
-          })
-        : await execute(WorkTrackerWorkItemDocument, {
-            id: compactWorktrackerId(id),
-          });
-      const item = result.work_item.nodes[0];
-      if (!item) throw new Error(`Work item ${id} was not found.`);
-      return workItemFromIssue(item);
-    },
-  });
-}
-
-export function readModuleTreeRecords(
-  projectId: string,
-  moduleId: string,
-): Promise<ModuleTree & { workItems: WorkItem[]; states: State[] }> {
-  return studioRuntime().readWorkTracker({
-    graphQl: async (execute) => {
-      const result = await execute(WorkTrackerModuleTreeDocument, {
-        projectId: compactWorktrackerId(projectId),
-        moduleId: compactWorktrackerId(moduleId),
-      });
-      const workItems = orderedWorkItems(result.work_items.nodes);
-      return {
-        ...moduleTreeFromWorkItems(moduleId, workItems),
-        workItems,
-        states: result.states.nodes.map((state) => ({
-          ...state,
-          id: publicWorktrackerId(state.id),
-        })),
-      };
-    },
-  });
-}
-
-export function readProjectWorkItems(projectId: string): Promise<WorkItem[]> {
-  return studioRuntime().readWorkTracker({
-    graphQl: async (execute) => orderedWorkItems((
-      await execute(WorkTrackerWorkItemsDocument, {
-        projectId: compactWorktrackerId(projectId),
+export async function readWorkItem(id: string): Promise<WorkItem> {
+  const key = /^(.*)-(\d+)$/.exec(id);
+  const request = key
+    ? studioApolloClient().query({
+        query: WorkTrackerWorkItemByKeyDocument,
+        variables: {
+          projectSlug: key[1]!.toUpperCase(),
+          sequenceId: Number(key[2]),
+        },
+        fetchPolicy: "network-only" as const,
       })
-    ).work_items.nodes),
-  });
+    : studioApolloClient().query({
+        query: WorkTrackerWorkItemDocument,
+        variables: { id: compactWorktrackerId(id) },
+        fetchPolicy: "network-only" as const,
+      });
+  const { data } = await request;
+  const item = data!.work_item.nodes[0];
+  if (!item) throw new Error(`Work item ${id} was not found.`);
+  return workItemFromIssue(item);
 }
 
-const workItemBatcher = createWorkItemBatcher(readWorkItemsByIds);
+export async function readModuleTreeRecords(
+  _projectId: string,
+  moduleId: string,
+): Promise<ModuleTree & { workItems: WorkItem[] }> {
+  const { data } = await studioApolloClient().query({
+    query: WorkTrackerModuleOpenDocument,
+    variables: { moduleId: compactWorktrackerId(moduleId) },
+    fetchPolicy: "network-only",
+  });
+  const workItems = orderedWorkItems(data!.work_items.nodes);
+  return {
+    ...moduleTreeFromWorkItems(moduleId, workItems),
+    workItems,
+  };
+}
 
-export const readBatchedWorkItem = workItemBatcher.fetchWorkItem;
+export async function readProjectWorkItems(projectId: string): Promise<WorkItem[]> {
+  const { data } = await studioApolloClient().query({
+    query: WorkTrackerWorkItemsDocument,
+    variables: { projectId: compactWorktrackerId(projectId) },
+    fetchPolicy: "network-only",
+  });
+  return orderedWorkItems(data!.work_items.nodes);
+}
 
-function moduleTreeFromWorkItems(moduleId: string, tasks: readonly WorkItem[]) {
+export function moduleTreeFromWorkItems(
+  moduleId: string,
+  tasks: readonly WorkItem[],
+): ModuleTree {
+  const publicModuleId = publicWorktrackerId(moduleId);
   const rootIds: string[] = [];
   const children: Record<string, string[]> = {};
   const order: string[] = [];
@@ -118,8 +72,10 @@ function moduleTreeFromWorkItems(moduleId: string, tasks: readonly WorkItem[]) {
     children[task.id] = [];
   }
   for (const task of tasks) {
-    if (task.parent_id === moduleId) rootIds.push(task.id);
-    else if (task.parent_id && children[task.parent_id]) children[task.parent_id].push(task.id);
+    if (task.parent_id === publicModuleId) rootIds.push(task.id);
+    else if (task.parent_id && children[task.parent_id]) {
+      children[task.parent_id].push(task.id);
+    }
   }
   return { rootIds, children, order };
 }

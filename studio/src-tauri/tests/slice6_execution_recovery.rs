@@ -7,8 +7,9 @@
 
 mod common;
 
-use common::execution_django_fixture as fixture;
+use common::execution_fixture as fixture;
 use common::execution_harness::{public_id, ExecutionHarness, HarnessOptions};
+use common::execution_legacy_fixture as legacy_fixture;
 use muxed_studio_lib::terminal_launch::TerminalLaunchBoundary;
 use sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, Statement};
 use serde_json::{json, Value};
@@ -31,7 +32,7 @@ async fn a_crash_before_the_response_leaves_one_claim_and_one_runtime_after_rest
     // Startup replayed the same generation rather than starting a second agent.
     assert_eq!(claim_tuples(&database).await, claims_before);
     assert_eq!(
-        count(&database, "agent_runs").await,
+        count_campaign_runs(&database).await,
         claims_before.len() as i64
     );
     assert_eq!(harness.live_runtimes().len(), claims_before.len());
@@ -58,7 +59,7 @@ async fn a_crash_after_runtime_creation_adopts_the_same_runtime_on_restart() {
     assert_eq!(claim_tuples(&database).await, claims_before);
     assert_eq!(harness.live_runtimes(), runtimes_before);
     assert_eq!(
-        count(&database, "agent_runs").await,
+        count_campaign_runs(&database).await,
         claims_before.len() as i64
     );
 
@@ -69,7 +70,7 @@ async fn a_crash_after_runtime_creation_adopts_the_same_runtime_on_restart() {
     assert_eq!(claim_tuples(&database).await, claims_before);
     assert_eq!(harness.live_runtimes(), runtimes_before);
     assert_eq!(
-        count(&database, "agent_runs").await,
+        count_campaign_runs(&database).await,
         claims_before.len() as i64
     );
     assert_eq!(
@@ -179,12 +180,12 @@ async fn an_auto_start_transition_produces_one_launch_across_a_crash_and_restart
     harness.restart().await;
     let attempts = count(&database, "automation_attempts").await;
     assert_eq!(attempts, 1, "one occurrence materializes one attempt");
-    let runs = count(&database, "agent_runs").await;
+    let runs = count_campaign_runs(&database).await;
     assert!(runs <= 1, "auto-start prepares at most one launch: {runs}");
 
     harness.restart().await;
     assert_eq!(count(&database, "automation_attempts").await, attempts);
-    assert_eq!(count(&database, "agent_runs").await, runs);
+    assert_eq!(count_campaign_runs(&database).await, runs);
     harness.shutdown().await;
 }
 
@@ -202,10 +203,14 @@ async fn simultaneous_presses_and_events_converge_on_one_claim_per_child() {
     );
 
     let database = harness.database().await;
-    assert_eq!(claimed_children(&database).await, ready_children());
+    assert_eq!(
+        claimed_children(&database).await,
+        ready_children(),
+        "pressed={pressed}; pressed_again={pressed_again}; woken={woken:?}"
+    );
     // One claim, one Agent Run, and one verified runtime per child, whichever
     // caller won the race.
-    assert_eq!(count(&database, "agent_runs").await, 2);
+    assert_eq!(count_campaign_runs(&database).await, 2);
     assert_eq!(harness.live_runtimes().len(), 2);
     assert_eq!(count(&database, "launched_tasks").await, 2);
     for observed in [&pressed, &pressed_again] {
@@ -274,8 +279,7 @@ async fn normal_shutdown_leaves_campaigns_and_runtimes_durable() {
 async fn adopting_copied_campaign_data_preserves_it_across_two_opens() {
     // A store that already carries a serial campaign, a settled claim, a
     // parallel campaign without a policy snapshot, and a compatibility receipt.
-    let mut harness =
-        ExecutionHarness::start_over(HarnessOptions::default(), fixture::provision_current).await;
+    let mut harness = ExecutionHarness::start_over_legacy_current(HarnessOptions::default()).await;
     let database = harness.database().await;
     let first = (
         claim_tuples(&database).await,
@@ -286,7 +290,7 @@ async fn adopting_copied_campaign_data_preserves_it_across_two_opens() {
     assert_eq!(first.2, 1);
     assert_eq!(
         claimed_children(&database).await,
-        vec![public_id(fixture::CLAIMED_CHILD)]
+        vec![public_id(legacy_fixture::CLAIMED_CHILD)]
     );
 
     harness.restart().await;
@@ -323,10 +327,7 @@ async fn adoption_refuses_an_uncertain_execution_schema_before_any_write_or_laun
             "UPDATE agent_runs SET ended_at=NULL WHERE id='run-893'",
         ),
     ] {
-        let refusal = ExecutionHarness::try_adopt(|directory| {
-            fixture::provision_current(directory);
-            fixture::mutate(directory, mutation);
-        })
+        let refusal = ExecutionHarness::try_adopt_legacy_current(mutation)
         .await
         .expect_err(label);
         assert!(
@@ -401,6 +402,18 @@ async fn rows(database: &DatabaseConnection, query: &str) -> Vec<String> {
 
 async fn count(database: &DatabaseConnection, table: &str) -> i64 {
     scalar(database, &format!("SELECT COUNT(*) FROM {table}")).await
+}
+
+/// The active harness principal authenticates MCP but is not a campaign launch.
+async fn count_campaign_runs(database: &DatabaseConnection) -> i64 {
+    scalar(
+        database,
+        &format!(
+            "SELECT COUNT(*) FROM agent_runs WHERE id<>'{}'",
+            common::execution_authorization::CALLER_RUN_ID
+        ),
+    )
+    .await
 }
 
 async fn count_where(database: &DatabaseConnection, table: &str, predicate: &str) -> i64 {

@@ -1,4 +1,4 @@
-import { FoundationGraphQlError } from "../../graphql-foundation/foundationClient";
+import { FoundationGraphQlError } from "../apollo/errorLink";
 
 export class ApiError extends Error {
   constructor(

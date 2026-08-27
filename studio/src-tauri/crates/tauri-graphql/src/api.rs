@@ -1,13 +1,16 @@
 use std::collections::HashMap;
+use std::pin::Pin;
 use std::sync::{Arc, Mutex, RwLock};
 
-use futures_util::StreamExt;
+use futures_util::{Stream, StreamExt};
 use tauri::ipc::Channel;
 
 use crate::endpoint::{error_response, service_unavailable_response};
 use crate::GraphQlEndpoint;
 
 const MAX_ACTIVE_SUBSCRIPTIONS: usize = 256;
+
+pub type GraphQlSubscriptionStream = Pin<Box<dyn Stream<Item = String> + Send>>;
 
 #[taurpc::procedures]
 pub trait TransportApi {
@@ -46,9 +49,28 @@ impl TransportApiImpl {
             .ok()
             .and_then(|endpoint| endpoint.clone())
     }
+
+    /// Open the framed stream shared by Tauri channels and the browser adapter.
+    pub fn graphql_subscription_stream(
+        &self,
+        request_json: &str,
+    ) -> Result<GraphQlSubscriptionStream, String> {
+        let endpoint = self
+            .installed_endpoint()
+            .ok_or_else(service_unavailable_response)?;
+        let stream = endpoint.execute_stream_json(request_json)?;
+        Ok(Box::pin(
+            stream
+                .map(|response_json| subscription_event(&response_json))
+                .chain(futures_util::stream::once(async {
+                    r#"{"type":"complete"}"#.to_owned()
+                })),
+        ))
+    }
 }
 
-fn valid_subscription_id(id: &str) -> bool {
+/// Whether an identifier is safe on every supported subscription carrier.
+pub fn valid_subscription_id(id: &str) -> bool {
     !id.is_empty()
         && id.len() <= 128
         && id
@@ -95,10 +117,7 @@ impl TransportApi for TransportApiImpl {
                 "use 1-128 ASCII letters, digits, hyphens, or underscores",
             );
         }
-        let Some(endpoint) = self.installed_endpoint() else {
-            return service_unavailable_response();
-        };
-        let stream = match endpoint.execute_stream_json(&request_json) {
+        let stream = match self.graphql_subscription_stream(&request_json) {
             Ok(stream) => stream,
             Err(response) => return response,
         };
@@ -138,12 +157,11 @@ impl TransportApi for TransportApiImpl {
                 return;
             }
             let mut stream = Box::pin(stream);
-            while let Some(response_json) = stream.next().await {
-                if on_event.send(subscription_event(&response_json)).is_err() {
+            while let Some(event) = stream.next().await {
+                if on_event.send(event).is_err() {
                     break;
                 }
             }
-            let _ = on_event.send(r#"{"type":"complete"}"#.to_owned());
             if let Ok(mut subscriptions) = subscriptions.lock() {
                 subscriptions.remove(&task_id);
             }

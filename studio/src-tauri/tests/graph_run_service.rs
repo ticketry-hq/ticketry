@@ -106,6 +106,10 @@ async fn create_press_policy_refresh_inert_success_and_reset_are_serialized() {
     let first = service.create_or_press(request(None)).await.unwrap();
     assert_eq!(first.graph_run.execution_mode, "parallel");
     assert_eq!(task_ids(&first), [CHILD_A, CHILD_B]);
+    let child_a_prompt = launch_prompt(&database, CHILD_A).await;
+    assert!(child_a_prompt
+        .starts_with("Selected workflow prompt:\nInitial policy.\n\nWork item context (factual):"));
+    assert!(child_a_prompt.contains("Description:\nChild A launch details."));
     let claims_before = claim_runs(&database).await;
 
     let repeated = service.create_or_press(request(None)).await.unwrap();
@@ -518,6 +522,10 @@ async fn serial_advancement_treats_satisfaction_and_termination_as_symmetric_fac
             .collect::<Vec<_>>(),
         [CHILD_B]
     );
+    let child_b_prompt = launch_prompt(&database, CHILD_B).await;
+    assert!(child_b_prompt
+        .starts_with("Selected workflow prompt:\nInitial policy.\n\nWork item context (factual):"));
+    assert!(child_b_prompt.contains("Description:\nChild B launch details."));
     drop(first_service);
     drop(database);
     drop(harness);
@@ -701,10 +709,10 @@ async fn seed(database: &DatabaseConnection, directory: &std::path::Path) {
                 VALUES ('{REVIEW}','{compact_project}','Review','started','',99,0,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP);
             INSERT INTO worktracker_issue
                 (id,project_id,type,issue_type_id,parent_id,module_id,state_id,state_revision,name,sequence_id,is_archived,rank,description,created_at,updated_at)
-                SELECT '{CHILD_A}',project_id,'task',issue_type_id,'{compact_root}','{compact_module}',state_id,0,'Child A',9001,0,'a','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP FROM worktracker_issue WHERE id='{compact_root}';
+                SELECT '{CHILD_A}',project_id,'task',issue_type_id,'{compact_root}','{compact_module}',state_id,0,'Child A',9001,0,'a','<p>Child A launch details.</p>',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP FROM worktracker_issue WHERE id='{compact_root}';
             INSERT INTO worktracker_issue
                 (id,project_id,type,issue_type_id,parent_id,module_id,state_id,state_revision,name,sequence_id,is_archived,rank,description,created_at,updated_at)
-                SELECT '{CHILD_B}',project_id,'task',issue_type_id,'{compact_root}','{compact_module}',state_id,0,'Child B',9002,0,'b','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP FROM worktracker_issue WHERE id='{compact_root}';
+                SELECT '{CHILD_B}',project_id,'task',issue_type_id,'{compact_root}','{compact_module}',state_id,0,'Child B',9002,0,'b','<p>Child B launch details.</p>',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP FROM worktracker_issue WHERE id='{compact_root}';
             INSERT INTO worktracker_issue
                 (id,project_id,type,issue_type_id,parent_id,module_id,state_id,state_revision,name,sequence_id,is_archived,rank,description,created_at,updated_at)
                 SELECT '{BLOCKED}',project_id,'task',issue_type_id,'{compact_root}','{compact_module}',state_id,0,'Blocked',9003,0,'c','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP FROM worktracker_issue WHERE id='{compact_root}';
@@ -763,6 +771,21 @@ async fn claim_runs(database: &DatabaseConnection) -> std::collections::HashMap<
             )
         })
         .collect()
+}
+
+async fn launch_prompt(database: &DatabaseConnection, task_id: &str) -> String {
+    database
+        .query_one_raw(Statement::from_string(
+            DbBackend::Sqlite,
+            format!(
+                "SELECT prompt FROM terminal_launch_material WHERE task_id='{task_id}' ORDER BY created_at DESC LIMIT 1"
+            ),
+        ))
+        .await
+        .unwrap()
+        .unwrap()
+        .try_get("", "prompt")
+        .unwrap()
 }
 
 async fn claim_tuple(

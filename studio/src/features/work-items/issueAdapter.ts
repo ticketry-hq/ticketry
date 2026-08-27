@@ -3,19 +3,20 @@ import {
   publicWorktrackerId,
   publicWorktrackerTimestamp,
 } from "../../shared/api/generatedWorktracker";
-import type { GeneratedWorkTrackerWorkItem } from "./generated/operations";
+import type { GeneratedWorkTrackerWorkItemFieldsFragment } from "./generated/workItems.documents";
 
-export function workItemFromIssue(item: GeneratedWorkTrackerWorkItem): WorkItem {
+export function workItemFromIssue(item: GeneratedWorkTrackerWorkItemFieldsFragment): WorkItem {
   return {
     id: publicWorktrackerId(item.id),
     name: item.name,
     project_id: publicWorktrackerId(item.project_id),
     sequence_id: item.sequence_id,
     state: item.state_id ? publicWorktrackerId(item.state_id) : null,
-    state_revision: item.state_revision,
     description: item.description,
     parent_id: item.parent_id ? publicWorktrackerId(item.parent_id) : null,
-    sub_issues_count: item.children.nodes.length,
+    sub_issues_count: item.children.nodes.filter((child) =>
+      !("is_archived" in child) || !child.is_archived
+    ).length,
     key: `${item.project?.slug ?? ""}-${item.sequence_id}`,
     is_archived: item.is_archived,
     created_at: publicWorktrackerTimestamp(item.created_at),
@@ -32,7 +33,7 @@ export function workItemFromIssue(item: GeneratedWorkTrackerWorkItem): WorkItem 
 }
 
 export function orderedWorkItems(
-  items: readonly GeneratedWorkTrackerWorkItem[],
+  items: readonly GeneratedWorkTrackerWorkItemFieldsFragment[],
 ): WorkItem[] {
   return items.map(workItemFromIssue).sort((left, right) =>
     left.rank.localeCompare(right.rank)

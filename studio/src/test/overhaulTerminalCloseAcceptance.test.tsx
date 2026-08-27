@@ -1,18 +1,19 @@
-import { QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useGlobalKeymap } from "../app/navigation/useGlobalKeymap";
 import { SelectedTicketContent } from "../app/shell/ticket-workspace/selected-ticket/SelectedTicketContent";
-import { useAgentStatusStore } from "../features/agents/status";
+import { useAgentStatusStore } from "../features/agents/status/testStore";
 import {
   useTerminalStore,
   type SessionMeta,
 } from "../features/agents/terminal";
 import { useStudioStore } from "../features/projects/store";
 import { seedConfig } from "../features/studio/stores/configStore";
-import { queryClient } from "../shared/query/queryClient";
 import { useClientStore } from "../state/clientStore";
-import { installDesktopGraphQlRuntime } from "./desktopGraphQlRuntime";
+import {
+  installDesktopGraphQlRuntime,
+  terminalSessionReadExecutor,
+} from "./desktopGraphQlRuntime";
 
 const terminalApi = vi.hoisted(() => ({
   getDocuments: vi.fn(),
@@ -36,11 +37,6 @@ const terminalReads = vi.hoisted(() => {
     readScratchResumableTerminalSessions: resumable,
   };
 });
-
-vi.mock(
-  "../features/agents/terminal/internal/sessionReadTransport",
-  () => terminalReads,
-);
 
 vi.mock(
   "../app/shell/ticket-workspace/selected-ticket/terminals/SelectedTicketTerminal",
@@ -102,7 +98,7 @@ function mountLiveTerminal({ keyboard = false }: { keyboard?: boolean } = {}) {
   });
 
   render(
-    <QueryClientProvider client={queryClient}>
+    <>
       {keyboard && <KeymapHarness />}
       <SelectedTicketContent
         bucket="story-1"
@@ -111,16 +107,15 @@ function mountLiveTerminal({ keyboard = false }: { keyboard?: boolean } = {}) {
         owner="studio"
         details={<div>Issue details</div>}
       />
-    </QueryClientProvider>,
+    </>,
   );
 }
 
 describe("overhaul acceptance — terminal close synchronization", () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    installDesktopGraphQlRuntime();
+    installDesktopGraphQlRuntime(terminalSessionReadExecutor(terminalReads));
     localStorage.clear();
-    queryClient.clear();
     seedConfig({ features: { sidebar: true, projects: true } });
     useStudioStore.setState({ selectedProjectId: "project-1" });
     useClientStore.setState({

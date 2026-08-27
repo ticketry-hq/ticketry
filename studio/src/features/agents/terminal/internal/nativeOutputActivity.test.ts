@@ -38,13 +38,16 @@ describe("native terminal output reports", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("refuses to observe without the desktop GraphQL runtime", async () => {
+  it("uses the browser GraphQL adapter when no desktop stream is available", async () => {
     initializeStudioRuntime(createBrowserRuntime({ environment: {} }));
 
     await expect(desktopOutputActivity.report("run-1")).rejects.toThrow(
-      "Terminal output observation requires the desktop GraphQL runtime.",
+      "The GraphQL foundation response has no data.",
     );
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/graphql",
+      expect.objectContaining({ method: "POST" }),
+    );
   });
 
   it("reports once on attachment and never polls while the viewer idles", () => {

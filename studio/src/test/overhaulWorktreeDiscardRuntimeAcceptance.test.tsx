@@ -4,7 +4,6 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { WorktreeBlock } from "../features/agents/worktrees";
 import { createDesktopRuntime } from "../runtime/desktopRuntime";
 import { initializeStudioRuntime } from "../runtime";
-import { queryClient } from "../shared/query/queryClient";
 
 const startup = {
   serviceHealth: {
@@ -93,7 +92,6 @@ async function installDesktopRuntime(requests: Request[]) {
 
 describe("worktree discard desktop runtime acceptance", () => {
   it("[overhaul-90] throws a checkout away only after an explicit confirmation, by identity alone", async () => {
-    queryClient.clear();
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
     const requests: Request[] = [];
@@ -138,7 +136,6 @@ describe("worktree discard desktop runtime acceptance", () => {
   });
 
   it("[overhaul-91] cancelling the confirmation sends nothing at all", async () => {
-    queryClient.clear();
     vi.stubGlobal("fetch", vi.fn());
     const requests: Request[] = [];
     await installDesktopRuntime(requests);

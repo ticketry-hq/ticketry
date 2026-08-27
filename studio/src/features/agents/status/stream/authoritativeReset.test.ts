@@ -4,7 +4,7 @@
  */
 import { describe, expect, it, vi } from "vitest";
 
-import type { RunStatusEventFrame } from "../generated/statusStream";
+import type { RunStatusEventFrame } from "../types";
 import { createAuthoritativeReset } from "./authoritativeReset";
 
 const frame = (cursor: number): RunStatusEventFrame =>

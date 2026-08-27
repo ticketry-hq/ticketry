@@ -1,22 +1,28 @@
-import { QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useGlobalKeymap } from "../app/navigation/useGlobalKeymap";
 import { SelectedTicketContent } from "../app/shell/ticket-workspace/selected-ticket/SelectedTicketContent";
 import type { WorkItemRow } from "../app/shell/ticket-workspace/tasks/TasksPane";
 import { useStudioStore } from "../features/projects/store";
-import { useAgentStatusStore } from "../features/agents/status";
+import { useAgentStatusStore } from "../features/agents/status/testStore";
 import {
+  refreshTerminalHoldings,
   useTerminalStore,
   type SessionMeta,
 } from "../features/agents/terminal";
 import { seedConfig } from "../features/studio/stores/configStore";
-import { queryClient } from "../shared/query/queryClient";
-import { queryKeys } from "../shared/query/keys";
-import { setStatesSorted } from "../shared/query/stateCatalog";
+import { setStatesSorted } from "../features/projects";
 import { useClientStore } from "../state/clientStore";
 import { workItem } from "./seam";
-import { installDesktopGraphQlRuntime } from "./desktopGraphQlRuntime";
+import {
+  installDesktopGraphQlRuntime,
+  terminalSessionReadExecutor,
+} from "./desktopGraphQlRuntime";
+import { seedModuleOpenFixture } from "./projectOpenFixture";
+import {
+  getModuleTreeSnapshot,
+  getWorkItemSnapshot,
+} from "../features/work-items";
 
 const terminalApi = vi.hoisted(() => ({
   resumeTerminal: vi.fn(),
@@ -49,11 +55,6 @@ const terminalReads = vi.hoisted(() => {
     readScratchResumableTerminalSessions: resumable,
   };
 });
-
-vi.mock(
-  "../features/agents/terminal/internal/sessionReadTransport",
-  () => terminalReads,
-);
 
 vi.mock(
   "../app/shell/ticket-workspace/selected-ticket/terminals/SelectedTicketTerminal",
@@ -117,9 +118,8 @@ function KeymapHarness({ rows }: { rows: WorkItemRow[] }) {
 describe("overhaul acceptance — terminals", () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    installDesktopGraphQlRuntime();
+    installDesktopGraphQlRuntime(terminalSessionReadExecutor(terminalReads));
     localStorage.clear();
-    queryClient.clear();
     seedConfig({ features: { sidebar: true, projects: true } });
     useStudioStore.setState({ selectedProjectId: "project-1" });
     useClientStore.setState({
@@ -164,14 +164,13 @@ describe("overhaul acceptance — terminals", () => {
       parent_id: "story-1",
       rank: "A",
     });
-    queryClient.setQueryData(queryKeys.tasks.byModule("project-1", "module-1"), {
-      rootIds: ["story-1"],
-      children: { "story-1": ["child-1"], "child-1": [] },
-      order: ["story-1", "child-1"],
-    });
-    queryClient.setQueryData(queryKeys.workItems.byId(parent.id), parent);
-    queryClient.setQueryData(queryKeys.workItems.byId(child.id), child);
+    seedModuleOpenFixture("module-1", [parent, child]);
     setStatesSorted("project-1", [TODO]);
+    expect(getModuleTreeSnapshot("project-1", "module-1").order).toEqual([
+      "child-1",
+      "story-1",
+    ]);
+    expect(getWorkItemSnapshot("child-1")?.parent_id).toBe("story-1");
 
     useTerminalStore.setState({
       sessions: {
@@ -234,9 +233,15 @@ describe("overhaul acceptance — terminals", () => {
       agent_run_id: "run-old",
       terminated: true,
     });
-    terminalApi.resumeTerminal.mockResolvedValue({
-      agent_run_id: "run-new",
-      resumed_from: "run-old",
+    terminalApi.resumeTerminal.mockImplementation(async () => {
+      // The real Apollo mutation refreshes terminal holdings before it
+      // resolves; keep this API spy faithful to that contract.
+      terminalReads.readTaskResumableTerminalSessions.mockResolvedValue([]);
+      await refreshTerminalHoldings();
+      return {
+        agent_run_id: "run-new",
+        resumed_from: "run-old",
+      };
     });
     useTerminalStore.setState({
       sessions: {
@@ -261,7 +266,6 @@ describe("overhaul acceptance — terminals", () => {
     });
 
     render(
-      <QueryClientProvider client={queryClient}>
         <SelectedTicketContent
           bucket="story-1"
           projectId="project-1"
@@ -269,7 +273,6 @@ describe("overhaul acceptance — terminals", () => {
           owner="studio"
           details={<input aria-label="Issue title draft" defaultValue="Draft" />}
         />
-      </QueryClientProvider>,
     );
 
     const draft = screen.getByRole("textbox", { name: "Issue title draft" });
@@ -293,7 +296,10 @@ describe("overhaul acceptance — terminals", () => {
       name: "Resume codex terminal",
     })).toHaveLength(1);
     expect(terminalApi.terminateTerminal).toHaveBeenCalledWith("run-old");
-    expect(terminalReads.readTaskResumableTerminalSessions).toHaveBeenCalledTimes(2);
+    // Apollo refetches both mounted resumable holdings through the shared
+    // terminal refresh. The task read plus the standby scratch holding replace
+    // the single legacy cache invalidation this assertion used to count.
+    expect(terminalReads.readTaskResumableTerminalSessions).toHaveBeenCalledTimes(3);
     expect(terminalApi.terminateTerminal.mock.invocationCallOrder[0])
       .toBeLessThan(terminalReads.readTaskResumableTerminalSessions.mock.invocationCallOrder[1]);
     expect(screen.getByRole("textbox", { name: "Issue title draft" }))
@@ -303,7 +309,7 @@ describe("overhaul acceptance — terminals", () => {
 
     await waitFor(() => {
       expect(terminalApi.resumeTerminal).toHaveBeenCalledWith({
-        source: resumableSession,
+        source: expect.objectContaining(resumableSession),
         projectId: "project-1",
         moduleId: "module-1",
         taskId: "story-1",

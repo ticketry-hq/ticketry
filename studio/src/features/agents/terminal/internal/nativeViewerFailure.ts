@@ -26,9 +26,20 @@ export type NativeTerminalCompletion = {
 export const NATIVE_TERMINAL_HOST_NOT_VISIBLE =
   "native terminal host has no visible frame";
 
-/** True for the one failure reason that must never start a recovery campaign. */
+const VIEWER_OWNERSHIP_STORAGE_FAILURE = "viewer ownership storage failed:";
+
+/** True when attachment never reached the renderer because its host had no frame. */
 export function nativeFailureIsHostNotVisible(reason: string): boolean {
   return reason === NATIVE_TERMINAL_HOST_NOT_VISIBLE;
+}
+
+/**
+ * Viewer lease persistence belongs to the Rust control plane, not the native
+ * renderer. Reloading the WebView cannot repair it and can turn a transient
+ * database lock into a reload loop, so the compatibility renderer stays up.
+ */
+export function nativeFailureIsViewerOwnershipStorage(reason: string): boolean {
+  return reason.includes(VIEWER_OWNERSHIP_STORAGE_FAILURE);
 }
 
 export function nativeFailureMessage(error: unknown): string {

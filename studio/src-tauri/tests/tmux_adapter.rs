@@ -81,6 +81,42 @@ async fn creates_verifies_inventories_observes_and_kills_owned_sessions() {
 }
 
 #[tokio::test]
+async fn creates_a_provider_command_larger_than_tmuxs_control_message_limit() {
+    let harness = TerminalLifecycleHarness::start().await;
+    let adapter = TmuxAdapter::discover().unwrap();
+    let create = CreateSession {
+        identity: identity("adapter-oversized-command"),
+        geometry: TerminalGeometry::new(93, 31).unwrap(),
+        command: ApprovedArgv::for_tool(
+            SupportedTool::Codex,
+            ["large task context ".repeat(1_500)],
+            harness.data_directory().to_path_buf(),
+            BTreeMap::new(),
+        )
+        .unwrap(),
+    };
+
+    assert_eq!(adapter.create(&create).unwrap(), CreateOutcome::Created);
+
+    let deadline = Instant::now() + Duration::from_secs(3);
+    loop {
+        match adapter.observe(&create.identity) {
+            RuntimeObservation::Exited { exit_code } => {
+                assert_eq!(exit_code, Some(0));
+                break;
+            }
+            observed => {
+                assert!(
+                    Instant::now() < deadline,
+                    "oversized hosted command did not exit: {observed:?}"
+                );
+                tokio::time::sleep(Duration::from_millis(20)).await;
+            }
+        }
+    }
+}
+
+#[tokio::test]
 async fn distinguishes_foreign_ambiguous_and_unavailable_runtime_state() {
     let harness = TerminalLifecycleHarness::start().await;
     harness

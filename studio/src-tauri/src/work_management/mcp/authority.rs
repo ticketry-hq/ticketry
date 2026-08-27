@@ -20,6 +20,21 @@ pub struct RunPrincipal {
     pub scope: String,
 }
 
+impl RunPrincipal {
+    pub fn global() -> Self {
+        Self {
+            agent_run_id: String::new(),
+            issue_id: String::new(),
+            project_id: String::new(),
+            scope: "global".to_owned(),
+        }
+    }
+
+    pub fn is_global(&self) -> bool {
+        self.scope == "global" && self.agent_run_id.is_empty()
+    }
+}
+
 #[derive(Clone)]
 pub struct RunAuthority {
     database: sea_orm::DatabaseConnection,

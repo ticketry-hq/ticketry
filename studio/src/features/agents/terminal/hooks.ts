@@ -10,7 +10,7 @@ import type { TerminalPresentationState } from "./lifecycle";
 import {
   isLiveAgentRunState,
   selectRunState,
-  useAgentStatusStore,
+  useAgentStatusRuns,
 } from "../status";
 import type { RunRecord } from "../status";
 import { bucketOfMeta, dismissedRunsFor } from "./internal/sessionStore";
@@ -105,11 +105,7 @@ export function deriveTaskSessions(
 // buckets). The workspace-tabs store is the sole tab index (CODIN-981/982).
 export function useTaskSessions(taskId: TaskId | null): SessionTab[] {
   const sessions = useTerminalStore((s) => s.sessions);
-  const runStates = useAgentStatusStore((s) => s.runs);
-  // A run can change presentation with no run fact changing at all — the clock
-  // simply passed its unchanged-output deadline. The epoch is what tells this
-  // memo to reproject then.
-  const stallEpoch = useAgentStatusStore((s) => s.stallEpoch);
+  const runStates = useAgentStatusRuns();
   return useMemo(
     () => deriveTaskSessions(
       taskId,
@@ -117,7 +113,7 @@ export function useTaskSessions(taskId: TaskId | null): SessionTab[] {
       runStates,
       taskId ? dismissedRunsFor(taskId) : new Set(),
     ),
-    [taskId, sessions, runStates, stallEpoch],
+    [taskId, sessions, runStates],
   );
 }
 

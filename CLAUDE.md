@@ -76,6 +76,9 @@ Ticketry's Rust GraphQL surface is migration-first and generated-contract-first:
   changed entity. When membership or ordering can change, update or refetch all
   affected lists; creates update/refetch lists and deletes evict known
   identities or explicitly refetch.
+- **Keep one frontend state owner.** Apollo's `InMemoryCache` owns server data
+  and client-only state. Selector or persistence adapters may write cache rows,
+  but they must not retain a second application-state snapshot.
 
 ## Reference
 

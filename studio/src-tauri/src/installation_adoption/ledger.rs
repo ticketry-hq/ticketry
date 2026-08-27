@@ -175,6 +175,52 @@ pub(super) async fn write(
     Ok(())
 }
 
+/// Replace the singleton after a verified semantic bridge repairs a Rust-owned
+/// installation. The bridge and this update share one transaction.
+pub(super) async fn replace(
+    transaction: &DatabaseTransaction,
+    row: &LedgerRow,
+) -> Result<(), AdoptionFailure> {
+    let counts = serde_json::to_string(&row.counts)
+        .map_err(|error| failure(format!("could not encode adoption counts: {error}")))?;
+    let bridges = serde_json::to_string(&row.bridges)
+        .map_err(|error| failure(format!("could not encode adoption bridges: {error}")))?;
+    let result = transaction
+        .execute_raw(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
+            format!(
+                "UPDATE {LEDGER_TABLE} SET
+                    version = ?, source_generation = ?, source_fingerprint = ?,
+                    application_version = ?, snapshot_file = ?, snapshot_sha256 = ?,
+                    rust_leaf = ?, bridges = ?, preserved_digest = ?, counts = ?,
+                    completion = ?, ready_at = NULL
+                 WHERE singleton = 1 AND adoption_id = ?"
+            ),
+            [
+                row.version.into(),
+                row.source_generation.clone().into(),
+                row.source_fingerprint.clone().into(),
+                row.application_version.clone().into(),
+                row.snapshot_file.clone().into(),
+                row.snapshot_sha256.clone().into(),
+                row.rust_leaf.clone().into(),
+                bridges.into(),
+                row.preserved_digest.clone().into(),
+                counts.into(),
+                row.completion.stored().into(),
+                row.adoption_id.clone().into(),
+            ],
+        ))
+        .await
+        .map_err(failed)?;
+    if result.rows_affected() != 1 {
+        return Err(failure(
+            "semantic bridge could not replace its adoption ledger row".to_owned(),
+        ));
+    }
+    Ok(())
+}
+
 /// Record that validation finished and the boundary was published.
 pub async fn mark_ready(database: &DatabaseConnection) -> Result<(), AdoptionFailure> {
     database

@@ -4,8 +4,7 @@ import {
 } from "../../../../../features/agents/terminal/appNavigation";
 import { toast } from "../../../../../state/clientStore";
 import { apiErrorMessage } from "../../../../../shared/api/errors";
-import { queryClient } from "../../../../../shared/query/queryClient";
-import { queryKeys } from "../../../../../shared/query/keys";
+import { refreshTerminalHoldings } from "../../../../../features/agents/terminal";
 import type { SessionId } from "../../../../../features/agents/types";
 
 /**
@@ -26,10 +25,7 @@ export async function closeTerminalTab(
       return;
     }
     if (!isScratchBucket(bucket)) {
-      await queryClient.invalidateQueries({
-        queryKey: queryKeys.terminalSessions.resumable(bucket),
-        exact: true,
-      });
+      await refreshTerminalHoldings();
     }
   } else {
     term.closeTab(sessionId);

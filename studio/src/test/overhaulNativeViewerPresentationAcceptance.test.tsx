@@ -13,6 +13,7 @@ import {
   grantsEveryLease,
   installDesktopGraphQlRuntime,
 } from "./desktopGraphQlRuntime";
+import { documentOperationName } from "../graphql-foundation/typedDocument";
 
 const tauri = vi.hoisted(() => ({
   invoke: vi.fn(),
@@ -201,7 +202,7 @@ describe("native viewer attachment acceptance", () => {
     const host = vi.fn();
     vi.stubGlobal("fetch", host);
     installDesktopGraphQlRuntime(async (document, variables) => {
-      if (document.operationName === "CreateTerminalSession") {
+      if (documentOperationName(document) === "CreateTerminalSession") {
         return { terminal_session: { agent_run_id: "run-fresh" } } as never;
       }
       return grantsEveryLease(document, variables);

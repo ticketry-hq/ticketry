@@ -5,6 +5,7 @@ use std::path::PathBuf;
 const GHOSTTY_REVISION: &str = "332b2aefc6e72d363aa93ab6ecfc86eeeeb5ed28";
 
 fn main() {
+    println!("cargo:rerun-if-changed=../../config/product-identity.json");
     build_native_libghostty();
 
     tauri_build::try_build(tauri_build::Attributes::new().app_manifest(
@@ -16,6 +17,7 @@ fn main() {
             "desktop_validate_module_folder",
             "desktop_preflight_report",
             "desktop_approve_executable_path",
+            "desktop_launch_default_coding_agent",
             "viewer_attach",
             "viewer_input",
             "viewer_resize",

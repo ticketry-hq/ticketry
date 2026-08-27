@@ -6,7 +6,7 @@ import {
   CreateWorkTrackerProjectDocument,
   DeleteWorkTrackerProjectDocument,
   UpdateWorkTrackerProjectDocument,
-} from "./generated/mutations";
+} from "./generated/projects.documents";
 
 async function graphQl<TResult>(operation: () => Promise<TResult>): Promise<TResult> {
   try {

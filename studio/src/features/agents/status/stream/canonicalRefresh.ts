@@ -22,14 +22,15 @@
  * just refused to replay. Failures propagate — the caller closes and retries
  * the subscription rather than silently baselining.
  */
-import { queryClient } from "../../../../shared/query/queryClient";
-import { queryKeys } from "../../../../shared/query/keys";
-
-/** Cached WorkItem entities and the collections that contain them. */
-const WORK_ITEM_ENTITY_PREFIX = ["workItem"] as const;
-const WORK_ITEM_COLLECTION_PREFIX = ["work-items"] as const;
-const DOCUMENT_REGISTRY_PREFIX = ["documents", "registry"] as const;
-const TERMINAL_HOLDINGS_PREFIX = ["terminal-sessions"] as const;
+import { studioApolloClient } from "../../../../shared/apollo/client";
+import { WorkTrackerProjectOpenDocument } from "../../../projects";
+import {
+  WorkTrackerModuleOpenDocument,
+  WorkTrackerWorkItemDocument,
+} from "../../../work-items";
+import { refreshDocumentRegistries } from "./documentInvalidation";
+import { refreshWorktreeHoldings } from "./worktreeInvalidation";
+import { refreshTerminalHoldings } from "../../terminal";
 
 export interface CanonicalRefreshRequest {
   readonly projectId: string;
@@ -56,21 +57,16 @@ export async function refreshCanonicalHoldings(
   // observer has nothing to paint over, and entries written directly by a feed
   // have no query function to refetch with — awaiting those would fail every
   // reset for a holding nobody is looking at.
-  const refetch = (queryKey: readonly unknown[]) =>
-    queryClient.invalidateQueries(
-      { queryKey, refetchType: "active" },
-      { throwOnError: true },
-    );
   await Promise.all([
-    refetch(queryKeys.tasks.all),
-    refetch(WORK_ITEM_ENTITY_PREFIX),
-    refetch(WORK_ITEM_COLLECTION_PREFIX),
-    // The workflow catalogue is two cached reads: the normalized catalogue and
-    // the state list every surface selects from.
-    refetch(queryKeys.workflows.catalog(request.projectId)),
-    refetch(queryKeys.states.byProject(request.projectId)),
-    refetch(DOCUMENT_REGISTRY_PREFIX),
-    refetch(TERMINAL_HOLDINGS_PREFIX),
-    refetch(queryKeys.worktrees.all),
+    studioApolloClient().refetchQueries({
+      include: [
+        WorkTrackerProjectOpenDocument,
+        WorkTrackerModuleOpenDocument,
+        WorkTrackerWorkItemDocument,
+      ],
+    }),
+    refreshDocumentRegistries(),
+    refreshTerminalHoldings(),
+    refreshWorktreeHoldings(),
   ]);
 }

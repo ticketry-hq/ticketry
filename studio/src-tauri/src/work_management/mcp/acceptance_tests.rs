@@ -273,7 +273,7 @@ async fn mcp_mutations_cover_crud_hierarchy_workflow_and_blockers_through_rust_c
         .unwrap();
     let url = format!("http://{}/mcp", runtime.address());
 
-    let unauthorized = post(
+    let external_projects = post(
         &url,
         None,
         json!({
@@ -281,10 +281,8 @@ async fn mcp_mutations_cover_crud_hierarchy_workflow_and_blockers_through_rust_c
             "id": 0,
             "method": "tools/call",
             "params": {
-                "name": "create_task",
-                "arguments": {
-                    "project_id": PROJECT, "name": "Must not exist", "issue_type": "Story"
-                }
+                "name": "list_projects",
+                "arguments": {}
             }
         }),
     )
@@ -293,8 +291,8 @@ async fn mcp_mutations_cover_crud_hierarchy_workflow_and_blockers_through_rust_c
     .await
     .unwrap();
     assert_eq!(
-        unauthorized["result"]["structuredContent"]["reason"],
-        "authorization_missing"
+        external_projects["result"]["structuredContent"]["result"][0]["id"],
+        PROJECT
     );
 
     let first = call(
@@ -560,6 +558,34 @@ async fn mcp_mutations_cover_crud_hierarchy_workflow_and_blockers_through_rust_c
     let repeated = call(&url, 14, "terminate_current_run", json!({})).await;
     assert_eq!(repeated["reason"], "caller_run_inactive", "{repeated}");
     assert_eq!(terminal_record(&directory).await, (ended_at, 1));
+
+    let external_create = post(
+        &url,
+        None,
+        json!({
+            "jsonrpc": "2.0",
+            "id": 15,
+            "method": "tools/call",
+            "params": {
+                "name": "create_task",
+                "arguments": {
+                    "project_id": PROJECT,
+                    "name": "Created externally",
+                    "issue_type": "Story"
+                }
+            }
+        }),
+    )
+    .await
+    .json::<Value>()
+    .await
+    .unwrap();
+    assert!(
+        external_create["result"]["structuredContent"]["result"]
+            .as_str()
+            .is_some(),
+        "{external_create}"
+    );
 
     runtime.shutdown().await;
     backend_shutdown.cancel();

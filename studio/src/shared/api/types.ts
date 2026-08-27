@@ -102,7 +102,6 @@ export interface WorkItem {
   readonly project_id: string;
   readonly sequence_id: number;
   readonly state: string | null;
-  readonly state_revision: number;
   readonly description: string;
   readonly parent_id: string | null;
   readonly sub_issues_count: number;

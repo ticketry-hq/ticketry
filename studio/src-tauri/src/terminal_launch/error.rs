@@ -7,6 +7,7 @@ pub enum TerminalLaunchErrorCode {
     Conflict,
     EffectBusy,
     RuntimeUnavailable,
+    RuntimeStartFailed,
     RuntimeConflict,
     RuntimeExited,
     ResumeUnknown,
@@ -39,6 +40,11 @@ impl TerminalLaunchError {
         Self::new(TerminalLaunchErrorCode::UnusableFolder, message)
     }
 
+    #[doc(hidden)]
+    pub fn runtime_start_failed(message: impl Into<String>) -> Self {
+        Self::new(TerminalLaunchErrorCode::RuntimeStartFailed, message)
+    }
+
     pub fn code_str(&self) -> &'static str {
         match self.code {
             TerminalLaunchErrorCode::InvalidRequest => "terminal_launch_invalid",
@@ -46,6 +52,7 @@ impl TerminalLaunchError {
             TerminalLaunchErrorCode::Conflict => "terminal_launch_conflict",
             TerminalLaunchErrorCode::EffectBusy => "terminal_launch_busy",
             TerminalLaunchErrorCode::RuntimeUnavailable => "terminal_runtime_unavailable",
+            TerminalLaunchErrorCode::RuntimeStartFailed => "terminal_runtime_start_failed",
             TerminalLaunchErrorCode::RuntimeConflict => "terminal_runtime_identity_conflict",
             TerminalLaunchErrorCode::RuntimeExited => "terminal_runtime_exited",
             TerminalLaunchErrorCode::ResumeUnknown => "resume_unknown",

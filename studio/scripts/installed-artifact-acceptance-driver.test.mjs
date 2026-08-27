@@ -27,13 +27,16 @@ import {
   uninstallPreservesDataScenario,
   upgradeWithExistingDataScenario,
 } from "./installed-artifact-acceptance-driver.mjs";
-import { assertAcceptanceResult } from "./installed-artifact-acceptance.mjs";
+import {
+  acceptanceDataDirectory,
+  assertAcceptanceResult,
+} from "./installed-artifact-acceptance.mjs";
 
 const CREDENTIAL_PATTERN =
   /((api|access|auth|secret|token|password)[_-]?(key|token|password)?\s*[=:])|bearer\s+/i;
 async function fixture() {
   const sandboxRoot = await mkdtemp(path.join(tmpdir(), "ticketry-driver-test-"));
-  const dataDirectory = path.join(sandboxRoot, "home", ".config", "worktracker-studio");
+  const dataDirectory = acceptanceDataDirectory(path.join(sandboxRoot, "home"));
   const appPath = path.join(sandboxRoot, "Applications", "Ticketry.app");
   const databasePath = path.join(dataDirectory, "state.db");
   await mkdir(dataDirectory, { recursive: true });

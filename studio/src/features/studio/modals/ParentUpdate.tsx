@@ -4,11 +4,10 @@ import { useModalStore } from "../../../app/modal/modalStore";
 import { useModulesQuery } from "../../projects";
 import { useStudioStore } from "../../projects";
 import { useClientStore } from "../../../state/clientStore";
-import { useModuleTree } from "../../work-items";
 import {
   useSetWorkItemParent,
   useWorkItem,
-  useWorkItemsByIds,
+  useModuleOpen,
 } from "../../work-items";
 import { apiErrorMessage } from "../../../shared/api/errors";
 import { toast } from "../../../state/clientStore";
@@ -37,8 +36,7 @@ export function ParentUpdate({ payload }: { payload?: ParentUpdatePayload }) {
   const selectedProjectId = useStudioStore((s) => s.selectedProjectId);
   const selectedModuleId = useClientStore((s) => s.selectedModuleId);
   const selectedTaskId = useClientStore((s) => s.selectedTaskId);
-  const membership = useModuleTree(selectedProjectId, selectedModuleId);
-  const tasks = useWorkItemsByIds(membership.order);
+  const { items: tasks } = useModuleOpen(selectedModuleId);
   const modules = useModulesQuery(selectedProjectId).data ?? [];
   const { data: selectedTask } = useWorkItem(
     selectedTaskId && selectedTaskId !== TEMP_TASK_ID ? selectedTaskId : null,

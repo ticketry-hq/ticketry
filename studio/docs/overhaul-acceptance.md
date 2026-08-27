@@ -55,7 +55,7 @@ named gate before the full Studio suite, typecheck, and build.
 | 46 | A module created in an automatic project leads every module surface, and selection, its folder link, and the sidebar add control are unchanged. |
 | 47 | A module created in a project with Manual module order leads every module surface without leaving that mode, and agent activity cannot demote it. |
 | 48 | A live desktop run waits for the direct native libghostty-to-tmux viewer without opening the xterm/WebSocket fallback in parallel. |
-| 49 | A persisted terminal appears when its run projection arrives after the workspace first mounts. |
+| 49 | A terminal tab appears directly from ProjectRunStatus when its run projection arrives after the workspace first mounts, without a separate terminal-discovery read. |
 | 50 | Details and document navigation keep the same opened terminal mounted, then reactivate it in place. |
 | 51 | A tab-strip drag places a module at the indicated tab edge and every module surface follows. |
 | 52 | Tab navigation and the fixed add-module control remain intact across tab-strip reordering. |
@@ -140,6 +140,15 @@ named gate before the full Studio suite, typecheck, and build.
 | 157 | Startup failures distinguish unsupported, refused, snapshot, bridge, postflight, and recovery states. |
 | 158 | Browser development uses the Rust GraphQL adapter with no REST fallback. |
 | 159 | Startup failures point to the Ticketry application log and never show a retired sidecar notice. |
+| 160 | Studio keeps its established typefaces and readable native-terminal metrics. |
+| 161 | Native-render recovery keeps the compatibility renderer and does not refresh after viewer-ownership storage failure. |
+| 162 | A retained native viewer releases once when the WebView lifecycle ends, including listener-cleanup failure. |
+| 163 | Apollo is Studio's only server-state client. |
+| 164 | Module tickets with blocker edges render from the WorkTracker read contract. |
+| 165 | The selected Work Item owns one worktree block inside the hideable Details panel. |
+| 166 | Worktree confirmation and mutation errors do not leak across task selection. |
+| 167 | Apollo is Studio's only application-state owner; client-only UI state lives in the same cache as server records. |
+| 168 | A module drag rejected because its cached neighbors are stale refreshes the authoritative order, recomputes the same gesture, and completes without asking the person to retry. |
 
 Each executable case carries one stable `[overhaul-NN]` marker. The gate has a
 contract test that fails if a marker is missing or duplicated. When a Studio UI

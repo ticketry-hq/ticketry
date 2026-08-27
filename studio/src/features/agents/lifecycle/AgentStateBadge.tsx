@@ -1,7 +1,6 @@
 import {
-  selectTaskAgentLifecycle,
-  selectTaskLifecycleChips,
-  useAgentStatusStore,
+  useTaskAgentLifecycle,
+  useTaskLifecycleChips,
 } from "../status";
 import { LifecycleBadge } from "../terminal/LifecycleBadge";
 
@@ -19,14 +18,8 @@ interface Props {
  * without them the badge reflects this issue's runs only.
  */
 export function AgentStateBadge({ issueId, descendantIds, className }: Props) {
-  const state = useAgentStatusStore((s) =>
-    issueId
-      ? selectTaskAgentLifecycle(s, issueId, descendantIds ?? [])
-      : "idle",
-  );
-  const chips = useAgentStatusStore((s) =>
-    issueId ? selectTaskLifecycleChips(s, issueId, descendantIds ?? []) : [],
-  );
+  const state = useTaskAgentLifecycle(issueId, descendantIds ?? []);
+  const chips = useTaskLifecycleChips(issueId, descendantIds ?? []);
   if (!issueId) return null;
   if (chips.length === 0) return null;
 

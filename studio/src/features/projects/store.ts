@@ -1,4 +1,4 @@
-import { create } from "zustand";
+import { createApolloStore } from "../../shared/apollo/localState";
 import { ApiError } from "../../shared/api/errors";
 import * as recentProjects from "./utilities/recentProjects";
 import { toast } from "../../state/clientStore";
@@ -13,7 +13,7 @@ import {
   updateProjectRecord,
 } from "./queries";
 import { markModuleCreated } from "./internal/newlyCreatedModules";
-import { createWorkItem } from "../work-items/mutationTransport";
+import { createWorkItem } from "../work-items";
 import type {
   Module,
   Project,
@@ -37,8 +37,8 @@ function errMessage(e: unknown): string {
 }
 
 // Client-only state: which project is open and which view is active. The
-// project and module lists themselves live in the TanStack Query cache
-// (features/projects.ts); components subscribe with
+// project and module lists themselves live in Apollo's normalized cache;
+// components subscribe with
 // useProjectsQuery/useModulesQuery.
 interface StudioState {
   selectedProjectId: string | null;
@@ -75,7 +75,7 @@ export interface DeleteProjectResult {
   targetId: string | null;
 }
 
-export const useStudioStore = create<StudioState>((set, get) => ({
+export const useStudioStore = createApolloStore<StudioState>("studio", (set, get) => ({
   selectedProjectId: null,
   activeView: "backlog",
   error: null,

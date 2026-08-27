@@ -14,17 +14,29 @@ fn test_schema() -> Schema {
         TypeRef::named_nn(TypeRef::STRING),
         |_| FieldFuture::new(async { Ok(Some(FieldValue::value("pong"))) }),
     ));
-    let subscription = Subscription::new("Subscription").field(SubscriptionField::new(
-        "ticks",
-        TypeRef::named_nn(TypeRef::INT),
-        |_| {
-            SubscriptionFieldFuture::new(async {
-                let first = futures_util::stream::once(async { Ok(FieldValue::value(1)) });
-                let rest = futures_util::stream::pending();
-                Ok(first.chain(rest))
-            })
-        },
-    ));
+    let subscription = Subscription::new("Subscription")
+        .field(SubscriptionField::new(
+            "ticks",
+            TypeRef::named_nn(TypeRef::INT),
+            |_| {
+                SubscriptionFieldFuture::new(async {
+                    let first = futures_util::stream::once(async { Ok(FieldValue::value(1)) });
+                    let rest = futures_util::stream::pending();
+                    Ok(first.chain(rest))
+                })
+            },
+        ))
+        .field(SubscriptionField::new(
+            "finiteTicks",
+            TypeRef::named_nn(TypeRef::INT),
+            |_| {
+                SubscriptionFieldFuture::new(async {
+                    Ok(futures_util::stream::once(async {
+                        Ok(FieldValue::value(2))
+                    }))
+                })
+            },
+        ));
 
     Schema::build("Query", None, Some("Subscription"))
         .register(query)
@@ -156,6 +168,36 @@ async fn subscriptions_stream_and_teardown_without_stale_registry_entries() {
 
     assert!(api.clone().graphql_unsubscribe("sub-1".to_owned()).await);
     assert!(!api.graphql_unsubscribe("sub-1".to_owned()).await);
+}
+
+#[tokio::test]
+async fn shared_subscription_stream_uses_transport_frames_and_completes() {
+    let api = installed_api();
+    let request = serde_json::json!({
+        "query": "subscription FiniteTicks { finiteTicks }",
+        "operationName": "FiniteTicks",
+        "variables": null
+    })
+    .to_string();
+    let mut stream = api
+        .graphql_subscription_stream(&request)
+        .expect("open the shared subscription stream");
+
+    let next: serde_json::Value = serde_json::from_str(
+        &stream
+            .next()
+            .await
+            .expect("receive the GraphQL result frame"),
+    )
+    .expect("decode the next frame");
+    assert_eq!(next["type"], "next");
+    assert_eq!(next["payload"]["data"]["finiteTicks"], 2);
+
+    let complete: serde_json::Value =
+        serde_json::from_str(&stream.next().await.expect("receive the completion frame"))
+            .expect("decode the completion frame");
+    assert_eq!(complete["type"], "complete");
+    assert!(stream.next().await.is_none());
 }
 
 #[tokio::test]

@@ -10,12 +10,14 @@ use std::ffi::OsString;
 use std::path::PathBuf;
 use std::process::{Command, Output, Stdio};
 
+mod hosted_command;
 mod inventory;
 mod runtime_namespace;
 mod session_naming;
 mod session_records;
 mod types;
 
+use hosted_command::HostedCommand;
 pub use runtime_namespace::current_runtime_namespace;
 use session_naming::session_name;
 pub use session_naming::{PersistedSessionName, SESSION_PREFIX};
@@ -72,6 +74,7 @@ impl TmuxAdapter {
         let session = session_name(request.identity.agent_run_id());
         let columns = request.geometry.columns.to_string();
         let rows = request.geometry.rows.to_string();
+        let hosted = HostedCommand::prepare(request.identity.agent_run_id(), &request.command)?;
         let mut command = self.command();
         command
             .args([
@@ -89,10 +92,6 @@ impl TmuxAdapter {
         for (name, value) in &request.command.environment {
             command.args(["-e", &format!("{name}={value}")]);
         }
-        command
-            .arg("--")
-            .arg(&request.command.executable)
-            .args(&request.command.arguments);
         for (key, value) in [
             ("remain-on-exit", "on"),
             ("window-size", "manual"),
@@ -108,6 +107,24 @@ impl TmuxAdapter {
         // session between `new-session` and the first `set-option` and treat
         // the incomplete identity as an orphan.
         checked(command, "create detached session")?;
+
+        let mut start = self.command();
+        start
+            .args(["respawn-pane", "-k", "-t", &session, "--"])
+            .arg(hosted.tmux_command());
+        if let Err(error) = checked(start, "start hosted command") {
+            let cleanup = checked(
+                self.command_with(["kill-session", "-t", &session]),
+                "remove partial session",
+            );
+            return match cleanup {
+                Ok(_) => Err(error),
+                Err(cleanup_error) => Err(TmuxAdapterError::Unavailable(format!(
+                    "{error}; {cleanup_error}"
+                ))),
+            };
+        }
+        hosted.release_to_process();
         match self.observe(&request.identity) {
             RuntimeObservation::Running | RuntimeObservation::Exited { .. } => {
                 Ok(CreateOutcome::Created)
@@ -279,9 +296,16 @@ impl TmuxAdapter {
         command
     }
 
-    pub(crate) fn attach_shell_command(&self, run_id: &str, environment: &[String]) -> String {
-        let mut environment = environment.to_vec();
-        environment.extend(["-u".to_owned(), "TMUX".to_owned()]);
+    pub(crate) fn attach_shell_command(
+        &self,
+        run_id: &str,
+        renderer_environment: &[String],
+    ) -> String {
+        // POSIX `env` stops parsing options at the first NAME=VALUE operand.
+        // Keep every unset option ahead of the renderer's assignments or the
+        // macOS implementation tries to execute the later `-u` as a command.
+        let mut environment = vec!["-u".to_owned(), "TMUX".to_owned()];
+        environment.extend_from_slice(renderer_environment);
         if let Some(directory) = &self.socket_directory {
             environment.push(format!("TMUX_TMPDIR={}", directory.to_string_lossy()));
         }
@@ -413,5 +437,28 @@ mod tests {
         let row = SessionRecord::parse("pt-run\tticketry-v1\trun\tns\t1\t1\t17").unwrap();
         assert!(row.pane_dead);
         assert_eq!(row.exit_code, Some(17));
+    }
+
+    #[test]
+    fn puts_every_env_unset_before_renderer_assignments() {
+        let adapter = TmuxAdapter {
+            executable: PathBuf::from("/approved/tmux"),
+            socket: "ticketry-dev".to_owned(),
+            socket_directory: Some(OsString::from("/tmp/tmux")),
+        };
+        let command = adapter.attach_shell_command(
+            "run-123",
+            &[
+                "-u".to_owned(),
+                "LC_ALL".to_owned(),
+                "TERM=xterm-256color".to_owned(),
+                "LC_CTYPE=UTF-8".to_owned(),
+            ],
+        );
+
+        assert_eq!(
+            command,
+            "'-u' 'TMUX' '-u' 'LC_ALL' 'TERM=xterm-256color' 'LC_CTYPE=UTF-8' 'TMUX_TMPDIR=/tmp/tmux' '/approved/tmux' '-L' 'ticketry-dev' 'attach-session' '-t' 'pt-run-123'",
+        );
     }
 }

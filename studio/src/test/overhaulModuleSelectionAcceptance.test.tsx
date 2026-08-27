@@ -1,9 +1,9 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../shared/api/client", async () => {
-  const actual = await vi.importActual<typeof import("../shared/api/client")>(
-    "../shared/api/client",
+vi.mock("./legacyApiFixture", async () => {
+  const actual = await vi.importActual<typeof import("./legacyApiFixture")>(
+    "./legacyApiFixture",
   );
   return {
     ...actual,
@@ -28,7 +28,6 @@ import {
   getConfigSnapshot,
   seedConfig,
 } from "../features/studio/stores/configStore";
-import { queryClient } from "../shared/query/queryClient";
 import * as profileTransport from "../features/settings/profileTransport";
 import * as workItemReadTransport from "../features/work-items/queries/readTransport";
 import { useClientStore } from "../state/clientStore";
@@ -57,7 +56,6 @@ function seedActiveProfile(): void {
 
 describe("module-folder selection acceptance", () => {
   beforeEach(() => {
-    queryClient.clear();
     getTasks.mockReset().mockResolvedValue({
       rootIds: [],
       children: {},

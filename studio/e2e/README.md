@@ -1,5 +1,9 @@
 # Ticketry web acceptance suite
 
+This suite proves browser compatibility and the public GraphQL contract. It
+does **not** prove that Ticketry can launch an agent. The separate
+[desktop acceptance suite](../e2e-desktop/README.md) owns that proof.
+
 Run the complete browser suite from the repository root:
 
 ```sh
@@ -51,5 +55,5 @@ npm run test:overhaul --workspace @worktracker/studio
 
 The obsolete far-left Projects/Modules sidebar is intentionally outside this
 suite. Native Ghostty/Tauri rendering, real provider processes, and tmux death
-or reconnect behavior require the desktop smoke/acceptance harness rather than
-a deterministic web Playwright run.
+or reconnect behavior require the desktop acceptance harness rather than a
+deterministic web Playwright run.

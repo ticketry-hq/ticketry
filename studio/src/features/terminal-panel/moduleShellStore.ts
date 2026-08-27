@@ -21,7 +21,7 @@
  * destructive failure the user could not see.
  */
 
-import { create } from "zustand";
+import { createApolloStore } from "../../shared/apollo/localState";
 
 import { useTerminalStore } from "../agents/terminal";
 import { apiErrorMessage } from "../../shared/api/errors";
@@ -88,7 +88,7 @@ function problemFor(error: unknown): ModuleShellProblem {
       };
 }
 
-export const useModuleShellStore = create<ModuleShellStoreState>((set, get) => {
+export const useModuleShellStore = createApolloStore<ModuleShellStoreState>("module-shell", (set, get) => {
   function setFor(moduleId: string): ModuleShellSet {
     return get().byModule[moduleId] ?? EMPTY_SHELL_SET;
   }

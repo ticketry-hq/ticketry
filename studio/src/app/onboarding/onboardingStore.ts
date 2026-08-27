@@ -1,47 +1,74 @@
-import { useQuery } from "@tanstack/react-query";
-import { acknowledgeOnboarding as writeOnboardingAcknowledgement, readWorkspace } from "../../features/projects";
-import { queryClient } from "../../shared/query/queryClient";
-import { queryKeys } from "../../shared/query/keys";
+import { useQuery } from "@apollo/client/react";
+import {
+  acknowledgeOnboarding as writeOnboardingAcknowledgement,
+  readWorkspace,
+  WorkTrackerWorkspaceDocument,
+} from "../../features/projects";
+import { compactWorktrackerId } from "../../shared/api/generatedWorktracker";
+import { studioApolloClient } from "../../shared/apollo/client";
 
-async function fetchOnboardingRequired(): Promise<boolean> {
-  return (await readWorkspace()).onboarding_required;
+function workspaceQueryData(nodes: Array<{
+  id: string;
+  slug: string;
+  name: string;
+  onboarding_required: boolean;
+}>) {
+  return {
+    workspace: {
+      __typename: "WorktrackerWorkspaceConnection",
+      nodes: nodes.map((workspace) => ({
+        __typename: "WorktrackerWorkspace",
+        ...workspace,
+      })),
+    },
+  };
 }
 
 export async function loadWorkspaceState(): Promise<void> {
   try {
-    await queryClient.fetchQuery({
-      queryKey: queryKeys.workspace,
-      queryFn: fetchOnboardingRequired,
-      staleTime: 0,
+    const workspace = await readWorkspace();
+    studioApolloClient().writeQuery({
+      query: WorkTrackerWorkspaceDocument,
+      data: workspaceQueryData([{
+        id: compactWorktrackerId(workspace.id),
+        slug: workspace.slug,
+        name: workspace.name,
+        onboarding_required: workspace.onboarding_required,
+      }]),
     });
   } catch (error) {
     // A flaky workspace endpoint must not strand an existing user during
     // bootstrap. Absence is deliberately interpreted as no pending welcome.
     console.warn("[onboarding] workspace state load failed", error);
-    queryClient.setQueryData(queryKeys.workspace, false);
+    studioApolloClient().writeQuery({
+      query: WorkTrackerWorkspaceDocument,
+      data: workspaceQueryData([]),
+    });
   }
 }
 
 export async function acknowledgeOnboarding(): Promise<void> {
   const workspace = await writeOnboardingAcknowledgement();
-  queryClient.setQueryData(
-    queryKeys.workspace,
-    workspace.onboarding_required,
-  );
+  studioApolloClient().writeQuery({
+    query: WorkTrackerWorkspaceDocument,
+    data: workspaceQueryData([{
+      id: compactWorktrackerId(workspace.id),
+      slug: workspace.slug,
+      name: workspace.name,
+      onboarding_required: workspace.onboarding_required,
+    }]),
+  });
 }
 
 export function getOnboardingRequiredSnapshot(): boolean {
-  return queryClient.getQueryData<boolean>(queryKeys.workspace) ?? false;
+  return studioApolloClient().readQuery({ query: WorkTrackerWorkspaceDocument })
+    ?.workspace.nodes[0]?.onboarding_required ?? false;
 }
 
 export function useOnboardingRequired(): boolean {
-  const { data } = useQuery(
-    {
-      queryKey: queryKeys.workspace,
-      queryFn: fetchOnboardingRequired,
-      enabled: false,
-    },
-    queryClient,
-  );
-  return data ?? false;
+  const { data } = useQuery(WorkTrackerWorkspaceDocument, {
+    client: studioApolloClient(),
+    fetchPolicy: "cache-only",
+  });
+  return data?.workspace.nodes[0]?.onboarding_required ?? false;
 }

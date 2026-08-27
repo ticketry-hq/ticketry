@@ -37,7 +37,10 @@ mod tests {
 
     #[test]
     fn automated_exit_includes_smoke_mode() {
-        assert!(!automated_startup_exit_requested() || smoke_startup_exit_requested()
-            || env::var(ACCEPTANCE_EXIT_AFTER_STARTUP).as_deref() == Ok("1"));
+        assert!(
+            !automated_startup_exit_requested()
+                || smoke_startup_exit_requested()
+                || env::var(ACCEPTANCE_EXIT_AFTER_STARTUP).as_deref() == Ok("1")
+        );
     }
 }

@@ -482,10 +482,10 @@ async fn create_tmux_runtime(
             .map_err(|_| invalid_launch("The terminal geometry is invalid."))?,
             command,
         })
-        .map_err(|_| {
+        .map_err(|error| {
             TerminalLaunchError::new(
-                TerminalLaunchErrorCode::RuntimeUnavailable,
-                "The terminal runtime could not be created.",
+                TerminalLaunchErrorCode::RuntimeStartFailed,
+                format!("The terminal runtime could not be created: {error}"),
             )
         })? {
         CreateOutcome::Created | CreateOutcome::Existing(RuntimeObservation::Running) => {}

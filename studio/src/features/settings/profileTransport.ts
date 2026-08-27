@@ -1,5 +1,6 @@
 import { studioRuntime } from "../../runtime";
 import { graphQlMutationError } from "../../shared/api/graphqlError";
+import { studioApolloClient } from "../../shared/apollo/client";
 import type { ConfigPayload, Profile } from "../studio/lib/types";
 import {
   AddLocalProfileDocument,
@@ -8,27 +9,37 @@ import {
   ReplaceFeatureFlagsDocument,
   ReplaceLocalProfileDocument,
   SelectLocalProfileDocument,
-  type LocalProfileInput,
-  type LocalSettingsPayload,
-} from "./generated/profileSettings";
+} from "./generated/profileSettings.documents";
+import type {
+  LocalProfileInput,
+  LocalSettingsFieldsFragment,
+} from "./generated/profileSettings.documents";
 
-function mutablePayload(payload: LocalSettingsPayload): ConfigPayload {
+function stringRecord(value: unknown): Record<string, string> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return Object.fromEntries(
+    Object.entries(value).filter((entry): entry is [string, string] => (
+      typeof entry[1] === "string"
+    )),
+  );
+}
+
+function mutablePayload(value: unknown): ConfigPayload {
+  const payload = value as LocalSettingsFieldsFragment;
   return {
     recent_profile_index: payload.recent_profile_index,
     profiles: payload.profiles.map((profile) => ({
       ...profile,
-      agent_prompts: { ...profile.agent_prompts } as Record<string, string>,
+      agent_prompts: stringRecord(profile.agent_prompts),
       module_links: profile.module_links.map((link) => ({ ...link })),
-      recent_module_ids: {
-        ...profile.recent_module_ids,
-      } as Record<string, string>,
+      recent_module_ids: stringRecord(profile.recent_module_ids),
     })),
     features: { ...payload.features },
   };
 }
 
 function input(profile: Partial<Profile>): LocalProfileInput {
-  return profile as LocalProfileInput;
+  return profile as unknown as LocalProfileInput;
 }
 
 async function graphQl<TResult>(operation: () => Promise<TResult>): Promise<TResult> {
@@ -39,12 +50,13 @@ async function graphQl<TResult>(operation: () => Promise<TResult>): Promise<TRes
   }
 }
 
-export function getConfig(): Promise<ConfigPayload> {
-  return studioRuntime().readWorkTracker({
-    graphQl: async (execute) => mutablePayload(
-      (await execute(LoadLocalSettingsDocument, {})).local_settings,
-    ),
+export async function getConfig(): Promise<ConfigPayload> {
+  const { data } = await studioApolloClient().query({
+    query: LoadLocalSettingsDocument,
+    fetchPolicy: "network-only",
   });
+  if (!data) throw new Error("Local settings returned no data.");
+  return mutablePayload(data.local_settings);
 }
 
 export function postProfile(profile: Partial<Profile>): Promise<ConfigPayload> {

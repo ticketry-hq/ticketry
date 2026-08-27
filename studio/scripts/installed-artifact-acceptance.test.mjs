@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import path from "node:path";
 import test from "node:test";
+import { productIdentity } from "../../scripts/product-identity.mjs";
 import {
   InstalledArtifactAcceptanceError,
   acceptanceDataDirectory,
@@ -109,7 +110,10 @@ test("GUI launches get only the clean desktop environment", () => {
 test("acceptance uses the product data directory under the sandboxed home", () => {
   assert.equal(
     acceptanceDataDirectory("/tmp/acceptance/home"),
-    "/tmp/acceptance/home/.config/worktracker-studio",
+    path.join(
+      "/tmp/acceptance/home/.config",
+      productIdentity.defaultDataDirectoryName,
+    ),
   );
 });
 

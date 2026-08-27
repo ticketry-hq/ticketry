@@ -3,7 +3,7 @@ import type {
   ServiceHealthListener,
   StudioRuntime,
 } from "./contract";
-import { executeFoundationOperation } from "../graphql-foundation/foundationClient";
+import { executeGraphQlTransport } from "./graphQlTransport";
 import type { GraphQlTransportProxy } from "../graphql-foundation/generated/taurpc";
 import { encodeDocumentPath } from "./documentAssetUrl";
 
@@ -43,6 +43,11 @@ function subscriptionEndpoint(endpoint: string): string {
   return `${endpoint.replace(/\/$/, "")}/subscribe`;
 }
 
+/**
+ * The terminal WebSocket lives on the same origin as the GraphQL endpoint.
+ * A relative endpoint is same-origin; an absolute http(s) adapter origin maps
+ * to ws(s) with the terminal path. Schemes are already validated above.
+ */
 function websocketEndpoint(graphQlApi: string): string {
   if (graphQlApi.startsWith("/") && !graphQlApi.startsWith("//")) {
     return TERMINAL_WEBSOCKET_PATH;
@@ -80,7 +85,9 @@ async function readSubscription(
       if (frame) onEvent(frame);
       boundary = buffered.indexOf("\n\n");
     }
-    if (done) return;
+    if (done) {
+      return;
+    }
   }
 }
 
@@ -169,15 +176,17 @@ export function createBrowserRuntime({
     initialNotices: Object.freeze([]),
   });
   const graphQlProxy = browserGraphQlProxy(graphQlApi);
+  const graphQlTransport = () => graphQlProxy;
   const readWorkTracker: StudioRuntime["readWorkTracker"] = (routes) =>
-    routes.graphQl((document, variables) => executeFoundationOperation(
+    routes.graphQl((document, variables) => executeGraphQlTransport(
       document,
       variables,
-      () => graphQlProxy,
+      graphQlTransport,
     ));
 
   return Object.freeze({
     platform: "browser" as const,
+    graphQlTransport,
     capabilities: Object.freeze({
       statusFeed: true,
       nativeLifecycle: false,
@@ -191,7 +200,9 @@ export function createBrowserRuntime({
     writeWorkTracker: readWorkTracker,
     readSettings: readWorkTracker,
     writeSettings: readWorkTracker,
-    statusStream: () => () => graphQlProxy,
+    statusStream: () => graphQlTransport,
+    // The browser terminal attaches over the adapter's /ws/terminal socket on
+    // the same origin as the GraphQL endpoint.
     terminalWebSocketUrl: () => terminalWebSocket,
     // Browser development has no desktop protocol, so the Rust development
     // adapter exposes the same registered, read-only document assets over HTTP.

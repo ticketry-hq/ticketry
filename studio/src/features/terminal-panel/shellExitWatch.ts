@@ -14,9 +14,12 @@ import { useEffect } from "react";
 import {
   isLiveAgentRunState,
   projectRunPresentation,
-  useAgentStatusStore,
   type AgentStatusData,
   type RunRecord,
+} from "../agents/status";
+import {
+  readAgentStatusHolding,
+  subscribeAgentStatusHolding,
 } from "../agents/status";
 import { useModuleShellStore } from "./moduleShellStore";
 
@@ -48,9 +51,14 @@ function applyEndings(moduleId: string, runs: AgentStatusData["runs"]): void {
 export function useShellExitWatch(moduleId: string | null): void {
   useEffect(() => {
     if (!moduleId) return;
-    applyEndings(moduleId, useAgentStatusStore.getState().runs);
-    return useAgentStatusStore.subscribe((state) => {
-      applyEndings(moduleId, state.runs);
+    applyEndings(moduleId, readAgentStatusHolding().runs);
+    return subscribeAgentStatusHolding(() => {
+      // The status subscription runs during Apollo's cache broadcast. Defer
+      // the client-state write until that broadcast finishes so the same cache
+      // never starts a nested recomputation.
+      queueMicrotask(() => {
+        applyEndings(moduleId, readAgentStatusHolding().runs);
+      });
     });
   }, [moduleId]);
 }

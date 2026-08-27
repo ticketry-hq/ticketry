@@ -1,7 +1,7 @@
 import {
   LoadKeybindingSettingDocument,
   UpdateKeybindingSettingDocument,
-} from "../../features/settings/generated/keybindings";
+} from "../../features/settings";
 import { studioRuntime } from "../../runtime";
 import {
   studioKeymapRegistry,

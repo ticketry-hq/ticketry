@@ -6,16 +6,22 @@
  * narrow: turn the typed union into safe, ordered calls on the supplied
  * handlers, and retain one monotonic cursor per project.
  */
-import type { CreateGraphQlTransportProxy } from "../../../graphql-foundation/foundationClient";
+import type { CreateGraphQlTransportProxy } from "../../../runtime/graphQlTransport";
+import {
+  documentOperationName,
+  documentSource,
+} from "../../../graphql-foundation/typedDocument";
 import {
   RunStatusStreamDocument,
-  type RunStatusCaughtUpFrame,
-  type RunStatusEventFrame,
-  type RunStatusFailedFrame,
-  type RunStatusFrame,
-  type RunStatusResetRequiredFrame,
-  type RunStatusSnapshotFrame,
-} from "./generated/statusStream";
+} from "./generated/statusStream.documents";
+import type {
+  RunStatusCaughtUpFrame,
+  RunStatusEventFrame,
+  RunStatusFailedFrame,
+  RunStatusFrame,
+  RunStatusResetRequiredFrame,
+  RunStatusSnapshotFrame,
+} from "./types";
 import type { StatusCursorStore } from "./statusStreamCursors";
 
 /** The payload versions this build understands. */
@@ -181,8 +187,8 @@ export function createStatusStreamClient(
       await createProxy().graphql_subscribe(
         subscriptionId,
         JSON.stringify({
-          query: RunStatusStreamDocument.source,
-          operationName: RunStatusStreamDocument.operationName,
+          query: documentSource(RunStatusStreamDocument),
+          operationName: documentOperationName(RunStatusStreamDocument),
           variables: { projectId, afterCursor: afterCursor ?? null },
         }),
         receive,

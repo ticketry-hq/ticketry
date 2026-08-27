@@ -6,9 +6,9 @@ import type {
   UserNoticeListener,
 } from "./contract";
 import {
-  executeFoundationOperation,
+  executeGraphQlTransport,
   type CreateGraphQlTransportProxy,
-} from "../graphql-foundation/foundationClient";
+} from "./graphQlTransport";
 import { createTauRPCProxy } from "../graphql-foundation/generated/taurpc";
 import { desktopDocumentUrl } from "./documentAssetUrl";
 import {
@@ -122,7 +122,7 @@ export async function createDesktopRuntime({
     startup.initialNotices.map((notice) => notice.id),
   );
   const readWorkTracker: StudioRuntime["readWorkTracker"] = (routes) =>
-    routes.graphQl((document, variables) => executeFoundationOperation(
+    routes.graphQl((document, variables) => executeGraphQlTransport(
       document,
       variables,
       createGraphQlProxy,
@@ -130,6 +130,7 @@ export async function createDesktopRuntime({
 
   return Object.freeze({
     platform: "desktop" as const,
+    graphQlTransport: createGraphQlProxy,
     capabilities: Object.freeze({
       statusFeed: true,
       nativeLifecycle: false,

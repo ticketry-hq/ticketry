@@ -8,6 +8,11 @@ import {
 import { createBrowserRuntime } from "../runtime/browserRuntime";
 import { createDesktopRuntime } from "../runtime/desktopRuntime";
 import { initializeStudioRuntime } from "../runtime";
+import { studioApolloClient } from "../shared/apollo/client";
+import {
+  LoadLocalSettingsDocument,
+  type LoadLocalSettingsQuery,
+} from "../features/settings/generated/profileSettings.documents";
 
 const startup = {
   serviceHealth: {
@@ -24,6 +29,7 @@ describe("profile settings desktop runtime acceptance", () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
     let settings = {
+      __typename: "LocalSettings" as const,
       recent_profile_index: 0,
       profiles: [
         {
@@ -86,6 +92,11 @@ describe("profile settings desktop runtime acceptance", () => {
     }));
 
     await loadConfig();
+    expect(
+      studioApolloClient().readQuery<LoadLocalSettingsQuery>({
+        query: LoadLocalSettingsDocument,
+      })?.local_settings.recent_profile_index,
+    ).toBe(0);
     await selectProfile(1);
     await setModuleFolder("module-1", "/repos/ticketry");
 

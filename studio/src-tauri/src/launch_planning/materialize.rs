@@ -242,10 +242,7 @@ fn hook_command(provider: Provider, run_id: &str, authority: &ExecutionAuthority
             .into_owned(),
     ];
     if provider != Provider::Claude {
-        args.extend([
-            "--agent-run-id".into(),
-            run_id.into(),
-        ]);
+        args.extend(["--agent-run-id".into(), run_id.into()]);
     }
     shell_join(&args)
 }

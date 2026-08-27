@@ -15,7 +15,6 @@ import { WorktreeBlock } from "../features/agents/worktrees";
 import { statusStreamFeed } from "../features/agents/status/stream/statusStreamFeed";
 import { createDesktopRuntime } from "../runtime/desktopRuntime";
 import { initializeStudioRuntime } from "../runtime";
-import { queryClient } from "../shared/query/queryClient";
 
 const PROJECT = "11111111-1111-1111-1111-111111111111";
 const OTHER_PROJECT = "22222222-2222-2222-2222-222222222222";
@@ -206,7 +205,6 @@ function renderViews() {
 }
 
 beforeEach(() => {
-  queryClient.clear();
   statusStreamFeed.resetCursors(PROJECT);
   statusStreamFeed.resetCursors(OTHER_PROJECT);
   vi.stubGlobal("fetch", vi.fn());
@@ -243,7 +241,9 @@ describe("worktree holding refresh acceptance", () => {
     feed.send(worktreeFact(11, "created"));
 
     expect(
-      await screen.findByText(`Shares the worktree of its parent task (${OWNER}).`),
+      await screen.findByText(
+        `Shares the worktree owned by top-level task (${OWNER}).`,
+      ),
     ).toBeTruthy();
     // The window that already had the answer re-reads too: an immediate
     // response is authority, not a reason to suppress a later durable refresh.

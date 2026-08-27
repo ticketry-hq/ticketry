@@ -9,6 +9,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ModalHost } from "../app/modal/ModalHost";
 import { useModalStore } from "../app/modal/modalStore";
 import { useGlobalKeymap } from "../app/navigation/useGlobalKeymap";
+import { studioKeymapRegistry } from "../app/navigation/keymapRegistry";
 import { StudioFooter } from "../app/shell/StudioFooter";
 import { useStudioStore } from "../features/projects/store";
 import { useWorkflowEditorStore } from "../features/workflows/workflowEditorStore";
@@ -23,8 +24,14 @@ const settingsApi = vi.hoisted(() => ({
   putProviderCatalog: vi.fn(),
 }));
 
-vi.mock("../shared/api/client", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../shared/api/client")>()),
+const keybindingApi = vi.hoisted(() => ({
+  saveKeybindingOverrides: vi.fn(),
+}));
+
+vi.mock("../app/navigation/keymapSettings", () => keybindingApi);
+
+vi.mock("./legacyApiFixture", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./legacyApiFixture")>()),
   ...settingsApi,
 }));
 
@@ -90,6 +97,10 @@ function GlobalKeymapHarness() {
 describe("overhaul acceptance — settings", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    studioKeymapRegistry.setOverrides([]);
+    keybindingApi.saveKeybindingOverrides.mockImplementation(async (overrides) => {
+      studioKeymapRegistry.setOverrides(overrides);
+    });
     useModalStore.setState({
       modalStack: [],
       presentedNoticeIds: new Set(),
@@ -153,7 +164,7 @@ describe("overhaul acceptance — settings", () => {
     expect(settingsApi.getIssueTypeWorkflowSettings).not.toHaveBeenCalled();
   });
 
-  it("[overhaul-122] keeps the keyboard shortcut reference inside Settings instead of the footer", async () => {
+  it("[overhaul-122] edits and persists keyboard shortcuts inside Settings", async () => {
     render(
       <>
         <GlobalKeymapHarness />
@@ -175,11 +186,35 @@ describe("overhaul acceptance — settings", () => {
     expect(
       within(dialog).getByRole("heading", { name: "Keyboard shortcuts" }),
     ).toBeInTheDocument();
-    expect(
-      within(dialog).getByRole("table", {
-        name: "Effective keyboard bindings by action and Keymap context",
-      }),
-    ).toBeInTheDocument();
+    const runNow = within(dialog).getByRole("button", {
+      name: "Record Run now binding",
+    });
+    fireEvent.click(runNow);
+    expect(runNow).toHaveTextContent("Press a chord…");
+    fireEvent.keyDown(window, { key: "x" });
+
+    await waitFor(() => {
+      expect(keybindingApi.saveKeybindingOverrides).toHaveBeenCalledWith([{
+        context: "global",
+        actionId: "run-now",
+        chord: {
+          key: "x",
+          alt: false,
+          control: false,
+          meta: false,
+          shift: false,
+        },
+      }]);
+    });
+    expect(runNow).toHaveTextContent("X");
+
+    fireEvent.click(within(dialog).getByRole("button", {
+      name: "Reset Run now binding",
+    }));
+    await waitFor(() => {
+      expect(keybindingApi.saveKeybindingOverrides).toHaveBeenLastCalledWith([]);
+    });
+    expect(runNow).toHaveTextContent("R");
 
     fireEvent.click(within(dialog).getByRole("tab", { name: "Models" }));
     expect(

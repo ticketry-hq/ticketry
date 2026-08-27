@@ -18,8 +18,8 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../shared/api/client", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../shared/api/client")>()),
+vi.mock("./legacyApiFixture", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./legacyApiFixture")>()),
   getTasks: vi.fn(),
   putProfile: vi.fn(),
 }));
@@ -50,7 +50,6 @@ import { useTerminalPanelStore } from "../features/terminal-panel/panelStore";
 import { TerminalPanel } from "../features/terminal-panel/TerminalPanel";
 import * as profileTransport from "../features/settings/profileTransport";
 import * as workItemReadTransport from "../features/work-items/queries/readTransport";
-import { queryClient } from "../shared/query/queryClient";
 import { useClientStore } from "../state/clientStore";
 import { TERMINAL_PANEL_KEY } from "../state/persistence";
 
@@ -132,7 +131,6 @@ function persistedFurniture(): Record<string, unknown> | null {
 describe("terminal panel module scope acceptance", () => {
   beforeEach(() => {
     localStorage.clear();
-    queryClient.clear();
     runtime.desktop = false;
     runtime.nativeAvailable = false;
     getTasks.mockReset().mockResolvedValue({
@@ -168,7 +166,6 @@ describe("terminal panel module scope acceptance", () => {
       sidebarVisible: false,
       editViewZone: "active-tab-body",
       editViewBodyEngaged: false,
-      modalStack: [],
     });
     useStudioStore.setState({ selectedProjectId: "project-1" });
     seedConfig({

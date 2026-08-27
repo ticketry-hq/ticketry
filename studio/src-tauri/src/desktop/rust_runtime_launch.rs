@@ -13,10 +13,10 @@ use crate::desktop::runtime_configuration::rust_runtime_configuration;
 use crate::desktop::service_health::ServiceHealth;
 use crate::desktop::service_state::DesktopServiceState;
 use crate::desktop::{runs_handoff, workspace_handoff};
+use crate::settings_persistence;
 use crate::terminal_lifecycle::{
     ProductionTerminalLifecycleWork, TerminalLifecycleConfig, TerminalLifecycleRuntime,
 };
-use crate::settings_persistence;
 
 pub(crate) fn launch_rust_runtime(
     application: &tauri::App,
@@ -98,8 +98,8 @@ pub(crate) fn launch_rust_runtime(
         Arc::new(composed.terminal_runtime().clone()),
         Arc::new(crate::terminal_cleanup::TmuxCleanupRuntime::default()),
     );
-    let terminal_runtime = Arc::new(tauri::async_runtime::block_on(
-        TerminalLifecycleRuntime::start(
+    let terminal_runtime = Arc::new(
+        tauri::async_runtime::block_on(TerminalLifecycleRuntime::start(
             Arc::new(ProductionTerminalLifecycleWork::new(
                 database.clone(),
                 spool,
@@ -110,8 +110,9 @@ pub(crate) fn launch_rust_runtime(
                 sweep_interval: terminal_sweep_interval(),
                 ..TerminalLifecycleConfig::default()
             },
-        ),
-    ).map_err(|error| format!("terminal lifecycle startup failed: {error}"))?);
+        ))
+        .map_err(|error| format!("terminal lifecycle startup failed: {error}"))?,
+    );
     let execution_service = crate::execution_reconciliation::ExecutionReconciliationService::new(
         database.clone(),
         crate::work_management::launch_policy::LaunchPolicyResolver::new(
@@ -126,7 +127,8 @@ pub(crate) fn launch_rust_runtime(
             Arc::clone(&terminal_runtime),
             crate::execution_reconciliation::ExecutionReconciliationConfig::default(),
         ),
-    ).map_err(|error| format!("execution reconciliation startup failed: {error}"))?;
+    )
+    .map_err(|error| format!("execution reconciliation startup failed: {error}"))?;
 
     tauri::async_runtime::block_on(workspace_handoff::open_gate(
         &data_directory,
@@ -139,16 +141,27 @@ pub(crate) fn launch_rust_runtime(
         .map_err(|error| format!("could not publish Slice 2 readiness: {error}"))?;
     state.readiness.record(&complete);
 
-    *state.configuration.lock().expect("runtime configuration lock poisoned") =
-        Some(rust_runtime_configuration());
+    *state
+        .configuration
+        .lock()
+        .expect("runtime configuration lock poisoned") = Some(rust_runtime_configuration());
     *state.mcp_runtime.lock().expect("MCP runtime lock poisoned") = mcp_runtime.take();
-    *state.terminal_runtime.lock().expect("terminal runtime lock poisoned") =
-        Some(terminal_runtime);
-    *state.execution_runtime.lock().expect("execution runtime lock poisoned") =
-        Some(execution_runtime);
-    *state.terminal_launch.lock().expect("terminal launch lock poisoned") =
-        Some(terminal_launch);
-    *state.output_sweep.lock().expect("output sweep lock poisoned") = Some(
+    *state
+        .terminal_runtime
+        .lock()
+        .expect("terminal runtime lock poisoned") = Some(terminal_runtime);
+    *state
+        .execution_runtime
+        .lock()
+        .expect("execution runtime lock poisoned") = Some(execution_runtime);
+    *state
+        .terminal_launch
+        .lock()
+        .expect("terminal launch lock poisoned") = Some(terminal_launch);
+    *state
+        .output_sweep
+        .lock()
+        .expect("output sweep lock poisoned") = Some(
         crate::terminal_output_activity::LiveOutputSweepRuntime::start(
             composed.output_activity().clone(),
             crate::terminal_output_activity::configured_sweep_interval(),
@@ -159,6 +172,14 @@ pub(crate) fn launch_rust_runtime(
 }
 
 fn terminal_sweep_interval() -> Duration {
+    #[cfg(feature = "desktop-acceptance")]
+    if let Some(milliseconds) = std::env::var("TICKETRY_DESKTOP_ACCEPTANCE_SWEEP_MILLIS")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+    {
+        return Duration::from_millis(milliseconds.max(25));
+    }
+
     const DEFAULT_MINUTES: u64 = 30;
     let minutes = std::env::var("MUXED_IDLE_SWEEP_MINUTES")
         .ok()

@@ -1,6 +1,6 @@
 import { studioRuntime } from "../../../../runtime";
 import { graphQlMutationError } from "../../../../shared/api/graphqlError";
-import { ObserveTerminalOutputDocument } from "../generated/outputActivity";
+import { ObserveTerminalOutputDocument } from "../generated/outputActivity.documents";
 
 /**
  * The native renderer's report of the shared terminal-output observation.

@@ -17,7 +17,7 @@ import {
   selectScratchRunIds,
   selectTaskRunCount,
 } from "./selectors";
-import { useAgentStatusStore } from "./store";
+import { useAgentStatusStore } from "./testStore";
 import type { RunRecord } from "./types";
 
 const SCRATCH_TASK_ID = "00000000-0000-0000-0000-000000000000";

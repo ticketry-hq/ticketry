@@ -72,6 +72,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map(PathBuf::from)
         .ok_or("MUXED_DATA_DIR is required")?;
     std::fs::create_dir_all(&data_directory)?;
+    let _data_directory_guard = muxed_studio_lib::data_directory::DataDirectoryGuard::acquire(
+        &data_directory,
+    )
+    .map_err(|error| {
+        format!(
+            "could not own browser development data directory {}: {error}",
+            data_directory.display()
+        )
+    })?;
     let api = TransportApiImpl::new();
     let adopted = muxed_studio_lib::graphql_foundation::adopt_worktracker_and_install(
         &data_directory.join("rust-core.sqlite3"),

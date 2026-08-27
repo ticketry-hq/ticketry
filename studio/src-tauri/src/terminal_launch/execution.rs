@@ -132,6 +132,7 @@ impl TerminalLaunchService {
                         error.code,
                         TerminalLaunchErrorCode::InvalidRequest
                             | TerminalLaunchErrorCode::Conflict
+                            | TerminalLaunchErrorCode::RuntimeStartFailed
                             | TerminalLaunchErrorCode::RuntimeExited
                     ) =>
                 {

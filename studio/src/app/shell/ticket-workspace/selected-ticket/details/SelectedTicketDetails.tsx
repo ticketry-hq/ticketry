@@ -1,10 +1,7 @@
 import { useStudioStore } from "../../../../../features/projects";
 import { useClientStore } from "../../../../../state/clientStore";
 import { TEMP_TASK_ID } from "../../../../../features/agents/types";
-import {
-  selectScratchLifecycleChips,
-  useAgentStatusStore,
-} from "../../../../../features/agents/status";
+import { useScratchLifecycleChips } from "../../../../../features/agents/status";
 import { ScratchStateBadge } from "../../../../../features/agents/lifecycle";
 import IssueDetail from "./IssueDetail";
 
@@ -15,11 +12,7 @@ function ScratchDetails({
   projectId: string | null;
   moduleId: string | null;
 }) {
-  const chips = useAgentStatusStore((status) =>
-    projectId && moduleId
-      ? selectScratchLifecycleChips(status, projectId, moduleId)
-      : [],
-  );
+  const chips = useScratchLifecycleChips(projectId ?? "", moduleId ?? "");
 
   if (chips.length === 0) {
     return <div className="text-text-muted">No active Scratch runs.</div>;

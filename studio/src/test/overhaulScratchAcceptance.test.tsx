@@ -2,18 +2,28 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SelectedTicketContent } from "../app/shell/ticket-workspace/selected-ticket/SelectedTicketContent";
 import { SelectedTicketDetails } from "../app/shell/ticket-workspace/selected-ticket/details/SelectedTicketDetails";
-import { useAgentStatusStore } from "../features/agents/status";
+import { useAgentStatusStore } from "../features/agents/status/testStore";
 import { scratchBucketId, useTerminalStore } from "../features/agents/terminal";
 import { TEMP_TASK_ID } from "../features/agents/types";
 import { useStudioStore } from "../features/projects/store";
 import { seedConfig } from "../features/studio/stores/configStore";
-import { queryClient } from "../shared/query/queryClient";
 import { useClientStore } from "../state/clientStore";
+import {
+  installDesktopGraphQlRuntime,
+  terminalSessionReadExecutor,
+} from "./desktopGraphQlRuntime";
+
+const emptyTerminalReads = {
+  readTaskTerminalSessions: async () => [],
+  readScratchTerminalSessions: async () => [],
+  readTaskResumableTerminalSessions: async () => [],
+  readScratchResumableTerminalSessions: async () => [],
+};
 
 describe("overhaul acceptance — module scratch workspace", () => {
   beforeEach(() => {
+    installDesktopGraphQlRuntime(terminalSessionReadExecutor(emptyTerminalReads));
     localStorage.clear();
-    queryClient.clear();
     seedConfig({ features: { sidebar: true, projects: true } });
     useStudioStore.setState({ selectedProjectId: "project-1" });
     useClientStore.setState({
@@ -31,9 +41,6 @@ describe("overhaul acceptance — module scratch workspace", () => {
       automationAttempts: {},
       automationByTask: {},
     });
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(
-      new Response("[]", { headers: { "Content-Type": "application/json" } }),
-    ));
   });
 
   it("[overhaul-13] opens a module scratch workspace, launches, and shows its run summary", async () => {

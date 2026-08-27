@@ -11,8 +11,8 @@ const providerState = vi.hoisted(() => ({
   capabilities: [] as unknown[],
 }));
 
-vi.mock("../shared/api/client", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../shared/api/client")>()),
+vi.mock("./legacyApiFixture", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./legacyApiFixture")>()),
   ...catalogApi,
 }));
 
@@ -95,5 +95,21 @@ describe("onboarding acceptance", () => {
     );
     expect(useStudioStore.getState().selectedProjectId).toBe("created-project");
     expect(useOnboardingTourStore.getState().projectId).toBe("created-project");
+  });
+
+  it("keeps a provider selection when a late catalog response repeats the initial value", async () => {
+    const view = render(<OnboardingWelcome />);
+    const codex = await screen.findByRole("checkbox", { name: "I use codex" });
+
+    fireEvent.click(codex);
+    expect(codex).toBeChecked();
+
+    providerState.catalog = {
+      activated_providers: [],
+      global_default: null,
+    };
+    view.rerender(<OnboardingWelcome />);
+
+    expect(codex).toBeChecked();
   });
 });

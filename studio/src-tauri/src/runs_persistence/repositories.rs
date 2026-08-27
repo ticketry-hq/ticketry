@@ -45,9 +45,7 @@ impl AutomationAttemptRepository {
         &self,
         id: &str,
     ) -> Result<Option<AutomationAttemptRecord>, RunsPersistenceError> {
-        let database_id = uuid::Uuid::parse_str(id)
-            .map(|value| value.simple().to_string())
-            .unwrap_or_else(|_| id.to_owned());
+        let database_id = database_uuid(id);
         let row = find_attempt(&self.0, &database_id).await?;
         Ok(row.map(automation_attempt))
     }
@@ -110,14 +108,14 @@ impl StatusEventRepository {
         let row = status_event_entity::ActiveModel {
             cursor: NotSet,
             event_id: Set(event.event_id.to_owned()),
-            project_id: Set(event.project_id.to_owned()),
+            project_id: Set(database_uuid(event.project_id)),
             event_kind: Set(event.event_kind.to_owned()),
             payload_version: Set(event.payload_version),
             subject_kind: Set(event.subject_kind.to_owned()),
             subject_id: Set(event.subject_id.to_owned()),
             agent_run_id: Set(event.agent_run_id.map(str::to_owned)),
             automation_attempt_id: Set(event.automation_attempt_id.map(str::to_owned)),
-            work_item_id: Set(event.work_item_id.map(str::to_owned)),
+            work_item_id: Set(event.work_item_id.map(database_uuid)),
             payload: Set(event.payload.to_string()),
             committed_at: NotSet,
         }
@@ -245,6 +243,12 @@ impl StatusEventRepository {
             .count(&self.database)
             .await?)
     }
+}
+
+fn database_uuid(value: &str) -> String {
+    uuid::Uuid::parse_str(value)
+        .map(|value| value.simple().to_string())
+        .unwrap_or_else(|_| value.to_owned())
 }
 
 #[derive(Clone)]

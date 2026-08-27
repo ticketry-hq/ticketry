@@ -1,168 +1,161 @@
-import { useQuery } from "@tanstack/react-query";
+import { skipToken, useQuery } from "@apollo/client/react";
+import { useEffect, useState } from "react";
+import type { Module, Project, ProjectCreate, ProjectPatch } from "../../../shared/api/types";
+import { compactWorktrackerId } from "../../../shared/api/generatedWorktracker";
+import { studioApolloClient } from "../../../shared/apollo/client";
 import {
-  applyCanonicalModuleOrder,
-  usesManualModuleOrder,
-} from "../utilities/canonicalModuleOrder";
-import {
-  forgetAcceptedManualModuleOrder,
-  hasAcceptedManualModuleOrder,
-} from "../internal/acceptedManualModuleOrder";
-import { forgetNewlyCreatedModules } from "../internal/newlyCreatedModules";
-import { queryClient } from "../../../shared/query/queryClient";
-import { queryKeys } from "../../../shared/query/keys";
-import type {
-  Module,
-  Project,
-  ProjectCreate,
-  ProjectPatch,
-} from "../../../shared/api/types";
-import { readModules, readProjects, readWorkspace } from "./readTransport";
+  WorkTrackerProjectOpenDocument,
+  WorkTrackerProjectsDocument,
+} from "../generated/projects.documents";
+import type { WorkTrackerProjectsQuery } from "../generated/projects.documents";
 import {
   createProject as writeProject,
   deleteProject as removeProject,
   updateProject as writeProjectUpdate,
 } from "../mutationTransport";
-
-// Server-owned project + module lists, cached under queryKeys.projects /
-// queryKeys.modules. Full backend shapes (Project, Module) are the canonical
-// cache entries; surfaces needing a slimmer projection derive it at read time.
+import { applyCanonicalModuleOrder } from "../utilities/canonicalModuleOrder";
+import { forgetAcceptedManualModuleOrder } from "../internal/acceptedManualModuleOrder";
+import { forgetNewlyCreatedModules } from "../internal/newlyCreatedModules";
+import {
+  modulesFromProjectOpen,
+  projectsFromResult,
+  readProjects,
+  readProjectOpen,
+  readWorkspace,
+} from "./readTransport";
 
 const EMPTY_PROJECTS: Project[] = [];
 const EMPTY_MODULES: Module[] = [];
 
-async function fetchProjects(): Promise<Project[]> {
-  return readProjects();
+function canonicalModules(projectId: string, data: {
+  project: { nodes: Array<{ manual_module_order: boolean }> };
+  modules: Parameters<typeof modulesFromProjectOpen>[0]["modules"];
+}): Module[] {
+  const modules = modulesFromProjectOpen(data as Parameters<typeof modulesFromProjectOpen>[0]);
+  // The consolidated query is already ordered by the server. Automatic
+  // activity ordering is applied by the asynchronous open path below.
+  void projectId;
+  return modules;
 }
 
-/**
- * Resolve the project's durable module ordering mode (#359, #363).
- *
- * The mode is revalidated on every module fetch rather than answered from the
- * cached project list. Nothing else refreshes that list on a running client, so
- * a teammate or another device flipping the project to Manual module order
- * would otherwise stay invisible here indefinitely, and recency would keep
- * layering itself back over the server's persisted rank order.
- *
- * The two reads are issued together by `fetchModules`, so neither can outrun
- * the other. An authoritative read is final, and retires whatever the last
- * accepted reorder implied about the mode (#367).
- *
- * A failed read falls back, in order, to a reorder this client has already had
- * accepted — the server took the project manual to accept it, so recency must
- * not be layered back over the rank order that drag produced — then to whatever
- * the cache already knows. An empty cache leaves the project automatic, the
- * mode every project starts in.
- */
-async function fetchModuleOrderingMode(projectId: string): Promise<boolean> {
-  try {
-    const manualModuleOrder = usesManualModuleOrder(await loadProjects(), projectId);
-    forgetAcceptedManualModuleOrder(projectId);
-    return manualModuleOrder;
-  } catch {
-    return (
-      hasAcceptedManualModuleOrder(projectId) ||
-      usesManualModuleOrder(getProjectsSnapshot(), projectId)
-    );
-  }
-}
-
-// Modules are cached already in the Canonical module order: every consumer
-// (sidebar, module tabs, Epic derive, backlog groups, position shortcuts)
-// reads that one array (#831, #359). Automatic projects get activity recency
-// layered over the server's newest-created-first fallback; manual projects
-// keep the server's persisted rank order untouched.
-async function fetchModules(projectId: string): Promise<Module[]> {
-  const [modules, manualModuleOrder] = await Promise.all([
-    readModules(projectId),
-    fetchModuleOrderingMode(projectId),
-  ]);
-  return applyCanonicalModuleOrder(projectId, modules, manualModuleOrder);
-}
-
-/** Cached projects, [] before the first load resolves. */
 export function getProjectsSnapshot(): Project[] {
-  return queryClient.getQueryData<Project[]>(queryKeys.projects.all) ?? [];
+  const data = studioApolloClient().readQuery({ query: WorkTrackerProjectsDocument });
+  return data ? projectsFromResult(data) : [];
 }
 
-/** Cached modules for one project, [] when absent. */
 export function getModulesSnapshot(projectId: string | null): Module[] {
   if (!projectId) return [];
-  return (
-    queryClient.getQueryData<Module[]>(queryKeys.modules.byProject(projectId)) ??
-    []
-  );
+  const data = studioApolloClient().readQuery({
+    query: WorkTrackerProjectOpenDocument,
+    variables: { projectId: compactWorktrackerId(projectId) },
+    optimistic: true,
+  });
+  return data ? canonicalModules(projectId, data) : [];
 }
 
 export async function loadProjects(): Promise<Project[]> {
-  return queryClient.fetchQuery({
-    queryKey: queryKeys.projects.all,
-    queryFn: fetchProjects,
-    staleTime: 0,
-  });
+  const projects = await readProjects();
+  seedProjects(projects);
+  return projects;
 }
 
-export async function loadModules(projectId: string): Promise<Module[]> {
-  return queryClient.fetchQuery({
-    queryKey: queryKeys.modules.byProject(projectId),
-    queryFn: () => fetchModules(projectId),
-    staleTime: 0,
+export async function loadModules(
+  projectId: string,
+  options: { readonly queryDeduplication?: boolean } = {},
+): Promise<Module[]> {
+  const opened = await readProjectOpen(projectId, "network-only", options);
+  studioApolloClient().writeQuery({
+    query: WorkTrackerProjectOpenDocument,
+    variables: { projectId: compactWorktrackerId(projectId) },
+    data: opened.data,
   });
-}
-
-/**
- * Subscribe to the cached lists WITHOUT fetching. Surfaces that read along with
- * whoever owns the load (Studio's panes) use these so a create or refresh
- * re-renders them, without each pane issuing its own request.
- */
-export function useCachedProjects(): Project[] {
-  const { data } = useQuery(
-    { queryKey: queryKeys.projects.all, queryFn: fetchProjects, enabled: false },
-    queryClient,
+  const ordered = await applyCanonicalModuleOrder(
+    projectId,
+    opened.modules,
+    opened.project.manual_module_order,
   );
-  return data ?? EMPTY_PROJECTS;
+  seedModules(projectId, ordered);
+  return ordered;
+}
+
+export function useCachedProjects(): Project[] {
+  const query = useQuery(WorkTrackerProjectsDocument, {
+    client: studioApolloClient(),
+    fetchPolicy: "cache-only",
+  });
+  return query.data ? projectsFromResult(query.data) : EMPTY_PROJECTS;
 }
 
 export function useCachedModules(projectId: string | null): Module[] {
-  const { data } = useQuery(
-    {
-      queryKey: queryKeys.modules.byProject(projectId ?? "none"),
-      queryFn: () => fetchModules(projectId!),
-      enabled: false,
-    },
-    queryClient,
+  const query = useQuery(
+    WorkTrackerProjectOpenDocument,
+    projectId
+      ? {
+          variables: { projectId: compactWorktrackerId(projectId) },
+          client: studioApolloClient(),
+          fetchPolicy: "cache-only",
+        }
+      : skipToken,
   );
-  return data ?? EMPTY_MODULES;
+  return projectId && query.data
+    ? canonicalModules(projectId, query.data)
+    : EMPTY_MODULES;
 }
 
 export function useProjectsQuery() {
-  return useQuery(
-    {
-      queryKey: queryKeys.projects.all,
-      queryFn: fetchProjects,
-    },
-    queryClient,
-  );
+  const query = useQuery(WorkTrackerProjectsDocument, { client: studioApolloClient() });
+  return {
+    ...query,
+    data: query.data ? projectsFromResult(query.data) : undefined,
+    isPending: query.loading,
+  };
 }
 
-/** Subscribe to a project's modules; disabled (empty) until a project exists. */
 export function useModulesQuery(projectId: string | null) {
-  return useQuery(
-    {
-      queryKey: queryKeys.modules.byProject(projectId ?? "none"),
-      queryFn: () => fetchModules(projectId!),
-      enabled: projectId !== null,
-    },
-    queryClient,
+  const [loading, setLoading] = useState(Boolean(projectId));
+  const [error, setError] = useState<Error>();
+  const query = useQuery(
+    WorkTrackerProjectOpenDocument,
+    projectId
+      ? {
+          variables: { projectId: compactWorktrackerId(projectId) },
+          client: studioApolloClient(),
+          fetchPolicy: "cache-only",
+        }
+      : skipToken,
   );
+  useEffect(() => {
+    if (!projectId) {
+      setLoading(false);
+      return;
+    }
+    let active = true;
+    setLoading(true);
+    void loadModules(projectId).then(
+      () => { if (active) setError(undefined); },
+      (cause: unknown) => {
+        if (active) setError(cause instanceof Error ? cause : new Error(String(cause)));
+      },
+    ).finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [projectId]);
+  return {
+    ...query,
+    data: projectId && query.data
+      ? canonicalModules(projectId, query.data)
+      : undefined,
+    error: error ?? query.error,
+    loading,
+    isPending: loading,
+  };
 }
 
 export async function createProjectRecord(body: ProjectCreate): Promise<Project> {
   const created = await writeProject(body);
-  queryClient.setQueryData<Project[]>(queryKeys.projects.all, (old) =>
-    old && !old.some((project) => project.id === created.id)
-      ? [...old, created]
-      : old ?? [created],
-  );
+  const projects = getProjectsSnapshot();
+  seedProjects(projects.some((project) => project.id === created.id)
+    ? projects
+    : [...projects, created]);
   return created;
 }
 
@@ -171,30 +164,79 @@ export async function updateProjectRecord(
   patch: ProjectPatch,
 ): Promise<Project> {
   const updated = await writeProjectUpdate(id, patch);
-  queryClient.setQueryData<Project[]>(queryKeys.projects.all, (old) =>
-    old?.map((project) => (project.id === id ? updated : project)),
-  );
+  seedProjects(getProjectsSnapshot().map((project) =>
+    project.id === id ? updated : project
+  ));
   return updated;
 }
 
 export async function deleteProjectRecord(id: string): Promise<void> {
   await removeProject(id);
-  queryClient.setQueryData<Project[]>(queryKeys.projects.all, (old) =>
-    old?.filter((project) => project.id !== id),
-  );
-  queryClient.removeQueries({ queryKey: queryKeys.modules.byProject(id) });
+  studioApolloClient().cache.evict({
+    id: studioApolloClient().cache.identify({
+      __typename: "WorktrackerProject",
+      id: compactWorktrackerId(id),
+    }),
+  });
+  studioApolloClient().cache.gc();
+  seedProjects(getProjectsSnapshot().filter((project) => project.id !== id));
   forgetAcceptedManualModuleOrder(id);
   forgetNewlyCreatedModules(id);
 }
 
-/** Test seam: seed the cached project list. */
 export function seedProjects(projects: Project[]): void {
-  queryClient.setQueryData(queryKeys.projects.all, projects);
+  studioApolloClient().writeQuery({
+    query: WorkTrackerProjectsDocument,
+    data: {
+      projects: {
+        __typename: "WorktrackerProjectConnection",
+        nodes: projects.map((project, index) => ({
+          __typename: "WorktrackerProject",
+          id: compactWorktrackerId(project.id),
+          name: project.name,
+          slug: project.slug,
+          description: project.description,
+          manual_module_order: project.manual_module_order ?? false,
+          created_at: new Date(index).toISOString(),
+        })),
+      },
+    } as unknown as WorkTrackerProjectsQuery,
+  });
 }
 
-/** Test seam: seed one project's cached module list. */
 export function seedModules(projectId: string, modules: Module[]): void {
-  queryClient.setQueryData(queryKeys.modules.byProject(projectId), modules);
+  const variables = { projectId: compactWorktrackerId(projectId) };
+  const current = studioApolloClient().readQuery({
+    query: WorkTrackerProjectOpenDocument,
+    variables,
+  });
+  if (!current) return;
+  studioApolloClient().writeQuery({
+    query: WorkTrackerProjectOpenDocument,
+    variables,
+    data: {
+      ...current,
+      modules: {
+        ...current.modules,
+        nodes: modules.map((module, index) => ({
+          __typename: "WorktrackerIssue" as const,
+          id: compactWorktrackerId(module.id),
+          name: module.name,
+          project_id: compactWorktrackerId(module.project_id),
+          sequence_id: module.sequence_id,
+          is_archived: module.is_archived,
+          issue_type: compactWorktrackerId(module.issue_type),
+          rank: String(index),
+          project: {
+            __typename: "WorktrackerProject" as const,
+            id: compactWorktrackerId(projectId),
+            slug: current.project.nodes[0]?.slug ?? module.key.split("-")[0] ?? "",
+            manual_module_order: current.project.nodes[0]?.manual_module_order ?? false,
+          },
+        })),
+      },
+    },
+  });
 }
 
-export { readWorkspace };
+export { readProjectOpen, readWorkspace };

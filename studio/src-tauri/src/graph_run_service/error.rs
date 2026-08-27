@@ -1,4 +1,5 @@
 use crate::execution_graph::GraphFactsError;
+use crate::launch_authority::LaunchAuthorityError;
 use crate::terminal_launch::TerminalLaunchError;
 use crate::work_management::launch_policy::LaunchPolicyError;
 
@@ -64,6 +65,16 @@ impl From<LaunchPolicyError> for GraphRunServiceError {
         Self::new(
             GraphRunServiceErrorCode::LaunchPolicy,
             error.code(),
+            error.to_string(),
+        )
+    }
+}
+
+impl From<LaunchAuthorityError> for GraphRunServiceError {
+    fn from(error: LaunchAuthorityError) -> Self {
+        Self::new(
+            GraphRunServiceErrorCode::LaunchPolicy,
+            "launch_context_incomplete",
             error.to_string(),
         )
     }

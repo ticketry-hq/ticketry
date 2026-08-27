@@ -14,10 +14,12 @@ import { formatDate } from "../../../../../shared/utilities/display";
 import Field from "./Field";
 import BlockerChipView from "./BlockerChipView";
 import IssueTypePicker from "./fields/IssueTypePicker";
+import { WorktreeBlock } from "../../../../../features/agents/worktrees";
 
 interface IssueSidebarProps {
   task: WorkItem;
   epic: Module | null;
+  moduleId: string | null;
   saving: Record<string, boolean>;
   blockedByChips: BlockerChip[];
   blocksChips: BlockerChip[];
@@ -33,6 +35,7 @@ interface IssueSidebarProps {
 export default function IssueSidebar({
   task,
   epic,
+  moduleId,
   saving,
   blockedByChips,
   blocksChips,
@@ -140,6 +143,15 @@ export default function IssueSidebar({
           </span>
         </Field>
       </div>
+
+      <WorktreeBlock
+        taskId={task.id}
+        parentId={task.parent_id}
+        moduleId={moduleId}
+        projectId={task.project_id}
+        ticketSeq={task.sequence_id}
+        taskName={task.name}
+      />
     </div>
   );
 }

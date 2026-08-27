@@ -1,4 +1,4 @@
-import { create } from "zustand";
+import { createApolloStore } from "../../shared/apollo/localState";
 import {
   validateUserNotice,
   type UserNotice,
@@ -48,7 +48,7 @@ interface ModalState {
   popModal: () => void;
 }
 
-export const useModalStore = create<ModalState>((set) => ({
+export const useModalStore = createApolloStore<ModalState>("modal", (set) => ({
   modalStack: [],
   // Seeded from window-session storage so notices already presented before an
   // in-app recovery refresh stay silent in the document that replaces it.

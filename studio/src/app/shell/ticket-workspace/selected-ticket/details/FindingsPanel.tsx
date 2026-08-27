@@ -1,7 +1,7 @@
 import { type WorkItem } from "../../../../../shared/api/types";
 import { stateColor, stateLabel } from "../../../../../shared/utilities/display";
 import { useClientStore } from "../../../../../state/clientStore";
-import { useCachedStates, stateById } from "../../../../../shared/query/stateCatalog";
+import { useCachedStates, stateById } from "../../../../../features/projects";
 import { useIssueTypesQuery } from "../../../../../features/settings";
 import { formatWorkItemDisplayIdentifier } from "../../../../../features/work-items";
 import {

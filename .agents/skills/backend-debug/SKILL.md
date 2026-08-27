@@ -5,27 +5,27 @@ description: Diagnose Ticketry backend, work-item, graph-run, agent-run, and ter
 
 # Ticketry Backend Debugging
 
-Ticketry source development uses the local Postgres database when the machine is opted in. The development launcher sets `MUXED_ENABLE_LOCAL_POSTGRES=true`, and the connection URL is normally stored in:
+The installed app and browser development use the product data directory named
+by `config/product-identity.json`. A configured `TICKETRY_DATA_DIR` path wins.
+The active SQLite database is:
 
 ```text
-~/.config/worktracker-studio/database-url
+<product data directory>/state.db
 ```
 
-Do not assume `~/.config/worktracker-studio/state.db` is live. It may be an old SQLite copy even while the running backend is reading and writing Postgres.
+Do not select a similarly named legacy profile by modification time. Confirm
+the configured path and the process holding `.muxed-desktop-owner.json`.
 
 ## Diagnose without changing state
 
 Backend debugging is read-only unless the user explicitly asks for a repair. Do not call launch, advance, reset, terminate, POST, DELETE, or model write methods merely to discover why something is stuck.
 
-Prefer the Django ORM because it uses the same settings and models as the backend:
+Prefer read-only SQLite queries against the configured database:
 
 ```bash
-MUXED_ENABLE_LOCAL_POSTGRES=true \
-  backend/.venv/bin/python backend/manage.py shell -c \
-  "from django.conf import settings; print(settings.DATABASES['default'])"
+sqlite3 -readonly <product-data-directory>/state.db \
+  "SELECT id, name FROM worktracker_issue WHERE id = '<work-item-id>';"
 ```
-
-Confirm that `ENGINE` is `django.db.backends.postgresql` before treating results as live application state.
 
 Then make narrow, read-only queries. For example:
 
@@ -67,4 +67,3 @@ If configuration resolves but no run rows exist, inspect the live backend log or
 ## Local connection caveat
 
 Some sandboxes block the local Postgres Unix socket and report `Operation not permitted` even though Postgres and the backend are running. Treat that as a sandbox restriction, not evidence that the database is down. Ask for narrowly scoped permission to run the same read-only `manage.py shell -c` command outside the sandbox; do not switch to SQLite as a fallback.
-

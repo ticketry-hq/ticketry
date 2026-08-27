@@ -1,5 +1,4 @@
-import type { TypedDocumentNode } from "../../../graphql-foundation/typedDocument";
-import { operationDocuments } from "../generated/manifest";
+export { RunWorkTrackerWorkItemNowDocument } from "../generated/workItems.documents";
 
 export interface RunNowPayload {
   readonly target_id: string;
@@ -13,12 +12,3 @@ export interface RunNowPayload {
     readonly agent_run_id: string;
   } | null;
 }
-
-export const RunWorkTrackerWorkItemNowDocument: TypedDocumentNode<
-  { readonly run_now: RunNowPayload },
-  { readonly idOrKey: string; readonly requestIdentity: string }
-> = {
-  kind: "Document",
-  operationName: "RunWorkTrackerWorkItemNow",
-  source: operationDocuments.RunWorkTrackerWorkItemNow,
-};

@@ -11,7 +11,7 @@ import {
   getStatesSnapshot,
   removeState,
   upsertState,
-} from "../../../../shared/query/stateCatalog";
+} from "../../../../features/projects";
 import { advanceStateCatalogRevision } from "../../../../shared/stateCatalogRevision";
 import { useWorkflowEditorStore } from "../../../workflows";
 import type { WorkflowStateRow } from "./statusFacts";

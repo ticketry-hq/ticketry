@@ -10,10 +10,9 @@ import {
   refreshSubtreeRunCapabilities,
   useSubtreeRunCapabilitiesQuery,
 } from "../../../../../../features/settings";
-import { queryClient } from "../../../../../../shared/query/queryClient";
-import { queryKeys } from "../../../../../../shared/query/keys";
+import { readWorkItem } from "../../../../../../features/work-items";
 import type { WorkItem } from "../../../../../../shared/api/types";
-import { stateById, useCachedStates } from "../../../../../../shared/query/stateCatalog";
+import { stateById, useCachedStates } from "../../../../../../features/projects";
 
 /**
  * Reports whether the one subtree-run capability authorizes campaigns for this
@@ -94,16 +93,15 @@ export function useSubtreeRunLaunch({
         ((error.body as Record<string, unknown>).error === "subtree_run_not_enabled" ||
           (error.body as Record<string, unknown>).code === "subtree_run_not_enabled")
       ) {
-        await Promise.all([
+        const [, freshItem] = await Promise.all([
           refreshSubtreeRunCapabilities(item.project_id),
-          queryClient.invalidateQueries({
-            queryKey: queryKeys.workItems.byId(item.id),
-            exact: true,
-          }),
+          // Capability refresh is the required recovery. A simultaneous item
+          // read is useful for a newer state label, but a transient read miss
+          // must not turn the already-handled launch refusal into an unhandled
+          // rejection or suppress its feedback.
+          readWorkItem(item.id).catch(() => item),
         ]);
-        const stateId = queryClient.getQueryData<WorkItem>(
-          queryKeys.workItems.byId(item.id),
-        )?.state ?? item.state;
+        const stateId = freshItem.state ?? item.state;
         const stateName = stateById(states, stateId)?.name;
         toast.error(
           stateName

@@ -2,15 +2,9 @@ import { mkdir } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
-import { generateWorkTrackerOperationManifests } from "./worktracker-operation-generation.mjs";
-import { generateSettingsOperations } from "./settings-operation-generation.mjs";
-import { generateAgentStatusOperations } from "./agent-status-operation-generation.mjs";
-import { generateWorktreeOperations } from "./worktree-operation-generation.mjs";
-import { generateDocumentOperations } from "./documents-operation-generation.mjs";
-import { generateTerminalOperations } from "./terminal-operation-generation.mjs";
 import { generateTerminalEntities } from "./terminal-entity-generation.mjs";
 import { generateExecutionEntities } from "./execution-entity-generation.mjs";
-import { generateExecutionOperations } from "./execution-operation-generation.mjs";
+import { generateStudioTypedDocuments } from "./typed-document-generation.mjs";
 
 export const studioRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -104,7 +98,6 @@ export async function generateFoundationArtifacts(outputRoot) {
   await generateExecutionEntities({ rawDirectory: rawExecutionEntities, outputRoot });
   const schemaPath = join(outputRoot, "schema.graphql");
   const bindingsPath = join(outputRoot, "taurpc.ts");
-  const operationsPath = join(outputRoot, "operations.ts");
   run(
     "cargo",
     ["run", "--locked", "--quiet", "--features", "development-tools", "--bin", "export_foundation_schema", "--", schemaPath],
@@ -115,49 +108,9 @@ export async function generateFoundationArtifacts(outputRoot) {
     ["run", "--locked", "--quiet", "--features", "development-tools", "--bin", "export_foundation_bindings", "--", bindingsPath],
     tauriRoot,
   );
-  run(
-    process.execPath,
-    [
-      join(studioRoot, "scripts/generate-foundation-operations.mjs"),
-      schemaPath,
-      join(studioRoot, "src/graphql-foundation/operations.graphql"),
-      operationsPath,
-    ],
-    studioRoot,
-  );
-  await generateWorkTrackerOperationManifests({
+  await generateStudioTypedDocuments({
     schemaPath,
     sourceRoot: join(studioRoot, "src"),
-    outputRoot,
-  });
-  await generateSettingsOperations({
-    schemaPath,
-    sourceRoot: join(studioRoot, "src"),
-    outputRoot,
-  });
-  await generateAgentStatusOperations({
-    schemaPath,
-    sourceRoot: join(studioRoot, "src"),
-    outputRoot,
-  });
-  await generateWorktreeOperations({
-    schemaPath,
-    sourceRoot: join(studioRoot, "src"),
-    outputRoot,
-  });
-  await generateDocumentOperations({
-    schemaPath,
-    sourceRoot: join(studioRoot, "src"),
-    outputRoot,
-  });
-  await generateTerminalOperations({
-    schemaPath,
-    sourceRoot: join(studioRoot, "src"),
-    outputRoot,
-  });
-  await generateExecutionOperations({
-    schemaPath,
-    sourceRoot: join(studioRoot, "src"),
-    outputRoot,
+    outputRoot: join(outputRoot, "typed-documents"),
   });
 }

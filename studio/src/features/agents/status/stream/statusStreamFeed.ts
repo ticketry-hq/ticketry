@@ -8,11 +8,11 @@
  * reconciliation, WorkItem and workflow convergence, document availability —
  * expressed against durable facts and one retained cursor per project.
  */
-import type { CreateGraphQlTransportProxy } from "../../../../graphql-foundation/foundationClient";
+import type { CreateGraphQlTransportProxy } from "../../../../runtime/graphQlTransport";
 import type {
   RunStatusEventFrame,
   RunStatusResetRequiredFrame,
-} from "../generated/statusStream";
+} from "../types";
 import {
   createStatusStreamClient,
   type StatusStreamClient,
@@ -21,7 +21,10 @@ import {
   createStatusCursorStore,
   type StatusCursorStore,
 } from "../statusStreamCursors";
-import { useAgentStatusStore } from "../store";
+import {
+  switchAgentStatusProject,
+  upsertAutomationAttempt,
+} from "../apolloHolding";
 import {
   createAuthoritativeReset,
   type AuthoritativeReset,
@@ -75,7 +78,7 @@ export const statusStreamFeed = {
   start(projectId: string, options: StatusStreamFeedOptions): void {
     if (active?.projectId === projectId) return;
     active?.stop();
-    useAgentStatusStore.getState().switchProject(projectId);
+    switchAgentStatusProject(projectId);
 
     let stopped = false;
     let attempt = 0;
@@ -130,14 +133,12 @@ export const statusStreamFeed = {
         return;
       }
       if (runResult === "applied") return;
-      const runs = useAgentStatusStore.getState();
       switch (fact.family) {
         case "automation_attempt":
-          runs.upsertAutomationAttempt(fact.attempt);
+          upsertAutomationAttempt(fact.attempt);
           return;
         case "work_item":
-          if (fact.removed) invalidator.recordRemoval(fact.workItemId);
-          else invalidator.record(fact.workItemId, fact.membershipChanged);
+          invalidator.record(fact);
           return;
         case "workflow_state":
           applyWorkflowStateFact(
@@ -200,7 +201,7 @@ export const statusStreamFeed = {
       snapshotCursor = null;
       const next = createStatusStreamClient({
         projectId,
-        subscriptionId: `run-status:${projectId}:${subscription}`,
+        subscriptionId: `run-status_${projectId}_${subscription}`,
         cursors,
         createProxy: options.createProxy,
         handlers: {
@@ -304,7 +305,7 @@ export const statusStreamFeed = {
   },
 };
 
-// Vite preserves Zustand state across Fast Refresh, but module-scoped
+// Vite preserves the Apollo cache across Fast Refresh, but module-scoped
 // subscription handles are replaced. Close the old subscription so the
 // replacement resumes from the retained cursor instead of silently baselining
 // over cached rows.

@@ -6,6 +6,9 @@ import path from "node:path";
 
 import { createDevelopmentLogCapture } from "./dev-log-capture.mjs";
 import {
+  resolveProductDataDirectory,
+} from "./product-identity.mjs";
+import {
   createTemporarySqliteProfile,
   removeTemporarySqliteProfile,
   resolveDevelopmentDataDirectory,
@@ -16,6 +19,27 @@ import {
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const children = new Set();
 let stopping = false;
+let cleanupLaunch = null;
+
+function cleanupActiveLaunch() {
+  cleanupLaunch?.();
+  cleanupLaunch = null;
+}
+
+function startTemporaryProfileWatchdog(launch) {
+  if (!launch.temporaryProfile) return;
+  const script = fileURLToPath(new URL("./temporary-profile-watchdog.mjs", import.meta.url));
+  const watchdog = spawn(process.execPath, [
+    script,
+    launch.dataDirectory,
+    String(process.pid),
+    launch.environment.MUXED_TMUX_SOCKET,
+  ], {
+    detached: true,
+    stdio: "ignore",
+  });
+  watchdog.unref();
+}
 
 export function parseWebDevOptions(args = []) {
   const normalized = args[0] === "--" ? args.slice(1) : args;
@@ -57,9 +81,16 @@ async function isGraphqlReady(port) {
   }
 }
 
-async function waitUntilGraphqlReady(port, timeoutMs = 180_000) {
+export async function waitUntilGraphqlReady(
+  port,
+  timeoutMs = 180_000,
+  shouldStop = () => false,
+) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
+    if (shouldStop()) {
+      throw new Error("GraphQL adapter stopped before it became ready; run npm run logs");
+    }
     if (await isGraphqlReady(port)) return;
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
@@ -126,24 +157,38 @@ export function buildWebDevelopmentEnvironment({
   environment = process.env,
   temporarySqlite = false,
   temporaryRoot,
+  resolveProductData = resolveProductDataDirectory,
 } = {}) {
+  const explicitDataDirectory = environment.MUXED_DATA_DIR;
+  const productDataDirectory = !temporarySqlite && !explicitDataDirectory
+    ? resolveProductData({ cwd, environment })
+    : null;
   const dataDirectory = temporarySqlite
     ? createTemporarySqliteProfile({ temporaryRoot })
-    : path.resolve(cwd, resolveDevelopmentDataDirectory({ cwd, environment }));
+    : explicitDataDirectory
+      ? path.resolve(cwd, resolveDevelopmentDataDirectory({ cwd, environment }))
+      : productDataDirectory;
+  const tmuxSocket = environment.MUXED_TMUX_SOCKET
+    ?? (productDataDirectory ? "muxed" : resolveDevelopmentTmuxSocket(dataDirectory));
+  const launchEnvironment = {
+    ...environment,
+    MUXED_DATA_DIR: dataDirectory,
+    MUXED_TMUX_SOCKET: tmuxSocket,
+  };
+  if (temporarySqlite) launchEnvironment.MUXED_FORCE_SQLITE = "true";
   return {
     dataDirectory,
+    productDataDirectory,
+    temporaryProfile: temporarySqlite,
     temporarySqlite,
-    environment: {
-      ...environment,
-      MUXED_DATA_DIR: dataDirectory,
-      MUXED_TMUX_SOCKET: resolveDevelopmentTmuxSocket(dataDirectory),
-    },
+    environment: launchEnvironment,
   };
 }
 
 export function cleanupTemporaryWebLaunch(launch) {
-  stopTemporaryTmuxServer(launch.environment.MUXED_TMUX_SOCKET);
+  if (!launch.temporaryProfile) return;
   removeTemporarySqliteProfile(launch.dataDirectory);
+  stopTemporaryTmuxServer(launch.environment.MUXED_TMUX_SOCKET);
 }
 
 function start(name, command, args, environment, logs) {
@@ -162,7 +207,10 @@ function start(name, command, args, environment, logs) {
       process.exitCode = code ?? 1;
       for (const running of children) running.kill("SIGTERM");
     }
-    if (children.size === 0) logs.close();
+    if (children.size === 0) {
+      logs.close();
+      cleanupActiveLaunch();
+    }
   });
   child.once("error", (error) => console.error(`[web] Could not start ${name}: ${error.message}`));
 }
@@ -170,6 +218,9 @@ function start(name, command, args, environment, logs) {
 export async function main() {
   const options = parseWebDevOptions(process.argv.slice(2));
   const launch = buildWebDevelopmentEnvironment({ temporarySqlite: options.temporarySqlite });
+  cleanupLaunch = () => cleanupTemporaryWebLaunch(launch);
+  process.once("exit", cleanupActiveLaunch);
+  startTemporaryProfileWatchdog(launch);
   mkdirSync(launch.dataDirectory, { recursive: true });
   const adapterPort = await selectWebPort({
     requestedPort: process.env.TICKETRY_GRAPHQL_ADAPTER_PORT,
@@ -192,21 +243,33 @@ export async function main() {
     MUXED_DESKTOP_MCP_PORT: String(mcpPort),
     MUXED_VITE_GRAPHQL_ORIGIN: `http://127.0.0.1:${adapterPort}`,
   };
+  const dataSource = launch.productDataDirectory
+    ? `product profile ${launch.productDataDirectory}`
+    : launch.temporarySqlite
+      ? "empty temporary SQLite profile"
+      : `explicit profile ${launch.dataDirectory}`;
+  console.log(
+    `[web] data=${launch.dataDirectory} source=${dataSource} mcp=http://127.0.0.1:${mcpPort}/mcp`,
+  );
   const stop = (signal) => {
     stopping = true;
     for (const child of children) child.kill(signal);
+    cleanupActiveLaunch();
   };
   process.once("SIGINT", () => stop("SIGINT"));
   process.once("SIGTERM", () => stop("SIGTERM"));
   start("rust-graphql", "cargo", ["run", "--locked", "--manifest-path",
     "studio/src-tauri/Cargo.toml", "--features", "development-tools", "--bin", "ticketry_graphql_adapter"], environment, logs);
-  await waitUntilGraphqlReady(adapterPort);
+  await waitUntilGraphqlReady(adapterPort, 180_000, () => stopping);
   const [frontend, ...frontendArgs] = buildWebFrontendCommand(frontendPort);
   start("frontend", frontend, frontendArgs, environment, logs);
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   main().catch((error) => {
+    if (children.size === 0) {
+      cleanupActiveLaunch();
+    }
     console.error(`[web] Launch failed: ${error.message}`);
     process.exitCode = 1;
   });

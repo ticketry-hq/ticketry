@@ -1,6 +1,7 @@
-import { create } from "zustand";
-import { NO_EPIC } from "./backlogSelectors";
+import { createApolloStore } from "../../../shared/apollo/localState";
 import { readVersionedItem } from "../../../shared/storage/versioned";
+
+const NO_EPIC = "none";
 
 // The shared planning-filter selection (#674), kept separate from
 // `useBacklogStore.filters` so the planning surfaces (Story Map #672) own their
@@ -72,7 +73,7 @@ function persist(projectId: string | null, sel: Selection): void {
   }
 }
 
-export const usePlanningFilterStore = create<PlanningFilterState>((set, get) => {
+export const usePlanningFilterStore = createApolloStore<PlanningFilterState>("planning-filter", (set, get) => {
   // Persist the three axes from the current state after a mutation.
   const save = (sel: Selection) => persist(get().projectId, sel);
 

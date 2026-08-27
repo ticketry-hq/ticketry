@@ -5,8 +5,19 @@ import type {
   StateImpact,
   WorkItem,
 } from "../../../shared/api/types";
-import { queryClient } from "../../../shared/query/queryClient";
-import { queryKeys } from "../../../shared/query/keys";
+import type { FetchPolicy } from "@apollo/client";
+import {
+  compactWorktrackerId,
+  publicWorktrackerId,
+} from "../../../shared/api/generatedWorktracker";
+import { studioApolloClient } from "../../../shared/apollo/client";
+import {
+  getStatesSnapshot,
+  setStates as setApolloStates,
+} from "../../../features/projects";
+import {
+  WorkTrackerProjectIssueTypesDocument,
+} from "../../projects";
 import { loadProviderCapabilities } from "../providerQueries";
 import {
   getProviderCapabilitiesSnapshot,
@@ -18,114 +29,163 @@ import {
   readWorkflowSettings,
   readWorkflowStates,
 } from "./readTransport";
+import { getWorkflowCatalogSnapshot } from "./projectCatalog";
 import { readProjectWorkItems } from "../../work-items";
 
 const EMPTY_ISSUE_TYPES: IssueType[] = [];
-const EMPTY_STATES: State[] = [];
 const EMPTY_CAPABILITIES: WorkflowEditorResources["providerCapabilities"] = [];
 const EMPTY_COUNTS: Record<string, number> = {};
 const EMPTY_WORKFLOWS: Record<string, ScopedWorkflowSettings> = {};
 
+const projectWorkflowSettings = new Map<string, Record<string, ScopedWorkflowSettings>>();
+const stateCounts = new Map<string, Record<string, number>>();
+
 export interface WorkflowEditorResources {
   issueTypes: IssueType[];
   states: State[];
-  providerCapabilities: Awaited<
-    ReturnType<typeof loadProviderCapabilities>
-  >;
+  providerCapabilities: Awaited<ReturnType<typeof loadProviderCapabilities>>;
   workItems: WorkItem[];
 }
 
 export async function loadWorkflowSettings(
   projectId: string,
   issueTypeId: string,
+  fetchPolicy: FetchPolicy = "cache-first",
 ): Promise<ScopedWorkflowSettings> {
-  return queryClient.fetchQuery({
-    queryKey: queryKeys.workflows.byIssueType(issueTypeId),
-    queryFn: () => readWorkflowSettings(projectId, issueTypeId),
-    staleTime: 0,
+  const workflow = await readWorkflowSettings(projectId, issueTypeId, fetchPolicy);
+  projectWorkflowSettings.set(projectId, {
+    ...(projectWorkflowSettings.get(projectId) ?? {}),
+    [workflow.issue_type_id]: workflow,
   });
+  return workflow;
 }
 
-export function setWorkflowSettings(
-  workflow: ScopedWorkflowSettings,
-): void {
-  queryClient.setQueryData(
-    queryKeys.workflows.byIssueType(workflow.issue_type_id),
-    workflow,
-  );
-  queryClient.setQueryData(
-    queryKeys.workflows.transitionsByIssueType(workflow.issue_type_id),
-    workflow.transitions,
-  );
+export function setWorkflowSettings(workflow: ScopedWorkflowSettings): void {
+  for (const [projectId, workflows] of projectWorkflowSettings) {
+    if (getWorkflowIssueTypesSnapshot(projectId).some(
+      (type) => type.id === workflow.issue_type_id,
+    )) {
+      projectWorkflowSettings.set(projectId, {
+        ...workflows,
+        [workflow.issue_type_id]: workflow,
+      });
+      return;
+    }
+  }
 }
 
 export function getWorkflowSettingsSnapshot(
   issueTypeId: string,
 ): ScopedWorkflowSettings | undefined {
-  return queryClient.getQueryData(
-    queryKeys.workflows.byIssueType(issueTypeId),
-  );
+  for (const workflows of projectWorkflowSettings.values()) {
+    if (workflows[issueTypeId]) return workflows[issueTypeId];
+  }
+  return undefined;
 }
 
 export function setProjectWorkflowSettings(
   projectId: string,
   workflows: Record<string, ScopedWorkflowSettings>,
 ): void {
-  queryClient.setQueryData(queryKeys.workflows.byProject(projectId), workflows);
-  Object.values(workflows).forEach(setWorkflowSettings);
+  projectWorkflowSettings.set(projectId, workflows);
 }
 
 export function getProjectWorkflowSettingsSnapshot(
   projectId: string,
 ): Record<string, ScopedWorkflowSettings> {
-  return (
-    queryClient.getQueryData<Record<string, ScopedWorkflowSettings>>(
-      queryKeys.workflows.byProject(projectId),
-    ) ?? EMPTY_WORKFLOWS
-  );
+  return projectWorkflowSettings.get(projectId) ?? EMPTY_WORKFLOWS;
 }
 
 export function setWorkflowIssueTypes(
   projectId: string,
   issueTypes: IssueType[],
 ): void {
-  queryClient.setQueryData(queryKeys.issueTypes.byProject(projectId), issueTypes);
+  const variables = { projectId: compactWorktrackerId(projectId) };
+  const current = studioApolloClient().readQuery({
+    query: WorkTrackerProjectIssueTypesDocument,
+    variables,
+    optimistic: true,
+  });
+  const currentById = new Map(
+    current?.issue_types.nodes.map((row) => [row.id, row]) ?? [],
+  );
+  studioApolloClient().writeQuery({
+    query: WorkTrackerProjectIssueTypesDocument,
+    variables,
+    data: {
+      issue_types: {
+        __typename: "WorktrackerIssuetypeConnection",
+        nodes: issueTypes.map((type, index) => {
+          const id = compactWorktrackerId(type.id);
+          const existing = currentById.get(id);
+          return {
+            __typename: "WorktrackerIssuetype",
+            id,
+            project: compactWorktrackerId(type.project ?? projectId),
+            name: type.name,
+            level: type.level,
+            color: type.color ?? "",
+            sort_order: type.sort_order ?? index,
+            start_state: type.start_state
+              ? compactWorktrackerId(type.start_state)
+              : null,
+            workflow_revision: type.workflow_revision ?? 0,
+            is_pathfind: existing?.is_pathfind ?? false,
+            created_at: existing?.created_at ?? new Date(index).toISOString(),
+            updated_at: existing?.updated_at ?? new Date(index).toISOString(),
+            transitions: existing?.transitions ?? {
+              __typename: "WorktrackerIssuetypetransitionConnection",
+              nodes: [],
+            },
+            launch_bindings: existing?.launch_bindings ?? {
+              __typename: "WorktrackerLaunchbindingConnection",
+              nodes: [],
+            },
+          };
+        }),
+      },
+    } as never,
+  });
 }
 
 export function getWorkflowIssueTypesSnapshot(projectId: string): IssueType[] {
-  return (
-    queryClient.getQueryData<IssueType[]>(
-      queryKeys.issueTypes.byProject(projectId),
-    ) ?? EMPTY_ISSUE_TYPES
-  );
+  const projectRows = getWorkflowCatalogSnapshot(projectId)?.issueTypes;
+  const auxiliaryRows = studioApolloClient().readQuery({
+    query: WorkTrackerProjectIssueTypesDocument,
+    variables: { projectId: compactWorktrackerId(projectId) },
+    optimistic: true,
+  })?.issue_types.nodes;
+  return (projectRows ?? auxiliaryRows)?.map((row) => ({
+    id: publicWorktrackerId(row.id),
+    project: publicWorktrackerId(row.project),
+    name: row.name,
+    level: row.level as IssueType["level"],
+    color: row.color,
+    sort_order: row.sort_order,
+    start_state: row.start_state ? publicWorktrackerId(row.start_state) : null,
+    workflow_revision: row.workflow_revision,
+  })) ?? EMPTY_ISSUE_TYPES;
 }
 
 export function setWorkflowStates(projectId: string, states: State[]): void {
-  queryClient.setQueryData(queryKeys.states.byProject(projectId), states);
+  setApolloStates(projectId, states);
 }
 
 export function getWorkflowStatesSnapshot(projectId: string): State[] {
-  return (
-    queryClient.getQueryData<State[]>(queryKeys.states.byProject(projectId)) ??
-    EMPTY_STATES
-  );
+  return getStatesSnapshot(projectId);
 }
 
 export function setWorkflowStateCounts(
   projectId: string,
   counts: Record<string, number>,
 ): void {
-  queryClient.setQueryData(queryKeys.workflows.stateCounts(projectId), counts);
+  stateCounts.set(projectId, counts);
 }
 
 export function getWorkflowStateCountsSnapshot(
   projectId: string,
 ): Record<string, number> {
-  return (
-    queryClient.getQueryData<Record<string, number>>(
-      queryKeys.workflows.stateCounts(projectId),
-    ) ?? EMPTY_COUNTS
-  );
+  return stateCounts.get(projectId) ?? EMPTY_COUNTS;
 }
 
 export function setWorkflowProviderCapabilities(
@@ -147,45 +207,17 @@ export async function loadWorkflowProjectItems(
 export async function loadWorkflowEditorResources(
   projectId: string,
 ): Promise<WorkflowEditorResources> {
-  const existingStates = getWorkflowStatesSnapshot(projectId);
   const [issueTypes, states, providerCapabilities, workItems] = await Promise.all([
-    queryClient.fetchQuery({
-      queryKey: queryKeys.issueTypes.byProject(projectId),
-      queryFn: () => readWorkflowIssueTypes(projectId),
-      staleTime: 0,
-    }),
-    queryClient.fetchQuery({
-      queryKey: queryKeys.states.byProject(projectId),
-      // A configured project cannot have a genuinely empty workflow catalog.
-      // Preserve a catalog already published by the planning surface when an
-      // editor bootstrap endpoint transiently yields an empty response.
-      queryFn: async () => {
-        const fetched = await readWorkflowStates(projectId);
-        return fetched.length > 0 ? fetched : existingStates;
-      },
-      staleTime: 0,
-    }),
+    readWorkflowIssueTypes(projectId),
+    readWorkflowStates(projectId),
     loadProviderCapabilities(),
     loadWorkflowProjectItems(projectId),
   ]);
-  return {
-    issueTypes,
-    states,
-    providerCapabilities,
-    workItems,
-  };
+  return { issueTypes, states, providerCapabilities, workItems };
 }
 
 export function loadWorkflowStates(projectId: string): Promise<State[]> {
-  const existingStates = getWorkflowStatesSnapshot(projectId);
-  return queryClient.fetchQuery({
-    queryKey: queryKeys.states.byProject(projectId),
-    queryFn: async () => {
-      const fetched = await readWorkflowStates(projectId);
-      return fetched.length > 0 ? fetched : existingStates;
-    },
-    staleTime: 0,
-  });
+  return readWorkflowStates(projectId);
 }
 
 export {
@@ -199,24 +231,21 @@ export async function loadAllWorkflowSettings(
   projectId: string,
   issueTypeIds: string[],
 ): Promise<ScopedWorkflowSettings[]> {
-  return Promise.all(
-    issueTypeIds.map((issueTypeId) => loadWorkflowSettings(projectId, issueTypeId)),
-  );
+  return Promise.all(issueTypeIds.map((id) => loadWorkflowSettings(projectId, id)));
 }
 
 export async function loadStateImpact(
   projectId: string,
   stateId: string,
 ): Promise<StateImpact> {
-  const state = getWorkflowStatesSnapshot(projectId).find(
-    (candidate) => candidate.id === stateId,
-  );
+  const states = getWorkflowStatesSnapshot(projectId);
+  const state = states.find((candidate) => candidate.id === stateId);
   if (!state) throw new Error("State not found.");
 
-  const issueTypeIds = getWorkflowIssueTypesSnapshot(projectId).map(
-    (issueType) => issueType.id,
+  const workflows = await loadAllWorkflowSettings(
+    projectId,
+    getWorkflowIssueTypesSnapshot(projectId).map((type) => type.id),
   );
-  const workflows = await loadAllWorkflowSettings(projectId, issueTypeIds);
   const totalWorkItems = getWorkflowStateCountsSnapshot(projectId)[stateId] ?? 0;
   const rules: NonNullable<StateImpact["protection_rules"]> = [];
   if (state.is_protected) {
@@ -225,11 +254,7 @@ export async function loadStateImpact(
       message: `State '${state.name}' is protected and cannot be deleted.`,
     });
   }
-  if (
-    getWorkflowStatesSnapshot(projectId).filter(
-      (candidate) => candidate.group === state.group,
-    ).length <= 1
-  ) {
+  if (states.filter((candidate) => candidate.group === state.group).length <= 1) {
     rules.push({
       code: "last_state_in_group",
       message: `State '${state.name}' is the last state in its group and cannot be deleted.`,
@@ -244,9 +269,9 @@ export async function loadStateImpact(
   const referenced = workflows.some((workflow) =>
     workflow.start_state_id === stateId
     || workflow.transitions.some((transition) =>
-      transition.from_state_id === stateId
-      || transition.to_state_id === stateId)
-    || workflow.launch_bindings.some((binding) => binding.state_id === stateId));
+      transition.from_state_id === stateId || transition.to_state_id === stateId)
+    || workflow.launch_bindings.some((binding) => binding.state_id === stateId)
+  );
   if (referenced) {
     rules.push({
       code: "workflow_referenced",

@@ -2,7 +2,11 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { StateCatalog } from "../features/workflows/StateCatalog";
 import { useWorkflowEditorStore } from "../features/workflows/workflowEditorStore";
-import { queryClient } from "../shared/query/queryClient";
+import { setStatesSorted } from "../features/projects";
+import {
+  setWorkflowIssueTypes,
+  setWorkflowStateCounts,
+} from "../features/workflows/queries";
 
 const fetchMock = vi.fn();
 const workflowReads = vi.hoisted(() => ({
@@ -42,7 +46,6 @@ function jsonResponse(body: unknown): Response {
 
 describe("workflow settings acceptance", () => {
   beforeEach(() => {
-    queryClient.clear();
     fetchMock.mockReset().mockImplementation(
       async (input: RequestInfo | URL) => {
         const url = String(input);
@@ -86,6 +89,11 @@ describe("workflow settings acceptance", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
     workflowReads.readWorkflowSettings.mockReset().mockResolvedValue(workflow);
+    setStatesSorted("project-1", states);
+    setWorkflowIssueTypes("project-1", [
+      { id: "story", name: "Story", level: "task", color: null, sort_order: 0 },
+    ]);
+    setWorkflowStateCounts("project-1", { review: 2 });
     useWorkflowEditorStore.setState({
       projectId: "project-1",
       issueTypes: [
@@ -107,7 +115,6 @@ describe("workflow settings acceptance", () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
-    queryClient.clear();
   });
 
   it("[overhaul-19] derives state-delete blockers without deleted impact or composite workflow reads", async () => {
@@ -122,7 +129,11 @@ describe("workflow settings acceptance", () => {
     expect(screen.queryByRole("button", { name: "Delete state" })).toBeNull();
 
     const urls = fetchMock.mock.calls.map(([input]) => String(input));
-    expect(workflowReads.readWorkflowSettings).toHaveBeenCalledWith("project-1", "story");
+    expect(workflowReads.readWorkflowSettings).toHaveBeenCalledWith(
+      "project-1",
+      "story",
+      "cache-first",
+    );
     expect(urls.some((url) => url.includes("/states/review/impact"))).toBe(false);
     expect(urls.some((url) => url.endsWith("/workflow-settings"))).toBe(false);
   });

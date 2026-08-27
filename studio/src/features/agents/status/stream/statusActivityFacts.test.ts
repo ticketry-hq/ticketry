@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { RunStatusEventFrame } from "../generated/statusStream";
+import type { RunStatusEventFrame } from "../types";
 import { readStatusFact } from "./statusFacts";
 
 const activity = {

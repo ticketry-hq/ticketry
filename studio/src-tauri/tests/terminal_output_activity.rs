@@ -14,6 +14,7 @@ use std::time::Duration;
 const PROJECT: &str = "11111111111111111111111111111111";
 const PUBLIC_PROJECT: &str = "11111111-1111-1111-1111-111111111111";
 const TASK: &str = "22222222222222222222222222222222";
+const PUBLIC_TASK: &str = "22222222-2222-2222-2222-222222222222";
 const MODULE: &str = "33333333333333333333333333333333";
 
 struct UnusedCapture;
@@ -136,6 +137,32 @@ async fn event_count(database: &DatabaseConnection) -> i64 {
         .unwrap()
         .unwrap()
         .try_get("", "value")
+        .unwrap()
+}
+
+async fn event_work_item_id(database: &DatabaseConnection, run_id: &str) -> Option<String> {
+    database
+        .query_one_raw(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
+            "SELECT work_item_id FROM runs_status_events WHERE agent_run_id=? ORDER BY cursor DESC LIMIT 1",
+            [run_id.into()],
+        ))
+        .await
+        .unwrap()
+        .and_then(|row| row.try_get("", "work_item_id").unwrap())
+}
+
+async fn event_project_id(database: &DatabaseConnection, run_id: &str) -> String {
+    database
+        .query_one_raw(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
+            "SELECT project_id FROM runs_status_events WHERE agent_run_id=? ORDER BY cursor DESC LIMIT 1",
+            [run_id.into()],
+        ))
+        .await
+        .unwrap()
+        .unwrap()
+        .try_get("", "project_id")
         .unwrap()
 }
 
@@ -373,6 +400,28 @@ async fn changed_output_advances_once_and_unchanged_output_extends_nothing() {
 }
 
 #[tokio::test]
+async fn status_events_store_database_uuid_spellings() {
+    let (_directory, database, service) = fixture().await;
+    database
+        .execute_unprepared(&format!(
+            "UPDATE agent_terminal_sessions SET task_id='{PUBLIC_TASK}', project_id='{PUBLIC_PROJECT}' WHERE agent_run_id='run-a'"
+        ))
+        .await
+        .unwrap();
+
+    service
+        .record_captured("run-a", b"screen", "2026-08-20T10:01:00Z")
+        .await
+        .unwrap();
+
+    assert_eq!(
+        event_work_item_id(&database, "run-a").await.as_deref(),
+        Some(TASK)
+    );
+    assert_eq!(event_project_id(&database, "run-a").await, PROJECT);
+}
+
+#[tokio::test]
 async fn document_chat_advances_activity_without_project_status_publication() {
     let (_directory, database, service) = fixture().await;
     database
@@ -391,6 +440,29 @@ async fn document_chat_advances_activity_without_project_status_publication() {
     assert!(observed.advanced);
     assert_eq!(observed.output_sequence, 1);
     assert_eq!(event_count(&database).await, 0);
+}
+
+#[tokio::test]
+async fn shell_output_events_reference_the_module_instead_of_the_scratch_task() {
+    let (_directory, database, service) = fixture().await;
+    database
+        .execute_unprepared(&format!(
+            "INSERT INTO agent_runs (id, issue_id, status, started_at, lifecycle_state, scope) VALUES ('run-shell', '{MODULE}', 'running', '2026-08-20T10:00:00Z', 'starting', 'shell');\n\
+             INSERT INTO agent_terminal_sessions (agent_run_id, tmux_session_name, task_id, module_id, project_id, created_at, scope, runtime_cleanup_pending, output_sequence, last_output_at) VALUES ('run-shell', 'pt-run-shell', '00000000000000000000000000000000', '{MODULE}', '{PROJECT}', '2026-08-20T10:00:00Z', 'shell', 0, 0, '2026-08-20T10:00:00Z');"
+        ))
+        .await
+        .unwrap();
+
+    let observed = service
+        .record_captured("run-shell", b"shell output", "2026-08-20T10:01:00Z")
+        .await
+        .unwrap();
+
+    assert!(observed.advanced);
+    assert_eq!(
+        event_work_item_id(&database, "run-shell").await.as_deref(),
+        Some(MODULE)
+    );
 }
 
 #[tokio::test]

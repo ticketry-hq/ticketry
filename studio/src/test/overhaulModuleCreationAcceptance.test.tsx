@@ -1,4 +1,3 @@
-import { QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -16,18 +15,30 @@ const moduleFolderValidationApi = vi.hoisted(() => ({
   validateModuleFolder: vi.fn(),
 }));
 
-vi.mock("../shared/api/client", async () => {
-  const actual = await vi.importActual<typeof import("../shared/api/client")>(
-    "../shared/api/client",
+vi.mock("./legacyApiFixture", async () => {
+  const actual = await vi.importActual<typeof import("./legacyApiFixture")>(
+    "./legacyApiFixture",
   );
   return { ...actual, ...api };
 });
 
-vi.mock("../features/projects/queries/readTransport", () => ({
-  readModules: api.listModules,
-  readProjects: api.listProjects,
-  readWorkspace: vi.fn(),
-}));
+vi.mock("../features/projects/queries/readTransport", async () => {
+  const actual = await vi.importActual<typeof import("../features/projects/queries/readTransport")>(
+    "../features/projects/queries/readTransport",
+  );
+  const { projectOpenFixture } = await import("./projectOpenFixture");
+  return {
+    ...actual,
+    readProjects: api.listProjects,
+    readProjectOpen: async (projectId: string) => {
+      const [projects, modules] = await Promise.all([api.listProjects(), api.listModules(projectId)]);
+      const project = projects.find((candidate: { id: string }) => candidate.id === projectId) ?? projects[0];
+      if (!project) throw new Error(`Project ${projectId} was not found.`);
+      return projectOpenFixture(project, modules);
+    },
+    readWorkspace: vi.fn(),
+  };
+});
 
 vi.mock("../features/workflows/queries/readTransport", async () => ({
   ...(await vi.importActual("../features/workflows/queries/readTransport")),
@@ -87,7 +98,6 @@ import {
   getConfigSnapshot,
   seedConfig,
 } from "../features/studio/stores/configStore";
-import { queryClient } from "../shared/query/queryClient";
 import type { Module, Project } from "../shared/api/types";
 import { useClientStore } from "../state/clientStore";
 
@@ -127,11 +137,11 @@ function project(manual_module_order: boolean): Project {
  */
 function ModuleCreationSurfaces() {
   return (
-    <QueryClientProvider client={queryClient}>
+    <>
       <ModulesPane />
       <ModuleTabStrip />
       <ModalHost />
-    </QueryClientProvider>
+    </>
   );
 }
 
@@ -210,7 +220,6 @@ describe("module creation front-placement acceptance", () => {
   });
 
   beforeEach(() => {
-    queryClient.clear();
     api.createModule.mockReset().mockResolvedValue(CREATED);
     moduleFolderValidationApi.validateModuleFolder
       .mockReset()

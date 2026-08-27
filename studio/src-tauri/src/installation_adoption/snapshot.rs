@@ -75,11 +75,12 @@ pub fn create(data_directory: &Path, database_path: &Path) -> Result<PathBuf, Ad
 ///
 /// Pinning is idempotent and never replaces an existing pin: the first cutover
 /// snapshot an installation ever produced is the one worth keeping, and a later
-/// run has a Rust-owned source rather than the Python-era one.
-pub fn pin(data_directory: &Path, snapshot: &Path) -> Result<PathBuf, AdoptionFailure> {
+/// run has a Rust-owned source rather than the Python-era one. `None` means the
+/// original pin already exists and must retain its original verification record.
+pub fn pin(data_directory: &Path, snapshot: &Path) -> Result<Option<PathBuf>, AdoptionFailure> {
     let pinned = data_directory.join(PINNED_SNAPSHOT);
     if pinned.exists() {
-        return Ok(pinned);
+        return Ok(None);
     }
     fs::copy(snapshot, &pinned).map_err(|error| {
         failed(
@@ -87,7 +88,7 @@ pub fn pin(data_directory: &Path, snapshot: &Path) -> Result<PathBuf, AdoptionFa
             format!("could not pin the snapshot: {error}"),
         )
     })?;
-    Ok(pinned)
+    Ok(Some(pinned))
 }
 
 /// Hash the snapshot and prove it reproduces the source, independently.

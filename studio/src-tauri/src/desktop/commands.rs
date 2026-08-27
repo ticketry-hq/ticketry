@@ -39,23 +39,31 @@ pub(crate) async fn desktop_launch_default_coding_agent(
         database.clone(),
         launch.profiles()?,
     );
-    let decision = resolver.resolve(work_management::launch_policy::LaunchPolicyRequest {
-        task_id: issue_id,
-        destination_state_id: None,
-        provider_override: None,
-        caller_scope: work_management::launch_policy::CallerScope::Interactive,
-        idempotency_key: uuid::Uuid::new_v4().simple().to_string(),
-    }).await.map_err(|error| error.code().to_owned())?;
+    let decision = resolver
+        .resolve(work_management::launch_policy::LaunchPolicyRequest {
+            task_id: issue_id,
+            destination_state_id: None,
+            provider_override: None,
+            caller_scope: work_management::launch_policy::CallerScope::Interactive,
+            idempotency_key: uuid::Uuid::new_v4().simple().to_string(),
+        })
+        .await
+        .map_err(|error| error.code().to_owned())?;
     let decision = work_management::launch_policy::record(database, &decision)
-        .await.map_err(|error| error.code().to_owned())?;
-    let terminal_launch = services.terminal_launch
-        .lock().expect("terminal launch lock poisoned").clone()
+        .await
+        .map_err(|error| error.code().to_owned())?;
+    let terminal_launch = services
+        .terminal_launch
+        .lock()
+        .expect("terminal launch lock poisoned")
+        .clone()
         .ok_or_else(|| "terminal launch is unavailable".to_owned())?;
     let session = work_management::launch_policy::execute_pending_decision(
         database,
         &terminal_launch,
         &decision,
-    ).await?;
+    )
+    .await?;
     Ok(serde_json::json!({ "agent_run_id": session.agent_run_id }))
 }
 
@@ -83,7 +91,10 @@ pub(crate) fn desktop_retry_services(
     _application: tauri::AppHandle,
     _state: tauri::State<'_, DesktopServiceState>,
 ) -> Result<(), String> {
-    Err("Ticketry's in-process runtime could not recover; restart the application to retry startup".to_owned())
+    Err(
+        "Ticketry's in-process runtime could not recover; restart the application to retry startup"
+            .to_owned(),
+    )
 }
 
 /// Open one directory-only native chooser parented to the local main window.
@@ -115,16 +126,24 @@ pub(crate) struct ModuleFolderValidation {
 #[tauri::command]
 pub(crate) fn desktop_validate_module_folder(path: String) -> ModuleFolderValidation {
     match crate::launch_paths::validate_module_folder(Some(&path)) {
-        Ok(_) => ModuleFolderValidation { valid: true, reason: None },
+        Ok(_) => ModuleFolderValidation {
+            valid: true,
+            reason: None,
+        },
         Err(error) => {
             let reason = match error {
                 crate::launch_paths::ModuleFolderFailure::Relative
                 | crate::launch_paths::ModuleFolderFailure::Unset => "module_folder_not_absolute",
                 crate::launch_paths::ModuleFolderFailure::Missing
                 | crate::launch_paths::ModuleFolderFailure::Inaccessible => "module_folder_missing",
-                crate::launch_paths::ModuleFolderFailure::NotDirectory => "module_folder_not_a_directory",
+                crate::launch_paths::ModuleFolderFailure::NotDirectory => {
+                    "module_folder_not_a_directory"
+                }
             };
-            ModuleFolderValidation { valid: false, reason: Some(reason) }
+            ModuleFolderValidation {
+                valid: false,
+                reason: Some(reason),
+            }
         }
     }
 }

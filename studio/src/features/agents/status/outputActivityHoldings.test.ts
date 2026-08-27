@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { useAgentStatusStore } from "./store";
+import { useAgentStatusStore } from "./testStore";
 import { applySnapshotFrame } from "./stream/statusSnapshot";
 import { statusRunHolding } from "./testing/durableStatusFrames";
 import {
@@ -272,7 +272,7 @@ describe("the unchanged-output deadline coordinator", () => {
 
     vi.advanceTimersByTime(STALL_AFTER_MS);
 
-    expect(holding().stallEpoch).toBe(1);
+    expect(holding().runs["run-1"].effective_state).toBe("stalled");
     expect(selectRunState(holding(), "run-1")).toBe("stalled");
     expect(selectTaskLifecycleChips(holding(), "story-1")).toEqual([
       { state: "stalled", count: 1 },

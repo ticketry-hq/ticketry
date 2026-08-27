@@ -1,20 +1,22 @@
 //! The in-process WorkTracker MCP listener external agents connect to. It is
 //! optional: the desktop stays usable when its port cannot be bound.
 
-use std::path::Path;
 use crate::desktop::environment::{optional_port, DEVELOPMENT_MCP_PORT_ENV};
 use crate::work_management;
+use std::path::Path;
+
+const DEFAULT_MCP_PORT: u16 = 8123;
 
 pub(crate) fn configured_mcp_port() -> Result<u16, String> {
     if cfg!(debug_assertions) {
         optional_port(DEVELOPMENT_MCP_PORT_ENV).map(selected_mcp_port)
     } else {
-        Ok(0)
+        Ok(DEFAULT_MCP_PORT)
     }
 }
 
 fn selected_mcp_port(development_override: Option<u16>) -> u16 {
-    development_override.unwrap_or(0)
+    development_override.unwrap_or(DEFAULT_MCP_PORT)
 }
 
 #[cfg(test)]
@@ -22,8 +24,8 @@ mod tests {
     use super::selected_mcp_port;
 
     #[test]
-    fn production_requests_an_os_assigned_port() {
-        assert_eq!(selected_mcp_port(None), 0);
+    fn desktop_uses_the_global_mcp_port_by_default() {
+        assert_eq!(selected_mcp_port(None), 8123);
         assert_eq!(selected_mcp_port(Some(43_219)), 43_219);
     }
 }

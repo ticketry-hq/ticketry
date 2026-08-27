@@ -26,7 +26,6 @@ use axum::{
 use rmcp::transport::streamable_http_server::{
     session::local::LocalSessionManager, StreamableHttpServerConfig, StreamableHttpService,
 };
-use serde_json::json;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
@@ -160,9 +159,10 @@ impl McpRuntime {
         // opening a second one. It is not an MCP tool: it is the seam the
         // Python hook adapter forwards a normalized fact through, so the
         // durable write happens before its caller is acknowledged.
-        let mcp_router = Router::new().nest_service("/mcp", service).route_layer(
-            axum::middleware::from_fn_with_state(authority.clone(), authenticate_mcp_request),
-        );
+        // The global MCP endpoint matches the historical Python contract:
+        // normal WorkTracker tools are available to local external clients,
+        // while run control still requires a run-bound bearer credential.
+        let mcp_router = Router::new().nest_service("/mcp", service);
         let lifecycle_router = Router::new()
             .route(
                 "/runs/lifecycle",
@@ -274,29 +274,6 @@ fn verify_registry() -> Result<(), String> {
         return Err("WorkTracker MCP registry contains duplicate tool names.".to_owned());
     }
     Ok(())
-}
-
-async fn authenticate_mcp_request(
-    State(authority): State<RunAuthority>,
-    request: Request<axum::body::Body>,
-    next: Next,
-) -> Response {
-    let authorization = request
-        .headers()
-        .get("authorization")
-        .and_then(|value| value.to_str().ok());
-    match authority.authenticate(authorization).await {
-        Ok(_) => next.run(request).await,
-        Err(failure) => (
-            axum::http::StatusCode::UNAUTHORIZED,
-            axum::Json(json!({
-                "jsonrpc": "2.0",
-                "id": null,
-                "result": {"structuredContent": failure.0}
-            })),
-        )
-            .into_response(),
-    }
 }
 
 async fn authenticate_provider_request(

@@ -1,14 +1,21 @@
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { type WorktreeContext } from "./internal/api";
-import { readWorktreeStatus } from "./internal/statusTransport";
+import { useQuery } from "@apollo/client/react";
+import { type WorktreeContext } from "./internal/types";
+import {
+  adaptWorktreeStatus,
+  type WorktreeStatusPayload,
+} from "./internal/statusTransport";
 import {
   newOperationId,
   requestWorktreeCreate,
 } from "./internal/createTransport";
 import { requestWorktreeDiscard } from "./internal/discardTransport";
-import { queryClient } from "../../../shared/query/queryClient";
-import { queryKeys } from "../../../shared/query/keys";
+import { studioApolloClient } from "../../../shared/apollo/client";
+import {
+  WorktreeStatusDocument,
+  type WorktreeStatusQuery,
+} from "./generated/worktreeStatus.documents";
+import type { WorktreeStatus } from "./internal/types";
 
 interface WorktreeBlockProps {
   taskId: string;
@@ -17,6 +24,15 @@ interface WorktreeBlockProps {
   projectId?: string | null;
   ticketSeq?: number | null;
   taskName?: string | null;
+}
+
+function worktreeQueryData(status: WorktreeStatus): WorktreeStatusQuery {
+  return {
+    worktree_status: {
+      __typename: "WorktreeStatusView",
+      ...status,
+    },
+  } as unknown as WorktreeStatusQuery;
 }
 
 /**
@@ -57,24 +73,19 @@ export function WorktreeBlock({
     taskName,
   };
 
-  // The checkout belongs to the top-level Work Item, so the holding is keyed
-  // by the owner rather than by whichever descendant this view is showing. A
-  // durable fact names that owner, which is how a parent window and a child
-  // window looking at one checkout converge on one result.
-  const ownerId = parentId ?? taskId;
-  const statusKey = queryKeys.worktrees.status(ownerId, taskId, moduleId);
-  const statusQuery = useQuery(
-    {
-      queryKey: statusKey,
-      queryFn: ({ signal }) =>
-        readWorktreeStatus(taskId, { parentId, moduleId }, signal),
-    },
-    queryClient,
-  );
-  const status = statusQuery.data ?? null;
+  const client = studioApolloClient();
+  const statusQuery = useQuery(WorktreeStatusDocument, {
+    client,
+    variables: { taskId },
+  });
+  const status = statusQuery.data
+    ? adaptWorktreeStatus(
+      statusQuery.data.worktree_status as WorktreeStatusPayload,
+    )
+    : null;
   const error =
     mutationError ??
-    (statusQuery.isError ? "Could not load worktree status" : null);
+    (statusQuery.error ? "Could not load worktree status" : null);
 
   useEffect(() => {
     setConfirming(false);
@@ -88,10 +99,12 @@ export function WorktreeBlock({
     // converges on the same worktree rather than cutting a second branch.
     const operationId = newOperationId();
     try {
-      queryClient.setQueryData(
-        statusKey,
-        await requestWorktreeCreate(taskId, operationId, ctx),
-      );
+      const created = await requestWorktreeCreate(taskId, operationId, ctx);
+      client.writeQuery<WorktreeStatusQuery>({
+        query: WorktreeStatusDocument,
+        variables: { taskId },
+        data: worktreeQueryData(created),
+      });
     } catch {
       setMutationError("Create failed");
     } finally {
@@ -111,7 +124,11 @@ export function WorktreeBlock({
       // The mutation's own response is authoritative for this window; a
       // transport that cannot answer with one falls back to a refetch.
       if (result.status) {
-        queryClient.setQueryData(statusKey, result.status);
+        client.writeQuery<WorktreeStatusQuery>({
+          query: WorktreeStatusDocument,
+          variables: { taskId },
+          data: worktreeQueryData(result.status),
+        });
       } else {
         await statusQuery.refetch();
       }
@@ -139,7 +156,7 @@ export function WorktreeBlock({
   } else if (status.is_shared) {
     body = (
       <div className="text-text-muted">
-        Shares the worktree of its parent task ({status.top_level_task_id}).
+        Shares the worktree owned by top-level task ({status.top_level_task_id}).
       </div>
     );
   } else if (status.kind === "none") {

@@ -74,6 +74,7 @@ describe("desktop shell security contract", () => {
         "allow-desktop-validate-module-folder",
         "allow-desktop-preflight-report",
         "allow-desktop-approve-executable-path",
+        "allow-desktop-launch-default-coding-agent",
         "allow-TauRPC--graphql-execute",
         "allow-TauRPC--graphql-subscribe",
         "allow-TauRPC--graphql-unsubscribe",

@@ -902,6 +902,7 @@ type WorktrackerIssue {
 	moduleMembers(filters: WorktrackerIssueFilterInput, orderBy: WorktrackerIssueOrderInput, pagination: PaginationInput): WorktrackerIssueConnection!
 	blockedByEdges(filters: WorktrackerIssueBlockedByFilterInput, orderBy: WorktrackerIssueBlockedByOrderInput, pagination: PaginationInput): WorktrackerIssueBlockedByConnection!
 	blocksEdges(filters: WorktrackerIssueBlockedByFilterInput, orderBy: WorktrackerIssueBlockedByOrderInput, pagination: PaginationInput): WorktrackerIssueBlockedByConnection!
+	agentRuns(filters: AgentRunsFilterInput, orderBy: AgentRunsOrderInput, pagination: PaginationInput): AgentRunsConnection!
 	attachment(filters: WorktrackerAttachmentFilterInput, orderBy: WorktrackerAttachmentOrderInput, pagination: PaginationInput): WorktrackerAttachmentConnection!
 }
 
@@ -988,6 +989,7 @@ input WorktrackerIssueHavingInput {
 	moduleMembers: WorktrackerIssueFilterInput
 	blockedByEdges: WorktrackerIssueBlockedByFilterInput
 	blocksEdges: WorktrackerIssueBlockedByFilterInput
+	agentRuns: AgentRunsFilterInput
 	attachment: WorktrackerAttachmentFilterInput
 }
 

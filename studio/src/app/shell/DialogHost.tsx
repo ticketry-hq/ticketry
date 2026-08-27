@@ -50,58 +50,6 @@ function ConfirmDialog({
   );
 }
 
-function ConfirmTypedDialog({
-  descriptor,
-}: {
-  descriptor: Extract<DialogDescriptor, { kind: "confirmTyped" }>;
-}) {
-  const [value, setValue] = useState("");
-  const inputRef = useRef<HTMLInputElement>(null);
-  const { opts, resolve } = descriptor;
-
-  useEffect(() => setValue(""), [descriptor]);
-
-  return (
-    <ModalShell
-      title={opts.title}
-      ariaLabel={opts.title}
-      width="w-[min(32rem,calc(100vw-2rem))]"
-      initialFocusRef={inputRef}
-      onClose={() => resolve(false)}
-    >
-      <p className="whitespace-pre-wrap text-sm text-text-primary">
-        {opts.body}
-      </p>
-      <label className="mt-4 block text-xs font-medium text-text-muted">
-        Type <span className="font-mono text-text-primary">{opts.confirmText}</span> to confirm
-        <input
-          ref={inputRef}
-          value={value}
-          onChange={(event) => setValue(event.target.value)}
-          className="mt-2 block w-full border border-pane-border bg-pane-bg px-3 py-2 font-mono text-sm text-text-primary outline-none focus:border-accent-primary"
-        />
-      </label>
-      <div className="mt-5 flex justify-end gap-2">
-        <button
-          type="button"
-          className={buttonClass}
-          onClick={() => resolve(false)}
-        >
-          Cancel
-        </button>
-        <button
-          type="button"
-          disabled={value !== opts.confirmText}
-          className={opts.danger ? dangerButtonClass : primaryButtonClass}
-          onClick={() => resolve(true)}
-        >
-          {opts.confirmLabel ?? "Confirm"}
-        </button>
-      </div>
-    </ModalShell>
-  );
-}
-
 function ReassignDialog({
   descriptor,
 }: {
@@ -177,8 +125,6 @@ export function DialogHost() {
   switch (top.kind) {
     case "confirm":
       return <ConfirmDialog descriptor={top} />;
-    case "confirmTyped":
-      return <ConfirmTypedDialog descriptor={top} />;
     case "reassign":
       return <ReassignDialog descriptor={top} />;
   }

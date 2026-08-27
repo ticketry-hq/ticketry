@@ -154,10 +154,13 @@ describe("overhaul acceptance — task agent launch interaction", () => {
     fireEvent.click(screen.getByRole("button", { name: "＋ Agent" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "codex" }));
     await waitFor(() => expect(terminalApi.createTerminalRun).toHaveBeenCalledTimes(2));
-    // Two runs with no recorded launch state show the same blank label, so the
-    // strip separates them in assistive text alone (#709).
-    expect(screen.getAllByRole("tab", { name: /^codex terminal/ })).toHaveLength(2);
-    expect(screen.getByRole("tab", { name: "codex terminal 1" })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "codex terminal 2" })).toBeInTheDocument();
+    // Launch-state projection can arrive after the tab. Provider fallbacks keep
+    // both tabs named and visibly distinct during that gap.
+    expect(screen.getAllByRole("tab", { name: /^codex [12] terminal$/ }))
+      .toHaveLength(2);
+    expect(screen.getByRole("tab", { name: "codex 1 terminal" }))
+      .toHaveTextContent("codex 1");
+    expect(screen.getByRole("tab", { name: "codex 2 terminal" }))
+      .toHaveTextContent("codex 2");
   });
 });

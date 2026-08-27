@@ -1,0 +1,22 @@
+#!/bin/sh
+set -eu
+
+if [ "$#" -eq 0 ]; then
+  echo "usage: run-worker --prompt-file <path> | <codex-exec-args...>" >&2
+  exit 64
+fi
+
+if ! ocx health --json >/dev/null 2>&1; then
+  echo "OpenCodex is unavailable; run: ocx service start" >&2
+  exit 69
+fi
+
+if [ "$1" = "--prompt-file" ]; then
+  if [ "$#" -ne 2 ] || [ ! -f "$2" ]; then
+    echo "usage: run-worker --prompt-file <path>" >&2
+    exit 64
+  fi
+  exec codex exec --ephemeral --sandbox workspace-write -p glm_worker - < "$2"
+fi
+
+exec codex exec --ephemeral --sandbox workspace-write -p glm_worker "$@"

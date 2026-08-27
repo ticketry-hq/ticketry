@@ -273,7 +273,7 @@ async fn listener_lists_the_thirty_one_tools_and_recovers_on_the_same_port() {
     let url = format!("http://127.0.0.1:{port}/mcp");
     let listed = post(
         &url,
-        Some("Bearer first"),
+        None,
         json!({"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}),
     )
     .await
@@ -290,7 +290,7 @@ async fn listener_lists_the_thirty_one_tools_and_recovers_on_the_same_port() {
         .unwrap();
     let pinged = post(
         &url,
-        Some("Bearer second"),
+        None,
         json!({
             "jsonrpc":"2.0","id":2,"method":"tools/call",
             "params":{"name":"mcp_ping","arguments":{}}
@@ -354,7 +354,7 @@ async fn listener_returns_structured_unavailable_until_runtime_reconciliation_fi
 }
 
 #[tokio::test]
-async fn run_authority_rejects_expired_stale_disallowed_and_foreign_access() {
+async fn global_mcp_allows_task_tools_while_run_credentials_remain_scoped() {
     let directory = tempfile::tempdir().unwrap();
     prepare_projects(&directory).await;
     let (_backend_address, backend_shutdown, backend_task) = start_authorizer().await;
@@ -377,19 +377,6 @@ async fn run_authority_rejects_expired_stale_disallowed_and_foreign_access() {
     let url = format!("http://127.0.0.1:{port}/mcp");
     let call = |id, name: &str, arguments: Value| json!({"jsonrpc":"2.0","id":id,"method":"tools/call","params":{"name":name,"arguments":arguments}});
 
-    let malformed_unauthorized = reqwest::Client::new()
-        .post(&url)
-        .header("content-type", "application/json")
-        .body("{")
-        .send()
-        .await
-        .unwrap();
-    assert_eq!(malformed_unauthorized.status(), StatusCode::UNAUTHORIZED);
-    assert_eq!(
-        malformed_unauthorized.json::<Value>().await.unwrap()["result"]["structuredContent"]
-            ["reason"],
-        "authorization_missing"
-    );
     let malformed_lifecycle = reqwest::Client::new()
         .post(format!("http://127.0.0.1:{port}/runs/lifecycle"))
         .header("content-type", "application/json")
@@ -409,7 +396,19 @@ async fn run_authority_rejects_expired_stale_disallowed_and_foreign_access() {
         .await
         .unwrap();
     assert_eq!(
-        missing["result"]["structuredContent"]["reason"],
+        missing["result"]["structuredContent"]["result"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
+    let unbound_termination = post(&url, None, call(8, "terminate_current_run", json!({})))
+        .await
+        .json::<Value>()
+        .await
+        .unwrap();
+    assert_eq!(
+        unbound_termination["result"]["structuredContent"]["reason"],
         "authorization_missing"
     );
 

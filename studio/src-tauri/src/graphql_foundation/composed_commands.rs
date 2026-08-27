@@ -14,10 +14,8 @@ use crate::document_watch::DocumentWatchSupervisor;
 use crate::documents::DocumentsService;
 use crate::settings_persistence::{ProfileStore, SettingsStores};
 
-/// What a completed one-writer handoff leaves behind: the evidence the
-/// readiness gate publishes, and the handles the desktop shell must reuse.
+/// The handles a completed one-writer handoff leaves for the desktop shell.
 pub struct AdoptedWorktracker {
-    pub evidence: crate::work_management::adoption::AdoptionEvidence,
     pub runtime: ComposedCommandRuntime,
 }
 

@@ -44,6 +44,17 @@ type NativeViewerLifecycleOptions = {
   outputActivity?: OutputActivityClient;
 };
 
+/** Tauri's runtime unlisten may reject during WebView teardown despite its void type. */
+function releaseListener(unlisten: UnlistenFn | null): void {
+  if (!unlisten) return;
+  try {
+    const completion = unlisten() as void | Promise<void>;
+    void Promise.resolve(completion).catch(() => {});
+  } catch {
+    // The document is already unloading, so there is no listener left to use.
+  }
+}
+
 /**
  * Starts the one native attachment lifecycle retained by the terminal pool.
  *
@@ -83,9 +94,9 @@ export function ensureNativeViewerLifecycle({
     disposed = true;
     window.removeEventListener("pagehide", unload);
     window.removeEventListener("beforeunload", unload);
-    unlistenFailure?.();
+    releaseListener(unlistenFailure);
     unlistenFailure = null;
-    unlistenCompletion?.();
+    releaseListener(unlistenCompletion);
     unlistenCompletion = null;
     const detachedHandle = handle;
     handle = null;
@@ -114,10 +125,7 @@ export function ensureNativeViewerLifecycle({
     if (handle !== completion.handle) return;
     // The native worker has already removed and freed this handle.
     handle = null;
-    failNativeViewerMount(
-      runId,
-      "the native terminal attachment process exited",
-    );
+    teardown();
   };
 
   const attach = async () => {
@@ -140,9 +148,9 @@ export function ensureNativeViewerLifecycle({
         },
       );
       if (disposed || tornDown) {
-        unlistenFailure();
+        releaseListener(unlistenFailure);
         unlistenFailure = null;
-        unlistenCompletion();
+        releaseListener(unlistenCompletion);
         unlistenCompletion = null;
         return;
       }
@@ -183,10 +191,7 @@ export function ensureNativeViewerLifecycle({
       }
       if (completedHandle === status.handle) {
         handle = null;
-        failNativeViewerMount(
-          runId,
-          "the native terminal attachment process exited",
-        );
+        teardown();
         return;
       }
       if (disposed || tornDown) {

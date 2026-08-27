@@ -27,8 +27,10 @@ pub fn run() {
     }
     let graphql_api = graphql_foundation::transport_api();
     let setup_graphql_api = graphql_api.clone();
-    let application = match tauri::Builder::default()
-        .plugin(tauri_plugin_dialog::init())
+    let builder = tauri::Builder::default().plugin(tauri_plugin_dialog::init());
+    #[cfg(feature = "desktop-acceptance")]
+    let builder = builder.plugin(tauri_plugin_wdio_webdriver::init());
+    let application = match builder
         .manage(ownership)
         .manage(DesktopServiceState::new())
         .manage(DesktopLaunchRuntime::new())

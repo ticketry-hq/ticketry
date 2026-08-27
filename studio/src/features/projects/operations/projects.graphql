@@ -9,6 +9,59 @@ query WorkTrackerWorkspace {
   }
 }
 
+fragment GeneratedWorkTrackerStateFields on WorktrackerState {
+  id
+  project: projectId
+  name
+  group
+  color
+  sort_order: sortOrder
+  is_protected: isProtected
+  created_at: createdAt
+  updated_at: updatedAt
+}
+
+fragment GeneratedWorkTrackerIssueTypeFields on WorktrackerIssuetype {
+  id
+  project: projectId
+  name
+  level
+  color
+  sort_order: sortOrder
+  start_state: startStateId
+  workflow_revision: workflowRevision
+  is_pathfind: isPathfind
+  created_at: createdAt
+  updated_at: updatedAt
+  transitions: issueTypeTransition {
+    nodes {
+      id
+      issue_type: issueTypeId
+      from_state: fromStateId
+      to_state: toStateId
+      agent_allowed: agentAllowed
+      fromState { id sort_order: sortOrder }
+      toState { id sort_order: sortOrder }
+    }
+  }
+  launch_bindings: launchBinding {
+    nodes {
+      id
+      issue_type: issueTypeId
+      state: stateId
+      prompt
+      required_skills: requiredSkills
+      model: modelId
+      reasoning: reasoningId
+      auto_start: autoStart
+      subtree_run_enabled: subtreeRunEnabled
+      created_at: createdAt
+      updated_at: updatedAt
+      state_record: state { id sort_order: sortOrder }
+    }
+  }
+}
+
 query WorkTrackerProjects {
   projects: worktrackerProject {
     nodes {
@@ -22,9 +75,24 @@ query WorkTrackerProjects {
   }
 }
 
-query WorkTrackerModules($projectId: String!) {
+query WorkTrackerProjectOpen($projectId: String!) {
+  project: worktrackerProject(filters: { id: { eq: $projectId } }) {
+    nodes {
+      id
+      name
+      slug
+      description
+      manual_module_order: manualModuleOrder
+      created_at: createdAt
+    }
+  }
   modules: worktrackerIssue(
-    filters: { projectId: { eq: $projectId }, type: { eq: "module" } }
+    filters: {
+      projectId: { eq: $projectId }
+      type: { eq: "module" }
+      isArchived: { eq: false }
+    }
+    orderBy: { rank: ASC, sequenceId: DESC }
   ) {
     nodes {
       id
@@ -34,11 +102,52 @@ query WorkTrackerModules($projectId: String!) {
       is_archived: isArchived
       issue_type: issueTypeId
       rank
-      project {
-        slug
-        manual_module_order: manualModuleOrder
+      project { id slug manual_module_order: manualModuleOrder }
+    }
+  }
+  states: worktrackerState(
+    filters: { projectId: { eq: $projectId } }
+    orderBy: { sortOrder: ASC, createdAt: ASC }
+  ) {
+    nodes { ...GeneratedWorkTrackerStateFields }
+  }
+  issue_types: worktrackerIssuetype(
+    filters: { projectId: { eq: $projectId } }
+    orderBy: { sortOrder: ASC, createdAt: ASC }
+  ) {
+    nodes { ...GeneratedWorkTrackerIssueTypeFields }
+  }
+  provider_catalog {
+    configurable_providers { id slug activated supports_unattended: supportsUnattended }
+    providers { id slug activated supports_unattended: supportsUnattended }
+    agent_models {
+      id
+      provider: providerId
+      name
+      reasoning_levels: agentModelReasoningLevel {
+        nodes { id reasoning_level_id: reasoningLevelId }
       }
     }
+    reasoning_levels { id name }
+    global_default { provider model reasoning }
+  }
+}
+
+query WorkTrackerProjectStates($projectId: String!) {
+  states: worktrackerState(
+    filters: { projectId: { eq: $projectId } }
+    orderBy: { sortOrder: ASC, createdAt: ASC }
+  ) {
+    nodes { ...GeneratedWorkTrackerStateFields }
+  }
+}
+
+query WorkTrackerProjectIssueTypes($projectId: String!) {
+  issue_types: worktrackerIssuetype(
+    filters: { projectId: { eq: $projectId } }
+    orderBy: { sortOrder: ASC, createdAt: ASC }
+  ) {
+    nodes { ...GeneratedWorkTrackerIssueTypeFields }
   }
 }
 

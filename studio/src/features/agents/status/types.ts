@@ -1,3 +1,41 @@
+import type { AutomationAttemptFieldsFragment } from "./generated/attempts.documents";
+import type { RunStatusStreamSubscription } from "./generated/statusStream.documents";
+
+export type AutomationAttemptPayload = AutomationAttemptFieldsFragment;
+
+type GeneratedRunStatusFrame = RunStatusStreamSubscription["run_status_stream"];
+
+export type RunStatusSnapshotFrame = Extract<
+  GeneratedRunStatusFrame,
+  { __typename: "RunStatusSnapshot" }
+>;
+type GeneratedRunStatusEventFrame = Extract<
+  GeneratedRunStatusFrame,
+  { __typename: "RunStatusEvent" }
+>;
+export type RunStatusEventFrame = Omit<GeneratedRunStatusEventFrame, "payload"> & {
+  readonly payload: Readonly<Record<string, unknown>>;
+};
+export type RunStatusCaughtUpFrame = Extract<
+  GeneratedRunStatusFrame,
+  { __typename: "RunStatusCaughtUp" }
+>;
+export type RunStatusResetRequiredFrame = Extract<
+  GeneratedRunStatusFrame,
+  { __typename: "RunStatusResetRequired" }
+>;
+export type RunStatusFailedFrame = Extract<
+  GeneratedRunStatusFrame,
+  { __typename: "RunStatusFailed" }
+>;
+export type RunStatusFrame =
+  | RunStatusSnapshotFrame
+  | RunStatusEventFrame
+  | RunStatusCaughtUpFrame
+  | RunStatusResetRequiredFrame
+  | RunStatusFailedFrame;
+export type RunHoldingPayload = RunStatusSnapshotFrame["runs"][number];
+
 export type RawLifecycleState =
   | "starting" | "working" | "needs_input" | "permission_required"
   | "turn_complete" | "quiet" | "reconnecting" | "exited" | "lost"

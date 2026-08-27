@@ -1,4 +1,4 @@
-import { create } from "zustand";
+import { createApolloStore } from "../../shared/apollo/localState";
 import { ApiError } from "../../shared/api/errors";
 import type {
   IssueType,
@@ -23,9 +23,7 @@ import {
   removeState as removeStateFromCatalog,
   setStatesSorted,
   upsertState,
-} from "../../shared/query/stateCatalog";
-import { queryClient } from "../../shared/query/queryClient";
-import { queryKeys } from "../../shared/query/keys";
+} from "../../features/projects";
 import { synchronizeSubtreeRunCapabilities } from "../settings";
 import {
   loadAllWorkflowSettings,
@@ -163,7 +161,7 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-export const useWorkflowEditorStore = create<WorkflowEditorState>((set, get) => ({
+export const useWorkflowEditorStore = createApolloStore<WorkflowEditorState>("workflow-editor", (set, get) => ({
   projectId: null,
   issueTypes: [],
   states: [],
@@ -316,7 +314,7 @@ export const useWorkflowEditorStore = create<WorkflowEditorState>((set, get) => 
     try {
       await operation(workflow.workflow_revision);
       if (get().projectId !== projectId) return null;
-      const next = await loadWorkflowSettings(projectId, typeId);
+      const next = await loadWorkflowSettings(projectId, typeId, "network-only");
       setWorkflowSettings(next);
       synchronizeSubtreeRunCapabilities(
         projectId,
@@ -334,7 +332,7 @@ export const useWorkflowEditorStore = create<WorkflowEditorState>((set, get) => 
     } catch (error) {
       if (error instanceof ApiError && error.status === 409) {
         try {
-          const latest = await loadWorkflowSettings(projectId, typeId);
+          const latest = await loadWorkflowSettings(projectId, typeId, "network-only");
           setWorkflowSettings(latest);
           synchronizeSubtreeRunCapabilities(
             projectId,
@@ -543,9 +541,6 @@ export const useWorkflowEditorStore = create<WorkflowEditorState>((set, get) => 
       if (get().projectId !== projectId) return;
       advanceStateCatalogRevision(projectId, states);
       setStatesSorted(projectId, states);
-      for (const item of workItems) {
-        queryClient.setQueryData(queryKeys.workItems.byId(item.id), item);
-      }
       set({
         states: getWorkflowStatesSnapshot(projectId),
         stateWorkItemCounts: countWorkItemsByState(workItems),

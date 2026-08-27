@@ -124,7 +124,7 @@ async fn reparent_tasks(
             skipped.push(json!({"task_id": raw_id, "reason": "not_found"}));
             continue;
         };
-        if task.project_id != principal.project_id {
+        if !principal.is_global() && task.project_id != principal.project_id {
             skipped.push(json!({"task_id": raw_id, "reason": "cross_project"}));
             continue;
         }

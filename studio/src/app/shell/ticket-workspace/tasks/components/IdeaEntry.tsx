@@ -11,8 +11,6 @@ import { apiErrorMessage } from "../../../../../shared/api/errors";
 import { createWorkItem } from "../../../../../features/work-items";
 import { useStudioStore } from "../../../../../features/projects";
 import { loadIssueTypes } from "../../../../../features/settings";
-import { queryClient } from "../../../../../shared/query/queryClient";
-import { queryKeys } from "../../../../../shared/query/keys";
 import { useClientStore } from "../../../../../state/clientStore";
 import { focusFirstStory } from "../storiesFocus";
 
@@ -67,11 +65,7 @@ export function IdeaEntry() {
         name,
         parent_id: moduleId,
         issue_type_id: storyType.id,
-      });
-      await queryClient.invalidateQueries({
-        queryKey: queryKeys.tasks.byModule(projectId, moduleId),
-        exact: true,
-      });
+      }, { moduleId });
       if (
         submissionRef.current !== submission ||
         useClientStore.getState().selectedModuleId !== moduleId

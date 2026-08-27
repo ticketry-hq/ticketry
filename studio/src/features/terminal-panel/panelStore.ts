@@ -15,7 +15,7 @@
  * nothing about shell membership belongs here.
  */
 
-import { create } from "zustand";
+import { createApolloStore } from "../../shared/apollo/localState";
 
 import { useClientStore } from "../../state/clientStore";
 import {
@@ -73,7 +73,7 @@ interface TerminalPanelState {
 
 const restored = readTerminalPanelFurniture();
 
-export const useTerminalPanelStore = create<TerminalPanelState>((set, get) => {
+export const useTerminalPanelStore = createApolloStore<TerminalPanelState>("terminal-panel", (set, get) => {
   function setOpen(moduleId: string, open: boolean): void {
     if (!moduleId) return;
     set((state) => ({

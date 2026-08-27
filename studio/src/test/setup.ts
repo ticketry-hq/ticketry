@@ -1,12 +1,6 @@
 import "@testing-library/jest-dom/vitest";
 import { afterEach, beforeEach } from "vitest";
 import { cleanup } from "@testing-library/react";
-import { notifyManager } from "@tanstack/react-query";
-
-// TanStack Query defers subscriber notifications to a scheduler tick; the
-// suite's interaction patterns (act + synchronous assertion) predate that and
-// assume zustand's synchronous set→render. Notify synchronously under test.
-notifyManager.setScheduler((callback) => callback());
 
 // Launch surfaces read activation from the provider-capabilities payload
 // (ADR-0015). Default every test to the server's first-run answer — the three
@@ -68,9 +62,8 @@ afterEach(async () => {
   } catch {
     /* no storage in this env */
   }
-  // Server-state cache isolation: every test starts with an empty TanStack
-  // Query cache, mirroring the zustand-store resets tests do themselves.
-  const { queryClient } = await import("../shared/query/queryClient");
-  queryClient.cancelQueries();
-  queryClient.clear();
+  // Server-state cache isolation: every test starts with empty Apollo and
+  // transitional TanStack caches.
+  const { resetStudioApolloClient } = await import("../shared/apollo/client");
+  await resetStudioApolloClient();
 });

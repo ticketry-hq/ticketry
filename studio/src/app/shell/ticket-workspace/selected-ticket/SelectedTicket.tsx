@@ -4,7 +4,7 @@ import { PaneShell } from "../../PaneShell";
 import { useConfig } from "../../../../features/studio/stores/configStore";
 import { useStudioStore } from "../../../../features/projects";
 import { useClientStore } from "../../../../state/clientStore";
-import { useCachedStates } from "../../../../shared/query/stateCatalog";
+import { useCachedStates } from "../../../../features/projects";
 import { useWorkItem } from "../../../../features/work-items";
 import type { WorkspaceLauncherContext } from "./SelectedTicketContent";
 import { SelectedTicketDetails } from "./details/SelectedTicketDetails";

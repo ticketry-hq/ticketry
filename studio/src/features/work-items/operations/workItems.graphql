@@ -4,7 +4,6 @@ fragment GeneratedWorkTrackerWorkItemFields on WorktrackerIssue {
   project_id: projectId
   sequence_id: sequenceId
   state_id: stateId
-  state_revision: stateRevision
   description
   parent_id: parentId
   module_id: moduleId
@@ -13,10 +12,12 @@ fragment GeneratedWorkTrackerWorkItemFields on WorktrackerIssue {
   updated_at: updatedAt
   rank
   issue_type_id: issueTypeId
-  project { slug }
-  children(filters: { isArchived: { eq: false } }) { nodes { id } }
-  blocked_by_edges: blockedByEdges { nodes { to_issue_id: toIssueId } }
-  blocks_edges: blocksEdges { nodes { from_issue_id: fromIssueId } }
+  project { id slug }
+  state_record: state { id name group color sort_order: sortOrder is_protected: isProtected }
+  issue_type_record: issueType { id name level color sort_order: sortOrder }
+  children { nodes { id is_archived: isArchived } }
+  blocked_by_edges: blockedByEdges { nodes { id to_issue_id: toIssueId } }
+  blocks_edges: blocksEdges { nodes { id from_issue_id: fromIssueId } }
 }
 
 query WorkTrackerWorkItems($projectId: String!) {
@@ -27,27 +28,28 @@ query WorkTrackerWorkItems($projectId: String!) {
   }
 }
 
-query WorkTrackerModuleTree($projectId: String!, $moduleId: String!) {
-  work_items: worktrackerIssue(
-    filters: { moduleId: { eq: $moduleId }, type: { eq: "task" } }
+query WorkTrackerModuleOpen($moduleId: String!) {
+  module: worktrackerIssue(
+    filters: { id: { eq: $moduleId }, type: { eq: "module" } }
   ) {
-    nodes { ...GeneratedWorkTrackerWorkItemFields }
-  }
-  states: worktrackerState(filters: { projectId: { eq: $projectId } }) {
     nodes {
       id
       name
-      group
-      color
-      sort_order: sortOrder
-      is_protected: isProtected
+      project_id: projectId
+      sequence_id: sequenceId
+      is_archived: isArchived
+      issue_type: issueTypeId
+      rank
+      project { id slug manual_module_order: manualModuleOrder }
     }
   }
-}
-
-query WorkTrackerWorkItemsByIds($ids: [String!]!) {
-  work_items_by_ids: worktrackerIssue(
-    filters: { id: { is_in: $ids }, type: { eq: "task" } }
+  work_items: worktrackerIssue(
+    filters: {
+      moduleId: { eq: $moduleId }
+      type: { eq: "task" }
+      isArchived: { eq: false }
+    }
+    orderBy: { rank: ASC, sequenceId: ASC }
   ) {
     nodes { ...GeneratedWorkTrackerWorkItemFields }
   }

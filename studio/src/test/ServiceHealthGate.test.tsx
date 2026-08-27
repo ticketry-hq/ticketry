@@ -21,6 +21,7 @@ function runtimeHealthHarness() {
   const retryServices = vi.fn().mockResolvedValue(undefined);
   const runtime = {
     platform: "desktop",
+    graphQlTransport: () => { throw new Error("not used"); },
     capabilities: {
       statusFeed: true,
       nativeLifecycle: false,

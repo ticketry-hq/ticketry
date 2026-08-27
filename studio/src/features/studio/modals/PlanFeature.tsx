@@ -14,9 +14,7 @@ import { getConfigSnapshot, getModuleFolder } from "../stores/configStore";
 import { TEMP_TASK_ID } from "../../agents/types";
 import { useStudioStore } from "../../projects";
 import { useClientStore } from "../../../state/clientStore";
-import { queryClient } from "../../../shared/query/queryClient";
-import { queryKeys } from "../../../shared/query/keys";
-import type { WorkItem } from "../../../shared/api/types";
+import { getWorkItemSnapshot } from "../../work-items";
 
 function selectScratchWorkspace(): void {
   useClientStore.getState().selectTask(TEMP_TASK_ID);
@@ -151,9 +149,7 @@ function selectedTaskLaunchContext(): {
     !selectedTaskId ||
     selectedTaskId === TEMP_TASK_ID
   ) return null;
-  const selected = queryClient.getQueryData<WorkItem>(
-    queryKeys.workItems.byId(selectedTaskId),
-  );
+  const selected = getWorkItemSnapshot(selectedTaskId);
   if (!selected) return null;
   return {
     projectId: selectedProjectId,

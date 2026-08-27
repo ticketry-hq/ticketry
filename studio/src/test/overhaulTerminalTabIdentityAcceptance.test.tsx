@@ -1,16 +1,18 @@
-import { QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SelectedTicketContent } from "../app/shell/ticket-workspace/selected-ticket/SelectedTicketContent";
 import { useStudioStore } from "../features/projects/store";
-import { useAgentStatusStore } from "../features/agents/status";
+import { useAgentStatusStore } from "../features/agents/status/testStore";
 import {
   useTerminalStore,
   type SessionMeta,
 } from "../features/agents/terminal";
 import { seedConfig } from "../features/studio/stores/configStore";
-import { queryClient } from "../shared/query/queryClient";
 import { useClientStore } from "../state/clientStore";
+import {
+  installDesktopGraphQlRuntime,
+  terminalSessionReadExecutor,
+} from "./desktopGraphQlRuntime";
 
 // The tab strip's job in a task workspace is to say *who* is working and *what
 // phase* each conversation belongs to (#694). The ticket identifier and title
@@ -39,11 +41,6 @@ const terminalReads = vi.hoisted(() => {
     readScratchResumableTerminalSessions: resumable,
   };
 });
-
-vi.mock(
-  "../features/agents/terminal/internal/sessionReadTransport",
-  () => terminalReads,
-);
 
 vi.mock(
   "../app/shell/ticket-workspace/selected-ticket/terminals/SelectedTicketTerminal",
@@ -105,7 +102,6 @@ function run({
 
 function workspace() {
   return (
-    <QueryClientProvider client={queryClient}>
       <SelectedTicketContent
         bucket="story-1"
         projectId="project-1"
@@ -113,15 +109,14 @@ function workspace() {
         owner="studio"
         details={<div>Issue details</div>}
       />
-    </QueryClientProvider>
   );
 }
 
 describe("overhaul acceptance — terminal tab identity", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    installDesktopGraphQlRuntime(terminalSessionReadExecutor(terminalReads));
     localStorage.clear();
-    queryClient.clear();
     seedConfig({ features: { sidebar: true, projects: true } });
     useStudioStore.setState({ selectedProjectId: "project-1" });
     useClientStore.setState({
@@ -398,7 +393,7 @@ describe("overhaul acceptance — terminal tab identity", () => {
     ).toBeInTheDocument();
   });
 
-  it("[overhaul-114] gives runs with no recorded launch state distinct accessible names", async () => {
+  it("[overhaul-114] gives runs with no recorded launch state visible provider labels", async () => {
     useTerminalStore.setState({
       sessions: {
         "session-first": session("session-first", "run-first"),
@@ -410,7 +405,7 @@ describe("overhaul acceptance — terminal tab identity", () => {
       },
     });
     // Runs from before the launch-metadata migration record no launch state, so
-    // both tabs show an empty label and neither can wear a visible ordinal.
+    // both tabs fall back to the provider name and receive visible ordinals.
     useAgentStatusStore.setState({
       runs: {
         "run-first": run({
@@ -427,15 +422,14 @@ describe("overhaul acceptance — terminal tab identity", () => {
     render(workspace());
 
     expect(
-      await screen.findByRole("tab", { name: "claude terminal 1" }),
+      await screen.findByRole("tab", { name: "claude 1 terminal" }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "claude terminal 2" }))
+    expect(screen.getByRole("tab", { name: "claude 2 terminal" }))
       .toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: "claude terminal" }))
       .not.toBeInTheDocument();
-    // The numeral lives in assistive text alone: the visible tab stays blank.
     expect(
-      screen.getByRole("tab", { name: "claude terminal 1" }).textContent,
-    ).not.toContain("1");
+      screen.getByRole("tab", { name: "claude 1 terminal" }),
+    ).toHaveTextContent("claude 1");
   });
 });

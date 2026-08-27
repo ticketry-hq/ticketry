@@ -13,12 +13,10 @@
 //! reports which bridges an installation would need and leaves the source
 //! exactly as it found it.
 //!
-//! The registry is deliberately empty in this release. No shipped Ticketry
-//! generation is known to produce a defect any of these rules find, so there is
-//! nothing to admit — and an entry added "just in case" would be an untested
-//! licence to modify user data. A generation later found to carry a defect gets
-//! an entry here together with the bridge that repairs it and the fixture that
-//! proves it.
+//! The registry contains only defects reproduced from a shipped installation.
+//! Each entry has a matching transactional repair and fixture in installation
+//! adoption. An entry added "just in case" would be an untested licence to
+//! modify user data and does not belong here.
 
 use super::report::Defect;
 
@@ -49,7 +47,12 @@ impl Bridge {
 }
 
 /// Every reviewed admission this release ships.
-pub const REGISTRY: &[Bridge] = &[];
+pub const REGISTRY: &[Bridge] = &[Bridge {
+    defect_code: "document-work-item-missing",
+    name: "remove-orphaned-design-document-metadata",
+    version: 1,
+    generations: &["rust-owned"],
+}];
 
 /// Mark the defects a bridge admits, leaving the rest as refusals.
 ///
@@ -83,13 +86,14 @@ mod tests {
     }
 
     #[test]
-    fn this_release_admits_nothing() {
-        // An entry here is a licence to modify user data during startup. Adding
-        // one without its bridge and its fixture is the failure this guards.
-        assert!(
-            REGISTRY.is_empty(),
-            "a shipped admission needs a named bridge and a fixture proving it"
+    fn every_shipped_admission_is_narrow_and_versioned() {
+        assert_eq!(REGISTRY.len(), 1);
+        assert_eq!(REGISTRY[0].defect_code, "document-work-item-missing");
+        assert_eq!(
+            REGISTRY[0].identity(),
+            "remove-orphaned-design-document-metadata.v1"
         );
+        assert_eq!(REGISTRY[0].generations, &["rust-owned"]);
     }
 
     #[test]

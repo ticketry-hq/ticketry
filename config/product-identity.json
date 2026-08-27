@@ -1,0 +1,12 @@
+{
+  "defaultDataDirectoryName": "worktracker-studio-rust",
+  "dataDirectoryNameEnvironmentVariable": "TICKETRY_DATA_DIR_NAME",
+  "dataDirectoryPathEnvironmentVariables": [
+    "TICKETRY_DATA_DIR",
+    "TICKETRY_PRODUCT_DATA_DIR",
+    "MUXED_DATA_DIR"
+  ],
+  "legacyDataDirectoryNames": [
+    "worktracker-studio"
+  ]
+}

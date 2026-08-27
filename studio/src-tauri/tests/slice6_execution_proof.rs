@@ -12,7 +12,7 @@
 
 mod common;
 
-use common::execution_django_fixture as fixture;
+use common::execution_fixture as fixture;
 use common::execution_harness::{public_id, ExecutionHarness};
 use sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, Statement};
 use serde_json::{json, Value};
@@ -93,7 +93,7 @@ async fn a_parallel_press_starts_every_ready_direct_child_exactly_once() {
     let database = harness.database().await;
     assert_eq!(claimed_children(&database).await, ready_children());
     assert_eq!(harness.live_runtimes().len(), 2);
-    assert_eq!(count(&database, "agent_runs").await, 2);
+    assert_eq!(count_campaign_runs(&database).await, 2);
 
     // A repeated press finds nothing startable, and says so with an accepted
     // empty result rather than a failure.
@@ -101,7 +101,7 @@ async fn a_parallel_press_starts_every_ready_direct_child_exactly_once() {
     assert_eq!(launched_ids(&again), Vec::<String>::new(), "{again}");
     assert!(again.get("error").is_none(), "{again}");
     assert_eq!(harness.live_runtimes().len(), 2);
-    assert_eq!(count(&database, "agent_runs").await, 2);
+    assert_eq!(count_campaign_runs(&database).await, 2);
     harness.shutdown().await;
 }
 
@@ -229,7 +229,7 @@ async fn a_terminated_parallel_child_does_not_advance_its_campaign_by_itself() {
         Vec::<String>::new(),
         "parallel scheduling stays dependency-based: {report:?}"
     );
-    assert_eq!(count(&database, "agent_runs").await, 2);
+    assert_eq!(count_campaign_runs(&database).await, 2);
     harness.shutdown().await;
 }
 
@@ -345,7 +345,7 @@ async fn the_studio_contract_resets_the_ledger_without_starting_or_ending_work()
     let mut harness = ExecutionHarness::start().await;
     harness.execute(fixture::PARALLEL_CAMPAIGN_ROOT).await;
     let database = harness.database().await;
-    let runs_before = count(&database, "agent_runs").await;
+    let runs_before = count_campaign_runs(&database).await;
     let live_before = harness.live_runtimes();
 
     let reset = harness
@@ -355,7 +355,7 @@ async fn the_studio_contract_resets_the_ledger_without_starting_or_ending_work()
     assert_eq!(count(&database, "graph_runs").await, 0);
     assert_eq!(count(&database, "launched_tasks").await, 0);
     // Reset is administrative: the agents it forgets keep running.
-    assert_eq!(count(&database, "agent_runs").await, runs_before);
+    assert_eq!(count_campaign_runs(&database).await, runs_before);
     assert_eq!(harness.live_runtimes(), live_before);
     assert_eq!(
         count_where(&database, "agent_runs", "ended_at IS NOT NULL").await,
@@ -413,7 +413,7 @@ async fn rejections_are_stable_coded_and_leave_no_partial_campaign() {
 
     assert_eq!(count(&database, "graph_runs").await, 0);
     assert_eq!(count(&database, "launched_tasks").await, 0);
-    assert_eq!(count(&database, "agent_runs").await, 0);
+    assert_eq!(count_campaign_runs(&database).await, 0);
     assert!(harness.live_runtimes().is_empty());
     harness.shutdown().await;
 }
@@ -473,7 +473,7 @@ async fn mcp_reset_and_execute_uses_the_same_serialized_service_as_the_studio_co
     );
     assert_eq!(count(&database, "launched_tasks").await, 0);
     assert_eq!(count(&database, "graph_runs").await, 1);
-    assert_eq!(count(&database, "agent_runs").await, 2);
+    assert_eq!(count_campaign_runs(&database).await, 2);
 
     // Once those runtimes end while the children remain unsatisfied, the same
     // compatibility request re-arms them. A reset does not end an Agent Run, so
@@ -494,7 +494,7 @@ async fn mcp_reset_and_execute_uses_the_same_serialized_service_as_the_studio_co
         )
         .await;
     assert_eq!(launched_ids(&rearmed), ready_children(), "{rearmed}");
-    assert_eq!(count(&database, "agent_runs").await, 2);
+    assert_eq!(count_campaign_runs(&database).await, 2);
     assert_eq!(
         [
             agent_run_for(&database, fixture::READY_FIRST).await,
@@ -717,6 +717,18 @@ async fn rows(database: &DatabaseConnection, query: &str) -> Vec<String> {
 
 async fn count(database: &DatabaseConnection, table: &str) -> i64 {
     scalar(database, &format!("SELECT COUNT(*) FROM {table}")).await
+}
+
+/// The active harness principal authenticates MCP but is not a campaign launch.
+async fn count_campaign_runs(database: &DatabaseConnection) -> i64 {
+    scalar(
+        database,
+        &format!(
+            "SELECT COUNT(*) FROM agent_runs WHERE id<>'{}'",
+            common::execution_authorization::CALLER_RUN_ID
+        ),
+    )
+    .await
 }
 
 async fn count_where(database: &DatabaseConnection, table: &str, predicate: &str) -> i64 {

@@ -1,13 +1,13 @@
-import { QueryClientProvider } from "@tanstack/react-query";
 import { render, type RenderResult } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach } from "vitest";
 import { TasksPane } from "../app/shell/ticket-workspace/tasks/TasksPane";
 import { SelectedTicketDetails } from "../app/shell/ticket-workspace/selected-ticket/details/SelectedTicketDetails";
-import { useAgentStatusStore } from "../features/agents/status/store";
+import { useAgentStatusStore } from "../features/agents/status/testStore";
 import type { RunRecord } from "../features/agents/status/types";
 import type { DesignDoc } from "../features/agents/types";
 import { useStudioStore } from "../features/projects/store";
+import { loadModules } from "../features/projects/queries";
 import { loadModuleTree } from "../features/work-items/queries";
 import type {
   Attachment,
@@ -16,14 +16,22 @@ import type {
   State,
   WorkItem,
 } from "../shared/api/types";
-import { queryClient } from "../shared/query/queryClient";
-import { queryKeys } from "../shared/query/keys";
+import { StudioApolloProvider } from "../shared/apollo/StudioApolloProvider";
 import { useClientStore } from "../state/clientStore";
 import { rankBetween } from "../features/work-items/utilities/rank";
-import type { TypedDocumentNode } from "../graphql-foundation/typedDocument";
-import { FoundationGraphQlError } from "../graphql-foundation/foundationClient";
+import {
+  documentOperationName,
+  type TypedDocumentNode,
+} from "../graphql-foundation/typedDocument";
+import { FoundationGraphQlError } from "../shared/apollo/errorLink";
 import { createBrowserRuntime, initializeStudioRuntime } from "../runtime";
 import { compactWorktrackerId } from "../shared/api/generatedWorktracker";
+import { studioApolloClient } from "../shared/apollo/client";
+import {
+  WorkTrackerModuleOpenDocument,
+  WorkTrackerWorkItemDocument,
+} from "../features/work-items/generated/workItems.documents";
+import { WorkTrackerProjectOpenDocument } from "../features/projects/generated/projects.documents";
 
 export interface HttpFixture {
   tree(moduleId: string, tree: ModuleTree): void;
@@ -141,12 +149,14 @@ class BoundaryFixture implements StudioFixture {
   >();
 
   private applyWorkItemChange(id: string, membershipChanged: boolean): void {
-    void queryClient.invalidateQueries({
-      queryKey: queryKeys.workItems.byId(id),
-      exact: true,
+    const client = studioApolloClient();
+    void client.query({
+      query: WorkTrackerWorkItemDocument,
+      variables: { id: compactWorktrackerId(id) },
+      fetchPolicy: "network-only",
     });
     if (membershipChanged) {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });
+      void client.refetchQueries({ include: [WorkTrackerModuleOpenDocument] });
     }
   }
 
@@ -264,9 +274,11 @@ class BoundaryFixture implements StudioFixture {
   }
 
   async refreshRunNowCapabilities(issueTypeId: string): Promise<void> {
-    await queryClient.invalidateQueries({
-      queryKey: queryKeys.workflows.transitionsByIssueType(issueTypeId),
-      exact: true,
+    void issueTypeId;
+    await studioApolloClient().query({
+      query: WorkTrackerProjectOpenDocument,
+      variables: { projectId: compactWorktrackerId(this.projectId()) },
+      fetchPolicy: "network-only",
     });
   }
 
@@ -348,118 +360,186 @@ class BoundaryFixture implements StudioFixture {
     const issueRow = (item: WorkItem) => {
       const moduleId = [...this.trees].find(([, tree]) => tree.order.includes(item.id))?.[0] ?? null;
       return {
+        __typename: "WorktrackerIssue",
         ...item,
         state_id: item.state,
         issue_type_id: item.issue_type,
         module_id: moduleId,
         project: {
+          __typename: "WorktrackerProject",
+          id: this.projectId(),
           slug: item.key.split("-")[0] ?? "PROJECT",
         },
-        children: { nodes: [...this.items.values()].filter((child) => child.parent_id === item.id).map((child) => ({ id: child.id })) },
-        blocked_by_edges: { nodes: item.blocked_by_ids.map((id) => ({ to_issue_id: id })) },
-        blocks_edges: { nodes: item.blocks_ids.map((id) => ({ from_issue_id: id })) },
+        state_record: item.state ? {
+          __typename: "WorktrackerState",
+          ...this.states.get(item.state),
+          id: item.state,
+          sort_order: this.states.get(item.state)?.sort_order ?? 0,
+          is_protected: this.states.get(item.state)?.is_protected ?? false,
+        } : null,
+        issue_type_record: {
+          __typename: "WorktrackerIssuetype",
+          ...this.issueTypes.get(item.issue_type),
+          id: item.issue_type,
+          sort_order: this.issueTypes.get(item.issue_type)?.sort_order ?? 0,
+        },
+        children: { __typename: "WorktrackerIssueConnection", nodes: [...this.items.values()].filter((child) => child.parent_id === item.id).map((child) => ({ __typename: "WorktrackerIssue", id: child.id, is_archived: child.is_archived })) },
+        blocked_by_edges: {
+          __typename: "WorktrackerIssueBlockedByConnection",
+          nodes: item.blocked_by_ids.map((id) => ({
+            __typename: "WorktrackerIssueBlockedByEdge",
+            to_issue_id: id,
+          })),
+        },
+        blocks_edges: {
+          __typename: "WorktrackerIssueBlockedByConnection",
+          nodes: item.blocks_ids.map((id) => ({
+            __typename: "WorktrackerIssueBlockedByEdge",
+            from_issue_id: id,
+          })),
+        },
       };
     };
-    if (document.operationName === "WorkTrackerModuleTree") {
-      const moduleKey = fixtureKey(this.trees, input.moduleId);
-      const ids = moduleKey ? this.trees.get(moduleKey)?.order ?? [] : [];
+    const createdAt = "2026-08-06T12:00:00Z";
+    const stateRows = () => [...this.states.values()].map((state) => ({
+      __typename: "WorktrackerState",
+      ...state,
+      project: this.projectId(),
+      sort_order: state.sort_order ?? 0,
+      is_protected: state.is_protected ?? false,
+      created_at: createdAt,
+      updated_at: createdAt,
+    }));
+    const issueTypeRows = () => [...this.issueTypes.values()].map((type) => {
+      const ideas = [...this.states.values()].find((state) => state.name === "Ideas");
+      const implement = [...this.states.values()].find((state) => state.name === "Implement");
+      const transitions = this.runNowTransitionEnabled && ideas?.id && implement?.id
+        ? [{
+            __typename: "WorktrackerIssuetypetransition",
+            id: 1,
+            issue_type: type.id,
+            from_state: ideas.id,
+            to_state: implement.id,
+            agent_allowed: true,
+            fromState: { __typename: "WorktrackerState", id: ideas.id, sort_order: ideas.sort_order ?? 0 },
+            toState: { __typename: "WorktrackerState", id: implement.id, sort_order: implement.sort_order ?? 0 },
+          }]
+        : [];
+      const bindings = [...this.items.values()].flatMap((item, index) =>
+        item.issue_type === type.id && item.state ? [{
+          __typename: "WorktrackerLaunchbinding",
+          id: index + 1,
+          issue_type: type.id,
+          state: item.state,
+          prompt: null,
+          required_skills: [],
+          model: null,
+          reasoning: null,
+          auto_start: false,
+          subtree_run_enabled: this.subtreeRunEnabled,
+          created_at: createdAt,
+          updated_at: createdAt,
+          state_record: { __typename: "WorktrackerState", id: item.state, sort_order: this.states.get(item.state)?.sort_order ?? 0 },
+        }] : [],
+      );
       return {
-        work_items: { nodes: ids.flatMap((id) => this.items.has(id) ? [issueRow(this.items.get(id)!)] : []) },
-        states: { nodes: [...this.states.values()].map((state) => ({ ...state, sort_order: state.sort_order ?? 0, is_protected: state.is_protected ?? false })) },
+        __typename: "WorktrackerIssuetype",
+        ...type,
+        project: type.project ?? this.projectId(),
+        start_state: type.start_state ?? null,
+        workflow_revision: type.workflow_revision ?? 1,
+        is_pathfind: false,
+        created_at: createdAt,
+        updated_at: createdAt,
+        transitions: { __typename: "WorktrackerIssuetypetransitionConnection", nodes: transitions },
+        launch_bindings: { __typename: "WorktrackerLaunchbindingConnection", nodes: bindings },
+      };
+    });
+    const moduleRows = () => [...this.trees.keys()].map((id, index) => ({
+      __typename: "WorktrackerIssue",
+      id,
+      name: `Module ${index + 1}`,
+      project_id: this.projectId(),
+      sequence_id: index + 1,
+      is_archived: false,
+      issue_type: "module",
+      rank: String(index),
+      project: { __typename: "WorktrackerProject", id: this.projectId(), slug: "T", manual_module_order: false },
+    }));
+    const providerCatalog = {
+      __typename: "WorktrackerProviderCatalog",
+      configurable_providers: [],
+      providers: [],
+      agent_models: [],
+      reasoning_levels: [],
+      global_default: null,
+    };
+    if (documentOperationName(document) === "WorkTrackerModuleOpen") {
+      const moduleKey = fixtureKey(this.trees, input.moduleId);
+      const ids = moduleKey ? [...(this.trees.get(moduleKey)?.order ?? [])].sort((leftId, rightId) => {
+        const left = this.items.get(leftId);
+        const right = this.items.get(rightId);
+        return (left?.rank ?? "").localeCompare(right?.rank ?? "")
+          || (left?.sequence_id ?? 0) - (right?.sequence_id ?? 0)
+          || leftId.localeCompare(rightId);
+      }) : [];
+      return {
+        module: { __typename: "WorktrackerIssueConnection", nodes: moduleRows().filter((row) => fixtureKey(this.trees, row.id) === moduleKey) },
+        work_items: { __typename: "WorktrackerIssueConnection", nodes: ids.flatMap((id) => this.items.has(id) ? [issueRow(this.items.get(id)!)] : []) },
       } as TResult;
     }
-    if (document.operationName === "WorkTrackerModules") {
-      return { modules: { nodes: [...this.trees.keys()].map((id, index) => ({
-        id,
-        name: `Module ${index + 1}`,
-        project_id: this.projectId(),
-        sequence_id: index + 1,
-        is_archived: false,
-        issue_type: "module",
-        rank: String(index),
-        project: { slug: "T", manual_module_order: false },
-      })) } } as TResult;
+    if (documentOperationName(document) === "WorkTrackerProjectOpen") {
+      return {
+        project: { __typename: "WorktrackerProjectConnection", nodes: [{
+          __typename: "WorktrackerProject",
+          id: this.projectId(), name: "Project", slug: "project", description: "",
+          manual_module_order: false, created_at: createdAt,
+        }] },
+        modules: { __typename: "WorktrackerIssueConnection", nodes: moduleRows() },
+        states: { __typename: "WorktrackerStateConnection", nodes: stateRows() },
+        issue_types: { __typename: "WorktrackerIssuetypeConnection", nodes: issueTypeRows() },
+        provider_catalog: providerCatalog,
+      } as TResult;
     }
-    if (document.operationName === "WorkTrackerWorkItems") {
+    if (documentOperationName(document) === "WorkTrackerProjectStates") {
+      return { states: { __typename: "WorktrackerStateConnection", nodes: stateRows() } } as TResult;
+    }
+    if (documentOperationName(document) === "WorkTrackerProjectIssueTypes") {
+      return { issue_types: { __typename: "WorktrackerIssuetypeConnection", nodes: issueTypeRows() } } as TResult;
+    }
+    if (documentOperationName(document) === "WorkTrackerProjects") {
+      return { projects: { __typename: "WorktrackerProjectConnection", nodes: [{
+        __typename: "WorktrackerProject", id: this.projectId(), name: "Project",
+        slug: "project", description: "", manual_module_order: false, created_at: createdAt,
+      }] } } as TResult;
+    }
+    if (documentOperationName(document) === "LoadProviderCatalog") {
+      return { provider_catalog: providerCatalog } as TResult;
+    }
+    if (documentOperationName(document) === "WorkTrackerWorkItems") {
       return { work_items: { nodes: [...this.items.values()].map(issueRow) } } as TResult;
     }
-    if (document.operationName === "WorkTrackerWorkItemsByIds") {
-      return { work_items_by_ids: { nodes: (input.ids ?? []).flatMap((id) => {
-        const item = fixtureItem(id);
-        return item ? [issueRow(item)] : [];
-      }) } } as TResult;
-    }
-    if (document.operationName === "WorkTrackerWorkItem") {
+    if (documentOperationName(document) === "WorkTrackerWorkItem") {
       const item = fixtureItem(input.id);
       return { work_item: { nodes: item ? [issueRow(item)] : [] } } as TResult;
     }
-    if (document.operationName === "WorkTrackerWorkItemByKey") {
+    if (documentOperationName(document) === "WorkTrackerWorkItemByKey") {
       const item = [...this.items.values()].find((candidate) =>
         candidate.sequence_id === input.sequenceId
         && candidate.key.split("-")[0]?.toUpperCase() === input.projectSlug,
       );
       return { work_item: { nodes: item ? [issueRow(item)] : [] } } as TResult;
     }
-    if (document.operationName === "WorkTrackerAttachments") {
+    if (documentOperationName(document) === "WorkTrackerAttachments") {
       const issueKey = fixtureKey(this.attachmentRows, input.issueId);
-      return { attachments: { nodes: (issueKey ? this.attachmentRows.get(issueKey) ?? [] : []).map((attachment) => ({
+      return { attachments: { __typename: "WorktrackerAttachmentConnection", nodes: (issueKey ? this.attachmentRows.get(issueKey) ?? [] : []).map((attachment) => ({
+        __typename: "WorktrackerAttachment",
         id: attachment.id, issue_id: attachment.issue, file: attachment.url,
         filename: attachment.filename, mime_type: attachment.mime_type,
         size: attachment.size, created_at: attachment.created_at,
       })) } } as TResult;
     }
-    if (document.operationName === "WorkTrackerWorkflowCatalog") {
-      const createdAt = "2026-08-06T12:00:00Z";
-      return {
-        states: { nodes: [...this.states.values()].map((state) => ({
-          ...state,
-          project: this.projectId(),
-          sort_order: state.sort_order ?? 0,
-          is_protected: state.is_protected ?? false,
-          created_at: createdAt,
-          updated_at: createdAt,
-        })) },
-        issue_types: { nodes: [...this.issueTypes.values()].map((type) => ({
-          ...type,
-          project: type.project ?? this.projectId(),
-          start_state: type.start_state ?? null,
-          workflow_revision: type.workflow_revision ?? 1,
-          is_pathfind: false,
-          created_at: createdAt,
-          updated_at: createdAt,
-        })) },
-        launch_bindings: { nodes: [...this.items.values()].flatMap((item, index) =>
-          item.state && item.issue_type ? [{
-            id: index + 1,
-            issue_type: item.issue_type,
-            state: item.state,
-            prompt: null,
-            required_skills: [],
-            model: null,
-            reasoning: null,
-            auto_start: false,
-            subtree_run_enabled: this.subtreeRunEnabled,
-            created_at: createdAt,
-            updated_at: createdAt,
-            issueType: { sort_order: this.issueTypes.get(item.issue_type)?.sort_order ?? 0 },
-            state_record: { sort_order: this.states.get(item.state)?.sort_order ?? 0 },
-          }] : [],
-        ) },
-        providers: { nodes: [] },
-        agent_models: { nodes: [] },
-        reasoning_levels: { nodes: [] },
-      } as TResult;
-    }
-    if (document.operationName === "WorkTrackerIssueTypeTransitions") {
-      const ideas = [...this.states.values()].find((state) => state.name === "Ideas");
-      const implement = [...this.states.values()].find((state) => state.name === "Implement");
-      return { issue_type_transitions: { nodes: this.runNowTransitionEnabled && ideas?.id && implement?.id ? [{
-        id: 1, issue_type: input.issueTypeId ?? "story", from_state: ideas.id,
-        to_state: implement.id, agent_allowed: true,
-        fromState: { sort_order: ideas.sort_order ?? 0 }, toState: { sort_order: implement.sort_order ?? 0 },
-      }] : [] } } as TResult;
-    }
-    if (["UpdateWorkTrackerWorkItem", "TransitionWorkTrackerWorkItem", "ReparentWorkTrackerWorkItem", "SetWorkTrackerBlockers"].includes(document.operationName)) {
+    if (["UpdateWorkTrackerWorkItem", "TransitionWorkTrackerWorkItem", "ReparentWorkTrackerWorkItem", "SetWorkTrackerBlockers"].includes(documentOperationName(document))) {
       const id = fixtureKey(this.items, input.id) ?? input.id!;
       const current = fixtureItem(id);
       if (!current) throw new FoundationGraphQlError("not_found", "Not found");
@@ -498,7 +578,7 @@ class BoundaryFixture implements StudioFixture {
       }
       return { update_work_item: issueRow(updated) } as TResult;
     }
-    if (document.operationName === "ReorderWorkTrackerWorkItem") {
+    if (documentOperationName(document) === "ReorderWorkTrackerWorkItem") {
       const id = fixtureKey(this.items, input.id) ?? input.id!;
       const current = this.items.get(id);
       if (!current) throw new FoundationGraphQlError("not_found", "Not found");
@@ -514,7 +594,7 @@ class BoundaryFixture implements StudioFixture {
       }
       return { reorder_work_item: issueRow(updated) } as TResult;
     }
-    if (document.operationName === "RunWorkTrackerWorkItemNow") {
+    if (documentOperationName(document) === "RunWorkTrackerWorkItemNow") {
       const id = input.idOrKey;
       if (!id) throw new Error("RunWorkTrackerWorkItemNow requires idOrKey.");
       this.runNowCalls.push({ id });
@@ -568,8 +648,8 @@ class BoundaryFixture implements StudioFixture {
       } as TResult;
     }
     const id = fixtureKey(this.items, input.rootId) ?? input.rootId;
-    if (!id) throw new Error(`${document.operationName} requires rootId.`);
-    if (document.operationName === "ExecutionGraphRunHolding") {
+    if (!id) throw new Error(`${documentOperationName(document)} requires rootId.`);
+    if (documentOperationName(document) === "ExecutionGraphRunHolding") {
       return {
         graph_run_holding: {
           nodes: this.armedGraphRuns.has(id)
@@ -579,10 +659,10 @@ class BoundaryFixture implements StudioFixture {
       } as TResult;
     }
     if (
-      document.operationName !== "CreateExecutionGraphRun" &&
-      document.operationName !== "UpdateExecutionGraphRun"
+      documentOperationName(document) !== "CreateExecutionGraphRun" &&
+      documentOperationName(document) !== "UpdateExecutionGraphRun"
     ) {
-      throw new Error(`Unexpected GraphQL operation ${document.operationName}.`);
+      throw new Error(`Unexpected GraphQL operation ${documentOperationName(document)}.`);
     }
     this.graphRuns.push({ id, mode: input.executionMode ?? null });
     const failure = this.graphRunFailures.shift();
@@ -855,7 +935,6 @@ export function workItem(overrides: WorkItemOverrides = {}): FixtureWorkItem {
     project_id: "project-1",
     sequence_id: 1,
     state: typeof state === "string" || state === null ? state : state.id,
-    state_revision: 1,
     description: "",
     parent_id: "module-1",
     sub_issues_count: 0,
@@ -877,18 +956,54 @@ export function workItem(overrides: WorkItemOverrides = {}): FixtureWorkItem {
 
 function StudioBehaviourSurface({ children }: { children?: ReactNode }) {
   return (
-    <QueryClientProvider client={queryClient}>
-      <div>
-        <section role="region" aria-label="Stories">
-          <TasksPane />
-        </section>
-        <section role="region" aria-label="Details">
-          <SelectedTicketDetails />
-        </section>
-        {children}
-      </div>
-    </QueryClientProvider>
+    <StudioApolloProvider>
+        <div>
+          <section role="region" aria-label="Stories">
+            <TasksPane />
+          </section>
+          <section role="region" aria-label="Details">
+            <SelectedTicketDetails />
+          </section>
+          {children}
+        </div>
+    </StudioApolloProvider>
   );
+}
+
+function fixtureGraphQlTransport(execute: HttpFixture["executeGraphQl"]) {
+  return () => ({
+    graphql_execute: async (requestJson: string) => {
+      const request = JSON.parse(requestJson) as {
+        query: string;
+        operationName: string;
+        variables: Record<string, unknown>;
+      };
+      try {
+        const data = await execute(
+          {
+            kind: "Document",
+            operationName: request.operationName,
+            source: request.query,
+          },
+          request.variables,
+        );
+        return JSON.stringify({ data });
+      } catch (error) {
+        if (!(error instanceof FoundationGraphQlError)) throw error;
+        return JSON.stringify({
+          data: null,
+          errors: [{
+            message: error.message,
+            extensions: { ...error.extensions, code: error.code },
+          }],
+        });
+      }
+    },
+    graphql_subscribe: async () => {
+      throw new Error("not used by the acceptance fixture");
+    },
+    graphql_unsubscribe: async () => false,
+  });
 }
 
 export function mountStudio({
@@ -918,6 +1033,7 @@ export function mountStudio({
     const execute = graphQlExecute ?? http.executeGraphQl.bind(http);
     initializeStudioRuntime({
       ...browser,
+      graphQlTransport: fixtureGraphQlTransport(execute),
       readWorkTracker: (routes) => routes.graphQl(execute),
       writeWorkTracker: (routes) => routes.graphQl(execute),
       readSettings: (routes) => routes.graphQl(execute),
@@ -925,7 +1041,6 @@ export function mountStudio({
     });
   }
 
-  queryClient.clear();
   useStudioStore.setState({
     selectedProjectId: http.projectId(),
     activeView: "backlog",
@@ -947,7 +1062,10 @@ export function mountStudio({
     automationAttempts: {},
     automationByTask: {},
   });
-  void loadModuleTree(http.projectId(), http.firstModuleId());
+  void Promise.all([
+    loadModules(http.projectId()),
+    loadModuleTree(http.projectId(), http.firstModuleId()),
+  ]);
 
   return render(<StudioBehaviourSurface>{children}</StudioBehaviourSurface>);
 }

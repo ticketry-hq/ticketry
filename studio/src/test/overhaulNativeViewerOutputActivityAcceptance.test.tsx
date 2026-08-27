@@ -10,6 +10,7 @@ import {
   grantsEveryLease,
   installDesktopGraphQlRuntime,
 } from "./desktopGraphQlRuntime";
+import { documentOperationName } from "../graphql-foundation/typedDocument";
 
 const tauri = vi.hoisted(() => ({
   invoke: vi.fn(),
@@ -152,7 +153,7 @@ describe("native viewer output activity acceptance", () => {
 
   it("keeps native rendering intact when activity reporting fails", async () => {
     installDesktopGraphQlRuntime(async (document, variables) => {
-      if (document.operationName === "ObserveTerminalOutput") {
+      if (documentOperationName(document) === "ObserveTerminalOutput") {
         throw new Error("backend unavailable");
       }
       return grantsEveryLease(document, variables);

@@ -6,6 +6,10 @@ import {
   generateFoundationArtifacts,
   studioRoot,
 } from "./graphql-foundation-generation.mjs";
+import {
+  schemaTypesTargetRelative,
+  typedDocumentTargets,
+} from "./typed-document-generation.mjs";
 
 async function files(directory, prefix = "") {
   const found = [];
@@ -73,94 +77,24 @@ try {
     "Terminal Session entity drift",
   );
   const generatedDirectory = join(studioRoot, "src/graphql-foundation/generated");
-  for (const name of ["schema.graphql", "taurpc.ts", "operations.ts"]) {
+  for (const name of ["schema.graphql", "taurpc.ts"]) {
     await assertSameFile(
       join(first, name),
       join(generatedDirectory, name),
       `${name} drift`,
     );
   }
-  for (const feature of ["projects", "work-items", "workflows"]) {
+  for (const target of await typedDocumentTargets(join(studioRoot, "src"))) {
     await assertSameFile(
-      join(first, "worktracker", feature, "manifest.ts"),
-      join(studioRoot, "src/features", feature, "generated/manifest.ts"),
-      `${feature} operation manifest drift`,
+      join(first, "typed-documents", target.targetRelative),
+      join(studioRoot, "src", target.targetRelative),
+      `${target.targetRelative} drift`,
     );
   }
   await assertSameFile(
-    join(first, "worktracker/work-items/attachments.ts"),
-    join(studioRoot, "src/features/work-items/generated/attachments.ts"),
-    "work-items attachment operation drift",
-  );
-  await assertSameFile(
-    join(first, "settings/keybindings.ts"),
-    join(studioRoot, "src/features/settings/generated/keybindings.ts"),
-    "settings keybinding operation drift",
-  );
-  await assertSameFile(
-    join(first, "settings/profileSettings.ts"),
-    join(studioRoot, "src/features/settings/generated/profileSettings.ts"),
-    "settings profile operation drift",
-  );
-  await assertSameFile(
-    join(first, "settings/providerCatalog.ts"),
-    join(studioRoot, "src/features/settings/generated/providerCatalog.ts"),
-    "settings provider catalogue operation drift",
-  );
-  await assertSameFile(
-    join(first, "agent-status/attempts.ts"),
-    join(studioRoot, "src/features/agents/status/generated/attempts.ts"),
-    "agent status automation attempt operation drift",
-  );
-  await assertSameFile(
-    join(first, "agent-status/statusStream.ts"),
-    join(studioRoot, "src/features/agents/status/generated/statusStream.ts"),
-    "agent status stream subscription operation drift",
-  );
-  await assertSameFile(
-    join(first, "worktrees/worktreeStatus.ts"),
-    join(studioRoot, "src/features/agents/worktrees/generated/worktreeStatus.ts"),
-    "worktree live status operation drift",
-  );
-  await assertSameFile(
-    join(first, "worktrees/worktreeCreate.ts"),
-    join(studioRoot, "src/features/agents/worktrees/generated/worktreeCreate.ts"),
-    "worktree creation operation drift",
-  );
-  await assertSameFile(
-    join(first, "worktrees/worktreeDiscard.ts"),
-    join(studioRoot, "src/features/agents/worktrees/generated/worktreeDiscard.ts"),
-    "worktree discard operation drift",
-  );
-  await assertSameFile(
-    join(first, "documents/documentRegistry.ts"),
-    join(studioRoot, "src/features/documents/generated/documentRegistry.ts"),
-    "document registry operation drift",
-  );
-  await assertSameFile(
-    join(first, "documents/documentSave.ts"),
-    join(studioRoot, "src/features/documents/generated/documentSave.ts"),
-    "document save operation drift",
-  );
-  await assertSameFile(
-    join(first, "terminals/terminalSessions.ts"),
-    join(studioRoot, "src/features/agents/terminal/generated/terminalSessions.ts"),
-    "terminal session operation drift",
-  );
-  await assertSameFile(
-    join(first, "terminals/outputActivity.ts"),
-    join(studioRoot, "src/features/agents/terminal/generated/outputActivity.ts"),
-    "terminal output activity operation drift",
-  );
-  await assertSameFile(
-    join(first, "terminals/viewerLeases.ts"),
-    join(studioRoot, "src/features/agents/terminal/generated/viewerLeases.ts"),
-    "viewer lease operation drift",
-  );
-  await assertSameFile(
-    join(first, "execution/graphRuns.ts"),
-    join(studioRoot, "src/features/execution/generated/graphRuns.ts"),
-    "Graph Run operation drift",
+    join(first, "typed-documents", schemaTypesTargetRelative),
+    join(studioRoot, "src", schemaTypesTargetRelative),
+    "GraphQL schema TypeScript drift",
   );
   console.log("GraphQL foundation generation is deterministic and drift-free");
 } finally {

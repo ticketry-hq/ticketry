@@ -1,12 +1,16 @@
-import { studioRuntime } from "../../runtime";
+import { studioApolloClient } from "../../shared/apollo/client";
 import { documentLabel } from "./documentLabel";
 import {
   CompleteDirectoriesDocument,
   RefreshScratchDocumentRegistryDocument,
   RefreshTaskDocumentRegistryDocument,
-  type DesignDocumentRow,
-} from "./generated/documentRegistry";
+} from "./generated/documentRegistry.documents";
+import type { RefreshTaskDocumentRegistryMutation } from "./generated/documentRegistry.documents";
 import type { DesignDoc } from "./types";
+
+type DesignDocumentRow = RefreshTaskDocumentRegistryMutation[
+  "refresh_task_document_registry"
+][number];
 
 /**
  * Studio's view of the document registry.
@@ -34,15 +38,19 @@ export function listTaskDocuments(
   signal?: AbortSignal,
 ): Promise<DesignDoc[]> {
   void signal;
-  return studioRuntime().readWorkTracker({
-    graphQl: async (execute) => adapt(
-      (await execute(RefreshTaskDocumentRegistryDocument, {
+  return studioApolloClient()
+    .mutate({
+      mutation: RefreshTaskDocumentRegistryDocument,
+      variables: {
         taskId,
         projectId: projectId ?? null,
         moduleId: moduleId ?? null,
-      })).refresh_task_document_registry,
-    ),
-  });
+      },
+    })
+    .then((result) => {
+      if (!result.data) throw new Error("Task document registry returned no data.");
+      return adapt(result.data.refresh_task_document_registry);
+    });
 }
 
 export function listScratchDocuments(
@@ -50,12 +58,15 @@ export function listScratchDocuments(
   signal?: AbortSignal,
 ): Promise<DesignDoc[]> {
   void signal;
-  return studioRuntime().readWorkTracker({
-    graphQl: async (execute) => adapt(
-      (await execute(RefreshScratchDocumentRegistryDocument, { moduleId }))
-        .refresh_scratch_document_registry,
-    ),
-  });
+  return studioApolloClient()
+    .mutate({
+      mutation: RefreshScratchDocumentRegistryDocument,
+      variables: { moduleId },
+    })
+    .then((result) => {
+      if (!result.data) throw new Error("Scratch document registry returned no data.");
+      return adapt(result.data.refresh_scratch_document_registry);
+    });
 }
 
 /**
@@ -67,10 +78,14 @@ export function completeDirectories(
   signal?: AbortSignal,
 ): Promise<string[]> {
   void signal;
-  return studioRuntime().readWorkTracker({
-    graphQl: async (execute) => [
-      ...(await execute(CompleteDirectoriesDocument, { path }))
-        .directory_completions,
-    ],
-  });
+  return studioApolloClient()
+    .query({
+      query: CompleteDirectoriesDocument,
+      variables: { path },
+      fetchPolicy: "network-only",
+    })
+    .then((result) => {
+      if (!result.data) throw new Error("Directory completion returned no data.");
+      return [...result.data.directory_completions];
+    });
 }

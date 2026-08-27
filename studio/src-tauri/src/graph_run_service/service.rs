@@ -11,12 +11,16 @@ use crate::entities::{
 use crate::execution_graph::{
     automatic_candidates, manual_candidates, scheduling_facts, ExecutionMode, GraphAccess,
 };
+use crate::launch_authority::{compose_task_prompt, TaskPromptSource};
 use crate::terminal_launch::{CreateTerminalSession, TerminalLaunchKind, TerminalLaunchService};
 use crate::work_management::launch_policy::{
     CallerScope, LaunchPolicyDecision, LaunchPolicyRequest, LaunchPolicyResolver,
 };
 use serde::{Deserialize, Serialize};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
 
 static PRODUCTION_MUTATIONS_OPEN: AtomicBool = AtomicBool::new(false);
 
@@ -35,6 +39,7 @@ pub struct GraphRunService {
     database: DatabaseConnection,
     policy: LaunchPolicyResolver,
     terminal_launch: TerminalLaunchService,
+    mutation_lock: Arc<tokio::sync::Mutex<()>>,
     guarded: bool,
 }
 
@@ -69,6 +74,8 @@ struct StoredGraphRunPolicy {
     reasoning: Option<String>,
     required_skills: Vec<String>,
     module_id: String,
+    #[serde(default)]
+    module_link_path: Option<String>,
 }
 
 impl GraphRunService {
@@ -77,10 +84,12 @@ impl GraphRunService {
         policy: LaunchPolicyResolver,
         terminal_launch: TerminalLaunchService,
     ) -> Self {
+        let mutation_lock = terminal_launch.graph_run_mutation_lock();
         Self {
             database,
             policy,
             terminal_launch,
+            mutation_lock,
             guarded: false,
         }
     }
@@ -90,10 +99,12 @@ impl GraphRunService {
         policy: LaunchPolicyResolver,
         terminal_launch: TerminalLaunchService,
     ) -> Self {
+        let mutation_lock = terminal_launch.graph_run_mutation_lock();
         Self {
             database,
             policy,
             terminal_launch,
+            mutation_lock,
             guarded: true,
         }
     }
@@ -103,8 +114,9 @@ impl GraphRunService {
         request: GraphRunRequest,
     ) -> Result<GraphRunResult, GraphRunServiceError> {
         self.require_mutations_open()?;
+        let _mutation = self.mutation_lock.lock().await;
         self.require_header(&request.root_id, false).await?;
-        self.create_or_press(request).await
+        self.create_or_press_unlocked(request).await
     }
 
     pub async fn update(
@@ -112,8 +124,9 @@ impl GraphRunService {
         request: GraphRunRequest,
     ) -> Result<GraphRunResult, GraphRunServiceError> {
         self.require_mutations_open()?;
+        let _mutation = self.mutation_lock.lock().await;
         self.require_header(&request.root_id, true).await?;
-        self.create_or_press(request).await
+        self.create_or_press_unlocked(request).await
     }
 
     pub async fn delete(
@@ -122,11 +135,12 @@ impl GraphRunService {
         access: &crate::execution_graph::GraphAccess,
     ) -> Result<DeletedGraphRunResult, GraphRunServiceError> {
         self.require_mutations_open()?;
+        let _mutation = self.mutation_lock.lock().await;
         let graph_run = self
             .require_header(root_id, true)
             .await?
             .expect("checked header");
-        let reset = self.reset(root_id, access).await?;
+        let reset = self.reset_unlocked(root_id, access).await?;
         Ok(DeletedGraphRunResult {
             graph_run,
             cleared_task_ids: reset.cleared_task_ids,
@@ -141,7 +155,8 @@ impl GraphRunService {
         request: GraphRunRequest,
     ) -> Result<GraphRunResult, GraphRunServiceError> {
         self.require_mutations_open()?;
-        self.create_or_press(request).await
+        let _mutation = self.mutation_lock.lock().await;
+        self.create_or_press_unlocked(request).await
     }
 
     /// Clear the campaign and immediately execute it again through the same
@@ -151,8 +166,10 @@ impl GraphRunService {
         request: GraphRunRequest,
     ) -> Result<GraphRunResult, GraphRunServiceError> {
         self.require_mutations_open()?;
-        self.reset(&request.root_id, &request.access).await?;
-        self.create_or_press(request).await
+        let _mutation = self.mutation_lock.lock().await;
+        self.reset_unlocked(&request.root_id, &request.access)
+            .await?;
+        self.create_or_press_unlocked(request).await
     }
 
     /// Create an unarmed root or deliberately press an existing campaign.
@@ -161,6 +178,14 @@ impl GraphRunService {
     /// Each child claim then commits with its Runs and Terminal launch material;
     /// runtime creation happens only after that transaction closes.
     pub async fn create_or_press(
+        &self,
+        request: GraphRunRequest,
+    ) -> Result<GraphRunResult, GraphRunServiceError> {
+        let _mutation = self.mutation_lock.lock().await;
+        self.create_or_press_unlocked(request).await
+    }
+
+    async fn create_or_press_unlocked(
         &self,
         request: GraphRunRequest,
     ) -> Result<GraphRunResult, GraphRunServiceError> {
@@ -245,10 +270,23 @@ impl GraphRunService {
                 identity: identity.clone(),
                 selection: ClaimSelection::Manual,
             };
+            let prompt = compose_task_prompt(
+                &self.database,
+                TaskPromptSource {
+                    task_id: &child_id,
+                    module_id: &module_id,
+                    local_module_folder: decision.module_link.path.as_deref().unwrap_or_default(),
+                    state_name: None,
+                    workflow_prompt: &decision.prompt,
+                    additional_user_input: None,
+                    design_directory: None,
+                },
+            )
+            .await?;
             let accepted = self
                 .terminal_launch
                 .prepare_with_participant(
-                    terminal_request(&decision, &identity, &child_id, &module_id),
+                    terminal_request(&decision, &identity, &child_id, &module_id, prompt),
                     &claim,
                 )
                 .await?;
@@ -278,6 +316,7 @@ impl GraphRunService {
         &self,
         root_id: &str,
     ) -> Result<GraphRunAdvanceResult, GraphRunServiceError> {
+        let _mutation = self.mutation_lock.lock().await;
         let root_id = compact(root_id);
         let graph = graph_run::Entity::find_by_id(&root_id)
             .one(&self.database)
@@ -338,10 +377,29 @@ impl GraphRunService {
                 identity: identity.clone(),
                 selection: ClaimSelection::Automatic,
             };
+            let prompt = compose_task_prompt(
+                &self.database,
+                TaskPromptSource {
+                    task_id: &child_id,
+                    module_id: &policy.module_id,
+                    local_module_folder: policy.module_link_path.as_deref().unwrap_or_default(),
+                    state_name: None,
+                    workflow_prompt: &policy.prompt,
+                    additional_user_input: None,
+                    design_directory: None,
+                },
+            )
+            .await?;
             let accepted = self
                 .terminal_launch
                 .prepare_with_participant(
-                    stored_terminal_request(&policy, &identity, &child_id, &graph.project_id),
+                    stored_terminal_request(
+                        &policy,
+                        &identity,
+                        &child_id,
+                        &graph.project_id,
+                        prompt,
+                    ),
                     &claim,
                 )
                 .await?;
@@ -360,6 +418,15 @@ impl GraphRunService {
     }
 
     pub async fn reset(
+        &self,
+        root_id: &str,
+        access: &crate::execution_graph::GraphAccess,
+    ) -> Result<ResetGraphRunResult, GraphRunServiceError> {
+        let _mutation = self.mutation_lock.lock().await;
+        self.reset_unlocked(root_id, access).await
+    }
+
+    async fn reset_unlocked(
         &self,
         root_id: &str,
         access: &crate::execution_graph::GraphAccess,
@@ -492,6 +559,7 @@ fn terminal_request(
     identity: &ClaimGeneration,
     child_id: &str,
     module_id: &str,
+    prompt: String,
 ) -> CreateTerminalSession {
     CreateTerminalSession {
         client_request_id: identity.request_id.clone(),
@@ -504,7 +572,7 @@ fn terminal_request(
         model: decision.model.clone(),
         reasoning: decision.reasoning.clone(),
         policy_reference: Some(decision.policy_identity.clone()),
-        prompt: Some(decision.prompt.clone()),
+        prompt: Some(prompt),
         resume_from_agent_run_id: None,
         automation_attempt_id: None,
         required_skills: decision.required_skills.clone(),
@@ -521,6 +589,7 @@ fn stored_terminal_request(
     identity: &ClaimGeneration,
     child_id: &str,
     project_id: &str,
+    prompt: String,
 ) -> CreateTerminalSession {
     CreateTerminalSession {
         client_request_id: identity.request_id.clone(),
@@ -533,7 +602,7 @@ fn stored_terminal_request(
         model: policy.model.clone(),
         reasoning: policy.reasoning.clone(),
         policy_reference: Some(policy.policy_identity.clone()),
-        prompt: Some(policy.prompt.clone()),
+        prompt: Some(prompt),
         resume_from_agent_run_id: None,
         automation_attempt_id: None,
         required_skills: policy.required_skills.clone(),

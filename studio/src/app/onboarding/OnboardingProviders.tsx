@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { apiErrorMessage } from "../../shared/api/errors";
 import type {
   ConfigurableProvider,
@@ -46,6 +46,7 @@ export function OnboardingProviders({ continueLabel, onContinue }: Props) {
     useState<LaunchDefaultPickerValue>(EMPTY_DEFAULT);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const hydratedCatalog = useRef(false);
   const catalogQuery = useProviderCatalogQuery();
   const configurableCapabilitiesQuery =
     useConfigurableProviderCapabilitiesQuery();
@@ -55,18 +56,19 @@ export function OnboardingProviders({ continueLabel, onContinue }: Props) {
 
   useEffect(() => {
     const value = catalogQuery.data;
-    if (value) {
-        // An absent backend setting intentionally reads as all providers active
-        // with no default for pre-onboarding compatibility. On a pending first
-        // run that is not a declaration: only a catalog completed by this pane
-        // (and therefore carrying a default) is restored after a reload.
-        if (value.global_default) {
-          setActivated(value.activated_providers);
-          setLaunchDefault(pickerValueFrom(value));
-        } else {
-          setActivated([]);
-          setLaunchDefault(EMPTY_DEFAULT);
-        }
+    if (value && !hydratedCatalog.current) {
+      hydratedCatalog.current = true;
+      // An absent backend setting intentionally reads as all providers active
+      // with no default for pre-onboarding compatibility. On a pending first
+      // run that is not a declaration: only a catalog completed by this pane
+      // (and therefore carrying a default) is restored after a reload.
+      if (value.global_default) {
+        setActivated(value.activated_providers);
+        setLaunchDefault(pickerValueFrom(value));
+      } else {
+        setActivated([]);
+        setLaunchDefault(EMPTY_DEFAULT);
+      }
     }
   }, [catalogQuery.data]);
 

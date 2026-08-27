@@ -1,8 +1,8 @@
 import {
-  selectScratchLifecycleChips,
   toAgentLifecycle,
-  useAgentStatusStore,
+  useScratchLifecycleChips,
   type AgentLifecycle,
+  type TaskLifecycleChip,
 } from "../status";
 import { LifecycleBadge } from "../terminal/LifecycleBadge";
 
@@ -13,7 +13,7 @@ interface Props {
 }
 
 function aggregateLifecycle(
-  chips: ReturnType<typeof selectScratchLifecycleChips>,
+  chips: readonly TaskLifecycleChip[],
 ): AgentLifecycle {
   let aggregate: AgentLifecycle = "idle";
   for (const chip of chips) {
@@ -33,11 +33,7 @@ export function ScratchStateBadge({
   moduleId,
   className,
 }: Props) {
-  const chips = useAgentStatusStore((status) =>
-    projectId && moduleId
-      ? selectScratchLifecycleChips(status, projectId, moduleId)
-      : [],
-  );
+  const chips = useScratchLifecycleChips(projectId ?? "", moduleId ?? "");
   if (chips.length === 0) return null;
 
   return (

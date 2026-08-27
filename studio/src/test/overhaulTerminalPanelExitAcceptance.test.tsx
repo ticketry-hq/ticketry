@@ -18,7 +18,7 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useGlobalKeymap } from "../app/navigation/useGlobalKeymap";
-import { useAgentStatusStore } from "../features/agents/status/store";
+import { useAgentStatusStore } from "../features/agents/status/testStore";
 import {
   selectModuleLifecycleCounts,
   selectScratchLifecycleChips,
@@ -233,7 +233,6 @@ describe("terminal panel shell exit acceptance", () => {
       editViewZone: "active-tab-body",
       editViewBodyEngaged: false,
       activeByTask: {},
-      modalStack: [],
     });
     useStudioStore.setState({ selectedProjectId: "project-1" });
     seedConfig({

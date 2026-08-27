@@ -17,8 +17,6 @@ pub mod state;
 pub mod transition_occurrence;
 pub mod workspace;
 
-pub mod prelude;
-
 /// Register the generated WorkTracker read graph. Audited writes are installed
 /// separately by `work_management::graphql`, one operation at a time; every
 /// other generated mutation remains private.

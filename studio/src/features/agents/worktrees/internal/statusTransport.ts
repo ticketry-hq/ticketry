@@ -8,12 +8,14 @@
  * at the Slice 4 handoff and refuses. What remains below it is the browser-only
  * development path, which has no in-process runtime to ask.
  */
-import { studioRuntime } from "../../../../runtime";
+import { studioApolloClient } from "../../../../shared/apollo/client";
 import {
   WorktreeStatusDocument,
-  type WorktreeStatusPayload,
-} from "../generated/worktreeStatus";
-import type { WorktreeContext, WorktreeStatus } from "./api";
+} from "../generated/worktreeStatus.documents";
+import type { WorktreeStatusQuery } from "../generated/worktreeStatus.documents";
+import type { WorktreeContext, WorktreeStatus } from "./types";
+
+export type WorktreeStatusPayload = WorktreeStatusQuery["worktree_status"];
 
 export function readWorktreeStatus(
   taskId: string,
@@ -22,12 +24,18 @@ export function readWorktreeStatus(
 ): Promise<WorktreeStatus> {
   void ctx;
   void signal;
-  return studioRuntime().readWorkTracker({
-    graphQl: async (execute) =>
-      adaptWorktreeStatus(
-        (await execute(WorktreeStatusDocument, { taskId })).worktree_status,
-      ),
-  });
+  return studioApolloClient()
+    .query({
+      query: WorktreeStatusDocument,
+      variables: { taskId },
+      fetchPolicy: "network-only",
+    })
+    .then(({ data }) => {
+      if (!data) throw new Error("Worktree status returned no data.");
+      return adaptWorktreeStatus(
+        data.worktree_status as WorktreeStatusPayload,
+      );
+    });
 }
 
 /**
@@ -39,7 +47,7 @@ export function adaptWorktreeStatus(
   payload: WorktreeStatusPayload,
 ): WorktreeStatus {
   return {
-    kind: payload.kind,
+    kind: payload.kind as WorktreeStatus["kind"],
     task_id: payload.task_id,
     top_level_task_id: payload.top_level_task_id,
     is_shared: payload.is_shared,

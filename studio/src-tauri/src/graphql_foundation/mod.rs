@@ -543,7 +543,7 @@ pub async fn adopt_worktracker_and_install(
                 error.to_string(),
             )
         })?;
-    let evidence = crate::work_management::adoption::adopt(data_directory)
+    crate::work_management::adoption::adopt(data_directory)
         .await
         .map_err(|error| {
             FoundationInitializationError::new(
@@ -634,7 +634,6 @@ pub async fn adopt_worktracker_and_install(
     .await?;
     verify_graphql_readiness(api).await?;
     Ok(AdoptedWorktracker {
-        evidence,
         runtime: ComposedCommandRuntime::new(composed, &settings_stores),
     })
 }

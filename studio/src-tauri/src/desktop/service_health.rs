@@ -99,5 +99,4 @@ mod tests {
         assert!(value.get("exitCode").is_none());
         assert!(value.get("processName").is_none());
     }
-
 }

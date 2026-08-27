@@ -35,7 +35,7 @@ function campaignFixture() {
 async function openCampaignDetails(): Promise<HTMLElement> {
   const stories = await screen.findByRole("region", { name: "Stories" });
   fireEvent.click(
-    within(stories).getByRole("treeitem", { name: /Campaign root/ }),
+    await within(stories).findByRole("treeitem", { name: /Campaign root/ }),
   );
   const details = screen.getByRole("region", { name: "Details" });
   await within(details).findByRole("button", { name: "Run subtree" });
@@ -133,6 +133,9 @@ describe("overhaul acceptance — subtree execution", () => {
       expect(
         within(details).queryByRole("button", { name: "Run serially" }),
       ).toBeNull(),
+    );
+    await waitFor(() =>
+      expect(hasToast("error", "is no longer available")).toBe(true),
     );
     expect(
       within(details).queryByRole("button", { name: "Run subtree" }),

@@ -4,7 +4,7 @@ import {
   type APIRequestContext,
   type Page,
 } from "@playwright/test";
-import { UpdateWorkTrackerWorkItemDocument } from "../src/features/work-items/generated/mutations";
+import { UpdateWorkTrackerWorkItemDocument } from "../src/features/work-items/generated/workItems.documents";
 import {
   acknowledgeOnboarding,
   createModule,

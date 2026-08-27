@@ -5,12 +5,12 @@
  * shapes. Converting once, here, keeps the rest of the consumer free of
  * generated types and gives the typed failure detail one place to be narrowed.
  */
-import type { AutomationAttemptPayload } from "../generated/attempts";
-import type { RunHoldingPayload } from "../generated/statusStream";
 import type {
   AgentRunScope,
+  AutomationAttemptPayload,
   AutomationAttemptRecord,
   RawLifecycleState,
+  RunHoldingPayload,
   RunRecord,
 } from "../types";
 
@@ -47,7 +47,7 @@ export function toAutomationAttemptRecord(
     root_attempt_id: payload.root_attempt_id,
     retry_of_attempt_id: payload.retry_of_attempt_id,
     work_item_id: payload.work_item_id,
-    status: payload.status,
+    status: payload.status as AutomationAttemptRecord["status"],
     error: payload.error,
     failure: toAttemptFailure(payload.failure),
     retryable: payload.retryable,

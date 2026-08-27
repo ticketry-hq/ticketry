@@ -6,7 +6,7 @@ import {
   presentDormantTerminalChips,
   type SessionTab,
 } from "../../../../../features/agents/terminal";
-import { useAgentStatusStore } from "../../../../../features/agents/status";
+import { useAgentStatusRuns } from "../../../../../features/agents/status";
 import {
   DEFAULT_WORKSPACE,
   useClientStore as useTicketWorkspaceStore,
@@ -59,7 +59,7 @@ export function useWorkspaceTabPresentation({
   // the same rule from the same durable records (#695). The run store supplies
   // liveness and, for a run still inside the status window, a second copy of
   // the launch snapshot the listing already carries.
-  const runs = useAgentStatusStore((state) => state.runs);
+  const runs = useAgentStatusRuns();
   const dormantChips = presentDormantTerminalChips({
     resumableSessions: resumable,
     history: visibleHistory,

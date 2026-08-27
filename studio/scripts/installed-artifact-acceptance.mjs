@@ -3,6 +3,8 @@ import { access, cp, mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
+import { resolveProductDataDirectory } from "../../scripts/product-identity.mjs";
+
 export class InstalledArtifactAcceptanceError extends Error {}
 
 const studioRoot = fileURLToPath(new URL("..", import.meta.url));
@@ -59,7 +61,7 @@ export function sanitizedDesktopEnvironment({ home, dataDirectory, resultPath })
 }
 
 export function acceptanceDataDirectory(home) {
-  return path.join(home, ".config", "worktracker-studio");
+  return resolveProductDataDirectory({ environment: { HOME: home } });
 }
 
 export function assertAcceptanceResult(result) {

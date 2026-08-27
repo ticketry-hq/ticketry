@@ -1,26 +1,26 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../shared/api/client", async () => {
-  const actual = await vi.importActual<typeof import("../shared/api/client")>(
-    "../shared/api/client",
+vi.mock("../features/projects", async () => {
+  const actual = await vi.importActual<typeof import("../features/projects")>(
+    "../features/projects",
   );
   return {
     ...actual,
-    getWorkspace: vi.fn(),
+    readWorkspace: vi.fn(),
     acknowledgeOnboarding: vi.fn(),
   };
 });
 
-import * as api from "../shared/api/client";
+import * as api from "../features/projects";
 import {
   acknowledgeOnboarding as acknowledgeOnboardingAction,
   getOnboardingRequiredSnapshot,
   loadWorkspaceState,
 } from "../app/onboarding/onboardingStore";
-import { queryClient } from "../shared/query/queryClient";
-import { queryKeys } from "../shared/query/keys";
+import { WorkTrackerWorkspaceDocument } from "../features/projects/generated/projects.documents";
+import { studioApolloClient } from "../shared/apollo/client";
 
-const getWorkspace = api.getWorkspace as ReturnType<typeof vi.fn>;
+const getWorkspace = api.readWorkspace as ReturnType<typeof vi.fn>;
 const acknowledgeOnboarding = api.acknowledgeOnboarding as ReturnType<typeof vi.fn>;
 
 const workspace = (onboarding_required: boolean) => ({
@@ -30,10 +30,23 @@ const workspace = (onboarding_required: boolean) => ({
   onboarding_required,
 });
 
+function seedWorkspace(onboardingRequired: boolean): void {
+  const data = {
+    workspace: {
+      __typename: "WorktrackerWorkspaceConnection",
+      nodes: [{
+        __typename: "WorktrackerWorkspace",
+        ...workspace(onboardingRequired),
+      }],
+    },
+  };
+  studioApolloClient().writeQuery({ query: WorkTrackerWorkspaceDocument, data });
+}
+
 beforeEach(() => {
   getWorkspace.mockReset();
   acknowledgeOnboarding.mockReset();
-  queryClient.setQueryData(queryKeys.workspace, false);
+  seedWorkspace(false);
 });
 
 describe("onboardingStore", () => {
@@ -49,7 +62,7 @@ describe("onboardingStore", () => {
 
   it("swallows a failing load: resolves and leaves onboarding not required", async () => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
-    queryClient.setQueryData(queryKeys.workspace, true);
+    seedWorkspace(true);
     getWorkspace.mockRejectedValue(new TypeError("Failed to fetch"));
 
     await expect(
@@ -59,7 +72,7 @@ describe("onboardingStore", () => {
   });
 
   it("acknowledgement clears onboardingRequired", async () => {
-    queryClient.setQueryData(queryKeys.workspace, true);
+    seedWorkspace(true);
     acknowledgeOnboarding.mockResolvedValue(workspace(false));
 
     await acknowledgeOnboardingAction();

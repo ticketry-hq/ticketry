@@ -7,7 +7,7 @@ import {
   CreateViewerLeaseDocument,
   DeleteViewerLeaseDocument,
   UpdateViewerLeaseDocument,
-} from "../generated/viewerLeases";
+} from "../generated/viewerLeases.documents";
 
 export interface ViewerLeaseGrant {
   readonly generation: string;

@@ -7,9 +7,11 @@
  * `null` — it is skipped rather than guessed at, and the caller leaves its
  * holding untouched.
  */
-import type { RunStatusEventFrame } from "../generated/statusStream";
-import type { AutomationAttemptPayload } from "../generated/attempts";
-import type { RunHoldingPayload } from "../generated/statusStream";
+import type {
+  AutomationAttemptPayload,
+  RunHoldingPayload,
+  RunStatusEventFrame,
+} from "../types";
 import { toAutomationAttemptRecord, toRunRecord } from "./statusHoldingAdapters";
 import type {
   AutomationAttemptRecord,
@@ -55,6 +57,9 @@ export interface AgentRunActivityFact {
 export interface WorkItemFact {
   readonly family: "work_item";
   readonly workItemId: string;
+  readonly projectId: string | null;
+  readonly moduleId: string | null;
+  readonly itemKind: "module" | "task" | "unknown";
   readonly removed: boolean;
   readonly membershipChanged: boolean;
 }
@@ -210,9 +215,20 @@ export function readStatusFact(frame: RunStatusEventFrame): StatusFact | null {
     case WORK_ITEM_DELETED: {
       const workItemId = text(payload.workItemId) ?? text(frame.work_item_id);
       if (workItemId === null) return null;
+      const hasModuleId = Object.prototype.hasOwnProperty.call(payload, "moduleId");
+      const moduleId = text(payload.moduleId);
       return {
         family: "work_item",
         workItemId,
+        projectId: text(payload.projectId) ?? text(frame.project_id),
+        moduleId,
+        itemKind: !hasModuleId
+          ? "unknown"
+          : payload.moduleId === null
+            ? "module"
+            : moduleId === null
+              ? "unknown"
+              : "task",
         removed: frame.event_kind === WORK_ITEM_DELETED,
         // A fact that does not claim a membership change never forces a
         // containing-collection refetch.

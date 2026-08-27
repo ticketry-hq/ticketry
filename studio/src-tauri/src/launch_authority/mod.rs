@@ -11,13 +11,19 @@
 //! profile, the document registry, and the run's worktree-derived
 //! directories. Nothing is echoed back from the request, so durable launch
 //! material is a copy of policy rather than a copy of the caller.
+//!
+//! Task prompt composition also lives here so interactive launches, Run Now,
+//! auto-start, retry, and Graph Run children all add the same durable Work
+//! Item facts to their resolved workflow prompt.
 
 mod error;
 mod facts;
 mod material;
 mod service;
 mod sources;
+mod task_prompt;
 
 pub use error::{LaunchAuthorityError, LaunchAuthorityErrorCode};
 pub use material::ResolvedLaunchMaterial;
 pub use service::{InteractiveLaunchAuthority, LaunchAuthorityService};
+pub(crate) use task_prompt::{compose_task_prompt, TaskPromptSource};

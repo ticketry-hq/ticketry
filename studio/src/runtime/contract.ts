@@ -1,6 +1,6 @@
 import type { UserNotice } from "./userNotice";
 import type { TypedDocumentNode } from "../graphql-foundation/typedDocument";
-import type { CreateGraphQlTransportProxy } from "../graphql-foundation/foundationClient";
+import type { CreateGraphQlTransportProxy } from "./graphQlTransport";
 
 export type StudioPlatform = "browser" | "desktop";
 
@@ -54,6 +54,8 @@ export interface RuntimeStartupConfiguration {
 export interface StudioRuntime {
   readonly platform: StudioPlatform;
   readonly capabilities: RuntimeCapabilities;
+  /** The configured GraphQL transport used by both imperative reads and Apollo. */
+  readonly graphQlTransport: CreateGraphQlTransportProxy;
   readWorkTracker<TResult>(
     routes: WorkTrackerReadRoutes<TResult>,
   ): Promise<TResult>;
@@ -68,7 +70,11 @@ export interface StudioRuntime {
    * platform has none.
    */
   statusStream(): CreateGraphQlTransportProxy | null;
-  /** The browser terminal WebSocket endpoint, when this platform exposes one. */
+  /**
+   * The derived WebSocket URL a browser terminal client attaches through, when
+   * this platform serves terminal bytes over HTTP. Optional because the
+   * desktop attaches through its own Tauri viewer commands.
+   */
   terminalWebSocketUrl?(): string;
   /**
    * The URL a registered document or one of its relative assets is served

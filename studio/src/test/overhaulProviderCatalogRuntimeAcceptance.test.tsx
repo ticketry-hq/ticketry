@@ -6,7 +6,6 @@ import {
   type ModelConfigurationPanelHandle,
   useActivatedProviders,
 } from "../features/workflows";
-import { queryClient } from "../shared/query/queryClient";
 import { initializeStudioRuntime } from "../runtime";
 import { createBrowserRuntime } from "../runtime/browserRuntime";
 import { createDesktopRuntime } from "../runtime/desktopRuntime";
@@ -29,35 +28,45 @@ const allProviders = [
 
 function payload(activated: readonly string[]) {
   return {
+    __typename: "ProviderCatalog",
     configurable_providers: allProviders.map((provider) => ({
+      __typename: "WorktrackerProvider",
       ...provider,
       activated: activated.includes(provider.slug),
     })),
     providers: allProviders
       .filter((provider) => activated.includes(provider.slug))
-      .map((provider) => ({ ...provider, activated: true })),
+      .map((provider) => ({
+        __typename: "WorktrackerProvider",
+        ...provider,
+        activated: true,
+      })),
     agent_models: [
       {
+        __typename: "WorktrackerAgentmodel",
         id: "m-sonnet",
         provider: "p-claude",
         name: "sonnet",
-        reasoning_levels: { nodes: [{ reasoning_level_id: "r-high" }] },
+        reasoning_levels: { __typename: "WorktrackerAgentmodelreasoninglevelConnection", nodes: [{ __typename: "WorktrackerAgentmodelreasoninglevel", id: 1, reasoning_level_id: "r-high" }] },
       },
       {
+        __typename: "WorktrackerAgentmodel",
         id: "m-gpt",
         provider: "p-codex",
         name: "gpt-5.6-luna",
-        reasoning_levels: { nodes: [{ reasoning_level_id: "r-high" }] },
+        reasoning_levels: { __typename: "WorktrackerAgentmodelreasoninglevelConnection", nodes: [{ __typename: "WorktrackerAgentmodelreasoninglevel", id: 2, reasoning_level_id: "r-high" }] },
       },
       {
+        __typename: "WorktrackerAgentmodel",
         id: "m-gemini",
         provider: "p-gemini",
         name: "gemini-pro",
-        reasoning_levels: { nodes: [{ reasoning_level_id: "r-high" }] },
+        reasoning_levels: { __typename: "WorktrackerAgentmodelreasoninglevelConnection", nodes: [{ __typename: "WorktrackerAgentmodelreasoninglevel", id: 3, reasoning_level_id: "r-high" }] },
       },
     ],
-    reasoning_levels: [{ id: "r-high", name: "high" }],
+    reasoning_levels: [{ __typename: "WorktrackerReasoninglevel", id: "r-high", name: "high" }],
     global_default: {
+      __typename: "GlobalLaunchDefault",
       provider: activated.includes("gemini") ? "gemini" : "codex",
       model: activated.includes("gemini") ? "gemini-pro" : "gpt-5.6-luna",
       reasoning: "high",
@@ -76,7 +85,6 @@ function PickerProbe() {
 
 describe("provider catalogue desktop runtime acceptance", () => {
   afterEach(() => {
-    queryClient.removeQueries();
     initializeStudioRuntime(createBrowserRuntime({ environment: {} }));
     vi.unstubAllGlobals();
   });
@@ -120,7 +128,6 @@ describe("provider catalogue desktop runtime acceptance", () => {
         graphql_unsubscribe: vi.fn(),
       }),
     }));
-    queryClient.removeQueries();
 
     const panel = createRef<ModelConfigurationPanelHandle>();
     render(
@@ -132,8 +139,10 @@ describe("provider catalogue desktop runtime acceptance", () => {
     );
 
     const region = await screen.findByRole("region", { name: "Model configuration" });
-    expect(screen.getByRole("status", { name: "Launch picker providers" }))
-      .toHaveTextContent("claude,codex");
+    await waitFor(() => {
+      expect(screen.getByRole("status", { name: "Launch picker providers" }))
+        .toHaveTextContent("claude,codex");
+    });
     fireEvent.click(within(region).getByRole("checkbox", { name: "Activate gemini" }));
     fireEvent.change(within(region).getByRole("combobox", { name: "Agent/provider" }), {
       target: { value: "gemini" },

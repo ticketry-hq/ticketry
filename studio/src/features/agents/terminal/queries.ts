@@ -1,16 +1,20 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery } from "@apollo/client/react";
 import type {
   PersistedTerminalSession,
   ResumableTerminalSession,
 } from "../types";
 import {
-  readScratchResumableTerminalSessions,
-  readScratchTerminalSessions,
-  readTaskResumableTerminalSessions,
-  readTaskTerminalSessions,
-} from "./internal/sessionReadTransport";
-import { queryClient } from "../../../shared/query/queryClient";
-import { queryKeys } from "../../../shared/query/keys";
+  adaptResumableTerminalSessions,
+  adaptTerminalSessions,
+  TERMINAL_SESSION_PAGE_LIMIT,
+} from "./internal/sessionReadModel";
+import { studioApolloClient } from "../../../shared/apollo/client";
+import {
+  ScratchResumableTerminalSessionsDocument,
+  ScratchTerminalSessionsDocument,
+  TaskResumableTerminalSessionsDocument,
+  TaskTerminalSessionsDocument,
+} from "./generated/terminalSessions.documents";
 
 const EMPTY_SESSIONS: PersistedTerminalSession[] = [];
 const EMPTY_RESUMABLE_SESSIONS: ResumableTerminalSession[] = [];
@@ -20,17 +24,19 @@ export function usePersistedTerminalSessions(
   taskId: string | null,
 ): { sessions: PersistedTerminalSession[]; isFetched: boolean } {
   const query = useQuery(
+    TaskTerminalSessionsDocument,
     {
-      queryKey: taskId
-        ? queryKeys.terminalSessions.persisted(taskId)
-        : queryKeys.terminalSessions.persisted("none"),
-      queryFn: () => readTaskTerminalSessions(taskId!),
-      enabled: taskId !== null,
-      staleTime: 0,
+      client: studioApolloClient(),
+      variables: { taskId: taskId ?? "", limit: TERMINAL_SESSION_PAGE_LIMIT },
+      skip: !taskId,
     },
-    queryClient,
   );
-  return { sessions: query.data ?? EMPTY_SESSIONS, isFetched: query.isFetched };
+  return {
+    sessions: query.data
+      ? adaptTerminalSessions(query.data.terminal_sessions.sessions)
+      : EMPTY_SESSIONS,
+    isFetched: query.data !== undefined || query.error !== undefined,
+  };
 }
 
 /** The one immutable holding for a module scratch workspace's sessions. */
@@ -39,18 +45,23 @@ export function useScratchTerminalSessions(
   moduleId: string | null,
 ): { sessions: PersistedTerminalSession[]; isFetched: boolean } {
   const query = useQuery(
+    ScratchTerminalSessionsDocument,
     {
-      queryKey:
-        projectId && moduleId
-          ? queryKeys.terminalSessions.scratch(projectId, moduleId)
-          : queryKeys.terminalSessions.scratch("none", null),
-      queryFn: () => readScratchTerminalSessions(projectId!, moduleId!),
-      enabled: projectId !== null && moduleId !== null,
-      staleTime: 0,
+      client: studioApolloClient(),
+      variables: {
+        projectId: projectId ?? "",
+        moduleId: moduleId ?? "",
+        limit: TERMINAL_SESSION_PAGE_LIMIT,
+      },
+      skip: !projectId || !moduleId,
     },
-    queryClient,
   );
-  return { sessions: query.data ?? EMPTY_SESSIONS, isFetched: query.isFetched };
+  return {
+    sessions: query.data
+      ? adaptTerminalSessions(query.data.terminal_sessions.sessions)
+      : EMPTY_SESSIONS,
+    isFetched: query.data !== undefined || query.error !== undefined,
+  };
 }
 
 /** Ended provider sessions that can be resumed into a new terminal run. */
@@ -59,22 +70,25 @@ export function useResumableTerminalSessions(
   projectId: string | null,
   moduleId: string | null,
 ): ResumableTerminalSession[] {
-  const enabled = taskId !== null || (projectId !== null && moduleId !== null);
-  const query = useQuery(
+  const taskQuery = useQuery(
+    TaskResumableTerminalSessionsDocument,
     {
-      queryKey: queryKeys.terminalSessions.resumable(
-        taskId,
-        taskId ? null : projectId,
-        taskId ? null : moduleId,
-      ),
-      queryFn: () =>
-        taskId
-          ? readTaskResumableTerminalSessions(taskId)
-          : readScratchResumableTerminalSessions(projectId!, moduleId!),
-      enabled,
-      staleTime: 0,
+      client: studioApolloClient(),
+      variables: { taskId: taskId ?? "" },
+      skip: !taskId,
     },
-    queryClient,
   );
-  return query.data ?? EMPTY_RESUMABLE_SESSIONS;
+  const scratchQuery = useQuery(
+    ScratchResumableTerminalSessionsDocument,
+    {
+      client: studioApolloClient(),
+      variables: { projectId: projectId ?? "", moduleId: moduleId ?? "" },
+      skip: Boolean(taskId) || !projectId || !moduleId,
+    },
+  );
+  const data = taskQuery.data?.resumable_sessions
+    ?? scratchQuery.data?.resumable_sessions;
+  return data
+    ? adaptResumableTerminalSessions(data)
+    : EMPTY_RESUMABLE_SESSIONS;
 }

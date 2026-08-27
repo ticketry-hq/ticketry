@@ -11,6 +11,7 @@ import {
   grantsEveryLease,
   type RecordedGraphQlOperation,
 } from "./desktopGraphQlRuntime";
+import { documentOperationName } from "../graphql-foundation/typedDocument";
 
 const tauri = vi.hoisted(() => ({
   invoke: vi.fn(),
@@ -202,8 +203,8 @@ describe("native viewer attachment acceptance", () => {
       selectedTaskId: "task-1",
       children: <MountedSelectedTicketTerminal />,
       graphQlExecute: async (document, variables) => {
-        if (document.operationName.endsWith("ViewerLease")) {
-          leaseOperations.push({ operationName: document.operationName, variables });
+        if (documentOperationName(document).endsWith("ViewerLease")) {
+          leaseOperations.push({ operationName: documentOperationName(document), variables });
           return grantsEveryLease(document, variables);
         }
         return http.executeGraphQl(document, variables);

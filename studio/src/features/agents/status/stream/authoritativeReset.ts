@@ -21,7 +21,7 @@
  * and retries the subscription, and the next reset drains the same facts on top
  * of holdings that actually loaded.
  */
-import type { RunStatusEventFrame } from "../generated/statusStream";
+import type { RunStatusEventFrame } from "../types";
 
 export interface AuthoritativeResetOptions {
   /** Refetch every canonical holding. Rejecting means "do not baseline". */

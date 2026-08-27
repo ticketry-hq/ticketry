@@ -20,7 +20,7 @@ use super::outcome::{Adoption, AdoptionPath, EventBoundary, Readiness, EVIDENCE_
 use super::phase::{AdoptionPlan, Phase};
 use super::protection::Protection;
 use super::{application_version, bridge, event_boundary, exclusive, fault, inventory};
-use super::{postflight, RUST_LEAF};
+use super::{postflight, semantic_bridge, RUST_LEAF};
 use crate::installation_classification;
 
 /// Commit ownership and validate the result. Readiness stays closed.
@@ -37,6 +37,7 @@ pub(super) async fn settle(
     generation: String,
     protection: Option<Protection>,
     provided_bridges: &[String],
+    semantic_bridges: &[String],
     plan: &AdoptionPlan,
 ) -> Result<Adoption, AdoptionFailure> {
     let database_path = data_directory.join("state.db");
@@ -48,6 +49,7 @@ pub(super) async fn settle(
             &generation,
             protection.as_ref(),
             provided_bridges,
+            semantic_bridges,
             plan,
         )
         .await;
@@ -103,6 +105,7 @@ pub(crate) async fn settle_import(
         generation,
         None,
         bridges,
+        &[],
         plan,
     )
     .await
@@ -165,6 +168,7 @@ pub(super) async fn commit_ownership(
     generation: &str,
     protection: Option<&Protection>,
     provided_bridges: &[String],
+    semantic_bridges: &[String],
     plan: &AdoptionPlan,
 ) -> Result<(Inventory, String, bool, Vec<String>), AdoptionFailure> {
     let original = match protection {
@@ -191,7 +195,7 @@ pub(super) async fn commit_ownership(
         Some(row) => row.adoption_id.clone(),
         None => uuid::Uuid::new_v4().simple().to_string(),
     };
-    let bridge_ids = existing.as_ref().map_or_else(
+    let mut bridge_ids = existing.as_ref().map_or_else(
         || {
             let selected = protection
                 .and_then(|protection| protection.bridge)
@@ -205,8 +209,56 @@ pub(super) async fn commit_ownership(
         },
         |row| row.bridges.clone(),
     );
+    bridge_ids.extend_from_slice(semantic_bridges);
+    bridge_ids.sort();
+    bridge_ids.dedup();
     let mut expected = original;
-    if existing.is_none() {
+    if !semantic_bridges.is_empty() {
+        if existing.is_none() || protection.is_none() {
+            return Err(AdoptionFailure::new(
+                Phase::BridgeWork,
+                Refusal::BridgePreconditionFailed,
+                "a semantic repair requires a Rust-owned ledger and verified snapshot",
+            ));
+        }
+        let transaction = database.begin().await.map_err(|error| {
+            AdoptionFailure::new(Phase::BridgeWork, Refusal::LedgerFailed, error.to_string())
+        })?;
+        let repaired = async {
+            let inventory = semantic_bridge::apply(&transaction, semantic_bridges).await?;
+            fault(plan, Phase::BridgeWork)?;
+            Ok::<Inventory, AdoptionFailure>(inventory)
+        }
+        .await;
+        match repaired {
+            Ok(inventory) => {
+                expected = inventory;
+                let row = ownership_row(
+                    &adoption_id,
+                    generation,
+                    &fingerprint,
+                    protection,
+                    &expected,
+                    bridge_ids.clone(),
+                );
+                if let Err(error) = ledger::replace(&transaction, &row).await {
+                    let _ = transaction.rollback().await;
+                    return Err(error);
+                }
+                transaction.commit().await.map_err(|error| {
+                    AdoptionFailure::new(
+                        Phase::LedgerCommit,
+                        Refusal::LedgerFailed,
+                        error.to_string(),
+                    )
+                })?;
+            }
+            Err(error) => {
+                let _ = transaction.rollback().await;
+                return Err(error);
+            }
+        }
+    } else if existing.is_none() {
         if let Some(selected) = protection.and_then(|protection| protection.bridge) {
             bridge::set_foreign_keys(database, false).await?;
             let transaction = database.begin().await.map_err(|error| {

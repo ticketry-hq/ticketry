@@ -7,6 +7,7 @@ import type { ServiceHealth, StudioRuntime } from "../runtime";
 function runtime(health: ServiceHealth): StudioRuntime {
   return {
     platform: "desktop",
+    graphQlTransport: () => { throw new Error("not used"); },
     capabilities: {
       statusFeed: true,
       nativeLifecycle: true,

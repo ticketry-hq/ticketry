@@ -1,14 +1,16 @@
-import { FoundationGraphQlError } from "../../../../graphql-foundation/foundationClient";
+import { FoundationGraphQlError } from "../../../../shared/apollo/errorLink";
 import { studioRuntime } from "../../../../runtime";
 import { graphQlMutationError } from "../../../../shared/api/graphqlError";
-import { queryClient } from "../../../../shared/query/queryClient";
 import type { ResumableTerminalSession } from "../../types";
+import { refreshTerminalHoldings } from "../refresh";
 import {
   CreateTerminalSessionDocument,
   ResumeTerminalSessionDocument,
   UpdateTerminalSessionDocument,
-  type CreateTerminalSessionVariables,
-} from "../generated/terminalSessions";
+} from "../generated/terminalSessions.documents";
+import type {
+  CreateTerminalSessionMutationVariables as CreateTerminalSessionVariables,
+} from "../generated/terminalSessions.documents";
 
 const DEFAULT_COLUMNS = 80;
 const DEFAULT_ROWS = 24;
@@ -48,13 +50,6 @@ async function retryTransport<TResult>(operation: () => Promise<TResult>): Promi
     if (error instanceof FoundationGraphQlError) throw error;
     return operation();
   }
-}
-
-async function refreshTerminalHoldings(): Promise<void> {
-  await queryClient.invalidateQueries({
-    queryKey: ["terminal-sessions"],
-    refetchType: "active",
-  });
 }
 
 function launchVariables(

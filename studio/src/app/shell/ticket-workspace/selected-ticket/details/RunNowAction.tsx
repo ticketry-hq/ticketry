@@ -20,6 +20,7 @@ export function RunNowAction({
   const issueType = issueTypes.find((candidate) => candidate.id === item.issue_type);
   const currentState = states.find((candidate) => candidate.id === item.state);
   const transitions = useRunNowTransitions(
+    item.project_id,
     item.issue_type,
     issueType?.name === "Story" && currentState?.name === "Ideas",
   );

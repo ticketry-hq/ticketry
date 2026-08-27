@@ -122,5 +122,4 @@ mod tests {
 
         assert_eq!(configuration.service_health, failed);
     }
-
 }

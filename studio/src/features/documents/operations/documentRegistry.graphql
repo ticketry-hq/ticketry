@@ -25,3 +25,32 @@ mutation RefreshScratchDocumentRegistry($moduleId: String!) {
 query CompleteDirectories($path: String!) {
   directory_completions(path: $path)
 }
+
+query TaskDocumentRegistry($taskId: String!) {
+  document_registry: designDocuments(
+    filters: { taskId: { eq: $taskId } }
+    orderBy: { relPath: ASC }
+  ) {
+    nodes {
+      id
+      relPath
+      contentDigest
+    }
+  }
+}
+
+query ScratchDocumentRegistry($moduleId: String!) {
+  document_registry: designDocuments(
+    filters: {
+      moduleId: { eq: $moduleId }
+      scope: { eq: "scratch" }
+    }
+    orderBy: { relPath: ASC }
+  ) {
+    nodes {
+      id
+      relPath
+      contentDigest
+    }
+  }
+}

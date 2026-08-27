@@ -4,9 +4,8 @@ use sea_orm::{DatabaseConnection, EntityTrait};
 use crate::entities::runs::agent_run;
 use crate::launch_paths::LaunchPathsService;
 use crate::launch_planning::{
-    build_document_chat_prompt, build_instant_prompt, build_planning_prompt, build_task_prompt,
-    provider_contract, DocumentChatPrompt, InstantPrompt, PlanningPrompt, Provider,
-    TaskPromptInput,
+    build_document_chat_prompt, build_instant_prompt, build_planning_prompt, provider_contract,
+    DocumentChatPrompt, InstantPrompt, PlanningPrompt, Provider,
 };
 use crate::settings_persistence::ProfileStore;
 use crate::terminal_launch::{CreateTerminalSession, TerminalLaunchKind};
@@ -18,6 +17,7 @@ use super::error::LaunchAuthorityError;
 use super::facts;
 use super::material::ResolvedLaunchMaterial;
 use super::sources::{activated_provider, launch_paths, local_module_folder, submitted};
+use super::task_prompt::{compose_task_prompt, TaskPromptSource};
 
 /// The seam the Terminal Launch service resolves an interactive request
 /// through. It exists as a trait so the launch service depends on the policy
@@ -91,25 +91,23 @@ impl LaunchAuthorityService {
                 idempotency_key: request.client_request_id.clone(),
             })
             .await?;
-        let task = facts::work_item(&self.database, &request.issue_id).await?;
-        let prompt_facts = facts::task_prompt_facts(
+        let paths = launch_paths(&self.paths, request).await?;
+        let prompt = compose_task_prompt(
             &self.database,
-            &task,
-            &decision.module_link.module_id,
-            decision.module_link.path.clone().unwrap_or_default(),
-            decision.state_name.clone(),
+            TaskPromptSource {
+                task_id: &request.issue_id,
+                module_id: &decision.module_link.module_id,
+                local_module_folder: decision.module_link.path.as_deref().unwrap_or_default(),
+                state_name: decision.state_name.as_deref(),
+                workflow_prompt: &decision.prompt,
+                // The one thing the caller contributes to a task prompt: the
+                // free text typed into the launch box, kept as user input
+                // rather than as authority.
+                additional_user_input: submitted(request.prompt.as_deref()),
+                design_directory: paths.design_directory_relative.as_deref(),
+            },
         )
         .await?;
-        let paths = launch_paths(&self.paths, request).await?;
-        let prompt = build_task_prompt(&TaskPromptInput {
-            facts: prompt_facts,
-            workflow_prompt: decision.prompt.clone(),
-            // The one thing the caller contributes to a task prompt: the free
-            // text typed into the launch box, kept as user input rather than
-            // as authority.
-            additional_user_input: submitted(request.prompt.as_deref()).map(str::to_owned),
-            design_directory: paths.design_directory_relative.clone(),
-        });
         Ok(ResolvedLaunchMaterial {
             provider: Some(decision.provider),
             model: decision.model,

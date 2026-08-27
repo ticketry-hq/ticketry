@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import { QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, vi } from "vitest";
 import type { WorkspaceLauncherContext } from "../app/shell/ticket-workspace/selected-ticket/SelectedTicketContent";
 
@@ -7,18 +6,6 @@ const terminalApi = vi.hoisted(() => ({
   createTerminalRun: vi.fn(),
   getDocuments: vi.fn(),
 }));
-
-// Terminal session reads moved to the Rust Terminal Session graph, so the seam
-// a test controls is the read transport, not a host API module.
-const terminalReads = vi.hoisted(() => {
-  const resumable = vi.fn();
-  return {
-    readTaskTerminalSessions: vi.fn(),
-    readScratchTerminalSessions: vi.fn(),
-    readTaskResumableTerminalSessions: resumable,
-    readScratchResumableTerminalSessions: resumable,
-  };
-});
 
 const terminalTransport = vi.hoisted(() => ({ attach: vi.fn() }));
 
@@ -32,17 +19,12 @@ vi.doMock("../features/agents/api/agentApi", async (importOriginal) => ({
   ...terminalApi,
 }));
 
-vi.doMock(
-  "../features/agents/terminal/internal/sessionReadTransport",
-  () => terminalReads,
-);
-
 vi.doMock("../features/agents/terminal/internal/terminalClientRuntime", () => ({
   terminalClientTransport: terminalTransport,
 }));
 
-vi.doMock("../shared/api/client", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../shared/api/client")>()),
+vi.doMock("./legacyApiFixture", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./legacyApiFixture")>()),
   ...providerApi,
 }));
 
@@ -116,7 +98,6 @@ const { seedConfig } = await import("../features/studio/stores/configStore");
 const { setProviderCapabilities } = await import(
   "../features/workflows/providerQueries"
 );
-const { queryClient } = await import("../shared/query/queryClient");
 const { useClientStore } = await import("../state/clientStore");
 
 class TestResizeObserver {
@@ -153,9 +134,6 @@ beforeEach(() => {
   });
   useTerminalStore.setState({ sessions: {}, sessionByRun: {} });
   terminalApi.getDocuments.mockResolvedValue({ documents: [] });
-  terminalReads.readTaskTerminalSessions.mockResolvedValue([]);
-  terminalReads.readScratchTerminalSessions.mockResolvedValue([]);
-  terminalReads.readTaskResumableTerminalSessions.mockResolvedValue([]);
   terminalApi.createTerminalRun.mockResolvedValue({ agent_run_id: "run-570" });
   terminalTransport.attach.mockImplementation((_params, onEvent) => {
     const handle = {
@@ -197,7 +175,7 @@ function workspaceView({
   children,
 }: WorkspaceViewOptions) {
   return (
-    <QueryClientProvider client={queryClient}>
+    <>
       {children}
       <SelectedTicketContent
         bucket={bucket}
@@ -207,7 +185,7 @@ function workspaceView({
         details={<div>Task details</div>}
         launchContext={launchContext}
       />
-    </QueryClientProvider>
+    </>
   );
 }
 
@@ -223,7 +201,6 @@ const providerCapability = (agent: string) => ({
 export {
   providerApi,
   providerCapability,
-  queryClient,
   setProviderCapabilities,
   terminalApi,
   terminalTransport,

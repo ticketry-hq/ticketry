@@ -4,7 +4,6 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { WorktreeBlock } from "../features/agents/worktrees";
 import { createDesktopRuntime } from "../runtime/desktopRuntime";
 import { initializeStudioRuntime } from "../runtime";
-import { queryClient } from "../shared/query/queryClient";
 
 const startup = {
   serviceHealth: {
@@ -89,7 +88,6 @@ async function installDesktopRuntime(requests: Request[]) {
 
 describe("worktree creation desktop runtime acceptance", () => {
   it("[overhaul-88] opts a task into a worktree by identity alone and renders the authoritative result", async () => {
-    queryClient.clear();
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
     const requests: Request[] = [];
@@ -141,7 +139,6 @@ describe("worktree creation desktop runtime acceptance", () => {
   });
 
   it("[overhaul-89] reuses one operation identity for the retries of one intent", async () => {
-    queryClient.clear();
     vi.stubGlobal("fetch", vi.fn());
     const requests: Request[] = [];
     await installDesktopRuntime(requests);
@@ -155,7 +152,6 @@ describe("worktree creation desktop runtime acceptance", () => {
     await screen.findByText("wt/CODIN-881-parent-story → main");
     first.unmount();
 
-    queryClient.clear();
     render(<WorktreeBlock taskId={TASK} moduleId="m1" ticketSeq={881} />);
     await waitFor(() =>
       expect(

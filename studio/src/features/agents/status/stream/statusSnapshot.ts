@@ -7,28 +7,15 @@
  * refused. Reconciling it would mark every run of the newly selected project
  * absent, and therefore exited.
  */
-import { useAgentStatusStore } from "../store";
-import type { RunStatusSnapshotFrame } from "../generated/statusStream";
+import { replaceAgentStatusSnapshot } from "../apolloHolding";
+import type { RunStatusSnapshotFrame } from "../types";
 import { toAutomationAttemptRecord, toRunRecord } from "./statusHoldingAdapters";
-
-/** Ended runs older than the visibility horizon leave the local holding. */
-const EXITED_RUN_RETENTION_MS = 30 * 24 * 60 * 60 * 1_000;
 
 /** Returns true when the snapshot was authoritative for the live project. */
 export function applySnapshotFrame(frame: RunStatusSnapshotFrame): boolean {
-  const runs = useAgentStatusStore.getState();
-  if (runs.projectId !== frame.project_id) return false;
-  runs.reconcileScope(
-    { project_id: frame.project_id, task_id: null },
+  return replaceAgentStatusSnapshot(
+    frame.project_id,
     frame.runs.map(toRunRecord),
-    frame.at,
-  );
-  runs.reconcileAutomationAttempts(
     frame.automation_attempts.map(toAutomationAttemptRecord),
   );
-  const cutoff = new Date(
-    Date.parse(frame.at) - EXITED_RUN_RETENTION_MS,
-  ).toISOString();
-  runs.pruneRuns(cutoff);
-  return true;
 }

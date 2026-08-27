@@ -7,10 +7,8 @@ import {
   getProjectsSnapshot,
 } from "../../features/projects";
 import { useStudioStore } from "../../features/projects";
-import { getModuleTreeSnapshot } from "../../features/work-items";
-import { getStatesSnapshot } from "../../shared/query/stateCatalog";
-import { queryClient } from "../../shared/query/queryClient";
-import { queryKeys } from "../../shared/query/keys";
+import { getModuleTreeSnapshot, getWorkItemSnapshot } from "../../features/work-items";
+import { getStatesSnapshot } from "../../features/projects";
 import type { Module, ModuleTree, Project, State, WorkItem } from "../../shared/api/types";
 import { useClientStore } from "../../state/clientStore";
 import type {
@@ -55,7 +53,7 @@ export function createNavigationContext(
   const tree = getModuleTreeSnapshot(project.selectedProjectId, ui.selectedModuleId);
   const itemsById = Object.fromEntries(
     tree.order.flatMap((id) => {
-      const item = queryClient.getQueryData<WorkItem>(queryKeys.workItems.byId(id));
+      const item = getWorkItemSnapshot(id);
       return item ? [[id, item] as const] : [];
     }),
   );

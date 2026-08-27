@@ -1,5 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { gql } from "@apollo/client";
 
 import DocViewer from "../app/shell/ticket-workspace/selected-ticket/documents/DocViewer";
 import {
@@ -10,6 +11,7 @@ import {
 import { initializeStudioRuntime } from "../runtime";
 import { createBrowserRuntime } from "../runtime/browserRuntime";
 import { createDesktopRuntime } from "../runtime/desktopRuntime";
+import { studioApolloClient } from "../shared/apollo/client";
 
 const startup = {
   serviceHealth: {
@@ -24,8 +26,8 @@ const startup = {
 /// The generated model rows the runtime returns: an identity and a relative
 /// path, and deliberately no absolute root, no provenance, and no label.
 const taskRows = [
-  { id: "doc-spec", relPath: "SPEC.MD", contentDigest: "digest-spec" },
-  { id: "doc-design", relPath: "notes/Design.HTML", contentDigest: null },
+  { __typename: "DesignDocuments", id: "doc-spec", relPath: "SPEC.MD", contentDigest: "digest-spec" },
+  { __typename: "DesignDocuments", id: "doc-design", relPath: "notes/Design.HTML", contentDigest: null },
 ];
 
 async function desktopStudio(): Promise<{ operations: string[] }> {
@@ -51,7 +53,7 @@ async function desktopStudio(): Promise<{ operations: string[] }> {
     return JSON.stringify({
       data: {
         refresh_scratch_document_registry: [
-          { id: "doc-plan", relPath: "Plan.md", contentDigest: "digest-plan" },
+          { __typename: "DesignDocuments", id: "doc-plan", relPath: "Plan.md", contentDigest: "digest-plan" },
         ],
       },
     });
@@ -116,6 +118,24 @@ describe("document registry desktop runtime acceptance", () => {
       "RefreshTaskDocumentRegistry",
       "RefreshScratchDocumentRegistry",
     ]);
+    expect(studioApolloClient().readFragment({
+      id: studioApolloClient().cache.identify({
+        __typename: "DesignDocuments",
+        id: "doc-spec",
+      }),
+      fragment: gql`
+        fragment CachedDocumentRegistryRow on DesignDocuments {
+          id
+          relPath
+          contentDigest
+        }
+      `,
+    })).toEqual({
+      __typename: "DesignDocuments",
+      id: "doc-spec",
+      relPath: "SPEC.MD",
+      contentDigest: "digest-spec",
+    });
     expect(fetchMock).not.toHaveBeenCalled();
 
     // HTML keeps its sandboxed frame, now pointed at the desktop protocol so

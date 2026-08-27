@@ -1,7 +1,8 @@
 import { render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 import { AgentStateBadge } from "../features/agents/lifecycle";
-import { useAgentStatusStore, type RunRecord } from "../features/agents/status";
+import type { RunRecord } from "../features/agents/status";
+import { useAgentStatusStore } from "../features/agents/status/testStore";
 
 function run(
   runId: string,

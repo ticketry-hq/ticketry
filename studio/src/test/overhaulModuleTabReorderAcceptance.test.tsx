@@ -1,9 +1,9 @@
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../shared/api/client", async () => {
-  const actual = await vi.importActual<typeof import("../shared/api/client")>(
-    "../shared/api/client",
+vi.mock("./legacyApiFixture", async () => {
+  const actual = await vi.importActual<typeof import("./legacyApiFixture")>(
+    "./legacyApiFixture",
   );
   return {
     ...actual,
@@ -13,15 +13,31 @@ vi.mock("../shared/api/client", async () => {
   };
 });
 vi.mock("../features/projects/queries/readTransport", async () => {
-  const api = await import("../shared/api/client");
-  return { readModules: api.listModules, readProjects: api.listProjects, readWorkspace: vi.fn() };
+  const actual = await vi.importActual<typeof import("../features/projects/queries/readTransport")>(
+    "../features/projects/queries/readTransport",
+  );
+  const api = await import("./legacyApiFixture");
+  const { projectOpenFixture } = await import("./projectOpenFixture");
+  return {
+    ...actual,
+    readProjectOpen: async (projectId: string) => {
+      const [projects, modules] = await Promise.all([api.listProjects(), api.listModules(projectId)]);
+      const project = projects.find((candidate: { id: string }) => candidate.id === projectId) ?? projects[0];
+      if (!project) throw new Error(`Project ${projectId} was not found.`);
+      return projectOpenFixture(project, modules);
+    },
+    readWorkspace: vi.fn(),
+  };
 });
 vi.mock("../features/work-items/mutationTransport", async () => {
-  const api = await import("../shared/api/client");
-  return { reorderWorkItem: api.reorderWorkItem };
+  const actual = await vi.importActual<typeof import("../features/work-items/mutationTransport")>(
+    "../features/work-items/mutationTransport",
+  );
+  const api = await import("./legacyApiFixture");
+  return { ...actual, reorderWorkItem: api.reorderWorkItem };
 });
 
-import { useAgentStatusStore } from "../features/agents/status";
+import { useAgentStatusStore } from "../features/agents/status/testStore";
 import type { WorkItem } from "../shared/api/types";
 import { useClientStore } from "../state/clientStore";
 import {
@@ -205,5 +221,34 @@ describe("module tab strip reorder acceptance", () => {
 
     fireEvent.click(tabFor("module-a"));
     expect(selectModule).toHaveBeenCalledWith("module-a");
+  });
+
+  it("finishes an accepted tab drag when the host omits the drop event", async () => {
+    await renderAutomaticProject();
+    listProjects.mockResolvedValue([project(true)]);
+    listModules.mockResolvedValue(modules("module-c", "module-a", "module-b"));
+
+    const { source, target, transfer } = dragTab("module-c", "module-a", "near", {
+      drop: false,
+    });
+    expect(screen.getByTestId("module-tab-drop-seam")).toHaveAttribute(
+      "data-drop-intent",
+      "near",
+    );
+
+    // Some desktop webviews finish an otherwise accepted HTML drag with a
+    // target dragleave and source dragend, but never dispatch drop. The last
+    // promised seam still defines the user's release, so the Module must move
+    // instead of silently snapping back to where it started.
+    fireEvent.dragLeave(target, { dataTransfer: transfer, relatedTarget: null });
+    dragEvent(source, "dragend", transfer);
+
+    await waitFor(() => expect(reorderWorkItem).toHaveBeenCalledOnce());
+    expect(reorderWorkItem).toHaveBeenCalledWith("module-c", {
+      before_id: null,
+      after_id: "module-a",
+      initial_order_ids: ["module-a", "module-b", "module-c"],
+    });
+    await waitFor(() => expect(tabStripOrder()).toEqual(["C", "A", "B"]));
   });
 });

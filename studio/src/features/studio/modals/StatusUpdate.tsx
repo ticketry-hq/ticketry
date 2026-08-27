@@ -3,7 +3,7 @@ import { ModalShell } from "../../../app/modal/ModalShell";
 import { useModalStore } from "../../../app/modal/modalStore";
 import { useStudioStore } from "../../projects";
 import { useClientStore } from "../../../state/clientStore";
-import { useCachedStates } from "../../../shared/query/stateCatalog";
+import { useCachedStates } from "../../../features/projects";
 import { MODAL_ACTIONS } from "../../../app/navigation/keymapRegistry";
 import { useSetWorkItemState } from "../../work-items";
 import { apiErrorMessage, isNoOpTransition } from "../../../shared/api/errors";

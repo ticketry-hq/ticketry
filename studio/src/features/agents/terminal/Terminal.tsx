@@ -19,7 +19,10 @@ import { registerTerminalFocus } from "./internal/terminalRegistry";
 import { NativeGhosttyTerminal } from "./NativeGhosttyTerminal";
 import { nativeGhosttyAvailable } from "./internal/nativeGhosttyAvailability";
 import { reportNativeRenderFailure } from "./internal/nativeRenderRecovery";
-import { nativeFailureIsHostNotVisible } from "./internal/nativeViewerFailure";
+import {
+  nativeFailureIsHostNotVisible,
+  nativeFailureIsViewerOwnershipStorage,
+} from "./internal/nativeViewerFailure";
 import { nativeViewerSessionIsLive } from "./internal/nativeViewerSessionLiveness";
 import { ensureTerminalRunCreated } from "./internal/terminalRunCreation";
 
@@ -90,6 +93,10 @@ export function Terminal({
     // renderer. Refreshing rebuilds the same layout, so the campaign would
     // escalate to its cap and reload forever without a renderer ever failing.
     if (nativeFailureIsHostNotVisible(nativeFailureReason)) return;
+    // Lease persistence failures come from the Rust control plane. A WebView
+    // reload cannot unlock its database and interrupts any in-flight Tauri
+    // callbacks, so keep the working compatibility renderer instead.
+    if (nativeFailureIsViewerOwnershipStorage(nativeFailureReason)) return;
     // Report the run, not just the reason, and hold the report for as long as
     // this surface shows the fallback: these inputs cannot change again once
     // the run has failed, so the coordinator is the only place that remembers

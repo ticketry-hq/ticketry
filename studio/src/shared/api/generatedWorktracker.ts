@@ -1,5 +1,6 @@
 export function compactWorktrackerId(value: string): string {
-  return value.replace(/-/g, "").toLowerCase();
+  const compact = value.replace(/-/g, "").toLowerCase();
+  return /^[0-9a-f]{32}$/.test(compact) ? compact : value;
 }
 
 export function publicWorktrackerId(value: string): string {

@@ -50,6 +50,8 @@ pub struct Model {
     pub blocked_by_edges: HasMany<super::issue_blocker::Entity>,
     #[sea_orm(has_many, relation_enum = "BlocksEdges", via_rel = "BlockingIssue")]
     pub blocks_edges: HasMany<super::issue_blocker::Entity>,
+    #[sea_orm(has_many, relation_enum = "AgentRuns")]
+    pub agent_runs: HasMany<crate::entities::runs::agent_run::Entity>,
     #[sea_orm(has_many)]
     pub attachments: HasMany<super::attachment::Entity>,
 }

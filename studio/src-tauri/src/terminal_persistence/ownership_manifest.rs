@@ -42,9 +42,6 @@ pub const GENERATED_MUTATION_GAPS: &[&str] = &[
     "delete: rc.9 bypasses delete hooks and could erase durable history or unverified runtime ownership",
 ];
 
-pub const SESSION_PROTECTED_COLUMNS: &[&str] = SESSION_COLUMNS;
-pub const LEASE_PROTECTED_COLUMNS: &[&str] = LEASE_COLUMNS;
-
 pub fn owned_tables() -> Vec<&'static str> {
     ADOPTED_TABLES
         .iter()

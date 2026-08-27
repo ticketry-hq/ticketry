@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { adaptWorktreeStatus, readWorktreeStatus } from "./statusTransport";
-import type { WorktreeStatusPayload } from "../generated/worktreeStatus";
+import {
+  adaptWorktreeStatus,
+  readWorktreeStatus,
+  type WorktreeStatusPayload,
+} from "./statusTransport";
 import { initializeStudioRuntime, type StudioRuntime } from "../../../../runtime";
 
 const live: WorktreeStatusPayload = {
@@ -28,6 +31,7 @@ function desktopRuntime(
 ): StudioRuntime {
   return {
     platform: "desktop",
+    graphQlTransport: () => { throw new Error("not used"); },
     capabilities: {
       statusFeed: true,
       nativeLifecycle: false,
@@ -62,16 +66,30 @@ describe("worktree status transport", () => {
   it("asks the runtime for one identity and adapts the discriminated contract", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
-    const execute = vi.fn(async (document, variables) => {
-      expect(document.operationName).toBe("WorktreeStatus");
-      expect(variables).toEqual({
+    const graphqlExecute = vi.fn(async (requestJson: string) => {
+      const request = JSON.parse(requestJson) as {
+        operationName: string;
+        variables: Record<string, unknown>;
+      };
+      expect(request.operationName).toBe("WorktreeStatus");
+      expect(request.variables).toEqual({
         taskId: "60000000-0000-0000-0000-000000000002",
       });
-      return { worktree_status: live };
+      return JSON.stringify({
+        data: {
+          worktree_status: { __typename: "WorktreeStatusView", ...live },
+        },
+      });
     });
-    initializeStudioRuntime(
-      desktopRuntime((routes) => routes.graphQl(execute as never)),
-    );
+    const runtime = desktopRuntime((routes) => routes.graphQl(vi.fn() as never));
+    initializeStudioRuntime({
+      ...runtime,
+      graphQlTransport: () => ({
+        graphql_execute: graphqlExecute,
+        graphql_subscribe: vi.fn(),
+        graphql_unsubscribe: vi.fn(),
+      }),
+    });
 
     const status = await readWorktreeStatus(
       "60000000-0000-0000-0000-000000000002",

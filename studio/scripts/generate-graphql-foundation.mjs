@@ -1,11 +1,15 @@
 import { copyFile, mkdtemp, mkdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 import {
   generateFoundationArtifacts,
   studioRoot,
 } from "./graphql-foundation-generation.mjs";
+import {
+  schemaTypesTargetRelative,
+  typedDocumentTargets,
+} from "./typed-document-generation.mjs";
 
 const scratch = await mkdtemp(join(tmpdir(), "ticketry-graphql-generate-"));
 try {
@@ -44,65 +48,22 @@ try {
     join(scratch, "terminal-entities/session.rs"),
     join(terminalEntityTarget, "session.rs"),
   );
-  for (const name of ["schema.graphql", "taurpc.ts", "operations.ts"]) {
+  for (const name of ["schema.graphql", "taurpc.ts"]) {
     await copyFile(join(scratch, name), join(frontendTarget, name));
   }
-  for (const feature of ["projects", "work-items", "workflows"]) {
-    const target = join(studioRoot, "src/features", feature, "generated");
-    await mkdir(target, { recursive: true });
+  for (const target of await typedDocumentTargets(join(studioRoot, "src"))) {
+    const destination = join(studioRoot, "src", target.targetRelative);
+    await mkdir(dirname(destination), { recursive: true });
     await copyFile(
-      join(scratch, "worktracker", feature, "manifest.ts"),
-      join(target, "manifest.ts"),
-    );
-    if (feature === "work-items") {
-      await copyFile(
-        join(scratch, "worktracker", feature, "attachments.ts"),
-        join(target, "attachments.ts"),
-      );
-    }
-  }
-  const settingsTarget = join(studioRoot, "src/features/settings/generated");
-  await mkdir(settingsTarget, { recursive: true });
-  for (const name of ["keybindings.ts", "profileSettings.ts", "providerCatalog.ts"]) {
-    await copyFile(
-      join(scratch, "settings", name),
-      join(settingsTarget, name),
+      join(scratch, "typed-documents", target.targetRelative),
+      destination,
     );
   }
-  const agentStatusTarget = join(
-    studioRoot,
-    "src/features/agents/status/generated",
-  );
-  await mkdir(agentStatusTarget, { recursive: true });
-  for (const name of ["attempts.ts", "statusStream.ts"]) {
-    await copyFile(join(scratch, "agent-status", name), join(agentStatusTarget, name));
-  }
-  const worktreeTarget = join(
-    studioRoot,
-    "src/features/agents/worktrees/generated",
-  );
-  await mkdir(worktreeTarget, { recursive: true });
-  for (const name of ["worktreeStatus.ts", "worktreeCreate.ts"]) {
-    await copyFile(join(scratch, "worktrees", name), join(worktreeTarget, name));
-  }
-  const documentTarget = join(studioRoot, "src/features/documents/generated");
-  await mkdir(documentTarget, { recursive: true });
-  for (const name of ["documentRegistry.ts", "documentSave.ts"]) {
-    await copyFile(join(scratch, "documents", name), join(documentTarget, name));
-  }
-  const terminalTarget = join(
-    studioRoot,
-    "src/features/agents/terminal/generated",
-  );
-  await mkdir(terminalTarget, { recursive: true });
-  for (const name of ["outputActivity.ts", "terminalSessions.ts", "viewerLeases.ts"]) {
-    await copyFile(join(scratch, "terminals", name), join(terminalTarget, name));
-  }
-  const executionTarget = join(studioRoot, "src/features/execution/generated");
-  await mkdir(executionTarget, { recursive: true });
+  const schemaTypesDestination = join(studioRoot, "src", schemaTypesTargetRelative);
+  await mkdir(dirname(schemaTypesDestination), { recursive: true });
   await copyFile(
-    join(scratch, "execution/graphRuns.ts"),
-    join(executionTarget, "graphRuns.ts"),
+    join(scratch, "typed-documents", schemaTypesTargetRelative),
+    schemaTypesDestination,
   );
   console.log("generated GraphQL foundation entities, SDL, TauRPC, and operations");
 } finally {

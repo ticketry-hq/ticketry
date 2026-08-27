@@ -7,11 +7,18 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { queryClient } from "../../../../shared/query/queryClient";
-import { queryKeys } from "../../../../shared/query/keys";
-import { getStatesSnapshot, seedStates } from "../../../../shared/query/stateCatalog";
-import { useAgentStatusStore } from "../store";
+import { studioApolloClient } from "../../../../shared/apollo/client";
+import { compactWorktrackerId } from "../../../../shared/api/generatedWorktracker";
+import { getStatesSnapshot, seedStates } from "../../../../features/projects";
+import { useAgentStatusStore } from "../testStore";
+import { readAgentStatusHolding } from "../apolloHolding";
 import { statusStreamFeed } from "./statusStreamFeed";
+import {
+  ScratchDocumentRegistryDocument,
+  TaskDocumentRegistryDocument,
+} from "../../../documents/generated/documentRegistry.documents";
+import { WorktreeStatusDocument } from "../../worktrees/generated/worktreeStatus.documents";
+import { WorkTrackerProjectOpenDocument } from "../../../projects/generated/projects.documents";
 
 const PROJECT = "11111111-1111-1111-1111-111111111111";
 const OTHER_PROJECT = "22222222-2222-2222-2222-222222222222";
@@ -149,7 +156,6 @@ beforeEach(() => {
     automationAttempts: {},
     automationByTask: {},
   });
-  queryClient.clear();
 });
 
 afterEach(() => {
@@ -167,7 +173,7 @@ describe("snapshot reconciliation", () => {
 
     transport.send(snapshot(10, [run()]));
 
-    expect(useAgentStatusStore.getState().runs["run-1"].state).toBe("working");
+    expect(readAgentStatusHolding().runs["run-1"].state).toBe("working");
   });
 
   it("never lets a queued snapshot from the previous project mark runs exited", async () => {
@@ -186,7 +192,7 @@ describe("snapshot reconciliation", () => {
     expect(useAgentStatusStore.getState().runs["run-1"].state).toBe("working");
   });
 
-  it("keeps a run started after the snapshot stamp alive", async () => {
+  it("replaces the project run list with the authoritative snapshot", async () => {
     const transport = harness();
     statusStreamFeed.start(PROJECT, { createProxy: transport.createProxy });
     await vi.advanceTimersByTimeAsync(0);
@@ -196,12 +202,13 @@ describe("snapshot reconciliation", () => {
 
     transport.send(snapshot(10, []));
 
-    expect(useAgentStatusStore.getState().runs["run-1"].state).toBe("starting");
+    expect(useAgentStatusStore.getState().runs["run-1"]).toBeUndefined();
   });
 
   it("prefers a terminal outcome over a stale live state", async () => {
     const transport = harness();
-    const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+    const refetch = vi.spyOn(studioApolloClient(), "refetchQueries")
+      .mockResolvedValue([]);
     statusStreamFeed.start(PROJECT, { createProxy: transport.createProxy });
     await vi.advanceTimersByTimeAsync(0);
     transport.send(snapshot(10, [run()]));
@@ -219,11 +226,8 @@ describe("snapshot reconciliation", () => {
       ),
     );
 
-    expect(useAgentStatusStore.getState().runs["run-1"].state).toBe("exited");
-    expect(invalidate).toHaveBeenCalledWith({
-      queryKey: ["terminal-sessions"],
-      refetchType: "active",
-    });
+    expect(readAgentStatusHolding().runs["run-1"].state).toBe("exited");
+    expect(refetch).toHaveBeenCalled();
   });
 
   it("applies a changed-output projection without waiting for a snapshot", async () => {
@@ -288,12 +292,42 @@ describe("snapshot reconciliation", () => {
 });
 
 describe("WorkItem convergence", () => {
-  it("batches the canonical entity and refreshes the collection only on membership changes", async () => {
+  it("refreshes the project module collection for a module-order fact", async () => {
     const transport = harness();
-    const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+    const client = studioApolloClient();
+    const refresh = vi.spyOn(client, "query").mockResolvedValue({} as never);
+    const refreshTaskCollection = vi.spyOn(client, "refetchQueries")
+      .mockResolvedValue([] as never);
     statusStreamFeed.start(PROJECT, { createProxy: transport.createProxy });
     await vi.advanceTimersByTimeAsync(0);
-    invalidate.mockClear();
+
+    transport.send(
+      event(11, "work_item.changed", {
+        workItemId: "module-1",
+        projectId: PROJECT,
+        moduleId: null,
+        changeKind: "reordered",
+        membershipChanged: true,
+      }),
+    );
+    await vi.advanceTimersByTimeAsync(60);
+
+    expect(refresh).toHaveBeenCalledWith(expect.objectContaining({
+      query: WorkTrackerProjectOpenDocument,
+      variables: { projectId: compactWorktrackerId(PROJECT) },
+      context: { queryDeduplication: false },
+    }));
+    expect(refreshTaskCollection).not.toHaveBeenCalled();
+  });
+
+  it("batches the canonical entity and refreshes the collection only on membership changes", async () => {
+    const transport = harness();
+    const client = studioApolloClient();
+    const refresh = vi.spyOn(client, "query").mockResolvedValue({} as never);
+    const refreshCollection = vi.spyOn(client, "refetchQueries")
+      .mockResolvedValue([] as never);
+    statusStreamFeed.start(PROJECT, { createProxy: transport.createProxy });
+    await vi.advanceTimersByTimeAsync(0);
 
     transport.send(
       event(11, "work_item.changed", {
@@ -309,10 +343,12 @@ describe("WorkItem convergence", () => {
     );
     await vi.advanceTimersByTimeAsync(60);
 
-    const keys = invalidate.mock.calls.map(([options]) => options?.queryKey);
-    expect(keys).toEqual([queryKeys.workItems.byId("item-1")]);
+    expect(refresh.mock.calls.map(([options]) => options?.variables)).toEqual([
+      { id: "item-1" },
+    ]);
+    expect(refreshCollection).not.toHaveBeenCalled();
 
-    invalidate.mockClear();
+    refresh.mockClear();
     transport.send(
       event(13, "work_item.changed", {
         workItemId: "item-2",
@@ -320,19 +356,19 @@ describe("WorkItem convergence", () => {
       }),
     );
     await vi.advanceTimersByTimeAsync(60);
-    expect(invalidate.mock.calls.map(([options]) => options?.queryKey)).toEqual([
-      queryKeys.workItems.byId("item-2"),
-      queryKeys.tasks.all,
+    expect(refresh.mock.calls.map(([options]) => options?.variables)).toEqual([
+      { id: "item-2" },
     ]);
+    expect(refreshCollection).toHaveBeenCalledTimes(1);
   });
 
-  it("defers to an in-flight optimistic edit instead of painting over it", async () => {
+  it("refreshes through an in-flight optimistic edit without a mutation skip", async () => {
     const transport = harness();
-    const invalidate = vi.spyOn(queryClient, "invalidateQueries");
-    vi.spyOn(queryClient, "isMutating").mockImplementation(() => 1);
+    const refresh = vi.spyOn(studioApolloClient(), "query")
+      .mockResolvedValue({} as never);
     statusStreamFeed.start(PROJECT, { createProxy: transport.createProxy });
     await vi.advanceTimersByTimeAsync(0);
-    invalidate.mockClear();
+    refresh.mockClear();
 
     transport.send(
       event(11, "work_item.changed", {
@@ -342,26 +378,27 @@ describe("WorkItem convergence", () => {
     );
     await vi.advanceTimersByTimeAsync(60);
 
-    expect(invalidate).not.toHaveBeenCalled();
+    expect(refresh).toHaveBeenCalledWith(expect.objectContaining({
+      variables: { id: "item-1" },
+    }));
   });
 
   it("evicts a deleted identity and refreshes its collection", async () => {
     const transport = harness();
-    const invalidate = vi.spyOn(queryClient, "invalidateQueries");
-    const remove = vi.spyOn(queryClient, "removeQueries");
+    const client = studioApolloClient();
+    const evict = vi.spyOn(client.cache, "evict");
+    const refreshCollection = vi.spyOn(client, "refetchQueries")
+      .mockResolvedValue([] as never);
     statusStreamFeed.start(PROJECT, { createProxy: transport.createProxy });
     await vi.advanceTimersByTimeAsync(0);
-    invalidate.mockClear();
 
     transport.send(event(11, "work_item.deleted", { workItemId: "item-9" }));
     await vi.advanceTimersByTimeAsync(60);
 
-    expect(remove.mock.calls.map(([options]) => options?.queryKey)).toEqual([
-      queryKeys.workItems.byId("item-9"),
-    ]);
-    expect(invalidate.mock.calls.map(([options]) => options?.queryKey)).toEqual([
-      queryKeys.tasks.all,
-    ]);
+    expect(evict).toHaveBeenCalledWith({
+      id: client.cache.identify({ __typename: "WorktrackerIssue", id: "item-9" }),
+    });
+    expect(refreshCollection).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -400,6 +437,7 @@ describe("workflow convergence", () => {
         group: "unstarted",
         color: "#222222",
         sort_order: 3,
+        is_protected: false,
       },
     ]);
   });
@@ -473,42 +511,41 @@ describe("connection lifecycle", () => {
 
   it("refreshes authoritative document registries at each caught-up boundary", async () => {
     const transport = harness();
-    const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+    const refetch = vi.spyOn(studioApolloClient(), "refetchQueries")
+      .mockResolvedValue([] as never);
     statusStreamFeed.start(PROJECT, { createProxy: transport.createProxy });
     await vi.advanceTimersByTimeAsync(0);
-    invalidate.mockClear();
+    refetch.mockClear();
 
     transport.send(caughtUp(10));
 
-    expect(invalidate.mock.calls.map(([options]) => options?.queryKey)).toContainEqual([
-      "documents",
-      "registry",
-    ]);
+    expect(refetch).toHaveBeenCalledWith({
+      include: [TaskDocumentRegistryDocument, ScratchDocumentRegistryDocument],
+    });
   });
 
   it("refetches canonical holdings before installing a reset baseline", async () => {
     const transport = harness();
-    const refetch = vi.spyOn(queryClient, "invalidateQueries");
+    const apolloRefetch = vi.spyOn(studioApolloClient(), "refetchQueries")
+      .mockResolvedValue([] as never);
     statusStreamFeed.start(PROJECT, { createProxy: transport.createProxy });
     await vi.advanceTimersByTimeAsync(0);
     transport.send(snapshot(40, [run()]));
-    refetch.mockClear();
 
     transport.send(reset(40));
     await vi.advanceTimersByTimeAsync(0);
 
     // Every canonical holding outside the outbox is re-read; Agent Runs and
     // Automation Attempts came from this handshake's own snapshot.
-    expect(refetch.mock.calls.map(([filters]) => filters?.queryKey)).toEqual([
-      queryKeys.tasks.all,
-      ["workItem"],
-      ["work-items"],
-      queryKeys.workflows.catalog(PROJECT),
-      queryKeys.states.byProject(PROJECT),
-      ["documents", "registry"],
-      ["terminal-sessions"],
-      queryKeys.worktrees.all,
-    ]);
+    expect(apolloRefetch).toHaveBeenCalledWith({
+      include: expect.any(Array),
+    });
+    expect(apolloRefetch).toHaveBeenCalledWith({
+      include: [TaskDocumentRegistryDocument, ScratchDocumentRegistryDocument],
+    });
+    expect(apolloRefetch).toHaveBeenCalledWith({
+      include: [WorktreeStatusDocument],
+    });
     // Only now is the server's high-water cursor trusted as a baseline.
     window.dispatchEvent(new Event("online"));
     await vi.advanceTimersByTimeAsync(0);
@@ -562,7 +599,7 @@ describe("connection lifecycle", () => {
     await vi.advanceTimersByTimeAsync(0);
     transport.send(caughtUp(10));
     transport.send(snapshot(40, [run()]));
-    vi.spyOn(queryClient, "invalidateQueries").mockRejectedValue(
+    vi.spyOn(studioApolloClient(), "refetchQueries").mockRejectedValue(
       new Error("the canonical read failed"),
     );
 
@@ -611,10 +648,11 @@ describe("connection lifecycle", () => {
     );
 
     statusStreamFeed.start(OTHER_PROJECT, { createProxy: transport.createProxy });
-    const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+    const refresh = vi.spyOn(studioApolloClient(), "query")
+      .mockResolvedValue({} as never);
     await vi.advanceTimersByTimeAsync(300);
 
-    expect(invalidate).not.toHaveBeenCalled();
+    expect(refresh).not.toHaveBeenCalled();
     expect(useAgentStatusStore.getState().projectId).toBe(OTHER_PROJECT);
   });
 
@@ -643,12 +681,13 @@ describe("connection lifecycle", () => {
 
   it("drops queued results from the project it no longer owns", async () => {
     const transport = harness();
-    const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+    const refresh = vi.spyOn(studioApolloClient(), "query")
+      .mockResolvedValue({} as never);
     statusStreamFeed.start(PROJECT, { createProxy: transport.createProxy });
     await vi.advanceTimersByTimeAsync(0);
     statusStreamFeed.start(OTHER_PROJECT, { createProxy: transport.createProxy });
     await vi.advanceTimersByTimeAsync(0);
-    invalidate.mockClear();
+    refresh.mockClear();
 
     transport.send(
       event(11, "work_item.changed", { workItemId: "item-1", membershipChanged: true }),
@@ -656,7 +695,7 @@ describe("connection lifecycle", () => {
     );
     await vi.advanceTimersByTimeAsync(60);
 
-    expect(invalidate).not.toHaveBeenCalled();
+    expect(refresh).not.toHaveBeenCalled();
   });
 
   it("stops writing anything once the feed is stopped", async () => {
@@ -683,8 +722,6 @@ describe("connection lifecycle", () => {
 
 describe("worktree holdings", () => {
   const OWNER = "60000000-0000-0000-0000-000000000001";
-  const CHILD = "60000000-0000-0000-0000-000000000002";
-  const OTHER_OWNER = "60000000-0000-0000-0000-000000000009";
 
   const worktreeFact = (
     cursor: number,
@@ -700,46 +737,23 @@ describe("worktree holdings", () => {
       { subject_kind: "worktree", subject_id: `wt-${cursor}`, ...overrides },
     );
 
-  /** A holding a surface is displaying, so an invalidation actually refetches. */
-  const seedHolding = (
-    ownerKeyId: string,
-    taskId: string,
-    reportedOwner = ownerKeyId,
-  ) => {
-    const key = queryKeys.worktrees.status(ownerKeyId, taskId, null);
-    queryClient.setQueryData(key, {
-      kind: "worktree",
-      task_id: taskId,
-      top_level_task_id: reportedOwner,
-    });
-    return key;
-  };
-
-  /** The cache entries each recorded invalidation actually selected. */
-  const invalidatedKeys = (invalidate: { mock: { calls: unknown[][] } }) =>
-    invalidate.mock.calls.flatMap(([options]) =>
-      queryClient
-        .getQueryCache()
-        .findAll(options as never)
-        .map((query) => query.queryKey),
-    );
-
   it.each(["created", "conflicted", "discarded", "integrated", "reconciled"])(
     "converges the owner's holding for a %s fact",
     async (changeKind) => {
       const transport = harness();
       statusStreamFeed.start(PROJECT, { createProxy: transport.createProxy });
       await vi.advanceTimersByTimeAsync(0);
-      const owned = seedHolding(OWNER, OWNER);
-      const foreign = seedHolding(OTHER_OWNER, OTHER_OWNER);
-      const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+      const refetch = vi.spyOn(studioApolloClient(), "refetchQueries")
+        .mockResolvedValue([] as never);
 
       transport.send(worktreeFact(11, changeKind));
       await vi.advanceTimersByTimeAsync(60);
 
-      const keys = invalidatedKeys(invalidate);
-      expect(keys).toContainEqual(owned);
-      expect(keys).not.toContainEqual(foreign);
+      expect(refetch).toHaveBeenCalledOnce();
+      expect(refetch).toHaveBeenCalledWith(expect.objectContaining({
+        include: "active",
+        onQueryUpdated: expect.any(Function),
+      }));
     },
   );
 
@@ -747,61 +761,56 @@ describe("worktree holdings", () => {
     const transport = harness();
     statusStreamFeed.start(PROJECT, { createProxy: transport.createProxy });
     await vi.advanceTimersByTimeAsync(0);
-    const parentView = seedHolding(OWNER, OWNER);
-    const childView = seedHolding(OWNER, CHILD);
-    // A view keyed under an intermediate ancestor still reports the true owner.
-    const grandchildView = seedHolding(CHILD, "grandchild", OWNER);
-    const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+    const refetch = vi.spyOn(studioApolloClient(), "refetchQueries")
+      .mockResolvedValue([] as never);
 
     transport.send(worktreeFact(11, "created"));
     await vi.advanceTimersByTimeAsync(60);
 
-    const keys = invalidatedKeys(invalidate);
-    expect(keys).toContainEqual(parentView);
-    expect(keys).toContainEqual(childView);
-    expect(keys).toContainEqual(grandchildView);
+    expect(refetch).toHaveBeenCalledOnce();
   });
 
   it("costs one refetch for a burst about the same checkout", async () => {
     const transport = harness();
     statusStreamFeed.start(PROJECT, { createProxy: transport.createProxy });
     await vi.advanceTimersByTimeAsync(0);
-    seedHolding(OWNER, OWNER);
-    const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+    const refetch = vi.spyOn(studioApolloClient(), "refetchQueries")
+      .mockResolvedValue([] as never);
 
     transport.send(worktreeFact(11, "created"));
     transport.send(worktreeFact(12, "reconciled"));
     await vi.advanceTimersByTimeAsync(60);
 
-    expect(invalidate).toHaveBeenCalledTimes(1);
+    expect(refetch).toHaveBeenCalledTimes(1);
   });
 
   it("skips a fact that names no owner", async () => {
     const transport = harness();
     statusStreamFeed.start(PROJECT, { createProxy: transport.createProxy });
     await vi.advanceTimersByTimeAsync(0);
-    seedHolding(OWNER, OWNER);
-    const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+    const refetch = vi.spyOn(studioApolloClient(), "refetchQueries")
+      .mockResolvedValue([] as never);
 
     transport.send(
       event(11, "worktree.changed", { worktreeId: "wt-11", changeKind: "created" }),
     );
     await vi.advanceTimersByTimeAsync(60);
 
-    expect(invalidate).not.toHaveBeenCalled();
+    expect(refetch).not.toHaveBeenCalled();
   });
 
   it("re-reads every visible holding at each caught-up boundary", async () => {
     const transport = harness();
     statusStreamFeed.start(PROJECT, { createProxy: transport.createProxy });
     await vi.advanceTimersByTimeAsync(0);
-    const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+    const refetch = vi.spyOn(studioApolloClient(), "refetchQueries")
+      .mockResolvedValue([] as never);
 
     transport.send(caughtUp(10));
 
-    expect(invalidate.mock.calls.map(([options]) => options?.queryKey)).toContainEqual(
-      queryKeys.worktrees.all,
-    );
+    expect(refetch).toHaveBeenCalledWith({
+      include: [WorktreeStatusDocument],
+    });
   });
 
   it("never lets a delayed fact from the previous project touch the new one", async () => {
@@ -810,8 +819,8 @@ describe("worktree holdings", () => {
     await vi.advanceTimersByTimeAsync(0);
     statusStreamFeed.start(OTHER_PROJECT, { createProxy: transport.createProxy });
     await vi.advanceTimersByTimeAsync(0);
-    seedHolding(OWNER, OWNER);
-    const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+    const refetch = vi.spyOn(studioApolloClient(), "refetchQueries")
+      .mockResolvedValue([] as never);
 
     // The previous project's subscription is torn down asynchronously, so its
     // last fact can still arrive — and it is partitioned into that project.
@@ -821,6 +830,6 @@ describe("worktree holdings", () => {
     transport.send(worktreeFact(12, "created", { project_id: PROJECT }));
     await vi.advanceTimersByTimeAsync(60);
 
-    expect(invalidate).not.toHaveBeenCalled();
+    expect(refetch).not.toHaveBeenCalled();
   });
 });

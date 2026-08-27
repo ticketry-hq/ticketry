@@ -1,26 +1,44 @@
 import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+const projectApi = vi.hoisted(() => ({
+  readWorkspace: vi.fn(),
+  acknowledgeOnboarding: vi.fn(),
+}));
 const catalogApi = vi.hoisted(() => ({
   getLaunchProviderCapabilities: vi.fn(),
   getProviderCatalog: vi.fn(),
   putProviderCatalog: vi.fn(),
 }));
 
-vi.mock("../shared/api/client", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../shared/api/client")>()),
-  ...catalogApi,
-  getWorkspace: vi.fn(),
-  acknowledgeOnboarding: vi.fn(),
+vi.mock("../features/projects", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../features/projects")>()),
+  ...projectApi,
 }));
 
-import * as api from "../shared/api/client";
 import { OnboardingGate } from "../app/onboarding/OnboardingGate";
 import { useOnboardingTourStore } from "../app/onboarding/onboardingTourStore";
-import { queryClient } from "../shared/query/queryClient";
-import { queryKeys } from "../shared/query/keys";
+import { WorkTrackerWorkspaceDocument } from "../features/projects/generated/projects.documents";
+import { studioApolloClient } from "../shared/apollo/client";
 
-const acknowledgeOnboarding = api.acknowledgeOnboarding as ReturnType<typeof vi.fn>;
+function seedWorkspace(onboardingRequired: boolean): void {
+  const data = {
+    workspace: {
+      __typename: "WorktrackerWorkspaceConnection",
+      nodes: [{
+        __typename: "WorktrackerWorkspace",
+        id: "w1",
+        name: "MEML",
+        slug: "meml",
+        onboarding_required: onboardingRequired,
+      }],
+    },
+  };
+  studioApolloClient().writeQuery({
+    query: WorkTrackerWorkspaceDocument,
+    data,
+  });
+}
 
 beforeEach(() => {
   catalogApi.getLaunchProviderCapabilities.mockReset().mockResolvedValue([]);
@@ -30,13 +48,13 @@ beforeEach(() => {
   catalogApi.putProviderCatalog.mockReset().mockImplementation(async (value) => ({
     value,
   }));
-  acknowledgeOnboarding.mockReset().mockResolvedValue({
+  projectApi.acknowledgeOnboarding.mockReset().mockResolvedValue({
     id: "w1",
     name: "MEML",
     slug: "meml",
     onboarding_required: false,
   });
-  queryClient.setQueryData(queryKeys.workspace, false);
+  seedWorkspace(false);
   useOnboardingTourStore.getState().reset();
 });
 
@@ -53,7 +71,7 @@ describe("OnboardingGate", () => {
   });
 
   it("substitutes the onboarding surface for the app shell while required", () => {
-    queryClient.setQueryData(queryKeys.workspace, true);
+    seedWorkspace(true);
 
     render(
       <OnboardingGate>
@@ -66,7 +84,7 @@ describe("OnboardingGate", () => {
   });
 
   it("hands off to the app shell while the guided tour is active", () => {
-    queryClient.setQueryData(queryKeys.workspace, true);
+    seedWorkspace(true);
     useOnboardingTourStore.getState().start("created-project");
 
     render(
@@ -77,11 +95,12 @@ describe("OnboardingGate", () => {
 
     expect(screen.getByText("App shell")).toBeInTheDocument();
     expect(screen.queryByTestId("onboarding-welcome")).not.toBeInTheDocument();
-    expect(queryClient.getQueryData(queryKeys.workspace)).toBe(true);
+    expect(studioApolloClient().readQuery({ query: WorkTrackerWorkspaceDocument })
+      ?.workspace.nodes[0]?.onboarding_required).toBe(true);
   });
 
   it("does not offer a way to skip required onboarding", () => {
-    queryClient.setQueryData(queryKeys.workspace, true);
+    seedWorkspace(true);
 
     render(
       <OnboardingGate>
@@ -94,6 +113,6 @@ describe("OnboardingGate", () => {
     ).not.toBeInTheDocument();
     expect(screen.getByTestId("onboarding-welcome")).toBeInTheDocument();
     expect(screen.queryByText("App shell")).not.toBeInTheDocument();
-    expect(acknowledgeOnboarding).not.toHaveBeenCalled();
+    expect(projectApi.acknowledgeOnboarding).not.toHaveBeenCalled();
   });
 });

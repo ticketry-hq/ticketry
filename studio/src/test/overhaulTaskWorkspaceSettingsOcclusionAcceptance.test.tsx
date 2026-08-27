@@ -6,7 +6,6 @@
  * singleton modal host, and serialized native boundary all participate.
  */
 
-import { QueryClientProvider } from "@tanstack/react-query";
 import {
   act,
   fireEvent,
@@ -21,15 +20,15 @@ import { ModalHost } from "../app/modal/ModalHost";
 import { useModalStore } from "../app/modal/modalStore";
 import { StudioFooter } from "../app/shell/StudioFooter";
 import { SelectedTicketContent } from "../app/shell/ticket-workspace/selected-ticket/SelectedTicketContent";
-import { useAgentStatusStore } from "../features/agents/status";
+import { useAgentStatusStore } from "../features/agents/status/testStore";
 import { useTerminalForegroundStore } from "../features/agents/terminal/internal/foregroundStore";
 import { useTerminalStore } from "../features/agents/terminal/internal/sessionStore";
 import { useStudioStore } from "../features/projects/store";
 import { seedConfig } from "../features/studio/stores/configStore";
-import { queryClient } from "../shared/query/queryClient";
 import { useClientStore } from "../state/clientStore";
 import {
   installDesktopGraphQlRuntime,
+  terminalSessionReadExecutor,
   type RecordedGraphQlOperation,
 } from "./desktopGraphQlRuntime";
 
@@ -61,8 +60,8 @@ const settingsApi = vi.hoisted(() => ({
   putProviderCatalog: vi.fn(),
 }));
 
-vi.mock("../shared/api/client", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../shared/api/client")>()),
+vi.mock("./legacyApiFixture", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./legacyApiFixture")>()),
   ...settingsApi,
 }));
 
@@ -87,11 +86,6 @@ const terminalReads = vi.hoisted(() => {
     readScratchResumableTerminalSessions: resumable,
   };
 });
-
-vi.mock(
-  "../features/agents/terminal/internal/sessionReadTransport",
-  () => terminalReads,
-);
 
 class ResizeObserverStub {
   observe() {}
@@ -171,7 +165,7 @@ function seedTaskWorkspace(sessionId: string, runId: string): void {
 
 function mountTaskWorkspace() {
   return render(
-    <QueryClientProvider client={queryClient}>
+    <>
       <SelectedTicketContent
         bucket="task-792"
         projectId="project-1"
@@ -181,16 +175,17 @@ function mountTaskWorkspace() {
       />
       <StudioFooter />
       <ModalHost />
-    </QueryClientProvider>,
+    </>,
   );
 }
 
 describe("overhaul acceptance — Task workspace Settings occlusion", () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    leaseOperations = installDesktopGraphQlRuntime();
+    leaseOperations = installDesktopGraphQlRuntime(
+      terminalSessionReadExecutor(terminalReads),
+    );
     localStorage.clear();
-    queryClient.clear();
     hostRequests = [];
     tauri.desktop = true;
     vi.stubGlobal("ResizeObserver", ResizeObserverStub);

@@ -10,12 +10,12 @@
  */
 
 import { studioRuntime } from "../../../runtime";
-import { FoundationGraphQlError } from "../../../graphql-foundation/foundationClient";
+import { FoundationGraphQlError } from "../../../shared/apollo/errorLink";
 import { graphQlMutationError } from "../../../shared/api/graphqlError";
 import {
   CreateModuleShellDocument,
   ModuleShellSessionsDocument,
-} from "../../agents/terminal/generated/terminalSessions";
+} from "../../agents/terminal";
 
 const DEFAULT_COLUMNS = 80;
 const DEFAULT_ROWS = 24;

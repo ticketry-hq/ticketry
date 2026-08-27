@@ -28,13 +28,14 @@ export type {
 export {
   EMPTY_MODULE_TREE,
   getModuleTreeSnapshot,
+  getWorkItemSnapshot,
   loadModuleTree,
+  readWorkItem,
   readProjectWorkItems,
-  workItemQuery,
   useWorkItem,
   useWorkItemAttachments,
+  useModuleOpen,
   useModuleTree,
-  useWorkItemsByIds,
 } from "./queries";
 export { useStoriesTree } from "./queries/useStoriesTree";
 export {
@@ -61,13 +62,6 @@ export type {
   ScratchRow,
 } from "./selectors";
 export { formatWorkItemDisplayIdentifier } from "./displayIdentifier";
-export {
-  groupBacklog,
-  matchesQuery,
-  NO_EPIC,
-  toggleEpic,
-} from "./internal/backlogSelectors";
-export type { EpicGroup, TreeNode } from "./internal/backlogSelectors";
 export { usePlanningFilterStore } from "./internal/planningFilterStore";
 export { useClientStore } from "../../state/clientStore";
 export type { SelectionSurface } from "../../state/clientStore";
@@ -75,22 +69,18 @@ export { rankBetween } from "./utilities/rank";
 export { reachable } from "./utilities/dependencyGraph";
 export type { DependencyEdgeField } from "./utilities/dependencyGraph";
 export {
-  WorkTrackerModuleTreeDocument,
+  WorkTrackerModuleOpenDocument,
   WorkTrackerWorkItemDocument,
-  WorkTrackerWorkItemsByIdsDocument,
   WorkTrackerWorkItemsDocument,
-} from "./generated/operations";
+} from "./generated/workItems.documents";
 export type {
-  WorkTrackerModuleTreeQuery,
-  WorkTrackerModuleTreeState,
-  WorkTrackerModuleTreeVariables,
+  WorkTrackerModuleOpenQuery,
+  WorkTrackerModuleOpenQueryVariables,
   WorkTrackerWorkItemQuery,
-  WorkTrackerWorkItemVariables,
-  WorkTrackerWorkItemsByIdsQuery,
-  WorkTrackerWorkItemsByIdsVariables,
+  WorkTrackerWorkItemQueryVariables,
   WorkTrackerWorkItemsQuery,
-  WorkTrackerWorkItemsVariables,
-} from "./generated/operations";
+  WorkTrackerWorkItemsQueryVariables,
+} from "./generated/workItems.documents";
 export {
   isRunNowEligible,
   startRunNow,

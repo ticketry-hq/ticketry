@@ -4,7 +4,7 @@ import { stateColor } from "../../../../../shared/utilities/display";
 import { useIssueTypesQuery } from "../../../../../features/settings";
 import { formatWorkItemDisplayIdentifier } from "../../../../../features/work-items";
 import { useClientStore } from "../../../../../state/clientStore";
-import { stateById, useCachedStates } from "../../../../../shared/query/stateCatalog";
+import { stateById, useCachedStates } from "../../../../../features/projects";
 
 interface ChildIssuesProps {
   children: WorkItem[];

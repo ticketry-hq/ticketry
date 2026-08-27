@@ -7,7 +7,7 @@ query LoadProviderCatalog {
       provider: providerId
       name
       reasoning_levels: agentModelReasoningLevel {
-        nodes { reasoning_level_id: reasoningLevelId }
+        nodes { id reasoning_level_id: reasoningLevelId }
       }
     }
     reasoning_levels { id name }
@@ -34,7 +34,7 @@ mutation UpdateProviderCatalog(
       provider: providerId
       name
       reasoning_levels: agentModelReasoningLevel {
-        nodes { reasoning_level_id: reasoningLevelId }
+        nodes { id reasoning_level_id: reasoningLevelId }
       }
     }
     reasoning_levels { id name }

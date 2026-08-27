@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { createStatusStreamClient } from "./statusStreamClient";
 import { createStatusCursorStore } from "./statusStreamCursors";
-import type { RunStatusFrame } from "./generated/statusStream";
+import type { RunStatusFrame } from "./types";
 
 const PROJECT = "11111111-1111-1111-1111-111111111111";
 const OTHER_PROJECT = "22222222-2222-2222-2222-222222222222";

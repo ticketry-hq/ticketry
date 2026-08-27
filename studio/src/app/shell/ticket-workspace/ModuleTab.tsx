@@ -1,8 +1,6 @@
-import { useShallow } from "zustand/react/shallow";
 import {
   MODULE_LIFECYCLE_STATES,
-  selectModuleLifecycleCounts,
-  useAgentStatusStore,
+  useModuleLifecycleCounts,
 } from "../../../features/agents/status";
 import { LifecycleBadge } from "../../../features/agents/terminal";
 import type {
@@ -13,9 +11,7 @@ import type {
 import type { Module } from "../../../shared/api/types";
 
 function ModuleLifecycleChicklets({ moduleId }: { moduleId: string }) {
-  const counts = useAgentStatusStore(
-    useShallow((state) => selectModuleLifecycleCounts(state, moduleId)),
-  );
+  const counts = useModuleLifecycleCounts(moduleId);
   const visibleStates = MODULE_LIFECYCLE_STATES.filter(
     (state) => counts[state] > 0,
   );

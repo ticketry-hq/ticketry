@@ -5,13 +5,13 @@
 use tauri::Manager;
 
 use crate::data_directory::established_data_directory;
-use crate::desktop::rust_runtime_launch::launch_rust_runtime;
 use crate::desktop::data_directory::DesktopDataDirectoryOwnership;
 use crate::desktop::environment::automated_startup_exit_requested;
 use crate::desktop::launch_runtime::DesktopLaunchRuntime;
 use crate::desktop::runtime_configuration::{
     development_runtime_configuration, failed_runtime_configuration,
 };
+use crate::desktop::rust_runtime_launch::launch_rust_runtime;
 use crate::desktop::service_health::{ServiceHealth, ServiceHealthState};
 use crate::desktop::service_state::DesktopServiceState;
 use crate::{graphql_foundation, settings_persistence};

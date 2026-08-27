@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createDesktopRuntime } from "../../runtime/desktopRuntime";
+import type { GraphQlTransportProxy } from "../../graphql-foundation/generated/taurpc";
 
 function startupConfiguration() {
   return {
@@ -55,6 +56,16 @@ describe("desktop runtime contract", () => {
       nativeTerminal: false,
       nativeFolderPicker: true,
     });
+  });
+
+  it("gives Apollo the configured in-process GraphQL transport", async () => {
+    const invoke = vi.fn().mockResolvedValue(startupConfiguration());
+    const proxy = {} as GraphQlTransportProxy;
+    const createGraphQlProxy = vi.fn(() => proxy);
+    const runtime = await createDesktopRuntime({ invoke, createGraphQlProxy });
+
+    expect(runtime.graphQlTransport()).toBe(proxy);
+    expect(createGraphQlProxy).toHaveBeenCalledOnce();
   });
 
   it("returns one validated absolute folder path from the native picker", async () => {

@@ -7,7 +7,7 @@ import { stateColor } from "../../../../../../shared/utilities/display";
 import Popover, { PopoverOption } from "./Popover";
 import PopoverContent from "./PopoverContent";
 import { GhostChipAdd } from "./QuietChipControls";
-import { stateById, useCachedStates } from "../../../../../../shared/query/stateCatalog";
+import { stateById, useCachedStates } from "../../../../../../features/projects";
 
 interface Props {
   /** The issue being edited. */

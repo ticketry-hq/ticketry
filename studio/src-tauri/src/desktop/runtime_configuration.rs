@@ -43,7 +43,10 @@ mod tests {
         );
         let configuration = failed_runtime_configuration(health.clone());
         assert_eq!(configuration.service_health, health);
-        assert_eq!(configuration.service_health.state, ServiceHealthState::Failed);
+        assert_eq!(
+            configuration.service_health.state,
+            ServiceHealthState::Failed
+        );
         assert!(configuration.initial_notices.is_empty());
     }
 

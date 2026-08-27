@@ -28,8 +28,7 @@ fn acquire_owned(directory: &Path) -> DataDirectoryGuard {
 fn two_instances_cannot_own_one_data_directory() {
     let directory = temp_data_directory("exclusive");
     let first = acquire_owned(&directory);
-    let error = DataDirectoryGuard::acquire(&directory)
-        .expect_err("second owner must be refused");
+    let error = DataDirectoryGuard::acquire(&directory).expect_err("second owner must be refused");
 
     assert!(matches!(error, OwnershipError::DataDirectoryInUse { .. }));
     first.release().expect("release first owner");
@@ -42,8 +41,7 @@ fn two_instances_cannot_own_one_data_directory() {
 fn contended_explicit_data_directory_diagnostic_names_the_directory() {
     let directory = temp_data_directory("explicit-contention");
     let first = acquire_owned(&directory);
-    let error = DataDirectoryGuard::acquire(&directory)
-        .expect_err("second owner must be refused");
+    let error = DataDirectoryGuard::acquire(&directory).expect_err("second owner must be refused");
     let diagnostic = format!(
         "could not own selected data directory {}: {error}",
         directory.display()

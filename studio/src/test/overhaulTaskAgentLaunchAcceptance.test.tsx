@@ -3,13 +3,18 @@ import { describe, expect, it, vi } from "vitest";
 import {
   providerApi,
   providerCapability,
-  queryClient,
   setProviderCapabilities,
   terminalApi,
   useTerminalStore,
   workspaceView,
 } from "./taskAgentLaunchAcceptanceHarness";
 import type { WorkspaceLauncherContext } from "./taskAgentLaunchAcceptanceHarness";
+import { studioApolloClient } from "../shared/apollo/client";
+
+function clearProviderHolding(): void {
+  studioApolloClient().cache.evict({ id: "ROOT_QUERY", fieldName: "provider_catalog" });
+  studioApolloClient().cache.gc();
+}
 
 describe("overhaul acceptance — task agent launch", () => {
   it("[overhaul-128] launches one promptless task run and activates its acknowledged terminal tab", async () => {
@@ -107,7 +112,7 @@ describe("overhaul acceptance — task agent launch", () => {
     );
     mounted.unmount();
 
-    queryClient.clear();
+    clearProviderHolding();
     providerApi.getLaunchProviderCapabilities.mockReturnValue(new Promise(() => {}));
     mounted = renderLauncher();
     fireEvent.click(screen.getByRole("button", { name: "＋ Agent" }));
@@ -115,7 +120,7 @@ describe("overhaul acceptance — task agent launch", () => {
     expect(screen.queryByRole("menuitem")).not.toBeInTheDocument();
     mounted.unmount();
 
-    queryClient.clear();
+    clearProviderHolding();
     providerApi.getLaunchProviderCapabilities.mockRejectedValue(
       new Error("provider discovery failed"),
     );

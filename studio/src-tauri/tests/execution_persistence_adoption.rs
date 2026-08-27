@@ -2,7 +2,7 @@ mod common;
 
 use std::path::Path;
 
-use common::execution_django_fixture as fixture;
+use common::execution_legacy_fixture as fixture;
 use muxed_studio_lib::execution_persistence::{self, SourceClassification};
 use sea_orm::{ConnectionTrait, Database, DbBackend, Statement};
 
@@ -55,7 +55,7 @@ async fn fresh_database_without_execution_history_installs_rust_schema_idempoten
 async fn every_supported_execution_leaf_adopts_twice_without_row_drift() {
     for leaf in fixture::LEAVES {
         let directory = tempfile::tempdir().expect("create Execution leaf fixture");
-        fixture::migrate_leaf(directory.path(), leaf);
+        fixture::migrate_leaf(directory.path(), leaf).await;
         assert_eq!(
             execution_persistence::preflight(directory.path())
                 .await
@@ -81,7 +81,7 @@ async fn every_supported_execution_leaf_adopts_twice_without_row_drift() {
 #[tokio::test]
 async fn adoption_preserves_campaign_identity_history_and_policy() {
     let directory = tempfile::tempdir().expect("create Execution adoption fixture");
-    fixture::provision_current(directory.path());
+    fixture::provision_current(directory.path()).await;
     muxed_studio_lib::runs_persistence::adopt(directory.path())
         .await
         .expect("adopt Runs before campaign claims");
@@ -147,7 +147,7 @@ async fn adoption_preserves_campaign_identity_history_and_policy() {
 #[tokio::test]
 async fn an_active_claim_is_adopted_when_its_runtime_names_the_child_in_either_form() {
     let directory = tempfile::tempdir().expect("create active Execution fixture");
-    fixture::provision_current(directory.path());
+    fixture::provision_current(directory.path()).await;
     muxed_studio_lib::runs_persistence::adopt(directory.path())
         .await
         .expect("adopt Runs before campaign claims");
@@ -171,7 +171,8 @@ async fn an_active_claim_is_adopted_when_its_runtime_names_the_child_in_either_f
             module = hyphenated(fixture::MODULE),
             project = hyphenated(fixture::PROJECT),
         ),
-    );
+    )
+    .await;
 
     let evidence = execution_persistence::adopt(directory.path())
         .await
@@ -207,8 +208,8 @@ async fn preflight_refuses_schema_policy_identity_and_runtime_drift_before_write
         ("runtime", "UPDATE agent_runs SET ended_at=NULL WHERE id='run-893'"),
     ] {
         let directory = tempfile::tempdir().expect("create rejected Execution fixture");
-        fixture::provision_current(directory.path());
-        fixture::mutate(directory.path(), mutation);
+        fixture::provision_current(directory.path()).await;
+        fixture::mutate(directory.path(), mutation).await;
         execution_persistence::preflight(directory.path())
             .await
             .expect_err(label);

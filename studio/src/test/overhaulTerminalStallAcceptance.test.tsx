@@ -1,4 +1,3 @@
-import { QueryClientProvider } from "@tanstack/react-query";
 import { act, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SelectedTicketContent } from "../app/shell/ticket-workspace/selected-ticket/SelectedTicketContent";
@@ -7,9 +6,9 @@ import { AgentStateBadge } from "../features/agents/lifecycle";
 import {
   startStallDeadlines,
   stopStallDeadlines,
-  useAgentStatusStore,
   STALL_AFTER_MS,
 } from "../features/agents/status";
+import { useAgentStatusStore } from "../features/agents/status/testStore";
 import { applyRunStatusFrame } from "../features/agents/status/stream/runStatusHolding";
 import {
   lifecycleStatusFrame,
@@ -21,7 +20,6 @@ import {
   type SessionMeta,
 } from "../features/agents/terminal";
 import { seedConfig } from "../features/studio/stores/configStore";
-import { queryClient } from "../shared/query/queryClient";
 import { useClientStore } from "../state/clientStore";
 import type { RunRecord } from "../features/agents/status";
 
@@ -37,21 +35,6 @@ vi.mock("../features/agents/api/agentApi", async (importOriginal) => ({
 
 // Terminal session reads moved to the Rust Terminal Session graph, so the seam
 // a test controls is the read transport, not a host API module.
-const terminalReads = vi.hoisted(() => {
-  const resumable = vi.fn();
-  return {
-    readTaskTerminalSessions: vi.fn(),
-    readScratchTerminalSessions: vi.fn(),
-    readTaskResumableTerminalSessions: resumable,
-    readScratchResumableTerminalSessions: resumable,
-  };
-});
-
-vi.mock(
-  "../features/agents/terminal/internal/sessionReadTransport",
-  () => terminalReads,
-);
-
 vi.mock(
   "../app/shell/ticket-workspace/selected-ticket/terminals/SelectedTicketTerminal",
   () => ({
@@ -103,7 +86,7 @@ function run(overrides: Partial<RunRecord> = {}): RunRecord {
 
 function renderWorkspace() {
   return render(
-    <QueryClientProvider client={queryClient}>
+    <>
       <AgentStateBadge issueId="story-1" />
       <SelectedTicketContent
         bucket="story-1"
@@ -112,7 +95,7 @@ function renderWorkspace() {
         owner="studio"
         details={<div>Issue details</div>}
       />
-    </QueryClientProvider>,
+    </>,
   );
 }
 
@@ -125,7 +108,6 @@ describe("overhaul acceptance — terminal output stall", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(LAUNCHED_AT));
     localStorage.clear();
-    queryClient.clear();
     seedConfig({ features: { sidebar: true, projects: true } });
     useStudioStore.setState({ selectedProjectId: "project-1" });
     useClientStore.setState({
@@ -151,9 +133,6 @@ describe("overhaul acceptance — terminal output stall", () => {
       stallEpoch: 0,
     });
     terminalApi.getDocuments.mockResolvedValue({ documents: [] });
-    terminalReads.readTaskTerminalSessions.mockResolvedValue([]);
-    terminalReads.readScratchTerminalSessions.mockResolvedValue([]);
-    terminalReads.readTaskResumableTerminalSessions.mockResolvedValue([]);
 });
   afterEach(() => {
     stopStallDeadlines();

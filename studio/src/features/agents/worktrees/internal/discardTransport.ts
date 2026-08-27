@@ -14,9 +14,12 @@
  * removing something a second time.
  */
 import { studioRuntime } from "../../../../runtime";
-import { WorktreeDiscardDocument } from "../generated/worktreeDiscard";
-import { adaptWorktreeStatus } from "./statusTransport";
-import type { DiscardResult, WorktreeContext } from "./api";
+import { WorktreeDiscardDocument } from "../generated/worktreeDiscard.documents";
+import {
+  adaptWorktreeStatus,
+  type WorktreeStatusPayload,
+} from "./statusTransport";
+import type { DiscardResult, WorktreeContext } from "./types";
 
 export function requestWorktreeDiscard(
   taskId: string,
@@ -34,7 +37,7 @@ export function requestWorktreeDiscard(
         reason: payload.reason ?? "",
         // The mutation's own response is the authority for the window that
         // confirmed, so the block renders it without a follow-up status read.
-        status: adaptWorktreeStatus(payload.status),
+        status: adaptWorktreeStatus(payload.status as WorktreeStatusPayload),
       };
     },
   });

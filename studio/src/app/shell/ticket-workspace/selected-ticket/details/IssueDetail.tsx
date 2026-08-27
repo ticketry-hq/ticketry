@@ -11,9 +11,8 @@ import {
   useSetWorkItemParent,
   useSetWorkItemState,
   usePlanningFilterStore,
-  useWorkItem,
   useWorkItemAttachments,
-  useWorkItemsByIds,
+  useModuleOpen,
 } from "../../../../../features/work-items";
 import { dialog, toast, useClientStore } from "../../../../../state/clientStore";
 import { useStudioStore } from "../../../../../features/projects";
@@ -21,11 +20,8 @@ import { useModulesQuery, useProjectsQuery } from "../../../../../features/proje
 import type { Module, Project } from "../../../../../shared/api/types";
 import { apiErrorMessage, isNoOpTransition } from "../../../../../shared/api/errors";
 import { deleteWorkItem } from "../../../../../features/work-items";
-import { queryClient } from "../../../../../shared/query/queryClient";
-import { queryKeys } from "../../../../../shared/query/keys";
 import { WorkItemNotFoundError } from "../../../../../shared/api/workItemBatcher";
-import { useCachedStates } from "../../../../../shared/query/stateCatalog";
-import { useModuleTree } from "../../../../../features/work-items";
+import { useCachedStates } from "../../../../../features/projects";
 import { useIssueTypesQuery } from "../../../../../features/settings";
 
 const EMPTY_MODULES: Module[] = [];
@@ -60,16 +56,19 @@ function readSidebarVisible(): boolean {
 // The two-pane issue body reads the same per-id holding as the Stories row.
 // A mounted query requests only when that holding is genuinely absent.
 export default function IssueDetail({ issueId }: { issueId: string }) {
-  const taskQuery = useWorkItem(issueId);
-  const task = taskQuery.data ?? null;
-  const attachments = useWorkItemAttachments(task?.id ?? null).data ?? [];
   const selectedModuleId = useClientStore((s) => s.selectedModuleId);
   const selectedProjectId = useStudioStore((s) => s.selectedProjectId);
-  const membership = useModuleTree(selectedProjectId, selectedModuleId);
-  const items = useWorkItemsByIds(membership.order);
-  const displayedChildren = useWorkItemsByIds(
-    task ? membership.children[task.id] ?? NO_CHILD_IDS : NO_CHILD_IDS,
-  );
+  const { tree: membership, items, loading } = useModuleOpen(selectedModuleId);
+  const task = items.find((item) => item.id === issueId) ?? null;
+  const taskQuery = {
+    isPending: loading,
+    error: undefined as Error | undefined,
+  };
+  const attachments = useWorkItemAttachments(task?.id ?? null).data ?? [];
+  const displayedChildIds = task
+    ? membership.children[task.id] ?? NO_CHILD_IDS
+    : NO_CHILD_IDS;
+  const displayedChildren = items.filter((item) => displayedChildIds.includes(item.id));
   const projectContextId = selectedProjectId ?? task?.project_id ?? null;
   const modules = useModulesQuery(projectContextId).data ?? EMPTY_MODULES;
   const projects = useProjectsQuery().data ?? EMPTY_PROJECTS;
@@ -205,13 +204,6 @@ export default function IssueDetail({ issueId }: { issueId: string }) {
     });
     if (!ok) return;
     await deleteWorkItem(task.id);
-    queryClient.removeQueries({ queryKey: queryKeys.workItems.byId(task.id) });
-    if (selectedProjectId && selectedModuleId) {
-      await queryClient.invalidateQueries({
-        queryKey: queryKeys.tasks.byModule(selectedProjectId, selectedModuleId),
-        exact: true,
-      });
-    }
   };
 
   return (
@@ -326,6 +318,7 @@ export default function IssueDetail({ issueId }: { issueId: string }) {
         <IssueSidebar
           task={task}
           epic={epic}
+          moduleId={epic?.id ?? selectedModuleId}
           saving={saving}
           blockedByChips={blockedByChips}
           blocksChips={blocksChips}

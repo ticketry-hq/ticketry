@@ -24,9 +24,11 @@
  * the checkout is gone. Evicting it would blank the block instead of showing
  * that answer.
  */
-import type { Query } from "@tanstack/react-query";
-import { queryClient } from "../../../../shared/query/queryClient";
-import { queryKeys } from "../../../../shared/query/keys";
+import { studioApolloClient } from "../../../../shared/apollo/client";
+import {
+  WorktreeStatusDocument,
+  type WorktreeStatusQuery,
+} from "../../worktrees/generated/worktreeStatus.documents";
 
 export const WORKTREE_INVALIDATION_WINDOW_MS = 50;
 
@@ -37,24 +39,6 @@ export interface WorktreeInvalidator {
   flush(): void;
   /** Drop everything queued; used when the feed stops or switches project. */
   cancel(): void;
-}
-
-/** The owner a cached worktree status belongs to, as the server reported it. */
-function reportedOwner(query: Query): string | null {
-  const data = query.state.data as { top_level_task_id?: unknown } | undefined;
-  return typeof data?.top_level_task_id === "string"
-    ? data.top_level_task_id
-    : null;
-}
-
-/** True when this cache entry is the worktree holding of `topLevelTaskId`. */
-export function ownsWorktreeHolding(
-  query: Query,
-  topLevelTaskId: string,
-): boolean {
-  const key = query.queryKey;
-  if (key[0] !== "worktrees" || key[1] !== "status") return false;
-  return key[2] === topLevelTaskId || reportedOwner(query) === topLevelTaskId;
 }
 
 export function createWorktreeInvalidator(
@@ -71,8 +55,18 @@ export function createWorktreeInvalidator(
     const owners = [...pending];
     pending.clear();
     for (const owner of owners) {
-      void queryClient.invalidateQueries({
-        predicate: (query) => ownsWorktreeHolding(query, owner),
+      void studioApolloClient().refetchQueries({
+        include: "active",
+        onQueryUpdated(observableQuery) {
+          if (observableQuery.queryName !== "WorktreeStatus") return false;
+          const variables = observableQuery.variables as { taskId?: unknown };
+          const data = observableQuery.getCurrentResult().data as
+            | WorktreeStatusQuery
+            | undefined;
+          const matches = variables.taskId === owner
+            || data?.worktree_status.top_level_task_id === owner;
+          return matches ? observableQuery.refetch() : false;
+        },
       });
     }
   };
@@ -102,8 +96,7 @@ export function createWorktreeInvalidator(
  * fact this client received saying so.
  */
 export function refreshWorktreeHoldings(): Promise<void> {
-  return queryClient.invalidateQueries({
-    queryKey: queryKeys.worktrees.all,
-    refetchType: "active",
-  });
+  return studioApolloClient()
+    .refetchQueries({ include: [WorktreeStatusDocument] })
+    .then(() => undefined);
 }

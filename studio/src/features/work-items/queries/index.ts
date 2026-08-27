@@ -1,34 +1,20 @@
-import { useQueries, useQuery } from "@tanstack/react-query";
-import type {
-  ModuleTree,
-  WorkItem,
-} from "../../../shared/api/types";
-import { setStatesSorted } from "../../../shared/query/stateCatalog";
+import { skipToken, useFragment, useQuery } from "@apollo/client/react";
+import { useMemo } from "react";
+import type { ModuleTree, WorkItem } from "../../../shared/api/types";
+import { compactWorktrackerId } from "../../../shared/api/generatedWorktracker";
+import { studioApolloClient } from "../../../shared/apollo/client";
 import {
-  FIVE_MINUTES,
-  queryClient,
-} from "../../../shared/query/queryClient";
-import { queryKeys } from "../../../shared/query/keys";
+  GeneratedWorkTrackerWorkItemFieldsFragmentDoc,
+  WorkTrackerModuleOpenDocument,
+} from "../generated/workItems.documents";
+import type { GeneratedWorkTrackerWorkItemFieldsFragment } from "../generated/workItems.documents";
 import {
-  readBatchedWorkItem,
-  readWorkItemAttachments,
+  moduleTreeFromWorkItems,
   readModuleTreeRecords,
   readProjectWorkItems,
+  readWorkItem,
 } from "./readTransport";
-
-/**
- * Canonical read boundary for work-item server state.
- *
- * Zustand stores may still project these records while their consumers are
- * migrated, but requests, cancellation, de-duplication, staleness and errors
- * belong to TanStack Query here.
- */
-
-export const workItemQuery = (id: string) => ({
-  queryKey: queryKeys.workItems.byId(id),
-  queryFn: () => readBatchedWorkItem(id),
-  staleTime: FIVE_MINUTES,
-});
+import { orderedWorkItems, workItemFromIssue } from "../issueAdapter";
 
 export const EMPTY_MODULE_TREE: ModuleTree = {
   rootIds: [],
@@ -36,102 +22,115 @@ export const EMPTY_MODULE_TREE: ModuleTree = {
   order: [],
 };
 
+const issueReference = (id: string) => ({
+  __typename: "WorktrackerIssue" as const,
+  id: compactWorktrackerId(id),
+});
+
+const recordSelectionProfilePoint = (point: string) => {
+  (globalThis as typeof globalThis & {
+    __ticketrySelectionProfileProbe?: (point: string) => void;
+  }).__ticketrySelectionProfileProbe?.(point);
+};
+
+function moduleTreeFromResult(
+  moduleId: string,
+  rows: readonly GeneratedWorkTrackerWorkItemFieldsFragment[],
+): ModuleTree {
+  return moduleTreeFromWorkItems(moduleId, orderedWorkItems(rows));
+}
+
 export function getModuleTreeSnapshot(
-  projectId: string | null,
+  _projectId: string | null,
   moduleId: string | null,
 ): ModuleTree {
-  if (!projectId || !moduleId) return EMPTY_MODULE_TREE;
-  return (
-    queryClient.getQueryData<ModuleTree>(
-      queryKeys.tasks.byModule(projectId, moduleId),
-    ) ?? EMPTY_MODULE_TREE
-  );
+  if (!moduleId) return EMPTY_MODULE_TREE;
+  const result = studioApolloClient().readQuery({
+    query: WorkTrackerModuleOpenDocument,
+    variables: { moduleId: compactWorktrackerId(moduleId) },
+    optimistic: true,
+  });
+  return result
+    ? moduleTreeFromResult(moduleId, result.work_items.nodes)
+    : EMPTY_MODULE_TREE;
 }
 
 export async function loadModuleTree(
   projectId: string,
   moduleId: string,
 ): Promise<ModuleTree> {
-  return queryClient.fetchQuery(moduleTreeQuery(projectId, moduleId));
-}
-
-function moduleTreeQuery(projectId: string, moduleId: string) {
-  return {
-    queryKey: queryKeys.tasks.byModule(projectId, moduleId),
-    staleTime: 0,
-    queryFn: async () => {
-      const { rootIds, children, order, workItems, states } = await readModuleTreeRecords(
-        projectId,
-        moduleId,
-      );
-      setStatesSorted(projectId, states);
-      for (const item of workItems) {
-        const locallyMutating = queryClient.isMutating({
-          predicate: (mutation) =>
-            (mutation.state.variables as { id?: unknown } | undefined)?.id ===
-            item.id,
-        });
-        if (locallyMutating > 0) continue;
-        queryClient.setQueryData<WorkItem>(
-          queryKeys.workItems.byId(item.id),
-          (current) =>
-            current && current.state_revision > item.state_revision
-              ? current
-              : item,
-        );
-      }
-      return { rootIds, children, order };
-    },
-  };
+  const { workItems: _workItems, ...tree } = await readModuleTreeRecords(
+    projectId,
+    moduleId,
+  );
+  return tree;
 }
 
 export function useModuleTree(
-  projectId: string | null,
+  _projectId: string | null,
   moduleId: string | null,
 ): ModuleTree {
-  const { data } = useQuery<ModuleTree, Error, ModuleTree>(
-    projectId && moduleId
-      ? moduleTreeQuery(projectId, moduleId)
-      : {
-          queryKey: queryKeys.tasks.emptyTree,
-          queryFn: () => EMPTY_MODULE_TREE,
-          enabled: false,
-        },
-    queryClient,
-  );
-  return data ?? EMPTY_MODULE_TREE;
+  return useModuleOpen(moduleId).tree;
 }
 
-/** Subscribe to the one server-state holding for a work item. */
+export function useModuleOpen(moduleId: string | null): {
+  tree: ModuleTree;
+  items: WorkItem[];
+  loading: boolean;
+} {
+  recordSelectionProfilePoint("module-open-hook");
+  const query = useQuery(
+    WorkTrackerModuleOpenDocument,
+    moduleId
+      ? {
+          variables: { moduleId: compactWorktrackerId(moduleId) },
+          client: studioApolloClient(),
+          fetchPolicy: "cache-and-network",
+          nextFetchPolicy: "cache-first",
+        }
+      : skipToken,
+  );
+  const opened = useMemo(() => {
+    if (!moduleId || !query.data) {
+      return { tree: EMPTY_MODULE_TREE, items: [] };
+    }
+    const items = orderedWorkItems(query.data.work_items.nodes);
+    recordSelectionProfilePoint("module-open-materialize");
+    return {
+      tree: moduleTreeFromWorkItems(moduleId, items),
+      items,
+    };
+  }, [moduleId, query.data]);
+  return { ...opened, loading: query.loading };
+}
+
+/** Subscribe to the normalized Apollo row for one work item. */
 export function useWorkItem(id: string | null) {
-  return useQuery(
-    {
-      ...workItemQuery(id ?? "no-work-item"),
-      enabled: id !== null,
-    },
-    queryClient,
-  );
+  const fragment = useFragment({
+    client: studioApolloClient(),
+    fragment: GeneratedWorkTrackerWorkItemFieldsFragmentDoc,
+    from: id ? issueReference(id) : null,
+  });
+  const data = id && fragment.data && "id" in fragment.data
+    ? workItemFromIssue(fragment.data as GeneratedWorkTrackerWorkItemFieldsFragment)
+    : undefined;
+  return {
+    data,
+    isPending: Boolean(id) && !fragment.complete,
+    isLoading: Boolean(id) && !fragment.complete,
+    error: undefined as Error | undefined,
+  };
 }
 
-/** Subscribe to the attachment subcollection without re-reading its work item. */
-export function useWorkItemAttachments(id: string | null) {
-  return useQuery(
-    {
-      queryKey: queryKeys.workItems.attachments(id ?? "no-work-item"),
-      queryFn: () => readWorkItemAttachments(id!),
-      enabled: id !== null,
-    },
-    queryClient,
-  );
+export function getWorkItemSnapshot(id: string | null): WorkItem | undefined {
+  if (!id) return undefined;
+  const row = studioApolloClient().readFragment({
+    fragment: GeneratedWorkTrackerWorkItemFieldsFragmentDoc,
+    from: issueReference(id),
+    optimistic: true,
+  });
+  return row ? workItemFromIssue(row) : undefined;
 }
 
-/** Resolve id-only membership without creating a record-shaped collection. */
-export function useWorkItemsByIds(ids: readonly string[]): WorkItem[] {
-  const results = useQueries(
-    { queries: ids.map((id) => workItemQuery(id)) },
-    queryClient,
-  );
-  return results.flatMap(({ data }) => (data ? [data] : []));
-}
-
-export { readProjectWorkItems };
+export { readProjectWorkItems, readWorkItem };
+export { useWorkItemAttachments } from "./useWorkItemAttachments";

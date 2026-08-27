@@ -5,4 +5,4 @@ export type {
   WorktreeContext,
   WorktreeStatus,
   DiscardResult,
-} from "./internal/api";
+} from "./internal/types";

@@ -1,5 +1,5 @@
 import { studioRuntime } from "../../../runtime";
-import { FoundationGraphQlError } from "../../../graphql-foundation/foundationClient";
+import { FoundationGraphQlError } from "../../../shared/apollo/errorLink";
 import {
   RunWorkTrackerWorkItemNowDocument,
   type RunNowPayload,

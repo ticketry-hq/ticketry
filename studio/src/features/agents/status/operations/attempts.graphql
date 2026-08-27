@@ -11,12 +11,6 @@ fragment AutomationAttemptFields on AutomationAttemptProjection {
   updated_at
 }
 
-query AutomationAttempts($projectId: String!, $taskId: String) {
-  automation_attempts(project_id: $projectId, task_id: $taskId) {
-    ...AutomationAttemptFields
-  }
-}
-
 mutation RetryAutomationAttempt($attemptId: String!) {
   retry_automation_attempt(attempt_id: $attemptId) {
     ...AutomationAttemptFields

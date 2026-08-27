@@ -9,6 +9,7 @@ export {
   getProjectsSnapshot,
   loadModules,
   loadProjects,
+  readProjectOpen,
   readWorkspace,
   seedModules,
   seedProjects,
@@ -19,6 +20,18 @@ export {
   updateProjectRecord,
 } from "./queries";
 export { acknowledgeOnboarding } from "./mutationTransport";
+export {
+  getStatesSnapshot,
+  loadStates,
+  reloadStates,
+  removeState,
+  seedStates,
+  setStates,
+  setStatesSorted,
+  stateById,
+  upsertState,
+  useCachedStates,
+} from "./stateCatalog";
 export { useReorderModule } from "./mutations";
 export type { ModuleReorderControls } from "./mutations";
 export { moduleDragCodec } from "./internal/moduleDrag";
@@ -31,27 +44,25 @@ export { planModuleReorder } from "./internal/moduleReorder";
 export type { ModuleReorderPlan } from "./internal/moduleReorder";
 export {
   applyCanonicalModuleOrder,
+  resolveStartProject,
   usesManualModuleOrder,
-} from "./utilities/canonicalModuleOrder";
+} from "./selectors";
 export {
   fetchModuleActivity,
   registerModuleRecencyProvider,
   sortModulesByRecency,
 } from "./utilities/moduleRecency";
-export { resolveStartProject } from "./utilities/recentProjects";
 export {
-  WorkTrackerModulesDocument,
+  WorkTrackerProjectIssueTypesDocument,
+  WorkTrackerProjectOpenDocument,
+  WorkTrackerProjectStatesDocument,
   WorkTrackerProjectsDocument,
   WorkTrackerWorkspaceDocument,
-} from "./generated/operations";
+} from "./generated/projects.documents";
 export type {
-  WorkTrackerModule,
-  WorkTrackerModulesQuery,
-  WorkTrackerModulesVariables,
-  WorkTrackerProject,
+  WorkTrackerProjectOpenQuery,
   WorkTrackerProjectsQuery,
-  WorkTrackerProjectsVariables,
-  WorkTrackerWorkspace,
+  WorkTrackerProjectsQueryVariables as WorkTrackerProjectsVariables,
   WorkTrackerWorkspaceQuery,
-  WorkTrackerWorkspaceVariables,
-} from "./generated/operations";
+  WorkTrackerWorkspaceQueryVariables as WorkTrackerWorkspaceVariables,
+} from "./generated/projects.documents";

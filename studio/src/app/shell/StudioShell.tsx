@@ -26,9 +26,8 @@ export function StudioShell() {
 
   useEffect(() => {
     if (!selectedProjectId) return;
-    // The durable GraphQL subscription is the only status authority. A
-    // platform without the in-process transport has no status feed at all —
-    // there is deliberately no second source to fall back to.
+    // The durable GraphQL subscription is the only status authority. Desktop
+    // uses Tauri IPC; browser development streams it from the Rust adapter.
     const createProxy = statusStreamTransport();
     if (!createProxy) return;
     statusStreamFeed.start(selectedProjectId, { createProxy });

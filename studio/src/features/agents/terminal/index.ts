@@ -63,6 +63,7 @@ export {
   type TerminalProvider,
 } from "./presentation/providerPresentation";
 export { isLiveTerminalState } from "./presentation/terminalLiveness";
+export { selectWorkspaceTerminalRuns } from "./runTabRestoration";
 export {
   presentDormantTerminalChips,
   type DormantTerminalChip,
@@ -119,3 +120,9 @@ export {
 } from "./internal/foregroundStore";
 export { focusTerminal } from "./internal/terminalRegistry";
 export { launchFailureMessage } from "./internal/launchFailure";
+export { launchDefaultAgent } from "./internal/launchDefaultAgent";
+export { refreshTerminalHoldings } from "./refresh";
+export {
+  CreateModuleShellDocument,
+  ModuleShellSessionsDocument,
+} from "./generated/terminalSessions.documents";

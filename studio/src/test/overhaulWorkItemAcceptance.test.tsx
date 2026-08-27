@@ -1,8 +1,40 @@
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { useApolloClient } from "@apollo/client/react";
+import { useEffect, useState } from "react";
 import { describe, expect, it } from "vitest";
 import { fixture, mountStudio, workItem } from "./seam";
-import { setStatesSorted } from "../shared/query/stateCatalog";
-import { dragWorkItem } from "./workItemDragGestures";
+import { WorkTrackerAttachmentsDocument } from "../features/work-items/generated/workItems.documents";
+import { useWorkItemAttachments } from "../features/work-items";
+import { compactWorktrackerId } from "../shared/api/generatedWorktracker";
+import { useClientStore } from "../state/clientStore";
+import { setStatesSorted } from "../features/projects";
+import { finishWorkItemDragWithoutDrop } from "./workItemDragGestures";
+
+function AttachmentCacheProbe({ issueId }: { issueId: string }) {
+  const client = useApolloClient();
+  const [cacheKey, setCacheKey] = useState("");
+
+  useEffect(() => client.cache.watch({
+    query: WorkTrackerAttachmentsDocument,
+    variables: { issueId: compactWorktrackerId(issueId) },
+    optimistic: true,
+    immediate: true,
+    callback: ({ result }) => {
+      const attachment = result?.attachments?.nodes?.[0];
+      setCacheKey(attachment ? client.cache.identify(attachment) ?? "" : "");
+    },
+  }), [client, issueId]);
+
+  return <output data-testid="attachment-cache-key">{cacheKey}</output>;
+}
+
+function AttachmentErrorProbe() {
+  const issueId = useClientStore((state) => state.selectedTaskId);
+  const { error } = useWorkItemAttachments(issueId);
+  const message = error instanceof Error ? error.message : "";
+  const code = error && "code" in error ? String(error.code) : "";
+  return <output data-testid="attachment-error">{code}:{message}</output>;
+}
 
 describe("overhaul acceptance — Stories and details", () => {
   it("[overhaul-25] keeps held work items in a state section after its catalog name changes", async () => {
@@ -16,7 +48,7 @@ describe("overhaul acceptance — Stories and details", () => {
     mountStudio({ http });
 
     const stories = await screen.findByRole("region", { name: "Stories" });
-    expect(within(stories).getByRole("button", { name: "Collapse Ideas" }))
+    expect(await within(stories).findByRole("button", { name: "Collapse Ideas" }))
       .toHaveTextContent("Ideas1");
 
     act(() => {
@@ -60,7 +92,11 @@ describe("overhaul acceptance — Stories and details", () => {
         created_at: "2026-08-09T12:00:00Z",
       },
     ]);
-    mountStudio({ http, selectedTaskId: "story-1" });
+    mountStudio({
+      http,
+      selectedTaskId: "story-1",
+      children: <AttachmentCacheProbe issueId="story-1" />,
+    });
 
     const details = screen.getByRole("region", { name: "Details" });
     const attachment = await within(details).findByRole("link", {
@@ -69,6 +105,31 @@ describe("overhaul acceptance — Stories and details", () => {
 
     expect(attachment).toHaveAttribute("href", "/media/implementation-notes.md");
     expect(within(details).getByTestId("attachments")).toHaveTextContent("2.0 KB");
+    expect(await screen.findByTestId("attachment-cache-key")).toHaveTextContent(
+      'WorktrackerAttachment:{"id":"attachment-1"}',
+    );
+  });
+
+  it("keeps the attachment domain error contract on the Apollo read", async () => {
+    const http = fixture();
+    http.tree("module-1", {
+      rootIds: ["story-1"],
+      children: { "story-1": [] },
+      order: ["story-1"],
+    });
+    http.workItems([workItem({ id: "story-1", name: "Attached story" })]);
+    mountStudio({ http, children: <AttachmentErrorProbe /> });
+
+    const stories = await screen.findByRole("region", { name: "Stories" });
+    const row = await within(stories).findByRole("treeitem", {
+      name: /Attached story/,
+    });
+    http.failNext(409, { detail: "Attachment read conflicted." });
+    fireEvent.click(row);
+
+    expect(await screen.findByTestId("attachment-error")).toHaveTextContent(
+      "conflict:Attachment read conflicted.",
+    );
   });
 
   it("[overhaul-01] repaints every surface after fields, type, and parent change", async () => {
@@ -112,7 +173,7 @@ describe("overhaul acceptance — Stories and details", () => {
     ]);
     mountStudio({ http });
     const stories = await screen.findByRole("region", { name: "Stories" });
-    fireEvent.click(within(stories).getByRole("button", { name: "Expand subtasks" }));
+    fireEvent.click(await within(stories).findByRole("button", { name: "Expand subtasks" }));
     fireEvent.click(await within(stories).findByRole("treeitem", { name: /Before/ }));
     const details = screen.getByRole("region", { name: "Details" });
     expect(
@@ -153,7 +214,6 @@ describe("overhaul acceptance — Stories and details", () => {
         issue_type: implementation,
         state: review,
         parent_id: "module-1",
-        state_revision: 2,
         rank: "A",
       }),
       workItem({
@@ -221,7 +281,7 @@ describe("overhaul acceptance — Stories and details", () => {
     });
     mountStudio({ http });
     const stories = await screen.findByRole("region", { name: "Stories" });
-    fireEvent.click(within(stories).getByRole("treeitem", { name: /Moving story/ }));
+    fireEvent.click(await within(stories).findByRole("treeitem", { name: /Moving story/ }));
     const details = screen.getByRole("region", { name: "Details" });
 
     fireEvent.click(await within(details).findByRole("button", { name: "Grill" }));
@@ -274,7 +334,7 @@ describe("overhaul acceptance — Stories and details", () => {
 
     const stories = await screen.findByRole("region", { name: "Stories" });
     fireEvent.click(
-      within(stories).getByRole("treeitem", { name: /Ready for direct kickoff/ }),
+      await within(stories).findByRole("treeitem", { name: /Ready for direct kickoff/ }),
     );
     const details = screen.getByRole("region", { name: "Details" });
     fireEvent.click(await within(details).findByRole("button", { name: "Ideas" }));
@@ -291,28 +351,101 @@ describe("overhaul acceptance — Stories and details", () => {
 
   it("[overhaul-03] leaves a dragged row where dropped after the server reply", async () => {
     const http = fixture();
+    const topId = "11111111111111111111111111111111";
+    const bottomId = "22222222222222222222222222222222";
     http.tree("module-1", {
-      rootIds: ["top", "bottom"],
-      children: { top: [], bottom: [] },
-      order: ["top", "bottom"],
+      rootIds: [topId, bottomId],
+      children: { [topId]: [], [bottomId]: [] },
+      order: [topId, bottomId],
     });
     http.workItems([
-      workItem({ id: "top", name: "Top", rank: "A" }),
-      workItem({ id: "bottom", name: "Bottom", key: "MEML-2", rank: "Z" }),
+      workItem({ id: topId, name: "Top", rank: "A" }),
+      workItem({ id: bottomId, name: "Bottom", key: "MEML-2", rank: "Z" }),
     ]);
-    const reordered = http.expectReorder("bottom", {
+    const reordered = http.expectReorder(bottomId, {
       before_id: null,
-      after_id: "top",
+      after_id: topId,
     });
     mountStudio({ http });
     const stories = await screen.findByRole("region", { name: "Stories" });
-    const source = within(stories).getByRole("treeitem", { name: /Bottom/ });
-    const target = within(stories).getByRole("treeitem", { name: /Top/ });
-    dragWorkItem(source, target, "before");
+    const source = await within(stories).findByRole("treeitem", { name: /Bottom/ });
+    const target = await within(stories).findByRole("treeitem", { name: /Top/ });
+    finishWorkItemDragWithoutDrop(source, target, "before");
     await reordered;
 
-    expect(within(stories).getAllByRole("treeitem").map((row) => row.getAttribute("data-task-id")))
-      .toEqual(["__scratch__", "bottom", "top"]);
+    await waitFor(() => {
+      expect(within(stories).getAllByRole("treeitem").map((row) => row.getAttribute("data-task-id")))
+        .toEqual([
+          "__scratch__",
+          "22222222-2222-2222-2222-222222222222",
+          "11111111-1111-1111-1111-111111111111",
+        ]);
+    });
+  });
+
+  it("keeps the destination order after moving a Story to another state", async () => {
+    const http = fixture();
+    const ideasId = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const implementId = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    const sourceId = "11111111111111111111111111111111";
+    const targetId = "22222222222222222222222222222222";
+    http.tree("module-1", {
+      rootIds: [sourceId, targetId],
+      children: { [sourceId]: [], [targetId]: [] },
+      order: [sourceId, targetId],
+    });
+    http.workItems([
+      workItem({
+        id: sourceId,
+        name: "Move to Implement",
+        rank: "Z",
+        state: {
+          id: ideasId,
+          name: "Ideas",
+          group: "backlog",
+          color: null,
+          sort_order: 1,
+        },
+      }),
+      workItem({
+        id: targetId,
+        name: "Already implementing",
+        key: "MEML-2",
+        rank: "M",
+        state: {
+          id: implementId,
+          name: "Implement",
+          group: "started",
+          color: null,
+          sort_order: 2,
+        },
+      }),
+    ]);
+    const transitioned = http.expectPatch(sourceId, {
+      state_id: implementId,
+      origin: "human",
+    });
+    const reordered = http.expectReorder(sourceId, {
+      before_id: null,
+      after_id: targetId,
+    });
+    mountStudio({ http });
+
+    const stories = await screen.findByRole("region", { name: "Stories" });
+    const source = await within(stories).findByRole("treeitem", { name: /Move to Implement/ });
+    const target = await within(stories).findByRole("treeitem", { name: /Already implementing/ });
+    finishWorkItemDragWithoutDrop(source, target, "before");
+
+    await transitioned;
+    await reordered;
+    await waitFor(() => {
+      expect(within(stories).getAllByRole("treeitem").map((row) => row.getAttribute("data-task-id")))
+        .toEqual([
+          "__scratch__",
+          "11111111-1111-1111-1111-111111111111",
+          "22222222-2222-2222-2222-222222222222",
+        ]);
+    });
   });
 
   it("[overhaul-04] visibly reverts a write refused by the server", async () => {
@@ -325,7 +458,7 @@ describe("overhaul acceptance — Stories and details", () => {
     http.workItems([workItem({ id: "story-1", name: "Accepted name" })]);
     mountStudio({ http });
     const stories = await screen.findByRole("region", { name: "Stories" });
-    fireEvent.click(within(stories).getByRole("treeitem", { name: /Accepted name/ }));
+    fireEvent.click(await within(stories).findByRole("treeitem", { name: /Accepted name/ }));
     const details = screen.getByRole("region", { name: "Details" });
     fireEvent.click(await within(details).findByText("Accepted name"));
     const name = within(details).getByRole("textbox", { name: "Name" });
@@ -354,7 +487,7 @@ describe("overhaul acceptance — Stories and details", () => {
     const stories = await screen.findByRole("region", { name: "Stories" });
     const details = screen.getByRole("region", { name: "Details" });
     for (const name of ["First", "Second", "Third", "First"]) {
-      fireEvent.click(within(stories).getByRole("treeitem", { name: new RegExp(name) }));
+      fireEvent.click(await within(stories).findByRole("treeitem", { name: new RegExp(name) }));
       expect(await within(details).findByText(name)).toBeVisible();
       expect(within(details).queryByText("Loading issue…")).toBeNull();
       expect(within(stories).queryByText("…")).toBeNull();
@@ -397,7 +530,7 @@ describe("overhaul acceptance — Stories and details", () => {
     mountStudio({ http });
 
     const stories = await screen.findByRole("region", { name: "Stories" });
-    const parent = within(stories).getByRole("treeitem", { name: /Parent story/ });
+    const parent = await within(stories).findByRole("treeitem", { name: /Parent story/ });
     expect(parent).toHaveAttribute("aria-expanded", "false");
     expect(within(stories).queryByText("Implementation child")).toBeNull();
 

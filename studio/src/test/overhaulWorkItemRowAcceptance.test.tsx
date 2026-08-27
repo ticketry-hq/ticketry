@@ -74,7 +74,7 @@ describe("overhaul acceptance — work-item rows", () => {
     });
     expect(scratch.querySelector("[data-task-id-token]")).toBeNull();
     expect(scratch.lastElementChild).toHaveTextContent("Local scratch workspace");
-    const unresolved = within(stories).getByRole("treeitem", {
+    const unresolved = await within(stories).findByRole("treeitem", {
       name: /Unresolved work item/,
     });
     expect(unresolved.querySelector("[data-task-id-token]")).toBeNull();

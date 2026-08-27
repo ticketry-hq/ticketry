@@ -1,17 +1,19 @@
-import { useQuery } from "@tanstack/react-query";
-import { studioRuntime } from "../../runtime";
+import { useQuery } from "@apollo/client/react";
 import type {
   ConfigurableProvider,
   ProviderCapabilities,
   ProviderCatalog,
 } from "../../shared/api/types";
-import { queryClient } from "../../shared/query/queryClient";
-import { queryKeys } from "../../shared/query/keys";
+import { studioApolloClient } from "../../shared/apollo/client";
 import {
   LoadProviderCatalogDocument,
   UpdateProviderCatalogDocument,
-  type ProviderCatalogPayload,
-} from "../settings/generated/providerCatalog";
+} from "../settings/generated/providerCatalog.documents";
+import type {
+  LoadProviderCatalogQuery,
+} from "../settings/generated/providerCatalog.documents";
+
+type ProviderCatalogPayload = LoadProviderCatalogQuery["provider_catalog"];
 
 interface ProviderHolding {
   catalog: ProviderCatalog;
@@ -44,9 +46,7 @@ function holdingFromGraphQl(payload: ProviderCatalogPayload): ProviderHolding {
       accepts_any_model: false,
       model_aliases: models.map((model) => model.name),
       model_prefixes: [],
-      reasoning_levels: [
-        ...new Set(Object.values(modelReasoningLevels).flat()),
-      ],
+      reasoning_levels: [...new Set(Object.values(modelReasoningLevels).flat())],
       model_reasoning_levels: modelReasoningLevels,
       supports_unattended: provider.supports_unattended,
     };
@@ -56,8 +56,8 @@ function holdingFromGraphQl(payload: ProviderCatalogPayload): ProviderHolding {
       activated_providers: payload.configurable_providers
         .filter((provider) => provider.activated && isConfigurable(provider.slug))
         .map((provider) => provider.slug as ConfigurableProvider),
-      global_default: payload.global_default &&
-          isConfigurable(payload.global_default.provider)
+      global_default: payload.global_default
+        && isConfigurable(payload.global_default.provider)
         ? {
             provider: payload.global_default.provider,
             model: payload.global_default.model,
@@ -70,27 +70,13 @@ function holdingFromGraphQl(payload: ProviderCatalogPayload): ProviderHolding {
   };
 }
 
-async function fetchProviderHolding(): Promise<ProviderHolding> {
-  return studioRuntime().readSettings({
-    graphQl: async (execute) => holdingFromGraphQl(
-      (await execute(LoadProviderCatalogDocument, {})).provider_catalog,
-    ),
+async function fetchHolding(force = false): Promise<ProviderHolding> {
+  const { data } = await studioApolloClient().query({
+    query: LoadProviderCatalogDocument,
+    fetchPolicy: force ? "network-only" : "cache-first",
   });
+  return holdingFromGraphQl(data!.provider_catalog);
 }
-
-const fetchHolding = async (force = false): Promise<ProviderHolding> => {
-  if (force) {
-    await queryClient.cancelQueries({
-      queryKey: queryKeys.providers.catalog,
-      exact: true,
-    });
-  }
-  return queryClient.fetchQuery({
-    queryKey: queryKeys.providers.catalog,
-    queryFn: fetchProviderHolding,
-    staleTime: 0,
-  });
-};
 
 export async function loadProviderCatalog(): Promise<ProviderCatalog> {
   return (await fetchHolding()).catalog;
@@ -111,87 +97,141 @@ export async function loadConfigurableProviderCapabilities(): Promise<
 export async function updateProviderCatalog(
   catalog: ProviderCatalog,
 ): Promise<ProviderCatalog> {
-  const holding = await studioRuntime().writeSettings({
-    graphQl: async (execute) => holdingFromGraphQl(
-      (await execute(UpdateProviderCatalogDocument, {
-        activatedProviders: catalog.activated_providers,
-        defaultProvider: catalog.global_default?.provider ?? null,
-        defaultModel: catalog.global_default?.model ?? null,
-        defaultReasoning: catalog.global_default?.reasoning ?? null,
-      })).update_provider_catalog,
-    ),
+  const client = studioApolloClient();
+  const { data } = await client.mutate({
+    mutation: UpdateProviderCatalogDocument,
+    variables: {
+      activatedProviders: catalog.activated_providers,
+      defaultProvider: catalog.global_default?.provider ?? null,
+      defaultModel: catalog.global_default?.model ?? null,
+      defaultReasoning: catalog.global_default?.reasoning ?? null,
+    },
   });
-  queryClient.setQueryData(queryKeys.providers.catalog, holding);
-  return holding.catalog;
+  const payload = data!.update_provider_catalog;
+  // The mutation field and catalogue query field have different root keys.
+  // Publish the authoritative response into the one normalized holding so all
+  // launch pickers converge in the same turn as the settings panel.
+  client.writeQuery({
+    query: LoadProviderCatalogDocument,
+    data: { provider_catalog: payload } as LoadProviderCatalogQuery,
+  });
+  return holdingFromGraphQl(payload).catalog;
+}
+
+function providerPayloadSnapshot(): ProviderCatalogPayload | undefined {
+  return studioApolloClient().readQuery({
+    query: LoadProviderCatalogDocument,
+    optimistic: true,
+  })?.provider_catalog;
 }
 
 export function setProviderCatalog(catalog: ProviderCatalog): void {
-  queryClient.setQueryData<ProviderHolding>(
-    queryKeys.providers.catalog,
-    (current) => ({
-      catalog,
-      capabilities: current?.capabilities ?? [],
-      configurableCapabilities: current?.configurableCapabilities ?? [],
-    }),
-  );
+  const current = providerPayloadSnapshot();
+  if (!current) return;
+  const activated = new Set(catalog.activated_providers);
+  studioApolloClient().writeQuery({
+    query: LoadProviderCatalogDocument,
+    data: {
+      provider_catalog: {
+        configurable_providers: current.configurable_providers.map((provider) => ({
+          ...provider,
+          activated: activated.has(provider.slug as ConfigurableProvider),
+        })),
+        providers: [...current.providers],
+        agent_models: current.agent_models.map((model) => ({
+          ...model,
+          reasoning_levels: { nodes: [...model.reasoning_levels.nodes] },
+        })),
+        reasoning_levels: [...current.reasoning_levels],
+        global_default: catalog.global_default,
+      },
+    } as unknown as LoadProviderCatalogQuery,
+  });
 }
 
 export function setProviderCapabilities(capabilities: ProviderCapabilities[]): void {
-  queryClient.setQueryData<ProviderHolding>(
-    queryKeys.providers.catalog,
-    (current) => ({
-      catalog: current?.catalog ?? {
-        activated_providers: capabilities
-          .map((capability) => capability.agent)
-          .filter(isConfigurable),
+  const reasoning = [...new Set(capabilities.flatMap((row) => row.reasoning_levels ?? []))];
+  let reasoningRelationId = 0;
+  const providers = capabilities.map((capability) => ({
+    __typename: "WorktrackerProvider" as const,
+    id: capability.agent,
+    slug: capability.agent,
+    activated: true,
+    supports_unattended: capability.supports_unattended ?? false,
+  }));
+  studioApolloClient().writeQuery({
+    query: LoadProviderCatalogDocument,
+    data: {
+      provider_catalog: {
+        __typename: "ProviderCatalog" as const,
+        configurable_providers: providers.filter((provider) => isConfigurable(provider.slug)),
+        providers,
+        agent_models: capabilities.flatMap((capability) =>
+          (capability.model_aliases ?? []).map((name) => ({
+            __typename: "WorktrackerAgentmodel" as const,
+            id: `${capability.agent}:${name}`,
+            provider: capability.agent,
+            name,
+            reasoning_levels: {
+              __typename: "WorktrackerAgentmodelreasoninglevelConnection" as const,
+              nodes: (capability.model_reasoning_levels?.[name]
+                ?? capability.reasoning_levels
+                ?? []).map((level) => ({
+                  __typename: "WorktrackerAgentmodelreasoninglevel" as const,
+                  id: ++reasoningRelationId,
+                  reasoning_level_id: level,
+                })),
+            },
+          })),
+        ),
+        reasoning_levels: reasoning.map((name) => ({
+          __typename: "WorktrackerReasoninglevel" as const,
+          id: name,
+          name,
+        })),
         global_default: null,
       },
-      capabilities,
-      configurableCapabilities: current?.configurableCapabilities ?? capabilities,
-    }),
-  );
+    } as unknown as LoadProviderCatalogQuery,
+  });
 }
 
-export function getProviderCapabilitiesSnapshot():
-  | ProviderCapabilities[]
-  | undefined {
-  return queryClient.getQueryData<ProviderHolding>(
-    queryKeys.providers.catalog,
-  )?.capabilities;
+export function getProviderCapabilitiesSnapshot(): ProviderCapabilities[] | undefined {
+  const payload = providerPayloadSnapshot();
+  return payload ? holdingFromGraphQl(payload).capabilities : undefined;
 }
 
 export function useProviderCatalogQuery() {
-  return useQuery(
-    {
-      queryKey: queryKeys.providers.catalog,
-      queryFn: fetchProviderHolding,
-      staleTime: 0,
-      select: (holding) => holding.catalog,
-    },
-    queryClient,
-  );
+  const query = useQuery(LoadProviderCatalogDocument, { client: studioApolloClient() });
+  return {
+    ...query,
+    data: query.data
+      ? holdingFromGraphQl(query.data.provider_catalog).catalog
+      : undefined,
+    isPending: query.loading,
+    isError: Boolean(query.error),
+  };
 }
 
 export function useProviderCapabilitiesQuery() {
-  return useQuery(
-    {
-      queryKey: queryKeys.providers.catalog,
-      queryFn: fetchProviderHolding,
-      staleTime: 0,
-      select: (holding) => holding.capabilities,
-    },
-    queryClient,
-  );
+  const query = useQuery(LoadProviderCatalogDocument, { client: studioApolloClient() });
+  return {
+    ...query,
+    data: query.data
+      ? holdingFromGraphQl(query.data.provider_catalog).capabilities
+      : undefined,
+    isPending: query.loading,
+    isError: Boolean(query.error),
+  };
 }
 
 export function useConfigurableProviderCapabilitiesQuery() {
-  return useQuery(
-    {
-      queryKey: queryKeys.providers.catalog,
-      queryFn: fetchProviderHolding,
-      staleTime: 0,
-      select: (holding) => holding.configurableCapabilities,
-    },
-    queryClient,
-  );
+  const query = useQuery(LoadProviderCatalogDocument, { client: studioApolloClient() });
+  return {
+    ...query,
+    data: query.data
+      ? holdingFromGraphQl(query.data.provider_catalog).configurableCapabilities
+      : undefined,
+    isPending: query.loading,
+    isError: Boolean(query.error),
+  };
 }

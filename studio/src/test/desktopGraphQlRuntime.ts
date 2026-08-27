@@ -1,5 +1,10 @@
 import { createBrowserRuntime, initializeStudioRuntime } from "../runtime";
 import type { StudioRuntime, WorkTrackerGraphQlExecute } from "../runtime";
+import { documentOperationName } from "../graphql-foundation/typedDocument";
+import type {
+  PersistedTerminalSession,
+  ResumableTerminalSession,
+} from "../features/agents/types";
 
 /**
  * The runtime every terminal surface actually ships on.
@@ -47,9 +52,143 @@ export const grantsEveryLease: WorkTrackerGraphQlExecute = async (
   document,
   variables,
 ) =>
-  (LEASE_OPERATIONS.has(document.operationName)
+  (LEASE_OPERATIONS.has(documentOperationName(document))
     ? { viewer_lease: grantedLease(variables) }
     : {}) as never;
+
+export interface TerminalSessionReadFixture {
+  readTaskTerminalSessions(taskId: string): Promise<PersistedTerminalSession[]>;
+  readScratchTerminalSessions(
+    projectId: string,
+    moduleId: string,
+  ): Promise<PersistedTerminalSession[]>;
+  readTaskResumableTerminalSessions(taskId: string): Promise<ResumableTerminalSession[]>;
+  readScratchResumableTerminalSessions(
+    projectId: string,
+    moduleId: string,
+  ): Promise<ResumableTerminalSession[]>;
+}
+
+function terminalSessionRow(
+  session: PersistedTerminalSession,
+  moduleId: string,
+  scope: "task" | "plan",
+) {
+  return {
+    __typename: "AgentTerminalSessions",
+    agent_run_id: session.agent_run_id,
+    module_id: moduleId,
+    scope,
+    doc_rel_path: session.doc_rel_path ?? null,
+    created_at: session.created_at,
+    agent_run: {
+      __typename: "AgentRuns",
+      id: session.agent_run_id,
+      launch_state: session.launch_state ?? null,
+      launch_model: session.launch_model ?? null,
+    },
+  };
+}
+
+/** Adapt legacy-shaped fixture data onto the Apollo operations under test. */
+export function terminalSessionReadExecutor(
+  fixture: TerminalSessionReadFixture,
+): WorkTrackerGraphQlExecute {
+  return async (document, variables) => {
+    const operation = documentOperationName(document);
+    const input = variables as Record<string, string>;
+    if (operation === "LoadProviderCatalog") {
+      const provider = {
+        __typename: "WorktrackerProvider",
+        id: "codex",
+        slug: "codex",
+        activated: true,
+        supports_unattended: true,
+      };
+      return {
+        provider_catalog: {
+          __typename: "ProviderCatalog",
+          configurable_providers: [provider],
+          providers: [provider],
+          agent_models: [],
+          reasoning_levels: [],
+          global_default: null,
+        },
+      } as never;
+    }
+    if (operation === "RefreshTaskDocumentRegistry") {
+      return { refresh_task_document_registry: [] } as never;
+    }
+    if (operation === "RefreshScratchDocumentRegistry") {
+      return { refresh_scratch_document_registry: [] } as never;
+    }
+    if (operation === "TaskDocumentRegistry" || operation === "ScratchDocumentRegistry") {
+      return {
+        document_registry: {
+          __typename: "DesignDocumentsConnection",
+          nodes: [],
+        },
+      } as never;
+    }
+    if (operation === "TaskTerminalSessions") {
+      const sessions = await fixture.readTaskTerminalSessions(input.taskId);
+      return {
+        terminal_sessions: {
+          __typename: "AgentTerminalSessionsConnection",
+          sessions: sessions.map((session) => terminalSessionRow(
+            session,
+            input.moduleId ?? "module-1",
+            "task",
+          )),
+        },
+      } as never;
+    }
+    if (operation === "ScratchTerminalSessions") {
+      const sessions = await fixture.readScratchTerminalSessions(
+        input.projectId,
+        input.moduleId,
+      );
+      return {
+        terminal_sessions: {
+          __typename: "AgentTerminalSessionsConnection",
+          sessions: sessions.map((session) => terminalSessionRow(
+            session,
+            input.moduleId,
+            "plan",
+          )),
+        },
+      } as never;
+    }
+    if (operation === "TaskResumableTerminalSessions") {
+      const sessions = await fixture.readTaskResumableTerminalSessions(input.taskId);
+      return {
+        resumable_sessions: sessions.map((session) => ({
+          __typename: "AgentRuns",
+          ...session,
+          ended_at: session.ended_at ?? null,
+          launch_state: session.launch_state ?? null,
+          launch_model: session.launch_model ?? null,
+        })),
+      } as never;
+    }
+    if (operation === "ScratchResumableTerminalSessions") {
+      const sessions = await fixture.readScratchResumableTerminalSessions(
+        input.projectId,
+        input.moduleId,
+      );
+      return {
+        resumable_sessions: sessions.map((session) => ({
+          __typename: "AgentRuns",
+          ...session,
+          ended_at: session.ended_at ?? null,
+          launch_state: session.launch_state ?? null,
+          launch_model: session.launch_model ?? null,
+        })),
+      } as never;
+    }
+    return grantsEveryLease(document, variables);
+  };
+}
 
 /**
  * Install the desktop GraphQL runtime and record what Studio asks it for.
@@ -64,12 +203,29 @@ export function installDesktopGraphQlRuntime(
   const recorded: RecordedGraphQlOperation[] = [];
   const route: StudioRuntime["readWorkTracker"] = (routes) =>
     routes.graphQl(((document, variables) => {
-      recorded.push({ operationName: document.operationName, variables });
+      recorded.push({ operationName: documentOperationName(document), variables });
       return execute(document, variables);
     }) as WorkTrackerGraphQlExecute);
+  const graphQlTransport: StudioRuntime["graphQlTransport"] = () => ({
+    graphql_execute: async (requestJson) => {
+      const request = JSON.parse(requestJson) as {
+        operationName: string;
+        variables: unknown;
+      };
+      recorded.push(request);
+      const data = await execute(
+        { operationName: request.operationName } as never,
+        request.variables as never,
+      );
+      return JSON.stringify({ data });
+    },
+    graphql_subscribe: async () => '{"type":"accepted"}',
+    graphql_unsubscribe: async () => true,
+  });
 
   initializeStudioRuntime({
     platform: "desktop",
+    graphQlTransport,
     capabilities: {
       statusFeed: true,
       nativeLifecycle: true,
@@ -119,7 +275,7 @@ export function installGraphQlViewerLeases(
     ...browser,
     writeWorkTracker: (routes) =>
       routes.graphQl(((document, variables) => {
-        recorded.push({ operationName: document.operationName, variables });
+        recorded.push({ operationName: documentOperationName(document), variables });
         return execute(document, variables);
       }) as WorkTrackerGraphQlExecute),
   });

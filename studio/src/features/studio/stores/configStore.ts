@@ -1,21 +1,17 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery } from "@apollo/client/react";
 import {
   deleteProfile as deleteProfileRecord,
-  getConfig,
   patchConfig,
   postProfile as postProfileRecord,
   putProfile as putProfileRecord,
 } from "../../settings/profileTransport";
 import { type ConfigPayload, type Profile } from "../lib/types";
-import { queryClient } from "../../../shared/query/queryClient";
-import { queryKeys } from "../../../shared/query/keys";
+import { studioApolloClient } from "../../../shared/apollo/client";
+import { LoadLocalSettingsDocument } from "../../settings/generated/profileSettings.documents";
 import { isAbsoluteFolderPath } from "../lib/moduleFolderPath";
 
-// Server config (profiles + feature flags) lives in the TanStack Query cache
-// under queryKeys.config — this module is the one place that reads and writes
-// that entry. Components subscribe through useConfig(); non-React code
-// (bootstrap, stores) uses the imperative functions, which share the same
-// cache entry the hooks render from.
+// Server config (profiles + feature flags) lives in Apollo's LoadLocalSettings
+// holding. Components and imperative bootstrap code read the same cache entry.
 
 export type SidebarPaneComposition =
   | "absent"
@@ -53,8 +49,21 @@ function toSnapshot(payload: ConfigPayload): ConfigSnapshot {
   };
 }
 
-async function fetchConfig(): Promise<ConfigSnapshot> {
-  return toSnapshot(await getConfig());
+function toQueryData(snapshot: ConfigSnapshot) {
+  return {
+    __typename: "LocalSettings",
+    recent_profile_index: snapshot.recentProfileIndex,
+    profiles: snapshot.profiles.map((profile) => ({
+      name: profile.name,
+      workspace_slug: profile.workspace_slug,
+      agent_prompt: profile.agent_prompt,
+      agent_prompts: profile.agent_prompts,
+      recent_project_id: profile.recent_project_id ?? null,
+      recent_module_ids: profile.recent_module_ids ?? {},
+      module_links: profile.module_links,
+    })),
+    features: snapshot.features,
+  };
 }
 
 // Profile mutations return the refreshed profile list; feature flags are not
@@ -66,38 +75,38 @@ function acceptConfig(payload: ConfigPayload): ConfigSnapshot {
     recentProfileIndex: payload.recent_profile_index,
     features: payload.features ?? getConfigSnapshot().features,
   };
-  queryClient.setQueryData(queryKeys.config, snapshot);
+  studioApolloClient().writeQuery({
+    query: LoadLocalSettingsDocument,
+    data: { local_settings: toQueryData(snapshot) },
+  });
   return snapshot;
 }
 
 /** The cached config, or the empty default before the first load resolves. */
 export function getConfigSnapshot(): ConfigSnapshot {
-  return (
-    queryClient.getQueryData<ConfigSnapshot>(queryKeys.config) ?? EMPTY_CONFIG
-  );
+  const data = studioApolloClient().readQuery({ query: LoadLocalSettingsDocument });
+  return data
+    ? toSnapshot(data.local_settings as unknown as ConfigPayload)
+    : EMPTY_CONFIG;
 }
 
 /** Explicit reload (page load, external change): always hits the server. */
 export async function loadConfig(): Promise<ConfigSnapshot> {
-  return queryClient.fetchQuery({
-    queryKey: queryKeys.config,
-    queryFn: fetchConfig,
-    staleTime: 0,
+  const { data } = await studioApolloClient().query({
+    query: LoadLocalSettingsDocument,
+    fetchPolicy: "network-only",
   });
+  return toSnapshot(data!.local_settings as unknown as ConfigPayload);
 }
 
 /** Subscribe to the config; renders the empty default until loaded. */
 export function useConfig(): ConfigSnapshot {
-  // The app-level queryClient is passed explicitly so the hook works without
-  // a provider in the tree (component tests, isolated hosts).
-  const { data } = useQuery(
-    {
-      queryKey: queryKeys.config,
-      queryFn: fetchConfig,
-    },
-    queryClient,
-  );
-  return data ?? EMPTY_CONFIG;
+  const { data } = useQuery(LoadLocalSettingsDocument, {
+    client: studioApolloClient(),
+  });
+  return data
+    ? toSnapshot(data.local_settings as unknown as ConfigPayload)
+    : EMPTY_CONFIG;
 }
 
 /**
@@ -112,7 +121,10 @@ export function seedConfig(
   const current = getConfigSnapshot();
   const partial = typeof update === "function" ? update(current) : update;
   const next = { ...current, ...partial };
-  queryClient.setQueryData(queryKeys.config, next);
+  studioApolloClient().writeQuery({
+    query: LoadLocalSettingsDocument,
+    data: { local_settings: toQueryData(next) },
+  });
   return next;
 }
 

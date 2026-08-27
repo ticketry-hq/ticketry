@@ -148,7 +148,7 @@ impl TerminalOutputActivityService {
                         subject_id: agent_run_id,
                         agent_run_id: Some(agent_run_id),
                         automation_attempt_id: None,
-                        work_item_id: Some(&current.task_id),
+                        work_item_id: Some(status_work_item_id(&current)),
                         payload: &payload,
                     },
                 )
@@ -220,6 +220,14 @@ fn observation(advanced: bool, row: &session::Model) -> TerminalOutputObservatio
         advanced,
         output_sequence: row.output_sequence,
         last_output_at: row.last_output_at.clone(),
+    }
+}
+
+fn status_work_item_id(row: &session::Model) -> &str {
+    if row.scope == "task" {
+        &row.task_id
+    } else {
+        &row.module_id
     }
 }
 

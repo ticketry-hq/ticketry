@@ -1,6 +1,5 @@
 import { studioRuntime } from "../../runtime";
 import { graphQlMutationError } from "../../shared/api/graphqlError";
-import { compactWorktrackerId } from "../../shared/api/generatedWorktracker";
 import type {
   IssueType, IssueTypeCreate, IssueTypePatch, LaunchBindingInput,
   State, StateCreate, StatePatch,
@@ -22,12 +21,18 @@ import {
   UpdateWorkTrackerStateDocument,
   UpdateWorkTrackerTransitionDocument,
   UpsertWorkTrackerLaunchBindingDocument,
-} from "./generated/mutations";
-import { WorkTrackerWorkflowCatalogDocument, type WorkTrackerIssueType } from "./generated/operations";
+} from "./generated/workflows.documents";
+import type { CreateWorkTrackerIssueTypeMutation } from "./generated/workflows.documents";
+import {
+  getWorkflowCatalogSnapshot,
+  readWorkflowCatalog,
+} from "./queries/projectCatalog";
 
 async function graphQl<TResult>(operation: () => Promise<TResult>): Promise<TResult> {
   try { return await operation(); } catch (error) { return graphQlMutationError(error); }
 }
+
+type WorkTrackerIssueType = CreateWorkTrackerIssueTypeMutation["create_issue_type"];
 
 const issueType = (row: WorkTrackerIssueType): IssueType => ({
   id: row.id, project: row.project, name: row.name, level: row.level as IssueType["level"],
@@ -114,12 +119,20 @@ export function upsertIssueTypeWorkflowLaunchBinding(
 ): Promise<unknown> {
   return studioRuntime().writeWorkTracker({
     graphQl: (execute) => graphQl(async () => {
-      const catalog = await execute(WorkTrackerWorkflowCatalogDocument, {
-        projectId: compactWorktrackerId(projectId),
-      });
-      const provider = binding.agent ? catalog.providers.nodes.find((row) => row.slug === binding.agent) : undefined;
-      const model = binding.model ? catalog.agent_models.nodes.find((row) => row.name === binding.model && (!provider || row.provider === provider.id || row.provider === provider.slug)) : undefined;
-      const reasoning = binding.reasoning ? catalog.reasoning_levels.nodes.find((row) => row.name === binding.reasoning) : undefined;
+      const catalog = getWorkflowCatalogSnapshot(projectId)
+        ?? await readWorkflowCatalog(projectId, "network-only");
+      const provider = binding.agent
+        ? catalog.providers.find((row) => row.slug === binding.agent)
+        : undefined;
+      const model = binding.model
+        ? catalog.agentModels.find((row) =>
+            row.name === binding.model
+            && (!provider || row.provider === provider.id || row.provider === provider.slug)
+          )
+        : undefined;
+      const reasoning = binding.reasoning
+        ? catalog.reasoningLevels.find((row) => row.name === binding.reasoning)
+        : undefined;
       if (binding.agent && !provider) throw new Error(`Agent/provider '${binding.agent}' is not in the catalog.`);
       if (binding.model && !model) throw new Error(`Model '${binding.model}' is not in the catalog for agent/provider '${binding.agent ?? ""}'.`);
       if (binding.reasoning && !reasoning) throw new Error(`Reasoning '${binding.reasoning}' is not in the catalog.`);

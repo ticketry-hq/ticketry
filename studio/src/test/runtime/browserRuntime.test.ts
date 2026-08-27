@@ -93,6 +93,27 @@ describe("browser runtime contract", () => {
     });
   });
 
+  it("gives Apollo the same browser GraphQL adapter transport", async () => {
+    const fetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ data: { ok: true } }), { status: 200 }),
+    );
+    vi.stubGlobal("fetch", fetch);
+    const runtime = createBrowserRuntime({ environment: {} });
+    const request = JSON.stringify({
+      query: "query Probe { ok }",
+      operationName: "Probe",
+      variables: {},
+    });
+
+    await expect(runtime.graphQlTransport().graphql_execute(request)).resolves.toBe(
+      JSON.stringify({ data: { ok: true } }),
+    );
+    expect(fetch).toHaveBeenCalledWith("/graphql", expect.objectContaining({
+      method: "POST",
+      body: request,
+    }));
+  });
+
   it("rejects invalid browser endpoint configuration", () => {
     expect(() =>
       createBrowserRuntime({

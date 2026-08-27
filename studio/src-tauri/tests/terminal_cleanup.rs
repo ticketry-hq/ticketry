@@ -130,6 +130,32 @@ async fn verified_runtime_is_killed_then_proved_absent() {
 }
 
 #[tokio::test]
+async fn hosted_exit_cleanup_clears_pending_without_rewriting_the_observed_exit_time() {
+    let harness = TerminalLifecycleHarness::start().await;
+    let database = harness.database().await;
+    let observed_exit = "2026-08-23T20:00:00.000000Z";
+    session::Entity::update_many()
+        .col_expr(
+            session::Column::TerminatedAt,
+            Expr::value(Some(observed_exit.to_owned())),
+        )
+        .col_expr(session::Column::RuntimeCleanupPending, Expr::value(true))
+        .filter(session::Column::AgentRunId.eq(TASK_RUN_ID))
+        .exec(&database)
+        .await
+        .unwrap();
+    let runtime = Arc::new(ScriptedRuntime::new([CleanupRuntimeObservation::Missing]));
+
+    let terminal = TerminalCleanupService::new(database, runtime)
+        .cleanup(TASK_RUN_ID, CleanupCause::HostedExit, TASK_RUN_ID)
+        .await
+        .unwrap();
+
+    assert!(!terminal.runtime_cleanup_pending);
+    assert_eq!(terminal.terminated_at.as_deref(), Some(observed_exit));
+}
+
+#[tokio::test]
 async fn foreign_identity_conflicts_and_unavailable_inspection_stays_pending() {
     let foreign_harness = TerminalLifecycleHarness::start().await;
     let foreign_database = foreign_harness.database().await;

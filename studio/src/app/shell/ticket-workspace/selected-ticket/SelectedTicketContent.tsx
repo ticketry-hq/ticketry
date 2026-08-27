@@ -27,10 +27,7 @@ import { WorkspaceTabStrip } from "./internal/WorkspaceTabStrip";
 import { DormantWorkspaceTabs } from "./internal/DormantWorkspaceTabs";
 import { WorkspaceTabBody } from "./internal/WorkspaceTabBody";
 import type { WorkspaceLauncherContext } from "./internal/WorkspaceLauncher";
-import {
-  useRefreshWorkspaceTerminalSessionsForRuns,
-  useWorkspaceTerminalSessions,
-} from "./terminals/useWorkspaceTerminalSessions";
+import { useWorkspaceTerminalSessions } from "./terminals/useWorkspaceTerminalSessions";
 import { useWorkspaceTabActions } from "./internal/useWorkspaceTabActions";
 import {
   useRememberPendingTerminalTarget,
@@ -84,10 +81,8 @@ export function SelectedTicketContent({
     tabs,
     activeTerminalId: activeTermIdOrNull,
     scratch,
-    persistedSessions,
-    terminalSessionsFetched,
+    workspaceRuns,
     resumableSessions,
-    mountedBucketRunIds,
   } = useWorkspaceTerminalSessions(bucket, projectId, moduleId);
   const {
     slugs: activatedProviders,
@@ -188,23 +183,14 @@ export function SelectedTicketContent({
   });
 
   useEffect(() => {
-    if (!bucket || !terminalSessionsFetched) return;
-    useTerminalStore.getState().restoreLiveSessions(bucket, persistedSessions);
+    if (!bucket) return;
+    useTerminalStore.getState().reconcileRunTabs(bucket, workspaceRuns);
     restoreTerminalTarget(bucket, restoreGenerationRef.current, true);
   }, [
     bucket,
-    mountedBucketRunIds,
-    persistedSessions,
     restoreTerminalTarget,
-    terminalSessionsFetched,
+    workspaceRuns,
   ]);
-
-  useRefreshWorkspaceTerminalSessionsForRuns({
-    bucket,
-    projectId,
-    moduleId,
-    mountedRunIds: mountedBucketRunIds,
-  });
 
   const sessionByRun = useTerminalStore((s) => s.sessionByRun);
 

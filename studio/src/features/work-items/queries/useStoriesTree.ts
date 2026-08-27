@@ -1,5 +1,4 @@
 import { useLayoutEffect, useMemo } from "react";
-import { useQueries } from "@tanstack/react-query";
 import { useClientStore } from "../../../state/clientStore";
 import { useStudioStore } from "../../projects";
 import {
@@ -12,18 +11,23 @@ import {
   type TreeWorkItem,
   visibleRows,
 } from "../selectors";
-import { useCachedStates } from "../../../shared/query/stateCatalog";
-import { queryClient } from "../../../shared/query/queryClient";
+import { useCachedStates } from "../../../features/projects";
 import { stateColor } from "../../../shared/utilities/display";
-import { useModuleTree, workItemQuery } from ".";
+import { useModuleOpen } from ".";
 
 const EMPTY_EXPANDED_IDS: string[] = [];
 
+const recordSelectionProfilePoint = (point: string) => {
+  (globalThis as typeof globalThis & {
+    __ticketrySelectionProfileProbe?: (point: string) => void;
+  }).__ticketrySelectionProfileProbe?.(point);
+};
+
 export function useStoriesTree() {
+  recordSelectionProfilePoint("stories-tree-render");
   const selectedProjectId = useStudioStore((s) => s.selectedProjectId);
   const selectedModuleId = useClientStore((s) => s.selectedModuleId);
-  const selectedTaskId = useClientStore((s) => s.selectedTaskId);
-  const tree = useModuleTree(selectedProjectId, selectedModuleId);
+  const { tree, items } = useModuleOpen(selectedModuleId);
   const states = useCachedStates(selectedProjectId);
   const loadingTasks = false;
   const rememberedExpandedIds = useClientStore((s) =>
@@ -39,34 +43,26 @@ export function useStoriesTree() {
   const normalizedQuery = storySearchQuery.trim().toLowerCase();
   const isSearchActive = normalizedQuery.length > 0;
 
-  const itemQueries = useQueries(
-    { queries: tree.order.map((id) => workItemQuery(id)) },
-    queryClient,
-  );
   const itemsById = useMemo(() => {
+    recordSelectionProfilePoint("items-by-id-build");
     const resolved: Record<string, TreeWorkItem> = {};
-    for (let index = 0; index < tree.order.length; index += 1) {
-      const item = itemQueries[index]?.data;
-      if (item) resolved[tree.order[index]] = item as unknown as TreeWorkItem;
+    for (const item of items) {
+      resolved[item.id] = item as unknown as TreeWorkItem;
     }
     return resolved;
-  }, [itemQueries, tree.order]);
-  const loadingRecords = itemQueries.some((query) => query.isPending);
+  }, [items]);
+  const loadingRecords = items.length < tree.order.length;
   const expandedIds = useMemo(() => {
-    const visible = new Set(rememberedExpandedIds);
-    if (selectedModuleId && selectedTaskId) {
-      for (const id of taskRevealPath(selectedTaskId, tree, itemsById, states).ancestorIds) {
-        visible.add(id);
-      }
-    }
-    return visible;
-  }, [itemsById, rememberedExpandedIds, selectedModuleId, selectedTaskId, states, tree]);
+    recordSelectionProfilePoint("expanded-ids-build");
+    return new Set(rememberedExpandedIds);
+  }, [rememberedExpandedIds]);
 
   useLayoutEffect(() => {
     migrateCollapsedStateNames(states);
   }, [migrateCollapsedStateNames, states]);
 
   const derived = useMemo(() => {
+    recordSelectionProfilePoint("visible-rows-build");
     const out: PlanningTreeRow[] = [];
     const sectionIdsByState: Record<string, string[]> = {};
 

@@ -74,11 +74,11 @@ describe("clientStore", () => {
     ).toBeNull();
   });
 
-  it("does not retain the deleted active bindings field", async () => {
+  it("does not retain parallel keybinding state", async () => {
     const { useClientStore } = await import("../state/clientStore");
     const state = useClientStore.getState() as unknown as Record<string, unknown>;
 
     expect(state).not.toHaveProperty("activeBindings");
-    expect(state.bindingsStack).toEqual([expect.any(Array)]);
+    expect(state).not.toHaveProperty("bindingsStack");
   });
 });

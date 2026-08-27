@@ -1,4 +1,4 @@
-import { create } from "zustand";
+import { createApolloStore } from "../../shared/apollo/localState";
 import {
   getConfigSnapshot,
   isSidebarEnabled,
@@ -38,7 +38,7 @@ function openingStep(): OnboardingTourStep {
 }
 
 /** Run-local only by design: a refresh never resumes a half-finished tour. */
-export const useOnboardingTourStore = create<OnboardingTourState>((set) => ({
+export const useOnboardingTourStore = createApolloStore<OnboardingTourState>("onboarding-tour", (set) => ({
   ...INACTIVE,
   start: (projectId) =>
     set({ ...INACTIVE, step: openingStep(), projectId }),

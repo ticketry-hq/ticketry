@@ -1,18 +1,19 @@
-import { QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SelectedTicketContent } from "../app/shell/ticket-workspace/selected-ticket/SelectedTicketContent";
 import { useStudioStore } from "../features/projects/store";
-import { useAgentStatusStore } from "../features/agents/status";
+import { useAgentStatusStore } from "../features/agents/status/testStore";
 import { statusStreamFeed } from "../features/agents/status/stream/statusStreamFeed";
 import {
   useTerminalStore,
   type SessionMeta,
 } from "../features/agents/terminal";
 import { seedConfig } from "../features/studio/stores/configStore";
-import { queryClient } from "../shared/query/queryClient";
 import { useClientStore } from "../state/clientStore";
-import { installDesktopGraphQlRuntime } from "./desktopGraphQlRuntime";
+import {
+  installDesktopGraphQlRuntime,
+  terminalSessionReadExecutor,
+} from "./desktopGraphQlRuntime";
 
 const terminalApi = vi.hoisted(() => ({
   resumeTerminal: vi.fn(),
@@ -71,11 +72,6 @@ const terminalReads = vi.hoisted(() => {
 });
 
 vi.mock(
-  "../features/agents/terminal/internal/sessionReadTransport",
-  () => terminalReads,
-);
-
-vi.mock(
   "../app/shell/ticket-workspace/selected-ticket/terminals/SelectedTicketTerminal",
   () => ({
     SelectedTicketTerminal: ({ bucket, active }: { bucket: string; active: boolean }) => (
@@ -114,6 +110,7 @@ function run(
     agent_run_id: agentRunId,
     task_id: taskId,
     module_id: "module-1",
+    agent: "codex",
     scope: "task" as const,
     state,
     started_at: "2026-08-07T12:00:00Z",
@@ -124,9 +121,8 @@ function run(
 describe("overhaul acceptance — terminals", () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    installDesktopGraphQlRuntime();
+    installDesktopGraphQlRuntime(terminalSessionReadExecutor(terminalReads));
     localStorage.clear();
-    queryClient.clear();
     seedConfig({ features: { sidebar: true, projects: true } });
     useStudioStore.setState({ selectedProjectId: "project-1" });
     useClientStore.setState({
@@ -162,7 +158,6 @@ describe("overhaul acceptance — terminals", () => {
 
   it("[overhaul-135] opens a document tab discovered by the backend watcher", async () => {
     render(
-      <QueryClientProvider client={queryClient}>
         <SelectedTicketContent
           bucket="story-1"
           projectId="project-1"
@@ -170,7 +165,6 @@ describe("overhaul acceptance — terminals", () => {
           owner="studio"
           details={<div>Issue details</div>}
         />
-      </QueryClientProvider>,
     );
     await waitFor(() => expect(documentRegistry.listTaskDocuments).toHaveBeenCalled());
 
@@ -203,7 +197,7 @@ describe("overhaul acceptance — terminals", () => {
       committed_at: "2026-08-14T12:00:00Z",
     }));
 
-    expect(await screen.findByRole("tab", { name: "Spec" })).toHaveAttribute(
+    expect(await screen.findByRole("tab", { name: "SPEC" })).toHaveAttribute(
       "aria-selected",
       "true",
     );
@@ -221,7 +215,6 @@ describe("overhaul acceptance — terminals", () => {
     useClientStore.setState({ activeByTask: { "story-1": "session-1" } });
 
     render(
-      <QueryClientProvider client={queryClient}>
         <SelectedTicketContent
           bucket="story-1"
           projectId="project-1"
@@ -229,7 +222,6 @@ describe("overhaul acceptance — terminals", () => {
           owner="studio"
           details={<div>Issue details</div>}
         />
-      </QueryClientProvider>,
     );
 
     const terminal = await screen.findByTestId("selected-ticket-terminal");
@@ -241,7 +233,7 @@ describe("overhaul acceptance — terminals", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Details" }));
     expect(terminal).toHaveAttribute("data-active", "false");
 
-    fireEvent.click(await screen.findByRole("tab", { name: "Design" }));
+    fireEvent.click(await screen.findByRole("tab", { name: "DESIGN" }));
     expect(screen.getByTestId("selected-ticket-terminal")).toBe(terminal);
     expect(terminal).toHaveAttribute("data-active", "false");
 
@@ -259,7 +251,6 @@ describe("overhaul acceptance — terminals", () => {
     useClientStore.setState({ activeByTask: { "story-1": "session-1" } });
 
     const workspace = (bucket: string) => (
-      <QueryClientProvider client={queryClient}>
         <SelectedTicketContent
           bucket={bucket}
           projectId="project-1"
@@ -267,7 +258,6 @@ describe("overhaul acceptance — terminals", () => {
           owner="studio"
           details={<div>Issue details</div>}
         />
-      </QueryClientProvider>
     );
     const view = render(workspace("story-1"));
 
@@ -284,13 +274,12 @@ describe("overhaul acceptance — terminals", () => {
     expect(retainedHost).toHaveTextContent("story-1");
   });
 
-  it("does not create a tab for a run omitted by terminal discovery", async () => {
+  it("creates a tab from ProjectRunStatus without terminal discovery", async () => {
     useAgentStatusStore.setState({
       runs: { "run-foreign": run("run-foreign", "story-1") },
     });
 
     render(
-      <QueryClientProvider client={queryClient}>
         <SelectedTicketContent
           bucket="story-1"
           projectId="project-1"
@@ -298,12 +287,13 @@ describe("overhaul acceptance — terminals", () => {
           owner="studio"
           details={<div>Issue details</div>}
         />
-      </QueryClientProvider>,
     );
 
-    await waitFor(() => expect(terminalReads.readTaskTerminalSessions).toHaveBeenCalled());
-    expect(screen.queryByRole("tab", { name: "codex terminal" }))
-      .not.toBeInTheDocument();
-    expect(useTerminalStore.getState().sessions).toEqual({});
+    expect(await screen.findByRole("tab", { name: "codex terminal" }))
+      .toBeInTheDocument();
+    expect(terminalReads.readTaskTerminalSessions).not.toHaveBeenCalled();
+    expect(Object.values(useTerminalStore.getState().sessions)).toContainEqual(
+      expect.objectContaining({ agentRunId: "run-foreign" }),
+    );
   });
 });

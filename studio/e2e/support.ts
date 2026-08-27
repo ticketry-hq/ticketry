@@ -1,5 +1,9 @@
 import { expect, type APIRequestContext, type Page } from "@playwright/test";
-import type { TypedDocumentNode } from "../src/graphql-foundation/typedDocument";
+import {
+  documentOperationName,
+  documentSource,
+  type TypedDocumentNode,
+} from "../src/graphql-foundation/typedDocument";
 import { RefreshTaskDocumentRegistryDocument } from "../src/features/documents/generated/documentRegistry";
 import {
   AcknowledgeWorkTrackerOnboardingDocument,
@@ -10,12 +14,12 @@ import {
   WorkTrackerProjectsDocument,
   WorkTrackerWorkspaceDocument,
 } from "../src/features/projects/generated/operations";
-import { CreateWorkTrackerWorkItemDocument } from "../src/features/work-items/generated/mutations";
 import {
+  CreateWorkTrackerWorkItemDocument,
   WorkTrackerWorkItemDocument,
   WorkTrackerWorkItemsDocument,
-  type GeneratedWorkTrackerWorkItem,
-} from "../src/features/work-items/generated/operations";
+  type GeneratedWorkTrackerWorkItemFieldsFragment,
+} from "../src/features/work-items/generated/workItems.documents";
 import { WorkTrackerWorkflowCatalogDocument } from "../src/features/workflows/generated/operations";
 import {
   LoadProviderCatalogDocument,
@@ -49,28 +53,29 @@ export async function graphql<TResult, TVariables>(
   document: TypedDocumentNode<TResult, TVariables>,
   variables: TVariables,
 ): Promise<TResult> {
+  const operationName = documentOperationName(document);
   const response = await request.post("/graphql", {
     data: {
-      operationName: document.operationName,
-      query: document.source,
+      operationName,
+      query: documentSource(document),
       variables,
     },
   });
   const text = await response.text();
   expect(
     response.ok(),
-    `${document.operationName} -> ${response.status()} ${text}`,
+    `${operationName} -> ${response.status()} ${text}`,
   ).toBeTruthy();
   const envelope = JSON.parse(text) as GraphqlEnvelope<TResult>;
   expect(
     envelope.errors,
-    `${document.operationName} -> ${JSON.stringify(envelope.errors)}`,
+    `${operationName} -> ${JSON.stringify(envelope.errors)}`,
   ).toBeUndefined();
-  expect(envelope.data, `${document.operationName} returned no data`).toBeTruthy();
+  expect(envelope.data, `${operationName} returned no data`).toBeTruthy();
   return envelope.data!;
 }
 
-function workItemRow(row: GeneratedWorkTrackerWorkItem): WorkItemRow {
+function workItemRow(row: GeneratedWorkTrackerWorkItemFieldsFragment): WorkItemRow {
   return { ...row, key: `T-${row.sequence_id}` };
 }
 

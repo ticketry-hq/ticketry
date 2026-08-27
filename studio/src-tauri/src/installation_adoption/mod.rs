@@ -49,6 +49,7 @@ pub mod provisioning;
 pub mod recovery;
 pub mod representative_reads;
 pub mod seaography_override;
+pub mod semantic_bridge;
 pub mod snapshot;
 pub mod snapshot_manifest;
 
@@ -156,6 +157,7 @@ async fn first_launch(
         provisioned.generation().to_owned(),
         None,
         &[],
+        &[],
         plan,
     )
     .await
@@ -194,6 +196,7 @@ async fn existing(
         ));
     }
     fault(plan, Phase::Preflight)?;
+    let semantic_bridges = report.required_bridges();
 
     let already_owned = matches!(classified, Installation::RustOwned(_));
     let path = if already_owned {
@@ -204,15 +207,24 @@ async fn existing(
         AdoptionPath::Adopted
     };
     let generation = classified.generation().to_owned();
-    let snapshot = if already_owned {
+    let snapshot = if already_owned && semantic_bridges.is_empty() {
         // Reopening protects nothing new: the installation is already Rust
         // owned, and its pre-Rust recovery point was pinned when it was
         // adopted. Copying it again would rotate that history out.
         None
     } else {
-        Some(protect(data_directory, &generation, plan).await?)
+        Some(protect(data_directory, &generation, &semantic_bridges, plan).await?)
     };
-    settle(data_directory, path, generation, snapshot, &[], plan).await
+    settle(
+        data_directory,
+        path,
+        generation,
+        snapshot,
+        &[],
+        &semantic_bridges,
+        plan,
+    )
+    .await
 }
 
 fn fault(plan: &AdoptionPlan, phase: Phase) -> Result<(), AdoptionFailure> {

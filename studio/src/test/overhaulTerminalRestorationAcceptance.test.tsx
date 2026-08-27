@@ -1,18 +1,19 @@
-import { QueryClientProvider } from "@tanstack/react-query";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SelectedTicketContent } from "../app/shell/ticket-workspace/selected-ticket/SelectedTicketContent";
 import { presentTerminalRuns } from "../features/agents/terminal";
 import { useStudioStore } from "../features/projects/store";
-import { useAgentStatusStore } from "../features/agents/status";
+import { useAgentStatusStore } from "../features/agents/status/testStore";
 import {
   useTerminalStore,
   type SessionMeta,
 } from "../features/agents/terminal";
 import { seedConfig } from "../features/studio/stores/configStore";
-import { queryClient } from "../shared/query/queryClient";
 import { useClientStore } from "../state/clientStore";
-import { installDesktopGraphQlRuntime } from "./desktopGraphQlRuntime";
+import {
+  installDesktopGraphQlRuntime,
+  terminalSessionReadExecutor,
+} from "./desktopGraphQlRuntime";
 
 const terminalApi = vi.hoisted(() => ({
   resumeTerminal: vi.fn(),
@@ -44,11 +45,6 @@ const terminalReads = vi.hoisted(() => {
     readScratchResumableTerminalSessions: resumable,
   };
 });
-
-vi.mock(
-  "../features/agents/terminal/internal/sessionReadTransport",
-  () => terminalReads,
-);
 
 vi.mock(
   "../app/shell/ticket-workspace/selected-ticket/terminals/SelectedTicketTerminal",
@@ -105,9 +101,8 @@ function run(
 describe("overhaul acceptance — terminals", () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    installDesktopGraphQlRuntime();
+    installDesktopGraphQlRuntime(terminalSessionReadExecutor(terminalReads));
     localStorage.clear();
-    queryClient.clear();
     seedConfig({ features: { sidebar: true, projects: true } });
     useStudioStore.setState({ selectedProjectId: "project-1" });
     useClientStore.setState({
@@ -150,10 +145,7 @@ describe("overhaul acceptance — terminals", () => {
       },
     });
     act(() => {
-      useTerminalStore.getState().attachPersisted({
-        agent_run_id: "run-restored",
-        created_at: "2026-08-07T12:00:00Z",
-      });
+      useTerminalStore.getState().attachRun("run-restored");
     });
     const restored = Object.values(useTerminalStore.getState().sessions).find(
       (meta) => meta.agentRunId === "run-restored",
@@ -161,7 +153,6 @@ describe("overhaul acceptance — terminals", () => {
     expect(restored?.taskId).toBe("story-1");
 
     render(
-      <QueryClientProvider client={queryClient}>
         <SelectedTicketContent
           bucket="story-1"
           projectId="project-1"
@@ -169,7 +160,6 @@ describe("overhaul acceptance — terminals", () => {
           owner="studio"
           details={<div>Issue details</div>}
         />
-      </QueryClientProvider>,
     );
 
     await waitFor(() => {
@@ -188,7 +178,7 @@ describe("overhaul acceptance — terminals", () => {
     expect(useTerminalStore.getState().sessionByRun["run-live"]).toBe("session-live");
 
     // Scratch runs have no workflow state and keep their lowercase launch
-    // modes; a run that recorded no launch state shows no invented word.
+    // modes; a run with no recorded launch state falls back to its provider.
     const scratch = {
       key: "scratch",
       agent: "codex",
@@ -204,18 +194,12 @@ describe("overhaul acceptance — terminals", () => {
         .label,
     ).toBe("instant");
     const unrecorded = presentTerminalRuns([{ ...scratch, isPlanning: false }])[0];
-    expect(unrecorded.label).toBe("");
+    expect(unrecorded.label).toBe("codex");
     expect(unrecorded.accessibleName).toBe("codex terminal");
   });
 
-  it("[overhaul-49] restores a persisted terminal when its run projection arrives later", async () => {
-    terminalReads.readTaskTerminalSessions.mockResolvedValue([{
-      agent_run_id: "run-late",
-      created_at: "2026-08-07T12:00:00Z",
-    }]);
-
+  it("[overhaul-49] restores a terminal directly when its run projection arrives later", async () => {
     render(
-      <QueryClientProvider client={queryClient}>
         <SelectedTicketContent
           bucket="story-1"
           projectId="project-1"
@@ -223,11 +207,10 @@ describe("overhaul acceptance — terminals", () => {
           owner="studio"
           details={<div>Issue details</div>}
         />
-      </QueryClientProvider>,
     );
 
-    await waitFor(() => expect(terminalReads.readTaskTerminalSessions).toHaveBeenCalled());
     expect(useTerminalStore.getState().sessions).toEqual({});
+    expect(terminalReads.readTaskTerminalSessions).not.toHaveBeenCalled();
 
     act(() => {
       useAgentStatusStore.setState({
@@ -240,12 +223,13 @@ describe("overhaul acceptance — terminals", () => {
         expect.objectContaining({ agentRunId: "run-late" }),
       );
     });
-    // Its run recorded no launch state, so the tab shows no phase — but the
-    // provider Studio does know about is still carried by colour.
+    // Its run recorded no launch state, so the tab uses the provider Studio
+    // does know about instead of rendering a colour-only control.
     const tab = screen.getByRole("tab", { name: "codex terminal" });
     expect(tab).toBeInTheDocument();
-    expect(tab).not.toHaveTextContent("codex");
+    expect(tab).toHaveTextContent("codex");
     expect(tab).toHaveClass("text-provider-codex");
+    expect(terminalReads.readTaskTerminalSessions).not.toHaveBeenCalled();
   });
 
   it("[overhaul-111] gives dormant terminal chips the same launch identity as the tab for the same run", async () => {
@@ -294,7 +278,6 @@ describe("overhaul acceptance — terminals", () => {
     });
 
     render(
-      <QueryClientProvider client={queryClient}>
         <SelectedTicketContent
           bucket="story-1"
           projectId="project-1"
@@ -302,7 +285,6 @@ describe("overhaul acceptance — terminals", () => {
           owner="studio"
           details={<div>Issue details</div>}
         />
-      </QueryClientProvider>,
     );
 
     const tab = await screen.findByRole("tab", { name: "Grill codex terminal" });
@@ -338,24 +320,17 @@ describe("overhaul acceptance — terminals", () => {
     expect(scratchChip).toHaveTextContent("instant");
     expect(scratchChip).toHaveAttribute("title", "codex");
 
-    // An unrecorded phase stays blank rather than borrowing the Story's state.
-    const blankChip = screen.getByLabelText("Terminated codex terminal");
-    expect(blankChip.textContent?.trim()).toBe("✕");
-    expect(blankChip).toHaveAttribute("title", "codex");
+    // An unrecorded phase uses the provider rather than borrowing the Story's
+    // current state or leaving a nameless control.
+    const providerChip = screen.getByLabelText("Terminated codex terminal");
+    expect(providerChip).toHaveTextContent("codex");
+    expect(providerChip).toHaveAttribute("title", "codex");
   });
 
   it("[overhaul-112] rebuilds launch labels, provider styling and ordinals from the authoritative records after a reload", async () => {
-    // A reload starts with no client-side session state at all: the terminals
-    // listing and the run projection are the only inputs, and they must be
-    // enough to reproduce exactly the tabs that were on screen before.
-    terminalReads.readTaskTerminalSessions.mockResolvedValue([
-      { agent_run_id: "run-first", created_at: "2026-08-07T12:00:00Z" },
-      { agent_run_id: "run-second", created_at: "2026-08-07T12:05:00Z" },
-      { agent_run_id: "run-gone", created_at: "2026-08-07T12:10:00Z" },
-    ]);
-
+    // A reload starts with no client-side session state. ProjectRunStatus must
+    // reproduce the tabs without an AgentTerminalSessions discovery read.
     render(
-      <QueryClientProvider client={queryClient}>
         <SelectedTicketContent
           bucket="story-1"
           projectId="project-1"
@@ -363,11 +338,7 @@ describe("overhaul acceptance — terminals", () => {
           owner="studio"
           details={<div>Issue details</div>}
         />
-      </QueryClientProvider>,
     );
-
-    await waitFor(() => expect(terminalReads.readTaskTerminalSessions).toHaveBeenCalled());
-
     act(() => {
       useAgentStatusStore.setState({
         runs: {
@@ -402,5 +373,6 @@ describe("overhaul acceptance — terminals", () => {
     const ended = screen.getByLabelText("Terminated Spec codex terminal");
     expect(ended).toHaveTextContent("Spec");
     expect(ended).toHaveClass("text-provider-ended");
+    expect(terminalReads.readTaskTerminalSessions).not.toHaveBeenCalled();
   });
 });

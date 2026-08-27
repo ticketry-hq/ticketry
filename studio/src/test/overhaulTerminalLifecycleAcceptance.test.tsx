@@ -1,10 +1,9 @@
-import { QueryClientProvider } from "@tanstack/react-query";
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SelectedTicketContent } from "../app/shell/ticket-workspace/selected-ticket/SelectedTicketContent";
 import { useStudioStore } from "../features/projects/store";
 import { AgentStateBadge } from "../features/agents/lifecycle";
-import { useAgentStatusStore } from "../features/agents/status";
+import { useAgentStatusStore } from "../features/agents/status/testStore";
 import { applySnapshotFrame } from "../features/agents/status/stream/statusSnapshot";
 import { applyRunStatusFrame } from "../features/agents/status/stream/runStatusHolding";
 import {
@@ -18,9 +17,11 @@ import {
 import { deriveTaskSessions } from "../features/agents/terminal/hooks";
 import { reduceLifecycle } from "../features/agents/terminal/lifecycle";
 import { seedConfig } from "../features/studio/stores/configStore";
-import { queryClient } from "../shared/query/queryClient";
 import { useClientStore } from "../state/clientStore";
-import { installDesktopGraphQlRuntime } from "./desktopGraphQlRuntime";
+import {
+  installDesktopGraphQlRuntime,
+  terminalSessionReadExecutor,
+} from "./desktopGraphQlRuntime";
 
 const terminalApi = vi.hoisted(() => ({
   resumeTerminal: vi.fn(),
@@ -52,11 +53,6 @@ const terminalReads = vi.hoisted(() => {
     readScratchResumableTerminalSessions: resumable,
   };
 });
-
-vi.mock(
-  "../features/agents/terminal/internal/sessionReadTransport",
-  () => terminalReads,
-);
 
 vi.mock(
   "../app/shell/ticket-workspace/selected-ticket/terminals/SelectedTicketTerminal",
@@ -107,9 +103,8 @@ function run(
 describe("overhaul acceptance — terminals", () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    installDesktopGraphQlRuntime();
+    installDesktopGraphQlRuntime(terminalSessionReadExecutor(terminalReads));
     localStorage.clear();
-    queryClient.clear();
     seedConfig({ features: { sidebar: true, projects: true } });
     useStudioStore.setState({ selectedProjectId: "project-1" });
     useClientStore.setState({
@@ -168,18 +163,15 @@ describe("overhaul acceptance — terminals", () => {
 
   it("[overhaul-10] keeps a closed terminal dismissed across a server refetch", () => {
     const meta = session("session-1", "story-1", "run-1");
-    const persisted = {
-      agent_run_id: "run-1",
-      created_at: "2026-08-07T12:00:00Z",
-    };
+    const liveRun = run("run-1", "story-1");
     useTerminalStore.setState({
       sessions: { "session-1": meta },
       sessionByRun: { "run-1": "session-1" },
     });
-    useAgentStatusStore.setState({ runs: { "run-1": run("run-1", "story-1") } });
+    useAgentStatusStore.setState({ runs: { "run-1": liveRun } });
 
     useTerminalStore.getState().closeTab("session-1");
-    useTerminalStore.getState().restoreLiveSessions("story-1", [persisted]);
+    useTerminalStore.getState().reconcileRunTabs("story-1", [liveRun]);
 
     expect(useTerminalStore.getState().sessions).toEqual({});
   });
@@ -233,7 +225,7 @@ describe("overhaul acceptance — terminals", () => {
     useAgentStatusStore.setState({ runs: { "run-1": exitedRun } });
 
     render(
-      <QueryClientProvider client={queryClient}>
+      <>
         <AgentStateBadge issueId="story-1" />
         <SelectedTicketContent
           bucket="story-1"
@@ -242,7 +234,7 @@ describe("overhaul acceptance — terminals", () => {
           owner="studio"
           details={<div>Issue details</div>}
         />
-      </QueryClientProvider>,
+      </>,
     );
 
     expect(screen.getByRole("tab", { name: "codex terminal" }))
@@ -331,7 +323,7 @@ describe("overhaul acceptance — terminals", () => {
     useAgentStatusStore.setState({ runs: { "run-1": workingRun } });
 
     render(
-      <QueryClientProvider client={queryClient}>
+      <>
         <AgentStateBadge issueId="story-1" />
         <SelectedTicketContent
           bucket="story-1"
@@ -340,7 +332,7 @@ describe("overhaul acceptance — terminals", () => {
           owner="studio"
           details={<div>Issue details</div>}
         />
-      </QueryClientProvider>,
+      </>,
     );
 
     expect(
@@ -394,7 +386,6 @@ describe("overhaul acceptance — terminals", () => {
     useAgentStatusStore.setState({ runs: { "run-1": workingRun } });
 
     render(
-      <QueryClientProvider client={queryClient}>
         <SelectedTicketContent
           bucket="story-1"
           projectId="project-1"
@@ -402,7 +393,6 @@ describe("overhaul acceptance — terminals", () => {
           owner="studio"
           details={<div>Issue details</div>}
         />
-      </QueryClientProvider>,
     );
     expect(screen.getByRole("tab", { name: "codex terminal" })).toBeInTheDocument();
     await waitFor(() => expect(terminalReads.readTaskResumableTerminalSessions).toHaveBeenCalled());

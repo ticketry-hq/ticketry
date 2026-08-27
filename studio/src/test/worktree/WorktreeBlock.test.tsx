@@ -1,13 +1,39 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { WorktreeBlock } from "../../features/agents/worktrees";
-import * as api from "../../features/agents/worktrees/internal/api";
-import type { WorktreeStatus } from "../../features/agents/worktrees/internal/api";
+import type { WorktreeStatus } from "../../features/agents/worktrees/internal/types";
+import { studioApolloClient } from "../../shared/apollo/client";
+import {
+  WorktreeStatusDocument,
+  type WorktreeStatusQuery,
+} from "../../features/agents/worktrees/generated/worktreeStatus.documents";
+import { requestWorktreeCreate } from "../../features/agents/worktrees/internal/createTransport";
+import { requestWorktreeDiscard } from "../../features/agents/worktrees/internal/discardTransport";
+
+vi.mock("../../features/agents/worktrees/internal/createTransport", () => ({
+  newOperationId: vi.fn(() => "operation-1"),
+  requestWorktreeCreate: vi.fn(),
+}));
+vi.mock("../../features/agents/worktrees/internal/discardTransport", () => ({
+  requestWorktreeDiscard: vi.fn(),
+}));
 
 const base = {
   task_id: "t1",
   top_level_task_id: "t1",
   is_shared: false,
+  branch: null,
+  base_branch: null,
+  path: null,
+  state: null,
+  clean: null,
+  dirty: null,
+  ahead: null,
+  behind: null,
+  conflict: null,
+  checkout_present: null,
+  ephemeral: false,
+  reason: null,
 };
 
 const none: WorktreeStatus = { ...base, kind: "none" };
@@ -23,6 +49,7 @@ const active: WorktreeStatus = {
   ahead: 2,
   behind: 0,
   conflict: false,
+  checkout_present: true,
 };
 const conflict: WorktreeStatus = {
   ...active,
@@ -30,6 +57,19 @@ const conflict: WorktreeStatus = {
   conflict: true,
 };
 const noRepo: WorktreeStatus = { ...base, kind: "no_repo", reason: "no git repo" };
+
+function seed(status: WorktreeStatus): void {
+  studioApolloClient().writeQuery<WorktreeStatusQuery>({
+    query: WorktreeStatusDocument,
+    variables: { taskId: "t1" },
+    data: {
+      worktree_status: {
+        __typename: "WorktreeStatusView",
+        ...status,
+      },
+    } as unknown as WorktreeStatusQuery,
+  });
+}
 
 function renderBlock() {
   return render(
@@ -45,13 +85,14 @@ function renderBlock() {
 }
 
 describe("WorktreeBlock (#589, shared CODIN-922)", () => {
-  beforeEach(() => {
-    vi.restoreAllMocks();
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    await studioApolloClient().clearStore();
   });
 
   it("shows + Create worktree when none exists, and creates on click", async () => {
-    vi.spyOn(api, "getWorktree").mockResolvedValue(none);
-    const create = vi.spyOn(api, "createWorktree").mockResolvedValue(active);
+    seed(none);
+    const create = vi.mocked(requestWorktreeCreate).mockResolvedValue(active);
     renderBlock();
 
     const btn = await screen.findByRole("button", { name: "+ Create worktree" });
@@ -62,12 +103,13 @@ describe("WorktreeBlock (#589, shared CODIN-922)", () => {
     );
     expect(create).toHaveBeenCalledWith(
       "t1",
+      "operation-1",
       expect.objectContaining({ moduleId: "m1", ticketSeq: 589 }),
     );
   });
 
   it("renders the active worktree read-only with branch/base + ahead/behind", async () => {
-    vi.spyOn(api, "getWorktree").mockResolvedValue(active);
+    seed(active);
     renderBlock();
 
     expect(
@@ -81,7 +123,7 @@ describe("WorktreeBlock (#589, shared CODIN-922)", () => {
   });
 
   it("surfaces a conflict line with the primary-untouched copy and no land control", async () => {
-    vi.spyOn(api, "getWorktree").mockResolvedValue(conflict);
+    seed(conflict);
     renderBlock();
 
     expect(await screen.findByText("Conflict")).toBeTruthy();
@@ -90,12 +132,12 @@ describe("WorktreeBlock (#589, shared CODIN-922)", () => {
   });
 
   it("discards only after explicit confirmation", async () => {
-    vi.spyOn(api, "getWorktree")
-      .mockResolvedValueOnce(active)
-      .mockResolvedValue(none);
-    const discard = vi
-      .spyOn(api, "discardWorktree")
-      .mockResolvedValue({ removed: true, reason: "" });
+    seed(active);
+    const discard = vi.mocked(requestWorktreeDiscard).mockResolvedValue({
+      removed: true,
+      reason: "",
+      status: none,
+    });
     renderBlock();
 
     fireEvent.click(await screen.findByRole("button", { name: "Discard" }));
@@ -119,7 +161,7 @@ describe("WorktreeBlock (#589, shared CODIN-922)", () => {
   });
 
   it("shows the not-isolated banner and no controls for a no-repo task", async () => {
-    vi.spyOn(api, "getWorktree").mockResolvedValue(noRepo);
+    seed(noRepo);
     renderBlock();
 
     expect(await screen.findByText(/Changes are not isolated/)).toBeTruthy();

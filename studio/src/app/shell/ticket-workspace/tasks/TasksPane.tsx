@@ -1,9 +1,10 @@
 import { useCallback, useMemo } from "react";
 import { useClientStore } from "../../../../state/clientStore";
 import { useStudioStore } from "../../../../features/projects";
-import { useCachedStates } from "../../../../shared/query/stateCatalog";
+import { useCachedStates } from "../../../../features/projects";
 import {
   isPlanningRow,
+  getWorkItemSnapshot,
   LOADING_PLACEHOLDER as PLACEHOLDER,
   STATE_HEADER as HEADER,
   type PlanningRow as Row,
@@ -27,9 +28,6 @@ import {
   resolveTicketReorderNeighbors,
   type VisibleRootBlock,
 } from "./internal/ticketReorder";
-import { queryClient } from "../../../../shared/query/queryClient";
-import { queryKeys } from "../../../../shared/query/keys";
-import type { WorkItem } from "../../../../shared/api/types";
 
 export {
   isPlanningRow,
@@ -48,6 +46,12 @@ interface TicketDragPayload {
 }
 
 const stateDropTargetId = (stateId: string) => `state:${stateId}`;
+
+const recordSelectionProfilePoint = (point: string) => {
+  (globalThis as typeof globalThis & {
+    __ticketrySelectionProfileProbe?: (point: string) => void;
+  }).__ticketrySelectionProfileProbe?.(point);
+};
 
 const ticketDragCodec: DragPayloadCodec<TicketDragPayload> = {
   type: "application/x-ticketry-workflow-ticket",
@@ -86,6 +90,7 @@ function groupRootBlocks(rows: TreeRow[]): RenderBlock[] {
 }
 
 export function TasksPane() {
+  recordSelectionProfilePoint("tasks-pane-render");
   const selectedProjectId = useStudioStore((s) => s.selectedProjectId);
   const selectedTaskId = useClientStore((s) => s.selectedTaskId);
   const selectedModuleId = useClientStore((s) => s.selectedModuleId);
@@ -128,27 +133,21 @@ export function TasksPane() {
       payload: TicketDragPayload,
       resolved: { targetId: string; intent: "near" | "far" },
     ) => {
-      const source = queryClient.getQueryData<WorkItem>(
-        queryKeys.workItems.byId(payload.taskId),
-      );
+      const source = getWorkItemSnapshot(payload.taskId);
       if (!source || !selectedProjectId || !selectedModuleId) return;
       const headerStateId = resolved.targetId.startsWith("state:")
         ? resolved.targetId.slice("state:".length)
         : null;
       const target = headerStateId
         ? null
-        : queryClient.getQueryData<WorkItem>(
-            queryKeys.workItems.byId(resolved.targetId),
-          );
+        : getWorkItemSnapshot(resolved.targetId);
       const destinationState = states.find(
         (state) => state.id === (headerStateId ?? target?.state),
       );
       if (!destinationState?.id) return;
 
       const sectionBlocks = visibleBlocks.filter((block) =>
-        queryClient.getQueryData<WorkItem>(
-          queryKeys.workItems.byId(block.rootId),
-        )?.state === destinationState.id,
+        getWorkItemSnapshot(block.rootId)?.state === destinationState.id,
       );
       // Collapsed headers have no visible blocks. Rebuild their root-only
       // section from the ranked task list so a head drop still uses the real

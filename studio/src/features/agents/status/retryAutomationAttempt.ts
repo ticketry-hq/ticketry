@@ -7,11 +7,12 @@
  * published by that stream and by nothing else, so a platform without it has no
  * attempt to retry rather than a second, weaker retry path.
  */
-import { executeFoundationOperation } from "../../../graphql-foundation/foundationClient";
+import { executeGraphQlTransport } from "../../../runtime/graphQlTransport";
 import { studioRuntime } from "../../../runtime";
 import { graphQlMutationError } from "../../../shared/api/graphqlError";
-import { RetryAutomationAttemptDocument } from "./generated/attempts";
-import { useAgentStatusStore } from "./store";
+import { RetryAutomationAttemptDocument } from "./generated/attempts.documents";
+import type { AutomationAttemptPayload } from "./types";
+import { upsertAutomationAttempt } from "./apolloHolding";
 import { toAutomationAttemptRecord } from "./stream/statusHoldingAdapters";
 import type { AutomationAttemptRecord } from "./types";
 
@@ -24,13 +25,15 @@ export async function retryAutomationAttempt(
       "Automation Attempt retry requires the desktop status transport.",
     );
   }
-  const attempt = await executeFoundationOperation(
+  const attempt = await executeGraphQlTransport(
     RetryAutomationAttemptDocument,
     { attemptId },
     transport,
   )
-    .then((data) => toAutomationAttemptRecord(data.retry_automation_attempt))
+    .then((data) => toAutomationAttemptRecord(
+      data.retry_automation_attempt as AutomationAttemptPayload,
+    ))
     .catch((error: unknown) => graphQlMutationError(error));
-  useAgentStatusStore.getState().upsertAutomationAttempt(attempt);
+  upsertAutomationAttempt(attempt);
   return attempt;
 }

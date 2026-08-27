@@ -2,7 +2,8 @@
 
 Implements invariants 1, 5 and 8 of [LLD 0](0-overview.md).
 
-`state/clientStore.ts`. One zustand store. Seven stores collapse into it.
+`state/clientStore.ts`. One Apollo-owned client-state row. Seven stores collapse
+into it.
 
 ---
 

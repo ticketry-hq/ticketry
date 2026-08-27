@@ -4,7 +4,8 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { WorktreeBlock } from "../features/agents/worktrees";
 import { createDesktopRuntime } from "../runtime/desktopRuntime";
 import { initializeStudioRuntime } from "../runtime";
-import { queryClient } from "../shared/query/queryClient";
+import { studioApolloClient } from "../shared/apollo/client";
+import { WorktreeStatusDocument } from "../features/agents/worktrees/generated/worktreeStatus.documents";
 
 const startup = {
   serviceHealth: {
@@ -21,6 +22,7 @@ const CHILD = "60000000-0000-0000-0000-000000000002";
 
 const answers: Record<string, Record<string, unknown>> = {
   [PARENT]: {
+    __typename: "WorktreeStatusView",
     kind: "worktree",
     task_id: PARENT,
     top_level_task_id: PARENT,
@@ -39,6 +41,7 @@ const answers: Record<string, Record<string, unknown>> = {
     reason: null,
   },
   [CHILD]: {
+    __typename: "WorktreeStatusView",
     kind: "no_repo",
     task_id: CHILD,
     top_level_task_id: CHILD,
@@ -87,7 +90,6 @@ async function installDesktopRuntime(
 
 describe("worktree status desktop runtime acceptance", () => {
   it("[overhaul-85] renders live worktree state and typed absence from the Rust status query alone", async () => {
-    queryClient.clear();
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
     const requests: { operationName: string; variables: Record<string, unknown> }[] = [];
@@ -140,6 +142,13 @@ describe("worktree status desktop runtime acceptance", () => {
       { taskId: PARENT },
       { taskId: CHILD },
     ]);
+    expect(studioApolloClient().readQuery({
+      query: WorktreeStatusDocument,
+      variables: { taskId: CHILD },
+    })?.worktree_status).toMatchObject({
+      task_id: CHILD,
+      kind: "no_repo",
+    });
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });

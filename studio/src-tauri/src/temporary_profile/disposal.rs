@@ -52,7 +52,7 @@ mod tests {
             root
         ));
         assert!(!is_temporary_profile(
-            Path::new("/home/user/.config/worktracker-studio"),
+            Path::new("/home/user/.config/product-data"),
             root
         ));
     }

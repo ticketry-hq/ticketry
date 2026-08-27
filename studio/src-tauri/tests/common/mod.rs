@@ -1,6 +1,7 @@
 pub mod execution_authorization;
-pub mod execution_django_fixture;
+pub mod execution_fixture;
 pub mod execution_harness;
+pub mod execution_legacy_fixture;
 pub mod installation_corpus;
 pub mod isolated_tmux;
 pub mod runs_status_fixture;

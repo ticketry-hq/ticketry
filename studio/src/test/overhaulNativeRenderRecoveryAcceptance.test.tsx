@@ -442,6 +442,25 @@ describe("native render recovery acceptance", () => {
     expect(readNativeRenderRecoveryAttempt()).toBe(0);
   });
 
+  it("[overhaul-161] keeps the compatibility renderer without refreshing on viewer ownership storage failure", async () => {
+    seed(session("session-locked", "run-locked"));
+    failingNativeTerminal(
+      "viewer ownership storage failed: Query Error: error returned from database: (code: 5) database is locked",
+    );
+
+    const locked = render(<Terminal sessionId="session-locked" active />);
+    await waitFor(() => {
+      expect(locked.getByTestId("native-terminal-fallback-notice")).toHaveTextContent(
+        "viewer ownership storage failed",
+      );
+    });
+    expect(locked.getByTestId("terminal-host")).toBeVisible();
+
+    await elapse(PAST_INITIAL_DELAY_MS);
+    expect(reload).not.toHaveBeenCalled();
+    expect(readNativeRenderRecoveryAttempt()).toBe(0);
+  });
+
   it("leaves ended sessions, inactive viewers and dismissal without a refresh", async () => {
     seed(session("session-g", "run-g", "exited"));
     failingNativeTerminal("terminal attachment failed");

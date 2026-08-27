@@ -1,6 +1,7 @@
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 
 use crate::entities::runs::automation_attempt;
+use crate::launch_authority::{compose_task_prompt, TaskPromptSource};
 use crate::terminal_launch::{CreateTerminalSession, TerminalLaunchKind, TerminalLaunchService};
 
 use super::{mark_delivered, CallerScope, LaunchPolicyDecision};
@@ -42,9 +43,23 @@ pub(crate) async fn execute(
         CallerScope::Retry => Some(decision.idempotency_key.clone()),
         _ => None,
     };
+    let prompt = compose_task_prompt(
+        database,
+        TaskPromptSource {
+            task_id: &decision.task_id,
+            module_id: &decision.module_link.module_id,
+            local_module_folder: decision.module_link.path.as_deref().unwrap_or_default(),
+            state_name: decision.state_name.as_deref(),
+            workflow_prompt: &decision.prompt,
+            additional_user_input: None,
+            design_directory: None,
+        },
+    )
+    .await
+    .map_err(|error| error.to_string())?;
     let accepted = service
         .prepare_policy(
-            request(decision, kind, automation_attempt_id),
+            request(decision, kind, automation_attempt_id, prompt),
             decision.state_name.clone(),
         )
         .await
@@ -62,6 +77,7 @@ fn request(
     decision: &LaunchPolicyDecision,
     kind: TerminalLaunchKind,
     automation_attempt_id: Option<String>,
+    prompt: String,
 ) -> CreateTerminalSession {
     let client_request_id = match decision.caller_scope {
         CallerScope::RunNow => decision.decision_id.clone(),
@@ -78,7 +94,7 @@ fn request(
         model: decision.model.clone(),
         reasoning: decision.reasoning.clone(),
         policy_reference: Some(decision.policy_identity.clone()),
-        prompt: Some(decision.prompt.clone()),
+        prompt: Some(prompt),
         resume_from_agent_run_id: None,
         automation_attempt_id,
         required_skills: decision.required_skills.clone(),
@@ -127,9 +143,24 @@ mod tests {
 
     #[test]
     fn run_now_launch_identities_derive_from_the_durable_decision() {
-        let first = request(&decision("decision-1"), TerminalLaunchKind::Task, None);
-        let replay = request(&decision("decision-1"), TerminalLaunchKind::Task, None);
-        let other = request(&decision("decision-2"), TerminalLaunchKind::Task, None);
+        let first = request(
+            &decision("decision-1"),
+            TerminalLaunchKind::Task,
+            None,
+            "first prompt".to_owned(),
+        );
+        let replay = request(
+            &decision("decision-1"),
+            TerminalLaunchKind::Task,
+            None,
+            "first prompt".to_owned(),
+        );
+        let other = request(
+            &decision("decision-2"),
+            TerminalLaunchKind::Task,
+            None,
+            "other prompt".to_owned(),
+        );
 
         assert_eq!(first.client_request_id, "decision-1");
         assert_eq!(first.agent_run_id(), replay.agent_run_id());

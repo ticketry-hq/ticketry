@@ -1,4 +1,3 @@
-import { QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SelectedTicketContent } from "../app/shell/ticket-workspace/selected-ticket/SelectedTicketContent";
@@ -7,9 +6,9 @@ import { AgentStateBadge } from "../features/agents/lifecycle";
 import {
   startStallDeadlines,
   stopStallDeadlines,
-  useAgentStatusStore,
   STALL_AFTER_MS,
 } from "../features/agents/status";
+import { useAgentStatusStore } from "../features/agents/status/testStore";
 import { applyRunStatusFrame } from "../features/agents/status/stream/runStatusHolding";
 import { applySnapshotFrame } from "../features/agents/status/stream/statusSnapshot";
 import {
@@ -23,9 +22,12 @@ import {
   type SessionMeta,
 } from "../features/agents/terminal";
 import { seedConfig } from "../features/studio/stores/configStore";
-import { queryClient } from "../shared/query/queryClient";
 import { useClientStore } from "../state/clientStore";
 import type { RunRecord } from "../features/agents/status";
+import {
+  installDesktopGraphQlRuntime,
+  terminalSessionReadExecutor,
+} from "./desktopGraphQlRuntime";
 
 const terminalApi = vi.hoisted(() => ({
   getDocuments: vi.fn(),
@@ -49,11 +51,6 @@ const terminalReads = vi.hoisted(() => {
     readScratchResumableTerminalSessions: resumable,
   };
 });
-
-vi.mock(
-  "../features/agents/terminal/internal/sessionReadTransport",
-  () => terminalReads,
-);
 
 vi.mock(
   "../app/shell/ticket-workspace/selected-ticket/terminals/SelectedTicketTerminal",
@@ -107,7 +104,7 @@ function run(overrides: Partial<RunRecord> = {}): RunRecord {
 
 function renderWorkspace() {
   return render(
-    <QueryClientProvider client={queryClient}>
+    <>
       <AgentStateBadge issueId="story-1" />
       <SelectedTicketContent
         bucket="story-1"
@@ -116,7 +113,7 @@ function renderWorkspace() {
         owner="studio"
         details={<div>Issue details</div>}
       />
-    </QueryClientProvider>,
+    </>,
   );
 }
 
@@ -133,8 +130,8 @@ describe("overhaul acceptance — terminal outcome authority", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(LAUNCHED_AT));
+    installDesktopGraphQlRuntime(terminalSessionReadExecutor(terminalReads));
     localStorage.clear();
-    queryClient.clear();
     seedConfig({ features: { sidebar: true, projects: true } });
     useStudioStore.setState({ selectedProjectId: "project-1" });
     useClientStore.setState({

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { initializeStudioRuntime, type StudioRuntime } from "../../../../runtime";
+import { documentOperationName } from "../../../../graphql-foundation/typedDocument";
 import { desktopViewerLease } from "./viewerLease";
 
 function desktopRuntime(
@@ -8,6 +9,7 @@ function desktopRuntime(
 ): StudioRuntime {
   return {
     platform: "desktop",
+    graphQlTransport: () => { throw new Error("not used"); },
     capabilities: {
       statusFeed: true,
       nativeLifecycle: true,
@@ -43,7 +45,7 @@ describe("desktop viewer lease GraphQL transport", () => {
       document: { operationName: string },
       _variables: unknown,
     ) => ({
-      viewer_lease: document.operationName === "DeleteViewerLease"
+      viewer_lease: documentOperationName(document) === "DeleteViewerLease"
         ? null
         : {
             agent_run_id: "run-1",
@@ -62,7 +64,7 @@ describe("desktop viewer lease GraphQL transport", () => {
     await desktopViewerLease.renew("run-1", "viewer-1", lease.generation);
     await desktopViewerLease.release("run-1", "viewer-1", lease.generation);
 
-    expect(execute.mock.calls.map(([document]) => document.operationName)).toEqual([
+    expect(execute.mock.calls.map(([document]) => documentOperationName(document))).toEqual([
       "CreateViewerLease",
       "UpdateViewerLease",
       "DeleteViewerLease",

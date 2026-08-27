@@ -1,5 +1,6 @@
-use sea_orm::DatabaseConnection;
+use sea_orm::{DatabaseConnection, EntityTrait};
 
+use crate::work_management::entities::issue;
 use crate::work_management::{commands::CommandError, read_queries, read_types::WorkItem};
 
 use super::{projection, RunPrincipal};
@@ -12,7 +13,7 @@ pub async fn project(
     let resolved = projection::resolve_project(database, value)
         .await
         .ok_or_else(|| CommandError::NotFound("Project not found.".to_owned()))?;
-    if resolved != principal.project_id {
+    if !principal.is_global() && resolved != principal.project_id {
         return Err(CommandError::ForeignScope(
             "The caller is not authorized for that project.".to_owned(),
         ));
@@ -41,6 +42,17 @@ pub async fn task_or_module_id(
         ensure_item_project(principal, &task.project_id)?;
         return Ok(task.id);
     }
+    if principal.is_global() {
+        if let Some(item) = read_queries::work_item(database, value).await? {
+            return Ok(item.id);
+        }
+        return issue::Entity::find_by_id(value.replace('-', ""))
+            .one(database)
+            .await?
+            .filter(|item| item.r#type == "module")
+            .map(|item| item.id)
+            .ok_or_else(|| CommandError::NotFound("Work item not found.".to_owned()));
+    }
     let modules = read_queries::modules(database, &principal.project_id, true).await?;
     modules
         .into_iter()
@@ -58,6 +70,14 @@ pub async fn module_id(
     principal: &RunPrincipal,
     value: &str,
 ) -> Result<String, CommandError> {
+    if principal.is_global() {
+        return issue::Entity::find_by_id(value.replace('-', ""))
+            .one(database)
+            .await?
+            .filter(|item| item.r#type == "module")
+            .map(|item| item.id)
+            .ok_or_else(|| CommandError::NotFound("Module not found.".to_owned()));
+    }
     read_queries::modules(database, &principal.project_id, true)
         .await?
         .into_iter()
@@ -76,7 +96,7 @@ pub async fn issue_type(
     let kind = read_queries::issue_type(database, type_id)
         .await?
         .ok_or_else(|| CommandError::NotFound("Work-item type not found.".to_owned()))?;
-    if kind.project != principal.project_id {
+    if !principal.is_global() && kind.project != principal.project_id {
         return Err(CommandError::ForeignScope(
             "The caller is not authorized for that workflow.".to_owned(),
         ));
@@ -85,7 +105,7 @@ pub async fn issue_type(
 }
 
 fn ensure_item_project(principal: &RunPrincipal, project_id: &str) -> Result<(), CommandError> {
-    if project_id != principal.project_id {
+    if !principal.is_global() && project_id != principal.project_id {
         return Err(CommandError::ForeignScope(
             "The caller is not authorized for that work item.".to_owned(),
         ));

@@ -1,5 +1,5 @@
 import { studioRuntime } from "../../runtime";
-import { SaveDesignDocumentDocument } from "./generated/documentSave";
+import { SaveDesignDocumentDocument } from "./generated/documentSave.documents";
 
 /**
  * Studio's digest-guarded document save.

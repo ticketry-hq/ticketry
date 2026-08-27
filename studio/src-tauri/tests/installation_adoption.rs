@@ -97,6 +97,35 @@ async fn ledger(data_directory: &Path) -> adoption::LedgerRow {
     row
 }
 
+async fn insert_orphaned_document_metadata(data_directory: &Path) {
+    use sea_orm::{ConnectionTrait, Database, DbBackend, Statement};
+
+    let database = Database::connect(format!(
+        "sqlite:{}?mode=rw",
+        data_directory.join("state.db").display()
+    ))
+    .await
+    .expect("open the installation for the defect fixture");
+    database
+        .execute_raw(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
+            "INSERT INTO design_documents (
+                id, module_id, task_id, scope, root_dir, rel_path,
+                discovered_by_run_id, created_at, updated_at
+             ) VALUES (?, ?, ?, 'task', ?, 'SPEC.md', NULL,
+                       '2026-08-27T00:00:00Z', '2026-08-27T00:00:00Z')",
+            [
+                "orphaned-document-metadata".into(),
+                "missing-module".into(),
+                "missing-task".into(),
+                data_directory.to_string_lossy().into_owned().into(),
+            ],
+        ))
+        .await
+        .expect("insert orphaned document metadata");
+    database.close().await.expect("close the fixture writer");
+}
+
 // ---------------------------------------------------------------------------
 // A current installation is adopted losslessly
 // ---------------------------------------------------------------------------
@@ -549,6 +578,88 @@ async fn a_semantically_defective_installation_is_refused_with_its_defects() {
         &before,
         "refusing a defective source",
     );
+}
+
+#[tokio::test]
+async fn a_rust_owned_orphaned_document_is_repaired_from_a_verified_snapshot() {
+    let installation = tempfile::tempdir().expect("create an installation");
+    adopt_and_open(installation.path()).await;
+    insert_orphaned_document_metadata(installation.path()).await;
+
+    let repaired = adoption::adopt(installation.path())
+        .await
+        .expect("the registered semantic bridge must repair the installation");
+
+    assert_eq!(repaired.path, AdoptionPath::Reopened);
+    assert_eq!(
+        repaired.bridges,
+        vec!["remove-orphaned-design-document-metadata.v1"]
+    );
+    let snapshot = repaired
+        .snapshot
+        .clone()
+        .expect("the repair must have a recovery snapshot");
+    assert!(snapshot.verified);
+    assert_eq!(
+        scalar(
+            installation.path(),
+            "SELECT CAST(COUNT(*) AS TEXT) FROM design_documents",
+        )
+        .await,
+        "0"
+    );
+    let recovery_directory = tempfile::tempdir().expect("create recovery inspection directory");
+    let recovery_database = recovery_directory.path().join("state.db");
+    std::fs::copy(installation.path().join(&snapshot.file), &recovery_database)
+        .expect("copy the recovery point for inspection");
+    assert_eq!(
+        scalar(
+            recovery_directory.path(),
+            "SELECT CAST(COUNT(*) AS TEXT) FROM design_documents",
+        )
+        .await,
+        "1",
+        "the recovery point must retain the removed metadata"
+    );
+    let ready = adoption::open_readiness(installation.path(), repaired)
+        .await
+        .expect("the repaired installation must open readiness");
+    assert_eq!(ready.readiness, Readiness::Open);
+    let recorded = ledger(installation.path()).await;
+    assert_eq!(recorded.bridges, ready.bridges);
+    assert_eq!(recorded.snapshot_file, Some(snapshot.file));
+
+    let reopened = adoption::adopt(installation.path())
+        .await
+        .expect("a repaired installation must reopen without another bridge");
+    assert!(reopened.snapshot.is_none());
+    assert_eq!(reopened.bridges, ready.bridges);
+}
+
+#[tokio::test]
+async fn a_semantic_bridge_fault_rolls_back_the_repair_and_ledger() {
+    let installation = tempfile::tempdir().expect("create an installation");
+    adopt_and_open(installation.path()).await;
+    insert_orphaned_document_metadata(installation.path()).await;
+    let before = ledger(installation.path()).await;
+
+    let failure = adoption::adopt_with(
+        installation.path(),
+        &AdoptionPlan::failing_after(Phase::BridgeWork),
+    )
+    .await
+    .expect_err("the bridge fault must stop adoption");
+
+    assert_eq!(failure.refusal(), Refusal::InjectedFault);
+    assert_eq!(
+        scalar(
+            installation.path(),
+            "SELECT CAST(COUNT(*) AS TEXT) FROM design_documents",
+        )
+        .await,
+        "1"
+    );
+    assert_eq!(ledger(installation.path()).await, before);
 }
 
 #[tokio::test]

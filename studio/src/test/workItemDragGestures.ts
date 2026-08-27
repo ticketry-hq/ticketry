@@ -36,6 +36,26 @@ export function dragWorkItem(
   target: Element,
   edge: "before" | "after",
 ) {
+  const transfer = beginWorkItemDrag(source, target, edge);
+  const clientY = edge === "before" ? 25 : 75;
+  dragEvent(target, "drop", transfer, clientY);
+}
+
+export function finishWorkItemDragWithoutDrop(
+  source: Element,
+  target: Element,
+  edge: "before" | "after",
+) {
+  const transfer = beginWorkItemDrag(source, target, edge);
+  dragEvent(target, "dragleave", transfer);
+  dragEvent(source, "dragend", transfer);
+}
+
+function beginWorkItemDrag(
+  source: Element,
+  target: Element,
+  edge: "before" | "after",
+): DataTransfer {
   const targetBlock = target.closest("li[role='none']");
   if (!(targetBlock instanceof HTMLElement)) {
     throw new Error("Work-item drag target is missing its layout block");
@@ -55,5 +75,5 @@ export function dragWorkItem(
   const transfer = dataTransfer();
   dragEvent(source, "dragstart", transfer);
   dragEvent(target, "dragover", transfer, clientY);
-  dragEvent(target, "drop", transfer, clientY);
+  return transfer;
 }

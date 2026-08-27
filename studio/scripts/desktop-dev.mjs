@@ -7,6 +7,8 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
+import { productIdentity } from "../../scripts/product-identity.mjs";
+
 const studioRoot = fileURLToPath(new URL("..", import.meta.url));
 const require = createRequire(import.meta.url);
 const defaultFrontendPort = 5174;
@@ -50,7 +52,7 @@ export function resolveDevelopmentDataDirectory({
   return path.join(
     environment.HOME,
     ".config",
-    "worktracker-studio-development",
+    `${productIdentity.defaultDataDirectoryName}-development`,
     `${sanitizedBasename(worktreeRoot)}-${identity}`,
   );
 }
@@ -173,9 +175,24 @@ export function stopTemporaryTmuxServer(
 export function buildTauriDevelopmentConfig(port) {
   const origin = `http://127.0.0.1:${port}`;
   return {
+    productName: "Ticketry Dev",
+    identifier: "com.ticketry.desktop.dev",
     build: {
       beforeDevCommand: `npm run dev -- --host 127.0.0.1 --port ${port} --strictPort`,
       devUrl: origin,
+    },
+    app: {
+      windows: [{
+        label: "main",
+        title: "Ticketry Dev",
+        width: 1440,
+        height: 960,
+        minWidth: 1024,
+        minHeight: 700,
+        resizable: true,
+        zoomHotkeysEnabled: true,
+        dragDropEnabled: false,
+      }],
     },
   };
 }
@@ -186,7 +203,7 @@ export function formatDevelopmentIdentity({
   tmuxSocket,
 }) {
   return [
-    "Ticketry desktop development instance:",
+    "Ticketry Dev instance:",
     `frontend=${frontendOrigin}`,
     "runtime=in-process-rust",
     `data=${dataDirectory}`,
@@ -229,44 +246,8 @@ export function resolveTauriCliPath(resolver = require.resolve) {
   return resolver("@tauri-apps/cli/tauri.js");
 }
 
-export function findRunningInstalledTicketry({
-  platform = process.platform,
-  runner = execFileSync,
-} = {}) {
-  if (platform !== "darwin") return [];
-
-  const processTable = runner("ps", ["-axo", "pid=,comm="], {
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  return processTable
-    .split("\n")
-    .map((line) => line.match(/^\s*(\d+)\s+(.+?)\s*$/))
-    .filter((match) =>
-      match?.[2].endsWith("/Ticketry.app/Contents/MacOS/ticketry")
-    )
-    .map((match) => ({ pid: Number(match[1]), executable: match[2] }));
-}
-
-export function assertInstalledTicketryIsNotRunning(options) {
-  if (options?.allowConcurrentInstalledApp) return;
-  const running = findRunningInstalledTicketry(options);
-  if (running.length === 0) return;
-
-  const processes = running
-    .map(({ pid, executable }) => `${executable} (PID ${pid})`)
-    .join(", ");
-  throw new Error(
-    `the installed Ticketry app is still running: ${processes}. ` +
-    "Quit it with Command-Q; closing its window is not enough. Then rerun pnpm run dev",
-  );
-}
-
 export async function main() {
   const options = parseDesktopDevOptions(process.argv.slice(2));
-  assertInstalledTicketryIsNotRunning({
-    allowConcurrentInstalledApp: options.temporarySqlite,
-  });
   const dataDirectory = options.temporarySqlite
     ? createTemporarySqliteProfile()
     : resolveDevelopmentDataDirectory();

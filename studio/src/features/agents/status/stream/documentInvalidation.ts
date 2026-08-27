@@ -16,8 +16,11 @@
  * cache entry is the *registry* rather than the document, and that registry
  * still exists and still has to be re-read to lose one row.
  */
-import { queryClient } from "../../../../shared/query/queryClient";
-import { queryKeys } from "../../../../shared/query/keys";
+import { studioApolloClient } from "../../../../shared/apollo/client";
+import {
+  ScratchDocumentRegistryDocument,
+  TaskDocumentRegistryDocument,
+} from "../../../documents/generated/documentRegistry.documents";
 
 export const DOCUMENT_INVALIDATION_WINDOW_MS = 50;
 
@@ -36,18 +39,6 @@ export interface DocumentInvalidator {
   cancel(): void;
 }
 
-/**
- * The cache prefix for one bucket.
- *
- * `queryKeys.documents.registry` closes with a filter object holding the
- * project and module the query was read with, and a fact cannot know which of
- * those a given surface passed. The prefix stops before it, which matches every
- * variant of that bucket and nothing outside it.
- */
-export function registryPrefix(bucket: DocumentRegistryKey): readonly unknown[] {
-  return queryKeys.documents.registry(bucket.scope, bucket.ownerId).slice(0, 4);
-}
-
 export function createDocumentInvalidator(
   windowMs: number = DOCUMENT_INVALIDATION_WINDOW_MS,
 ): DocumentInvalidator {
@@ -63,7 +54,20 @@ export function createDocumentInvalidator(
     const buckets = [...pending.values()];
     pending.clear();
     for (const bucket of buckets) {
-      void queryClient.invalidateQueries({ queryKey: registryPrefix(bucket) });
+      const queryName = bucket.scope === "task"
+        ? "TaskDocumentRegistry"
+        : "ScratchDocumentRegistry";
+      const variable = bucket.scope === "task" ? "taskId" : "moduleId";
+      void studioApolloClient().refetchQueries({
+        include: "active",
+        onQueryUpdated(observableQuery) {
+          if (observableQuery.queryName !== queryName) return false;
+          const variables = observableQuery.variables as Record<string, unknown>;
+          return variables[variable] === bucket.ownerId
+            ? observableQuery.refetch()
+            : false;
+        },
+      });
     }
   };
 
@@ -81,4 +85,15 @@ export function createDocumentInvalidator(
       }
     },
   };
+}
+
+export function refreshDocumentRegistries(): Promise<void> {
+  return studioApolloClient()
+    .refetchQueries({
+      include: [
+        TaskDocumentRegistryDocument,
+        ScratchDocumentRegistryDocument,
+      ],
+    })
+    .then(() => undefined);
 }

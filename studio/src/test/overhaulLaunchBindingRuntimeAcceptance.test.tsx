@@ -4,7 +4,6 @@ import { useWorkflowEditorStore } from "../features/workflows/workflowEditorStor
 import { initializeStudioRuntime } from "../runtime";
 import { createBrowserRuntime } from "../runtime/browserRuntime";
 import { createDesktopRuntime } from "../runtime/desktopRuntime";
-import { queryClient } from "../shared/query/queryClient";
 
 const startup = {
   serviceHealth: { state: "ready", service: "backend", message: null, logPointer: null },
@@ -12,13 +11,13 @@ const startup = {
 };
 
 const provider = {
-  id: "provider-codex", slug: "codex", activated: true, supports_unattended: true,
+  __typename: "WorktrackerProvider", id: "provider-codex", slug: "codex", activated: true, supports_unattended: true,
 };
 const model = {
-  id: "model-gpt", provider: provider.id, name: "gpt-5.6-luna",
-  reasoning_levels: { nodes: [{ reasoning_level_id: "reasoning-medium" }] },
+  __typename: "WorktrackerAgentmodel", id: "model-gpt", provider: provider.id, name: "gpt-5.6-luna",
+  reasoning_levels: { __typename: "WorktrackerAgentmodelreasoninglevelConnection", nodes: [{ __typename: "WorktrackerAgentmodelreasoninglevel", id: 1, reasoning_level_id: "reasoning-medium" }] },
 };
-const reasoning = { id: "reasoning-medium", name: "medium" };
+const reasoning = { __typename: "WorktrackerReasoninglevel", id: "reasoning-medium", name: "medium" };
 const issueType = {
   id: "story", project: "project-1", name: "Story", level: "task" as const,
   color: "", sort_order: 0, start_state: "build", workflow_revision: 8,
@@ -31,28 +30,38 @@ const state = {
 
 function catalog(subtreeRunEnabled: boolean, workflowRevision: number) {
   return {
-    states: { nodes: [state] },
-    issue_types: { nodes: [{ ...issueType, workflow_revision: workflowRevision }] },
-    launch_bindings: { nodes: [{
-      id: 1, issue_type: "story", state: "build", prompt: "Implement it.",
-      required_skills: ["tdd"], model: model.id, reasoning: reasoning.id,
-      auto_start: false, subtree_run_enabled: subtreeRunEnabled,
-      created_at: "", updated_at: "",
-      issueType: { sort_order: 0 }, state_record: { sort_order: 0 },
+    __typename: "WorkTrackerProjectOpen",
+    project: { __typename: "WorktrackerProjectConnection", nodes: [{
+      __typename: "WorktrackerProject",
+      id: "project-1", name: "Project", slug: "PROJECT", description: "",
+      manual_module_order: false, created_at: "",
     }] },
-    providers: { nodes: [provider] },
-    agent_models: { nodes: [{
-      ...model,
-      provider_record: { slug: provider.slug },
-      reasoning_levels: { nodes: [{ reasoning_level_id: "reasoning-medium" }] },
+    modules: { __typename: "WorktrackerIssueConnection", nodes: [] },
+    states: { __typename: "WorktrackerStateConnection", nodes: [{ __typename: "WorktrackerState", ...state }] },
+    issue_types: { __typename: "WorktrackerIssuetypeConnection", nodes: [{
+      __typename: "WorktrackerIssuetype",
+      ...issueType,
+      workflow_revision: workflowRevision,
+      transitions: { __typename: "WorktrackerIssuetypetransitionConnection", nodes: [] },
+      launch_bindings: { __typename: "WorktrackerLaunchbindingConnection", nodes: [{
+        __typename: "WorktrackerLaunchbinding",
+        id: 1, issue_type: "story", state: "build", prompt: "Implement it.",
+        required_skills: ["tdd"], model: model.id, reasoning: reasoning.id,
+        auto_start: false, subtree_run_enabled: subtreeRunEnabled,
+        created_at: "", updated_at: "", state_record: { __typename: "WorktrackerState", id: "build", sort_order: 0 },
+      }] },
     }] },
-    reasoning_levels: { nodes: [reasoning] },
+    provider_catalog: {
+      __typename: "ProviderCatalog",
+      configurable_providers: [provider], providers: [provider],
+      agent_models: [model], reasoning_levels: [reasoning],
+      global_default: { __typename: "GlobalLaunchDefault", provider: "codex", model: model.name, reasoning: "medium" },
+    },
   };
 }
 
 describe("launch-binding desktop runtime acceptance", () => {
   afterEach(() => {
-    queryClient.clear();
     initializeStudioRuntime(createBrowserRuntime({ environment: {} }));
   });
 
@@ -65,7 +74,7 @@ describe("launch-binding desktop runtime acceptance", () => {
         variables: Record<string, unknown>;
       };
       operations.push(request.operationName);
-      if (request.operationName === "WorkTrackerWorkflowCatalog") {
+      if (request.operationName === "WorkTrackerProjectOpen") {
         catalogRead += 1;
         return JSON.stringify({ data: catalog(catalogRead > 1, catalogRead > 1 ? 9 : 8) });
       }
@@ -80,16 +89,6 @@ describe("launch-binding desktop runtime acceptance", () => {
           }],
         });
       }
-      if (request.operationName === "WorkTrackerIssueTypeTransitions") {
-        return JSON.stringify({ data: { issue_type_transitions: { nodes: [] } } });
-      }
-      if (request.operationName === "LoadProviderCatalog") {
-        return JSON.stringify({ data: { provider_catalog: {
-          configurable_providers: [provider], providers: [provider],
-          agent_models: [model], reasoning_levels: [reasoning],
-          global_default: { provider: "codex", model: model.name, reasoning: "medium" },
-        } } });
-      }
       throw new Error(`Unexpected operation ${request.operationName}`);
     });
     initializeStudioRuntime(await createDesktopRuntime({
@@ -100,7 +99,6 @@ describe("launch-binding desktop runtime acceptance", () => {
         graphql_unsubscribe: vi.fn(),
       }),
     }));
-    queryClient.clear();
     useWorkflowEditorStore.setState({
       projectId: "project-1",
       issueTypes: [issueType],
@@ -133,11 +131,9 @@ describe("launch-binding desktop runtime acceptance", () => {
     expect(current.notice).toBe("Workflow changed elsewhere. Latest settings loaded.");
     expect(getCapabilitiesSnapshot("project-1")).toEqual({ story: ["build"] });
     expect(operations).toEqual([
-      "WorkTrackerWorkflowCatalog",
+      "WorkTrackerProjectOpen",
       "UpsertWorkTrackerLaunchBinding",
-      "WorkTrackerWorkflowCatalog",
-      "WorkTrackerIssueTypeTransitions",
-      "LoadProviderCatalog",
+      "WorkTrackerProjectOpen",
     ]);
   });
 });

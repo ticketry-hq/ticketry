@@ -1,7 +1,7 @@
 import type {
   RunHoldingPayload,
   RunStatusEventFrame,
-} from "../generated/statusStream";
+} from "../types";
 import type { RawLifecycleState, RunPresentationState } from "../types";
 import type { RunRecord } from "../types";
 

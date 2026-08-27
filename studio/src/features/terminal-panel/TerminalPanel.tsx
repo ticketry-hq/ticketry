@@ -16,7 +16,7 @@ import { useEffect } from "react";
 import type { ReactNode } from "react";
 
 import { Terminal, useTerminalStore } from "../agents/terminal";
-import { useStudioStore } from "../projects/store";
+import { useStudioStore } from "../projects";
 import { useClientStore } from "../../state/clientStore";
 import { DeadShell } from "./DeadShell";
 import { ModuleFolderRequired } from "./ModuleFolderRequired";

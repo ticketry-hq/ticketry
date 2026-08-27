@@ -23,13 +23,8 @@ import { studioKeymapRegistry } from "./keymapRegistry";
 
 const EMPTY_TASK_ROWS: TreeRow[] = [];
 
-function hasOpenModal(
-  ui: ReturnType<typeof useClientStore.getState>,
-): boolean {
-  return (
-    ui.modalStack.length > 0 ||
-    useModalStore.getState().modalStack.length > 0
-  );
+function hasOpenModal(): boolean {
+  return useModalStore.getState().modalStack.length > 0;
 }
 
 /** Installs the application-wide keyboard precedence and delegates actions. */
@@ -44,7 +39,7 @@ export function useGlobalKeymap(taskRows: TreeRow[] = EMPTY_TASK_ROWS): void {
     function onCaptureKeyDown(event: KeyboardEvent): void {
       const ui = useClientStore.getState();
       const sidebarVisible = isSidebarEnabled() && ui.sidebarVisible;
-      if (hasOpenModal(ui)) return;
+      if (hasOpenModal()) return;
 
       const actionId = studioKeymapRegistry.resolve("capture", event);
       // Ahead of body engagement: the panel toggle must reverse itself from any
@@ -75,7 +70,7 @@ export function useGlobalKeymap(taskRows: TreeRow[] = EMPTY_TASK_ROWS): void {
         return;
       }
       if (
-        hasOpenModal(ui) ||
+        hasOpenModal() ||
         isTypingTarget(event.target) ||
         event.defaultPrevented
       ) {

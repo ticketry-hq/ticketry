@@ -139,14 +139,18 @@ impl ServerHandler for WorktrackerMcpService {
             .get::<http::request::Parts>()
             .and_then(|parts| parts.headers.get("authorization"))
             .and_then(|value| value.to_str().ok());
-        let principal = match self
-            .authority
-            .authorize(authorization, request.name.as_ref())
-            .await
-        {
-            Ok(value) => value,
-            Err(failure) => {
-                return Ok(CallToolResult::structured(failure.0).into());
+        let principal = if authorization.is_none() && request.name != "terminate_current_run" {
+            super::RunPrincipal::global()
+        } else {
+            match self
+                .authority
+                .authorize(authorization, request.name.as_ref())
+                .await
+            {
+                Ok(value) => value,
+                Err(failure) => {
+                    return Ok(CallToolResult::structured(failure.0).into());
+                }
             }
         };
         let arguments: Map<String, Value> = request.arguments.unwrap_or_default();

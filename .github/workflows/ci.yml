@@ -41,6 +41,12 @@ jobs:
       - name: Desktop Rust tests
         run: cargo test --manifest-path studio/src-tauri/Cargo.toml --features native-libghostty
 
+      - name: Frontend-to-agent desktop acceptance
+        timeout-minutes: 30
+        run: |
+          command -v tmux || brew install tmux
+          npm run test:e2e:desktop --workspace @worktracker/studio
+
       - name: Release contract tests
         run: |
           npm run release:test --workspace @worktracker/studio

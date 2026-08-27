@@ -1,4 +1,4 @@
-import { create } from "zustand";
+import { createApolloStore } from "../shared/apollo/localState";
 import {
   getConfigSnapshot,
   getModuleFolder,
@@ -53,25 +53,11 @@ export type EditViewZone =
 export type NavigationModality = "keyboard" | "pointer";
 export type SelectionSurface = "backlog";
 
-export interface ModalDescriptor {
-  type: string;
-  payload?: Record<string, unknown>;
-}
-
-export interface KeyBinding {
-  key: string;
-  label: string;
-}
-
 export interface ConfirmOptions {
   title: string;
   body: string;
   confirmLabel?: string;
   danger?: boolean;
-}
-
-export interface ConfirmTypedOptions extends ConfirmOptions {
-  confirmText: string;
 }
 
 export interface ReassignCandidate {
@@ -89,11 +75,6 @@ export type ReassignResult = { reassignTo?: string } | null;
 
 export type DialogDescriptor =
   | { kind: "confirm"; opts: ConfirmOptions; resolve: (value: boolean) => void }
-  | {
-      kind: "confirmTyped";
-      opts: ConfirmTypedOptions;
-      resolve: (value: boolean) => void;
-    }
   | {
       kind: "reassign";
       opts: ReassignOptions;
@@ -123,9 +104,6 @@ export interface ClientState {
 
   sidebarVisible: boolean;
   panelLayout: number[] | null;
-
-  modalStack: ModalDescriptor[];
-  bindingsStack: KeyBinding[][];
 
   expandedIdsByModule: Record<string, string[]>;
   collapsedStateIds: Set<string>;
@@ -176,11 +154,6 @@ export interface ClientState {
   setSidebarVisible: (visible: boolean) => void;
   setPanelLayout: (sizes: number[]) => void;
 
-  pushModal: (modal: ModalDescriptor) => void;
-  popModal: () => void;
-  pushBindings: (bindings: KeyBinding[]) => void;
-  popBindings: () => void;
-
   toggleExpanded: (moduleId: string, id: string) => void;
   setExpanded: (moduleId: string, id: string, expanded: boolean) => void;
   expandMany: (moduleId: string, ids: readonly string[]) => void;
@@ -200,7 +173,6 @@ export interface ClientState {
   setStorySearchQuery: (query: string) => void;
 
   confirm: (options: ConfirmOptions) => Promise<boolean>;
-  confirmTyped: (options: ConfirmTypedOptions) => Promise<boolean>;
   reassign: (options: ReassignOptions) => Promise<ReassignResult>;
   pushToast: (kind: ToastKind, message: string) => number;
   dismissToast: (id: number) => void;
@@ -222,20 +194,6 @@ export const DEFAULT_WORKSPACE: TicketWorkspaceViewState = {
   activeDocId: null,
   closedDocIds: [],
 };
-
-export const DEFAULT_BINDINGS: KeyBinding[] = [
-  { key: "o", label: "Open Agent" },
-  { key: "n", label: "Plan" },
-  { key: "i", label: "Instant Change" },
-  { key: "r", label: "Run now" },
-  { key: "s", label: "Status" },
-  { key: "e", label: "Settings" },
-  { key: "f", label: "Set Folder" },
-  { key: "q", label: "Close Tab" },
-  { key: "⌘\\", label: "Next Terminal" },
-  { key: "⌘⇧\\", label: "Previous Terminal" },
-  { key: "\\", label: "Sidebar" },
-];
 
 const PANE_ORDER: FocusedPane[] = [
   "projects",
@@ -346,7 +304,7 @@ function nextExpandedMap(
   return { ...current, [moduleId]: [...ids] };
 }
 
-export const useClientStore = create<ClientState>((set, get) => ({
+export const useClientStore = createApolloStore<ClientState>("client", (set, get) => ({
   selectedModuleId: null,
   selectedTaskId: null,
   workspaceSelection: { kind: "task" },
@@ -360,8 +318,6 @@ export const useClientStore = create<ClientState>((set, get) => ({
   modulesCursorId: null,
   sidebarVisible: readSidebarVisible(),
   panelLayout: readPanelLayout(),
-  modalStack: [],
-  bindingsStack: [DEFAULT_BINDINGS],
   expandedIdsByModule: readExpandedIdsByModule(),
   collapsedStateIds: collapsedStorage.ids,
   selection: { surface: null, ids: new Set(), anchorId: null },
@@ -651,27 +607,6 @@ export const useClientStore = create<ClientState>((set, get) => ({
     set({ panelLayout });
   },
 
-  pushModal(modal) {
-    set((state) => ({ modalStack: [...state.modalStack, modal] }));
-  },
-
-  popModal() {
-    set((state) => ({ modalStack: state.modalStack.slice(0, -1) }));
-  },
-
-  pushBindings(bindings) {
-    set((state) => ({ bindingsStack: [...state.bindingsStack, bindings] }));
-  },
-
-  popBindings() {
-    set((state) => ({
-      bindingsStack:
-        state.bindingsStack.length > 1
-          ? state.bindingsStack.slice(0, -1)
-          : state.bindingsStack,
-    }));
-  },
-
   toggleExpanded(moduleId, id) {
     set((state) => {
       const expandedIdsByModule = nextExpandedMap(
@@ -784,21 +719,9 @@ export const useClientStore = create<ClientState>((set, get) => ({
         kind: "confirm",
         opts: options,
         resolve: (value) => {
-          set((state) => ({ dialogs: state.dialogs.filter((item) => item !== descriptor) }));
-          resolve(value);
-        },
-      };
-      set((state) => ({ dialogs: [...state.dialogs, descriptor] }));
-    });
-  },
-
-  confirmTyped(options) {
-    return new Promise<boolean>((resolve) => {
-      const descriptor: DialogDescriptor = {
-        kind: "confirmTyped",
-        opts: options,
-        resolve: (value) => {
-          set((state) => ({ dialogs: state.dialogs.filter((item) => item !== descriptor) }));
+          set((state) => ({
+            dialogs: state.dialogs.filter((item) => item.resolve !== descriptor.resolve),
+          }));
           resolve(value);
         },
       };
@@ -812,7 +735,9 @@ export const useClientStore = create<ClientState>((set, get) => ({
         kind: "reassign",
         opts: options,
         resolve: (value) => {
-          set((state) => ({ dialogs: state.dialogs.filter((item) => item !== descriptor) }));
+          set((state) => ({
+            dialogs: state.dialogs.filter((item) => item.resolve !== descriptor.resolve),
+          }));
           resolve(value);
         },
       };
@@ -864,8 +789,6 @@ useClientStore.subscribe((state, previous) => {
 
 export const dialog = {
   confirm: (options: ConfirmOptions) => useClientStore.getState().confirm(options),
-  confirmTyped: (options: ConfirmTypedOptions) =>
-    useClientStore.getState().confirmTyped(options),
   reassign: (options: ReassignOptions) =>
     useClientStore.getState().reassign(options),
 };

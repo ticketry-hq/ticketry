@@ -47,6 +47,10 @@ Ticketry has no product REST API. Browser development may use the Rust GraphQL
 adapter, but it must not grow into a second backend or external compatibility
 contract.
 
+Apollo's `InMemoryCache` is the frontend's one state owner for server records
+and client-only state. Selector and persistence adapters may write cache rows,
+but must not retain a second application-state snapshot.
+
 Keep the Tauri/webview boundary narrow. The native terminal renderer consumes a
 pinned libghostty revision through its C API, while tmux remains responsible for
 durable sessions. Preserve the existing fallback unless a deliberate migration

@@ -1,7 +1,7 @@
 mod api;
 mod endpoint;
 
-pub use api::{TransportApi, TransportApiImpl};
+pub use api::{valid_subscription_id, GraphQlSubscriptionStream, TransportApi, TransportApiImpl};
 pub use endpoint::GraphQlEndpoint;
 
 pub fn export_bindings(path: impl AsRef<std::path::Path>) -> Result<(), String> {

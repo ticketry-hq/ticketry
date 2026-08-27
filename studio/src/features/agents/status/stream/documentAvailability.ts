@@ -14,10 +14,4 @@
  * an optimization rather than the only thing standing between a person and a
  * document that silently never appeared.
  */
-import { queryClient } from "../../../../shared/query/queryClient";
-
-const REGISTRY_PREFIX = ["documents", "registry"] as const;
-
-export function refreshDocumentRegistries(): void {
-  void queryClient.invalidateQueries({ queryKey: REGISTRY_PREFIX });
-}
+export { refreshDocumentRegistries } from "./documentInvalidation";

@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { initializeStudioRuntime, type StudioRuntime } from "../runtime";
-import { queryClient } from "../shared/query/queryClient";
 import {
   createTerminalSession,
   resumeTerminalSession,
@@ -12,8 +11,13 @@ import {
   listModuleShells,
 } from "../features/terminal-panel/api/moduleShellApi";
 import { runWorkItemNow } from "../features/work-items/internal/runNowTransport";
-import { RunStatusStreamDocument } from "../features/agents/status/generated/statusStream";
+import { RunStatusStreamDocument } from "../features/agents/status/generated/statusStream.documents";
+import {
+  documentOperationName,
+  documentSource,
+} from "../graphql-foundation/typedDocument";
 import { readStatusFact } from "../features/agents/status/stream/statusFacts";
+import { studioApolloClient } from "../shared/apollo/client";
 
 const runtime = vi.hoisted(() => ({ desktop: true }));
 
@@ -28,6 +32,7 @@ function desktopRuntime(
 ): StudioRuntime {
   return {
     platform: "desktop",
+    graphQlTransport: () => { throw new Error("not used"); },
     capabilities: {
       statusFeed: true,
       nativeLifecycle: true,
@@ -82,8 +87,8 @@ describe("desktop terminal transport acceptance", () => {
       document: { operationName: string },
       variables: Record<string, unknown>,
     ) => {
-      calls.push({ operationName: document.operationName, variables });
-      if (document.operationName === "RunWorkTrackerWorkItemNow") {
+      calls.push({ operationName: documentOperationName(document), variables });
+      if (documentOperationName(document) === "RunWorkTrackerWorkItemNow") {
         if (firstRunNowAttempt) {
           firstRunNowAttempt = false;
           throw new Error("TauRPC response interrupted");
@@ -103,13 +108,13 @@ describe("desktop terminal transport acceptance", () => {
           },
         };
       }
-      if (document.operationName === "CreateTerminalSession" && firstCreateAttempt) {
+      if (documentOperationName(document) === "CreateTerminalSession" && firstCreateAttempt) {
         firstCreateAttempt = false;
         throw new Error("TauRPC response interrupted");
       }
-      if (document.operationName.endsWith("ViewerLease")) {
+      if (documentOperationName(document).endsWith("ViewerLease")) {
         return {
-          viewer_lease: document.operationName === "DeleteViewerLease"
+          viewer_lease: documentOperationName(document) === "DeleteViewerLease"
             ? null
             : {
                 agent_run_id: "run-lease",
@@ -121,7 +126,7 @@ describe("desktop terminal transport acceptance", () => {
               },
         };
       }
-      if (document.operationName === "ModuleShellSessions") {
+      if (documentOperationName(document) === "ModuleShellSessions") {
         return {
           terminal_sessions: {
             sessions: [{
@@ -137,13 +142,13 @@ describe("desktop terminal transport acceptance", () => {
       }
       return {
         terminal_session: {
-          agent_run_id: document.operationName === "ResumeTerminalSession"
+          agent_run_id: documentOperationName(document) === "ResumeTerminalSession"
             ? "run-resumed"
-            : document.operationName === "CreateModuleShell"
+            : documentOperationName(document) === "CreateModuleShell"
               ? "run-shell"
               : "run-created",
           module_id: "module-1",
-          scope: document.operationName === "CreateModuleShell" ? "shell" : "task",
+          scope: documentOperationName(document) === "CreateModuleShell" ? "shell" : "task",
           doc_rel_path: null,
           created_at: "2026-08-19T10:00:00Z",
           agent_run: { id: "run-created" },
@@ -153,8 +158,8 @@ describe("desktop terminal transport acceptance", () => {
     initializeStudioRuntime(
       desktopRuntime((routes) => routes.graphQl(execute as never)),
     );
-    const invalidate = vi.spyOn(queryClient, "invalidateQueries")
-      .mockResolvedValue(undefined);
+    const refetch = vi.spyOn(studioApolloClient(), "refetchQueries")
+      .mockResolvedValue([]);
 
     await expect(runWorkItemNow("task-1")).resolves.toMatchObject({
       target_id: "task-1",
@@ -236,17 +241,14 @@ describe("desktop terminal transport acceptance", () => {
       columns: 80,
       rows: 24,
     });
-    expect(invalidate).toHaveBeenCalledWith({
-      queryKey: ["terminal-sessions"],
-      refetchType: "active",
-    });
+    expect(refetch).toHaveBeenCalled();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("[overhaul-155] consumes Rust output and effective-state projections on snapshot and live status", () => {
-    expect(RunStatusStreamDocument.source).toContain("effective_state");
-    expect(RunStatusStreamDocument.source).toContain("output_sequence");
-    expect(RunStatusStreamDocument.source).toContain("last_output_at");
+    expect(documentSource(RunStatusStreamDocument)).toContain("effective_state");
+    expect(documentSource(RunStatusStreamDocument)).toContain("output_sequence");
+    expect(documentSource(RunStatusStreamDocument)).toContain("last_output_at");
 
     const fact = readStatusFact({
       __typename: "RunStatusEvent",

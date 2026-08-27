@@ -1,9 +1,9 @@
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../shared/api/client", async () => {
-  const actual = await vi.importActual<typeof import("../shared/api/client")>(
-    "../shared/api/client",
+vi.mock("./legacyApiFixture", async () => {
+  const actual = await vi.importActual<typeof import("./legacyApiFixture")>(
+    "./legacyApiFixture",
   );
   return {
     ...actual,
@@ -13,12 +13,28 @@ vi.mock("../shared/api/client", async () => {
   };
 });
 vi.mock("../features/projects/queries/readTransport", async () => {
-  const api = await import("../shared/api/client");
-  return { readModules: api.listModules, readProjects: api.listProjects, readWorkspace: vi.fn() };
+  const actual = await vi.importActual<typeof import("../features/projects/queries/readTransport")>(
+    "../features/projects/queries/readTransport",
+  );
+  const api = await import("./legacyApiFixture");
+  const { projectOpenFixture } = await import("./projectOpenFixture");
+  return {
+    ...actual,
+    readProjectOpen: async (projectId: string) => {
+      const [projects, modules] = await Promise.all([api.listProjects(), api.listModules(projectId)]);
+      const project = projects.find((candidate: { id: string }) => candidate.id === projectId) ?? projects[0];
+      if (!project) throw new Error(`Project ${projectId} was not found.`);
+      return projectOpenFixture(project, modules);
+    },
+    readWorkspace: vi.fn(),
+  };
 });
 vi.mock("../features/work-items/mutationTransport", async () => {
-  const api = await import("../shared/api/client");
-  return { reorderWorkItem: api.reorderWorkItem };
+  const actual = await vi.importActual<typeof import("../features/work-items/mutationTransport")>(
+    "../features/work-items/mutationTransport",
+  );
+  const api = await import("./legacyApiFixture");
+  return { ...actual, reorderWorkItem: api.reorderWorkItem };
 });
 
 import { loadModules, loadProjects } from "../features/projects";
@@ -196,6 +212,45 @@ describe("module sidebar reorder acceptance", () => {
       expect(sidebarOrder()).toEqual(["module-c", "module-a", "module-b"]),
     );
     expect(tabStripOrder()).toEqual(["C", "A", "B"]);
+  });
+
+  it("[overhaul-168] refreshes stale neighbors and completes the same module drag", async () => {
+    await renderAutomaticProject();
+
+    reorderWorkItem
+      .mockRejectedValueOnce(
+        new Error("before/after are not ordered neighbors."),
+      )
+      .mockResolvedValue(moved("module-c"));
+    listProjects.mockResolvedValue([project(true)]);
+    // The rejected write proves the visible a, b, c order is stale. The first
+    // refresh reveals b, c, a; after the recomputed write the server owns b, a, c.
+    listModules
+      .mockResolvedValueOnce(modules("module-b", "module-c", "module-a"))
+      .mockResolvedValue(modules("module-b", "module-a", "module-c"));
+
+    dragModule("module-c", "module-a", "far");
+
+    await waitFor(() => expect(reorderWorkItem).toHaveBeenCalledTimes(2));
+    expect(reorderWorkItem).toHaveBeenNthCalledWith(1, "module-c", {
+      before_id: "module-a",
+      after_id: "module-b",
+      initial_order_ids: ["module-a", "module-b", "module-c"],
+    });
+    expect(reorderWorkItem).toHaveBeenNthCalledWith(2, "module-c", {
+      before_id: "module-a",
+      after_id: null,
+      initial_order_ids: ["module-b", "module-c", "module-a"],
+    });
+    await waitFor(() =>
+      expect(sidebarOrder()).toEqual(["module-b", "module-a", "module-c"]),
+    );
+    expect(tabStripOrder()).toEqual(["B", "A", "C"]);
+    expect(
+      useClientStore
+        .getState()
+        .toasts.some((toast) => toast.message.includes("could not be reordered")),
+    ).toBe(false);
   });
 
   it("[overhaul-45] writes nothing for a cancelled or no-op module drop", async () => {

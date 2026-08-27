@@ -10,14 +10,12 @@ import {
   type SessionMeta,
 } from "../../../../../features/agents/terminal";
 import { resumeTerminal } from "../../../../../features/agents/api/agentApi";
-import { FoundationGraphQlError } from "../../../../../graphql-foundation/foundationClient";
+import { FoundationGraphQlError } from "../../../../../shared/apollo/errorLink";
 import {
   toast,
   useClientStore,
   useClientStore as useTicketWorkspaceStore,
 } from "../../../../../state/clientStore";
-import { queryClient } from "../../../../../shared/query/queryClient";
-import { queryKeys } from "../../../../../shared/query/keys";
 import { closeTerminalTab } from "./closeTerminalTab";
 import { rememberStudioWorkspaceTarget } from "./studioWorkspaceTarget";
 import type { TaskWorkspaceTabIdentity } from "./useTaskWorkspaceTabNavigation";
@@ -191,17 +189,6 @@ export function useWorkspaceTabActions({
         moduleId: moduleId ?? "",
         taskId: scratch ? null : bucket,
       });
-      const queryKey = queryKeys.terminalSessions.resumable(
-        scratch ? null : bucket,
-        scratch ? projectId : null,
-        scratch ? moduleId : null,
-      );
-      queryClient.setQueryData<ResumableTerminalSession[]>(queryKey, (current) =>
-        (current ?? []).filter(
-          (candidate) =>
-            candidate.agent_run_id !== resumableSession.agent_run_id,
-        ),
-      );
       openSession({
         taskId: scratch ? null : bucket,
         projectId,
@@ -218,12 +205,6 @@ export function useWorkspaceTabActions({
           agentRunId: resumed.agent_run_id,
         });
       }
-      void queryClient.invalidateQueries({ queryKey });
-      void queryClient.invalidateQueries({
-        queryKey: scratch
-          ? queryKeys.terminalSessions.scratch(projectId, moduleId)
-          : queryKeys.terminalSessions.persisted(bucket),
-      });
     } catch (error) {
       toast.error(resumeErrorMessage(error));
     } finally {

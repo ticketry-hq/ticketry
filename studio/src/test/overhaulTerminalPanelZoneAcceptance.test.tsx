@@ -152,7 +152,6 @@ describe("terminal panel zone acceptance", () => {
       editViewZone: "active-tab-body",
       editViewBodyEngaged: false,
       activeByTask: {},
-      modalStack: [],
     });
     useStudioStore.setState({ selectedProjectId: "project-1" });
     seedConfig({

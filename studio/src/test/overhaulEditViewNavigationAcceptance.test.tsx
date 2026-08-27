@@ -1,4 +1,3 @@
-import { QueryClientProvider } from "@tanstack/react-query";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useGlobalKeymap } from "../app/navigation/useGlobalKeymap";
@@ -11,17 +10,16 @@ import type {
 import { TEMP_TASK_ID } from "../features/agents/types";
 import { scratchBucketId } from "../features/agents/terminal";
 import { useStudioStore } from "../features/projects/store";
-import { useAgentStatusStore } from "../features/agents/status";
+import { useAgentStatusStore } from "../features/agents/status/testStore";
 import {
   useTerminalStore,
   type SessionMeta,
 } from "../features/agents/terminal";
 import { seedConfig } from "../features/studio/stores/configStore";
-import { queryClient } from "../shared/query/queryClient";
-import { queryKeys } from "../shared/query/keys";
-import { setStatesSorted } from "../shared/query/stateCatalog";
+import { setStatesSorted } from "../features/projects";
 import { useClientStore, type EditViewZone } from "../state/clientStore";
 import { workItem } from "./seam";
+import { seedModuleOpenFixture } from "./projectOpenFixture";
 
 const terminalApi = vi.hoisted(() => ({
   getDocuments: vi.fn(),
@@ -31,23 +29,6 @@ vi.mock("../features/agents/api/agentApi", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../features/agents/api/agentApi")>()),
   ...terminalApi,
 }));
-
-// Terminal session reads moved to the Rust Terminal Session graph, so the seam
-// a test controls is the read transport, not a host API module.
-const terminalReads = vi.hoisted(() => {
-  const resumable = vi.fn();
-  return {
-    readTaskTerminalSessions: vi.fn(),
-    readScratchTerminalSessions: vi.fn(),
-    readTaskResumableTerminalSessions: resumable,
-    readScratchResumableTerminalSessions: resumable,
-  };
-});
-
-vi.mock(
-  "../features/agents/terminal/internal/sessionReadTransport",
-  () => terminalReads,
-);
 
 vi.mock(
   "../app/shell/ticket-workspace/selected-ticket/terminals/SelectedTicketTerminal",
@@ -152,7 +133,7 @@ async function renderEditViewWorkspace(
 ): Promise<{ setRows: (next: WorkItemRow[]) => void }> {
   function tree(current: WorkItemRow[]) {
     return (
-      <QueryClientProvider client={queryClient}>
+      <>
         <KeymapHarness rows={current} />
         <SelectedTicketContent
           bucket="story-1"
@@ -161,7 +142,7 @@ async function renderEditViewWorkspace(
           owner="studio"
           details={<div>Details surface</div>}
         />
-      </QueryClientProvider>
+      </>
     );
   }
 
@@ -186,7 +167,7 @@ async function renderEditViewWorkspace(
 async function renderScratchWorkspace(): Promise<void> {
   useClientStore.setState({ selectedTaskId: TEMP_TASK_ID });
   render(
-    <QueryClientProvider client={queryClient}>
+    <>
       <KeymapHarness rows={[SCRATCH_ROW]} />
       <SelectedTicketContent
         bucket={scratchBucketId("module-1")}
@@ -195,7 +176,7 @@ async function renderScratchWorkspace(): Promise<void> {
         owner="studio"
         details={<div>Details surface</div>}
       />
-    </QueryClientProvider>,
+    </>,
   );
   await waitFor(() => {
     expect(screen.getByRole("tab", { name: "Details" })).toBeTruthy();
@@ -206,7 +187,6 @@ describe("overhaul acceptance — Edit view navigation zones", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     localStorage.clear();
-    queryClient.clear();
     seedConfig({ features: { sidebar: true, projects: true } });
     useStudioStore.setState({ selectedProjectId: "project-1" });
     useClientStore.setState({
@@ -264,19 +244,10 @@ describe("overhaul acceptance — Edit view navigation zones", () => {
       parent_id: "story-1",
       rank: "A",
     });
-    queryClient.setQueryData(queryKeys.tasks.byModule("project-1", "module-1"), {
-      rootIds: ["story-1"],
-      children: { "story-1": ["child-1"], "child-1": [] },
-      order: ["story-1", "child-1"],
-    });
-    queryClient.setQueryData(queryKeys.workItems.byId(parent.id), parent);
-    queryClient.setQueryData(queryKeys.workItems.byId(child.id), child);
+    seedModuleOpenFixture("module-1", [parent, child]);
     setStatesSorted("project-1", [TODO]);
 
     terminalApi.getDocuments.mockResolvedValue({ documents: [] });
-    terminalReads.readTaskTerminalSessions.mockResolvedValue([]);
-    terminalReads.readScratchTerminalSessions.mockResolvedValue([]);
-    terminalReads.readTaskResumableTerminalSessions.mockResolvedValue([]);
   });
 
   it("[overhaul-136] expands a collapsed Story on Right, then dives Right straight into its remembered Active tab body", async () => {

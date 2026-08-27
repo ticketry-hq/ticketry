@@ -7,25 +7,24 @@
  *
  * - The canonical entity is always refreshed; its containing collection only
  *   when a fact actually claimed a membership change.
- * - An identity with an in-flight local mutation is left alone. That
- *   mutation's own settle invalidation is authoritative, and refetching while
- *   its optimistic value is visible would paint an older external value over
- *   the person's edit.
+ * Apollo keeps an optimistic layer above incoming network data, so external
+ * refreshes can proceed while a local write is in flight without painting an
+ * older value over the edit.
  */
-import { queryClient } from "../../../../shared/query/queryClient";
-import { queryKeys } from "../../../../shared/query/keys";
+import { compactWorktrackerId } from "../../../../shared/api/generatedWorktracker";
+import { studioApolloClient } from "../../../../shared/apollo/client";
+import { loadModules } from "../../../projects";
+import {
+  WorkTrackerModuleOpenDocument,
+  WorkTrackerWorkItemDocument,
+} from "../../../work-items";
+import type { WorkItemFact } from "./statusFacts";
 
 export const WORK_ITEM_INVALIDATION_WINDOW_MS = 50;
 
 export interface WorkItemInvalidator {
-  /** Queue one fact. `membershipChanged` also refreshes the collection. */
-  record(workItemId: string, membershipChanged: boolean): void;
-  /**
-   * Queue a removal. A deleted identity is evicted rather than invalidated —
-   * refetching it would only ask the server to confirm it is gone — and its
-   * containing collection is always refreshed.
-   */
-  recordRemoval(workItemId: string): void;
+  /** Queue one typed fact and refresh the collection that owns that item kind. */
+  record(fact: WorkItemFact): void;
   /** Apply everything queued now, ignoring the window. */
   flush(): void;
   /** Drop everything queued; used when the feed stops or switches project. */
@@ -37,7 +36,8 @@ export function createWorkItemInvalidator(
 ): WorkItemInvalidator {
   const pending = new Set<string>();
   const removed = new Set<string>();
-  let membershipChanged = false;
+  const moduleProjects = new Set<string>();
+  let taskMembershipChanged = false;
   let timer: ReturnType<typeof setTimeout> | null = null;
 
   const flush = () => {
@@ -47,49 +47,59 @@ export function createWorkItemInvalidator(
     }
     const ids = [...pending];
     const evicted = [...removed];
+    const projects = [...moduleProjects];
     pending.clear();
     removed.clear();
-    const refreshMembership = membershipChanged;
-    membershipChanged = false;
+    moduleProjects.clear();
+    const refreshTaskMembership = taskMembershipChanged;
+    taskMembershipChanged = false;
+    const client = studioApolloClient();
     for (const id of evicted) {
-      queryClient.removeQueries({
-        queryKey: queryKeys.workItems.byId(id),
-        exact: true,
+      client.cache.evict({
+        id: client.cache.identify({
+          __typename: "WorktrackerIssue",
+          id: compactWorktrackerId(id),
+        }),
       });
     }
     for (const id of ids) {
-      const locallyMutating = queryClient.isMutating({
-        predicate: (mutation) =>
-          (mutation.state.variables as { id?: unknown } | undefined)?.id === id,
-      });
-      if (locallyMutating > 0) continue;
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.workItems.byId(id),
-        exact: true,
-      });
+      void client.query({
+        query: WorkTrackerWorkItemDocument,
+        variables: { id: compactWorktrackerId(id) },
+        fetchPolicy: "network-only",
+      }).catch(() => {});
     }
-    if (refreshMembership) {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });
+    for (const projectId of projects) {
+      void loadModules(projectId, { queryDeduplication: false }).catch(() => {});
     }
+    if (refreshTaskMembership) {
+      void client.refetchQueries({ include: [WorkTrackerModuleOpenDocument] })
+        .catch(() => {});
+    }
+    client.cache.gc();
   };
 
   return {
-    record(workItemId, changed) {
-      pending.add(workItemId);
-      membershipChanged ||= changed;
-      timer ??= setTimeout(flush, windowMs);
-    },
-    recordRemoval(workItemId) {
-      removed.add(workItemId);
-      pending.delete(workItemId);
-      membershipChanged = true;
+    record(fact) {
+      if (fact.removed) {
+        removed.add(fact.workItemId);
+        pending.delete(fact.workItemId);
+      } else if (fact.itemKind !== "module") {
+        pending.add(fact.workItemId);
+      }
+      if (fact.itemKind === "module" && fact.projectId) {
+        moduleProjects.add(fact.projectId);
+      } else {
+        taskMembershipChanged ||= fact.membershipChanged || fact.removed;
+      }
       timer ??= setTimeout(flush, windowMs);
     },
     flush,
     cancel() {
       pending.clear();
       removed.clear();
-      membershipChanged = false;
+      moduleProjects.clear();
+      taskMembershipChanged = false;
       if (timer) {
         clearTimeout(timer);
         timer = null;

@@ -26,7 +26,7 @@ import {
   type SettingsChangeLedger,
   type SettingsLedgerEntry,
 } from "../../settings/changeLedger";
-import { KeyboardShortcutsPanel } from "./KeyboardShortcutsModal";
+import { KeybindingSettings } from "./KeybindingSettings";
 
 const ModelConfigurationPanel = lazy(async () => ({
   default: (await import("../../workflows"))
@@ -148,7 +148,7 @@ export function SettingsModal() {
 
           {activeSection === "keyboard-shortcuts" ? (
             <div className="row-start-2 min-h-0 min-w-0 overflow-x-hidden overflow-y-auto px-5 py-4">
-              <KeyboardShortcutsPanel />
+              <KeybindingSettings />
             </div>
           ) : null}
 

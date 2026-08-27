@@ -120,6 +120,25 @@ struct RetryableMissingRuntime {
     run_id: Mutex<Option<String>>,
 }
 
+struct FailedStartRuntime;
+
+#[async_trait]
+impl TerminalLaunchRuntime for FailedStartRuntime {
+    async fn observe(&self, _agent_run_id: &str) -> TerminalRuntimeObservation {
+        TerminalRuntimeObservation::Missing
+    }
+
+    async fn materialize_and_create(
+        &self,
+        _material: &launch_material::Model,
+        _checkpoint: &dyn TerminalLaunchCheckpoint,
+    ) -> Result<(), TerminalLaunchError> {
+        Err(TerminalLaunchError::runtime_start_failed(
+            "tmux rejected the hosted command",
+        ))
+    }
+}
+
 #[async_trait]
 impl TerminalLaunchRuntime for RetryableMissingRuntime {
     async fn observe(&self, agent_run_id: &str) -> TerminalRuntimeObservation {
@@ -761,6 +780,35 @@ async fn unavailable_observation_defers_without_creating_or_ending_the_run() {
     )
     .await;
     assert_eq!(ended, 0);
+}
+
+#[tokio::test]
+async fn a_rejected_hosted_command_ends_the_run_without_a_phantom_session() {
+    let harness = TerminalLifecycleHarness::start().await;
+    let database = harness.database().await;
+    let request_id = "terminal-hosted-command-rejected";
+
+    let error = launch_service(database.clone(), Arc::new(FailedStartRuntime))
+        .create(request(request_id, TerminalLaunchKind::Task))
+        .await
+        .unwrap_err();
+
+    assert_eq!(error.code_str(), "terminal_runtime_start_failed");
+    assert_eq!(effect_state(&database, request_id).await, "failed");
+    assert_eq!(
+        run_count(&database, "agent_terminal_sessions", request_id).await,
+        0
+    );
+    let ended: i64 = scalar(
+        &database,
+        &format!(
+            "SELECT COUNT(*) AS value FROM agent_runs WHERE ended_at IS NOT NULL AND id=(SELECT agent_run_id FROM runs_launch_effects WHERE request_id='{request_id}')"
+        ),
+        "value",
+    )
+    .await;
+    assert_eq!(ended, 1);
+    assert_eq!(status_count(&database, request_id).await, 2);
 }
 
 #[tokio::test]

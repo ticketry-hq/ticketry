@@ -1,4 +1,4 @@
-import { FoundationGraphQlError } from "../../graphql-foundation/foundationClient";
+import { FoundationGraphQlError } from "../apollo/errorLink";
 import { ApiError } from "./errors";
 
 /** Preserve the established REST-shaped mutation failure contract at the UI seam. */

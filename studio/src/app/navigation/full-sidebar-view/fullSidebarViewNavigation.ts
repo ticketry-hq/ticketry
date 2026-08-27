@@ -6,7 +6,7 @@ import {
   useTerminalStore,
   useWorkspaceTabsStore,
 } from "../../../features/agents/terminal/appNavigation";
-import { useAgentStatusStore } from "../../../features/agents/status";
+import { readAgentStatusHolding } from "../../../features/agents/status";
 import {
   type FocusedPane,
   resolveCursorId,
@@ -17,11 +17,8 @@ import {
   useTicketWorkspaceStore,
 } from "../../shell/ticket-workspace/selected-ticket/appNavigation";
 import type { TreeRow } from "../../shell/ticket-workspace/tasks/TasksPane";
-import { queryClient } from "../../../shared/query/queryClient";
-import { queryKeys } from "../../../shared/query/keys";
-import type { WorkItem } from "../../../shared/api/types";
-import { getModuleTreeSnapshot } from "../../../features/work-items";
-import { getStatesSnapshot } from "../../../shared/query/stateCatalog";
+import { getModuleTreeSnapshot, getWorkItemSnapshot } from "../../../features/work-items";
+import { getStatesSnapshot } from "../../../features/projects";
 import { useStudioStore } from "../../../features/projects";
 import {
   selectLiveTerminalStops,
@@ -113,7 +110,7 @@ function cycleLiveTerminal(
   const ui = useClientStore.getState();
   const tree = getModuleTreeSnapshot(projectId, ui.selectedModuleId);
   const itemsById = Object.fromEntries(tree.order.flatMap((id) => {
-    const item = queryClient.getQueryData<WorkItem>(queryKeys.workItems.byId(id));
+    const item = getWorkItemSnapshot(id);
     return item ? [[id, item] as const] : [];
   })) as unknown as Record<string, TreeWorkItem>;
   const terminal = useTerminalStore.getState();
@@ -125,7 +122,7 @@ function cycleLiveTerminal(
     taskOrder: ui.storySearchQuery.trim()
       ? undefined
       : selectModuleTaskOrder(tree, itemsById, getStatesSnapshot(projectId)),
-    agentStatus: useAgentStatusStore.getState(),
+    agentStatus: readAgentStatusHolding(),
     sessions: terminal.sessions,
   });
   const currentSessionId = ui.selectedTaskId

@@ -1,14 +1,15 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { ApiError } from "../../../shared/api/client";
+import { ApiError } from "../../../shared/api/errors";
 import { initializeStudioRuntime } from "../../../runtime";
 import { createDesktopRuntime } from "../../../runtime/desktopRuntime";
 import { retryAutomationAttempt } from "./retryAutomationAttempt";
-import { useAgentStatusStore } from "./store";
+import { useAgentStatusStore } from "./testStore";
 
 const ATTEMPT = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 const RETRY = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
 const TASK = "cccccccc-cccc-cccc-cccc-cccccccccccc";
+const PROJECT = "dddddddd-dddd-dddd-dddd-dddddddddddd";
 
 const RETRY_PAYLOAD = {
   attempt_id: RETRY,
@@ -44,6 +45,12 @@ async function useStatusRuntime(
       graphql_unsubscribe: vi.fn(),
     }),
   }));
+  useAgentStatusStore.setState({
+    projectId: PROJECT,
+    runs: {},
+    automationAttempts: {},
+    automationByTask: {},
+  });
   return graphqlExecute;
 }
 

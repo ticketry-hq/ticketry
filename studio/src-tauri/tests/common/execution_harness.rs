@@ -1,8 +1,9 @@
 //! The desktop-runtime execution harness: the highest seam slice 6 is proved at.
 //!
-//! Composition is the product's own. A temporary SQLite database is provisioned
-//! by the real Django migrations and adopted through the same entry point the
-//! desktop uses, which installs Work Management, launch policy, Runs, Terminal,
+//! Composition is the product's own. The desktop's Rust first-launch path
+//! provisions a temporary SQLite database, then deterministic campaign facts
+//! are inserted before the runtimes start. The same entry point installs Work
+//! Management, launch policy, Runs, Terminal,
 //! status, and the GraphQL endpoint. The in-process MCP listener is started over
 //! that composition, and the execution reconciliation runtime is started after
 //! Terminal recovery is ready, exactly as startup orders them. Launches use the
@@ -12,14 +13,14 @@
 //! Three things are disposable rather than simulated. The tmux server is
 //! private to the harness, so the runtime a test creates, kills, and adopts is
 //! never a developer's own. The approved provider is a disposable executable,
-//! so no real coding agent runs. And `execution_authorization` answers the
-//! run-authorization port locally, because that principal comes from the Python
-//! boundary rather than this slice. Crash points are injected at the composed
-//! launch pipeline's own boundaries; nothing else about the effect is faked.
+//! so no real coding agent runs. And `execution_authorization` records a
+//! disposable caller Agent Run and asks the in-process Rust authority for its
+//! real MCP grant. Crash points are injected at the composed launch pipeline's
+//! own boundaries; nothing else about the effect is faked.
 #![allow(dead_code)]
 
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, MutexGuard};
 use std::time::Duration;
 
 use muxed_studio_lib::execution_reconciliation::{
@@ -41,7 +42,8 @@ use serde_json::{json, Value};
 use tauri_graphql::{TransportApi, TransportApiImpl};
 
 use super::execution_authorization::{Authorization, AUTHORIZATION_CREDENTIAL};
-use super::execution_django_fixture as fixture;
+use super::execution_fixture as fixture;
+use super::execution_legacy_fixture as legacy_fixture;
 use super::isolated_tmux::{IsolatedTmux, TmuxEnvironmentOverride, TMUX_ENV_LOCK};
 
 /// How a test wants the composed runtime built.
@@ -89,28 +91,38 @@ impl ExecutionHarness {
     }
 
     pub async fn start_with_options(options: HarnessOptions) -> Self {
-        Self::start_over(options, fixture::provision_campaign_installation).await
+        Self::start_prepared(options, true).await
     }
 
-    /// Compose over a store the caller provisioned, so adoption of copied data
-    /// is observed at this seam too.
-    pub async fn start_over(options: HarnessOptions, provision: impl FnOnce(&Path)) -> Self {
+    /// Compose over the checked historical current-leaf fixture, so adoption of
+    /// copied data is observed separately from a fresh Rust installation.
+    pub async fn start_over_legacy_current(options: HarnessOptions) -> Self {
+        Self::start_prepared(options, false).await
+    }
+
+    async fn start_prepared(options: HarnessOptions, fresh_campaign: bool) -> Self {
         let environment_lock = TMUX_ENV_LOCK
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let directory = tempfile::tempdir().expect("create execution harness directory");
-        provision(directory.path());
+        if !fresh_campaign {
+            legacy_fixture::provision_current(directory.path()).await;
+        }
         approve_module_link(directory.path());
-        approve_disposable_provider(directory.path());
         let tmux = IsolatedTmux::start_empty();
         let environment =
             TmuxEnvironmentOverride::set_with_data_directory(&tmux.socket_dir, directory.path());
+        approve_disposable_provider(directory.path());
+        let authorization = Authorization::default();
+        if !fresh_campaign {
+            authorization.bind_to_project(legacy_fixture::PROJECT, legacy_fixture::PARALLEL_ROOT);
+        }
         let mut harness = Self {
             _environment_lock: environment_lock,
             _environment: environment,
             directory,
             tmux,
-            authorization: Authorization::default(),
+            authorization,
             options,
             api: TransportApiImpl::new(),
             composed: None,
@@ -120,7 +132,7 @@ impl ExecutionHarness {
             mcp: None,
             mcp_url: String::new(),
         };
-        harness.compose().await;
+        harness.compose(fresh_campaign).await;
         harness
     }
 
@@ -131,12 +143,13 @@ impl ExecutionHarness {
     /// guards process-wide tmux and data-directory variables, so releasing it
     /// early would let a concurrent harness repoint them mid-adoption.
     #[allow(clippy::await_holding_lock)]
-    pub async fn try_adopt(provision: impl FnOnce(&Path)) -> Result<(), String> {
+    pub async fn try_adopt_legacy_current(mutation: &str) -> Result<(), String> {
         let _lock = TMUX_ENV_LOCK
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let directory = tempfile::tempdir().expect("create execution adoption directory");
-        provision(directory.path());
+        legacy_fixture::provision_current(directory.path()).await;
+        legacy_fixture::mutate(directory.path(), mutation).await;
         let api = TransportApiImpl::new();
         adopt_worktracker_and_install(
             &directory.path().join("rust-core.sqlite3"),
@@ -155,7 +168,7 @@ impl ExecutionHarness {
         self.stop().await;
         self.options.stop_once_at = None;
         self.api = TransportApiImpl::new();
-        self.compose().await;
+        self.compose(false).await;
     }
 
     /// Normal shutdown: stop accepting mutations and cancel future passes,
@@ -174,12 +187,14 @@ impl ExecutionHarness {
         if let Some(mcp) = self.mcp.take() {
             mcp.shutdown().await;
         }
-        self.authorization.stop().await;
+        if let Some(composed) = &self.composed {
+            self.authorization.stop(composed.commands()).await;
+        }
         self.launch.take();
         self.composed.take();
     }
 
-    async fn compose(&mut self) {
+    async fn compose(&mut self, seed_fresh_campaign: bool) {
         let data_directory = self.directory.path().to_owned();
         let adopted = adopt_worktracker_and_install(
             &data_directory.join("rust-core.sqlite3"),
@@ -206,11 +221,13 @@ impl ExecutionHarness {
         .expect("open the workspace gate");
         let composed = adopted.runtime;
         let commands = composed.commands().clone();
+        if seed_fresh_campaign {
+            fixture::seed_campaign(&commands).await;
+        }
         let spool_directory =
             muxed_studio_lib::terminal_lifecycle::ensure_hook_spool_directory(&data_directory)
                 .expect("create the provider hook spool directory");
 
-        self.authorization.start().await;
         // The interactive runtime is shared with the GraphQL composition, so
         // every transport prepares and adopts the same verified runtime.
         let launch_runtime = Arc::new(composed.terminal_runtime().clone());
@@ -237,6 +254,8 @@ impl ExecutionHarness {
         )
         .await
         .expect("start the in-process MCP listener");
+        let run_authority = mcp.authority();
+        self.authorization.start(&commands, &run_authority).await;
         self.mcp_url = format!("http://{}/mcp", mcp.address());
 
         // Startup is what points the interactive runtime at the launch paths,
@@ -413,12 +432,14 @@ impl ExecutionHarness {
     /// Call one MCP tool over the listener's own HTTP transport, so the tool
     /// registry, authorization, and dispatch are all real.
     pub async fn mcp(&self, name: &str, arguments: Value) -> Value {
+        self.authorization.refresh_binding(self.commands()).await;
+        let credential = self.authorization.credential();
         let response = reqwest::Client::new()
             .post(&self.mcp_url)
             .header("content-type", "application/json")
             .header("accept", "application/json, text/event-stream")
             .header("mcp-protocol-version", "2025-03-26")
-            .header("authorization", "Bearer slice6-caller")
+            .header("authorization", credential)
             .json(&json!({
                 "jsonrpc": "2.0",
                 "id": "slice6",

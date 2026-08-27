@@ -7,11 +7,10 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { queryClient } from "../../../../shared/query/queryClient";
-import { queryKeys } from "../../../../shared/query/keys";
-import type { RunStatusEventFrame } from "../generated/statusStream";
+import { studioApolloClient } from "../../../../shared/apollo/client";
+import type { RunStatusEventFrame } from "../types";
 import { readStatusFact } from "./statusFacts";
-import { createDocumentInvalidator, registryPrefix } from "./documentInvalidation";
+import { createDocumentInvalidator } from "./documentInvalidation";
 
 const TASK = "33333333-3333-3333-3333-333333333333";
 const MODULE = "44444444-4444-4444-4444-444444444444";
@@ -97,7 +96,9 @@ describe("converging a document registry", () => {
   });
 
   it("refetches one bucket per window however many facts it received", () => {
-    const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+    const refetch = vi
+      .spyOn(studioApolloClient(), "refetchQueries")
+      .mockResolvedValue([]);
     const invalidator = createDocumentInvalidator(50);
 
     for (let index = 0; index < 5; index += 1) {
@@ -106,34 +107,25 @@ describe("converging a document registry", () => {
     invalidator.record({ scope: "scratch", ownerId: MODULE });
     vi.advanceTimersByTime(50);
 
-    expect(invalidate.mock.calls.map(([options]) => options?.queryKey)).toEqual([
-      registryPrefix({ scope: "task", ownerId: TASK }),
-      registryPrefix({ scope: "scratch", ownerId: MODULE }),
-    ]);
-  });
-
-  it("matches every read of one bucket without matching another bucket", () => {
-    const prefix = registryPrefix({ scope: "task", ownerId: TASK });
-
-    // The surface reads the registry with the project and module it happens to
-    // hold; a fact cannot know those, so the key it invalidates stops short of
-    // them and still matches the read.
-    expect(
-      queryKeys.documents.registry("task", TASK, "project-1", MODULE).slice(0, 4),
-    ).toEqual(prefix);
-    expect(queryKeys.documents.registry("scratch", MODULE).slice(0, 4)).not.toEqual(
-      prefix,
-    );
+    expect(refetch).toHaveBeenCalledTimes(2);
+    for (const [options] of refetch.mock.calls) {
+      expect(options).toEqual(expect.objectContaining({
+        include: "active",
+        onQueryUpdated: expect.any(Function),
+      }));
+    }
   });
 
   it("drops what is queued when the feed stops or switches project", () => {
-    const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+    const refetch = vi
+      .spyOn(studioApolloClient(), "refetchQueries")
+      .mockResolvedValue([]);
     const invalidator = createDocumentInvalidator(50);
 
     invalidator.record({ scope: "task", ownerId: TASK });
     invalidator.cancel();
     vi.advanceTimersByTime(50);
 
-    expect(invalidate).not.toHaveBeenCalled();
+    expect(refetch).not.toHaveBeenCalled();
   });
 });

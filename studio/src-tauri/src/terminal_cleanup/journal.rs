@@ -152,9 +152,13 @@ impl TerminalCleanupService {
                 session::Column::TerminatedAt,
                 Expr::value(Some(settled_at.clone())),
             )
-            .col_expr(session::Column::RuntimeCleanupPending, Expr::value(false))
             .filter(session::Column::AgentRunId.eq(&terminal.agent_run_id))
             .filter(session::Column::TerminatedAt.is_null())
+            .exec(&transaction)
+            .await?;
+        session::Entity::update_many()
+            .col_expr(session::Column::RuntimeCleanupPending, Expr::value(false))
+            .filter(session::Column::AgentRunId.eq(&terminal.agent_run_id))
             .exec(&transaction)
             .await?;
         self.checkpoints

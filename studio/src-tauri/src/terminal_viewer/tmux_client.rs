@@ -363,14 +363,7 @@ fn configure_viewer_environment(command: &mut CommandBuilder) {
 }
 
 fn viewer_shell_environment() -> Vec<String> {
-    let mut environment = vec![
-        "-u".to_owned(),
-        "LC_ALL".to_owned(),
-        format!("TERM={VIEWER_TERM}"),
-        format!("LC_CTYPE={VIEWER_LC_CTYPE}"),
-    ];
-    #[cfg(target_os = "macos")]
-    environment.push(format!("TERMINFO={VIEWER_TERMINFO}"));
+    let mut environment = vec!["-u".to_owned(), "LC_ALL".to_owned()];
     #[cfg(not(target_os = "macos"))]
     environment.extend([
         "-u".to_owned(),
@@ -378,6 +371,12 @@ fn viewer_shell_environment() -> Vec<String> {
         "-u".to_owned(),
         "TERMINFO_DIRS".to_owned(),
     ]);
+    environment.extend([
+        format!("TERM={VIEWER_TERM}"),
+        format!("LC_CTYPE={VIEWER_LC_CTYPE}"),
+    ]);
+    #[cfg(target_os = "macos")]
+    environment.push(format!("TERMINFO={VIEWER_TERMINFO}"));
 
     environment
 }

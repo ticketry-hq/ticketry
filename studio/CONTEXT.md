@@ -36,10 +36,11 @@ _Avoid_: Scratch child row, per-run chicklet, run tab
 
 **Terminal panel**:
 The collapsible Studio surface along the bottom of the ticket workspace that
-hosts plain interactive shells for the selected module. It spans the Stories and
-workspace panes so its extent matches its module scope, and it never shows an
-agent run. Whether it is open and how tall it is belong to the window; which
-shells it holds belongs to the module.
+hosts the selected module's plain interactive shells and its app run, as
+visibly distinct segments of one panel. It spans the Stories and workspace
+panes so its extent matches its module scope, and it never shows an agent run.
+Whether it is open and how tall it is belong to the window; which shells and
+app run it holds belongs to the module.
 _Avoid_: Terminal drawer, bottom dock, console panel
 
 **Panel size mode**:
@@ -63,6 +64,30 @@ the code it ended on because it is the only record of the failure. It holds no
 viewer and no durable session; the action it offers is a shell restart, which
 puts a newly minted shell run in its slot rather than reopening the dead one.
 _Avoid_: Failed terminal, disconnected shell, stale tab
+
+**App run**:
+The single terminal in which a module's configured command is running or last
+ran, shown in the terminal panel's own segment apart from panel shell tabs. It
+is neither a panel shell nor an agent run: a module has at most one, it starts
+only from the Run control, and only an explicit Stop ends its process. It
+outlives the Studio session; on the next launch a still-live app run is
+re-adopted, while one whose process has died is simply gone.
+_Avoid_: Dev server shell, run terminal, script tab, app shell
+
+**Run control**:
+The always-visible footer control beside the Terminal toggle that starts the
+selected module's app run, focuses it while it is live, offers Stop, and opens
+the run configuration editor when no command is configured. It is disabled when
+the module has no module folder, and it is exactly as available as the
+Terminal toggle in each runtime.
+_Avoid_: Run button, play button, scripts menu
+
+**Run configuration**:
+A module's one stored run command together with its environment variables and
+preview URL, edited through the Run control. It belongs to the module and
+nothing else; a module may have none, and a work item that is not a module can
+never have one.
+_Avoid_: Project scripts, launch config, package scripts
 
 **Task workspace**:
 The Studio pane for one work item, containing its Details, design-document,

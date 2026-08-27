@@ -2,7 +2,7 @@ import {
   getStatesSnapshot,
   stateById,
   useCachedStates,
-} from "../../../../../../shared/query/stateCatalog";
+} from "../../../../../../features/projects";
 import { compareStateOrder, stateColor, stateLabel } from "../../../../../../shared/utilities/display";
 import type { State } from "../../../../../../shared/api/types";
 import Popover, { PopoverOption } from "./Popover";

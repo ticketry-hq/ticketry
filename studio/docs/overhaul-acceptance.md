@@ -149,6 +149,8 @@ named gate before the full Studio suite, typecheck, and build.
 | 166 | Worktree confirmation and mutation errors do not leak across task selection. |
 | 167 | Apollo is Studio's only application-state owner; client-only UI state lives in the same cache as server records. |
 | 168 | A module drag rejected because its cached neighbors are stale refreshes the authoritative order, recomputes the same gesture, and completes without asking the person to retry. |
+| 169 | Native Ghostty reads standard macOS pasteboard text and completes ordinary and multiline paste against the exact surface and opaque request state that requested it. |
+| 170 | Concurrent retained native terminals keep separate paste owners, and teardown invalidates only the departing owner before its Ghostty surface is destroyed. |
 
 Each executable case carries one stable `[overhaul-NN]` marker. The gate has a
 contract test that fails if a marker is missing or duplicated. When a Studio UI

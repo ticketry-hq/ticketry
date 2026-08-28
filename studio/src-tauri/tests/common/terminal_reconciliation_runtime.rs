@@ -5,15 +5,15 @@ use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 use muxed_studio_lib::entities::terminals::{launch_material, session};
-use muxed_studio_lib::terminal_cleanup::{
+use muxed_studio_lib::terminal::cleanup::{
     CleanupCheckpoint, CleanupCheckpoints, CleanupKillResult, CleanupRuntimeObservation,
     RuntimeInventory, TerminalCleanupError, TerminalCleanupRuntime,
 };
-use muxed_studio_lib::terminal_launch::{
+use muxed_studio_lib::terminal::launch::{
     TerminalLaunchBoundary, TerminalLaunchCheckpoint, TerminalLaunchError, TerminalLaunchRuntime,
     TerminalRuntimeObservation, VerifiedTerminalRuntime,
 };
-use muxed_studio_lib::terminal_reconciliation::{
+use muxed_studio_lib::terminal::reconciliation::{
     ReconciliationCheckpoint, ReconciliationCheckpoints, TerminalReconciliationError,
     TerminalReconciliationService,
 };

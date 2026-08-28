@@ -6,7 +6,7 @@ use tauri::Manager;
 
 use crate::desktop::data_directory::DesktopDataDirectoryOwnership;
 use crate::desktop::service_state::DesktopServiceState;
-use crate::terminal_viewer::webview_commands;
+use crate::terminal::viewer::webview_commands;
 use crate::{native_terminal, settings_persistence};
 
 pub(crate) const MAIN_WINDOW_LABEL: &str = "main";

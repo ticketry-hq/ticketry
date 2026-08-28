@@ -3,7 +3,6 @@ export interface Project {
   name: string;
   slug: string;
   description?: string;
-  workspace_slug?: string;
   readonly manual_module_order: boolean;
 }
 // `manual_module_order` joins `id` as server-owned: a project's module
@@ -11,7 +10,8 @@ export interface Project {
 // create or update body.
 export type ProjectCreate = Omit<Project, "id" | "manual_module_order">;
 export type ProjectPatch = Partial<Omit<Project, "id" | "manual_module_order">>;
-export interface Workspace {
+/** A project's identity plus the onboarding state it now owns. */
+export interface OnboardingProject {
   readonly id: string;
   readonly slug: string;
   readonly name: string;

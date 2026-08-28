@@ -15,10 +15,10 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use muxed_studio_lib::document_watch::filesystem_events::{
+use muxed_studio_lib::documents::watch::filesystem_events::{
     DirectoryWatch, FilesystemEvent, FilesystemWatcher, WatchUnavailable,
 };
-use muxed_studio_lib::document_watch::DocumentWatchSupervisor;
+use muxed_studio_lib::documents::watch::DocumentWatchSupervisor;
 use muxed_studio_lib::documents::{DocumentFactRecorder, DocumentsService, TaskRegistryScope};
 use muxed_studio_lib::runs_persistence::RunsServices;
 use muxed_studio_lib::settings_persistence::{ModuleLink, Profile, ProfileCatalog, ProfileStore};

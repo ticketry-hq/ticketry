@@ -14,15 +14,12 @@ async fn fixture() -> (tempfile::TempDir, sea_orm::DatabaseConnection) {
         .expect("open fixture writer");
     writer.execute_unprepared(r#"
         PRAGMA journal_mode=WAL;
-        CREATE TABLE worktracker_workspace (
-            id char(32) PRIMARY KEY, slug varchar(64) NOT NULL, name varchar(255) NOT NULL,
-            onboarding_required bool NOT NULL, created_at datetime NOT NULL, updated_at datetime NOT NULL
-        );
         CREATE TABLE worktracker_project (
-            id char(32) PRIMARY KEY, workspace_id char(32) NOT NULL, name varchar(255) NOT NULL,
+            id char(32) PRIMARY KEY, name varchar(255) NOT NULL,
             slug varchar(64) NOT NULL, description text NOT NULL, seq_counter integer NOT NULL,
             state_revision bigint NOT NULL, manual_module_order bool NOT NULL,
-            created_at datetime NOT NULL, updated_at datetime NOT NULL
+            created_at datetime NOT NULL, updated_at datetime NOT NULL,
+            onboarding_required bool NOT NULL
         );
         CREATE TABLE worktracker_issue (
             id char(32) PRIMARY KEY, project_id char(32) NOT NULL, type varchar(10) NOT NULL,
@@ -71,12 +68,9 @@ async fn fixture() -> (tempfile::TempDir, sea_orm::DatabaseConnection) {
             updated_at datetime NOT NULL, module_id char(32), project_id char(32) NOT NULL,
             execution_mode varchar(16) NOT NULL, launch_configuration text
         );
-        INSERT INTO worktracker_workspace VALUES
-            ('90000000000000000000000000000000', 'local', 'Local', 0,
-             '2026-08-12 00:00:00', '2026-08-12 00:00:00');
         INSERT INTO worktracker_project VALUES
-            ('10000000000000000000000000000000', '90000000000000000000000000000000',
-             'Memory Lane', 'MEM', '', 20, 0, 0, '2026-08-12 00:00:00', '2026-08-12 00:00:00');
+            ('10000000000000000000000000000000',
+             'Memory Lane', 'MEM', '', 20, 0, 0, '2026-08-12 00:00:00', '2026-08-12 00:00:00', 0);
         INSERT INTO worktracker_issue VALUES
             ('20000000000000000000000000000001','10000000000000000000000000000000','module','30000000000000000000000000000000',NULL,NULL,NULL,0,'Older',1,0,'z','', '2026-08-12 00:00:01','2026-08-12 00:00:01'),
             ('20000000000000000000000000000002','10000000000000000000000000000000','module','30000000000000000000000000000000',NULL,NULL,NULL,0,'Newer',2,0,'A','', '2026-08-12 00:00:02','2026-08-12 00:00:02'),

@@ -42,20 +42,13 @@ impl CustomInputType for StringList {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
-pub struct Workspace {
-    pub id: String,
-    pub slug: String,
-    pub name: String,
-    pub onboarding_required: bool,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct Project {
     pub id: String,
     pub name: String,
     pub slug: String,
     pub description: String,
     pub manual_module_order: bool,
+    pub onboarding_required: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]

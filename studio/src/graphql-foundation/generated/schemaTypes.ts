@@ -559,7 +559,7 @@ export type MigrationProbesOrderInput = {
 
 export type Mutation = {
   __typename?: 'Mutation';
-  acknowledge_onboarding: WorktrackerWorkspace;
+  acknowledge_onboarding: WorktrackerProject;
   add_local_profile: LocalSettings;
   create_issue_type_transition: WorktrackerIssuetypetransition;
   create_project: WorktrackerProject;
@@ -609,6 +609,11 @@ export type Mutation = {
 };
 
 
+export type MutationAcknowledge_OnboardingArgs = {
+  project_id: Scalars['String']['input'];
+};
+
+
 export type MutationAdd_Local_ProfileArgs = {
   profile: LocalProfileInput;
 };
@@ -627,7 +632,6 @@ export type MutationCreate_ProjectArgs = {
   description?: InputMaybe<Scalars['String']['input']>;
   name: Scalars['String']['input'];
   slug: Scalars['String']['input'];
-  workspace_slug?: InputMaybe<Scalars['String']['input']>;
 };
 
 
@@ -1007,7 +1011,6 @@ export type Query = {
   worktrackerProvider: WorktrackerProviderConnection;
   worktrackerReasoninglevel: WorktrackerReasoninglevelConnection;
   worktrackerState: WorktrackerStateConnection;
-  worktrackerWorkspace: WorktrackerWorkspaceConnection;
   worktree_status: WorktreeStatusView;
   worktrees: WorktreesConnection;
 };
@@ -1177,14 +1180,6 @@ export type QueryWorktrackerStateArgs = {
   filters?: InputMaybe<WorktrackerStateFilterInput>;
   having?: InputMaybe<WorktrackerStateHavingInput>;
   orderBy?: InputMaybe<WorktrackerStateOrderInput>;
-  pagination?: InputMaybe<PaginationInput>;
-};
-
-
-export type QueryWorktrackerWorkspaceArgs = {
-  filters?: InputMaybe<WorktrackerWorkspaceFilterInput>;
-  having?: InputMaybe<WorktrackerWorkspaceHavingInput>;
-  orderBy?: InputMaybe<WorktrackerWorkspaceOrderInput>;
   pagination?: InputMaybe<PaginationInput>;
 };
 
@@ -1906,13 +1901,12 @@ export type WorktrackerProject = {
   issueType: WorktrackerIssuetypeConnection;
   manualModuleOrder: Scalars['Boolean']['output'];
   name: Scalars['String']['output'];
+  onboardingRequired: Scalars['Boolean']['output'];
   seqCounter: Scalars['Int']['output'];
   slug: Scalars['String']['output'];
   state: WorktrackerStateConnection;
   stateRevision: Scalars['Int']['output'];
   updatedAt: Scalars['String']['output'];
-  workspace?: Maybe<WorktrackerWorkspace>;
-  workspaceId: Scalars['String']['output'];
 };
 
 
@@ -1958,19 +1952,18 @@ export type WorktrackerProjectFilterInput = {
   manualModuleOrder?: InputMaybe<BooleanFilterInput>;
   name?: InputMaybe<StringFilterInput>;
   not?: InputMaybe<WorktrackerProjectFilterInput>;
+  onboardingRequired?: InputMaybe<BooleanFilterInput>;
   or?: InputMaybe<Array<WorktrackerProjectFilterInput>>;
   seqCounter?: InputMaybe<IntegerFilterInput>;
   slug?: InputMaybe<StringFilterInput>;
   stateRevision?: InputMaybe<IntegerFilterInput>;
   updatedAt?: InputMaybe<TextFilterInput>;
-  workspaceId?: InputMaybe<StringFilterInput>;
 };
 
 export type WorktrackerProjectHavingInput = {
   issue?: InputMaybe<WorktrackerIssueFilterInput>;
   issueType?: InputMaybe<WorktrackerIssuetypeFilterInput>;
   state?: InputMaybe<WorktrackerStateFilterInput>;
-  workspace?: InputMaybe<WorktrackerWorkspaceFilterInput>;
 };
 
 export type WorktrackerProjectOrderInput = {
@@ -1979,11 +1972,11 @@ export type WorktrackerProjectOrderInput = {
   id?: InputMaybe<OrderByEnum>;
   manualModuleOrder?: InputMaybe<OrderByEnum>;
   name?: InputMaybe<OrderByEnum>;
+  onboardingRequired?: InputMaybe<OrderByEnum>;
   seqCounter?: InputMaybe<OrderByEnum>;
   slug?: InputMaybe<OrderByEnum>;
   stateRevision?: InputMaybe<OrderByEnum>;
   updatedAt?: InputMaybe<OrderByEnum>;
-  workspaceId?: InputMaybe<OrderByEnum>;
 };
 
 export type WorktrackerProvider = {
@@ -2147,63 +2140,6 @@ export type WorktrackerStateOrderInput = {
   name?: InputMaybe<OrderByEnum>;
   projectId?: InputMaybe<OrderByEnum>;
   sortOrder?: InputMaybe<OrderByEnum>;
-  updatedAt?: InputMaybe<OrderByEnum>;
-};
-
-export type WorktrackerWorkspace = {
-  __typename?: 'WorktrackerWorkspace';
-  createdAt: Scalars['String']['output'];
-  id: Scalars['String']['output'];
-  name: Scalars['String']['output'];
-  onboardingRequired: Scalars['Boolean']['output'];
-  project: WorktrackerProjectConnection;
-  slug: Scalars['String']['output'];
-  updatedAt: Scalars['String']['output'];
-};
-
-
-export type WorktrackerWorkspaceProjectArgs = {
-  filters?: InputMaybe<WorktrackerProjectFilterInput>;
-  orderBy?: InputMaybe<WorktrackerProjectOrderInput>;
-  pagination?: InputMaybe<PaginationInput>;
-};
-
-export type WorktrackerWorkspaceConnection = {
-  __typename?: 'WorktrackerWorkspaceConnection';
-  edges: Array<WorktrackerWorkspaceEdge>;
-  nodes: Array<WorktrackerWorkspace>;
-  pageInfo: PageInfo;
-  paginationInfo?: Maybe<PaginationInfo>;
-};
-
-export type WorktrackerWorkspaceEdge = {
-  __typename?: 'WorktrackerWorkspaceEdge';
-  cursor: Scalars['String']['output'];
-  node: WorktrackerWorkspace;
-};
-
-export type WorktrackerWorkspaceFilterInput = {
-  and?: InputMaybe<Array<WorktrackerWorkspaceFilterInput>>;
-  createdAt?: InputMaybe<TextFilterInput>;
-  id?: InputMaybe<StringFilterInput>;
-  name?: InputMaybe<StringFilterInput>;
-  not?: InputMaybe<WorktrackerWorkspaceFilterInput>;
-  onboardingRequired?: InputMaybe<BooleanFilterInput>;
-  or?: InputMaybe<Array<WorktrackerWorkspaceFilterInput>>;
-  slug?: InputMaybe<StringFilterInput>;
-  updatedAt?: InputMaybe<TextFilterInput>;
-};
-
-export type WorktrackerWorkspaceHavingInput = {
-  project?: InputMaybe<WorktrackerProjectFilterInput>;
-};
-
-export type WorktrackerWorkspaceOrderInput = {
-  createdAt?: InputMaybe<OrderByEnum>;
-  id?: InputMaybe<OrderByEnum>;
-  name?: InputMaybe<OrderByEnum>;
-  onboardingRequired?: InputMaybe<OrderByEnum>;
-  slug?: InputMaybe<OrderByEnum>;
   updatedAt?: InputMaybe<OrderByEnum>;
 };
 

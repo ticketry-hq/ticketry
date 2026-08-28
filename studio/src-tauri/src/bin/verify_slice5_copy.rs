@@ -75,21 +75,21 @@ fn private_copy_argument() -> PathBuf {
 async fn adopt(
     data_directory: &Path,
     pass: &str,
-) -> muxed_studio_lib::terminal_persistence::AdoptionEvidence {
+) -> muxed_studio_lib::terminal::persistence::AdoptionEvidence {
     muxed_studio_lib::runs_persistence::preflight(data_directory)
         .await
         .unwrap_or_else(|error| fail(&format!("{pass} Runs adoption preflight failed: {error}")));
     muxed_studio_lib::runs_persistence::adopt(data_directory)
         .await
         .unwrap_or_else(|error| fail(&format!("{pass} Runs adoption failed: {error}")));
-    muxed_studio_lib::terminal_persistence::preflight(data_directory)
+    muxed_studio_lib::terminal::persistence::preflight(data_directory)
         .await
         .unwrap_or_else(|error| {
             fail(&format!(
                 "{pass} Terminal adoption preflight failed: {error}"
             ))
         });
-    muxed_studio_lib::terminal_persistence::adopt(data_directory)
+    muxed_studio_lib::terminal::persistence::adopt(data_directory)
         .await
         .unwrap_or_else(|error| {
             fail(&format!(

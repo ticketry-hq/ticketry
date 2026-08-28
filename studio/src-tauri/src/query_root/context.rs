@@ -14,16 +14,9 @@ use crate::entities::worktrees::worktree;
 pub(super) fn builder_context() -> BuilderContext {
     let mut context = BuilderContext::default();
 
-    add_uuid_columns::<entities::workspace::Entity>(
-        &mut context,
-        [entities::workspace::Column::Id],
-    );
     add_uuid_columns::<entities::project::Entity>(
         &mut context,
-        [
-            entities::project::Column::Id,
-            entities::project::Column::WorkspaceId,
-        ],
+        [entities::project::Column::Id],
     );
     add_uuid_columns::<entities::state::Entity>(
         &mut context,
@@ -128,17 +121,17 @@ pub(super) fn builder_context() -> BuilderContext {
     );
     // Derived, Git-owned, and server-owned Worktree columns are never part of
     // a generated input, whatever the entity's mutation registration is.
-    crate::worktree_persistence::column_policy::apply(&mut context);
+    crate::worktree::persistence::column_policy::apply(&mut context);
     // Design Document roots and provenance leave the contract on the entity
     // itself; every remaining adopted column is skipped in generated inputs.
-    crate::documents_persistence::column_policy::apply(&mut context);
+    crate::documents::persistence::column_policy::apply(&mut context);
     // Terminal writes remain private, but the generated inputs are still
     // denylisted centrally so later registration cannot expose lifecycle data.
-    crate::terminal_persistence::column_policy::apply(&mut context);
+    crate::terminal::persistence::column_policy::apply(&mut context);
     crate::work_management::graphql::apply_generated_input_policy(&mut context);
     context.hooks = LifecycleHooks::new(
         MultiLifecycleHooks::default()
-            .add(crate::terminal_persistence::TerminalReadScope)
+            .add(crate::terminal::persistence::TerminalReadScope)
             .add(crate::graph_run_service::GraphRunReadScope),
     );
 
@@ -192,7 +185,7 @@ mod tests {
     fn registers_uuid_codec_for_public_worktracker_ids() {
         let context = builder_context();
         let id = EntityColumnId::of::<entities::project::Entity>(
-            &entities::project::Column::WorkspaceId,
+            &entities::project::Column::Id,
         );
 
         assert!(context.types.column_options.contains_key(&id));

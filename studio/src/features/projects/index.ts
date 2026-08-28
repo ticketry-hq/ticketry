@@ -9,8 +9,8 @@ export {
   getProjectsSnapshot,
   loadModules,
   loadProjects,
+  readOnboardingProjects,
   readProjectOpen,
-  readWorkspace,
   seedModules,
   seedProjects,
   useCachedModules,
@@ -56,13 +56,14 @@ export {
   WorkTrackerProjectIssueTypesDocument,
   WorkTrackerProjectOpenDocument,
   WorkTrackerProjectStatesDocument,
+  WorkTrackerOnboardingDocument,
   WorkTrackerProjectsDocument,
-  WorkTrackerWorkspaceDocument,
 } from "./generated/projects.documents";
 export type {
   WorkTrackerProjectOpenQuery,
   WorkTrackerProjectsQuery,
   WorkTrackerProjectsQueryVariables as WorkTrackerProjectsVariables,
-  WorkTrackerWorkspaceQuery,
-  WorkTrackerWorkspaceQueryVariables as WorkTrackerWorkspaceVariables,
+  WorkTrackerOnboardingQuery,
+  WorkTrackerOnboardingQueryVariables as WorkTrackerOnboardingVariables,
 } from "./generated/projects.documents";
+export type { OnboardingProject } from "../../shared/api/types";

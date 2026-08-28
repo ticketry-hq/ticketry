@@ -33,7 +33,6 @@ pub const RECOVERABLE_CODES: &[&str] = &[
     "module_folder_unusable",
     "module_not_found",
     "profile_not_configured",
-    "profile_workspace_mismatch",
     "prompt_not_configured",
     "provider_not_activated",
     "unattended_launch_unsupported",

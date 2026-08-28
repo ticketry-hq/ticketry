@@ -1,7 +1,6 @@
 import type { TypePolicies } from "@apollo/client";
 
 const normalizedEntityKeyFields = {
-  WorktrackerWorkspace: ["id"],
   WorktrackerProject: ["id"],
   WorktrackerIssue: ["id"],
   WorktrackerIssueBlockedBy: ["id"],

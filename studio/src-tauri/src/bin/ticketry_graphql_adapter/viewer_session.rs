@@ -17,7 +17,7 @@ use axum::extract::ws::{Message, WebSocket};
 use serde::Deserialize;
 use tokio::sync::mpsc;
 
-use muxed_studio_lib::terminal_viewer::attachment::{
+use muxed_studio_lib::terminal::viewer::attachment::{
     AttachmentOutcome, TerminalAttachment, TerminalAttachmentControl, TerminalScrollDirection,
 };
 use muxed_studio_lib::viewer_ownership::{

@@ -22,7 +22,7 @@ use serde::Serialize;
 
 use crate::documents::asset_access;
 use crate::documents::registry_facts::DocumentFactRecorder;
-use crate::workspace_operations::{
+use crate::workspace::operations::{
     WorkspaceOperationJournal, WorkspaceOperationOutcome, WorkspaceOperationReconciler,
     WorkspaceOperationRecord,
 };

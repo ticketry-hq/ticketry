@@ -5,7 +5,7 @@ use muxed_studio_lib::{
         terminals::session as terminal_session,
         work_management::{issue, issue_blocker, state},
     },
-    execution_graph::{
+    execution::graph::{
         dependency_graph, relevant_armed_roots, scheduling_facts, GraphAccess, GraphFactsErrorCode,
     },
 };

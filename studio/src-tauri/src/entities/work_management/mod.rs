@@ -15,13 +15,11 @@ pub mod provider;
 pub mod reasoning_level;
 pub mod state;
 pub mod transition_occurrence;
-pub mod workspace;
 
 /// Register the generated WorkTracker read graph. Audited writes are installed
 /// separately by `work_management::graphql`, one operation at a time; every
 /// other generated mutation remains private.
 pub fn register_entity_modules(mut builder: seaography::Builder) -> seaography::Builder {
-    seaography::register_entity!(builder, workspace, mutation: false);
     seaography::register_entity!(builder, project, mutation: false);
     seaography::register_entity!(builder, state, mutation: false);
     seaography::register_entity!(builder, issue_type, mutation: false);

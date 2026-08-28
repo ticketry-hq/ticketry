@@ -22,11 +22,12 @@ async fn fixture() -> (tempfile::TempDir, sea_orm::DatabaseConnection) {
             r#"
             PRAGMA foreign_keys = ON;
             CREATE TABLE worktracker_project (
-                id char(32) PRIMARY KEY, workspace_id char(32) NOT NULL,
+                id char(32) PRIMARY KEY,
                 name varchar(255) NOT NULL, slug varchar(64) NOT NULL,
                 description text NOT NULL, seq_counter integer NOT NULL,
                 state_revision bigint NOT NULL, manual_module_order bool NOT NULL,
-                created_at datetime NOT NULL, updated_at datetime NOT NULL
+                created_at datetime NOT NULL, updated_at datetime NOT NULL,
+                onboarding_required bool NOT NULL
             );
             CREATE TABLE worktracker_state (
                 id char(32) PRIMARY KEY, project_id char(32) NOT NULL,
@@ -68,8 +69,8 @@ async fn fixture() -> (tempfile::TempDir, sea_orm::DatabaseConnection) {
                 UNIQUE(issue_type_id, state_id)
             );
             INSERT INTO worktracker_project VALUES
-                ('{PROJECT}', '90000000000000000000000000000000', 'Project', 'PROJ',
-                 '', 1, 7, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+                ('{PROJECT}', 'Project', 'PROJ',
+                 '', 1, 7, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0);
             INSERT INTO worktracker_state VALUES
                 ('{FROM}', '{PROJECT}', 'Implement', 'started', '', 0, 0,
                  CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),

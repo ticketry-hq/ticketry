@@ -10,7 +10,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use muxed_studio_lib::workspace_handoff::{
+use muxed_studio_lib::workspace::handoff::{
     self, manifest, publish_readiness, published_readiness_is_complete, Slice4Readiness,
     WorkspaceReadinessGate,
 };
@@ -59,7 +59,7 @@ async fn the_manifest_names_exactly_the_tables_the_handoff_installs() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("state.db");
     django_fixture(&path);
-    workspace_handoff::adopt(directory.path())
+    handoff::adopt(directory.path())
         .await
         .expect("adopt the workspace schema");
     let database = open(&path).await;
@@ -142,7 +142,7 @@ async fn adoption_preserves_every_existing_document_and_worktree_row() {
     django_fixture(&path);
     seed_workspace_rows(&path);
 
-    let evidence = workspace_handoff::adopt(directory.path())
+    let evidence = handoff::adopt(directory.path())
         .await
         .expect("adopt the workspace schema");
 
@@ -207,12 +207,12 @@ async fn adoption_is_repeatable_across_a_restart() {
     let path = directory.path().join("state.db");
     django_fixture(&path);
 
-    let first = workspace_handoff::adopt(directory.path())
+    let first = handoff::adopt(directory.path())
         .await
         .expect("adopt the workspace schema");
     // Reopening an already-adopted store must converge rather than re-bridge:
     // a restart is the ordinary case, not a second migration.
-    let second = workspace_handoff::adopt(directory.path())
+    let second = handoff::adopt(directory.path())
         .await
         .expect("re-adopt an already-owned store");
 
@@ -235,7 +235,7 @@ async fn adoption_refuses_an_unknown_documents_schema_before_the_lease_changes_h
         .unwrap();
     database.close().await.unwrap();
 
-    let refusal = workspace_handoff::adopt(directory.path())
+    let refusal = handoff::adopt(directory.path())
         .await
         .expect_err("an unknown Documents schema must be refused");
 
@@ -250,7 +250,7 @@ async fn a_drifted_owned_table_is_refused_rather_than_written_through() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("state.db");
     django_fixture(&path);
-    workspace_handoff::adopt(directory.path())
+    handoff::adopt(directory.path())
         .await
         .expect("adopt the workspace schema");
 

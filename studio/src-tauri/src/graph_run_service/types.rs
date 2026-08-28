@@ -1,5 +1,5 @@
 use crate::entities::execution::graph_run;
-use crate::execution_graph::{ExecutionMode, GraphAccess};
+use crate::execution::graph::{ExecutionMode, GraphAccess};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GraphRunRequest {

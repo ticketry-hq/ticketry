@@ -3,9 +3,9 @@
 //! and the canonical prompt shapes decide what a run is allowed to start with.
 
 use muxed_studio_lib::{
-    launch_authority::{InteractiveLaunchAuthority, LaunchAuthorityService},
+    launch::authority::{InteractiveLaunchAuthority, LaunchAuthorityService},
     settings_persistence::ProfileStore,
-    terminal_launch::{CreateTerminalSession, TerminalLaunchKind},
+    terminal::launch::{CreateTerminalSession, TerminalLaunchKind},
     work_management::open_for_commands,
 };
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection};
@@ -45,17 +45,13 @@ async fn fixture() -> Fixture {
                 value varchar NOT NULL, updated_at varchar NOT NULL,
                 PRIMARY KEY(scope, "key")
             );
-            CREATE TABLE worktracker_workspace (
-                id char(32) PRIMARY KEY, slug varchar(48) NOT NULL,
-                name varchar(255) NOT NULL, onboarding_required bool NOT NULL,
-                created_at datetime NOT NULL, updated_at datetime NOT NULL
-            );
             CREATE TABLE worktracker_project (
-                id char(32) PRIMARY KEY, workspace_id char(32) NOT NULL,
+                id char(32) PRIMARY KEY,
                 name varchar(255) NOT NULL, slug varchar(64) NOT NULL,
                 description text NOT NULL, seq_counter integer NOT NULL,
                 state_revision bigint NOT NULL, manual_module_order bool NOT NULL,
-                created_at datetime NOT NULL, updated_at datetime NOT NULL
+                created_at datetime NOT NULL, updated_at datetime NOT NULL,
+                onboarding_required bool NOT NULL
             );
             CREATE TABLE worktracker_state (
                 id char(32) PRIMARY KEY, project_id char(32) NOT NULL,
@@ -119,11 +115,9 @@ async fn fixture() -> Fixture {
                 discovered_by_run_id text, created_at text NOT NULL,
                 updated_at text NOT NULL, content_digest text
             );
-            INSERT INTO worktracker_workspace VALUES
-                ('{WORKSPACE}', 'meml', 'Memory', 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
             INSERT INTO worktracker_project VALUES
-                ('{PROJECT}', '{WORKSPACE}', 'Main', 'MAIN', '', 2, 0, 0,
-                 CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+                ('{PROJECT}', 'Main', 'MAIN', '', 2, 0, 0,
+                 CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0);
             INSERT INTO worktracker_state VALUES
                 ('{STATE}', '{PROJECT}', 'Implement', 'started', '', 1, 0,
                  CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
@@ -237,7 +231,6 @@ async fn a_task_launch_takes_its_policy_from_the_launch_binding_not_the_caller()
     for expected in [
         "Source: WorkTracker (ticket #965)",
         "Task: Resolve launch policy",
-        "Workspace Slug: meml",
         "State: Implement",
         "Type: Implementation",
         "Description:\nFirst\n\nSecond",
@@ -287,7 +280,7 @@ async fn a_planning_launch_builds_the_module_planning_prompt() {
         "You are a planning assistant helping design new features for the 'Terminal' module."
     ));
     for expected in [
-        "Workspace: meml",
+        "Project: MAIN",
         &format!("Local Codebase: {}", fixture.folder),
         "  - #965 Resolve launch policy [Implement]",
         "Design directory: spec/terminal--50000000/planning/",

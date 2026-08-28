@@ -1,6 +1,6 @@
 import { studioRuntime } from "../../runtime";
 import { graphQlMutationError } from "../../shared/api/graphqlError";
-import type { Project, ProjectCreate, ProjectPatch, Workspace } from "../../shared/api/types";
+import type { OnboardingProject, Project, ProjectCreate, ProjectPatch } from "../../shared/api/types";
 import {
   AcknowledgeWorkTrackerOnboardingDocument,
   CreateWorkTrackerProjectDocument,
@@ -16,11 +16,11 @@ async function graphQl<TResult>(operation: () => Promise<TResult>): Promise<TRes
   }
 }
 
-export function acknowledgeOnboarding(): Promise<Workspace> {
+export function acknowledgeOnboarding(projectId: string): Promise<OnboardingProject> {
   return studioRuntime().writeWorkTracker({
     graphQl: (execute) => graphQl(async () => (
-      await execute(AcknowledgeWorkTrackerOnboardingDocument, {})
-    ).acknowledge_onboarding as Workspace),
+      await execute(AcknowledgeWorkTrackerOnboardingDocument, { projectId })
+    ).acknowledge_onboarding as OnboardingProject),
   });
 }
 

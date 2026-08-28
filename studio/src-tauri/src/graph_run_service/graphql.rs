@@ -23,7 +23,7 @@ use seaography::{
 };
 
 use crate::entities::{execution::graph_run, work_management::issue};
-use crate::execution_graph::{ExecutionMode, GraphAccess};
+use crate::execution::graph::{ExecutionMode, GraphAccess};
 use crate::work_management::read_types::StringList;
 
 use super::{

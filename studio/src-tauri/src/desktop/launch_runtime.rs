@@ -53,7 +53,7 @@ impl DesktopLaunchRuntime {
 
     pub(crate) fn configure_terminal_authority(
         &self,
-        authority: crate::terminal_lifecycle::TerminalRuntimeAuthority,
+        authority: crate::terminal::lifecycle::TerminalRuntimeAuthority,
     ) -> Result<(), String> {
         self.composed()?.terminal_runtime().configure(authority);
         Ok(())
@@ -78,7 +78,7 @@ impl DesktopLaunchRuntime {
 
     pub(crate) fn output_activity(
         &self,
-    ) -> Result<crate::terminal_output_activity::TerminalOutputActivityService, String> {
+    ) -> Result<crate::terminal::output_activity::TerminalOutputActivityService, String> {
         self.composed()
             .map(|runtime| runtime.output_activity().clone())
     }

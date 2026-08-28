@@ -55,7 +55,7 @@ impl McpRuntime {
     pub async fn start(configuration: McpConfiguration) -> Result<Self, String> {
         Self::start_with_services(
             configuration,
-            std::sync::Arc::new(crate::terminal_cleanup::TmuxCleanupRuntime),
+            std::sync::Arc::new(crate::terminal::cleanup::TmuxCleanupRuntime),
             None,
         )
         .await
@@ -63,11 +63,11 @@ impl McpRuntime {
 
     pub async fn start_with_terminal_launch(
         configuration: McpConfiguration,
-        terminal_launch: crate::terminal_launch::TerminalLaunchService,
+        terminal_launch: crate::terminal::launch::TerminalLaunchService,
     ) -> Result<Self, String> {
         Self::start_with_services(
             configuration,
-            std::sync::Arc::new(crate::terminal_cleanup::TmuxCleanupRuntime),
+            std::sync::Arc::new(crate::terminal::cleanup::TmuxCleanupRuntime),
             Some(terminal_launch),
         )
         .await
@@ -76,15 +76,15 @@ impl McpRuntime {
     #[cfg(test)]
     pub async fn start_for_test(
         configuration: McpConfiguration,
-        cleanup_runtime: std::sync::Arc<dyn crate::terminal_cleanup::TerminalCleanupRuntime>,
+        cleanup_runtime: std::sync::Arc<dyn crate::terminal::cleanup::TerminalCleanupRuntime>,
     ) -> Result<Self, String> {
         Self::start_with_services(configuration, cleanup_runtime, None).await
     }
 
     async fn start_with_services(
         configuration: McpConfiguration,
-        cleanup_runtime: std::sync::Arc<dyn crate::terminal_cleanup::TerminalCleanupRuntime>,
-        terminal_launch: Option<crate::terminal_launch::TerminalLaunchService>,
+        cleanup_runtime: std::sync::Arc<dyn crate::terminal::cleanup::TerminalCleanupRuntime>,
+        terminal_launch: Option<crate::terminal::launch::TerminalLaunchService>,
     ) -> Result<Self, String> {
         if !configuration.address.ip().is_loopback() {
             return Err("WorkTracker MCP must bind to a loopback address.".to_owned());
@@ -135,7 +135,7 @@ impl McpRuntime {
             authority.clone(),
             launch_policy,
             graph_runs,
-            crate::terminal_cleanup::TerminalCleanupService::new(database, cleanup_runtime),
+            crate::terminal::cleanup::TerminalCleanupService::new(database, cleanup_runtime),
             terminal_launch.clone(),
             integrations,
             configuration

@@ -16,11 +16,11 @@ pub(crate) const USER_NOTICE_EVENT: &str = "desktop-user-notice";
 pub(crate) struct DesktopServiceState {
     pub(crate) mcp_runtime: Mutex<Option<work_management::mcp::McpRuntime>>,
     pub(crate) terminal_runtime:
-        Mutex<Option<std::sync::Arc<crate::terminal_lifecycle::TerminalLifecycleRuntime>>>,
+        Mutex<Option<std::sync::Arc<crate::terminal::lifecycle::TerminalLifecycleRuntime>>>,
     pub(crate) execution_runtime:
-        Mutex<Option<crate::execution_reconciliation::ExecutionReconciliationRuntime>>,
-    pub(crate) terminal_launch: Mutex<Option<crate::terminal_launch::TerminalLaunchService>>,
-    pub(crate) output_sweep: Mutex<Option<crate::terminal_output_activity::LiveOutputSweepRuntime>>,
+        Mutex<Option<crate::execution::reconciliation::ExecutionReconciliationRuntime>>,
+    pub(crate) terminal_launch: Mutex<Option<crate::terminal::launch::TerminalLaunchService>>,
+    pub(crate) output_sweep: Mutex<Option<crate::terminal::output_activity::LiveOutputSweepRuntime>>,
     pub(crate) configuration: Mutex<Option<RuntimeStartupConfiguration>>,
     pub(crate) health: Mutex<ServiceHealth>,
     pub(crate) notices: Mutex<Vec<UserNotice>>,

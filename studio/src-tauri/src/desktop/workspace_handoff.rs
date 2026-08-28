@@ -1,7 +1,7 @@
 //! The one-way Slice 4 Documents and Worktrees handoff.
 //!
 //! Adoption already happened: the write lease moved inside
-//! [`crate::workspace_handoff::adopt`], before the schema was composed and while
+//! [`crate::workspace::handoff::adopt`], before the schema was composed and while
 //! the sidecar was still stopped. What remains is proving that the runtime built
 //! on top of it can actually serve — and saying so once, in one record, so no
 //! surface has to guess.
@@ -21,12 +21,12 @@ use tauri_graphql::TransportApi;
 
 use crate::desktop::document_protocol;
 use crate::graphql_foundation::ComposedCommandRuntime;
-use crate::workspace_handoff::{self, manifest, Slice4Readiness, WorkspaceHandoffError};
+use crate::workspace::handoff::{self, manifest, Slice4Readiness, WorkspaceHandoffError};
 
 /// Publish the closed gate. Called at startup, at every backend launch, and at
 /// shutdown, so a stale `ready: true` record can never outlive its runtime.
 pub(crate) fn close_gate(data_directory: &Path) -> Result<(), WorkspaceHandoffError> {
-    workspace_handoff::publish_readiness(data_directory, &Slice4Readiness::unavailable())
+    handoff::publish_readiness(data_directory, &Slice4Readiness::unavailable())
 }
 
 /// Open the gate once the composed runtime proves every part of the capability.
@@ -39,7 +39,7 @@ pub(crate) async fn open_gate<R: tauri::Runtime>(
     application: &tauri::AppHandle<R>,
 ) -> Result<(), String> {
     let readiness = evaluate(runtime, api, application).await?;
-    workspace_handoff::publish_readiness(data_directory, &readiness)
+    handoff::publish_readiness(data_directory, &readiness)
         .map_err(|error| format!("could not publish Slice 4 readiness: {error}"))
 }
 
@@ -56,12 +56,12 @@ async fn evaluate<R: tauri::Runtime>(
     let documents = runtime.documents();
     let mut readiness = Slice4Readiness::unavailable();
 
-    readiness.documents_ownership = crate::documents_persistence::documents_adopted(database).await;
-    readiness.worktree_ownership = crate::worktree_persistence::worktrees_adopted(database).await;
+    readiness.documents_ownership = crate::documents::persistence::documents_adopted(database).await;
+    readiness.worktree_ownership = crate::worktree::persistence::worktrees_adopted(database).await;
     // The journal has never had a Django writer, so its ownership is simply
     // whether the installed shape is the one this build authored. Without it no
     // filesystem or Git effect has a recovery record at all.
-    readiness.operation_journal_ownership = crate::workspace_operations::schema::verify(database)
+    readiness.operation_journal_ownership = crate::workspace::operations::schema::verify(database)
         .await
         .is_ok();
     readiness.ownership_validated = manifest::validate_schema(database).await.is_ok();

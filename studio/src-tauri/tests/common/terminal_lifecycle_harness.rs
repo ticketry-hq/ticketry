@@ -179,7 +179,7 @@ async fn compose(data_directory: &Path) -> (TransportApiImpl, ComposedCommandRun
 }
 
 async fn provision(data_directory: &Path) -> String {
-    muxed_studio_lib::installation_adoption::provisioning::provision(data_directory)
+    muxed_studio_lib::installation::adoption::provisioning::provision(data_directory)
         .await
         .expect("provision the current Rust schema");
     let database = Database::connect(format!(

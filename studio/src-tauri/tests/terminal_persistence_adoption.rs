@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use muxed_studio_lib::{runs_persistence, terminal_persistence};
+use muxed_studio_lib::{runs_persistence, terminal};
 use sea_orm::{ConnectionTrait, Database, DbBackend, Statement};
 
 const LEAVES: &[&str] = &[
@@ -24,13 +24,13 @@ async fn fresh_database_without_terminal_history_installs_rust_schema_idempotent
     runs_persistence::adopt(directory.path()).await.unwrap();
 
     assert_eq!(
-        terminal_persistence::preflight(directory.path())
+        terminal::persistence::preflight(directory.path())
             .await
             .unwrap(),
-        terminal_persistence::SourceClassification::Django("0000_no_terminal_history"),
+        terminal::persistence::SourceClassification::Django("0000_no_terminal_history"),
     );
-    let first = terminal_persistence::adopt(directory.path()).await.unwrap();
-    let second = terminal_persistence::adopt(directory.path()).await.unwrap();
+    let first = terminal::persistence::adopt(directory.path()).await.unwrap();
+    let second = terminal::persistence::adopt(directory.path()).await.unwrap();
 
     assert_eq!(first.tables["agent_terminal_sessions"].row_count, 0);
     assert_eq!(first.tables["terminal_launch_requests"].row_count, 0);
@@ -44,10 +44,10 @@ async fn every_supported_django_leaf_has_an_exact_classifier() {
         let directory = tempfile::tempdir().expect("create Terminal leaf fixture");
         migrate(directory.path(), leaf);
         assert_eq!(
-            terminal_persistence::preflight(directory.path())
+            terminal::persistence::preflight(directory.path())
                 .await
                 .unwrap_or_else(|error| panic!("{leaf} must classify: {error}")),
-            terminal_persistence::SourceClassification::Django(leaf),
+            terminal::persistence::SourceClassification::Django(leaf),
         );
     }
 }
@@ -59,15 +59,15 @@ async fn adoption_preserves_history_expires_leases_and_is_idempotent() {
     runs_persistence::preflight(directory.path()).await.unwrap();
     runs_persistence::adopt(directory.path()).await.unwrap();
 
-    let first = terminal_persistence::adopt(directory.path()).await.unwrap();
+    let first = terminal::persistence::adopt(directory.path()).await.unwrap();
     assert_eq!(first.stale_viewer_leases_expired, 2);
     assert_eq!(first.tables["agent_terminal_sessions"].row_count, 2);
     assert_eq!(first.tables["terminal_launch_requests"].row_count, 1);
     assert_eq!(first.tables["terminal_launch_material"].row_count, 0);
     assert_eq!(first.tables["terminal_cleanup_effects"].row_count, 0);
 
-    let second = terminal_persistence::adopt(directory.path()).await.unwrap();
-    let third = terminal_persistence::adopt(directory.path()).await.unwrap();
+    let second = terminal::persistence::adopt(directory.path()).await.unwrap();
+    let third = terminal::persistence::adopt(directory.path()).await.unwrap();
     assert_eq!(second.tables, third.tables);
     assert!(second.snapshot_path.is_none() && third.snapshot_path.is_none());
 
@@ -137,13 +137,13 @@ async fn live_index_rename_lineage_adopts_without_inventing_legacy_launch_reques
     );
 
     assert_eq!(
-        terminal_persistence::preflight(directory.path())
+        terminal::persistence::preflight(directory.path())
             .await
             .unwrap(),
-        terminal_persistence::SourceClassification::Django("0008_rename_terminal_task_index"),
+        terminal::persistence::SourceClassification::Django("0008_rename_terminal_task_index"),
     );
-    let first = terminal_persistence::adopt(directory.path()).await.unwrap();
-    let second = terminal_persistence::adopt(directory.path()).await.unwrap();
+    let first = terminal::persistence::adopt(directory.path()).await.unwrap();
+    let second = terminal::persistence::adopt(directory.path()).await.unwrap();
     assert_eq!(first.tables["agent_terminal_sessions"].row_count, 2);
     assert_eq!(first.tables["terminal_launch_requests"].row_count, 0);
     assert_eq!(first.tables, second.tables);
@@ -166,13 +166,13 @@ async fn preflight_refuses_schema_and_semantic_drift_before_mutation() {
         let directory = tempfile::tempdir().expect("create rejected Terminal fixture");
         provision_current(directory.path());
         mutate(directory.path(), mutation);
-        let error = terminal_persistence::preflight(directory.path())
+        let error = terminal::persistence::preflight(directory.path())
             .await
             .expect_err(label);
         assert!(matches!(
             error.code(),
-            terminal_persistence::TerminalPersistenceErrorCode::IncompatibleSchema
-                | terminal_persistence::TerminalPersistenceErrorCode::InvalidMetadata
+            terminal::persistence::TerminalPersistenceErrorCode::IncompatibleSchema
+                | terminal::persistence::TerminalPersistenceErrorCode::InvalidMetadata
         ));
         assert!(!directory.path().join("terminal-adoption.json").exists());
     }

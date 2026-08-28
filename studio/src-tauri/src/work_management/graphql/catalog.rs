@@ -9,8 +9,7 @@ use super::commands::catalog;
 use super::read_types as output;
 use super::support::{
     authoritative_issue_type, authoritative_issue_types, authoritative_project,
-    authoritative_state, authoritative_states, authoritative_workspace, command_database,
-    command_error, work_facts,
+    authoritative_state, authoritative_states, command_database, command_error, work_facts,
 };
 
 pub struct CatalogMutations;
@@ -19,12 +18,13 @@ pub struct CatalogMutations;
 impl CatalogMutations {
     async fn acknowledge_onboarding(
         ctx: &Context<'_>,
-    ) -> Result<super::entities::workspace::Model> {
+        project_id: String,
+    ) -> Result<super::entities::project::Model> {
         let database = command_database(ctx)?;
-        let id = catalog::acknowledge_onboarding(database)
+        let id = catalog::acknowledge_onboarding(database, &project_id)
             .await
             .map_err(command_error)?;
-        authoritative_workspace(database, &id).await
+        authoritative_project(database, &id).await
     }
 
     async fn create_project(
@@ -32,7 +32,6 @@ impl CatalogMutations {
         name: String,
         slug: String,
         description: Option<String>,
-        workspace_slug: Option<String>,
     ) -> Result<super::entities::project::Model> {
         let database = command_database(ctx)?;
         let id = catalog::create_project(
@@ -41,7 +40,6 @@ impl CatalogMutations {
                 name,
                 slug,
                 description,
-                workspace_slug,
             },
         )
         .await

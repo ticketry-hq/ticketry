@@ -9,7 +9,7 @@ use super::tests::{post, start_authorizer, PROJECT};
 use super::{loopback, McpConfiguration, McpRuntime};
 use crate::entities::terminals::session;
 use crate::graphql_foundation::initialize_with_worktracker_commands_and_install;
-use crate::terminal_cleanup::{
+use crate::terminal::cleanup::{
     CleanupKillResult, CleanupRuntimeObservation, TerminalCleanupRuntime,
 };
 
@@ -41,17 +41,13 @@ async fn prepare_command_database(directory: &tempfile::TempDir) {
             r#"
             PRAGMA journal_mode=WAL;
             PRAGMA foreign_keys=ON;
-            CREATE TABLE worktracker_workspace (
-                id char(32) PRIMARY KEY, slug varchar(255) NOT NULL UNIQUE,
-                name varchar(255) NOT NULL, created_at datetime NOT NULL,
-                updated_at datetime NOT NULL, onboarding_required bool NOT NULL
-            );
             CREATE TABLE worktracker_project (
-                id char(32) PRIMARY KEY, workspace_id char(32) NOT NULL,
+                id char(32) PRIMARY KEY,
                 name varchar(255) NOT NULL, slug varchar(64) NOT NULL,
                 description text NOT NULL, seq_counter integer NOT NULL,
                 state_revision bigint NOT NULL, manual_module_order bool NOT NULL,
-                created_at datetime NOT NULL, updated_at datetime NOT NULL
+                created_at datetime NOT NULL, updated_at datetime NOT NULL,
+                onboarding_required bool NOT NULL
             );
             CREATE TABLE worktracker_state (
                 id char(32) PRIMARY KEY, project_id char(32) NOT NULL,
@@ -146,11 +142,8 @@ async fn prepare_command_database(directory: &tempfile::TempDir) {
                 created_at TEXT NOT NULL, updated_at TEXT NOT NULL, applied_at TEXT
             );
             INSERT INTO worktracker_project VALUES
-                ('10000000000000000000000000000000', '90000000000000000000000000000000',
-                 'Authorized', 'AUTH', '', 0, 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
-            INSERT INTO worktracker_workspace VALUES
-                ('90000000000000000000000000000000', 'meml', 'Memory Lane',
-                 CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0);
+                ('10000000000000000000000000000000',
+                 'Authorized', 'AUTH', '', 0, 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0);
             INSERT INTO worktracker_state VALUES
                 ('40000000000000000000000000000001', '10000000000000000000000000000000',
                  'Backlog', 'backlog', '', 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),

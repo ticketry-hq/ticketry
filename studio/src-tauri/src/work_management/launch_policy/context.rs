@@ -36,12 +36,6 @@ impl<'a> LaunchContextReader<'a> {
                     "No selected local profile can satisfy this launch request.",
                 )
             })?;
-        if profile.workspace_slug != task.workspace_slug {
-            return Err(rejected(
-                "profile_workspace_mismatch",
-                "The selected profile belongs to another workspace.",
-            ));
-        }
         let module_id = match &task.module_id {
             Some(module_id) => module_id.clone(),
             None => self.module_ancestor(task.parent_id.clone()).await?,
@@ -53,7 +47,7 @@ impl<'a> LaunchContextReader<'a> {
             .find(|link| compact_uuid(&link.module_id) == compact_uuid(&module_id))
             .map(|link| link.path.trim().to_owned())
             .filter(|path| !path.is_empty());
-        crate::launch_paths::validate_module_folder(path.as_deref())
+        crate::launch::paths::validate_module_folder(path.as_deref())
             .map_err(|failure| rejected("module_folder_unusable", failure.message()))?;
         Ok((
             SelectedProfileInput {

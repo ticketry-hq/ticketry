@@ -12,10 +12,10 @@ mod common;
 use std::path::Path;
 
 use common::installation_corpus as corpus;
-use muxed_studio_lib::installation_adoption::{
+use muxed_studio_lib::installation::adoption::{
     self as adoption, AdoptionPath, AdoptionPlan, Completion, Phase, Readiness, Refusal,
 };
-use muxed_studio_lib::installation_classification::{self as classification, Installation};
+use muxed_studio_lib::installation::classification::{self as classification, Installation};
 
 /// Read one scalar out of an installation, for the preservation assertions.
 async fn scalar(data_directory: &Path, query: &str) -> String {
@@ -409,7 +409,25 @@ async fn an_empty_data_directory_is_provisioned_at_the_current_leaf() {
         )
         .await,
         "1",
-        "a first launch provisions the one workspace it needs"
+        "a first launch provisions the one workspace the recorded leaf still requires"
+    );
+    assert_eq!(
+        scalar(
+            installation.path(),
+            "SELECT slug || ' ' || name FROM worktracker_project"
+        )
+        .await,
+        "CDN Coding",
+        "a first launch provisions the installation project the app resolves by slug"
+    );
+    assert_eq!(
+        scalar(
+            installation.path(),
+            "SELECT CAST(onboarding_required AS TEXT) FROM worktracker_workspace"
+        )
+        .await,
+        "1",
+        "a first launch is still waiting to be onboarded"
     );
     let row = ledger(installation.path()).await;
     assert_eq!(row.rust_leaf, adoption::RUST_LEAF);
@@ -511,6 +529,15 @@ async fn reopening_a_provisioned_installation_is_idempotent() {
         )
         .await,
         "a second launch must not provision a second workspace"
+    );
+    assert_eq!(
+        scalar(
+            installation.path(),
+            "SELECT CAST(COUNT(*) AS TEXT) FROM worktracker_project"
+        )
+        .await,
+        "1",
+        "a second launch must not provision a second installation project"
     );
 }
 
@@ -664,7 +691,7 @@ async fn a_semantic_bridge_fault_rolls_back_the_repair_and_ledger() {
 
 #[tokio::test]
 async fn every_historical_generation_bridges_to_one_canonical_leaf_and_reopens_twice() {
-    use muxed_studio_lib::installation_adoption::inventory;
+    use muxed_studio_lib::installation::adoption::inventory;
     use sea_orm::Database;
 
     let canonical = corpus::install("django-current");
@@ -726,7 +753,7 @@ async fn every_historical_generation_bridges_to_one_canonical_leaf_and_reopens_t
 
 #[tokio::test]
 async fn an_alembic_source_with_rows_fails_its_recorded_precondition() {
-    use muxed_studio_lib::installation_adoption::bridge;
+    use muxed_studio_lib::installation::adoption::bridge;
     use sea_orm::{Database, TransactionTrait};
 
     let installation = corpus::install("alembic-0006_design_documents");
@@ -904,7 +931,7 @@ async fn the_final_python_era_snapshot_is_pinned_outside_rotation() {
 
     let pinned = installation
         .path()
-        .join(muxed_studio_lib::installation_adoption::snapshot::PINNED_SNAPSHOT);
+        .join(muxed_studio_lib::installation::adoption::snapshot::PINNED_SNAPSHOT);
     assert!(pinned.is_file(), "the cutover snapshot must be pinned");
     let bytes = std::fs::read(&pinned).expect("read the pinned snapshot");
 
@@ -1001,7 +1028,7 @@ async fn recovery_validation_rejects_a_snapshot_changed_after_discovery() {
 
 #[tokio::test]
 async fn a_snapshot_that_does_not_reproduce_the_source_is_refused() {
-    use muxed_studio_lib::installation_adoption::{inventory, snapshot};
+    use muxed_studio_lib::installation::adoption::{inventory, snapshot};
     use sea_orm::Database;
 
     let installation = corpus::install("current-representative");
@@ -1046,7 +1073,7 @@ async fn a_snapshot_that_does_not_reproduce_the_source_is_refused() {
 
 #[tokio::test]
 async fn every_product_table_holds_the_same_values_after_adoption() {
-    use muxed_studio_lib::installation_adoption::inventory;
+    use muxed_studio_lib::installation::adoption::inventory;
     use sea_orm::Database;
 
     async fn preserved(data_directory: &Path) -> inventory::Inventory {

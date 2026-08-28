@@ -52,7 +52,7 @@ async fn main() {
     );
 }
 
-fn rows(evidence: &muxed_studio_lib::execution_persistence::AdoptionEvidence, table: &str) -> i64 {
+fn rows(evidence: &muxed_studio_lib::execution::persistence::AdoptionEvidence, table: &str) -> i64 {
     evidence
         .tables
         .get(table)
@@ -90,7 +90,7 @@ async fn adopt(
     data_directory: &Path,
     pass: &str,
 ) -> (
-    muxed_studio_lib::execution_persistence::AdoptionEvidence,
+    muxed_studio_lib::execution::persistence::AdoptionEvidence,
     String,
 ) {
     muxed_studio_lib::runs_persistence::preflight(data_directory)
@@ -99,24 +99,24 @@ async fn adopt(
     muxed_studio_lib::runs_persistence::adopt(data_directory)
         .await
         .unwrap_or_else(|error| fail(&format!("{pass} Runs adoption failed: {error}")));
-    muxed_studio_lib::terminal_persistence::preflight(data_directory)
+    muxed_studio_lib::terminal::persistence::preflight(data_directory)
         .await
         .unwrap_or_else(|error| {
             fail(&format!(
                 "{pass} Terminal adoption preflight failed: {error}"
             ))
         });
-    muxed_studio_lib::terminal_persistence::adopt(data_directory)
+    muxed_studio_lib::terminal::persistence::adopt(data_directory)
         .await
         .unwrap_or_else(|error| fail(&format!("{pass} Terminal adoption failed: {error}")));
-    let source = muxed_studio_lib::execution_persistence::preflight(data_directory)
+    let source = muxed_studio_lib::execution::persistence::preflight(data_directory)
         .await
         .unwrap_or_else(|error| {
             fail(&format!(
                 "{pass} Execution adoption preflight failed: {error}"
             ))
         });
-    let evidence = muxed_studio_lib::execution_persistence::adopt(data_directory)
+    let evidence = muxed_studio_lib::execution::persistence::adopt(data_directory)
         .await
         .unwrap_or_else(|error| fail(&format!("{pass} Execution adoption failed: {error}")));
     (

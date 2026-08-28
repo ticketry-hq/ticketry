@@ -1,7 +1,7 @@
 //! A launch authority that resolves to exactly what the caller submitted.
 //!
 //! Production composes the real
-//! [`muxed_studio_lib::launch_authority::LaunchAuthorityService`], which is
+//! [`muxed_studio_lib::launch::authority::LaunchAuthorityService`], which is
 //! proved in `interactive_launch_authority`. Tests that exercise preparation,
 //! effect journalling, runtime settlement, and recovery care about the launch
 //! machinery rather than about policy, so they install this instead and keep
@@ -12,10 +12,10 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use muxed_studio_lib::launch_authority::{
+use muxed_studio_lib::launch::authority::{
     InteractiveLaunchAuthority, LaunchAuthorityError, ResolvedLaunchMaterial,
 };
-use muxed_studio_lib::terminal_launch::{
+use muxed_studio_lib::terminal::launch::{
     CreateTerminalSession, TerminalLaunchRuntime, TerminalLaunchService,
 };
 use sea_orm::DatabaseConnection;

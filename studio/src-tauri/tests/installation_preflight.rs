@@ -11,8 +11,8 @@ mod common;
 use std::path::Path;
 
 use common::installation_corpus as corpus;
-use muxed_studio_lib::installation_classification::{self as classification, Installation};
-use muxed_studio_lib::installation_preflight::{
+use muxed_studio_lib::installation::classification::{self as classification, Installation};
+use muxed_studio_lib::installation::preflight::{
     self as preflight, Area, PreflightFailure, PreflightReport, Verdict,
 };
 
@@ -647,7 +647,7 @@ async fn a_refused_installation_is_left_byte_for_byte_unchanged() {
     .await;
     let before = corpus::database_bytes(installation.path());
     let entries_before = corpus::directory_entries(installation.path());
-    let spool = muxed_studio_lib::terminal_lifecycle::hook_spool_directory(installation.path());
+    let spool = muxed_studio_lib::terminal::lifecycle::hook_spool_directory(installation.path());
 
     let report = run(installation.path()).await;
 
@@ -728,10 +728,10 @@ async fn adopt_every_capability(data_directory: &Path) {
     muxed_studio_lib::runs_persistence::adopt(data_directory)
         .await
         .expect("adopt Runs");
-    muxed_studio_lib::execution_persistence::adopt(data_directory)
+    muxed_studio_lib::execution::persistence::adopt(data_directory)
         .await
         .expect("adopt graph execution");
-    muxed_studio_lib::terminal_persistence::adopt(data_directory)
+    muxed_studio_lib::terminal::persistence::adopt(data_directory)
         .await
         .expect("adopt terminals");
 }

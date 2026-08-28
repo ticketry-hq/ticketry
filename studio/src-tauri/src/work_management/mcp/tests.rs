@@ -54,11 +54,12 @@ async fn prepare_projects(directory: &tempfile::TempDir) {
         .execute_unprepared(
             r#"
             CREATE TABLE worktracker_project (
-                id char(32) PRIMARY KEY, workspace_id char(32) NOT NULL,
+                id char(32) PRIMARY KEY,
                 name varchar(255) NOT NULL, slug varchar(64) NOT NULL,
                 description text NOT NULL, seq_counter integer NOT NULL,
                 state_revision bigint NOT NULL, manual_module_order bool NOT NULL,
-                created_at datetime NOT NULL, updated_at datetime NOT NULL
+                created_at datetime NOT NULL, updated_at datetime NOT NULL,
+                onboarding_required bool NOT NULL
             );
             CREATE TABLE worktracker_issue (
                 id char(32) PRIMARY KEY, project_id char(32) NOT NULL,
@@ -78,10 +79,10 @@ async fn prepare_projects(directory: &tempfile::TempDir) {
                 scope varchar NOT NULL, launch_state varchar, launch_model varchar
             );
             INSERT INTO worktracker_project VALUES
-                ('10000000000000000000000000000000', '90000000000000000000000000000000',
-                 'Authorized', 'AUTH', '', 0, 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-                ('20000000000000000000000000000000', '90000000000000000000000000000000',
-                 'Foreign', 'OTHER', '', 0, 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+                ('10000000000000000000000000000000',
+                 'Authorized', 'AUTH', '', 0, 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0),
+                ('20000000000000000000000000000000',
+                 'Foreign', 'OTHER', '', 0, 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0);
             INSERT INTO worktracker_issue VALUES
                 ('30000000000000000000000000000000',
                  '10000000000000000000000000000000', 'task',

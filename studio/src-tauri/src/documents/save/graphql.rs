@@ -55,8 +55,8 @@ pub(super) fn register(mut builder: seaography::Builder) -> seaography::Builder 
 fn service<'a>(ctx: &'a Context<'a>) -> Result<&'a DocumentSaveService> {
     // A save replaces a file and settles a durable operation, so it may run only
     // once this process holds the workspace write lease.
-    if !crate::workspace_handoff::gate::open(ctx) {
-        return Err(crate::workspace_handoff::gate::unavailable());
+    if !crate::workspace::handoff::gate::open(ctx) {
+        return Err(crate::workspace::handoff::gate::unavailable());
     }
     ctx.data::<DocumentSaveService>().map_err(|_| {
         Error::new("Saving design documents is unavailable.")

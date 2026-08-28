@@ -18,7 +18,7 @@
 
 use async_trait::async_trait;
 
-use crate::workspace_operations::{
+use crate::workspace::operations::{
     ExternalObservation, OperationSubject, WorkspaceOperationKind, WorkspaceOperationOutcome,
     WorkspaceStateProbe,
 };

@@ -16,9 +16,9 @@ static CONTEXT: LazyLock<BuilderContext> = LazyLock::new(context::builder_contex
 
 #[derive(Clone)]
 pub struct TerminalServices {
-    pub launch: crate::terminal_launch::TerminalLaunchService,
+    pub launch: crate::terminal::launch::TerminalLaunchService,
     pub viewers: crate::viewer_ownership::ViewerOwnershipService,
-    pub output_activity: crate::terminal_output_activity::TerminalOutputActivityService,
+    pub output_activity: crate::terminal::output_activity::TerminalOutputActivityService,
 }
 
 #[derive(Clone, Copy)]
@@ -36,7 +36,7 @@ pub fn foundation_schema(
     settings_stores: Option<crate::settings_persistence::SettingsStores>,
     readiness_data_directory: Option<PathBuf>,
     work_facts: Option<crate::work_management::commands::status_facts::WorkFactRecorder>,
-    worktree_operations: Option<crate::worktree_operations::WorktreeOperations>,
+    worktree_operations: Option<crate::worktree::operations::WorktreeOperations>,
     documents: Option<crate::documents::DocumentsService>,
 ) -> Result<Schema, FoundationInitializationError> {
     foundation_schema_with_terminal_services(
@@ -63,7 +63,7 @@ pub(crate) fn foundation_schema_with_terminal_services(
     settings_stores: Option<crate::settings_persistence::SettingsStores>,
     readiness_data_directory: Option<PathBuf>,
     work_facts: Option<crate::work_management::commands::status_facts::WorkFactRecorder>,
-    worktree_operations: Option<crate::worktree_operations::WorktreeOperations>,
+    worktree_operations: Option<crate::worktree::operations::WorktreeOperations>,
     documents: Option<crate::documents::DocumentsService>,
     terminal_services: Option<TerminalServices>,
 ) -> Result<Schema, FoundationInitializationError> {
@@ -118,7 +118,7 @@ fn build_schema(
     settings_stores: Option<crate::settings_persistence::SettingsStores>,
     readiness_data_directory: Option<PathBuf>,
     work_facts: Option<crate::work_management::commands::status_facts::WorkFactRecorder>,
-    worktree_operations: Option<crate::worktree_operations::WorktreeOperations>,
+    worktree_operations: Option<crate::worktree::operations::WorktreeOperations>,
     documents: Option<crate::documents::DocumentsService>,
     terminal_services: Option<TerminalServices>,
     contract: EntityContract,
@@ -189,19 +189,19 @@ fn build_schema(
     } else {
         builder
     };
-    let builder = crate::worktree_persistence::register_graphql(builder);
-    let builder = crate::worktree_status::register_graphql(builder);
-    let builder = crate::worktree_create::register_graphql(builder);
-    let builder = crate::worktree_discard::register_graphql(builder);
+    let builder = crate::worktree::persistence::register_graphql(builder);
+    let builder = crate::worktree::status::register_graphql(builder);
+    let builder = crate::worktree::create::register_graphql(builder);
+    let builder = crate::worktree::discard::register_graphql(builder);
     let builder = crate::work_management::graphql::register(builder);
     let builder = crate::settings_persistence::schema::register(builder);
     let builder = crate::settings_persistence::register_profile_graphql(builder);
     let builder = crate::runs_persistence::register_graphql(builder);
-    let builder = crate::terminal_persistence::register_graphql(builder);
-    let builder = crate::terminal_resume::register_graphql(builder);
-    let builder = crate::terminal_launch::register_graphql(builder);
-    let builder = crate::terminal_cleanup::register_graphql(builder);
-    let builder = crate::terminal_output_activity::register_graphql(builder);
+    let builder = crate::terminal::persistence::register_graphql(builder);
+    let builder = crate::terminal::resume::register_graphql(builder);
+    let builder = crate::terminal::launch::register_graphql(builder);
+    let builder = crate::terminal::cleanup::register_graphql(builder);
+    let builder = crate::terminal::output_activity::register_graphql(builder);
     let builder = crate::run_now::register_graphql(builder);
     let builder = if contract.product_generated_mutations {
         crate::graph_run_service::register_graphql(builder)
@@ -209,7 +209,7 @@ fn build_schema(
         builder
     };
     let builder = crate::viewer_ownership::register_graphql(builder);
-    let builder = crate::documents_persistence::register_graphql(builder);
+    let builder = crate::documents::persistence::register_graphql(builder);
     let builder = crate::documents::register_graphql(builder);
     let mut schema = builder.schema_builder().data(entity_database);
     if contract.product_generated_mutations {
@@ -265,7 +265,7 @@ fn build_schema(
     if let Some(work_items) = &worktracker_database {
         schema = schema.data(crate::documents::save::DocumentSaveService::new(
             work_items.clone(),
-            crate::workspace_operations::WorkspaceOperationJournal::new(work_items.clone()),
+            crate::workspace::operations::WorkspaceOperationJournal::new(work_items.clone()),
             document_facts,
         ));
     }
@@ -281,7 +281,7 @@ fn build_schema(
     } else if let (Some(work_items), Some(settings_stores)) =
         (&worktracker_database, &settings_stores)
     {
-        schema = schema.data(crate::worktree_status::WorktreeStatusService::new(
+        schema = schema.data(crate::worktree::status::WorktreeStatusService::new(
             work_items.clone(),
             settings_stores.profiles().clone(),
         ));
@@ -294,7 +294,7 @@ fn build_schema(
         schema = schema.data(worktree_operations.discard().clone());
     }
     if let Some(worktracker_database) = worktracker_database {
-        schema = schema.data(crate::terminal_cleanup::TerminalCleanupService::with_tmux(
+        schema = schema.data(crate::terminal::cleanup::TerminalCleanupService::with_tmux(
             worktracker_database.clone(),
         ));
         let runs = crate::runs_persistence::RunsServices::new(worktracker_database.clone());
@@ -303,7 +303,7 @@ fn build_schema(
                 .as_ref()
                 .map(|services| services.output_activity.clone())
                 .unwrap_or_else(|| {
-                    crate::terminal_output_activity::TerminalOutputActivityService::production(
+                    crate::terminal::output_activity::TerminalOutputActivityService::production(
                         worktracker_database.clone(),
                     )
                 }),
@@ -354,7 +354,7 @@ fn build_schema(
         // Documents and Worktrees consult a third gate for the same reason: the
         // Slice 4 handoff completes after both earlier ones, and it must not
         // open merely because settings or Runs ownership did.
-        schema = schema.data(crate::workspace_handoff::WorkspaceReadinessGate::watching(
+        schema = schema.data(crate::workspace::handoff::WorkspaceReadinessGate::watching(
             &data_directory,
         ));
         schema = schema.extension(

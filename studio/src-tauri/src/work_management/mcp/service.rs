@@ -11,7 +11,7 @@ use rmcp::{
 use sea_orm::DatabaseConnection;
 use serde_json::{json, Map, Value};
 
-use crate::terminal_cleanup::TerminalCleanupService;
+use crate::terminal::cleanup::TerminalCleanupService;
 use crate::work_management::commands::attachments::AttachmentStorage;
 use crate::work_management::launch_policy::LaunchPolicyResolver;
 
@@ -25,12 +25,12 @@ pub struct WorktrackerMcpService {
     launch_policy: LaunchPolicyResolver,
     graph_runs: Option<crate::graph_run_service::GraphRunService>,
     terminal_cleanup: TerminalCleanupService,
-    terminal_launch: Option<crate::terminal_launch::TerminalLaunchService>,
+    terminal_launch: Option<crate::terminal::launch::TerminalLaunchService>,
     /// Automatic worktree integration, when the journal it needs is installed.
     /// It is not an MCP tool and has no request path: this listener simply
     /// happens to be where committed transitions are produced, so it is also
     /// where the completions they publish are delivered.
-    integrations: Option<crate::worktree_integrate::WorktreeIntegrateService>,
+    integrations: Option<crate::worktree::integrate::WorktreeIntegrateService>,
     readiness_data_directory: PathBuf,
     tools: Arc<Vec<Tool>>,
 }
@@ -43,8 +43,8 @@ impl WorktrackerMcpService {
         launch_policy: LaunchPolicyResolver,
         graph_runs: Option<crate::graph_run_service::GraphRunService>,
         terminal_cleanup: TerminalCleanupService,
-        terminal_launch: Option<crate::terminal_launch::TerminalLaunchService>,
-        integrations: Option<crate::worktree_integrate::WorktreeIntegrateService>,
+        terminal_launch: Option<crate::terminal::launch::TerminalLaunchService>,
+        integrations: Option<crate::worktree::integrate::WorktreeIntegrateService>,
         readiness_data_directory: PathBuf,
     ) -> Self {
         Self {
@@ -72,7 +72,7 @@ impl WorktrackerMcpService {
             return;
         };
         if let Err(error) = integrations
-            .deliver_pending(crate::worktree_integrate::MAX_DELIVERY_BATCH)
+            .deliver_pending(crate::worktree::integrate::MAX_DELIVERY_BATCH)
             .await
         {
             eprintln!("Ticketry could not deliver completed worktree integrations: {error}");
@@ -91,7 +91,7 @@ impl WorktrackerMcpService {
 
 pub(super) async fn execute_launch_decision(
     database: &DatabaseConnection,
-    service: Option<&crate::terminal_launch::TerminalLaunchService>,
+    service: Option<&crate::terminal::launch::TerminalLaunchService>,
     decision: &crate::work_management::launch_policy::LaunchPolicyDecision,
 ) -> Result<crate::entities::terminals::session::Model, ()> {
     let Some(service) = service else {

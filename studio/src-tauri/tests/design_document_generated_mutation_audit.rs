@@ -4,12 +4,12 @@
 //! Seaography rc.9 installs create-one, create-batch, update, and delete
 //! together, so the four are judged together. This schema is what registering
 //! the bundle would publish; the reasons each operation is unsafe are recorded
-//! in `documents_persistence::generated_mutation_audit`, and
+//! in `documents::persistence::generated_mutation_audit`, and
 //! `design_document_graphql.rs` proves none of it reaches the composed schema.
 
 use std::sync::LazyLock;
 
-use muxed_studio_lib::documents_persistence::generated_mutation_audit::FINDINGS;
+use muxed_studio_lib::documents::persistence::generated_mutation_audit::FINDINGS;
 use muxed_studio_lib::entities::documents::design_document;
 use sea_orm::Database;
 use seaography::{

@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const projectApi = vi.hoisted(() => ({
-  readWorkspace: vi.fn(),
+  readOnboardingProjects: vi.fn(),
   acknowledgeOnboarding: vi.fn(),
 }));
 const catalogApi = vi.hoisted(() => ({
@@ -18,26 +18,23 @@ vi.mock("../features/projects", async (importOriginal) => ({
 
 import { OnboardingGate } from "../app/onboarding/OnboardingGate";
 import { useOnboardingTourStore } from "../app/onboarding/onboardingTourStore";
-import { WorkTrackerWorkspaceDocument } from "../features/projects/generated/projects.documents";
+import { WorkTrackerOnboardingDocument } from "../features/projects/generated/projects.documents";
 import { studioApolloClient } from "../shared/apollo/client";
 
-function seedWorkspace(onboardingRequired: boolean): void {
+function seedInstallationProject(onboardingRequired: boolean): void {
   const data = {
-    workspace: {
-      __typename: "WorktrackerWorkspaceConnection",
+    projects: {
+      __typename: "WorktrackerProjectConnection",
       nodes: [{
-        __typename: "WorktrackerWorkspace",
-        id: "w1",
-        name: "MEML",
-        slug: "meml",
+        __typename: "WorktrackerProject",
+        id: "p1",
+        name: "Coding",
+        slug: "CDN",
         onboarding_required: onboardingRequired,
       }],
     },
   };
-  studioApolloClient().writeQuery({
-    query: WorkTrackerWorkspaceDocument,
-    data,
-  });
+  studioApolloClient().writeQuery({ query: WorkTrackerOnboardingDocument, data });
 }
 
 beforeEach(() => {
@@ -54,7 +51,7 @@ beforeEach(() => {
     slug: "meml",
     onboarding_required: false,
   });
-  seedWorkspace(false);
+  seedInstallationProject(false);
   useOnboardingTourStore.getState().reset();
 });
 
@@ -71,7 +68,7 @@ describe("OnboardingGate", () => {
   });
 
   it("substitutes the onboarding surface for the app shell while required", () => {
-    seedWorkspace(true);
+    seedInstallationProject(true);
 
     render(
       <OnboardingGate>
@@ -84,7 +81,7 @@ describe("OnboardingGate", () => {
   });
 
   it("hands off to the app shell while the guided tour is active", () => {
-    seedWorkspace(true);
+    seedInstallationProject(true);
     useOnboardingTourStore.getState().start("created-project");
 
     render(
@@ -95,12 +92,12 @@ describe("OnboardingGate", () => {
 
     expect(screen.getByText("App shell")).toBeInTheDocument();
     expect(screen.queryByTestId("onboarding-welcome")).not.toBeInTheDocument();
-    expect(studioApolloClient().readQuery({ query: WorkTrackerWorkspaceDocument })
-      ?.workspace.nodes[0]?.onboarding_required).toBe(true);
+    expect(studioApolloClient().readQuery({ query: WorkTrackerOnboardingDocument })
+      ?.projects.nodes[0]?.onboarding_required).toBe(true);
   });
 
   it("does not offer a way to skip required onboarding", () => {
-    seedWorkspace(true);
+    seedInstallationProject(true);
 
     render(
       <OnboardingGate>

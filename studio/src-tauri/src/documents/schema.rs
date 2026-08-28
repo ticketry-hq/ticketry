@@ -36,8 +36,8 @@ impl DocumentQueries {
         // Rust now owns exclusively: while the handoff gate is closed there is
         // no Django route left to answer it, so it refuses rather than serving
         // from a runtime that has not proven itself ready.
-        if !crate::workspace_handoff::gate::open(ctx) {
-            return Err(crate::workspace_handoff::gate::unavailable());
+        if !crate::workspace::handoff::gate::open(ctx) {
+            return Err(crate::workspace::handoff::gate::unavailable());
         }
         let completions = tokio::task::spawn_blocking(move || complete_directories(&path))
             .await
@@ -90,8 +90,8 @@ fn service<'a>(ctx: &'a Context<'a>) -> Result<&'a DocumentsService> {
     // A registry refresh is a write: it registers files it discovered and prunes
     // rows whose file is gone. It may run only once this process holds the
     // workspace write lease and has finished its reconciliation pass.
-    if !crate::workspace_handoff::gate::open(ctx) {
-        return Err(crate::workspace_handoff::gate::unavailable());
+    if !crate::workspace::handoff::gate::open(ctx) {
+        return Err(crate::workspace::handoff::gate::unavailable());
     }
     ctx.data::<DocumentsService>().map_err(|_| {
         Error::new("Design documents are unavailable.")

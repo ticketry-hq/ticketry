@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use muxed_studio_lib::runs_persistence::{RunsServices, TerminalFact, TerminalOutcome};
-use muxed_studio_lib::terminal_output_activity::{
+use muxed_studio_lib::terminal::output_activity::{
     LiveOutputSweepRuntime, TerminalOutputActivityError, TerminalOutputActivityService,
     TerminalScreenCapture,
 };
@@ -277,7 +277,7 @@ async fn sweep_filters_and_orders_live_sessions_and_isolates_capture_failures() 
     let service = TerminalOutputActivityService::new(database.clone(), capture.clone());
 
     assert_eq!(
-        muxed_studio_lib::terminal_output_activity::observe_live_sessions(&service).await,
+        muxed_studio_lib::terminal::output_activity::observe_live_sessions(&service).await,
         1
     );
     assert_eq!(
@@ -311,7 +311,7 @@ async fn enumeration_failure_ends_only_that_pass() {
     let service = TerminalOutputActivityService::new(database.clone(), capture.clone());
 
     assert_eq!(
-        muxed_studio_lib::terminal_output_activity::observe_live_sessions(&service).await,
+        muxed_studio_lib::terminal::output_activity::observe_live_sessions(&service).await,
         0
     );
     assert!(capture.calls.lock().unwrap().is_empty());
@@ -330,7 +330,7 @@ async fn enumeration_failure_ends_only_that_pass() {
         .unwrap();
 
     assert_eq!(
-        muxed_studio_lib::terminal_output_activity::observe_live_sessions(&service).await,
+        muxed_studio_lib::terminal::output_activity::observe_live_sessions(&service).await,
         1
     );
     assert_eq!(capture.calls.lock().unwrap().as_slice(), ["run-a"]);

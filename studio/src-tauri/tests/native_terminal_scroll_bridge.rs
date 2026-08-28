@@ -9,7 +9,7 @@ use muxed_studio_lib::native_terminal::scroll::{
 use muxed_studio_lib::native_terminal::worker::{
     run_native_worker, NativeViewerCommand, NativeWorkerExit,
 };
-use muxed_studio_lib::terminal_viewer::attachment::{
+use muxed_studio_lib::terminal::viewer::attachment::{
     TerminalAttachment, TerminalCommandAttachment,
 };
 use std::io::Read;

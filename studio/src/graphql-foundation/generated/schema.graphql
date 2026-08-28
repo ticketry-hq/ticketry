@@ -521,8 +521,8 @@ type Mutation {
 	worktrackerIssuetypeCreateOne(data: WorktrackerIssuetypeInsertInput!): WorktrackerIssuetypeBasic!
 	worktree_create(task_id: String!, operation_id: String!): WorktreeStatusView!
 	worktree_discard(task_id: String!, operation_id: String!): WorktreeDiscardResult!
-	acknowledge_onboarding: WorktrackerWorkspace!
-	create_project(name: String!, slug: String!, description: String, workspace_slug: String): WorktrackerProject!
+	acknowledge_onboarding(project_id: String!): WorktrackerProject!
+	create_project(name: String!, slug: String!, description: String): WorktrackerProject!
 	update_project(id: String!, name: String, description: String): WorktrackerProject!
 	delete_project(id: String!): Boolean!
 	create_state(project_id: String!, name: String!, group: String!, color: String): WorktrackerState!
@@ -611,7 +611,6 @@ type ProviderCatalog {
 
 type Query {
 	migrationProbes(filters: MigrationProbesFilterInput, having: MigrationProbesHavingInput, orderBy: MigrationProbesOrderInput, pagination: PaginationInput): MigrationProbesConnection!
-	worktrackerWorkspace(filters: WorktrackerWorkspaceFilterInput, having: WorktrackerWorkspaceHavingInput, orderBy: WorktrackerWorkspaceOrderInput, pagination: PaginationInput): WorktrackerWorkspaceConnection!
 	worktrackerProject(filters: WorktrackerProjectFilterInput, having: WorktrackerProjectHavingInput, orderBy: WorktrackerProjectOrderInput, pagination: PaginationInput): WorktrackerProjectConnection!
 	worktrackerState(filters: WorktrackerStateFilterInput, having: WorktrackerStateHavingInput, orderBy: WorktrackerStateOrderInput, pagination: PaginationInput): WorktrackerStateConnection!
 	worktrackerIssuetype(filters: WorktrackerIssuetypeFilterInput, having: WorktrackerIssuetypeHavingInput, orderBy: WorktrackerIssuetypeOrderInput, pagination: PaginationInput): WorktrackerIssuetypeConnection!
@@ -1220,7 +1219,6 @@ input WorktrackerLaunchbindingOrderInput {
 
 type WorktrackerProject {
 	id: String!
-	workspaceId: String!
 	name: String!
 	slug: String!
 	description: String!
@@ -1229,7 +1227,7 @@ type WorktrackerProject {
 	manualModuleOrder: Boolean!
 	createdAt: String!
 	updatedAt: String!
-	workspace: WorktrackerWorkspace
+	onboardingRequired: Boolean!
 	state(filters: WorktrackerStateFilterInput, orderBy: WorktrackerStateOrderInput, pagination: PaginationInput): WorktrackerStateConnection!
 	issueType(filters: WorktrackerIssuetypeFilterInput, orderBy: WorktrackerIssuetypeOrderInput, pagination: PaginationInput): WorktrackerIssuetypeConnection!
 	issue(filters: WorktrackerIssueFilterInput, orderBy: WorktrackerIssueOrderInput, pagination: PaginationInput): WorktrackerIssueConnection!
@@ -1249,7 +1247,6 @@ type WorktrackerProjectEdge {
 
 input WorktrackerProjectFilterInput {
 	id: StringFilterInput
-	workspaceId: StringFilterInput
 	name: StringFilterInput
 	slug: StringFilterInput
 	description: StringFilterInput
@@ -1258,13 +1255,13 @@ input WorktrackerProjectFilterInput {
 	manualModuleOrder: BooleanFilterInput
 	createdAt: TextFilterInput
 	updatedAt: TextFilterInput
+	onboardingRequired: BooleanFilterInput
 	and: [WorktrackerProjectFilterInput!]
 	or: [WorktrackerProjectFilterInput!]
 	not: WorktrackerProjectFilterInput
 }
 
 input WorktrackerProjectHavingInput {
-	workspace: WorktrackerWorkspaceFilterInput
 	state: WorktrackerStateFilterInput
 	issueType: WorktrackerIssuetypeFilterInput
 	issue: WorktrackerIssueFilterInput
@@ -1272,7 +1269,6 @@ input WorktrackerProjectHavingInput {
 
 input WorktrackerProjectOrderInput {
 	id: OrderByEnum
-	workspaceId: OrderByEnum
 	name: OrderByEnum
 	slug: OrderByEnum
 	description: OrderByEnum
@@ -1281,6 +1277,7 @@ input WorktrackerProjectOrderInput {
 	manualModuleOrder: OrderByEnum
 	createdAt: OrderByEnum
 	updatedAt: OrderByEnum
+	onboardingRequired: OrderByEnum
 }
 
 type WorktrackerProvider {
@@ -1413,53 +1410,6 @@ input WorktrackerStateOrderInput {
 	color: OrderByEnum
 	sortOrder: OrderByEnum
 	isProtected: OrderByEnum
-	createdAt: OrderByEnum
-	updatedAt: OrderByEnum
-}
-
-type WorktrackerWorkspace {
-	id: String!
-	slug: String!
-	name: String!
-	onboardingRequired: Boolean!
-	createdAt: String!
-	updatedAt: String!
-	project(filters: WorktrackerProjectFilterInput, orderBy: WorktrackerProjectOrderInput, pagination: PaginationInput): WorktrackerProjectConnection!
-}
-
-type WorktrackerWorkspaceConnection {
-	pageInfo: PageInfo!
-	paginationInfo: PaginationInfo
-	nodes: [WorktrackerWorkspace!]!
-	edges: [WorktrackerWorkspaceEdge!]!
-}
-
-type WorktrackerWorkspaceEdge {
-	cursor: String!
-	node: WorktrackerWorkspace!
-}
-
-input WorktrackerWorkspaceFilterInput {
-	id: StringFilterInput
-	slug: StringFilterInput
-	name: StringFilterInput
-	onboardingRequired: BooleanFilterInput
-	createdAt: TextFilterInput
-	updatedAt: TextFilterInput
-	and: [WorktrackerWorkspaceFilterInput!]
-	or: [WorktrackerWorkspaceFilterInput!]
-	not: WorktrackerWorkspaceFilterInput
-}
-
-input WorktrackerWorkspaceHavingInput {
-	project: WorktrackerProjectFilterInput
-}
-
-input WorktrackerWorkspaceOrderInput {
-	id: OrderByEnum
-	slug: OrderByEnum
-	name: OrderByEnum
-	onboardingRequired: OrderByEnum
 	createdAt: OrderByEnum
 	updatedAt: OrderByEnum
 }

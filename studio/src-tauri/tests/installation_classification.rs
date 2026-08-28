@@ -7,7 +7,7 @@
 mod common;
 
 use common::installation_corpus as corpus;
-use muxed_studio_lib::installation_classification::{
+use muxed_studio_lib::installation::classification::{
     self as classification, manifest, Installation, Refusal,
 };
 
@@ -81,7 +81,7 @@ fn the_manifest_records_every_migration_on_disk() {
             recorded, on_disk,
             "{app} migrations changed; regenerate the manifest with \
              `backend/.venv/bin/python scripts/installation_corpus.py emit-manifest \
-             studio/src-tauri/src/installation_classification/manifest.v1.json`"
+             studio/src-tauri/src/installation/classification/manifest.v1.json`"
         );
     }
 }

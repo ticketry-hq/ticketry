@@ -103,7 +103,7 @@ describe("native viewer output activity acceptance", () => {
     });
   });
 
-  it("[overhaul-142] reports native terminal output through the shared activity operation once on attachment and never polls afterwards", async () => {
+  it("[overhaul-169] reports native terminal output through the shared activity operation once on attachment and never polls afterwards", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const host = vi.fn();
     vi.stubGlobal("fetch", host);

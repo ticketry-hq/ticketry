@@ -1,6 +1,6 @@
 import {
   getOnboardingRequiredSnapshot,
-  loadWorkspaceState,
+  loadOnboardingState,
 } from "../onboarding/onboardingStore";
 import {
   getConfigSnapshot,
@@ -42,9 +42,9 @@ async function loadBootstrapData(): Promise<void> {
   await Promise.all([
     loadConfig(),
     loadKeybindingOverrides(),
-    // Never rejects: the store swallows its own failure so a flaky workspace
+    // Never rejects: the store swallows its own failure so a flaky project
     // endpoint cannot flip the bootstrap outcome away from "ready".
-    loadWorkspaceState(),
+    loadOnboardingState(),
   ]);
 }
 

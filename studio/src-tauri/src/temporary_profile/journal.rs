@@ -14,7 +14,7 @@ use sea_orm::{
 };
 
 use crate::entities::terminals::{cleanup_effect, session};
-use crate::terminal_cleanup::{
+use crate::terminal::cleanup::{
     CleanupCause, TerminalCleanupError, TerminalCleanupErrorCode, TerminalCleanupService,
 };
 

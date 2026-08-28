@@ -12,7 +12,7 @@ use sea_orm::{
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 
-use super::ownership_manifest::{CURRENT_DJANGO_LEAF, OWNED_TABLES, VERSION};
+use super::ownership_manifest::{owned_tables, SchemaGeneration, CURRENT_DJANGO_LEAF, VERSION};
 
 const SNAPSHOT_GENERATIONS: usize = 3;
 
@@ -63,9 +63,10 @@ pub async fn adopt(data_directory: &Path) -> Result<AdoptionEvidence, AdoptionEr
     let database = connect(&database_path, false).await?;
     integrity(&database).await?;
     let source = classify(&database).await?;
-    validate_manifest(&database).await?;
+    let generation = schema_generation(&database).await?;
+    validate_manifest(&database, generation).await?;
     validate_semantics(&database).await?;
-    let before = stable_digest(&database).await?;
+    let before = stable_digest(&database, generation).await?;
 
     if source == SourceClassification::RustOwned {
         return Ok(AdoptionEvidence {
@@ -84,24 +85,24 @@ pub async fn adopt(data_directory: &Path) -> Result<AdoptionEvidence, AdoptionEr
     let snapshot_sha256 = file_sha256(&snapshot_path)?;
     let snapshot = connect(&snapshot_path, true).await?;
     integrity(&snapshot).await?;
-    validate_manifest(&snapshot).await?;
-    let snapshot_digest = stable_digest(&snapshot).await?;
+    validate_manifest(&snapshot, generation).await?;
+    let snapshot_digest = stable_digest(&snapshot, generation).await?;
     snapshot.close().await.map_err(sqlite_error)?;
     if snapshot_digest != before {
         return Err(AdoptionError::new(
             "verified snapshot digest does not match the classified source",
         ));
     }
-    prove_restoration(data_directory, &snapshot_path, &before).await?;
+    prove_restoration(data_directory, &snapshot_path, generation, &before).await?;
 
     let writable = connect(&database_path, false).await?;
     super::transition_occurrences::ensure_schema(&writable)
         .await
         .map_err(sqlite_error)?;
     install_ledger(&writable, &snapshot_path, &snapshot_sha256, &before).await?;
-    validate_manifest(&writable).await?;
+    validate_manifest(&writable, generation).await?;
     validate_semantics(&writable).await?;
-    let after = stable_digest(&writable).await?;
+    let after = stable_digest(&writable, generation).await?;
     if after != before {
         return Err(AdoptionError::new("post-adoption stable digest changed"));
     }
@@ -246,8 +247,26 @@ async fn classify(database: &DatabaseConnection) -> Result<SourceClassification,
     }
 }
 
-async fn validate_manifest(database: &DatabaseConnection) -> Result<(), AdoptionError> {
-    for (table, expected) in OWNED_TABLES {
+/// Which ownership-closure shape this installation is in.
+///
+/// The project-onboarding migration's ledger is the durable record that the
+/// Workspace table is gone, and the migration commits atomically, so its
+/// presence answers the question exactly.
+async fn schema_generation(
+    database: &DatabaseConnection,
+) -> Result<SchemaGeneration, AdoptionError> {
+    if table_exists(database, super::project_onboarding_migration::LEDGER_TABLE).await? {
+        Ok(SchemaGeneration::ProjectOnly)
+    } else {
+        Ok(SchemaGeneration::WorkspaceOwned)
+    }
+}
+
+async fn validate_manifest(
+    database: &DatabaseConnection,
+    generation: SchemaGeneration,
+) -> Result<(), AdoptionError> {
+    for (table, expected) in owned_tables(generation) {
         let query = format!("PRAGMA table_info('{table}')");
         let rows = database
             .query_all_raw(Statement::from_string(DbBackend::Sqlite, query))
@@ -297,9 +316,12 @@ async fn validate_semantics(database: &DatabaseConnection) -> Result<(), Adoptio
     Ok(())
 }
 
-async fn stable_digest(database: &DatabaseConnection) -> Result<String, AdoptionError> {
+async fn stable_digest(
+    database: &DatabaseConnection,
+    generation: SchemaGeneration,
+) -> Result<String, AdoptionError> {
     let mut hasher = Sha256::new();
-    for (table, columns) in OWNED_TABLES {
+    for (table, columns) in owned_tables(generation) {
         hasher.update(table.as_bytes());
         let quoted = columns
             .iter()
@@ -375,6 +397,7 @@ fn rotate_snapshot(data_directory: &Path, database: &Path) -> Result<PathBuf, Ad
 async fn prove_restoration(
     data_directory: &Path,
     snapshot: &Path,
+    generation: SchemaGeneration,
     expected: &str,
 ) -> Result<(), AdoptionError> {
     let candidate = data_directory.join(format!(
@@ -385,7 +408,7 @@ async fn prove_restoration(
     let result = async {
         let database = connect(&candidate, true).await?;
         integrity(&database).await?;
-        let digest = stable_digest(&database).await?;
+        let digest = stable_digest(&database, generation).await?;
         database.close().await.map_err(sqlite_error)?;
         if digest != expected {
             return Err(AdoptionError::new(

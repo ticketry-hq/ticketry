@@ -34,7 +34,7 @@ pub(crate) async fn start_in_process_mcp(
     data_directory: &Path,
     ingress_credential: &str,
     mcp_port: u16,
-    terminal_launch: Option<crate::terminal_launch::TerminalLaunchService>,
+    terminal_launch: Option<crate::terminal::launch::TerminalLaunchService>,
 ) -> Result<work_management::mcp::McpRuntime, String> {
     let configuration = work_management::mcp::McpConfiguration {
         address: work_management::mcp::loopback(mcp_port).map_err(|error| error.to_string())?,

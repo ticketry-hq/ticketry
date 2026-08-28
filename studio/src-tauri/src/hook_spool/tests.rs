@@ -277,7 +277,7 @@ async fn runtime_performs_startup_periodic_and_final_drains() {
 #[tokio::test]
 async fn a_required_drain_needs_the_root_startup_prepares_for_a_clean_profile() {
     let data_directory = TempDir::new().expect("data directory");
-    let root = crate::terminal_lifecycle::hook_spool_directory(data_directory.path());
+    let root = crate::terminal::lifecycle::hook_spool_directory(data_directory.path());
     let _ = fs::remove_dir_all(&root);
     let spool = HookSpool::new(root.clone(), FakeSink::default(), DEFAULT_BATCH_SIZE)
         .expect("absolute spool");
@@ -290,7 +290,7 @@ async fn a_required_drain_needs_the_root_startup_prepares_for_a_clean_profile() 
         .expect_err("an unprepared spool root");
     assert_eq!(unavailable.diagnostic(), HookDiagnostic::SpoolUnavailable);
 
-    crate::terminal_lifecycle::ensure_hook_spool_directory(data_directory.path())
+    crate::terminal::lifecycle::ensure_hook_spool_directory(data_directory.path())
         .expect("prepare the spool root");
 
     let report = spool.drain_required().await.expect("a prepared spool root");

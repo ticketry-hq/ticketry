@@ -9,12 +9,12 @@ use common::terminal_lifecycle_harness::{
     TerminalLifecycleHarness, MODULE_ID, PROJECT_ID, TASK_ID,
 };
 use muxed_studio_lib::entities::terminals::launch_material;
-use muxed_studio_lib::execution_graph::{ExecutionMode, GraphAccess};
-use muxed_studio_lib::execution_reconciliation::ExecutionReconciliationService;
+use muxed_studio_lib::execution::graph::{ExecutionMode, GraphAccess};
+use muxed_studio_lib::execution::reconciliation::ExecutionReconciliationService;
 use muxed_studio_lib::graph_run_service::GraphRunCaller;
 use muxed_studio_lib::graph_run_service::{GraphRunRequest, GraphRunService};
 use muxed_studio_lib::settings_persistence::ProfileStore;
-use muxed_studio_lib::terminal_launch::{
+use muxed_studio_lib::terminal::launch::{
     TerminalLaunchBoundary, TerminalLaunchCheckpoint, TerminalLaunchError, TerminalLaunchRuntime,
     TerminalLaunchService, TerminalRuntimeObservation, VerifiedTerminalRuntime,
 };

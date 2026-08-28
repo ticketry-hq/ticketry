@@ -71,7 +71,6 @@ fn recoverable_codes_cover_repairable_configuration() {
     for code in [
         "provider_not_activated",
         "profile_not_configured",
-        "profile_workspace_mismatch",
         "module_not_found",
         "unsupported_model",
         "unsupported_reasoning",

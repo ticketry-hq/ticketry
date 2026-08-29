@@ -9,12 +9,12 @@ import {
   type StudioRuntime,
 } from "../runtime";
 
-describe("overhaul acceptance - optional MCP listener failure", () => {
+describe("overhaul acceptance - fail-closed MCP listener failure", () => {
   afterEach(() => {
     useModalStore.setState({ modalStack: [] });
   });
 
-  it("keeps local Studio visible while explaining that provider launch is unavailable", async () => {
+  it("[overhaul-172] keeps shells available while agent launch waits for this instance's listener", async () => {
     const base = createBrowserRuntime({ environment: {} });
     const startup = base.startup();
     initializeStudioRuntime({
@@ -31,10 +31,10 @@ describe("overhaul acceptance - optional MCP listener failure", () => {
           {
             id: "mcp-unavailable",
             severity: "warning",
-            title: "External MCP unavailable",
+            title: "Agent launches unavailable",
             message:
-              "Ticketry is running, but external MCP connections are unavailable. Provider launch remains blocked until it recovers.",
-            acknowledgementLabel: "Continue without MCP",
+              "Ticketry could not start its MCP listener. Agent launches are blocked until this Ticketry instance owns an MCP listener. Local shells remain available. Restart Ticketry to retry.",
+            acknowledgementLabel: "Understood",
           },
         ],
       }),
@@ -50,11 +50,16 @@ describe("overhaul acceptance - optional MCP listener failure", () => {
 
     expect(screen.getByText("Local Studio remains usable")).toBeInTheDocument();
     expect(
-      await screen.findByRole("dialog", { name: "External MCP unavailable" }),
+      await screen.findByRole("dialog", { name: "Agent launches unavailable" }),
     ).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Continue without MCP" }));
+    expect(screen.getByText(/Agent launches are blocked/)).toBeInTheDocument();
+    expect(screen.getByText(/Local shells remain available/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Continue without MCP" }))
+      .not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Understood" }));
     expect(
-      screen.queryByRole("dialog", { name: "External MCP unavailable" }),
+      screen.queryByRole("dialog", { name: "Agent launches unavailable" }),
     ).not.toBeInTheDocument();
     expect(screen.getByText("Local Studio remains usable")).toBeInTheDocument();
   });

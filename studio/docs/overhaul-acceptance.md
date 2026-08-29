@@ -153,6 +153,7 @@ named gate before the full Studio suite, typecheck, and build.
 | 169 | A native terminal viewer reports terminal output through the shared backend activity operation exactly once when it takes the run, and then never polls. |
 | 170 | Onboarding belongs to the installation project: the welcome appears while no project exists or while the installation project still requires it, an acknowledgement names the project the tour ran for, and a restart reads the acknowledged state back. |
 | 171 | Workflow settings can select one required skill as a launch binding's entry skill, save it, clear it, and reload either persisted value. |
+| 172 | When Ticketry cannot own an MCP listener, Studio says agent launches are blocked, local shells remain available, restart retries listener startup, and the acknowledgement does not claim to continue without MCP. |
 
 Each executable case carries one stable `[overhaul-NN]` marker. The gate has a
 contract test that fails if a marker is missing or duplicated. When a Studio UI

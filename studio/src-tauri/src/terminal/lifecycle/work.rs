@@ -444,13 +444,28 @@ fn require_provider_control(
 #[cfg(test)]
 mod provider_control_tests {
     use super::require_provider_control;
-    use crate::terminal::launch::TerminalLaunchKind;
+    use crate::terminal::launch::{TerminalLaunchErrorCode, TerminalLaunchKind};
 
     #[test]
-    fn missing_listener_blocks_providers_but_not_local_shells() {
-        assert!(require_provider_control(TerminalLaunchKind::Task, "").is_err());
-        assert!(require_provider_control(TerminalLaunchKind::Planning, "").is_err());
+    fn missing_listener_blocks_provider_launch_with_an_empty_url() {
+        for kind in [TerminalLaunchKind::Task, TerminalLaunchKind::Planning] {
+            let error = require_provider_control(kind, "").expect_err("provider launch blocked");
+
+            assert_eq!(error.code, TerminalLaunchErrorCode::RuntimeUnavailable);
+            assert_eq!(
+                error.to_string(),
+                "WorkTracker MCP is unavailable. Provider launch is blocked."
+            );
+        }
+    }
+
+    #[test]
+    fn missing_listener_does_not_block_local_shells() {
         assert!(require_provider_control(TerminalLaunchKind::Shell, "").is_ok());
+    }
+
+    #[test]
+    fn owned_listener_recovery_allows_provider_launch() {
         assert!(
             require_provider_control(TerminalLaunchKind::Task, "http://127.0.0.1:43219/mcp")
                 .is_ok()

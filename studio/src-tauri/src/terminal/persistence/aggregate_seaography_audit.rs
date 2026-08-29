@@ -37,7 +37,7 @@ pub const REGISTERED_ENTITIES: &[RegisteredEntity] = &[
         graphql_type: "AgentTerminalSessions",
         generated_mutations: false,
         blockers: [
-            "launch must commit the Agent Run, Launch Effect, and normalized launch material, then prove tmux absence before and after creation",
+            "Seaolim Action saves commit one model stage at a time, but launch preparation must atomically commit the Agent Run, Launch Effect, normalized launch material, and starting status fact",
             "one flat batch cannot bind a separate external tmux effect per row or settle partial creations",
             "rc.9 update skips pre-save hooks, so termination cannot lease a cleanup effect, verify ownership, and settle Runs facts atomically",
             "rc.9 delete skips delete hooks and Terminal Session rows are durable history, so a caller delete would erase evidence or an unverified runtime",
@@ -100,15 +100,15 @@ pub const CUSTOM_MUTATIONS: &[CustomField] = &[
         field: "terminal_session_create",
         kind: CustomFieldKind::Mutation,
         returns: "AgentTerminalSessions",
-        override_reason: "one client request identity predetermines the Agent Run and Launch Effect, and the session may only be committed after verified tmux creation",
-        evidence: "spec/rusting--cf2de16d/T871--launch-one-terminal-through-the-restrict/override-record.md",
+        override_reason: "preparation and settlement each require one multi-model atomic commit around verified tmux creation; independent Seaolim Action saves expose invalid crash states",
+        evidence: "terminal::launch::action_compatibility::STAGES",
     },
     CustomField {
         field: "terminal_session_update",
         kind: CustomFieldKind::Mutation,
         returns: "AgentTerminalSessions",
-        override_reason: "termination exposes only a cause-bound request identity and settles history, run outcome, status, and cleanup evidence in one transaction",
-        evidence: "spec/rusting--cf2de16d/T875--implement-durable-verified-cleanup-and-t/override-record.md",
+        override_reason: "the tri-state patch is not readable through ActionContext, and preparation plus settlement require multi-model atomic commits around verified tmux cleanup",
+        evidence: "terminal::cleanup::action_compatibility::STAGES",
     },
     CustomField {
         field: "terminal_output_observe",

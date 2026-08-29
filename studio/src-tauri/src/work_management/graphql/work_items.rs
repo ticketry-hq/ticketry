@@ -6,7 +6,9 @@ use seaography::{
 };
 
 use super::commands::{blockers, hierarchy, reorder, work_items, workflow, CommandError};
-use super::patch_input::{GraphqlPatchBool, GraphqlPatchString, GraphqlPatchStringList};
+use super::patch_input::{
+    GraphqlPatchBool, GraphqlPatchJson, GraphqlPatchString, GraphqlPatchStringList,
+};
 use super::read_types as output;
 use super::support::{authoritative_work_item, command_database, command_error, work_facts};
 
@@ -51,13 +53,15 @@ impl WorkItemMutations {
         parent_id: GraphqlPatchString,
         blocked_by_ids: GraphqlPatchStringList,
         is_archived: GraphqlPatchBool,
+        workspace_tab_order: GraphqlPatchJson,
     ) -> Result<super::entities::issue::Model> {
         let database = command_database(ctx)?;
         let ordinary_patch = name.is_some() || description.is_some() || issue_type_id.is_some();
         let domain_patch_count = usize::from(!state_id.0.is_unset())
             + usize::from(!parent_id.0.is_unset())
             + usize::from(!blocked_by_ids.0.is_unset())
-            + usize::from(!is_archived.0.is_unset());
+            + usize::from(!is_archived.0.is_unset())
+            + usize::from(!workspace_tab_order.0.is_unset());
         if domain_patch_count > 1 || (ordinary_patch && domain_patch_count != 0) {
             return Err(command_error(CommandError::validation(
                 "Submit one relationship, state, or archive change at a time.",
@@ -126,19 +130,31 @@ impl WorkItemMutations {
                                 "Archived work items cannot be restored by this patch.",
                             ))
                         }
-                        workflow::PatchValue::Unset => {
-                            work_items::update(
-                                database,
-                                work_items::UpdateWorkItem {
-                                    id,
-                                    name,
-                                    description,
-                                    issue_type_id,
-                                },
-                                facts,
-                            )
-                            .await
-                        }
+                        workflow::PatchValue::Unset => match workspace_tab_order.0 {
+                            workflow::PatchValue::Value(order) => {
+                                crate::work_management::workspace_tab_order::update(
+                                    database, &id, order, facts,
+                                )
+                                .await
+                            }
+                            workflow::PatchValue::Null => Err(CommandError::field(
+                                "workspace_tab_order",
+                                "Workspace tab order cannot be null.",
+                            )),
+                            workflow::PatchValue::Unset => {
+                                work_items::update(
+                                    database,
+                                    work_items::UpdateWorkItem {
+                                        id,
+                                        name,
+                                        description,
+                                        issue_type_id,
+                                    },
+                                    facts,
+                                )
+                                .await
+                            }
+                        },
                     },
                 },
             },

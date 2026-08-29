@@ -1,4 +1,4 @@
-import type { RefObject } from "react";
+import { useCallback, useEffect, useRef, type RefObject } from "react";
 import type { DesignDoc, TabKind } from "../../../../../features/agents/types";
 import {
   isLiveTerminalState,
@@ -11,6 +11,8 @@ import {
 import type { EditViewZone } from "../../../../../state/clientStore";
 import { WorkspaceTab } from "./WorkspaceTab";
 import type { TaskWorkspaceTabIdentity } from "./useTaskWorkspaceTabNavigation";
+import type { WorkspaceTabReorderDrag } from "../../../../../features/workspace-tabs/internal/useWorkspaceTabReorderDrag";
+import { workspaceTabIdentityKey } from "../../../../../features/workspace-tabs/ordering";
 import {
   WorkspaceLauncher,
   type TicketLaunchContext,
@@ -37,6 +39,9 @@ export function WorkspaceTabStrip({
   activeTerminalId,
   documents,
   terminalTabs,
+  orderedTabs,
+  activeTab,
+  reorderDrag,
   bucket,
   launchContext,
   activatedProviders,
@@ -61,6 +66,9 @@ export function WorkspaceTabStrip({
   activeTerminalId: string | null;
   documents: readonly DesignDoc[];
   terminalTabs: readonly SessionTab[];
+  orderedTabs: readonly TaskWorkspaceTabIdentity[];
+  activeTab: TaskWorkspaceTabIdentity;
+  reorderDrag: WorkspaceTabReorderDrag;
   bucket: string;
   launchContext: WorkspaceLauncherContext | null;
   activatedProviders: ReadonlySet<string>;
@@ -76,6 +84,42 @@ export function WorkspaceTabStrip({
     context: TicketLaunchContext,
   ) => void;
 }) {
+  const tabRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const registerTabRef = useCallback(
+    (identity: TaskWorkspaceTabIdentity, node: HTMLDivElement | null) => {
+      tabRefs.current[workspaceTabIdentityKey(identity)] = node;
+    },
+    [],
+  );
+  const orderKey = orderedTabs.map(workspaceTabIdentityKey).join("\0");
+  const activeKey = workspaceTabIdentityKey(activeTab);
+
+  useEffect(() => {
+    tabRefs.current[activeKey]?.scrollIntoView?.({
+      block: "nearest",
+      inline: "nearest",
+    });
+  }, [activeKey, orderKey]);
+
+  const documentById = new Map(documents.map((document) => [document.id, document]));
+  const terminalPresentations = presentTerminalRuns(
+    terminalTabs.map((tab) => ({
+      key: tab.id,
+      agent: tab.meta.agent,
+      launchState: tab.launchState,
+      launchModel: tab.launchModel,
+      isPlanning: tab.meta.isPlanning,
+      isInstant: tab.meta.isInstant,
+      live: isLiveTerminal(tab),
+    })),
+  );
+  const terminalById = new Map(
+    terminalTabs.map((tab, index) => [
+      tab.id,
+      { tab, presentation: terminalPresentations[index] },
+    ]),
+  );
+
   return (
     <div
       ref={tabStripRef}
@@ -86,7 +130,7 @@ export function WorkspaceTabStrip({
       tabIndex={isEditView ? -1 : undefined}
       onMouseDown={isEditView ? () => onClaimPointerZone("tab-strip") : undefined}
       onFocus={isEditView ? () => onSetEditViewZone("tab-strip") : undefined}
-      className={`mb-1 flex shrink-0 flex-wrap gap-1 border-b border-pane-border pb-1 outline-none transition-opacity duration-150 motion-reduce:transition-none ${
+      className={`mb-1 flex min-w-0 shrink-0 flex-nowrap gap-1 overflow-x-auto border-b border-pane-border pb-1 outline-none transition-opacity duration-150 [scrollbar-width:none] motion-reduce:transition-none [&::-webkit-scrollbar]:hidden ${
         isEditView
           ? `min-h-10 items-center px-1 py-1 ${
               showZoneChrome
@@ -98,42 +142,61 @@ export function WorkspaceTabStrip({
           : ""
       }`}
     >
-      <WorkspaceTab
-        label="Details"
-        active={activeKind === "details"}
-        highlighted={showTabHighlight && highlightedTab.kind === "details"}
-        allowHoverEmphasis={allowTabHoverEmphasis}
-        onClick={() => onSelectTab({ kind: "details" })}
-      />
-      {documents.map((document) => (
-        <WorkspaceTab
-          key={document.id}
-          label={document.label}
-          active={activeKind === "doc" && activeDoc?.id === document.id}
-          highlighted={
-            showTabHighlight &&
-            highlightedTab.kind === "doc" &&
-            highlightedTab.id === document.id
-          }
-          allowHoverEmphasis={allowTabHoverEmphasis}
-          onClick={() => onSelectTab({ kind: "doc", id: document.id })}
-          onClose={() => onCloseDocument(document.id)}
-        />
-      ))}
-      {presentTerminalRuns(
-        // Tabs arrive in launch order, which is the order duplicate ordinals
-        // follow.
-        terminalTabs.map((tab) => ({
-          key: tab.id,
-          agent: tab.meta.agent,
-          launchState: tab.launchState,
-          launchModel: tab.launchModel,
-          isPlanning: tab.meta.isPlanning,
-          isInstant: tab.meta.isInstant,
-          live: isLiveTerminal(tab),
-        })),
-      ).map((presentation, index) => {
-        const tab = terminalTabs[index];
+      {orderedTabs.map((identity) => {
+        if (identity.kind === "details") {
+          return (
+            <WorkspaceTab
+              key="details"
+              label="Details"
+              active={activeKind === "details"}
+              highlighted={showTabHighlight && highlightedTab.kind === "details"}
+              allowHoverEmphasis={allowTabHoverEmphasis}
+              onClick={() => {
+                if (!reorderDrag.consumePostDropClick()) {
+                  onSelectTab({ kind: "details" });
+                }
+              }}
+              dropIntent={reorderDrag.dropIntentFor(identity)}
+              registerRef={(node) => registerTabRef(identity, node)}
+              dragSourceProps={reorderDrag.dragSourcePropsFor(identity)}
+              dropTargetProps={reorderDrag.dropTargetPropsFor(identity)}
+            />
+          );
+        }
+        if (identity.kind === "doc") {
+          const document = documentById.get(identity.id);
+          if (!document) return null;
+          return (
+            <WorkspaceTab
+              key={`doc:${document.id}`}
+              label={document.label}
+              active={activeKind === "doc" && activeDoc?.id === document.id}
+              highlighted={
+                showTabHighlight &&
+                highlightedTab.kind === "doc" &&
+                highlightedTab.id === document.id
+              }
+              allowHoverEmphasis={allowTabHoverEmphasis}
+              onClick={() => {
+                if (!reorderDrag.consumePostDropClick()) {
+                  onSelectTab({ kind: "doc", id: document.id });
+                }
+              }}
+              onClose={() => {
+                if (!reorderDrag.consumePostDropClick()) {
+                  onCloseDocument(document.id);
+                }
+              }}
+              dropIntent={reorderDrag.dropIntentFor(identity)}
+              registerRef={(node) => registerTabRef(identity, node)}
+              dragSourceProps={reorderDrag.dragSourcePropsFor(identity)}
+              dropTargetProps={reorderDrag.dropTargetPropsFor(identity)}
+            />
+          );
+        }
+        const terminal = terminalById.get(identity.id);
+        if (!terminal) return null;
+        const { tab, presentation } = terminal;
         const active = activeKind === "terminal" && activeTerminalId === tab.id;
         return (
           <WorkspaceTab
@@ -155,9 +218,21 @@ export function WorkspaceTabStrip({
             })}
             /* Attention axis — its own palette, independent of provider tone. */
             badge={<LifecycleBadge state={tab.lifecycle} />}
-            onClick={() => onSelectTab({ kind: "terminal", id: tab.id })}
-            onClose={() => onCloseTerminal(tab.id)}
+            onClick={() => {
+              if (!reorderDrag.consumePostDropClick()) {
+                onSelectTab({ kind: "terminal", id: tab.id });
+              }
+            }}
+            onClose={() => {
+              if (!reorderDrag.consumePostDropClick()) {
+                onCloseTerminal(tab.id);
+              }
+            }}
             closeLabel={presentation.closeName}
+            dropIntent={reorderDrag.dropIntentFor(identity)}
+            registerRef={(node) => registerTabRef(identity, node)}
+            dragSourceProps={reorderDrag.dragSourcePropsFor(identity)}
+            dropTargetProps={reorderDrag.dropTargetPropsFor(identity)}
           />
         );
       })}

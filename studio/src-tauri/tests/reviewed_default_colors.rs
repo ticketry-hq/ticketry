@@ -4,9 +4,7 @@ use muxed_studio_lib::work_management::commands::catalog::{self, CreateProject};
 use muxed_studio_lib::work_management::entities::{
     issue_type, issue_type_transition, launch_binding, project, state,
 };
-use muxed_studio_lib::work_management::{
-    launch_binding_entry_skill_migration, project_onboarding_migration,
-};
+use muxed_studio_lib::work_management::project_onboarding_migration;
 use muxed_studio_lib::work_management::open_for_commands;
 use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder};
 use tauri_graphql::{TransportApi, TransportApiImpl};
@@ -75,26 +73,12 @@ async fn assert_persisted_catalog(database: &sea_orm::DatabaseConnection, projec
     );
     assert_eq!(
         launch_binding::Entity::find()
-            .filter(launch_binding::Column::IssueTypeId.is_in(type_ids.clone()))
+            .filter(launch_binding::Column::IssueTypeId.is_in(type_ids))
             .count(database)
             .await
             .expect("count seeded launch bindings"),
         15
     );
-    let seeded = launch_binding::Entity::find()
-        .filter(launch_binding::Column::IssueTypeId.is_in(type_ids))
-        .all(database)
-        .await
-        .expect("read seeded launch bindings");
-    assert!(seeded.iter().all(|binding| binding.entry_skill.as_ref().is_none_or(
-        |skill| binding
-            .required_skills
-            .as_array()
-            .is_some_and(|required| required.iter().any(|value| value == skill))
-    )));
-    assert!(seeded.iter().any(|binding| binding.entry_skill.as_deref() == Some("grill-with-docs")));
-    assert!(seeded.iter().any(|binding| binding.entry_skill.as_deref() == Some("to-spec")));
-    assert!(seeded.iter().any(|binding| binding.entry_skill.as_deref() == Some("to-tickets")));
 }
 
 async fn assert_generated_state_read(api: &TransportApiImpl, project_id: &str) {
@@ -145,9 +129,6 @@ async fn fresh_install_projects_persist_and_read_the_reviewed_state_colors() {
     project_onboarding_migration::install(&database)
         .await
         .expect("move onboarding onto the project");
-    launch_binding_entry_skill_migration::install(&database)
-        .await
-        .expect("add entry skills to launch bindings");
 
     let first = create_project(&database, "First", "FST").await;
     let second = create_project(&database, "Second", "SND").await;
@@ -179,9 +160,6 @@ async fn a_catalog_insert_failure_rolls_back_the_whole_project() {
     project_onboarding_migration::install(&database)
         .await
         .expect("move onboarding onto the project");
-    launch_binding_entry_skill_migration::install(&database)
-        .await
-        .expect("add entry skills to launch bindings");
     let before = (
         project::Entity::find().count(&database).await.unwrap(),
         state::Entity::find().count(&database).await.unwrap(),

@@ -46,8 +46,7 @@ function catalog(subtreeRunEnabled: boolean, workflowRevision: number) {
       launch_bindings: { __typename: "WorktrackerLaunchbindingConnection", nodes: [{
         __typename: "WorktrackerLaunchbinding",
         id: 1, issue_type: "story", state: "build", prompt: "Implement it.",
-        required_skills: ["tdd"], entry_skill: null,
-        model: model.id, reasoning: reasoning.id,
+        required_skills: ["tdd"], model: model.id, reasoning: reasoning.id,
         auto_start: false, subtree_run_enabled: subtreeRunEnabled,
         created_at: "", updated_at: "", state_record: { __typename: "WorktrackerState", id: "build", sort_order: 0 },
       }] },
@@ -81,7 +80,6 @@ describe("launch-binding desktop runtime acceptance", () => {
       }
       if (request.operationName === "UpsertWorkTrackerLaunchBinding") {
         expect(request.variables.requiredSkills).toEqual(["tdd"]);
-        expect(request.variables.entrySkill).toBeNull();
         expect(request.variables.workflowRevision).toBe(8);
         return JSON.stringify({
           data: null,
@@ -112,7 +110,6 @@ describe("launch-binding desktop runtime acceptance", () => {
         issue_type_id: "story", start_state_id: "build", workflow_revision: 8,
         transitions: [], launch_bindings: [{
           state_id: "build", prompt: "Implement it.", required_skills: ["tdd"],
-          entry_skill: null,
           agent: "codex", model: model.name, reasoning: "medium",
           auto_start: false, subtree_run_enabled: false,
         }], warnings: [],

@@ -10,12 +10,6 @@ pub struct Model {
     pub state_id: String,
     pub prompt: String,
     pub required_skills: Json,
-    /// The one skill a launch enters through, or none.
-    ///
-    /// Nullable, and when present it names a skill the binding already
-    /// requires. The stored value is the bare skill slug: provider prefix
-    /// characters belong to the command a launch builds, not to this row.
-    pub entry_skill: Option<String>,
     pub model_id: Option<String>,
     pub reasoning_id: Option<String>,
     pub auto_start: bool,

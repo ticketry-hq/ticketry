@@ -170,7 +170,6 @@ pub async fn seed_campaign(database: &DatabaseConnection) {
             state_id: Set(state_id.to_owned()),
             prompt: Set("Implement the slice.".to_owned()),
             required_skills: Set(serde_json::json!([])),
-            entry_skill: Set(None),
             model_id: Set(Some(model.id.clone())),
             reasoning_id: Set(None),
             auto_start: Set(auto_start),
@@ -438,6 +437,7 @@ async fn insert_issue(
         is_archived: Set(is_archived),
         rank: Set(rank.to_owned()),
         description: Set(String::new()),
+        workspace_tab_order: Set(serde_json::json!([])),
         created_at: Set(now),
         updated_at: Set(now),
     }

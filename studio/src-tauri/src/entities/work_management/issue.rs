@@ -18,6 +18,7 @@ pub struct Model {
     pub is_archived: bool,
     pub rank: String,
     pub description: String,
+    pub workspace_tab_order: Json,
     pub created_at: DateTime,
     pub updated_at: DateTime,
     #[sea_orm(belongs_to, from = "project_id", to = "id")]

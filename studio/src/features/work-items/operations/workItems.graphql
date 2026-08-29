@@ -5,6 +5,7 @@ fragment GeneratedWorkTrackerWorkItemFields on WorktrackerIssue {
   sequence_id: sequenceId
   state_id: stateId
   description
+  workspace_tab_order: workspaceTabOrder
   parent_id: parentId
   module_id: moduleId
   is_archived: isArchived
@@ -92,6 +93,12 @@ mutation CreateWorkTrackerWorkItem($projectId: String!, $name: String!, $issueTy
 
 mutation UpdateWorkTrackerWorkItem($id: String!, $name: String, $description: String, $issueTypeId: String) {
   update_work_item(id: $id, name: $name, description: $description, issue_type_id: $issueTypeId) {
+    ...GeneratedWorkTrackerWorkItemFields
+  }
+}
+
+mutation UpdateWorkTrackerWorkspaceTabOrder($id: String!, $workspaceTabOrder: Json!) {
+  update_work_item(id: $id, workspace_tab_order: $workspaceTabOrder) {
     ...GeneratedWorkTrackerWorkItemFields
   }
 }

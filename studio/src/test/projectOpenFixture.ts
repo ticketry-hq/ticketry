@@ -68,6 +68,7 @@ export function seedModuleOpenFixture(moduleId: string, items: FixtureWorkItem[]
           sequence_id: item.sequence_id,
           state_id: item.state,
           description: item.description,
+          workspace_tab_order: [],
           parent_id: item.parent_id,
           module_id: moduleId,
           is_archived: item.is_archived,

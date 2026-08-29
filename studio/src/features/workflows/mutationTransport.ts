@@ -139,7 +139,6 @@ export function upsertIssueTypeWorkflowLaunchBinding(
       return execute(UpsertWorkTrackerLaunchBindingDocument, {
         issueTypeId: typeId, stateId, workflowRevision,
         prompt: binding.prompt ?? "", requiredSkills: binding.required_skills ?? [],
-        entrySkill: binding.entry_skill ?? null,
         modelId: model?.id ?? null, reasoningId: reasoning?.id ?? null,
         autoStart, subtreeRunEnabled,
       });

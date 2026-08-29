@@ -10,7 +10,6 @@ const REQUIRED_SKILL_LOCK: &str = include_str!("../../../../resources/launch/ski
 pub(super) struct LaunchBindingCandidate<'a> {
     pub prompt: &'a str,
     pub required_skills: &'a [String],
-    pub entry_skill: Option<&'a str>,
     pub model_id: Option<&'a str>,
     pub reasoning_id: Option<&'a str>,
     pub auto_start: bool,
@@ -33,7 +32,6 @@ pub(super) async fn validate_launch_binding(
     candidate: LaunchBindingCandidate<'_>,
 ) -> Result<(), CommandError> {
     validate_required_skills(candidate.required_skills, candidate.prompt)?;
-    validate_entry_skill(candidate.entry_skill, candidate.required_skills)?;
     if candidate.reasoning_id.is_some() && candidate.model_id.is_none() {
         return Err(rejected(
             "model_id",
@@ -84,20 +82,6 @@ pub(super) async fn validate_launch_binding(
         }
     }
     Ok(())
-}
-
-fn validate_entry_skill(
-    entry_skill: Option<&str>,
-    required_skills: &[String],
-) -> Result<(), CommandError> {
-    if entry_skill.is_none_or(|skill| required_skills.iter().any(|required| required == skill)) {
-        return Ok(());
-    }
-    Err(rejected(
-        "entry_skill",
-        "entry_skill_must_be_required",
-        "The entry skill must also appear in required skills.",
-    ))
 }
 
 fn validate_required_skills(values: &[String], prompt: &str) -> Result<(), CommandError> {
@@ -242,15 +226,5 @@ mod tests {
                 "to-tickets",
             ]
         );
-    }
-
-    #[test]
-    fn entry_skill_must_be_one_of_the_required_skills() {
-        let required = vec!["to-spec".to_owned()];
-        assert!(validate_entry_skill(None, &required).is_ok());
-        assert!(validate_entry_skill(Some("to-spec"), &required).is_ok());
-        let error = validate_entry_skill(Some("to-tickets"), &required).unwrap_err();
-        assert_eq!(error.code(), "entry_skill_must_be_required");
-        assert_eq!(error.field_name(), Some("entry_skill"));
     }
 }

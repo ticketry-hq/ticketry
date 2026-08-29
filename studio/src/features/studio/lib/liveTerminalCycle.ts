@@ -30,6 +30,7 @@ interface LiveTerminalStopInput {
   taskOrder?: readonly TaskId[];
   agentStatus: AgentStatusData;
   sessions: Readonly<Record<string, CycleSession>>;
+  terminalOrderByTask?: Readonly<Record<string, readonly string[]>>;
   /** @deprecated Tabs are derived from runs and the live-session registry. */
   tabsByTask?: Readonly<Record<string, readonly string[]>>;
 }
@@ -40,6 +41,7 @@ export function selectLiveTerminalStops({
   taskOrder,
   agentStatus,
   sessions,
+  terminalOrderByTask = {},
 }: LiveTerminalStopInput): LiveTerminalStop[] {
   if (!moduleId) return [];
 
@@ -50,7 +52,7 @@ export function selectLiveTerminalStops({
       isPlanningRow(row) ? [planningRowId(row)] : [],
     );
   for (const taskId of taskIds) {
-    const taskSessions = Object.values(sessions)
+    const defaultTaskSessions = Object.values(sessions)
       .filter((session) => session.taskId === taskId)
       .sort((left, right) => {
         const leftAt = left.agentRunId
@@ -62,6 +64,26 @@ export function selectLiveTerminalStops({
         return leftAt.localeCompare(rightAt) ||
           left.sessionId.localeCompare(right.sessionId);
       });
+    const savedPosition = new Map(
+      (terminalOrderByTask[taskId] ?? []).map((runId, index) => [runId, index]),
+    );
+    const taskSessions = defaultTaskSessions
+      .map((session, defaultIndex) => ({ session, defaultIndex }))
+      .sort((left, right) => {
+        const leftPosition = left.session.agentRunId
+          ? savedPosition.get(left.session.agentRunId)
+          : undefined;
+        const rightPosition = right.session.agentRunId
+          ? savedPosition.get(right.session.agentRunId)
+          : undefined;
+        if (leftPosition !== undefined && rightPosition !== undefined) {
+          return leftPosition - rightPosition;
+        }
+        if (leftPosition !== undefined) return -1;
+        if (rightPosition !== undefined) return 1;
+        return left.defaultIndex - right.defaultIndex;
+      })
+      .map(({ session }) => session);
     for (const session of taskSessions) {
       const sessionId = session.sessionId;
       if (

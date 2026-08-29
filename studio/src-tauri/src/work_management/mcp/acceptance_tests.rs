@@ -103,8 +103,7 @@ async fn prepare_command_database(directory: &tempfile::TempDir) {
             CREATE TABLE worktracker_launchbinding (
                 id integer PRIMARY KEY AUTOINCREMENT, issue_type_id char(32) NOT NULL,
                 state_id char(32) NOT NULL, prompt text NOT NULL,
-                required_skills text NOT NULL, entry_skill varchar(128),
-                model_id char(32), reasoning_id char(32),
+                required_skills text NOT NULL, model_id char(32), reasoning_id char(32),
                 auto_start bool NOT NULL, subtree_run_enabled bool NOT NULL,
                 created_at datetime NOT NULL, updated_at datetime NOT NULL,
                 UNIQUE(issue_type_id, state_id)
@@ -422,8 +421,7 @@ async fn mcp_mutations_cover_crud_hierarchy_workflow_and_blockers_through_rust_c
         "upsert_issue_type_workflow_launch_binding",
         json!({
             "type_id": TASK_TYPE, "state_id": BACKLOG, "workflow_revision": 1,
-            "prompt": "Implement this item", "required_skills": ["tdd", "to-spec"],
-            "entry_skill": "to-spec"
+            "prompt": "Implement this item", "required_skills": ["tdd"]
         }),
     )
     .await;
@@ -431,19 +429,6 @@ async fn mcp_mutations_cover_crud_hierarchy_workflow_and_blockers_through_rust_c
         launch["launch_bindings"][0]["prompt"],
         "Implement this item"
     );
-    assert_eq!(launch["launch_bindings"][0]["entry_skill"], "to-spec");
-    let invalid_entry = call(
-        &url,
-        840,
-        "upsert_issue_type_workflow_launch_binding",
-        json!({
-            "type_id": TASK_TYPE, "state_id": BACKLOG, "workflow_revision": 2,
-            "entry_skill": "to-tickets"
-        }),
-    )
-    .await;
-    assert_eq!(invalid_entry["code"], "entry_skill_must_be_required");
-    assert_eq!(invalid_entry["field"], "entry_skill");
     let unknown_provider = call(
         &url,
         841,
@@ -478,28 +463,14 @@ async fn mcp_mutations_cover_crud_hierarchy_workflow_and_blockers_through_rust_c
         preserved["launch_bindings"][0]["prompt"],
         "Implement this item"
     );
-    assert_eq!(preserved["launch_bindings"][0]["entry_skill"], "to-spec");
     assert_eq!(preserved["workflow_revision"], 2);
-
-    let cleared = call(
-        &url,
-        851,
-        "upsert_issue_type_workflow_launch_binding",
-        json!({
-            "type_id": TASK_TYPE, "state_id": BACKLOG, "workflow_revision": 2,
-            "entry_skill": null
-        }),
-    )
-    .await;
-    assert_eq!(cleared["launch_bindings"][0]["entry_skill"], Value::Null);
-    assert_eq!(cleared["workflow_revision"], 3);
 
     let mcp_null = call(
         &url,
         86,
         "upsert_issue_type_workflow_launch_binding",
         json!({
-            "type_id": TASK_TYPE, "state_id": BACKLOG, "workflow_revision": 3,
+            "type_id": TASK_TYPE, "state_id": BACKLOG, "workflow_revision": 2,
             "prompt": null
         }),
     )
@@ -517,11 +488,10 @@ async fn mcp_mutations_cover_crud_hierarchy_workflow_and_blockers_through_rust_c
     .unwrap();
     let graphql_null: Value = serde_json::from_str(
         &graphql
-            .clone()
             .graphql_execute(
                 json!({
                     "query": format!(
-                        "mutation {{ upsert_issue_type_launch_binding(issue_type_id: \"{TASK_TYPE}\", state_id: \"{BACKLOG}\", workflow_revision: 3, prompt: null) {{ prompt }} }}"
+                        "mutation {{ upsert_issue_type_launch_binding(issue_type_id: \"{TASK_TYPE}\", state_id: \"{BACKLOG}\", workflow_revision: 2, prompt: null) {{ prompt }} }}"
                     )
                 })
                 .to_string(),
@@ -532,25 +502,6 @@ async fn mcp_mutations_cover_crud_hierarchy_workflow_and_blockers_through_rust_c
     assert_eq!(
         graphql_null["errors"][0]["extensions"]["code"], mcp_null["code"],
         "{graphql_null}"
-    );
-    let graphql_entry: Value = serde_json::from_str(
-        &graphql
-            .clone()
-            .graphql_execute(
-                json!({
-                    "query": format!(
-                        "mutation {{ upsert_issue_type_launch_binding(issue_type_id: \"{TASK_TYPE}\", state_id: \"{BACKLOG}\", workflow_revision: 3, entry_skill: \"to-spec\") {{ entrySkill }} }}"
-                    )
-                })
-                .to_string(),
-            )
-            .await,
-    )
-    .unwrap();
-    assert_eq!(
-        graphql_entry["data"]["upsert_issue_type_launch_binding"]["entrySkill"],
-        "to-spec",
-        "{graphql_entry}"
     );
 
     let details = call(&url, 9, "get_task_details", json!({"id_or_key": "AUTH-1"})).await;

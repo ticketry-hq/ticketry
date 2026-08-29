@@ -5,7 +5,6 @@ pub mod commands;
 pub mod database;
 pub use crate::entities::work_management as entities;
 pub(crate) mod graphql;
-pub mod launch_binding_entry_skill_migration;
 pub mod launch_policy;
 pub mod mcp;
 pub mod ownership_manifest;
@@ -14,6 +13,8 @@ pub mod read_queries;
 pub mod read_types;
 mod transition_occurrences;
 pub mod workflow_color_migration;
+pub mod workspace_tab_order;
+pub mod workspace_tab_order_migration;
 
 pub use database::{
     open, open_established, open_for_commands, state_database_path, ReadDatabaseError,

@@ -536,14 +536,14 @@ type Mutation {
 	delete_issue_type(id: String!, reassign_to: String): Boolean!
 	reorder_issue_types(project_id: String!, ordered_ids: [String!]!): [WorktrackerIssuetype!]!
 	create_work_item(project_id: String!, name: String!, issue_type_id: String!, description: String, state_id: String, parent_id: String): WorktrackerIssue!
-	update_work_item(id: String!, name: String, description: String, issue_type_id: String, state_id: String, parent_id: String, blocked_by_ids: [String!], is_archived: Boolean): WorktrackerIssue!
+	update_work_item(id: String!, name: String, description: String, issue_type_id: String, state_id: String, parent_id: String, blocked_by_ids: [String!], is_archived: Boolean, workspace_tab_order: Json): WorktrackerIssue!
 	reorder_work_item(id: String!, before_id: String, after_id: String, initial_order_ids: [String!]): WorktrackerIssue!
 	delete_work_item(id: String!): Boolean!
 	create_issue_type_transition(issue_type_id: String!, from_state_id: String!, to_state_id: String!, agent_allowed: Boolean!, workflow_revision: Int!): WorktrackerIssuetypetransition!
 	update_issue_type_transition(issue_type_id: String!, from_state_id: String!, to_state_id: String!, agent_allowed: Boolean!, workflow_revision: Int!): WorktrackerIssuetypetransition!
 	delete_issue_type_transition(issue_type_id: String!, from_state_id: String!, to_state_id: String!, workflow_revision: Int!): Boolean!
 	remove_state_from_issue_type_workflow(issue_type_id: String!, state_id: String!, workflow_revision: Int!): Boolean!
-	upsert_issue_type_launch_binding(issue_type_id: String!, state_id: String!, workflow_revision: Int!, prompt: String, required_skills: [String!], entry_skill: String, model_id: String, reasoning_id: String, auto_start: Boolean, subtree_run_enabled: Boolean): WorktrackerLaunchbinding!
+	upsert_issue_type_launch_binding(issue_type_id: String!, state_id: String!, workflow_revision: Int!, prompt: String, required_skills: [String!], model_id: String, reasoning_id: String, auto_start: Boolean, subtree_run_enabled: Boolean): WorktrackerLaunchbinding!
 	delete_state(state_id: String!): Boolean!
 	update_keybinding_setting(value: Json!): KeybindingSetting!
 	update_provider_catalog(activated_providers: [String!]!, default_provider: String, default_model: String, default_reasoning: String): ProviderCatalog!
@@ -889,6 +889,7 @@ type WorktrackerIssue {
 	isArchived: Boolean!
 	rank: String!
 	description: String!
+	workspaceTabOrder: Json!
 	createdAt: String!
 	updatedAt: String!
 	project: WorktrackerProject
@@ -970,6 +971,7 @@ input WorktrackerIssueFilterInput {
 	isArchived: BooleanFilterInput
 	rank: StringFilterInput
 	description: StringFilterInput
+	workspaceTabOrder: JsonFilterInput
 	createdAt: TextFilterInput
 	updatedAt: TextFilterInput
 	and: [WorktrackerIssueFilterInput!]
@@ -1005,6 +1007,7 @@ input WorktrackerIssueOrderInput {
 	isArchived: OrderByEnum
 	rank: OrderByEnum
 	description: OrderByEnum
+	workspaceTabOrder: OrderByEnum
 	createdAt: OrderByEnum
 	updatedAt: OrderByEnum
 }
@@ -1154,7 +1157,6 @@ type WorktrackerLaunchbinding {
 	stateId: String!
 	prompt: String!
 	requiredSkills: Json!
-	entrySkill: String
 	modelId: String
 	reasoningId: String
 	autoStart: Boolean!
@@ -1185,7 +1187,6 @@ input WorktrackerLaunchbindingFilterInput {
 	stateId: StringFilterInput
 	prompt: StringFilterInput
 	requiredSkills: JsonFilterInput
-	entrySkill: StringFilterInput
 	modelId: StringFilterInput
 	reasoningId: StringFilterInput
 	autoStart: BooleanFilterInput
@@ -1210,7 +1211,6 @@ input WorktrackerLaunchbindingOrderInput {
 	stateId: OrderByEnum
 	prompt: OrderByEnum
 	requiredSkills: OrderByEnum
-	entrySkill: OrderByEnum
 	modelId: OrderByEnum
 	reasoningId: OrderByEnum
 	autoStart: OrderByEnum

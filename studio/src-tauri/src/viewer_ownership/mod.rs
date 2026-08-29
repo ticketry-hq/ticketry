@@ -7,15 +7,14 @@
 
 mod error;
 mod expiry;
-mod graphql;
 mod service;
+mod write_model;
 
 pub use error::{ViewerOwnershipError, ViewerOwnershipErrorCode};
 pub use service::{
     CreateViewerLease, DeleteViewerLease, PreparedViewerMechanics, UpdateViewerLease,
     ViewerDetachReason, ViewerOwnershipService,
 };
-
-pub fn register_graphql(builder: seaography::Builder) -> seaography::Builder {
-    graphql::register(builder)
-}
+pub(crate) use write_model::{
+    PreparedViewerLeaseWrite, ViewerLeaseModelWrite, ViewerLeaseWritePermit,
+};

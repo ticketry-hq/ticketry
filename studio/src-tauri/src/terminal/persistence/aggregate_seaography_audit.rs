@@ -122,21 +122,21 @@ pub const CUSTOM_MUTATIONS: &[CustomField] = &[
         kind: CustomFieldKind::Mutation,
         returns: "AgentRunViewerLeases",
         override_reason: "ownership transfers only after viewer mechanics succeed, under the Agent Run lock, with Rust allocating the generation",
-        evidence: "spec/rusting--cf2de16d/T872--enforce-atomic-viewer-ownership-with-res/override-record.md",
+        evidence: "spec/seaolim-migration--718c9c45/T1283--t09-migrate-viewer-lease-create-update-a/override-record.md",
     },
     CustomField {
         field: "update_viewer_lease",
         kind: CustomFieldKind::Mutation,
         returns: "AgentRunViewerLeases",
         override_reason: "renewal is a compare-and-set on the exact current viewer identity and generation",
-        evidence: "spec/rusting--cf2de16d/T872--enforce-atomic-viewer-ownership-with-res/override-record.md",
+        evidence: "spec/seaolim-migration--718c9c45/T1283--t09-migrate-viewer-lease-create-update-a/override-record.md",
     },
     CustomField {
         field: "delete_viewer_lease",
         kind: CustomFieldKind::Mutation,
         returns: "AgentRunViewerLeases",
         override_reason: "release is idempotent for the caller's own generation and can never end the hosted tmux session",
-        evidence: "spec/rusting--cf2de16d/T872--enforce-atomic-viewer-ownership-with-res/override-record.md",
+        evidence: "spec/seaolim-migration--718c9c45/T1283--t09-migrate-viewer-lease-create-update-a/override-record.md",
     },
 ];
 

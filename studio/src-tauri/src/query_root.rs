@@ -220,7 +220,7 @@ fn build_schema(
     } else {
         builder
     };
-    let builder = crate::viewer_ownership::register_graphql(builder);
+    let builder = crate::terminal::viewer_lease::register_graphql(builder);
     let builder = crate::documents::persistence::register_graphql(builder);
     let builder = crate::documents::register_graphql(builder);
     let mut schema = builder.schema_builder().data(entity_database);

@@ -7,8 +7,7 @@ use std::{
 
 use chrono::{NaiveDateTime, SecondsFormat, TimeZone, Utc};
 use sea_orm::{
-    ActiveModelTrait, ActiveValue::Set, ColumnTrait, DatabaseConnection, EntityTrait, ModelTrait,
-    QueryFilter, QuerySelect, TransactionTrait,
+    ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QuerySelect, TransactionTrait,
 };
 use tokio::sync::Mutex as AsyncMutex;
 use uuid::Uuid;
@@ -19,7 +18,7 @@ use crate::entities::{
     work_management::project,
 };
 
-use super::{ViewerOwnershipError, ViewerOwnershipErrorCode};
+use super::{write_model::persist_prepared, ViewerOwnershipError, ViewerOwnershipErrorCode};
 
 const DEFAULT_LEASE_TTL_SECONDS: u64 = 30;
 
@@ -62,8 +61,8 @@ pub struct DeleteViewerLease {
 #[derive(Clone)]
 pub struct ViewerOwnershipService {
     pub(super) database: DatabaseConnection,
-    ttl: Duration,
-    run_locks: Arc<Mutex<HashMap<String, Arc<AsyncMutex<()>>>>>,
+    pub(super) ttl: Duration,
+    pub(super) run_locks: Arc<Mutex<HashMap<String, Arc<AsyncMutex<()>>>>>,
     pub(super) viewers: Arc<Mutex<ViewerRegistry>>,
 }
 
@@ -80,9 +79,9 @@ pub(super) struct ViewerIdentity {
 }
 
 pub(super) struct PreparedViewer {
-    transport: String,
-    generation: String,
-    mechanics: Arc<dyn PreparedViewerMechanics>,
+    pub(super) transport: String,
+    pub(super) generation: String,
+    pub(super) mechanics: Arc<dyn PreparedViewerMechanics>,
 }
 
 pub(super) struct ActiveViewer {
@@ -160,60 +159,24 @@ impl ViewerOwnershipService {
         &self,
         input: CreateViewerLease,
     ) -> Result<viewer_lease::Model, ViewerOwnershipError> {
-        validate_create(&input)?;
-        let identity = identity(&input.agent_run_id, &input.viewer_id);
-        let prepared = self
-            .viewers
-            .lock()
-            .expect("viewer ownership registry poisoned")
-            .prepared
-            .remove(&identity)
-            .ok_or_else(|| {
-                ViewerOwnershipError::new(
-                    ViewerOwnershipErrorCode::MechanicsNotPrepared,
-                    "viewer mechanics must attach and validate before ownership is created",
-                )
-            })?;
-        if prepared.transport != input.transport {
-            prepared
-                .mechanics
-                .detach(ViewerDetachReason::AcquisitionFailed);
-            return Err(ViewerOwnershipError::new(
-                ViewerOwnershipErrorCode::MechanicsNotPrepared,
-                "the prepared viewer transport does not match the ownership request",
-            ));
-        }
-
-        let run_lock = self.run_lock(&input.agent_run_id);
-        let _guard = run_lock.lock().await;
-        let result = self.create_transaction(&input, &prepared.generation).await;
-        let model = match result {
-            Ok(model) => model,
-            Err(error) => {
-                prepared
-                    .mechanics
-                    .detach(ViewerDetachReason::AcquisitionFailed);
-                return Err(error);
-            }
-        };
-
-        let displaced = self
-            .viewers
-            .lock()
-            .expect("viewer ownership registry poisoned")
-            .active
-            .insert(
-                input.agent_run_id,
-                ActiveViewer {
-                    viewer_id: input.viewer_id,
-                    generation: prepared.generation,
-                    mechanics: prepared.mechanics,
-                },
-            );
-        if let Some(displaced) = displaced {
-            displaced.mechanics.detach(ViewerDetachReason::Replaced);
-        }
-        Ok(model)
+        let transaction = self
+            .database
+            .begin()
+            .await
+            .map_err(ViewerOwnershipError::storage)?;
+        let prepared = self.prepare_create_write(input, &transaction).await?;
+        let (model, permit) = persist_prepared(prepared, &transaction).await?;
+        transaction
+            .commit()
+            .await
+            .map_err(ViewerOwnershipError::storage)?;
+        permit.committed();
+        model.ok_or_else(|| {
+            ViewerOwnershipError::new(
+                ViewerOwnershipErrorCode::Storage,
+                "viewer ownership create prepared no model write",
+            )
+        })
     }
 
     /// Renew only the current, unexpired viewer identity and generation.
@@ -221,40 +184,19 @@ impl ViewerOwnershipService {
         &self,
         input: UpdateViewerLease,
     ) -> Result<viewer_lease::Model, ViewerOwnershipError> {
-        validate_identity_fields(&input.agent_run_id, &input.viewer_id, &input.generation)?;
-        let run_lock = self.run_lock(&input.agent_run_id);
-        let _guard = run_lock.lock().await;
         let transaction = self
             .database
             .begin()
             .await
             .map_err(ViewerOwnershipError::storage)?;
-        authorize_run(&transaction, &input.agent_run_id).await?;
-        let now = Utc::now();
-        let Some(model) = viewer_lease::Entity::find_by_id(&input.agent_run_id)
-            .one(&transaction)
-            .await
-            .map_err(ViewerOwnershipError::storage)?
-        else {
-            return Err(not_owned());
-        };
-        if model.viewer_id != input.viewer_id
-            || model.generation != input.generation
-            || parse_timestamp(&model.expires_at).is_none_or(|expires_at| expires_at <= now)
-        {
-            return Err(not_owned());
-        }
-        let mut active: viewer_lease::ActiveModel = model.into();
-        active.expires_at = Set(expires_at(self.ttl));
-        let model = active
-            .update(&transaction)
-            .await
-            .map_err(ViewerOwnershipError::storage)?;
+        let prepared = self.prepare_update_write(input, &transaction).await?;
+        let (model, permit) = persist_prepared(prepared, &transaction).await?;
         transaction
             .commit()
             .await
             .map_err(ViewerOwnershipError::storage)?;
-        Ok(model)
+        permit.committed();
+        model.ok_or_else(not_owned)
     }
 
     /// Release only the exact identity and generation. A missing or newer
@@ -263,104 +205,18 @@ impl ViewerOwnershipService {
         &self,
         input: DeleteViewerLease,
     ) -> Result<Option<viewer_lease::Model>, ViewerOwnershipError> {
-        validate_identity_fields(&input.agent_run_id, &input.viewer_id, &input.generation)?;
-        let run_lock = self.run_lock(&input.agent_run_id);
-        let _guard = run_lock.lock().await;
         let transaction = self
             .database
             .begin()
             .await
             .map_err(ViewerOwnershipError::storage)?;
-        authorize_run(&transaction, &input.agent_run_id).await?;
-        let Some(model) = viewer_lease::Entity::find_by_id(&input.agent_run_id)
-            .one(&transaction)
-            .await
-            .map_err(ViewerOwnershipError::storage)?
-        else {
-            transaction
-                .commit()
-                .await
-                .map_err(ViewerOwnershipError::storage)?;
-            return Ok(None);
-        };
-        if model.viewer_id != input.viewer_id || model.generation != input.generation {
-            transaction
-                .commit()
-                .await
-                .map_err(ViewerOwnershipError::storage)?;
-            return Ok(None);
-        }
-        model
-            .clone()
-            .delete(&transaction)
-            .await
-            .map_err(ViewerOwnershipError::storage)?;
+        let prepared = self.prepare_delete_write(input, &transaction).await?;
+        let (model, permit) = persist_prepared(prepared, &transaction).await?;
         transaction
             .commit()
             .await
             .map_err(ViewerOwnershipError::storage)?;
-
-        let released = {
-            let mut registry = self
-                .viewers
-                .lock()
-                .expect("viewer ownership registry poisoned");
-            let exact = registry
-                .active
-                .get(&input.agent_run_id)
-                .is_some_and(|viewer| {
-                    viewer.viewer_id == input.viewer_id && viewer.generation == input.generation
-                });
-            exact
-                .then(|| registry.active.remove(&input.agent_run_id))
-                .flatten()
-        };
-        if let Some(released) = released {
-            released.mechanics.detach(ViewerDetachReason::Released);
-        }
-        Ok(Some(model))
-    }
-
-    async fn create_transaction(
-        &self,
-        input: &CreateViewerLease,
-        generation: &str,
-    ) -> Result<viewer_lease::Model, ViewerOwnershipError> {
-        let transaction = self
-            .database
-            .begin()
-            .await
-            .map_err(ViewerOwnershipError::storage)?;
-        authorize_run(&transaction, &input.agent_run_id).await?;
-        let now = Utc::now();
-        let existing = viewer_lease::Entity::find_by_id(&input.agent_run_id)
-            .one(&transaction)
-            .await
-            .map_err(ViewerOwnershipError::storage)?;
-        let active = viewer_lease::ActiveModel {
-            agent_run_id: Set(input.agent_run_id.clone()),
-            viewer_id: Set(input.viewer_id.clone()),
-            transport: Set(input.transport.clone()),
-            generation: Set(generation.to_owned()),
-            acquired_at: Set(timestamp(now)),
-            expires_at: Set(timestamp(
-                now + chrono::Duration::from_std(self.ttl).unwrap(),
-            )),
-        };
-        let model = match existing {
-            Some(_) => active
-                .update(&transaction)
-                .await
-                .map_err(ViewerOwnershipError::storage)?,
-            None => active
-                .insert(&transaction)
-                .await
-                .map_err(ViewerOwnershipError::storage)?,
-        };
-        transaction
-            .commit()
-            .await
-            .map_err(ViewerOwnershipError::storage)?;
+        permit.committed();
         Ok(model)
     }
 
@@ -374,7 +230,7 @@ impl ViewerOwnershipService {
     }
 }
 
-fn validate_create(input: &CreateViewerLease) -> Result<(), ViewerOwnershipError> {
+pub(super) fn validate_create(input: &CreateViewerLease) -> Result<(), ViewerOwnershipError> {
     validate_identity(&input.agent_run_id)?;
     validate_identity(&input.viewer_id)?;
     if !matches!(input.transport.as_str(), "native" | "xterm") {
@@ -386,7 +242,7 @@ fn validate_create(input: &CreateViewerLease) -> Result<(), ViewerOwnershipError
     Ok(())
 }
 
-fn validate_identity_fields(
+pub(super) fn validate_identity_fields(
     agent_run_id: &str,
     viewer_id: &str,
     generation: &str,
@@ -410,14 +266,14 @@ fn validate_identity(value: &str) -> Result<(), ViewerOwnershipError> {
     })
 }
 
-fn identity(agent_run_id: &str, viewer_id: &str) -> ViewerIdentity {
+pub(super) fn identity(agent_run_id: &str, viewer_id: &str) -> ViewerIdentity {
     ViewerIdentity {
         agent_run_id: agent_run_id.to_owned(),
         viewer_id: viewer_id.to_owned(),
     }
 }
 
-fn expires_at(ttl: Duration) -> String {
+pub(super) fn expires_at(ttl: Duration) -> String {
     timestamp(Utc::now() + chrono::Duration::from_std(ttl).unwrap())
 }
 
@@ -436,7 +292,7 @@ pub(super) fn parse_timestamp(value: &str) -> Option<chrono::DateTime<Utc>> {
         })
 }
 
-async fn authorize_run(
+pub(super) async fn authorize_run(
     transaction: &sea_orm::DatabaseTransaction,
     agent_run_id: &str,
 ) -> Result<(), ViewerOwnershipError> {
@@ -480,7 +336,7 @@ async fn authorize_run(
     ))
 }
 
-fn not_owned() -> ViewerOwnershipError {
+pub(super) fn not_owned() -> ViewerOwnershipError {
     ViewerOwnershipError::new(
         ViewerOwnershipErrorCode::LeaseNotOwned,
         "the viewer lease was replaced, expired, or released",

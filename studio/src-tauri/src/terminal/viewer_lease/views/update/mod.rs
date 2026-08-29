@@ -1,0 +1,21 @@
+mod serializer;
+
+use seaography::{Builder, OperationType};
+use seaolim::{
+    register_restricted_model_mutation, string_argument, RestrictedMutationField, ViewSerializers,
+};
+
+use crate::entities::terminals::viewer_lease;
+
+pub(super) fn register(builder: &mut Builder) {
+    register_restricted_model_mutation::<viewer_lease::Entity, viewer_lease::ActiveModel, _>(
+        builder,
+        RestrictedMutationField::new("update_viewer_lease", OperationType::Update)
+            .argument(string_argument("agent_run_id"))
+            .argument(string_argument("viewer_id"))
+            .argument(string_argument("generation"))
+            .hook_owns_authorization(),
+        serializer::UpdateViewerLeaseView,
+        ViewSerializers::default(),
+    );
+}

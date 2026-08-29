@@ -8,7 +8,7 @@ import {
 test("uses the default frontend port and coordinates strict Vite with Tauri", async () => {
   const port = await selectFrontendPort({ isAvailable: async () => true });
   assert.equal(port, 5174);
-  assert.deepEqual(buildTauriDevelopmentConfig(port), {
+  assert.deepEqual(buildTauriDevelopmentConfig(port, { platform: "darwin" }), {
     productName: "Ticketry Dev",
     identifier: "com.ticketry.desktop.dev",
     build: {
@@ -29,6 +29,13 @@ test("uses the default frontend port and coordinates strict Vite with Tauri", as
       }],
     },
   });
+});
+
+test("non-macOS development excludes unavailable native terminal resources", () => {
+  assert.deepEqual(
+    buildTauriDevelopmentConfig(5174, { platform: "linux" }).bundle,
+    { resources: [] },
+  );
 });
 
 test("selects the next bounded candidate when the default is occupied", async () => {

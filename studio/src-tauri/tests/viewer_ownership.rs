@@ -311,40 +311,169 @@ async fn graphql_keeps_generated_writes_private_and_exposes_restricted_model_cru
 }
 
 #[tokio::test]
-async fn graphql_create_returns_the_authoritative_generated_lease_model() {
+async fn graphql_restricted_views_preserve_ownership_and_nullable_release() {
     let database = fixture().await;
     let service = ViewerOwnershipService::new(database.clone());
+    let mechanics = Arc::new(Mechanics::default());
     service
-        .stage_prepared(
-            &create("graphql-native", "native"),
-            Arc::new(Mechanics::default()),
-        )
+        .stage_prepared(&create("graphql-native", "native"), mechanics.clone())
         .unwrap();
     let mut context = BuilderContext::default();
     muxed_studio_lib::terminal::persistence::column_policy::apply(&mut context);
     let context = Box::leak(Box::new(context));
-    let mut builder = Builder::new(context, database);
+    let mut builder = Builder::new(context, database.clone());
     builder.mutation = Object::new("Mutation");
     builder.schema = Schema::build("Query", Some("Mutation"), None);
     let builder = muxed_studio_lib::entities::work_management::register_entity_modules(builder);
     let builder = muxed_studio_lib::terminal::persistence::register_graphql(builder);
-    let builder = muxed_studio_lib::viewer_ownership::register_graphql(builder);
-    let schema = builder.schema_builder().data(service).finish().unwrap();
-    let request = Request::new(include_str!(
-        "../../src/features/agents/terminal/operations/viewerLeases.graphql"
-    ))
-    .operation_name("CreateViewerLease")
-    .variables(Variables::from_json(serde_json::json!({
-        "agentRunId": RUN_ID,
-        "viewerId": "graphql-native",
-        "transport": "native"
-    })));
-    let response = schema.execute(request).await;
+    let builder = muxed_studio_lib::terminal::viewer_lease::register_graphql(builder);
+    let schema = builder
+        .schema_builder()
+        .data(database.clone())
+        .data(service.clone())
+        .finish()
+        .unwrap();
+    let response = schema
+        .execute(viewer_request(
+            "CreateViewerLease",
+            serde_json::json!({
+                "agentRunId": RUN_ID,
+                "viewerId": "graphql-native",
+                "transport": "native"
+            }),
+        ))
+        .await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let body = serde_json::to_value(response).unwrap();
     assert_eq!(body["data"]["viewer_lease"]["agent_run_id"], RUN_ID);
     assert_eq!(body["data"]["viewer_lease"]["viewer_id"], "graphql-native");
-    assert!(body["data"]["viewer_lease"]["generation"].is_string());
+    let generation = body["data"]["viewer_lease"]["generation"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let acquired_expiry = body["data"]["viewer_lease"]["expires_at"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+
+    let rejected = schema
+        .execute(viewer_request(
+            "UpdateViewerLease",
+            serde_json::json!({
+                "agentRunId": RUN_ID,
+                "viewerId": "graphql-native",
+                "generation": "replaced-generation"
+            }),
+        ))
+        .await;
+    let rejected = serde_json::to_value(rejected).unwrap();
+    assert_eq!(
+        rejected["errors"][0]["extensions"]["code"],
+        "viewer_lease_not_owned"
+    );
+
+    let renewed = schema
+        .execute(viewer_request(
+            "UpdateViewerLease",
+            serde_json::json!({
+                "agentRunId": RUN_ID,
+                "viewerId": "graphql-native",
+                "generation": generation
+            }),
+        ))
+        .await;
+    assert!(renewed.errors.is_empty(), "{:?}", renewed.errors);
+    let renewed = serde_json::to_value(renewed).unwrap();
+    assert!(
+        renewed["data"]["viewer_lease"]["expires_at"]
+            .as_str()
+            .unwrap()
+            > acquired_expiry.as_str()
+    );
+
+    let late_release = schema
+        .execute(viewer_request(
+            "DeleteViewerLease",
+            serde_json::json!({
+                "agentRunId": RUN_ID,
+                "viewerId": "graphql-native",
+                "generation": "replaced-generation"
+            }),
+        ))
+        .await;
+    assert!(late_release.errors.is_empty(), "{:?}", late_release.errors);
+    let late_release = serde_json::to_value(late_release).unwrap();
+    assert!(late_release["data"]["viewer_lease"].is_null());
+    assert!(viewer_lease::Entity::find_by_id(RUN_ID)
+        .one(&database)
+        .await
+        .unwrap()
+        .is_some());
+
+    let released = schema
+        .execute(viewer_request(
+            "DeleteViewerLease",
+            serde_json::json!({
+                "agentRunId": RUN_ID,
+                "viewerId": "graphql-native",
+                "generation": generation
+            }),
+        ))
+        .await;
+    assert!(released.errors.is_empty(), "{:?}", released.errors);
+    let released = serde_json::to_value(released).unwrap();
+    assert_eq!(released["data"]["viewer_lease"]["generation"], generation);
+    assert_eq!(mechanics.reasons(), vec![ViewerDetachReason::Released]);
+
+    let repeated = schema
+        .execute(viewer_request(
+            "DeleteViewerLease",
+            serde_json::json!({
+                "agentRunId": RUN_ID,
+                "viewerId": "graphql-native",
+                "generation": generation
+            }),
+        ))
+        .await;
+    assert!(repeated.errors.is_empty(), "{:?}", repeated.errors);
+    assert!(serde_json::to_value(repeated).unwrap()["data"]["viewer_lease"].is_null());
+
+    let unauthorized_mechanics = Arc::new(Mechanics::default());
+    let unauthorized = CreateViewerLease {
+        agent_run_id: "missing-run".into(),
+        viewer_id: "graphql-unauthorized".into(),
+        transport: "native".into(),
+    };
+    service
+        .stage_prepared(&unauthorized, unauthorized_mechanics.clone())
+        .unwrap();
+    let unauthorized = schema
+        .execute(viewer_request(
+            "CreateViewerLease",
+            serde_json::json!({
+                "agentRunId": "missing-run",
+                "viewerId": "graphql-unauthorized",
+                "transport": "native"
+            }),
+        ))
+        .await;
+    let unauthorized = serde_json::to_value(unauthorized).unwrap();
+    assert_eq!(
+        unauthorized["errors"][0]["extensions"]["code"],
+        "agent_run_not_found"
+    );
+    assert_eq!(
+        unauthorized_mechanics.reasons(),
+        vec![ViewerDetachReason::AcquisitionFailed]
+    );
+}
+
+fn viewer_request(operation: &str, variables: serde_json::Value) -> Request {
+    Request::new(include_str!(
+        "../../src/features/agents/terminal/operations/viewerLeases.graphql"
+    ))
+    .operation_name(operation)
+    .variables(Variables::from_json(variables))
 }
 
 async fn acquire(

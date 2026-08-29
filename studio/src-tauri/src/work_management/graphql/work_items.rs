@@ -171,7 +171,7 @@ impl WorkItemMutations {
         initial_order_ids: Option<output::StringList>,
     ) -> Result<super::entities::issue::Model> {
         let database = command_database(ctx)?;
-        let id = reorder::reorder(
+        let id = reorder::reorder_work_item(
             database,
             reorder::ReorderWorkItem {
                 id,

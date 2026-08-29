@@ -47,7 +47,6 @@ pub struct Project {
     pub name: String,
     pub slug: String,
     pub description: String,
-    pub manual_module_order: bool,
     pub onboarding_required: bool,
 }
 

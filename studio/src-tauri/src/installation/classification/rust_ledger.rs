@@ -36,6 +36,10 @@ pub fn owned_ledgers() -> Vec<(&'static str, i32)> {
             crate::work_management::workspace_tab_order_migration::VERSION,
         ),
         (
+            crate::work_management::module_presentation_migration::LEDGER_TABLE,
+            crate::work_management::module_presentation_migration::VERSION,
+        ),
+        (
             crate::work_management::project_onboarding_migration::LEDGER_TABLE,
             crate::work_management::project_onboarding_migration::VERSION,
         ),

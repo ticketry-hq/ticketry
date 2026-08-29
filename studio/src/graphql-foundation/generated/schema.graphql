@@ -535,6 +535,8 @@ type Mutation {
 	update_issue_type(id: String!, name: String, color: String, sort_order: Int, start_state_id: String, workflow_revision: Int): WorktrackerIssuetype!
 	delete_issue_type(id: String!, reassign_to: String): Boolean!
 	reorder_issue_types(project_id: String!, ordered_ids: [String!]!): [WorktrackerIssuetype!]!
+	update_module_presentation(module_id: String!, tab_hidden: Boolean!): WorktrackerModulepresentation!
+	reorder_module_presentation(module_id: String!, before_id: String, after_id: String, initial_order_ids: [String!]): WorktrackerModulepresentation!
 	create_work_item(project_id: String!, name: String!, issue_type_id: String!, description: String, state_id: String, parent_id: String): WorktrackerIssue!
 	update_work_item(id: String!, name: String, description: String, issue_type_id: String, state_id: String, parent_id: String, blocked_by_ids: [String!], is_archived: Boolean, workspace_tab_order: Json): WorktrackerIssue!
 	reorder_work_item(id: String!, before_id: String, after_id: String, initial_order_ids: [String!]): WorktrackerIssue!
@@ -614,6 +616,7 @@ type Query {
 	worktrackerState(filters: WorktrackerStateFilterInput, having: WorktrackerStateHavingInput, orderBy: WorktrackerStateOrderInput, pagination: PaginationInput): WorktrackerStateConnection!
 	worktrackerIssuetype(filters: WorktrackerIssuetypeFilterInput, having: WorktrackerIssuetypeHavingInput, orderBy: WorktrackerIssuetypeOrderInput, pagination: PaginationInput): WorktrackerIssuetypeConnection!
 	worktrackerIssue(filters: WorktrackerIssueFilterInput, having: WorktrackerIssueHavingInput, orderBy: WorktrackerIssueOrderInput, pagination: PaginationInput): WorktrackerIssueConnection!
+	worktrackerModulepresentation(filters: WorktrackerModulepresentationFilterInput, having: WorktrackerModulepresentationHavingInput, orderBy: WorktrackerModulepresentationOrderInput, pagination: PaginationInput): WorktrackerModulepresentationConnection!
 	worktrackerIssueBlockedBy(filters: WorktrackerIssueBlockedByFilterInput, having: WorktrackerIssueBlockedByHavingInput, orderBy: WorktrackerIssueBlockedByOrderInput, pagination: PaginationInput): WorktrackerIssueBlockedByConnection!
 	worktrackerAttachment(filters: WorktrackerAttachmentFilterInput, having: WorktrackerAttachmentHavingInput, orderBy: WorktrackerAttachmentOrderInput, pagination: PaginationInput): WorktrackerAttachmentConnection!
 	worktrackerIssuetypetransition(filters: WorktrackerIssuetypetransitionFilterInput, having: WorktrackerIssuetypetransitionHavingInput, orderBy: WorktrackerIssuetypetransitionOrderInput, pagination: PaginationInput): WorktrackerIssuetypetransitionConnection!
@@ -903,6 +906,7 @@ type WorktrackerIssue {
 	blocksEdges(filters: WorktrackerIssueBlockedByFilterInput, orderBy: WorktrackerIssueBlockedByOrderInput, pagination: PaginationInput): WorktrackerIssueBlockedByConnection!
 	agentRuns(filters: AgentRunsFilterInput, orderBy: AgentRunsOrderInput, pagination: PaginationInput): AgentRunsConnection!
 	attachment(filters: WorktrackerAttachmentFilterInput, orderBy: WorktrackerAttachmentOrderInput, pagination: PaginationInput): WorktrackerAttachmentConnection!
+	presentation(filters: WorktrackerModulepresentationFilterInput, orderBy: WorktrackerModulepresentationOrderInput, pagination: PaginationInput): WorktrackerModulepresentationConnection!
 }
 
 type WorktrackerIssueBlockedBy {
@@ -991,6 +995,7 @@ input WorktrackerIssueHavingInput {
 	blocksEdges: WorktrackerIssueBlockedByFilterInput
 	agentRuns: AgentRunsFilterInput
 	attachment: WorktrackerAttachmentFilterInput
+	presentation: WorktrackerModulepresentationFilterInput
 }
 
 input WorktrackerIssueOrderInput {
@@ -1219,6 +1224,44 @@ input WorktrackerLaunchbindingOrderInput {
 	updatedAt: OrderByEnum
 }
 
+type WorktrackerModulepresentation {
+	moduleId: String!
+	rank: String!
+	tabHidden: Boolean!
+	module: WorktrackerIssue
+}
+
+type WorktrackerModulepresentationConnection {
+	pageInfo: PageInfo!
+	paginationInfo: PaginationInfo
+	nodes: [WorktrackerModulepresentation!]!
+	edges: [WorktrackerModulepresentationEdge!]!
+}
+
+type WorktrackerModulepresentationEdge {
+	cursor: String!
+	node: WorktrackerModulepresentation!
+}
+
+input WorktrackerModulepresentationFilterInput {
+	moduleId: StringFilterInput
+	rank: StringFilterInput
+	tabHidden: BooleanFilterInput
+	and: [WorktrackerModulepresentationFilterInput!]
+	or: [WorktrackerModulepresentationFilterInput!]
+	not: WorktrackerModulepresentationFilterInput
+}
+
+input WorktrackerModulepresentationHavingInput {
+	module: WorktrackerIssueFilterInput
+}
+
+input WorktrackerModulepresentationOrderInput {
+	moduleId: OrderByEnum
+	rank: OrderByEnum
+	tabHidden: OrderByEnum
+}
+
 type WorktrackerProject {
 	id: String!
 	name: String!
@@ -1226,7 +1269,6 @@ type WorktrackerProject {
 	description: String!
 	seqCounter: Int!
 	stateRevision: Int!
-	manualModuleOrder: Boolean!
 	createdAt: String!
 	updatedAt: String!
 	onboardingRequired: Boolean!
@@ -1254,7 +1296,6 @@ input WorktrackerProjectFilterInput {
 	description: StringFilterInput
 	seqCounter: IntegerFilterInput
 	stateRevision: IntegerFilterInput
-	manualModuleOrder: BooleanFilterInput
 	createdAt: TextFilterInput
 	updatedAt: TextFilterInput
 	onboardingRequired: BooleanFilterInput
@@ -1276,7 +1317,6 @@ input WorktrackerProjectOrderInput {
 	description: OrderByEnum
 	seqCounter: OrderByEnum
 	stateRevision: OrderByEnum
-	manualModuleOrder: OrderByEnum
 	createdAt: OrderByEnum
 	updatedAt: OrderByEnum
 	onboardingRequired: OrderByEnum

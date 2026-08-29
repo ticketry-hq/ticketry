@@ -30,7 +30,10 @@ export function projectFromRow(
   row: WorkTrackerProjectsQuery["projects"]["nodes"][number],
 ): Project {
   const { created_at: _createdAt, ...project } = row;
-  return { ...project, id: publicWorktrackerId(project.id) };
+  return {
+    ...project,
+    id: publicWorktrackerId(project.id),
+  };
 }
 
 export function projectsFromResult(result: WorkTrackerProjectsQuery): Project[] {
@@ -46,7 +49,7 @@ export function projectsFromResult(result: WorkTrackerProjectsQuery): Project[] 
 export function modulesFromProjectOpen(
   result: WorkTrackerProjectOpenQuery,
 ): Module[] {
-  return result.modules.nodes
+  const modules = result.modules.nodes
     .filter((module) => !module.is_archived)
     .map((module): Module => ({
       id: publicWorktrackerId(module.id),
@@ -57,6 +60,22 @@ export function modulesFromProjectOpen(
       is_archived: module.is_archived,
       issue_type: publicWorktrackerId(module.issue_type),
     }));
+  const ranks = new Map(
+    result.module_presentations.nodes
+      .filter((presentation) => presentation.rank !== "")
+      .map((presentation) => [
+        publicWorktrackerId(presentation.module_id),
+        presentation.rank,
+      ]),
+  );
+  if (ranks.size === 0) return modules;
+  return modules.slice().sort((left, right) => {
+    const leftRank = ranks.get(left.id) ?? "";
+    const rightRank = ranks.get(right.id) ?? "";
+    if (leftRank < rightRank) return -1;
+    if (leftRank > rightRank) return 1;
+    return left.id.localeCompare(right.id);
+  });
 }
 
 export async function readProjects(): Promise<Project[]> {

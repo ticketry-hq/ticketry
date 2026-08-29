@@ -29,12 +29,12 @@ vi.mock("../features/projects/queries/readTransport", async () => {
     readOnboardingProjects: vi.fn(),
   };
 });
-vi.mock("../features/work-items/mutationTransport", async () => {
-  const actual = await vi.importActual<typeof import("../features/work-items/mutationTransport")>(
-    "../features/work-items/mutationTransport",
+vi.mock("../features/projects/modulePresentationTransport", async () => {
+  const actual = await vi.importActual<typeof import("../features/projects/modulePresentationTransport")>(
+    "../features/projects/modulePresentationTransport",
   );
   const api = await import("./legacyApiFixture");
-  return { ...actual, reorderWorkItem: api.reorderWorkItem };
+  return { ...actual, reorderModulePresentation: api.reorderWorkItem };
 });
 
 import { loadModules, loadProjects } from "../features/projects";
@@ -131,8 +131,7 @@ describe("module sidebar reorder acceptance", () => {
 
     settle.resolve(moved("module-c"));
 
-    // Recency still names a the most recent module. Layering it back on would
-    // restore a, b, c and visually undo the drag the server just accepted.
+    // The failed refresh must not visually undo the drag the server accepted.
     await waitFor(() => expect(listProjects).toHaveBeenCalledTimes(2));
     await waitFor(() =>
       expect(rows().every((row) => row.getAttribute("draggable") === "true")).toBe(true),
@@ -140,14 +139,13 @@ describe("module sidebar reorder acceptance", () => {
     expect(sidebarOrder()).toEqual(["module-c", "module-a", "module-b"]);
     expect(tabStripOrder()).toEqual(["C", "A", "B"]);
 
-    // Once the project list is readable again it is authoritative, and the
-    // remembered reorder steps aside for it.
+    // Once reads recover, the server's newest-first automatic order wins.
     listProjects.mockResolvedValue([project(false)]);
     listModules.mockResolvedValue(modules("module-c", "module-b", "module-a"));
     await loadModules(PROJECT_ID);
 
     await waitFor(() =>
-      expect(sidebarOrder()).toEqual(["module-a", "module-b", "module-c"]),
+      expect(sidebarOrder()).toEqual(["module-c", "module-b", "module-a"]),
     );
   });
 

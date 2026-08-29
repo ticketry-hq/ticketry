@@ -38,7 +38,7 @@ describe("WorkTracker write runtime acceptance", () => {
         expect(query).not.toContain("create_issue_type(project_id:");
       }
       const field = ({
-        CreateWorkTrackerProject: ["create_project", { id: "project-1", name: "Project", slug: "PRJ", description: "", manual_module_order: false }],
+        CreateWorkTrackerProject: ["create_project", { id: "project-1", name: "Project", slug: "PRJ", description: "" }],
         CreateWorkTrackerWorkItem: ["create_work_item", issue], UpdateWorkTrackerWorkItem: ["update_work_item", issue],
         TransitionWorkTrackerWorkItem: ["update_work_item", issue], ReparentWorkTrackerWorkItem: ["update_work_item", issue],
         SetWorkTrackerBlockers: ["update_work_item", issue], ReorderWorkTrackerWorkItem: ["reorder_work_item", issue],

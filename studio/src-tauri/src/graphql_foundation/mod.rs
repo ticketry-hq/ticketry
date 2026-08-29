@@ -183,6 +183,14 @@ async fn initialize_with_worktracker_commands_and_install_inner(
                 format!("could not install workspace-tab ordering: {error}"),
             )
         })?;
+    crate::work_management::module_presentation_migration::install(&worktracker_database)
+        .await
+        .map_err(|error| {
+            FoundationInitializationError::new(
+                FoundationInitializationErrorCode::WorktrackerDatabaseOpen,
+                format!("could not install module presentation: {error}"),
+            )
+        })?;
     crate::work_management::project_onboarding_migration::install(&worktracker_database)
         .await
         .map_err(|error| {

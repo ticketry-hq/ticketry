@@ -41,7 +41,7 @@ query WorkTrackerModuleOpen($moduleId: String!) {
       is_archived: isArchived
       issue_type: issueTypeId
       rank
-      project { id slug manual_module_order: manualModuleOrder }
+      project { id slug }
     }
   }
   work_items: worktrackerIssue(

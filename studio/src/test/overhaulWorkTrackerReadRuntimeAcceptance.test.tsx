@@ -27,7 +27,6 @@ const project = {
   name: "Runtime Project",
   slug: "runtime-project",
   description: "",
-  manual_module_order: false,
 };
 
 describe("WorkTracker read runtime acceptance", () => {

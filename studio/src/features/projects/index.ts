@@ -34,23 +34,16 @@ export {
 } from "./stateCatalog";
 export { useReorderModule } from "./mutations";
 export type { ModuleReorderControls } from "./mutations";
+export {
+  reorderModulePresentation,
+  setModuleTabHidden,
+} from "./modulePresentationTransport";
 export { moduleDragCodec } from "./internal/moduleDrag";
 export type { ModuleDragPayload } from "./internal/moduleDrag";
 export { useModuleReorderDrag } from "./internal/moduleReorderDrag";
 export type { ModuleReorderDrag } from "./internal/moduleReorderDrag";
-export { resetAcceptedManualModuleOrder } from "./internal/acceptedManualModuleOrder";
-export { resetNewlyCreatedModules } from "./internal/newlyCreatedModules";
 export { planModuleReorder } from "./internal/moduleReorder";
 export type { ModuleReorderPlan } from "./internal/moduleReorder";
-export {
-  applyCanonicalModuleOrder,
-  usesManualModuleOrder,
-} from "./selectors";
-export {
-  fetchModuleActivity,
-  registerModuleRecencyProvider,
-  sortModulesByRecency,
-} from "./utilities/moduleRecency";
 export {
   WorkTrackerProjectIssueTypesDocument,
   WorkTrackerProjectOpenDocument,

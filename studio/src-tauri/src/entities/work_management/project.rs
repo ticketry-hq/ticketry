@@ -11,7 +11,6 @@ pub struct Model {
     pub description: String,
     pub seq_counter: i32,
     pub state_revision: i64,
-    pub manual_module_order: bool,
     pub created_at: DateTime,
     pub updated_at: DateTime,
     pub onboarding_required: bool,

@@ -81,7 +81,6 @@ pub async fn seed_campaign(database: &DatabaseConnection) {
             description: Set(String::new()),
             seq_counter: Set(1000),
             state_revision: Set(0),
-            manual_module_order: Set(false),
             created_at: Set(now),
             updated_at: Set(now),
             onboarding_required: Set(false),

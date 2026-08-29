@@ -1,8 +1,11 @@
 use std::collections::{HashMap, HashSet};
 
-use sea_orm::{ColumnTrait, DatabaseConnection, DbErr, EntityTrait, QueryFilter, QueryOrder};
+use sea_orm::{
+    ColumnTrait, DatabaseConnection, DbErr, EntityTrait, JoinType, QueryFilter, QueryOrder,
+    QuerySelect, RelationTrait,
+};
 
-use super::entities::{issue, issue_blocker, project};
+use super::entities::{issue, issue_blocker, module_presentation, project};
 use super::read_types as output;
 
 mod catalog;
@@ -54,7 +57,6 @@ fn project_output(row: project::Model) -> output::Project {
         name: row.name,
         slug: row.slug,
         description: row.description,
-        manual_module_order: row.manual_module_order,
         onboarding_required: row.onboarding_required,
     }
 }
@@ -67,8 +69,7 @@ fn project_output(row: project::Model) -> output::Project {
 pub async fn installation_project(
     database: &DatabaseConnection,
 ) -> Result<Option<output::Project>, DbErr> {
-    let Some(id) =
-        super::project_onboarding_migration::installation_project_id(database).await?
+    let Some(id) = super::project_onboarding_migration::installation_project_id(database).await?
     else {
         return Ok(None);
     };
@@ -118,9 +119,21 @@ pub async fn modules(
     }
     // Source: backend/worktracker/module_order.py. SQLite's BINARY collation
     // gives fractional base-62 ranks their canonical byte order.
-    query = if project.manual_module_order {
+    let has_manual_order = module_presentation::Entity::find()
+        .join(
+            JoinType::InnerJoin,
+            module_presentation::Relation::Module.def(),
+        )
+        .filter(issue::Column::ProjectId.eq(&project_id))
+        .filter(issue::Column::Type.eq("module"))
+        .filter(module_presentation::Column::Rank.ne(""))
+        .one(database)
+        .await?
+        .is_some();
+    query = if has_manual_order {
         query
-            .order_by_asc(issue::Column::Rank)
+            .join(JoinType::LeftJoin, issue::Relation::Presentation.def())
+            .order_by_asc(module_presentation::Column::Rank)
             .order_by_asc(issue::Column::Id)
     } else {
         query

@@ -1,6 +1,7 @@
 use sea_orm::{
     sea_query::Expr, ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseConnection,
-    EntityTrait, ExprTrait, QueryFilter, QueryOrder, Set, TransactionTrait,
+    EntityTrait, ExprTrait, JoinType, QueryFilter, QueryOrder, QuerySelect, RelationTrait, Set,
+    TransactionTrait,
 };
 
 use super::fractional_rank;
@@ -9,7 +10,7 @@ use super::status_facts::{
     record_work_item, stamp, WorkFactRecorder, WorkItemChange, WorkItemFact, WorkItemIdentity,
 };
 use super::CommandError;
-use crate::work_management::entities::{issue, issue_type, project, state};
+use crate::work_management::entities::{issue, issue_type, module_presentation, project, state};
 
 pub use super::descriptions::{append_description, AppendDescription};
 pub use super::review_findings::{create_review_finding, CreateReviewFinding};
@@ -90,14 +91,41 @@ pub async fn create(
         .ok_or_else(|| CommandError::NotFound("Project not found.".to_owned()))?;
     let sequence_id = counters.seq_counter;
     let state_revision = counters.state_revision;
-    let tail = issue::Entity::find()
-        .filter(issue::Column::ProjectId.eq(&project_id))
-        .filter(issue::Column::Rank.ne(""))
-        .order_by_desc(issue::Column::Rank)
-        .one(&transaction)
-        .await?;
-    let rank = fractional_rank::between(tail.as_ref().map(|row| row.rank.as_str()), None)
-        .map_err(|_| CommandError::validation("An existing work-item rank is invalid."))?;
+    let presentation_rank =
+        if item_type == "module" && uses_manual_module_order(&transaction, &project_id).await? {
+            let first = module_presentation::Entity::find()
+                .join(
+                    JoinType::InnerJoin,
+                    module_presentation::Relation::Module.def(),
+                )
+                .filter(issue::Column::ProjectId.eq(&project_id))
+                .filter(issue::Column::Type.eq("module"))
+                .filter(issue::Column::IsArchived.eq(false))
+                .filter(module_presentation::Column::Rank.ne(""))
+                .order_by_asc(module_presentation::Column::Rank)
+                .order_by_asc(module_presentation::Column::ModuleId)
+                .one(&transaction)
+                .await?;
+            Some(
+                fractional_rank::between(None, first.as_ref().map(|row| row.rank.as_str()))
+                    .map_err(|_| CommandError::validation("An existing module rank is invalid."))?,
+            )
+        } else {
+            None
+        };
+    let rank = if item_type == "module" {
+        String::new()
+    } else {
+        let tail = issue::Entity::find()
+            .filter(issue::Column::ProjectId.eq(&project_id))
+            .filter(issue::Column::Type.eq("task"))
+            .filter(issue::Column::Rank.ne(""))
+            .order_by_desc(issue::Column::Rank)
+            .one(&transaction)
+            .await?;
+        fractional_rank::between(tail.as_ref().map(|row| row.rank.as_str()), None)
+            .map_err(|_| CommandError::validation("An existing work-item rank is invalid."))?
+    };
     let id = new_database_uuid();
     let now = super::timestamp::now();
     let occurred_at = stamp(now);
@@ -121,6 +149,15 @@ pub async fn create(
     }
     .insert(&transaction)
     .await?;
+    if let Some(rank) = presentation_rank {
+        module_presentation::ActiveModel {
+            module_id: Set(id.clone()),
+            rank: Set(rank),
+            tab_hidden: Set(false),
+        }
+        .insert(&transaction)
+        .await?;
+    }
     record_work_item(
         facts,
         &transaction,
@@ -142,6 +179,23 @@ pub async fn create(
         facts.wake();
     }
     Ok(id)
+}
+
+async fn uses_manual_module_order<C: ConnectionTrait>(
+    database: &C,
+    project_id: &str,
+) -> Result<bool, CommandError> {
+    Ok(module_presentation::Entity::find()
+        .join(
+            JoinType::InnerJoin,
+            module_presentation::Relation::Module.def(),
+        )
+        .filter(issue::Column::ProjectId.eq(project_id))
+        .filter(issue::Column::Type.eq("module"))
+        .filter(module_presentation::Column::Rank.ne(""))
+        .one(database)
+        .await?
+        .is_some())
 }
 
 pub async fn update(

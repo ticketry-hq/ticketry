@@ -10,6 +10,7 @@ pub mod issue_type_transition;
 pub mod launch_binding;
 pub mod launch_policy_decision;
 pub mod launch_policy_rejection;
+pub mod module_presentation;
 pub mod project;
 pub mod provider;
 pub mod reasoning_level;
@@ -24,6 +25,7 @@ pub fn register_entity_modules(mut builder: seaography::Builder) -> seaography::
     seaography::register_entity!(builder, state, mutation: false);
     seaography::register_entity!(builder, issue_type, mutation: false);
     seaography::register_entity!(builder, issue, mutation: false);
+    seaography::register_entity!(builder, module_presentation, mutation: false);
     seaography::register_entity!(builder, issue_blocker, mutation: false);
     seaography::register_entity!(builder, attachment, mutation: false);
     seaography::register_entity!(builder, issue_type_transition, mutation: false);

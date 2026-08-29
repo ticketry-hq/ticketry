@@ -3,10 +3,9 @@ import { apiErrorMessage } from "../../shared/api/errors";
 import { compactWorktrackerId, publicWorktrackerId } from "../../shared/api/generatedWorktracker";
 import { studioApolloClient } from "../../shared/apollo/client";
 import { toast } from "../../state/clientStore";
-import { reorderWorkItem } from "../work-items";
+import { reorderModulePresentation } from "./modulePresentationTransport";
 import { WorkTrackerProjectOpenDocument } from "./generated/projects.documents";
 import { planModuleReorder } from "./internal/moduleReorder";
-import { markManualModuleOrderAccepted } from "./internal/acceptedManualModuleOrder";
 import { getModulesSnapshot, loadModules, seedModules } from "./queries";
 
 export interface ModuleReorderControls {
@@ -37,6 +36,28 @@ function optimisticModuleOrder(projectId: string, order: readonly string[], laye
       cache.updateQuery({ query: WorkTrackerProjectOpenDocument, variables }, (current) => {
         if (!current) return current;
         const positions = new Map(order.map((id, index) => [compactWorktrackerId(id), index]));
+        const existing = new Map(
+          current.module_presentations.nodes.map((presentation) => [
+            presentation.module_id,
+            presentation,
+          ]),
+        );
+        const orderedPresentations = order.map((id, index) => {
+          const moduleId = compactWorktrackerId(id);
+          const presentation = existing.get(moduleId);
+          return {
+            __typename: "WorktrackerModulepresentation" as const,
+            module_id: moduleId,
+            rank: String(index).padStart(8, "0"),
+            tab_hidden: presentation?.tab_hidden ?? false,
+            module: presentation?.module ?? {
+              __typename: "WorktrackerIssue" as const,
+              id: moduleId,
+              project_id: variables.projectId,
+            },
+          };
+        });
+        const orderedIds = new Set(orderedPresentations.map((row) => row.module_id));
         return {
           ...current,
           modules: {
@@ -45,6 +66,15 @@ function optimisticModuleOrder(projectId: string, order: readonly string[], laye
               (positions.get(left.id) ?? Number.MAX_SAFE_INTEGER)
               - (positions.get(right.id) ?? Number.MAX_SAFE_INTEGER)
             ),
+          },
+          module_presentations: {
+            ...current.module_presentations,
+            nodes: [
+              ...current.module_presentations.nodes.filter(
+                (presentation) => !orderedIds.has(presentation.module_id),
+              ),
+              ...orderedPresentations,
+            ],
           },
         };
       });
@@ -66,7 +96,7 @@ async function persistModuleReorder(
   let settledPlan = plan;
   try {
     try {
-      await reorderWorkItem(moduleId, {
+      await reorderModulePresentation(moduleId, {
         before_id: plan.beforeId,
         after_id: plan.afterId,
         initial_order_ids: plan.initialOrderIds,
@@ -96,7 +126,7 @@ async function persistModuleReorder(
           retryPlan.order.map((module) => module.id),
           layerId,
         );
-        await reorderWorkItem(moduleId, {
+        await reorderModulePresentation(moduleId, {
           before_id: retryPlan.beforeId,
           after_id: retryPlan.afterId,
           initial_order_ids: retryPlan.initialOrderIds,
@@ -108,7 +138,6 @@ async function persistModuleReorder(
         return;
       }
     }
-    markManualModuleOrderAccepted(projectId);
     try {
       await loadModules(projectId, { queryDeduplication: false });
     } catch {

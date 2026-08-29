@@ -3,13 +3,9 @@ export interface Project {
   name: string;
   slug: string;
   description?: string;
-  readonly manual_module_order: boolean;
 }
-// `manual_module_order` joins `id` as server-owned: a project's module
-// ordering mode is set by the module reorder domain operation, never by a
-// create or update body.
-export type ProjectCreate = Omit<Project, "id" | "manual_module_order">;
-export type ProjectPatch = Partial<Omit<Project, "id" | "manual_module_order">>;
+export type ProjectCreate = Omit<Project, "id">;
+export type ProjectPatch = Partial<Omit<Project, "id">>;
 /** A project's identity plus the onboarding state it now owns. */
 export interface OnboardingProject {
   readonly id: string;
@@ -72,6 +68,12 @@ export interface Module {
   readonly key: string;
   readonly is_archived: boolean;
   readonly issue_type: string;
+}
+
+export interface ModulePresentation {
+  readonly module_id: string;
+  readonly rank: string;
+  readonly tab_hidden: boolean;
 }
 
 export type IssueLevel = "module" | "task";

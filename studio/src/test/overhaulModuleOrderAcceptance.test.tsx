@@ -1,5 +1,5 @@
 import { render, screen, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("./legacyApiFixture", async () => {
   const actual = await vi.importActual<typeof import("./legacyApiFixture")>(
@@ -27,9 +27,13 @@ vi.mock("../features/projects/queries/readTransport", async () => {
         const cached = studioApolloClient().readQuery({
           query: WorkTrackerProjectOpenDocument,
           variables: { projectId },
-        })?.project.nodes[0];
-        project = cached
-          ? { ...cached, id: projectId }
+        });
+        const cachedProject = cached?.project.nodes[0];
+        const manualModuleOrder = cached?.module_presentations.nodes.some(
+          (presentation) => presentation.module?.project_id === cachedProject?.id,
+        ) ?? false;
+        project = cachedProject
+          ? { ...cachedProject, id: projectId, manual_module_order: manualModuleOrder }
           : { id: projectId, name: "Project", slug: "PRJ", description: "", manual_module_order: false };
       }
       if (!project) throw new Error(`Project ${projectId} was not found.`);
@@ -44,7 +48,6 @@ import { ModulesPane } from "../app/shell/sidebar/modules/ModulesPane";
 import {
   getModulesSnapshot,
   loadModules,
-  registerModuleRecencyProvider,
   seedProjects,
 } from "../features/projects";
 import { useStudioStore } from "../features/projects/store";
@@ -126,52 +129,34 @@ describe("canonical module order acceptance", () => {
     await resetStudioApolloClient();
     listModules.mockReset().mockResolvedValue(SERVER_ORDER);
     listProjects.mockReset().mockResolvedValue([project(false)]);
-    registerModuleRecencyProvider(async () => ({}));
     useStudioStore.setState({ selectedProjectId: PROJECT_ID, error: null });
     useClientStore.setState({ selectedModuleId: null, modulesCursorId: null });
   });
 
-  afterEach(() => {
-    registerModuleRecencyProvider(async () => ({}));
-  });
-
   it("[overhaul-37] gives every module consumer one canonical order", async () => {
     seedProjects([project(false)]);
-    registerModuleRecencyProvider(async () => ({
-      "module-a": "2026-08-09T12:00:00Z",
-      "module-b": "2026-08-09T09:00:00Z",
-    }));
 
-    await renderModuleSurfaces(["Alpha", "Bravo", "Charlie"]);
+    await renderModuleSurfaces(["Charlie", "Bravo", "Alpha"]);
 
     // Sidebar, tab strip, keyboard position shortcuts, and backlog grouping all
     // read the same cached array — no surface re-sorts on its own.
-    expect(tabStripOrder()).toEqual(["Alpha", "Bravo", "Charlie"]);
-    expect(keyboardShortcutOrder()).toEqual(["Alpha", "Bravo", "Charlie"]);
-    expect(backlogGroupOrder()).toEqual(["Alpha", "Bravo", "Charlie"]);
+    expect(tabStripOrder()).toEqual(["Charlie", "Bravo", "Alpha"]);
+    expect(keyboardShortcutOrder()).toEqual(["Charlie", "Bravo", "Alpha"]);
+    expect(backlogGroupOrder()).toEqual(["Charlie", "Bravo", "Alpha"]);
   });
 
-  it("[overhaul-38] applies activity recency only to automatic projects", async () => {
+  it("[overhaul-38] never overlays activity recency on canonical order", async () => {
     listProjects.mockResolvedValue([project(true)]);
     seedProjects([project(true)]);
-    registerModuleRecencyProvider(async () => ({
-      "module-a": "2026-08-09T12:00:00Z",
-      "module-b": "2026-08-09T09:00:00Z",
-    }));
-
-    // The same activity that reordered the automatic project above must leave a
-    // manual project on the server's persisted rank order.
+    // Presentation mode does not create a second client-side sort.
     await renderModuleSurfaces(["Charlie", "Bravo", "Alpha"]);
 
     expect(tabStripOrder()).toEqual(["Charlie", "Bravo", "Alpha"]);
     expect(keyboardShortcutOrder()).toEqual(["Charlie", "Bravo", "Alpha"]);
   });
 
-  it("[overhaul-39] keeps the server fallback order when activity lookup fails", async () => {
+  it("[overhaul-39] keeps the generated automatic order", async () => {
     seedProjects([project(false)]);
-    registerModuleRecencyProvider(async () => {
-      throw new Error("activity unavailable");
-    });
 
     await renderModuleSurfaces(["Charlie", "Bravo", "Alpha"]);
 
@@ -180,31 +165,21 @@ describe("canonical module order acceptance", () => {
 
   it("[overhaul-40] reads the ordering mode without the project cache warmed", async () => {
     listProjects.mockResolvedValue([project(true)]);
-    registerModuleRecencyProvider(async () => ({
-      "module-a": "2026-08-09T12:00:00Z",
-    }));
 
     await renderModuleSurfaces(["Charlie", "Bravo", "Alpha"]);
 
     expect(listProjects).toHaveBeenCalled();
   });
 
-  it("[overhaul-41] treats an unreadable project as automatic", async () => {
+  it("[overhaul-41] keeps the generated module order when the project read fails", async () => {
     listProjects.mockRejectedValue(new Error("projects unavailable"));
-    registerModuleRecencyProvider(async () => ({
-      "module-a": "2026-08-09T12:00:00Z",
-    }));
 
-    await renderModuleSurfaces(["Alpha", "Charlie", "Bravo"]);
+    await renderModuleSurfaces(["Charlie", "Bravo", "Alpha"]);
   });
 
   it("[overhaul-53] adopts a Manual module order this client never made", async () => {
-    registerModuleRecencyProvider(async () => ({
-      "module-a": "2026-08-09T12:00:00Z",
-    }));
-
-    // This client only knows the project as automatic, so recency leads.
-    await renderModuleSurfaces(["Alpha", "Charlie", "Bravo"]);
+    // This client first knows the project as automatic.
+    await renderModuleSurfaces(["Charlie", "Bravo", "Alpha"]);
 
     // A teammate, or this user on another device, drags the project into a
     // Manual module order and the server now owns the whole arrangement.
@@ -228,14 +203,10 @@ describe("canonical module order acceptance", () => {
 
   it("[overhaul-54] keeps the last known mode when the project read fails", async () => {
     listProjects.mockResolvedValue([project(true)]);
-    registerModuleRecencyProvider(async () => ({
-      "module-a": "2026-08-09T12:00:00Z",
-    }));
 
     await renderModuleSurfaces(["Charlie", "Bravo", "Alpha"]);
 
-    // A transient failure to revalidate must not hand a manually ordered
-    // project back to recency.
+    // A transient failure must not replace the last canonical order.
     listProjects.mockRejectedValue(new Error("projects unavailable"));
     await loadModules(PROJECT_ID);
 

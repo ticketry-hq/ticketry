@@ -22,6 +22,10 @@ import type {
 import { loadIssueTypes } from "../settings";
 import { getModuleFolder } from "../module-links";
 import { readRecentModule } from "../../state/persistence";
+import {
+  getModulePresentationsSnapshot,
+  visibleModules,
+} from "./modulePresentation";
 
 const VIEWS: View[] = ["backlog", "settings"];
 
@@ -30,18 +34,22 @@ export function normalizeView(raw: string | undefined): View {
   return raw && (VIEWS as string[]).includes(raw) ? (raw as View) : "backlog";
 }
 
-/**
- * The remembered module, only when it is still a module of this project and its
- * folder link is already known. A module with no link would open the folder
- * prompt, and restoring a selection must never prompt.
- */
-function restorableRecentModuleId(projectId: string): string | null {
+/** Restore a visible linked module without opening a folder prompt at startup. */
+function startupModuleId(projectId: string): string | null {
   const moduleId = readRecentModule();
   if (!moduleId) return null;
-  const isCurrent = getModulesSnapshot(projectId).some(
-    (module) => module.id === moduleId,
+  const modules = getModulesSnapshot(projectId);
+  const remembered = modules.find((module) => module.id === moduleId);
+  if (!remembered) return null;
+
+  const visible = visibleModules(
+    modules,
+    getModulePresentationsSnapshot(projectId),
   );
-  return isCurrent && getModuleFolder(moduleId) ? moduleId : null;
+  if (visible.some((module) => module.id === moduleId)) {
+    return getModuleFolder(moduleId) ? moduleId : null;
+  }
+  return visible.find((module) => getModuleFolder(module.id))?.id ?? null;
 }
 
 function errMessage(e: unknown): string {
@@ -112,9 +120,9 @@ export const useStudioStore = createApolloStore<StudioState>("studio", (set, get
     });
     try {
       await loadModules(id);
-      const restorable = restorableRecentModuleId(id);
-      if (restorable) {
-        await useClientStore.getState().selectModule(restorable);
+      const startupModule = startupModuleId(id);
+      if (startupModule) {
+        await useClientStore.getState().selectModule(startupModule);
       }
     } catch (e) {
       set({ error: errMessage(e) });

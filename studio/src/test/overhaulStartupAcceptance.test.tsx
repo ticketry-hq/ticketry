@@ -15,6 +15,11 @@ vi.mock("../features/module-links", async () => ({
   loadModuleLinks: vi.fn(),
 }));
 
+vi.mock("../features/projects/modulePresentation", async () => ({
+  ...(await vi.importActual("../features/projects/modulePresentation")),
+  getModulePresentationsSnapshot: vi.fn(),
+}));
+
 vi.mock("../features/work-items/queries/readTransport", async () => ({
   ...(await vi.importActual("../features/work-items/queries/readTransport")),
   readModuleTreeRecords: vi.fn(),
@@ -28,6 +33,7 @@ vi.mock("../app/navigation/keymapSettings", async () => ({
 import { bootstrapStudio } from "../app/startup/bootstrapStudio";
 import { useModalStore } from "../app/modal";
 import * as moduleLinks from "../features/module-links";
+import * as modulePresentation from "../features/projects/modulePresentation";
 import { getModuleLinks, seedModuleLinks } from "../features/module-links";
 import { getProjectsSnapshot, seedProjects, useStudioStore } from "../features/projects";
 import * as projectQueries from "../features/projects/queries";
@@ -41,6 +47,8 @@ const getModulesSnapshot = projectQueries.getModulesSnapshot as ReturnType<
   typeof vi.fn
 >;
 const loadModuleLinks = moduleLinks.loadModuleLinks as ReturnType<typeof vi.fn>;
+const getModulePresentationsSnapshot =
+  modulePresentation.getModulePresentationsSnapshot as ReturnType<typeof vi.fn>;
 const readModuleTree = workItemReadTransport.readModuleTreeRecords as ReturnType<
   typeof vi.fn
 >;
@@ -88,6 +96,7 @@ describe("startup acceptance", () => {
     seedModuleLinks([]);
     loadModules.mockReset().mockResolvedValue(MODULES);
     getModulesSnapshot.mockReset().mockReturnValue(MODULES);
+    getModulePresentationsSnapshot.mockReset().mockReturnValue([]);
     readModuleTree.mockReset().mockResolvedValue({
       rootIds: [],
       children: {},
@@ -115,6 +124,14 @@ describe("startup acceptance", () => {
     expect(getProjectsSnapshot()).toHaveLength(1);
   });
 
+  it("does not force the Modules sidebar open during ordinary startup", async () => {
+    useClientStore.setState({ sidebarVisible: false });
+
+    expect(await bootstrapStudio()).toBe("ready");
+
+    expect(useClientStore.getState().sidebarVisible).toBe(false);
+  });
+
   it("reads the project and its links before anything can prompt", async () => {
     expect(await bootstrapStudio()).toBe("ready");
 
@@ -134,6 +151,39 @@ describe("startup acceptance", () => {
     expect(useClientStore.getState().focusedPane).toBe("tasks");
   });
 
+  it("uses the first visible linked module when the remembered module is hidden", async () => {
+    localStorage.setItem(RECENT_MODULE_KEY, "module-1");
+    getModulePresentationsSnapshot.mockReturnValue([
+      { module_id: "module-1", rank: "00000001", tab_hidden: true },
+      { module_id: "module-2", rank: "00000002", tab_hidden: false },
+    ]);
+    seedHost({
+      links: [
+        { id: "link-module-1", moduleId: "module-1", path: "/repos/runtime" },
+        { id: "link-module-2", moduleId: "module-2", path: "/repos/shell" },
+      ],
+    });
+
+    expect(await bootstrapStudio()).toBe("ready");
+
+    expect(useClientStore.getState().selectedModuleId).toBe("module-2");
+    expect(useModalStore.getState().modalStack).toEqual([]);
+  });
+
+  it("starts with no module when the remembered module and every fallback are hidden", async () => {
+    localStorage.setItem(RECENT_MODULE_KEY, "module-1");
+    getModulePresentationsSnapshot.mockReturnValue(MODULES.map((module, index) => ({
+      module_id: module.id,
+      rank: String(index).padStart(8, "0"),
+      tab_hidden: true,
+    })));
+
+    expect(await bootstrapStudio()).toBe("ready");
+
+    expect(useClientStore.getState().selectedModuleId).toBeNull();
+    expect(useModalStore.getState().modalStack).toEqual([]);
+  });
+
   it("leaves an unlinked remembered module unopened rather than prompting", async () => {
     localStorage.setItem(RECENT_MODULE_KEY, "module-2");
 
@@ -141,7 +191,7 @@ describe("startup acceptance", () => {
 
     expect(useClientStore.getState().selectedModuleId).toBeNull();
     expect(useModalStore.getState().modalStack).toEqual([]);
-    expect(useClientStore.getState().focusedPane).toBe("modules");
+    expect(useClientStore.getState().focusedPane).toBe("tasks");
   });
 
   it("ignores a remembered module the project no longer has", async () => {

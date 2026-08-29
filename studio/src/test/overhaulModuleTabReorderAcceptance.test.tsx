@@ -163,7 +163,7 @@ describe("module tab strip reorder acceptance", () => {
     expect(sidebarOrder()).toEqual(["module-b", "module-a", "module-c"]);
   });
 
-  it("[overhaul-52] keeps tab navigation and the fixed add-module button intact across a reorder", async () => {
+  it("[overhaul-52] keeps tab navigation and the fixed module picker intact across a reorder", async () => {
     const scrolledInto: Element[] = [];
     Element.prototype.scrollIntoView = vi.fn(function (this: Element) {
       scrolledInto.push(this);
@@ -180,16 +180,18 @@ describe("module tab strip reorder acceptance", () => {
     await waitFor(() => expect(tabBadges("module-c")).toHaveLength(1));
 
     const strip = screen.getByRole("tablist");
-    const addButton = screen.getByLabelText("Add module");
+    const pickerButton = screen.getByRole("button", {
+      name: "Open module picker",
+    });
 
-    // Creation is pinned to the left edge and is not one of the project's
+    // The picker is pinned to the left edge and is not one of the project's
     // Modules: it cannot be picked up, and it cannot receive one.
-    expect(strip.firstElementChild).toBe(addButton);
-    expect(addButton.getAttribute("draggable")).toBeNull();
+    expect(strip.parentElement?.firstElementChild).toContainElement(pickerButton);
+    expect(pickerButton.getAttribute("draggable")).toBeNull();
 
     const transfer = dataTransfer();
     dragEvent(tabFor("module-c"), "dragstart", transfer);
-    dragEvent(addButton, "dragover", transfer, { clientX: 4 });
+    dragEvent(pickerButton, "dragover", transfer, { clientX: 4 });
     expect(screen.queryByTestId("module-tab-drop-seam")).toBeNull();
     fireEvent.keyDown(window, { key: "Escape" });
 
@@ -203,12 +205,12 @@ describe("module tab strip reorder acceptance", () => {
 
     // Reordering moves tabs, not what they mean: the selected tab, its
     // lifecycle badge, and the scrolled-to element still belong to the same
-    // Modules, and the add button has not drifted along with the list.
+    // Modules, and the picker has not drifted along with the list.
     expect(tabFor("module-b").getAttribute("aria-selected")).toBe("true");
     expect(tabFor("module-c").getAttribute("aria-selected")).toBe("false");
     expect(tabBadges("module-c")).toHaveLength(1);
     expect(tabBadges("module-a")).toEqual([]);
-    expect(strip.firstElementChild).toBe(addButton);
+    expect(strip.parentElement?.firstElementChild).toContainElement(pickerButton);
 
     // The selected tab kept its id but changed position, so it must be scrolled
     // back into the strip's horizontal viewport (#369).

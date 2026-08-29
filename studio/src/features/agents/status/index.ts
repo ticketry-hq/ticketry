@@ -17,6 +17,7 @@ export type {
   TaskLifecycleChip,
 } from "./selectors";
 export { isAgentlessRun, SHELL_RUN_SCOPE } from "./runScopes";
+export { ModuleLifecycleChicklets } from "./ModuleLifecycleChicklets";
 export {
   useAgentStatusRuns,
   useAgentStatusSelection,

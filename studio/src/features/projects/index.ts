@@ -38,6 +38,13 @@ export {
   reorderModulePresentation,
   setModuleTabHidden,
 } from "./modulePresentationTransport";
+export {
+  getModulePresentationsSnapshot,
+  getVisibleModulesSnapshot,
+  hiddenModuleIds,
+  useModulePresentations,
+  visibleModules,
+} from "./modulePresentation";
 export { moduleDragCodec } from "./internal/moduleDrag";
 export type { ModuleDragPayload } from "./internal/moduleDrag";
 export { useModuleReorderDrag } from "./internal/moduleReorderDrag";

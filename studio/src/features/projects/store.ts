@@ -25,7 +25,7 @@ import { readRecentModule } from "../../state/persistence";
 import {
   getModulePresentationsSnapshot,
   visibleModules,
-} from "../module-tabs/modulePresentation";
+} from "./modulePresentation";
 
 const VIEWS: View[] = ["backlog", "settings"];
 

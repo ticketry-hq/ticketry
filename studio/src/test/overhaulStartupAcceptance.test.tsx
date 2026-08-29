@@ -15,8 +15,8 @@ vi.mock("../features/module-links", async () => ({
   loadModuleLinks: vi.fn(),
 }));
 
-vi.mock("../features/module-tabs/modulePresentation", async () => ({
-  ...(await vi.importActual("../features/module-tabs/modulePresentation")),
+vi.mock("../features/projects/modulePresentation", async () => ({
+  ...(await vi.importActual("../features/projects/modulePresentation")),
   getModulePresentationsSnapshot: vi.fn(),
 }));
 
@@ -33,7 +33,7 @@ vi.mock("../app/navigation/keymapSettings", async () => ({
 import { bootstrapStudio } from "../app/startup/bootstrapStudio";
 import { useModalStore } from "../app/modal";
 import * as moduleLinks from "../features/module-links";
-import * as modulePresentation from "../features/module-tabs/modulePresentation";
+import * as modulePresentation from "../features/projects/modulePresentation";
 import { getModuleLinks, seedModuleLinks } from "../features/module-links";
 import { getProjectsSnapshot, seedProjects, useStudioStore } from "../features/projects";
 import * as projectQueries from "../features/projects/queries";

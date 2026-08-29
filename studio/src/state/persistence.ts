@@ -67,6 +67,14 @@ export function writeRecentModule(moduleId: string): void {
   }
 }
 
+export function clearRecentModule(): void {
+  try {
+    localStorage.removeItem(RECENT_MODULE_KEY);
+  } catch {
+    /* unavailable storage leaves the in-memory selection intact */
+  }
+}
+
 /** Panel sizes, migrating the retired leading projects-pane slot away. */
 export function readPanelLayout(): number[] | null {
   try {

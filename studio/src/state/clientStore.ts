@@ -13,6 +13,7 @@ import {
   useTerminalPanelStore,
 } from "../features/terminal-panel/panelStore";
 import {
+  clearRecentModule,
   finishCollapsedStateMigration,
   isPanelLayout,
   persistPanelLayout,
@@ -111,6 +112,7 @@ export interface ClientState {
   workItemCursorsByProject: Record<string, number>;
 
   selectModule: (id: string) => Promise<void>;
+  deselectModule: () => void;
   selectTask: (id: string) => void;
   toggleStateConfiguration: (projectId: string, stateId: string) => void;
   dismissStateConfiguration: () => void;
@@ -334,6 +336,15 @@ export const useClientStore = createApolloStore<ClientState>("client", (set, get
     }));
     get().setSidebarVisible(false);
     get().setFocusedPane("tasks");
+  },
+
+  deselectModule() {
+    set({
+      selectedModuleId: null,
+      selectedTaskId: null,
+      workspaceSelection: { kind: "task" },
+    });
+    clearRecentModule();
   },
 
   selectTask(id) {

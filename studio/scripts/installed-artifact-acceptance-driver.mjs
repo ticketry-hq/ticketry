@@ -199,16 +199,41 @@ async function launchReadyApp(context) {
   try {
     await context.waitFor(
       async () => {
+        try {
+          const count = await context.sqlite(
+            context.databasePath,
+            "SELECT count(*) FROM worktracker_project WHERE EXISTS ("
+              + "SELECT 1 FROM ticketry_codex_spark_catalog_migration "
+              + "WHERE migration_id='0051_codex_5_3_model_catalog');",
+          );
+          if (Number(count) > 0) return true;
+        } catch (error) {
+          if (child.exitCode === null && child.signalCode === null) throw error;
+        }
         if (child.exitCode !== null || child.signalCode !== null) {
           throw new InstalledArtifactDriverError("installed app exited before readiness");
         }
-        const count = await context.sqlite(
-          context.databasePath,
-          "SELECT count(*) FROM worktracker_workspace;",
-        );
-        return Number(count) > 0;
+        return false;
       },
-      "workspace provisioning",
+      "project provisioning",
+      context.timeoutMs,
+    );
+    await context.waitFor(
+      async () => {
+        if (child.signalCode !== null) {
+          throw new InstalledArtifactDriverError(
+            `installed app startup ended with ${child.signalCode}`,
+          );
+        }
+        if (child.exitCode === null) return false;
+        if (child.exitCode !== 0) {
+          throw new InstalledArtifactDriverError(
+            `installed app startup failed (${child.exitCode})`,
+          );
+        }
+        return true;
+      },
+      "installed app startup completion",
       context.timeoutMs,
     );
     return { child };
@@ -280,12 +305,12 @@ export async function failedUpdateRecoveryScenario(context) {
   ]);
   const launched = await launchReadyApp(context);
   await context.stopApp(launched.child);
-  const workspaceCount = Number(await context.sqlite(
+  const projectCount = Number(await context.sqlite(
     context.databasePath,
-    "SELECT count(*) FROM worktracker_workspace;",
+    "SELECT count(*) FROM worktracker_project;",
   ));
-  if (workspaceCount < 1) {
-    throw new InstalledArtifactDriverError("restored database has no accessible workspace");
+  if (projectCount < 1) {
+    throw new InstalledArtifactDriverError("restored database has no accessible project");
   }
   return true;
 }
@@ -358,55 +383,104 @@ function sqlLiteral(value) {
   return `'${String(value).replaceAll("'", "''")}'`;
 }
 
-async function durableFlowTargets(context, identifier, createdAt) {
-  const existingProjectId = await context.sqlite(
+async function ensureAcceptanceIssues(context, projectId, startedAt) {
+  // The installed driver runs outside Tauri and cannot call the in-process
+  // GraphQL contract. Keep the unavoidable SQL fixture model-shaped and bind
+  // every row to the provisioned project before creating dependent records.
+  const typeRows = (await context.sqlite(
     context.databasePath,
-    "SELECT id FROM worktracker_project ORDER BY created_at LIMIT 1;",
-  );
-  if (existingProjectId) {
-    const rows = (await context.sqlite(
-      context.databasePath,
-      `SELECT id,type FROM worktracker_issue WHERE project_id=${sqlLiteral(existingProjectId)} `
-        + "ORDER BY sequence_id;",
-    )).split(/\r?\n/).filter(Boolean).map((row) => row.split("|"));
-    const moduleId = rows.find(([, type]) => type === "module")?.[0];
-    const taskId = rows.find(([, type]) => type === "task")?.[0];
-    if (moduleId && taskId) return { projectId: existingProjectId, moduleId, taskId };
-  }
+    `SELECT id,level FROM worktracker_issuetype WHERE project_id=${sqlLiteral(projectId)} `
+      + "ORDER BY sort_order;",
+  )).split(/\r?\n/).filter(Boolean).map((row) => row.split("|"));
+  let moduleTypeId = typeRows.find(([, level]) => level === "module")?.[0];
+  let taskTypeId = typeRows.find(([, level]) => level === "task")?.[0];
 
-  const workspaceId = await context.sqlite(
-    context.databasePath,
-    "SELECT id FROM worktracker_workspace ORDER BY created_at LIMIT 1;",
-  );
-  if (!workspaceId) {
-    throw new InstalledArtifactDriverError(
-      "durable terminal fixture requires a provisioned workspace",
+  const typeFixtures = [
+    { level: "module", name: "Acceptance Module", sortOrder: 0, id: moduleTypeId },
+    { level: "task", name: "Acceptance Task", sortOrder: 1, id: taskTypeId },
+  ];
+  for (const fixture of typeFixtures) {
+    if (fixture.id) continue;
+    fixture.id = randomUUID().replaceAll("-", "");
+    await context.sqlite(
+      context.databasePath,
+      "INSERT INTO worktracker_issuetype "
+        + "(id,name,level,color,sort_order,created_at,updated_at,project_id,"
+        + "start_state_id,workflow_revision,is_pathfind) VALUES ("
+        + [
+          fixture.id,
+          fixture.name,
+          fixture.level,
+          "#6B7280",
+          fixture.sortOrder,
+          startedAt,
+          startedAt,
+          projectId,
+        ].map(sqlLiteral).join(",")
+        + ",NULL,0,0);",
     );
   }
-  const id = () => randomUUID().replaceAll("-", "");
-  const projectId = id();
-  const moduleTypeId = id();
-  const taskTypeId = id();
-  const moduleId = id();
-  const taskId = id();
-  const slug = `acceptance-${identifier}`.slice(0, 64);
+  moduleTypeId = typeFixtures[0].id;
+  taskTypeId = typeFixtures[1].id;
+
+  const issueRows = (await context.sqlite(
+    context.databasePath,
+    `SELECT id,type FROM worktracker_issue WHERE project_id=${sqlLiteral(projectId)} `
+      + "ORDER BY sequence_id;",
+  )).split(/\r?\n/).filter(Boolean).map((row) => row.split("|"));
+  let moduleId = issueRows.find(([, type]) => type === "module")?.[0];
+  let taskId = issueRows.find(([, type]) => type === "task")?.[0];
+
+  if (!moduleId) {
+    moduleId = randomUUID().replaceAll("-", "");
+    await context.sqlite(
+      context.databasePath,
+      "INSERT INTO worktracker_issue "
+        + "(id,type,name,sequence_id,description,created_at,updated_at,project_id,state_id,"
+        + "is_archived,issue_type_id,rank,state_revision,workspace_tab_order,parent_id,module_id) "
+        + "SELECT "
+        + [
+          moduleId,
+          "module",
+          "Acceptance module",
+        ].map(sqlLiteral).join(",")
+        + `,COALESCE(MAX(i.sequence_id),0)+1,'',${sqlLiteral(startedAt)},${sqlLiteral(startedAt)},`
+        + `${sqlLiteral(projectId)},NULL,0,${sqlLiteral(moduleTypeId)},'',0,'[]',NULL,NULL `
+        + "FROM worktracker_project p LEFT JOIN worktracker_issue i "
+        + `ON i.project_id=${sqlLiteral(projectId)} `
+        + `WHERE p.id=${sqlLiteral(projectId)} GROUP BY p.id;`,
+    );
+  }
+
+  if (!taskId) {
+    taskId = randomUUID().replaceAll("-", "");
+    await context.sqlite(
+      context.databasePath,
+      "INSERT INTO worktracker_issue "
+        + "(id,type,name,sequence_id,description,created_at,updated_at,project_id,state_id,"
+        + "is_archived,issue_type_id,rank,state_revision,workspace_tab_order,parent_id,module_id) "
+        + "SELECT "
+        + [
+          taskId,
+          "task",
+          "Acceptance task",
+        ].map(sqlLiteral).join(",")
+        + `,COALESCE(MAX(i.sequence_id),0)+1,'',${sqlLiteral(startedAt)},${sqlLiteral(startedAt)},`
+        + `${sqlLiteral(projectId)},NULL,0,${sqlLiteral(taskTypeId)},'',0,'[]',${sqlLiteral(moduleId)},${sqlLiteral(moduleId)} `
+        + "FROM worktracker_project p LEFT JOIN worktracker_issue i "
+        + `ON i.project_id=${sqlLiteral(projectId)} `
+        + `WHERE p.id=${sqlLiteral(projectId)} GROUP BY p.id;`,
+    );
+  }
+
   await context.sqlite(
     context.databasePath,
-    "INSERT INTO worktracker_project "
-      + "(id,name,slug,description,seq_counter,created_at,updated_at,workspace_id,state_revision,manual_module_order) VALUES ("
-      + [projectId, "Acceptance", slug, "", 2, createdAt, createdAt, workspaceId, 0, 0]
-        .map(sqlLiteral).join(",")
-      + ");"
-      + "INSERT INTO worktracker_issuetype "
-      + "(id,name,level,color,sort_order,created_at,updated_at,project_id,start_state_id,workflow_revision,is_pathfind) VALUES "
-      + `(${[moduleTypeId, "Module", "module", "", 0, createdAt, createdAt, projectId, null, 0, 0].map((value) => value === null ? "NULL" : sqlLiteral(value)).join(",")}),`
-      + `(${[taskTypeId, "Task", "task", "", 1, createdAt, createdAt, projectId, null, 0, 0].map((value) => value === null ? "NULL" : sqlLiteral(value)).join(",")});`
-      + "INSERT INTO worktracker_issue "
-      + "(id,type,name,sequence_id,description,created_at,updated_at,project_id,state_id,is_archived,rank,state_revision,issue_type_id,parent_id,module_id) VALUES "
-      + `(${[moduleId, "module", "Acceptance module", 1, "", createdAt, createdAt, projectId, null, 0, "a", 0, moduleTypeId, null, null].map((value) => value === null ? "NULL" : sqlLiteral(value)).join(",")}),`
-      + `(${[taskId, "task", "Acceptance task", 2, "", createdAt, createdAt, projectId, null, 0, "a", 0, taskTypeId, moduleId, moduleId].map((value) => value === null ? "NULL" : sqlLiteral(value)).join(",")});`,
+    "UPDATE worktracker_project SET seq_counter=(SELECT COALESCE(MAX(sequence_id),0) "
+      + `FROM worktracker_issue WHERE project_id=${sqlLiteral(projectId)}),`
+      + `updated_at=${sqlLiteral(startedAt)} WHERE id=${sqlLiteral(projectId)};`,
   );
-  return { projectId, moduleId, taskId };
+
+  return { moduleId, taskId };
 }
 
 export async function durableAgentTerminalFlowScenario(context) {
@@ -416,10 +490,14 @@ export async function durableAgentTerminalFlowScenario(context) {
   const sessionName = `pt-${runId}`;
   const repository = path.join(context.sandboxRoot, "repository");
   await mkdir(repository, { recursive: true });
+  const projectId = await context.sqlite(
+    context.databasePath,
+    "SELECT id FROM worktracker_project ORDER BY created_at LIMIT 1;",
+  );
   const startedAt = new Date().toISOString();
-  const { projectId, moduleId, taskId } = await durableFlowTargets(
+  const { moduleId, taskId } = await ensureAcceptanceIssues(
     context,
-    identifier,
+    projectId,
     startedAt,
   );
 
@@ -466,10 +544,8 @@ export async function durableAgentTerminalFlowScenario(context) {
           "codex",
           startedAt,
           "task",
-          0,
-          0,
         ].map(sqlLiteral).join(",")
-        + ");",
+        + ",0,0);",
     );
     const relaunched = await launchReadyApp(context);
     await context.stopApp(relaunched.child);

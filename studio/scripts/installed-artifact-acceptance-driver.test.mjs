@@ -34,7 +34,11 @@ import {
 
 const CREDENTIAL_PATTERN =
   /((api|access|auth|secret|token|password)[_-]?(key|token|password)?\s*[=:])|bearer\s+/i;
-async function fixture() {
+async function fixture({
+  issueRows = "module-1|module\ntask-1|task",
+  issueTypeRows = "module-type|module\ntask-type|task",
+  appExitCode = 0,
+} = {}) {
   const sandboxRoot = await mkdtemp(path.join(tmpdir(), "ticketry-driver-test-"));
   const dataDirectory = acceptanceDataDirectory(path.join(sandboxRoot, "home"));
   const appPath = path.join(sandboxRoot, "Applications", "Ticketry.app");
@@ -75,15 +79,18 @@ async function fixture() {
     sqliteStatements: [],
     sqlite: async (_database, sql) => {
       context.sqliteStatements.push(sql);
-      if (sql.includes("SELECT count(*) FROM worktracker_workspace")) return "1";
+      if (sql.includes("SELECT count(*) FROM worktracker_project")) return "1";
       if (sql.includes("INSERT OR REPLACE INTO acceptance_evidence")) {
         upgradeSentinel = sql.match(/VALUES \('upgrade', '([^']+)'\)/)?.[1] ?? "";
         return "";
       }
       if (sql.includes("SELECT value FROM acceptance_evidence")) return upgradeSentinel;
       if (sql.includes("SELECT id FROM worktracker_project")) return "project-1";
+      if (sql.includes("SELECT id,level FROM worktracker_issuetype")) {
+        return issueTypeRows;
+      }
       if (sql.includes("SELECT id,type FROM worktracker_issue")) {
-        return "module-1|module\ntask-1|task";
+        return issueRows;
       }
       if (sql.includes("INSERT INTO agent_terminal_sessions")) {
         const session = sql.match(/'pt-acceptance-run-[^']+'/)?.[0]?.slice(1, -1);
@@ -97,7 +104,7 @@ async function fixture() {
       mkdirSync(dataDirectory, { recursive: true });
       if (!existsSync(databasePath)) writeFileSync(databasePath, "database-fixture");
       return Object.assign(new EventEmitter(), {
-        exitCode: null,
+        exitCode: appExitCode,
         signalCode: null,
       });
     },
@@ -121,10 +128,25 @@ async function withFixture(run) {
   }
 }
 
-test("clean_install launches a fresh data directory and reaches its workspace", async () => {
+test("clean_install launches a fresh data directory and reaches its project", async () => {
   await withFixture(async (context) => {
     assert.equal(await cleanInstallScenario(context), true);
+    assert.equal(
+      context.sqliteStatements.some((sql) => sql.includes(
+        "ticketry_codex_spark_catalog_migration",
+      )),
+      true,
+    );
   });
+});
+
+test("clean_install rejects an unsuccessful startup exit", async () => {
+  const { context, sandboxRoot } = await fixture({ appExitCode: 1 });
+  try {
+    await assert.rejects(cleanInstallScenario(context), /startup failed \(1\)/);
+  } finally {
+    await rm(sandboxRoot, { recursive: true, force: true });
+  }
 });
 
 test("main executable comes from CFBundleExecutable when helpers are also executable", async () => {
@@ -203,6 +225,42 @@ test("durable_agent_terminal_flow keeps repository, run, and tmux evidence acros
       true,
     );
   });
+});
+
+test("durable_agent_terminal_flow provisions final-schema records for an empty project", async () => {
+  const { context, sandboxRoot } = await fixture({ issueRows: "", issueTypeRows: "" });
+  try {
+    assert.equal(await durableAgentTerminalFlowScenario(context), true);
+    const issueTypeInserts = context.sqliteStatements.filter(
+      (sql) => sql.includes("INSERT INTO worktracker_issuetype"),
+    );
+    assert.equal(issueTypeInserts.length, 2);
+    for (const sql of issueTypeInserts) {
+      assert.match(
+        sql,
+        /id,name,level,color,sort_order,created_at,updated_at,project_id,start_state_id,workflow_revision,is_pathfind/,
+      );
+      assert.doesNotMatch(sql, /worktracker_workspace|workspace_id/);
+    }
+    const workItemInserts = context.sqliteStatements.filter(
+      (sql) => sql.includes("INSERT INTO worktracker_issue "),
+    );
+    assert.equal(workItemInserts.length, 2);
+    for (const sql of workItemInserts) {
+      assert.match(sql, /issue_type_id,rank,state_revision,workspace_tab_order,parent_id,module_id/);
+      assert.doesNotMatch(sql, /worktracker_workspace|workspace_id/);
+    }
+    assert.match(workItemInserts[0], /,'\[\]',NULL,NULL FROM/);
+    assert.match(workItemInserts[1], /,'\[\]','([0-9a-f]{32})','\1' FROM/);
+    assert.equal(
+      context.sqliteStatements.some((sql) => sql.includes(
+        "UPDATE worktracker_project SET seq_counter=",
+      )),
+      true,
+    );
+  } finally {
+    await rm(sandboxRoot, { recursive: true, force: true });
+  }
 });
 
 test("uninstall_preserves_data removes only the installed app", async () => {

@@ -171,7 +171,7 @@ async fn partial_empty_ranks_are_preserved() {
 }
 
 #[tokio::test]
-async fn archived_modules_are_excluded() {
+async fn archived_modules_are_preserved() {
     let database = fixture().await;
     project(&database, "manual", true).await;
     module(&database, "active", "manual", 1, "A", false).await;
@@ -188,7 +188,7 @@ async fn archived_modules_are_excluded() {
         .one(&database)
         .await
         .unwrap()
-        .is_none());
+        .is_some());
 }
 
 #[tokio::test]

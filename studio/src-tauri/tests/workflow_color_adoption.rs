@@ -6,7 +6,7 @@ use muxed_studio_lib::{
     installation::adoption::provisioning,
     work_management::{
         commands::catalog::{self, CreateProject},
-        open_for_commands, project_onboarding_migration,
+        module_presentation_migration, open_for_commands, project_onboarding_migration,
     },
 };
 use sea_orm::{ConnectionTrait, Database, DbBackend, Statement};
@@ -189,17 +189,20 @@ async fn skips_color_adoption_when_the_worktracker_state_table_is_absent() {
 }
 
 #[test]
-fn workflow_color_checkpoint_follows_worktracker_ownership_in_the_rust_ledger() {
+fn workflow_color_checkpoint_follows_entry_skill_in_the_rust_ledger() {
     let ledgers = muxed_studio_lib::installation::classification::rust_ledger::owned_ledgers();
-    let worktracker = ledgers
+    let entry_skill = ledgers
         .iter()
-        .position(|(table, _)| *table == "ticketry_worktracker_adoption")
-        .expect("WorkTracker ownership ledger");
+        .position(|(table, _)| {
+            *table
+                == muxed_studio_lib::work_management::launch_binding_entry_skill_migration::LEDGER_TABLE
+        })
+        .expect("entry-skill ledger");
     let colors = ledgers
         .iter()
         .position(|(table, _)| *table == LEDGER_TABLE)
         .expect("workflow color ledger");
-    assert_eq!(colors, worktracker + 1);
+    assert_eq!(colors, entry_skill + 1);
 }
 
 async fn generated_colors(api: &TransportApiImpl, project_id: &str) -> Vec<(String, String)> {
@@ -240,6 +243,9 @@ async fn production_startup_adopts_old_colors_before_generated_state_reads() {
     let database = open_for_commands(&state_path)
         .await
         .expect("open profile database");
+    module_presentation_migration::install(&database)
+        .await
+        .expect("remove the legacy project ordering flag");
     project_onboarding_migration::install(&database)
         .await
         .expect("move onboarding onto the project");

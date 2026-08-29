@@ -15,6 +15,7 @@ pub mod keybindings;
 mod legacy_profile_files;
 pub mod ownership_manifest;
 mod provider_catalog;
+pub mod provider_catalog_migrations;
 mod provider_catalog_provisioning;
 mod provider_catalog_read;
 mod readiness;

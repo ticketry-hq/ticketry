@@ -167,36 +167,12 @@ async fn initialize_with_worktracker_commands_and_install_inner(
                 error.to_string(),
             )
         })?;
-    crate::work_management::workflow_color_migration::install(&worktracker_database)
+    crate::work_management::final_schema_migrations::install(&worktracker_database)
         .await
         .map_err(|error| {
             FoundationInitializationError::new(
                 FoundationInitializationErrorCode::WorktrackerDatabaseOpen,
-                format!("could not adopt reviewed workflow-state colors: {error}"),
-            )
-        })?;
-    crate::work_management::workspace_tab_order_migration::install(&worktracker_database)
-        .await
-        .map_err(|error| {
-            FoundationInitializationError::new(
-                FoundationInitializationErrorCode::WorktrackerDatabaseOpen,
-                format!("could not install workspace-tab ordering: {error}"),
-            )
-        })?;
-    crate::work_management::module_presentation_migration::install(&worktracker_database)
-        .await
-        .map_err(|error| {
-            FoundationInitializationError::new(
-                FoundationInitializationErrorCode::WorktrackerDatabaseOpen,
-                format!("could not install module presentation: {error}"),
-            )
-        })?;
-    crate::work_management::project_onboarding_migration::install(&worktracker_database)
-        .await
-        .map_err(|error| {
-            FoundationInitializationError::new(
-                FoundationInitializationErrorCode::WorktrackerDatabaseOpen,
-                format!("could not move onboarding onto the project: {error}"),
+                format!("could not install the final WorkTracker schema: {error}"),
             )
         })?;
     let settings_repository =

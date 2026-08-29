@@ -28,6 +28,18 @@ pub fn owned_ledgers() -> Vec<(&'static str, i32)> {
             crate::work_management::ownership_manifest::VERSION,
         ),
         (
+            crate::settings_persistence::provider_catalog_migrations::CODEX_5_6_LEDGER,
+            crate::settings_persistence::provider_catalog_migrations::VERSION,
+        ),
+        (
+            crate::work_management::project_onboarding_migration::LEDGER_TABLE,
+            crate::work_management::project_onboarding_migration::VERSION,
+        ),
+        (
+            crate::work_management::launch_binding_entry_skill_migration::LEDGER_TABLE,
+            crate::work_management::launch_binding_entry_skill_migration::VERSION,
+        ),
+        (
             crate::work_management::workflow_color_migration::LEDGER_TABLE,
             crate::work_management::workflow_color_migration::VERSION,
         ),
@@ -40,8 +52,8 @@ pub fn owned_ledgers() -> Vec<(&'static str, i32)> {
             crate::work_management::module_presentation_migration::VERSION,
         ),
         (
-            crate::work_management::project_onboarding_migration::LEDGER_TABLE,
-            crate::work_management::project_onboarding_migration::VERSION,
+            crate::settings_persistence::provider_catalog_migrations::CODEX_SPARK_LEDGER,
+            crate::settings_persistence::provider_catalog_migrations::VERSION,
         ),
         (
             "ticketry_settings_adoption",

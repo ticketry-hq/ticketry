@@ -17,6 +17,24 @@ pub(crate) fn state_color(name: &str) -> serde_json::Result<Option<String>> {
         .map(|state| state.color))
 }
 
+pub(crate) fn entry_skill_seeds() -> serde_json::Result<Vec<(String, String)>> {
+    let defaults = load()?;
+    Ok([
+        ("Grill", "grill-with-docs"),
+        ("Spec", "to-spec"),
+        ("Tickets", "to-tickets"),
+    ]
+    .into_iter()
+    .filter(|(state, skill)| {
+        defaults
+            .required_skills
+            .get(*state)
+            .is_some_and(|skills| skills.iter().any(|required| required == skill))
+    })
+    .map(|(state, skill)| (state.to_owned(), skill.to_owned()))
+    .collect())
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct Defaults {

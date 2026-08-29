@@ -1,5 +1,5 @@
 use muxed_studio_lib::work_management::{
-    project_onboarding_migration, workflow_color_migration,
+    module_presentation_migration, workflow_color_migration,
     workspace_tab_order_migration::{self, LEDGER_TABLE, MIGRATION_ID, SOURCE_COMMIT},
 };
 use sea_orm::{ConnectionTrait, Database, DbBackend, Statement};
@@ -140,7 +140,7 @@ async fn failed_ledger_creation_rolls_back_the_issue_column() {
 }
 
 #[test]
-fn workspace_tab_checkpoint_is_between_colors_and_project_onboarding() {
+fn workspace_tab_checkpoint_is_between_colors_and_module_presentation() {
     let ledgers = muxed_studio_lib::installation::classification::rust_ledger::owned_ledgers();
     let colors = ledgers
         .iter()
@@ -150,10 +150,10 @@ fn workspace_tab_checkpoint_is_between_colors_and_project_onboarding() {
         .iter()
         .position(|(table, _)| *table == LEDGER_TABLE)
         .expect("workspace-tab ledger");
-    let onboarding = ledgers
+    let presentation = ledgers
         .iter()
-        .position(|(table, _)| *table == project_onboarding_migration::LEDGER_TABLE)
-        .expect("project onboarding ledger");
+        .position(|(table, _)| *table == module_presentation_migration::LEDGER_TABLE)
+        .expect("module presentation ledger");
     assert_eq!(workspace, colors + 1);
-    assert_eq!(onboarding, workspace + 1);
+    assert_eq!(presentation, workspace + 1);
 }

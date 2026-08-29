@@ -1,4 +1,4 @@
-//! Move module ordering state out of Project and into one row per active module.
+//! Move module ordering state out of Project and into one row per module.
 //!
 //! Every statement runs on the caller's connection and inside one transaction.
 //! The ledger makes later startups verification-only, while a failure rolls
@@ -65,8 +65,7 @@ async fn copy_manual_module_order(database: &impl ConnectionTrait) -> Result<(),
              FROM {ISSUE_TABLE} AS module \
              JOIN {PROJECT_TABLE} AS project ON project.id = module.project_id \
              WHERE project.{MANUAL_ORDER_COLUMN} = 1 \
-               AND module.type = 'module' \
-               AND module.is_archived = 0"
+               AND module.type = 'module'"
         ))
         .await?;
     Ok(())

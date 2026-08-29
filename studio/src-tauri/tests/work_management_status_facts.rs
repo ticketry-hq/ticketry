@@ -7,7 +7,9 @@ use muxed_studio_lib::work_management::commands::status_facts::WorkFactRecorder;
 use muxed_studio_lib::work_management::commands::{
     catalog, hierarchy, reorder, work_items, workflow,
 };
-use muxed_studio_lib::work_management::open_for_commands;
+use muxed_studio_lib::work_management::{
+    module_presentation_migration, open_for_commands, workspace_tab_order_migration,
+};
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection, DbBackend, Statement};
 
 const PROJECT: &str = "10000000000000000000000000000000";
@@ -146,6 +148,12 @@ async fn fixture() -> (tempfile::TempDir, DatabaseConnection, WorkFactRecorder) 
         .expect("create the WorkTracker fixture");
     drop(writer);
     let database = open_for_commands(&path).await.expect("open the database");
+    workspace_tab_order_migration::install(&database)
+        .await
+        .expect("install workspace-tab ordering");
+    module_presentation_migration::install(&database)
+        .await
+        .expect("install module presentation");
     let recorder = WorkFactRecorder::new(
         RunsServices::new(database.clone())
             .outbox()
@@ -242,7 +250,7 @@ async fn moving_and_removing_items_publish_explicit_collection_changes() {
     )
     .await
     .expect("reparent the child");
-    reorder::reorder(
+    reorder::reorder_work_item(
         &database,
         reorder::ReorderWorkItem {
             id: child.clone(),

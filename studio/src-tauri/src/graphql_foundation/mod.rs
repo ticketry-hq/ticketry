@@ -2,7 +2,6 @@ mod composed_commands;
 mod composition;
 mod database;
 pub(crate) mod entity_registration;
-pub(crate) mod generated_mutations;
 pub use crate::entities::foundation as entities;
 pub(crate) mod error;
 mod migration_probe;

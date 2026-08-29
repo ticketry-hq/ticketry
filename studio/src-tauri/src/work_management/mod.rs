@@ -6,6 +6,7 @@ pub mod database;
 pub mod final_schema_migrations;
 pub use crate::entities::work_management as entities;
 pub(crate) mod graphql;
+pub(crate) mod issue_type;
 pub mod launch_binding_entry_skill_migration;
 pub mod launch_policy;
 pub mod mcp;

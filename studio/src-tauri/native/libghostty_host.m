@@ -16,7 +16,11 @@ typedef struct {
 
 // Keep the compiled bridge as one Objective-C translation unit while each
 // implementation file owns one concern.
+#include "libghostty_surface_owner.m"
 #include "libghostty_focus_trace.m"
 #include "libghostty_runtime.m"
+#include "libghostty_key_event.m"
+#include "libghostty_studio_chord.m"
 #include "libghostty_view.m"
+#include "libghostty_command_routing.m"
 #include "libghostty_view_bridge.m"

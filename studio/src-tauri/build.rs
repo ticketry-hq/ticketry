@@ -103,8 +103,12 @@ fn build_native_libghostty() {
         manifest.join("native/libghostty_host.m").display()
     );
     for source in [
+        "native/libghostty_surface_owner.m",
         "native/libghostty_runtime.m",
+        "native/libghostty_key_event.m",
+        "native/libghostty_studio_chord.m",
         "native/libghostty_view.m",
+        "native/libghostty_command_routing.m",
         "native/libghostty_view_bridge.m",
     ] {
         println!("cargo:rerun-if-changed={}", manifest.join(source).display());

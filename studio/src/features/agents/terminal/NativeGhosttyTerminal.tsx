@@ -18,6 +18,7 @@ import {
   useNativeViewerFocusRegistration,
   useNativeViewerFocusSignal,
   useNativeViewerFrameSync,
+  useNativeViewerKeyboardOwnership,
 } from "./internal/useNativeViewerHostEffects";
 import {
   nativeFailureMessage,
@@ -108,6 +109,13 @@ export function NativeGhosttyTerminal({
 
   useNativeViewerFocusRegistration({
     sessionId,
+    handle: sharedHandle,
+    presented: presentedHere,
+    visible,
+    modalOpen,
+  });
+  useNativeViewerKeyboardOwnership({
+    runId,
     handle: sharedHandle,
     presented: presentedHere,
     visible,

@@ -1,7 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useRef, type RefObject } from "react";
 
-import { notifyNativeTerminalKeyboardEngaged } from "../../../../runtime/nativeTerminalKeyboard";
+import {
+  notifyNativeTerminalKeyboardEngaged,
+  registerNativeTerminalKeyboardOwner,
+} from "../../../../runtime/nativeTerminalKeyboard";
 import { clippedNativeTerminalFrame } from "./nativeTerminalFrame";
 import { traceViewerFocus } from "./focusTrace";
 import { registerTerminalFocus } from "./terminalRegistry";
@@ -36,6 +39,25 @@ export function useNativeViewerFocusRegistration({
       });
     });
   }, [handle, modalOpen, presented, sessionId, visible]);
+}
+
+export function useNativeViewerKeyboardOwnership({
+  runId,
+  handle,
+  presented,
+  visible,
+  modalOpen,
+}: {
+  runId: string | null;
+  handle: string | null;
+  presented: boolean;
+  visible: boolean;
+  modalOpen: boolean;
+}): void {
+  useEffect(() => {
+    if (!runId || !handle || !presented || !visible || modalOpen) return;
+    return registerNativeTerminalKeyboardOwner({ handle, runId });
+  }, [handle, modalOpen, presented, runId, visible]);
 }
 
 export function useNativeViewerFrameSync({

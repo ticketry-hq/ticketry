@@ -12,6 +12,18 @@ const projectReads = vi.hoisted(() => ({ readProjectOpen: vi.fn() }));
 const runtime = vi.hoisted(() => ({
   platform: "desktop" as "browser" | "desktop",
 }));
+const nativeHost = vi.hoisted(() => {
+  const listeners = new Map<string, (event: unknown) => void>();
+  return {
+    listeners,
+    listen: vi.fn(async (event: string, handler: (event: unknown) => void) => {
+      listeners.set(event, handler);
+      return () => listeners.delete(event);
+    }),
+    reportChord: (chord: string) =>
+      listeners.get("native-terminal-chord")?.({ payload: { chord } }),
+  };
+});
 
 vi.mock("../features/projects/queries/readTransport", async () => ({
   ...(await vi.importActual("../features/projects/queries/readTransport")),
@@ -22,6 +34,13 @@ vi.mock("../runtime", async () => ({
   ...(await vi.importActual("../runtime")),
   studioRuntime: () => runtime,
 }));
+
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: vi.fn(),
+  isTauri: () => runtime.platform === "desktop",
+}));
+
+vi.mock("@tauri-apps/api/event", () => ({ listen: nativeHost.listen }));
 
 import { useGlobalKeymap } from "../app/navigation/useGlobalKeymap";
 import { useModalStore } from "../app/modal/modalStore";
@@ -85,6 +104,8 @@ describe("overhaul acceptance - module jump badges", () => {
     projectReads.readProjectOpen.mockReset().mockImplementation(async () =>
       projectOpenResult()
     );
+    nativeHost.listeners.clear();
+    nativeHost.listen.mockClear();
     useStudioStore.setState({ selectedProjectId: PROJECT_ID, error: null });
     useModalStore.setState({ modalStack: [] });
     useClientStore.setState({
@@ -95,7 +116,7 @@ describe("overhaul acceptance - module jump badges", () => {
     });
   });
 
-  it("numbers only visible canonical tabs without changing tab width", async () => {
+  it("[overhaul-179] routes WebView and native position chords through the visible badge order", async () => {
     render(<ModuleJumpSurface />);
     await waitFor(() => expect(screen.getAllByRole("tab")).toHaveLength(11));
 
@@ -134,6 +155,13 @@ describe("overhaul acceptance - module jump badges", () => {
     fireEvent.keyDown(window, { key: "2", code: "Digit2", metaKey: true });
     expect(useClientStore.getState().selectModule).toHaveBeenCalledWith(
       "module-3",
+    );
+
+    act(() => notifyNativeTerminalKeyboardEngaged());
+    expect(screen.queryAllByTestId("module-jump-badge")).toHaveLength(0);
+    act(() => nativeHost.reportChord("module-position-10"));
+    expect(useClientStore.getState().selectModule).toHaveBeenLastCalledWith(
+      "module-12",
     );
   });
 

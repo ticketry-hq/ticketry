@@ -77,6 +77,7 @@ mod tests {
     const GRAVE_KEY: u16 = 0x32;
     const ESCAPE_KEY: u16 = 0x35;
     const E_KEY: u16 = 0x0E;
+    const NUMBER_KEYS: [u16; 10] = [0x12, 0x13, 0x14, 0x15, 0x17, 0x16, 0x1A, 0x1C, 0x19, 0x1D];
 
     fn studio_chord(modifier_flags: u64, key_code: u16) -> Option<StudioChord> {
         StudioChord::from_native(unsafe { muxed_ghostty_studio_chord(modifier_flags, key_code) })
@@ -122,6 +123,34 @@ mod tests {
     }
 
     #[test]
+    fn exact_command_escape_reports_body_disengagement() {
+        assert_eq!(
+            studio_chord(COMMAND, ESCAPE_KEY),
+            Some(StudioChord::BodyDisengage)
+        );
+        assert_eq!(
+            studio_chord(COMMAND | CAPS_LOCK, ESCAPE_KEY),
+            Some(StudioChord::BodyDisengage)
+        );
+        assert_eq!(studio_chord(0, ESCAPE_KEY), None);
+        assert_eq!(studio_chord(COMMAND | SHIFT, ESCAPE_KEY), None);
+        assert_eq!(studio_chord(COMMAND | CONTROL, ESCAPE_KEY), None);
+        assert_eq!(studio_chord(COMMAND | OPTION, ESCAPE_KEY), None);
+    }
+
+    #[test]
+    fn command_number_selects_the_matching_module_position() {
+        for (index, key_code) in NUMBER_KEYS.into_iter().enumerate() {
+            assert_eq!(
+                studio_chord(COMMAND, key_code),
+                Some(StudioChord::ModulePosition((index + 1) as u8))
+            );
+            assert_eq!(studio_chord(0, key_code), None);
+            assert_eq!(studio_chord(COMMAND | SHIFT, key_code), None);
+        }
+    }
+
+    #[test]
     fn a_recognised_chord_reaches_the_chord_sink() {
         let (reported, chords) = mpsc::channel();
         let sink = ChordSink::new(move |chord| {
@@ -131,9 +160,13 @@ mod tests {
 
         unsafe { report_studio_chord(context, 1) };
         unsafe { report_studio_chord(context, 2) };
+        unsafe { report_studio_chord(context, 13) };
+        unsafe { report_studio_chord(context, 5) };
 
         assert_eq!(chords.try_recv(), Ok(StudioChord::PanelToggle));
         assert_eq!(chords.try_recv(), Ok(StudioChord::Settings));
+        assert_eq!(chords.try_recv(), Ok(StudioChord::BodyDisengage));
+        assert_eq!(chords.try_recv(), Ok(StudioChord::ModulePosition(3)));
         release_chord_context(context as usize);
     }
 

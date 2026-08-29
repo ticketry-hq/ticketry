@@ -12,9 +12,7 @@ use sea_orm::{
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 
-use super::ownership_manifest::{
-    owned_tables, LaunchBindingShape, SchemaGeneration, CURRENT_DJANGO_LEAF, VERSION,
-};
+use super::ownership_manifest::{owned_tables, SchemaGeneration, CURRENT_DJANGO_LEAF, VERSION};
 
 const SNAPSHOT_GENERATIONS: usize = 3;
 
@@ -66,10 +64,9 @@ pub async fn adopt(data_directory: &Path) -> Result<AdoptionEvidence, AdoptionEr
     integrity(&database).await?;
     let source = classify(&database).await?;
     let generation = schema_generation(&database).await?;
-    let launch_binding = launch_binding_shape(&database).await?;
-    validate_manifest(&database, generation, launch_binding).await?;
+    validate_manifest(&database, generation).await?;
     validate_semantics(&database).await?;
-    let before = stable_digest(&database, generation, launch_binding).await?;
+    let before = stable_digest(&database, generation).await?;
 
     if source == SourceClassification::RustOwned {
         return Ok(AdoptionEvidence {
@@ -88,31 +85,24 @@ pub async fn adopt(data_directory: &Path) -> Result<AdoptionEvidence, AdoptionEr
     let snapshot_sha256 = file_sha256(&snapshot_path)?;
     let snapshot = connect(&snapshot_path, true).await?;
     integrity(&snapshot).await?;
-    validate_manifest(&snapshot, generation, launch_binding).await?;
-    let snapshot_digest = stable_digest(&snapshot, generation, launch_binding).await?;
+    validate_manifest(&snapshot, generation).await?;
+    let snapshot_digest = stable_digest(&snapshot, generation).await?;
     snapshot.close().await.map_err(sqlite_error)?;
     if snapshot_digest != before {
         return Err(AdoptionError::new(
             "verified snapshot digest does not match the classified source",
         ));
     }
-    prove_restoration(
-        data_directory,
-        &snapshot_path,
-        generation,
-        launch_binding,
-        &before,
-    )
-    .await?;
+    prove_restoration(data_directory, &snapshot_path, generation, &before).await?;
 
     let writable = connect(&database_path, false).await?;
     super::transition_occurrences::ensure_schema(&writable)
         .await
         .map_err(sqlite_error)?;
     install_ledger(&writable, &snapshot_path, &snapshot_sha256, &before).await?;
-    validate_manifest(&writable, generation, launch_binding).await?;
+    validate_manifest(&writable, generation).await?;
     validate_semantics(&writable).await?;
-    let after = stable_digest(&writable, generation, launch_binding).await?;
+    let after = stable_digest(&writable, generation).await?;
     if after != before {
         return Err(AdoptionError::new("post-adoption stable digest changed"));
     }
@@ -265,33 +255,23 @@ async fn classify(database: &DatabaseConnection) -> Result<SourceClassification,
 async fn schema_generation(
     database: &DatabaseConnection,
 ) -> Result<SchemaGeneration, AdoptionError> {
-    if table_exists(database, super::project_onboarding_migration::LEDGER_TABLE).await? {
-        Ok(SchemaGeneration::ProjectOnly)
-    } else {
-        Ok(SchemaGeneration::WorkspaceOwned)
-    }
-}
-
-/// Which launch-binding shape the database is in right now.
-async fn launch_binding_shape(
-    database: &DatabaseConnection,
-) -> Result<LaunchBindingShape, AdoptionError> {
-    if super::launch_binding_entry_skill_migration::has_entry_skill_column(database)
-        .await
-        .map_err(sqlite_error)?
-    {
-        Ok(LaunchBindingShape::WithEntrySkill)
-    } else {
-        Ok(LaunchBindingShape::WithoutEntrySkill)
+    let project_only =
+        table_exists(database, super::project_onboarding_migration::LEDGER_TABLE).await?;
+    let workspace_tab_order =
+        table_exists(database, super::workspace_tab_order_migration::LEDGER_TABLE).await?;
+    match (project_only, workspace_tab_order) {
+        (false, false) => Ok(SchemaGeneration::WorkspaceOwned),
+        (false, true) => Ok(SchemaGeneration::WorkspaceOwnedWithTabOrder),
+        (true, false) => Ok(SchemaGeneration::ProjectOnly),
+        (true, true) => Ok(SchemaGeneration::ProjectOnlyWithTabOrder),
     }
 }
 
 async fn validate_manifest(
     database: &DatabaseConnection,
     generation: SchemaGeneration,
-    launch_binding: LaunchBindingShape,
 ) -> Result<(), AdoptionError> {
-    for (table, expected) in owned_tables(generation, launch_binding) {
+    for (table, expected) in owned_tables(generation) {
         let query = format!("PRAGMA table_info('{table}')");
         let rows = database
             .query_all_raw(Statement::from_string(DbBackend::Sqlite, query))
@@ -344,10 +324,9 @@ async fn validate_semantics(database: &DatabaseConnection) -> Result<(), Adoptio
 async fn stable_digest(
     database: &DatabaseConnection,
     generation: SchemaGeneration,
-    launch_binding: LaunchBindingShape,
 ) -> Result<String, AdoptionError> {
     let mut hasher = Sha256::new();
-    for (table, columns) in owned_tables(generation, launch_binding) {
+    for (table, columns) in owned_tables(generation) {
         hasher.update(table.as_bytes());
         let quoted = columns
             .iter()
@@ -424,7 +403,6 @@ async fn prove_restoration(
     data_directory: &Path,
     snapshot: &Path,
     generation: SchemaGeneration,
-    launch_binding: LaunchBindingShape,
     expected: &str,
 ) -> Result<(), AdoptionError> {
     let candidate = data_directory.join(format!(
@@ -435,7 +413,7 @@ async fn prove_restoration(
     let result = async {
         let database = connect(&candidate, true).await?;
         integrity(&database).await?;
-        let digest = stable_digest(&database, generation, launch_binding).await?;
+        let digest = stable_digest(&database, generation).await?;
         database.close().await.map_err(sqlite_error)?;
         if digest != expected {
             return Err(AdoptionError::new(

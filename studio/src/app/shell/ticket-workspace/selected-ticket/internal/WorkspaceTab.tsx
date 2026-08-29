@@ -1,4 +1,9 @@
 import type { ReactNode } from "react";
+import type {
+  DragSourceProps,
+  DropIntent,
+  DropTargetProps,
+} from "../../../../../shared/dragDrop/useAxisDragAndDrop";
 
 /**
  * One tab of the task workspace strip.
@@ -20,6 +25,10 @@ export function WorkspaceTab({
   onClick,
   onClose,
   closeLabel,
+  dropIntent,
+  registerRef,
+  dragSourceProps,
+  dropTargetProps,
 }: {
   label: string;
   /** Assistive name when the visible label is not enough on its own. */
@@ -34,6 +43,10 @@ export function WorkspaceTab({
   onClick: () => void;
   onClose?: () => void;
   closeLabel?: string;
+  dropIntent: DropIntent | null;
+  registerRef: (node: HTMLDivElement | null) => void;
+  dragSourceProps: DragSourceProps;
+  dropTargetProps: DropTargetProps;
 }) {
   const name = accessibleName ?? label;
   const chrome =
@@ -43,18 +56,35 @@ export function WorkspaceTab({
       : `border-pane-border bg-pane-bg text-text-muted ${
           allowHoverEmphasis ? "hover:bg-pane-title" : ""
         }`);
+  const { ref: registerDropTarget, ...dropHandlers } = dropTargetProps;
   return (
     <div
+      ref={(node) => {
+        registerRef(node);
+        registerDropTarget(node);
+      }}
       role="tab"
       aria-selected={active}
       aria-label={name}
       title={title}
       data-highlighted={highlighted || undefined}
       onClick={onClick}
-      className={`flex shrink-0 cursor-pointer items-center gap-2 border px-2 py-0.5 text-xs ${chrome} ${
+      {...dragSourceProps}
+      {...dropHandlers}
+      className={`relative flex shrink-0 cursor-pointer items-center gap-2 border px-2 py-0.5 text-xs ${chrome} ${
         highlighted ? "ring-1 ring-focus-accent ring-inset" : ""
       }`}
     >
+      {dropIntent !== null ? (
+        <span
+          data-testid="workspace-tab-drop-seam"
+          data-drop-intent={dropIntent}
+          aria-hidden="true"
+          className={`pointer-events-none absolute top-0 bottom-0 z-10 w-0.5 bg-focus-accent ${
+            dropIntent === "near" ? "left-0" : "right-0"
+          }`}
+        />
+      ) : null}
       <span>{label}</span>
       {badge}
       {onClose && (

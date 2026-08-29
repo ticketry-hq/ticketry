@@ -80,11 +80,6 @@
     "Done": [],
     "Cancelled": []
   },
-  "entrySkills": {
-    "Grill": "grill-with-docs",
-    "Spec": "to-spec",
-    "Tickets": "to-tickets"
-  },
   "prompts": {
     "Story": {
       "Ideas": "This Story is in `Ideas`. Gather enough context to choose its delivery route. Read the title, description, attachments, linked material, and relevant repository context. If the work is small, unambiguous, and self-contained, call the MCP server's `run_now` tool so it moves the Story to `Implement` and launches the implementation run as one operation; never use a bare state move for this route. If essential product or behavior decisions are missing or ambiguous, move the Story to `Grill` using the MCP server and stop without inventing those decisions. If the available context is sufficient for the normal delivery workflow, move the Story to `Spec` using the MCP server so the Spec, Tickets, and Implement pipeline can continue. Do not implement the work or create implementation tickets while in `Ideas`. After making the transition or calling `run_now`, terminate the current agent session using the MCP server.",

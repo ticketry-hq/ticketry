@@ -195,21 +195,12 @@ pub async fn create_project(
                 .get(&state_seed.name)
                 .cloned()
                 .unwrap_or_default();
-            // A reviewed entry skill is only seeded where the same state
-            // already requires that skill, so a seeded row can never name an
-            // entry the binding does not carry.
-            let entry_skill = defaults
-                .entry_skills
-                .get(&state_seed.name)
-                .filter(|skill| required_skills.contains(*skill))
-                .cloned();
             launch_binding::ActiveModel {
                 id: sea_orm::ActiveValue::NotSet,
                 issue_type_id: Set(type_ids[type_name].clone()),
                 state_id: Set(state_ids[&state_seed.name].clone()),
                 prompt: Set(prompt),
                 required_skills: Set(serde_json::json!(required_skills)),
-                entry_skill: Set(entry_skill),
                 model_id: Set(None),
                 reasoning_id: Set(None),
                 auto_start: Set(state_seed.auto_start),

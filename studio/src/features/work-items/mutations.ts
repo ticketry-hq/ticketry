@@ -270,6 +270,7 @@ function optimisticCreatedIssue(
     sequence_id: -optimisticSequence,
     state_id: body.state_id ? compactWorktrackerId(body.state_id) : null,
     description: body.description ?? "",
+    workspace_tab_order: [],
     parent_id: body.parent_id ? compactWorktrackerId(body.parent_id) : compactWorktrackerId(membership.moduleId),
     module_id: compactWorktrackerId(membership.moduleId),
     is_archived: false,

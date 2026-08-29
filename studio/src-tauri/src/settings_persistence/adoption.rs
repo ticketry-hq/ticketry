@@ -12,9 +12,7 @@ use serde::Serialize;
 use sha2::{Digest, Sha256};
 
 use super::atomic_json::{write_json, RealAtomicFileOperations};
-use super::ownership_manifest::{
-    owned_tables, LaunchBindingShape, OWNED_ASSETS, PROVIDER_ADAPTER_SLUGS, VERSION,
-};
+use super::ownership_manifest::{OWNED_ASSETS, OWNED_TABLES, PROVIDER_ADAPTER_SLUGS, VERSION};
 use super::SettingsPersistenceError;
 
 const SNAPSHOT_GENERATIONS: usize = 3;
@@ -274,28 +272,10 @@ async fn classify(
     Ok(SourceClassification::DjangoCurrent)
 }
 
-/// Which launch-binding shape the database is in right now.
-///
-/// This preflight runs before the entry-skill migration on a first launch and
-/// after it on every launch that follows, so both shapes are recognized.
-async fn launch_binding_shape(
-    database: &impl ConnectionTrait,
-) -> Result<LaunchBindingShape, SettingsPersistenceError> {
-    if crate::work_management::launch_binding_entry_skill_migration::has_entry_skill_column(
-        database,
-    )
-    .await?
-    {
-        Ok(LaunchBindingShape::WithEntrySkill)
-    } else {
-        Ok(LaunchBindingShape::WithoutEntrySkill)
-    }
-}
-
 async fn validate_manifest(
     database: &impl ConnectionTrait,
 ) -> Result<(), SettingsPersistenceError> {
-    for (table, columns) in owned_tables(launch_binding_shape(database).await?) {
+    for (table, columns) in OWNED_TABLES {
         let rows = database
             .query_all_raw(Statement::from_string(
                 DbBackend::Sqlite,
@@ -402,7 +382,7 @@ async fn settings_digest(
     database: &impl ConnectionTrait,
 ) -> Result<String, SettingsPersistenceError> {
     let mut hasher = Sha256::new();
-    for (table, columns) in owned_tables(launch_binding_shape(database).await?) {
+    for (table, columns) in OWNED_TABLES {
         hasher.update(table.as_bytes());
         let projection = columns
             .iter()
@@ -433,7 +413,7 @@ async fn row_counts(
     database: &impl ConnectionTrait,
 ) -> Result<BTreeMap<String, u64>, SettingsPersistenceError> {
     let mut counts = BTreeMap::new();
-    for (table, _) in owned_tables(launch_binding_shape(database).await?) {
+    for (table, _) in OWNED_TABLES {
         let row = database
             .query_one_raw(Statement::from_string(
                 DbBackend::Sqlite,

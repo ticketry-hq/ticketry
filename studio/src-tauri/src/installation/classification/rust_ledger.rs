@@ -32,12 +32,12 @@ pub fn owned_ledgers() -> Vec<(&'static str, i32)> {
             crate::work_management::workflow_color_migration::VERSION,
         ),
         (
-            crate::work_management::project_onboarding_migration::LEDGER_TABLE,
-            crate::work_management::project_onboarding_migration::VERSION,
+            crate::work_management::workspace_tab_order_migration::LEDGER_TABLE,
+            crate::work_management::workspace_tab_order_migration::VERSION,
         ),
         (
-            crate::work_management::launch_binding_entry_skill_migration::LEDGER_TABLE,
-            crate::work_management::launch_binding_entry_skill_migration::VERSION,
+            crate::work_management::project_onboarding_migration::LEDGER_TABLE,
+            crate::work_management::project_onboarding_migration::VERSION,
         ),
         (
             "ticketry_settings_adoption",

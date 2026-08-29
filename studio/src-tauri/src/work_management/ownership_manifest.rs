@@ -14,83 +14,38 @@ pub const CURRENT_DJANGO_LEAF: &str = "0042_merge_singular_idea_state";
 pub enum SchemaGeneration {
     /// Onboarding still lives on a Workspace row that owns every project.
     WorkspaceOwned,
+    /// Workspace-owned schema after the 0049 workspace-tab migration.
+    WorkspaceOwnedWithTabOrder,
     /// Onboarding lives on Project and the Workspace table is gone.
     ProjectOnly,
-}
-
-/// Which shape of the launch-binding row a database is in.
-///
-/// Adoption runs before the entry-skill migration on a first launch and after
-/// it on every launch that follows, so both shapes are recognized rather than
-/// one of them being refused.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum LaunchBindingShape {
-    /// The launch binding has no entry skill yet.
-    WithoutEntrySkill,
-    /// The launch binding carries its nullable entry skill.
-    WithEntrySkill,
+    /// Project-only schema after the 0049 workspace-tab migration.
+    ProjectOnlyWithTabOrder,
 }
 
 /// The tables and columns Rust commands may mutate in `generation`.
 #[must_use]
-pub fn owned_tables(
-    generation: SchemaGeneration,
-    launch_binding: LaunchBindingShape,
-) -> Vec<(&'static str, &'static [&'static str])> {
+pub fn owned_tables(generation: SchemaGeneration) -> Vec<(&'static str, &'static [&'static str])> {
     let mut tables = match generation {
-        SchemaGeneration::WorkspaceOwned => vec![WORKSPACE, PROJECT_UNDER_WORKSPACE],
-        SchemaGeneration::ProjectOnly => vec![PROJECT_ONLY],
+        SchemaGeneration::WorkspaceOwned | SchemaGeneration::WorkspaceOwnedWithTabOrder => {
+            vec![WORKSPACE, PROJECT_UNDER_WORKSPACE]
+        }
+        SchemaGeneration::ProjectOnly | SchemaGeneration::ProjectOnlyWithTabOrder => {
+            vec![PROJECT_ONLY]
+        }
     };
     tables.extend_from_slice(SHARED_TABLES);
-    tables.push(launch_binding_table(launch_binding));
+    if matches!(
+        generation,
+        SchemaGeneration::WorkspaceOwnedWithTabOrder | SchemaGeneration::ProjectOnlyWithTabOrder
+    ) {
+        let issue = tables
+            .iter_mut()
+            .find(|(table, _)| *table == "worktracker_issue")
+            .expect("the ownership manifest includes Issue");
+        *issue = ISSUE_WITH_TAB_ORDER;
+    }
     tables
 }
-
-/// The launch-binding columns of `shape`.
-#[must_use]
-pub fn launch_binding_table(
-    shape: LaunchBindingShape,
-) -> (&'static str, &'static [&'static str]) {
-    match shape {
-        LaunchBindingShape::WithoutEntrySkill => LAUNCH_BINDING,
-        LaunchBindingShape::WithEntrySkill => LAUNCH_BINDING_WITH_ENTRY_SKILL,
-    }
-}
-
-const LAUNCH_BINDING: (&str, &[&str]) = (
-    "worktracker_launchbinding",
-    &[
-        "id",
-        "issue_type_id",
-        "state_id",
-        "prompt",
-        "required_skills",
-        "auto_start",
-        "created_at",
-        "updated_at",
-        "subtree_run_enabled",
-        "model_id",
-        "reasoning_id",
-    ],
-);
-
-const LAUNCH_BINDING_WITH_ENTRY_SKILL: (&str, &[&str]) = (
-    "worktracker_launchbinding",
-    &[
-        "id",
-        "issue_type_id",
-        "state_id",
-        "prompt",
-        "required_skills",
-        "entry_skill",
-        "auto_start",
-        "created_at",
-        "updated_at",
-        "subtree_run_enabled",
-        "model_id",
-        "reasoning_id",
-    ],
-);
 
 /// The Workspace table, present only before onboarding moved onto Project.
 const WORKSPACE: (&str, &[&str]) = (
@@ -139,6 +94,28 @@ const PROJECT_ONLY: (&str, &[&str]) = (
     ],
 );
 
+const ISSUE_WITH_TAB_ORDER: (&str, &[&str]) = (
+    "worktracker_issue",
+    &[
+        "id",
+        "project_id",
+        "type",
+        "issue_type_id",
+        "parent_id",
+        "module_id",
+        "state_id",
+        "state_revision",
+        "name",
+        "sequence_id",
+        "is_archived",
+        "rank",
+        "description",
+        "workspace_tab_order",
+        "created_at",
+        "updated_at",
+    ],
+);
+
 /// Every other owned table, identical in both shapes.
 const SHARED_TABLES: &[(&str, &[&str])] = &[
     (
@@ -179,6 +156,22 @@ const SHARED_TABLES: &[(&str, &[&str])] = &[
             "from_state_id",
             "to_state_id",
             "agent_allowed",
+        ],
+    ),
+    (
+        "worktracker_launchbinding",
+        &[
+            "id",
+            "issue_type_id",
+            "state_id",
+            "prompt",
+            "required_skills",
+            "auto_start",
+            "created_at",
+            "updated_at",
+            "subtree_run_enabled",
+            "model_id",
+            "reasoning_id",
         ],
     ),
     (
@@ -225,10 +218,7 @@ mod tests {
 
     #[test]
     fn the_project_only_shape_drops_workspace_and_owns_onboarding() {
-        let tables = owned_tables(
-            SchemaGeneration::ProjectOnly,
-            LaunchBindingShape::WithEntrySkill,
-        );
+        let tables = owned_tables(SchemaGeneration::ProjectOnly);
         assert!(!tables.iter().any(|(table, _)| *table == WORKSPACE.0));
         let (_, columns) = tables
             .iter()
@@ -238,45 +228,44 @@ mod tests {
         assert!(!columns.contains(&"workspace_id"));
     }
 
-    /// The entry-skill column is the only difference between the two shapes.
-    #[test]
-    fn the_entry_skill_shape_adds_exactly_that_column() {
-        let (without, before) = launch_binding_table(LaunchBindingShape::WithoutEntrySkill);
-        let (with, after) = launch_binding_table(LaunchBindingShape::WithEntrySkill);
-        assert_eq!(without, with);
-        assert!(!before.contains(&"entry_skill"));
-        assert!(after.contains(&"entry_skill"));
-        let added = after
-            .iter()
-            .filter(|column| !before.contains(column))
-            .collect::<Vec<_>>();
-        assert_eq!(added, [&"entry_skill"]);
-    }
-
     #[test]
     fn ownership_manifest_has_one_classification_per_table() {
         for generation in [
             SchemaGeneration::WorkspaceOwned,
+            SchemaGeneration::WorkspaceOwnedWithTabOrder,
             SchemaGeneration::ProjectOnly,
+            SchemaGeneration::ProjectOnlyWithTabOrder,
         ] {
-            for launch_binding in [
-                LaunchBindingShape::WithoutEntrySkill,
-                LaunchBindingShape::WithEntrySkill,
-            ] {
-                for (table, columns) in owned_tables(generation, launch_binding) {
-                    assert!(table.starts_with("worktracker_"));
-                    assert!(!columns.is_empty());
-                }
+            for (table, columns) in owned_tables(generation) {
+                assert!(table.starts_with("worktracker_"));
+                assert!(!columns.is_empty());
             }
         }
-        let slice2_tables = crate::settings_persistence::ownership_manifest::owned_tables(
-            LaunchBindingShape::WithEntrySkill,
-        )
+        let slice2_tables = crate::settings_persistence::ownership_manifest::OWNED_TABLES
             .iter()
             .map(|(table, _)| *table)
             .collect::<std::collections::BTreeSet<_>>();
         assert!(slice2_tables.contains("worktracker_provider"));
         assert!(slice2_tables.contains("worktracker_agentmodel"));
         assert!(slice2_tables.contains("worktracker_reasoninglevel"));
+    }
+
+    #[test]
+    fn post_0049_shapes_own_the_workspace_tab_order_column() {
+        for generation in [
+            SchemaGeneration::WorkspaceOwnedWithTabOrder,
+            SchemaGeneration::ProjectOnlyWithTabOrder,
+        ] {
+            let (_, columns) = owned_tables(generation)
+                .into_iter()
+                .find(|(table, _)| *table == "worktracker_issue")
+                .unwrap();
+            assert!(columns.contains(&"workspace_tab_order"));
+        }
+        let (_, baseline) = owned_tables(SchemaGeneration::ProjectOnly)
+            .into_iter()
+            .find(|(table, _)| *table == "worktracker_issue")
+            .unwrap();
+        assert!(!baseline.contains(&"workspace_tab_order"));
     }
 }

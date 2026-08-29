@@ -15,6 +15,7 @@ use super::read_types as output;
 pub struct GraphqlPatchString(pub workflow::PatchValue<String>);
 pub struct GraphqlPatchBool(pub workflow::PatchValue<bool>);
 pub struct GraphqlPatchStringList(pub workflow::PatchValue<output::StringList>);
+pub struct GraphqlPatchJson(pub workflow::PatchValue<serde_json::Value>);
 
 impl CustomInputType for GraphqlPatchString {
     fn gql_input_type_ref(_: &'static BuilderContext) -> TypeRef {
@@ -68,6 +69,23 @@ impl CustomInputType for GraphqlPatchStringList {
             Some(value) => {
                 workflow::PatchValue::Value(output::StringList::parse_value(ctx, Some(value))?)
             }
+        }))
+    }
+}
+
+impl CustomInputType for GraphqlPatchJson {
+    fn gql_input_type_ref(_: &'static BuilderContext) -> TypeRef {
+        TypeRef::named("Json")
+    }
+
+    fn parse_value(
+        _: &'static BuilderContext,
+        value: Option<ValueAccessor<'_>>,
+    ) -> SeaResult<Self> {
+        Ok(Self(match value {
+            None => workflow::PatchValue::Unset,
+            Some(value) if value.is_null() => workflow::PatchValue::Null,
+            Some(value) => workflow::PatchValue::Value(value.deserialize()?),
         }))
     }
 }

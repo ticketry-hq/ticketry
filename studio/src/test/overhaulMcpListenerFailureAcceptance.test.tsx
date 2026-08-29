@@ -14,7 +14,7 @@ describe("overhaul acceptance - fail-closed MCP listener failure", () => {
     useModalStore.setState({ modalStack: [] });
   });
 
-  it("[overhaul-172] keeps shells available while agent launch waits for this instance's listener", async () => {
+  it("[overhaul-174] keeps shells available while agent launch waits for this instance's listener", async () => {
     const base = createBrowserRuntime({ environment: {} });
     const startup = base.startup();
     initializeStudioRuntime({

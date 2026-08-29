@@ -362,6 +362,7 @@ class BoundaryFixture implements StudioFixture {
       return {
         __typename: "WorktrackerIssue",
         ...item,
+        workspace_tab_order: [],
         state_id: item.state,
         issue_type_id: item.issue_type,
         module_id: moduleId,
@@ -433,7 +434,6 @@ class BoundaryFixture implements StudioFixture {
           state: item.state,
           prompt: null,
           required_skills: [],
-          entry_skill: null,
           model: null,
           reasoning: null,
           auto_start: false,

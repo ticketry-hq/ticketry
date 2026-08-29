@@ -61,8 +61,8 @@ mutation UpdateWorkTrackerTransition($issueTypeId: String!, $fromStateId: String
   update_issue_type_transition(issue_type_id: $issueTypeId, from_state_id: $fromStateId, to_state_id: $toStateId, agent_allowed: $agentAllowed, workflow_revision: $workflowRevision) { id }
 }
 
-mutation UpsertWorkTrackerLaunchBinding($issueTypeId: String!, $stateId: String!, $workflowRevision: Int!, $prompt: String, $requiredSkills: [String!], $entrySkill: String, $modelId: String, $reasoningId: String, $autoStart: Boolean, $subtreeRunEnabled: Boolean) {
-  upsert_issue_type_launch_binding(issue_type_id: $issueTypeId, state_id: $stateId, workflow_revision: $workflowRevision, prompt: $prompt, required_skills: $requiredSkills, entry_skill: $entrySkill, model_id: $modelId, reasoning_id: $reasoningId, auto_start: $autoStart, subtree_run_enabled: $subtreeRunEnabled) { id entry_skill: entrySkill }
+mutation UpsertWorkTrackerLaunchBinding($issueTypeId: String!, $stateId: String!, $workflowRevision: Int!, $prompt: String, $requiredSkills: [String!], $modelId: String, $reasoningId: String, $autoStart: Boolean, $subtreeRunEnabled: Boolean) {
+  upsert_issue_type_launch_binding(issue_type_id: $issueTypeId, state_id: $stateId, workflow_revision: $workflowRevision, prompt: $prompt, required_skills: $requiredSkills, model_id: $modelId, reasoning_id: $reasoningId, auto_start: $autoStart, subtree_run_enabled: $subtreeRunEnabled) { id }
 }
 
 mutation SetWorkTrackerAutoStart($issueTypeId: String!, $stateId: String!, $workflowRevision: Int!, $autoStart: Boolean!) {

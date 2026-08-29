@@ -9,7 +9,6 @@ interface Binding {
   state: string;
   prompt?: string;
   required_skills?: unknown;
-  entry_skill?: string | null;
   model?: string | null;
   reasoning?: string | null;
   auto_start?: boolean;
@@ -60,7 +59,6 @@ export function assembleScopedWorkflowSettings(
       required_skills: Array.isArray(binding.required_skills)
         ? binding.required_skills.filter((skill): skill is string => typeof skill === "string")
         : [],
-      entry_skill: binding.entry_skill ?? null,
       agent: provider?.slug ?? null,
       model: model?.name ?? null,
       reasoning: binding.reasoning ? reasoningById.get(binding.reasoning)?.name ?? null : null,

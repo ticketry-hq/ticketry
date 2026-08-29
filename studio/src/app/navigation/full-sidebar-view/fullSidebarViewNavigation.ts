@@ -25,6 +25,7 @@ import {
   selectLiveTerminalStop,
   type LiveTerminalCycleDirection,
 } from "../../../features/studio/lib/liveTerminalCycle";
+import { loadWorkspaceTabOrder } from "../../../features/workspace-tabs/queries";
 import {
   selectModuleTaskOrder,
   taskRevealPath,
@@ -52,6 +53,8 @@ const FOCUSED_PANE_ACTIONS: Record<FocusedPane, ReadonlySet<string>> = {
   "details-or-terminal": new Set(),
 };
 
+let liveTerminalCycleQueue = Promise.resolve();
+
 export function focusedPaneActionIds(pane: FocusedPane): ReadonlySet<string> {
   return FOCUSED_PANE_ACTIONS[pane];
 }
@@ -63,11 +66,11 @@ export function routeFullSidebarViewCaptureNavigation(
   actionId: string | null,
 ): boolean {
   if (actionId === "cycle-terminal-forward") {
-    cycleLiveTerminal(event, taskRows, "forward");
+    queueLiveTerminalCycle(event, taskRows, "forward");
     return true;
   }
   if (actionId === "cycle-terminal-backward") {
-    cycleLiveTerminal(event, taskRows, "backward");
+    queueLiveTerminalCycle(event, taskRows, "backward");
     return true;
   }
   if (
@@ -96,13 +99,20 @@ export function routeFullSidebarViewFocusedPaneNavigation(
   }
 }
 
-function cycleLiveTerminal(
+function queueLiveTerminalCycle(
   event: KeyboardEvent,
   taskRows: TreeRow[],
   direction: LiveTerminalCycleDirection,
 ): void {
   consume(event);
+  const runCycle = () => cycleLiveTerminal(taskRows, direction);
+  liveTerminalCycleQueue = liveTerminalCycleQueue.then(runCycle, runCycle);
+}
 
+async function cycleLiveTerminal(
+  taskRows: TreeRow[],
+  direction: LiveTerminalCycleDirection,
+): Promise<void> {
   const projectId = useStudioStore.getState().selectedProjectId;
   const ui = useClientStore.getState();
   const tree = getModuleTreeSnapshot(projectId, ui.selectedModuleId);
@@ -113,14 +123,44 @@ function cycleLiveTerminal(
   const terminal = useTerminalStore.getState();
   const tabs = useWorkspaceTabsStore.getState();
   const workspace = useTicketWorkspaceStore.getState();
+  const taskIds = ui.storySearchQuery.trim()
+    ? undefined
+    : selectModuleTaskOrder(tree, itemsById, getStatesSnapshot(projectId));
+  const candidateStops = selectLiveTerminalStops({
+    moduleId: ui.selectedModuleId,
+    taskRows,
+    taskOrder: taskIds,
+    agentStatus: readAgentStatusHolding(),
+    sessions: terminal.sessions,
+  });
+  const orderedTaskIds = Array.from(new Set(
+    candidateStops.map((stop) => stop.taskId),
+  ));
+  let terminalOrderByTask: Record<string, readonly string[]>;
+  try {
+    terminalOrderByTask = Object.fromEntries(await Promise.all(
+      orderedTaskIds.map(async (taskId) => {
+        const saved = await loadWorkspaceTabOrder(taskId);
+        return [
+          taskId,
+          saved.order.flatMap((identity) =>
+            identity.kind === "terminal" ? [identity.id] : [],
+          ),
+        ] as const;
+      }),
+    ));
+  } catch {
+    // An unknown saved order can disagree with the visible strip. Stay put
+    // until every work item that contributes a stop has loaded.
+    return;
+  }
   const stops = selectLiveTerminalStops({
     moduleId: ui.selectedModuleId,
     taskRows,
-    taskOrder: ui.storySearchQuery.trim()
-      ? undefined
-      : selectModuleTaskOrder(tree, itemsById, getStatesSnapshot(projectId)),
+    taskOrder: taskIds,
     agentStatus: readAgentStatusHolding(),
     sessions: terminal.sessions,
+    terminalOrderByTask,
   });
   const currentSessionId = ui.selectedTaskId
     ? tabs.activeByTask[ui.selectedTaskId] ?? null

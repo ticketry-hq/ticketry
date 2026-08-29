@@ -134,6 +134,7 @@ named gate before the full Studio suite, typecheck, and build.
 | 125 | Module creation refuses a missing folder before creating the module. |
 | 126 | Opening state configuration over a selected Task terminal hides the retained native viewer without detaching or replacing it, and closing state configuration remeasures and reveals the same handle. |
 | 142 | An upgraded profile uses distinct gray, red, and teal workflow colors on state headers and work-item identifiers while preserving a custom state color. |
+| 149 | The module shell uses the native renderer when available and the browser fallback otherwise. |
 | 153 | The desktop xterm fallback attaches, exchanges bytes, resizes, scrolls, suspends, resumes, and detaches through Tauri viewer commands instead of the Python terminal WebSocket. |
 | 154 | Desktop Run Now, agent and module-shell discovery and control use caller-owned GraphQL over TauRPC, deliberate launches get fresh request IDs while retries retain them, mutations refresh canonical terminal holdings, and native plus xterm viewers share generation-bound lease authority. |
 | 155 | Studio snapshots and live output events consume the same Rust run projection, including Shell scope, nullable provider, launch metadata, effective state, output sequence, and output time. |
@@ -152,8 +153,10 @@ named gate before the full Studio suite, typecheck, and build.
 | 168 | A module drag rejected because its cached neighbors are stale refreshes the authoritative order, recomputes the same gesture, and completes without asking the person to retry. |
 | 169 | A native terminal viewer reports terminal output through the shared backend activity operation exactly once when it takes the run, and then never polls. |
 | 170 | Onboarding belongs to the installation project: the welcome appears while no project exists or while the installation project still requires it, an acknowledgement names the project the tour ran for, and a restart reads the acknowledged state back. |
-| 171 | Workflow settings can select one required skill as a launch binding's entry skill, save it, clear it, and reload either persisted value. |
-| 172 | When Ticketry cannot own an MCP listener, Studio says agent launches are blocked, local shells remain available, restart retries listener startup, and the acknowledgement does not claim to continue without MCP. |
+| 171 | A WorkItem's Apollo-owned workspace tab order interleaves Details, documents, and terminals across reload, close and reopen, dormant periods, and newly visible tabs. |
+| 172 | Workspace tabs stay locked until their saved order loads, then show horizontal drag placement, suppress the drop click, serialize saves, retain the active tab in view, and roll back a failed optimistic save. |
+| 173 | Live-terminal cycling reads each candidate WorkItem's Apollo-owned saved order, including workspaces that have not been opened, before selecting the next terminal. |
+| 174 | When Ticketry cannot own an MCP listener, Studio says agent launches are blocked, local shells remain available, restart retries listener startup, and the acknowledgement does not claim to continue without MCP. |
 
 Each executable case carries one stable `[overhaul-NN]` marker. The gate has a
 contract test that fails if a marker is missing or duplicated. When a Studio UI

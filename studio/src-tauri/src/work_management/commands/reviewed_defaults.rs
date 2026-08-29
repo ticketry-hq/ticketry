@@ -9,11 +9,6 @@ pub(super) fn load() -> serde_json::Result<Defaults> {
     serde_json::from_str(REVIEWED_DEFAULTS)
 }
 
-pub(crate) fn entry_skill_seeds() -> serde_json::Result<(Vec<String>, HashMap<String, String>)> {
-    let defaults = load()?;
-    Ok((defaults.issue_types, defaults.entry_skills))
-}
-
 pub(crate) fn state_color(name: &str) -> serde_json::Result<Option<String>> {
     Ok(load()?
         .states
@@ -28,8 +23,6 @@ pub(super) struct Defaults {
     pub(super) states: Vec<StateSeed>,
     pub(super) issue_types: Vec<String>,
     pub(super) required_skills: HashMap<String, Vec<String>>,
-    /// The reviewed entry skill per state name. States without one are absent.
-    pub(super) entry_skills: HashMap<String, String>,
     pub(super) prompts: HashMap<String, HashMap<String, String>>,
     pub(super) workflows: HashMap<String, WorkflowSeed>,
 }
@@ -99,17 +92,6 @@ mod tests {
             defaults.issue_types,
             ["Story", "PathFind", "Implementation"]
         );
-        assert_eq!(
-            defaults.entry_skills["Grill"].as_str(),
-            "grill-with-docs"
-        );
-        assert_eq!(defaults.entry_skills["Spec"].as_str(), "to-spec");
-        assert_eq!(defaults.entry_skills["Tickets"].as_str(), "to-tickets");
-        assert_eq!(defaults.entry_skills.len(), 3);
-        // Every reviewed entry skill is one the same state already requires.
-        for (state, skill) in &defaults.entry_skills {
-            assert!(defaults.required_skills[state].contains(skill));
-        }
         assert_eq!(defaults.workflows["Story"].start, "Ideas");
         assert_eq!(defaults.workflows["PathFind"].start, "Spec");
         assert_eq!(defaults.workflows["Implementation"].start, "Implement");

@@ -78,8 +78,7 @@ async fn fixture() -> (tempfile::TempDir, sea_orm::DatabaseConnection) {
             CREATE TABLE worktracker_launchbinding (
                 id integer PRIMARY KEY AUTOINCREMENT, issue_type_id char(32) NOT NULL,
                 state_id char(32) NOT NULL, prompt text NOT NULL,
-                required_skills text NOT NULL, entry_skill varchar(128),
-                model_id char(32), reasoning_id char(32),
+                required_skills text NOT NULL, model_id char(32), reasoning_id char(32),
                 auto_start bool NOT NULL, subtree_run_enabled bool NOT NULL,
                 created_at datetime NOT NULL, updated_at datetime NOT NULL,
                 UNIQUE(issue_type_id, state_id)
@@ -125,7 +124,6 @@ fn patch(state_id: &str) -> workflow::PatchLaunchBinding {
         workflow_revision: 1,
         prompt: workflow::PatchValue::Value("Implement it.".to_owned()),
         required_skills: workflow::PatchValue::Value(vec!["tdd".to_owned()]),
-        entry_skill: workflow::PatchValue::Value("tdd".to_owned()),
         model_id: workflow::PatchValue::Value(GPT.to_owned()),
         reasoning_id: workflow::PatchValue::Value(HIGH.to_owned()),
         auto_start: workflow::PatchValue::Value(true),
@@ -164,7 +162,6 @@ async fn binding_create_normalizes_and_round_trips_the_complete_policy() {
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].id, id);
     assert_eq!(rows[0].required_skills.0, ["tdd"]);
-    assert_eq!(rows[0].entry_skill.as_deref(), Some("tdd"));
     assert_eq!(
         rows[0].model.as_deref(),
         Some("60000000-0000-0000-0000-000000000001")
@@ -222,7 +219,7 @@ async fn binding_create_normalizes_and_round_trips_the_complete_policy() {
 
 #[tokio::test]
 async fn invalid_candidates_reject_without_a_row_or_revision_change() {
-    for invalid in 0..10 {
+    for invalid in 0..9 {
         let (_directory, database) = fixture().await;
         let mut candidate = patch(BUILD);
         match invalid {
@@ -241,7 +238,6 @@ async fn invalid_candidates_reject_without_a_row_or_revision_change() {
             }
             7 => candidate.prompt = workflow::PatchValue::Value(String::new()),
             8 => candidate.model_id = workflow::PatchValue::Value(INTERACTIVE_MODEL.to_owned()),
-            9 => candidate.entry_skill = workflow::PatchValue::Value("to-spec".to_owned()),
             _ => unreachable!(),
         }
         workflow::patch_launch_binding(&database, candidate)
@@ -249,41 +245,6 @@ async fn invalid_candidates_reject_without_a_row_or_revision_change() {
             .expect_err("invalid launch policy must be rejected");
         assert_no_effect(&database).await;
     }
-}
-
-#[tokio::test]
-async fn clearing_the_entry_skill_survives_reopen_without_deleting_the_binding() {
-    let (directory, database) = fixture().await;
-    let id = workflow::patch_launch_binding(&database, patch(BUILD))
-        .await
-        .unwrap();
-    let mut clear = patch(BUILD);
-    clear.workflow_revision = 2;
-    clear.prompt = workflow::PatchValue::Unset;
-    clear.required_skills = workflow::PatchValue::Unset;
-    clear.entry_skill = workflow::PatchValue::Null;
-    clear.model_id = workflow::PatchValue::Unset;
-    clear.reasoning_id = workflow::PatchValue::Unset;
-    clear.auto_start = workflow::PatchValue::Unset;
-    clear.subtree_run_enabled = workflow::PatchValue::Unset;
-    assert_eq!(
-        workflow::patch_launch_binding(&database, clear)
-            .await
-            .unwrap(),
-        id
-    );
-    database.close().await.unwrap();
-
-    let reopened = open_for_commands(&directory.path().join("state.db"))
-        .await
-        .unwrap();
-    let row = launch_binding::Entity::find_by_id(id)
-        .one(&reopened)
-        .await
-        .unwrap()
-        .unwrap();
-    assert_eq!(row.entry_skill, None);
-    assert_eq!(row.required_skills, serde_json::json!(["tdd"]));
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]

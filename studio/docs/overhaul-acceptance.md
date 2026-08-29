@@ -157,6 +157,9 @@ named gate before the full Studio suite, typecheck, and build.
 | 172 | Workspace tabs stay locked until their saved order loads, then show horizontal drag placement, suppress the drop click, serialize saves, retain the active tab in view, and roll back a failed optimistic save. |
 | 173 | Live-terminal cycling reads each candidate WorkItem's Apollo-owned saved order, including workspaces that have not been opened, before selecting the next terminal. |
 | 174 | When Ticketry cannot own an MCP listener, Studio says agent launches are blocked, local shells remain available, restart retries listener startup, and the acknowledgement does not claim to continue without MCP. |
+| 175 | A hidden Module tab stays hidden after the Apollo cache is rebuilt from the authoritative project read. |
+| 176 | Agent activity does not reopen a hidden Module tab. |
+| 177 | When every Module tab is hidden, the permanent footer control opens the Modules pane, hidden rows keep lifecycle status, and sidebar selection restores and selects the tab. A project with no Modules offers creation instead of recovery copy. |
 
 Each executable case carries one stable `[overhaul-NN]` marker. The gate has a
 contract test that fails if a marker is missing or duplicated. When a Studio UI

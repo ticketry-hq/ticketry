@@ -4,6 +4,7 @@ import {
   useModuleReorderDrag,
   useModulesQuery,
 } from "../../../../features/projects";
+import { useRestoreAndSelectModule } from "../../../../features/module-tabs";
 import { useStudioStore } from "../../../../features/projects";
 import {
   resolveCursorId,
@@ -17,7 +18,7 @@ export function ModulesPane() {
   const modulesQuery = useModulesQuery(selectedProjectId);
   const modules = modulesQuery.data ?? [];
   const selectedModuleId = useClientStore((s) => s.selectedModuleId);
-  const selectModule = useClientStore((s) => s.selectModule);
+  const restoreAndSelectModule = useRestoreAndSelectModule();
   const loading = modulesQuery.isPending;
 
   const cursorId = useClientStore((s) => s.modulesCursorId);
@@ -30,9 +31,9 @@ export function ModulesPane() {
     (moduleId: string) => {
       if (dragDrop.consumePostDropClick()) return;
       setCursor(moduleId);
-      void selectModule(moduleId);
+      restoreAndSelectModule(moduleId);
     },
-    [dragDrop, selectModule, setCursor],
+    [dragDrop, restoreAndSelectModule, setCursor],
   );
 
   // Centered "+ Add Module" trigger, always rendered after the list. It is

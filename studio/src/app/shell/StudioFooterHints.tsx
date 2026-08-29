@@ -79,19 +79,8 @@ function getFooterHints(
   zone: EditViewZone,
   bodyEngaged: boolean,
 ): FooterHint[] {
-  const chords = getEffectiveChords();
-  const sidebarChord = chords.get("global:toggle-sidebar");
-  const sidebarHints = sidebarChord
-    ? [
-        {
-          key: formatChordSymbols(sidebarChord),
-          label: sidebarVisible ? "Close Menu" : "Open Menu",
-        },
-      ]
-    : [];
-
-  if (sidebarVisible) return sidebarHints;
-  return [...sidebarHints, ...getEditViewHints(chords, zone, bodyEngaged)];
+  if (sidebarVisible) return [];
+  return getEditViewHints(getEffectiveChords(), zone, bodyEngaged);
 }
 
 function getEditViewHints(

@@ -115,6 +115,14 @@ describe("startup acceptance", () => {
     expect(getProjectsSnapshot()).toHaveLength(1);
   });
 
+  it("does not force the Modules sidebar open during ordinary startup", async () => {
+    useClientStore.setState({ sidebarVisible: false });
+
+    expect(await bootstrapStudio()).toBe("ready");
+
+    expect(useClientStore.getState().sidebarVisible).toBe(false);
+  });
+
   it("reads the project and its links before anything can prompt", async () => {
     expect(await bootstrapStudio()).toBe("ready");
 
@@ -141,7 +149,7 @@ describe("startup acceptance", () => {
 
     expect(useClientStore.getState().selectedModuleId).toBeNull();
     expect(useModalStore.getState().modalStack).toEqual([]);
-    expect(useClientStore.getState().focusedPane).toBe("modules");
+    expect(useClientStore.getState().focusedPane).toBe("tasks");
   });
 
   it("ignores a remembered module the project no longer has", async () => {

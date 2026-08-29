@@ -1,3 +1,4 @@
+import { ModuleLifecycleChicklets } from "../../../../features/agents/status";
 import type {
   DragSourceProps,
   DropIntent,
@@ -39,7 +40,7 @@ export function ModuleRow({
       onClick={() => onSelect(module.id)}
       {...dragSourceProps}
       {...dropTargetProps}
-      className={`relative cursor-pointer truncate px-1 py-0.5 ${
+      className={`relative flex cursor-pointer items-center px-1 py-0.5 ${
         isSelected
           ? "bg-selection-bg text-text-primary"
           : isFocused
@@ -57,8 +58,8 @@ export function ModuleRow({
           }`}
         />
       ) : null}
-      {"📦 "}
-      {module.name}
+      <span className="truncate">📦 {module.name}</span>
+      <ModuleLifecycleChicklets moduleId={module.id} />
     </li>
   );
 }

@@ -11,7 +11,7 @@ export function StudioFooterActions() {
   const openSettings = useModalStore((state) => state.openSettings);
 
   return (
-    <div className="ml-auto flex items-center gap-3">
+    <div className="flex min-w-0 items-center justify-end gap-3">
       <FooterTerminalToggle />
       <button
         type="button"

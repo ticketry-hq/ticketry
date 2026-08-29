@@ -87,11 +87,12 @@ export function routeFullSidebarViewFocusedPaneNavigation(
   event: KeyboardEvent,
   taskRows: TreeRow[],
   actionId: string | null,
+  selectSidebarModule: (moduleId: string) => void,
 ): boolean {
   const ctx = createNavigationContext(event, taskRows);
   switch (ctx.ui.focusedPane) {
     case "modules":
-      return routeModulesPane(ctx, actionId);
+      return routeModulesPane(ctx, actionId, selectSidebarModule);
     case "tasks":
       return routeTasksPane(ctx, actionId);
     case "details-or-terminal":
@@ -199,6 +200,7 @@ async function cycleLiveTerminal(
 function routeModulesPane(
   { event, tasks, ui }: NavigationContext,
   actionId: string | null,
+  selectSidebarModule: (moduleId: string) => void,
 ): boolean {
   if (actionId === "modules.next" || actionId === "modules.previous") {
     consume(event);
@@ -218,13 +220,13 @@ function routeModulesPane(
   const module = tasks.modules.find((candidate) => candidate.id === moduleId);
   if (event.shiftKey && module) {
     consume(event);
-    void tasks.selectModule(module.id);
+    selectSidebarModule(module.id);
     startInstantChangeFlow();
     return true;
   }
 
   consume(event);
-  if (module) void tasks.selectModule(module.id);
+  if (module) selectSidebarModule(module.id);
   return true;
 }
 

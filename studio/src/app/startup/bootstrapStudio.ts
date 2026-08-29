@@ -1,7 +1,4 @@
-import {
-  getOnboardingRequiredSnapshot,
-  loadOnboardingState,
-} from "../onboarding/onboardingStore";
+import { loadOnboardingState } from "../onboarding/onboardingStore";
 import { loadModuleLinks } from "../../features/module-links";
 import { loadProjects, useStudioStore } from "../../features/projects";
 import { resolveDefaultProject } from "../../features/studio/lib/defaultProject";
@@ -52,12 +49,6 @@ async function restoreWorkspace(): Promise<void> {
   const project = await resolveDefaultProject();
   await useStudioStore.getState().selectProject(project.id);
 
-  // A pending first run may be replaying over webview-local preferences from
-  // an established workspace. Leave that preference intact for the tour to
-  // capture before it temporarily reveals its anchors.
-  if (!getOnboardingRequiredSnapshot()) {
-    useClientStore.getState().setSidebarVisible(true);
-  }
   // Selecting the project restores the remembered module when it is still
   // present and linked, so the pane to open is whichever one now has content.
   const moduleRestored = useClientStore.getState().selectedModuleId !== null;

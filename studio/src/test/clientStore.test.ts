@@ -6,6 +6,21 @@ describe("clientStore", () => {
     vi.resetModules();
   });
 
+  it("ignores the retired disabled-build sidebar value and saves the current preference", async () => {
+    localStorage.setItem("studio.sidebarVisible:v1", "false");
+    const { useClientStore } = await import("../state/clientStore");
+
+    expect(useClientStore.getState().sidebarVisible).toBe(true);
+
+    useClientStore.getState().toggleSidebar();
+    expect(useClientStore.getState().sidebarVisible).toBe(false);
+    expect(localStorage.getItem("studio.sidebarVisible:v2")).toBe("false");
+
+    useClientStore.getState().setSidebarVisible(true);
+    expect(localStorage.getItem("studio.sidebarVisible:v2")).toBe("true");
+    expect(localStorage.getItem("studio.sidebarVisible:v1")).toBe("false");
+  });
+
   it("migrates legacy collapsed state names to live ids once", async () => {
     localStorage.setItem(
       "studio.collapsedStates:v1",

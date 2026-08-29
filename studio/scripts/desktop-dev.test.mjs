@@ -13,11 +13,13 @@ import test from "node:test";
 import { productIdentity } from "../../scripts/product-identity.mjs";
 
 import {
+  buildDesktopHookRunnerCommand,
   createTemporarySqliteProfile,
   formatDevelopmentIdentity,
   parseDesktopDevOptions,
   parseDesktopDevMode,
   removeTemporarySqliteProfile,
+  prepareDesktopHookRunner,
   resolveDevelopmentDataDirectory,
   resolveDevelopmentLogPath,
   resolveDevelopmentTmuxSocket,
@@ -193,6 +195,45 @@ test("the Tauri CLI is resolved through the workspace dependency tree", () => {
 
   assert.equal(resolved, "/repository/node_modules/@tauri-apps/cli/tauri.js");
   assert.deepEqual(requests, ["@tauri-apps/cli/tauri.js"]);
+});
+
+test("desktop development prepares the Tauri sidecar for the Rust host target", () => {
+  assert.deepEqual(buildDesktopHookRunnerCommand({
+    hostTarget: "x86_64-unknown-linux-gnu",
+    root: "/repository",
+    platform: "linux",
+  }), {
+    command: "rustc",
+    args: [
+      "/repository/studio/src-tauri/native/ticketry_hook.rs",
+      "--edition",
+      "2021",
+      "-o",
+      "/repository/studio/src-tauri/binaries/ticketry-hook-x86_64-unknown-linux-gnu",
+    ],
+  });
+});
+
+test("desktop development builds the sidecar before launching Tauri", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "ticketry-desktop-hook-test-"));
+  const calls = [];
+  prepareDesktopHookRunner({
+    root,
+    rustcVersion: () => "rustc 1.95.0\nhost: aarch64-apple-darwin\n",
+    runner(command, args, options) {
+      calls.push({ command, args, options });
+      return { status: 0 };
+    },
+  });
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].command, "rustc");
+  assert.equal(
+    calls[0].args.at(-1),
+    path.join(root, "studio/src-tauri/binaries/ticketry-hook-aarch64-apple-darwin"),
+  );
+  assert.equal(existsSync(path.dirname(calls[0].args.at(-1))), true);
+  rmSync(root, { recursive: true });
 });
 
 test("startup identity is one concise non-secret report with all selected resources", () => {

@@ -1,4 +1,4 @@
-import { execFileSync, spawn } from "node:child_process";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -172,9 +172,9 @@ export function stopTemporaryTmuxServer(
   }
 }
 
-export function buildTauriDevelopmentConfig(port) {
+export function buildTauriDevelopmentConfig(port, { platform = process.platform } = {}) {
   const origin = `http://127.0.0.1:${port}`;
-  return {
+  const config = {
     productName: "Ticketry Dev",
     identifier: "com.ticketry.desktop.dev",
     build: {
@@ -195,6 +195,8 @@ export function buildTauriDevelopmentConfig(port) {
       }],
     },
   };
+  if (platform !== "darwin") config.bundle = { resources: [] };
+  return config;
 }
 
 export function formatDevelopmentIdentity({
@@ -246,6 +248,42 @@ export function resolveTauriCliPath(resolver = require.resolve) {
   return resolver("@tauri-apps/cli/tauri.js");
 }
 
+export function buildDesktopHookRunnerCommand({
+  hostTarget,
+  root = workspaceRoot,
+  platform = process.platform,
+} = {}) {
+  const executable = `ticketry-hook-${hostTarget}${platform === "win32" ? ".exe" : ""}`;
+  return {
+    command: "rustc",
+    args: [
+      path.join(root, "studio", "src-tauri", "native", "ticketry_hook.rs"),
+      "--edition",
+      "2021",
+      "-o",
+      path.join(root, "studio", "src-tauri", "binaries", executable),
+    ],
+  };
+}
+
+export function prepareDesktopHookRunner({
+  root = workspaceRoot,
+  runner = spawnSync,
+  rustcVersion = () => execFileSync("rustc", ["-vV"], { encoding: "utf8" }),
+} = {}) {
+  const hostTarget = rustcVersion().match(/^host: (.+)$/m)?.[1];
+  if (!hostTarget) throw new Error("Could not determine the rustc host target");
+  const build = buildDesktopHookRunnerCommand({ hostTarget, root });
+  mkdirSync(path.dirname(build.args.at(-1)), { recursive: true });
+  const result = runner(build.command, build.args, { cwd: root, stdio: "inherit" });
+  if (result.error) {
+    throw new Error(`Could not build ticketry-hook: ${result.error.message}`);
+  }
+  if (result.status !== 0) {
+    throw new Error(`Could not build ticketry-hook: rustc exited with ${result.status}`);
+  }
+}
+
 export async function main() {
   const options = parseDesktopDevOptions(process.argv.slice(2));
   const dataDirectory = options.temporarySqlite
@@ -264,6 +302,7 @@ export async function main() {
     buildEnvironment.MUXED_FORCE_SQLITE = "true";
   }
   try {
+    prepareDesktopHookRunner();
     const frontendPort = await selectFrontendPort({
       requestedPort: process.env.MUXED_FRONTEND_PORT,
     });

@@ -133,8 +133,14 @@ describe("module boundaries", () => {
   });
 
   it("keeps the WorkTracker data-layer shape explicit", () => {
-    for (const root of ["projects", "work-items", "workflows"] as const) {
-      for (const directory of ["operations", "generated", "queries", "selectors"] as const) {
+    const expectedDirectories = {
+      projects: ["operations", "generated", "queries"],
+      "work-items": ["operations", "generated", "queries", "selectors"],
+      workflows: ["operations", "generated", "queries", "selectors"],
+    } as const;
+
+    for (const [root, directories] of Object.entries(expectedDirectories)) {
+      for (const directory of directories) {
         expect(statSync(join(SRC, "features", root, directory)).isDirectory()).toBe(true);
       }
       expect(statSync(join(SRC, "features", root, "index.ts")).isFile()).toBe(true);

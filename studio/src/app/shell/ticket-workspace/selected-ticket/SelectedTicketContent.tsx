@@ -36,6 +36,8 @@ import {
 } from "./internal/useWorkspaceTabFocus";
 import { useWorkspaceTabPresentation } from "./internal/useWorkspaceTabPresentation";
 import { useActivatedProviders } from "../../../../features/workflows";
+import { useWorkspaceTabOrdering } from "../../../../features/workspace-tabs/useWorkspaceTabOrdering";
+import { useWorkspaceTabOrder } from "../../../../features/workspace-tabs/queries";
 
 export type {
   ScratchLaunchMode,
@@ -188,6 +190,10 @@ export function SelectedTicketContent({
   ]);
 
   const sessionByRun = useTerminalStore((s) => s.sessionByRun);
+  const workspaceTabWorkItemId = bucket && !isScratchBucket(bucket)
+    ? bucket
+    : null;
+  const savedTabOrder = useWorkspaceTabOrder(workspaceTabWorkItemId);
 
   useEffect(() => {
     const request = restoreRequestRef.current;
@@ -230,6 +236,16 @@ export function SelectedTicketContent({
     terminalTabs: tabs,
     activeTerminalId: activeTermId,
     resumableSessions,
+    savedTabOrder: savedTabOrder.order,
+  });
+  const workspaceTabReorder = useWorkspaceTabOrdering({
+    workItemId: workspaceTabWorkItemId,
+    savedOrder: savedTabOrder,
+    documents: documentQuery.documents,
+    openDocuments: openDocs,
+    terminalTabs: tabs,
+    resumableSessions,
+    visibleOrder: navigableTabs,
   });
 
   useEditViewWorkspaceFocus({
@@ -328,6 +344,9 @@ export function SelectedTicketContent({
         activeTerminalId={activeTermId}
         documents={openDocs}
         terminalTabs={tabs}
+        orderedTabs={navigableTabs}
+        activeTab={activeTab}
+        reorderDrag={workspaceTabReorder}
         bucket={bucket}
         launchContext={launchContext}
         activatedProviders={activatedProviders}

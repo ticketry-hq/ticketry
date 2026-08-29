@@ -7,7 +7,9 @@ use muxed_studio_lib::work_management::commands::{
 use muxed_studio_lib::work_management::entities::{
     attachment, issue, issue_type, issue_type_transition, launch_binding, project, state,
 };
-use muxed_studio_lib::work_management::open_for_commands;
+use muxed_studio_lib::work_management::{
+    open_for_commands, workspace_tab_order, workspace_tab_order_migration,
+};
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, ConnectionTrait, Database, EntityTrait, PaginatorTrait,
     QueryFilter, QueryOrder, Set,
@@ -131,6 +133,18 @@ async fn fixture() -> (tempfile::TempDir, sea_orm::DatabaseConnection) {
     let database = open_for_commands(&path)
         .await
         .expect("open command database");
+    workspace_tab_order_migration::install(&database)
+        .await
+        .expect("install workspace-tab ordering");
+    let issue_column_count = database
+        .query_all_raw(sea_orm::Statement::from_string(
+            sea_orm::DbBackend::Sqlite,
+            "PRAGMA table_info(worktracker_issue)".to_owned(),
+        ))
+        .await
+        .expect("inspect migrated Issue schema")
+        .len();
+    assert_eq!(issue_column_count, 16);
     (directory, database)
 }
 
@@ -143,6 +157,279 @@ fn create_input(name: impl Into<String>) -> work_items::CreateWorkItem {
         state_id: None,
         parent_id: None,
     }
+}
+
+const TARGET_DOCUMENT: &str = "document-target";
+const FOREIGN_DOCUMENT: &str = "document-foreign";
+const TARGET_TERMINAL: &str = "terminal-target";
+const FOREIGN_TERMINAL: &str = "terminal-foreign";
+
+async fn seed_workspace_identities(
+    database: &sea_orm::DatabaseConnection,
+    target: &str,
+    foreign: &str,
+) {
+    database
+        .execute_unprepared(&format!(
+            r#"
+            CREATE TABLE design_documents (
+                id TEXT PRIMARY KEY, module_id TEXT NOT NULL, task_id TEXT NOT NULL,
+                scope TEXT NOT NULL, root_dir TEXT NOT NULL, rel_path TEXT NOT NULL,
+                discovered_by_run_id TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+                content_digest TEXT
+            );
+            CREATE TABLE agent_runs (
+                id TEXT PRIMARY KEY, issue_id TEXT NOT NULL, ticket_seq INTEGER,
+                agent TEXT, model TEXT, reasoning TEXT, status TEXT NOT NULL,
+                started_at TEXT NOT NULL, ended_at TEXT, exit_code INTEGER, error TEXT,
+                cwd TEXT, provider_session_id TEXT, lifecycle_state TEXT,
+                lifecycle_updated_at TEXT, design_dir TEXT, resumed_from TEXT,
+                scope TEXT NOT NULL, launch_state TEXT, launch_model TEXT
+            );
+            INSERT INTO design_documents
+                (id, module_id, task_id, scope, root_dir, rel_path, created_at, updated_at)
+            VALUES
+                ('{TARGET_DOCUMENT}', '', '{target}', 'task', '', 'target.md', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+                ('{FOREIGN_DOCUMENT}', '', '{foreign}', 'task', '', 'foreign.md', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+            INSERT INTO agent_runs (id, issue_id, status, started_at, scope) VALUES
+                ('{TARGET_TERMINAL}', '{target}', 'running', CURRENT_TIMESTAMP, 'task'),
+                ('{FOREIGN_TERMINAL}', '{foreign}', 'running', CURRENT_TIMESTAMP, 'task');
+            "#
+        ))
+        .await
+        .expect("seed workspace identity owners");
+}
+
+#[tokio::test]
+async fn workspace_tab_order_preserves_owned_dormant_tabs_prunes_unknown_and_rejects_foreign() {
+    let (_directory, database) = fixture().await;
+    let target = work_items::create(&database, create_input("Workspace target"), None)
+        .await
+        .unwrap();
+    let foreign = work_items::create(&database, create_input("Workspace foreign"), None)
+        .await
+        .unwrap();
+    seed_workspace_identities(&database, &target, &foreign).await;
+    let before = project::Entity::find_by_id(PROJECT)
+        .one(&database)
+        .await
+        .unwrap()
+        .unwrap()
+        .state_revision;
+    let expected = serde_json::json!([
+        {"kind": "terminal", "id": TARGET_TERMINAL},
+        {"kind": "details"},
+        {"kind": "doc", "id": TARGET_DOCUMENT}
+    ]);
+
+    workspace_tab_order::update(
+        &database,
+        &target,
+        serde_json::json!([
+            {"kind": "terminal", "id": TARGET_TERMINAL},
+            {"kind": "doc", "id": "missing-document"},
+            {"kind": "details"},
+            {"kind": "terminal", "id": "missing-terminal"},
+            {"kind": "doc", "id": TARGET_DOCUMENT}
+        ]),
+        None,
+    )
+    .await
+    .unwrap();
+    let stored = issue::Entity::find_by_id(&target)
+        .one(&database)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(stored.workspace_tab_order, expected);
+    assert_eq!(stored.state_revision, before + 1);
+
+    workspace_tab_order::update(&database, &target, expected.clone(), None)
+        .await
+        .expect("reopening the same order is a no-op");
+    assert_eq!(
+        project::Entity::find_by_id(PROJECT)
+            .one(&database)
+            .await
+            .unwrap()
+            .unwrap()
+            .state_revision,
+        before + 1
+    );
+
+    let error = workspace_tab_order::update(
+        &database,
+        &target,
+        serde_json::json!([{"kind": "doc", "id": FOREIGN_DOCUMENT}]),
+        None,
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(error.code(), "foreign_scope");
+    assert_eq!(
+        issue::Entity::find_by_id(&target)
+            .one(&database)
+            .await
+            .unwrap()
+            .unwrap()
+            .workspace_tab_order,
+        expected
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn concurrent_workspace_tab_writes_serialize_and_allocate_distinct_revisions() {
+    let (_directory, database) = fixture().await;
+    let target = work_items::create(&database, create_input("Concurrent workspace"), None)
+        .await
+        .unwrap();
+    let foreign = work_items::create(&database, create_input("Identity owner fixture"), None)
+        .await
+        .unwrap();
+    seed_workspace_identities(&database, &target, &foreign).await;
+    let before = project::Entity::find_by_id(PROJECT)
+        .one(&database)
+        .await
+        .unwrap()
+        .unwrap()
+        .state_revision;
+    let left = serde_json::json!([
+        {"kind": "details"},
+        {"kind": "doc", "id": TARGET_DOCUMENT}
+    ]);
+    let right = serde_json::json!([
+        {"kind": "doc", "id": TARGET_DOCUMENT},
+        {"kind": "details"}
+    ]);
+
+    let (left_result, right_result) = tokio::join!(
+        workspace_tab_order::update(&database, &target, left.clone(), None),
+        workspace_tab_order::update(&database, &target, right.clone(), None)
+    );
+    left_result.unwrap();
+    right_result.unwrap();
+
+    let stored = issue::Entity::find_by_id(&target)
+        .one(&database)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(stored.workspace_tab_order == left || stored.workspace_tab_order == right);
+    assert_eq!(stored.state_revision, before + 2);
+    assert_eq!(
+        project::Entity::find_by_id(PROJECT)
+            .one(&database)
+            .await
+            .unwrap()
+            .unwrap()
+            .state_revision,
+        before + 2
+    );
+}
+
+#[tokio::test]
+async fn graphql_reads_and_restricted_update_share_the_workspace_tab_order_model_field() {
+    let (directory, database) = fixture().await;
+    let target = work_items::create(&database, create_input("GraphQL workspace"), None)
+        .await
+        .unwrap();
+    let foreign = work_items::create(&database, create_input("GraphQL foreign"), None)
+        .await
+        .unwrap();
+    seed_workspace_identities(&database, &target, &foreign).await;
+    let api = TransportApiImpl::new();
+    let _runtime = initialize_with_worktracker_commands_and_install(
+        &directory.path().join("rust-core.sqlite3"),
+        &directory.path().join("state.db"),
+        &directory.path().join("media"),
+        &api,
+    )
+    .await
+    .unwrap();
+    let mutation = r#"
+        mutation SaveWorkspace($id: String!, $order: Json!) {
+          update_work_item(id: $id, workspace_tab_order: $order) {
+            id
+            workspace_tab_order: workspaceTabOrder
+          }
+        }
+    "#;
+    let execute = |query: &str, variables: serde_json::Value| {
+        api.clone().graphql_execute(
+            serde_json::json!({"query": query, "variables": variables}).to_string(),
+        )
+    };
+
+    let updated: serde_json::Value = serde_json::from_str(
+        &execute(
+            mutation,
+            serde_json::json!({
+                "id": target,
+                "order": [
+                    {"kind": "details"},
+                    {"kind": "doc", "id": "missing-document"},
+                    {"kind": "terminal", "id": TARGET_TERMINAL}
+                ]
+            }),
+        )
+        .await,
+    )
+    .unwrap();
+    assert!(updated.get("errors").is_none(), "{updated:#}");
+    assert_eq!(
+        updated["data"]["update_work_item"]["workspace_tab_order"],
+        serde_json::json!([
+            {"kind": "details"},
+            {"kind": "terminal", "id": TARGET_TERMINAL}
+        ])
+    );
+
+    let read: serde_json::Value = serde_json::from_str(
+        &execute(
+            r#"query ReadWorkspace($id: String!) {
+                worktrackerIssue(filters: { id: { eq: $id } }) {
+                  nodes { workspace_tab_order: workspaceTabOrder }
+                }
+            }"#,
+            serde_json::json!({"id": target}),
+        )
+        .await,
+    )
+    .unwrap();
+    assert!(read.get("errors").is_none(), "{read:#}");
+    assert_eq!(
+        read["data"]["worktrackerIssue"]["nodes"][0]["workspace_tab_order"],
+        updated["data"]["update_work_item"]["workspace_tab_order"]
+    );
+
+    let foreign: serde_json::Value = serde_json::from_str(
+        &execute(
+            mutation,
+            serde_json::json!({
+                "id": target,
+                "order": [{"kind": "doc", "id": FOREIGN_DOCUMENT}]
+            }),
+        )
+        .await,
+    )
+    .unwrap();
+    assert_eq!(foreign["errors"][0]["extensions"]["code"], "foreign_scope");
+
+    let malformed: serde_json::Value = serde_json::from_str(
+        &execute(
+            mutation,
+            serde_json::json!({
+                "id": target,
+                "order": [{"kind": "details"}, {"kind": "details"}]
+            }),
+        )
+        .await,
+    )
+    .unwrap();
+    assert_eq!(
+        malformed["errors"][0]["extensions"]["field"],
+        "workspace_tab_order"
+    );
 }
 
 #[tokio::test]
@@ -344,10 +631,10 @@ async fn hierarchy_create_reparent_detach_repairs_deep_module_ancestry_across_re
         .execute_unprepared(&format!(
             r#"
             INSERT INTO worktracker_issue VALUES
-                ('20000000000000000000000000000001','{PROJECT}','module','{MODULE_TYPE}',NULL,NULL,NULL,1,'Module A',1,0,'a','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP),
-                ('20000000000000000000000000000002','{PROJECT}','module','{MODULE_TYPE}',NULL,NULL,NULL,2,'Module B',2,0,'b','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP),
-                ('50000000000000000000000000000001','{PROJECT}','task','{TASK_TYPE}','20000000000000000000000000000002','20000000000000000000000000000002','{BACKLOG}',3,'Earlier sibling',3,0,'a','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP),
-                ('50000000000000000000000000000002','{PROJECT}','task','{TASK_TYPE}','20000000000000000000000000000002','20000000000000000000000000000002','{BACKLOG}',4,'Later sibling',4,0,'c','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP);
+                ('20000000000000000000000000000001','{PROJECT}','module','{MODULE_TYPE}',NULL,NULL,NULL,1,'Module A',1,0,'a','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'[]'),
+                ('20000000000000000000000000000002','{PROJECT}','module','{MODULE_TYPE}',NULL,NULL,NULL,2,'Module B',2,0,'b','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'[]'),
+                ('50000000000000000000000000000001','{PROJECT}','task','{TASK_TYPE}','20000000000000000000000000000002','20000000000000000000000000000002','{BACKLOG}',3,'Earlier sibling',3,0,'a','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'[]'),
+                ('50000000000000000000000000000002','{PROJECT}','task','{TASK_TYPE}','20000000000000000000000000000002','20000000000000000000000000000002','{BACKLOG}',4,'Later sibling',4,0,'c','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'[]');
             "#
         ))
         .await
@@ -365,7 +652,7 @@ async fn hierarchy_create_reparent_detach_repairs_deep_module_ancestry_across_re
         .unwrap();
     database
         .execute_unprepared(&format!(
-            "INSERT INTO worktracker_issue VALUES ('60000000000000000000000000000001','{PROJECT}','module','{MODULE_TYPE}','{child}','20000000000000000000000000000001',NULL,5,'Nested module',30,0,'m','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)"
+            "INSERT INTO worktracker_issue VALUES ('60000000000000000000000000000001','{PROJECT}','module','{MODULE_TYPE}','{child}','20000000000000000000000000000001',NULL,5,'Nested module',30,0,'m','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'[]')"
         ))
         .await
         .unwrap();
@@ -497,9 +784,9 @@ async fn invalid_hierarchy_targets_and_foreign_creation_are_atomic() {
             INSERT INTO worktracker_project VALUES
                 ('11000000000000000000000000000000','Foreign','FOREIGN','',1,0,0,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP, 0);
             INSERT INTO worktracker_issue VALUES
-                ('20000000000000000000000000000001','{PROJECT}','module','{MODULE_TYPE}',NULL,NULL,NULL,1,'Module',1,0,'a','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP),
-                ('21000000000000000000000000000001','11000000000000000000000000000000','module','{MODULE_TYPE}',NULL,NULL,NULL,0,'Foreign module',1,0,'a','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP),
-                ('22000000000000000000000000000001','{PROJECT}','task','{TASK_TYPE}',NULL,'ffffffffffffffffffffffffffffffff','{BACKLOG}',0,'Stale module parent',2,0,'b','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP);
+                ('20000000000000000000000000000001','{PROJECT}','module','{MODULE_TYPE}',NULL,NULL,NULL,1,'Module',1,0,'a','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'[]'),
+                ('21000000000000000000000000000001','11000000000000000000000000000000','module','{MODULE_TYPE}',NULL,NULL,NULL,0,'Foreign module',1,0,'a','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'[]'),
+                ('22000000000000000000000000000001','{PROJECT}','task','{TASK_TYPE}',NULL,'ffffffffffffffffffffffffffffffff','{BACKLOG}',0,'Stale module parent',2,0,'b','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'[]');
             "#
         ))
         .await
@@ -716,7 +1003,7 @@ async fn first_module_drag_is_atomic_and_manual_order_survives_reopen() {
     for (index, (id, name)) in ids.iter().zip(["A", "B", "C"]).enumerate() {
         database
             .execute_unprepared(&format!(
-                "INSERT INTO worktracker_issue VALUES ('{id}', '{PROJECT}', 'module', '{MODULE_TYPE}', NULL, NULL, NULL, 0, '{name}', {}, 0, '', '', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+                "INSERT INTO worktracker_issue VALUES ('{id}', '{PROJECT}', 'module', '{MODULE_TYPE}', NULL, NULL, NULL, 0, '{name}', {}, 0, '', '', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, '[]')",
                 index + 1
             ))
             .await
@@ -952,7 +1239,7 @@ async fn graphql_exposes_only_authored_mutations_and_structured_errors() {
     for (index, (id, name)) in module_ids.iter().zip(["A", "B", "C"]).enumerate() {
         database
             .execute_unprepared(&format!(
-                "INSERT INTO worktracker_issue VALUES ('{id}', '{PROJECT}', 'module', '{MODULE_TYPE}', NULL, NULL, NULL, 0, '{name}', {}, 0, '', '', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+                "INSERT INTO worktracker_issue VALUES ('{id}', '{PROJECT}', 'module', '{MODULE_TYPE}', NULL, NULL, NULL, 0, '{name}', {}, 0, '', '', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, '[]')",
                 index + 1
             ))
             .await
@@ -1691,7 +1978,7 @@ async fn blocker_replacement_rejects_bad_graphs_atomically_and_survives_restart(
         INSERT INTO worktracker_project VALUES
             ('11000000000000000000000000000000', 'Other', 'OTH', '', 1, 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0);
         INSERT INTO worktracker_issue VALUES
-            ('{foreign}', '11000000000000000000000000000000', 'task', '{TASK_TYPE}', NULL, NULL, NULL, 0, 'Foreign', 1, 0, 'A', '', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            ('{foreign}', '11000000000000000000000000000000', 'task', '{TASK_TYPE}', NULL, NULL, NULL, 0, 'Foreign', 1, 0, 'A', '', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, '[]')
     "#)).await.unwrap();
     blockers::replace(&database, &a, vec![b.clone()])
         .await

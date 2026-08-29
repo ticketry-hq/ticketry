@@ -255,10 +255,15 @@ async fn classify(database: &DatabaseConnection) -> Result<SourceClassification,
 async fn schema_generation(
     database: &DatabaseConnection,
 ) -> Result<SchemaGeneration, AdoptionError> {
-    if table_exists(database, super::project_onboarding_migration::LEDGER_TABLE).await? {
-        Ok(SchemaGeneration::ProjectOnly)
-    } else {
-        Ok(SchemaGeneration::WorkspaceOwned)
+    let project_only =
+        table_exists(database, super::project_onboarding_migration::LEDGER_TABLE).await?;
+    let workspace_tab_order =
+        table_exists(database, super::workspace_tab_order_migration::LEDGER_TABLE).await?;
+    match (project_only, workspace_tab_order) {
+        (false, false) => Ok(SchemaGeneration::WorkspaceOwned),
+        (false, true) => Ok(SchemaGeneration::WorkspaceOwnedWithTabOrder),
+        (true, false) => Ok(SchemaGeneration::ProjectOnly),
+        (true, true) => Ok(SchemaGeneration::ProjectOnlyWithTabOrder),
     }
 }
 

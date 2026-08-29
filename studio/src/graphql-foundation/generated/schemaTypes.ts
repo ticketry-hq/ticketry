@@ -891,6 +891,7 @@ export type MutationUpdate_Work_ItemArgs = {
   name?: InputMaybe<Scalars['String']['input']>;
   parent_id?: InputMaybe<Scalars['String']['input']>;
   state_id?: InputMaybe<Scalars['String']['input']>;
+  workspace_tab_order?: InputMaybe<Scalars['Json']['input']>;
 };
 
 
@@ -1491,6 +1492,7 @@ export type WorktrackerIssue = {
   stateRevision: Scalars['Int']['output'];
   type: Scalars['String']['output'];
   updatedAt: Scalars['String']['output'];
+  workspaceTabOrder: Scalars['Json']['output'];
 };
 
 
@@ -1611,6 +1613,7 @@ export type WorktrackerIssueFilterInput = {
   stateRevision?: InputMaybe<IntegerFilterInput>;
   type?: InputMaybe<StringFilterInput>;
   updatedAt?: InputMaybe<TextFilterInput>;
+  workspaceTabOrder?: InputMaybe<JsonFilterInput>;
 };
 
 export type WorktrackerIssueHavingInput = {
@@ -1643,6 +1646,7 @@ export type WorktrackerIssueOrderInput = {
   stateRevision?: InputMaybe<OrderByEnum>;
   type?: InputMaybe<OrderByEnum>;
   updatedAt?: InputMaybe<OrderByEnum>;
+  workspaceTabOrder?: InputMaybe<OrderByEnum>;
 };
 
 export type WorktrackerIssuetype = {

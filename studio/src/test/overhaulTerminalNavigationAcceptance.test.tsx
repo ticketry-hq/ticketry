@@ -22,6 +22,7 @@ import {
   getModuleTreeSnapshot,
   getWorkItemSnapshot,
 } from "../features/work-items";
+import { studioApolloClient } from "../shared/apollo/client";
 
 const terminalApi = vi.hoisted(() => ({
   resumeTerminal: vi.fn(),
@@ -146,7 +147,7 @@ describe("overhaul acceptance — terminals", () => {
     terminalReads.readTaskResumableTerminalSessions.mockResolvedValue([]);
   });
 
-  it("[overhaul-08] cycles live terminals by keyboard into a collapsed branch", () => {
+  it("[overhaul-08] cycles live terminals by keyboard into a collapsed branch", async () => {
     const parent = workItem({
       id: "story-1",
       name: "Parent",
@@ -208,9 +209,76 @@ describe("overhaul acceptance — terminals", () => {
       }));
     });
 
-    expect(useClientStore.getState().selectedTaskId).toBe("child-1");
+    await waitFor(() => expect(useClientStore.getState().selectedTaskId)
+      .toBe("child-1"));
     expect(useClientStore.getState().activeByTask["child-1"]).toBe("session-child");
     expect(useClientStore.getState().collapsedStateIds.has("todo")).toBe(false);
+  });
+
+  it("[overhaul-173] cycles through an unopened workspace in its saved terminal order", async () => {
+    const first = workItem({
+      id: "story-1",
+      name: "First",
+      state: TODO.id,
+      rank: "A",
+    });
+    const unopened = workItem({
+      id: "story-2",
+      name: "Unopened",
+      key: "MEML-2",
+      state: TODO.id,
+      rank: "B",
+    });
+    seedModuleOpenFixture("module-1", [first, unopened]);
+    studioApolloClient().cache.modify({
+      id: studioApolloClient().cache.identify({
+        __typename: "WorktrackerIssue",
+        id: "story-2",
+      }),
+      fields: {
+        workspaceTabOrder: () => [
+          { kind: "terminal", id: "run-b" },
+          { kind: "details" },
+          { kind: "terminal", id: "run-a" },
+        ],
+      },
+    });
+    setStatesSorted("project-1", [TODO]);
+    useTerminalStore.setState({
+      sessions: {
+        "session-first": session("session-first", "story-1", "run-first"),
+        "session-a": session("session-a", "story-2", "run-a"),
+        "session-b": session("session-b", "story-2", "run-b"),
+      },
+      sessionByRun: {
+        "run-first": "session-first",
+        "run-a": "session-a",
+        "run-b": "session-b",
+      },
+    });
+    useClientStore.setState({ activeByTask: { "story-1": "session-first" } });
+    useAgentStatusStore.setState({
+      runs: {
+        "run-first": run("run-first", "story-1"),
+        "run-a": run("run-a", "story-2"),
+        "run-b": run("run-b", "story-2"),
+      },
+    });
+    render(<KeymapHarness rows={[]} />);
+
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", {
+        key: "\\",
+        metaKey: true,
+        bubbles: true,
+        cancelable: true,
+      }));
+    });
+
+    await waitFor(() => expect(useClientStore.getState().selectedTaskId)
+      .toBe("story-2"));
+    expect(useClientStore.getState().activeByTask["story-2"])
+      .toBe("session-b");
   });
 
   it("[overhaul-16] closes, refreshes, and resumes a provider conversation in place", async () => {

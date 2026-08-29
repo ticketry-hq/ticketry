@@ -115,6 +115,7 @@ pub async fn create(
         is_archived: Set(false),
         rank: Set(rank),
         description: Set(input.description.unwrap_or_default()),
+        workspace_tab_order: Set(serde_json::json!([])),
         created_at: Set(now),
         updated_at: Set(now),
     }
@@ -328,7 +329,7 @@ pub async fn delete(
     Ok(())
 }
 
-pub(super) async fn next_revision<C: ConnectionTrait>(
+pub(crate) async fn next_revision<C: ConnectionTrait>(
     database: &C,
     project_id: &str,
 ) -> Result<i64, CommandError> {

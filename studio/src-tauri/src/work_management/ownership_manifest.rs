@@ -14,20 +14,36 @@ pub const CURRENT_DJANGO_LEAF: &str = "0042_merge_singular_idea_state";
 pub enum SchemaGeneration {
     /// Onboarding still lives on a Workspace row that owns every project.
     WorkspaceOwned,
+    /// Workspace-owned schema after the 0049 workspace-tab migration.
+    WorkspaceOwnedWithTabOrder,
     /// Onboarding lives on Project and the Workspace table is gone.
     ProjectOnly,
+    /// Project-only schema after the 0049 workspace-tab migration.
+    ProjectOnlyWithTabOrder,
 }
 
 /// The tables and columns Rust commands may mutate in `generation`.
 #[must_use]
-pub fn owned_tables(
-    generation: SchemaGeneration,
-) -> Vec<(&'static str, &'static [&'static str])> {
+pub fn owned_tables(generation: SchemaGeneration) -> Vec<(&'static str, &'static [&'static str])> {
     let mut tables = match generation {
-        SchemaGeneration::WorkspaceOwned => vec![WORKSPACE, PROJECT_UNDER_WORKSPACE],
-        SchemaGeneration::ProjectOnly => vec![PROJECT_ONLY],
+        SchemaGeneration::WorkspaceOwned | SchemaGeneration::WorkspaceOwnedWithTabOrder => {
+            vec![WORKSPACE, PROJECT_UNDER_WORKSPACE]
+        }
+        SchemaGeneration::ProjectOnly | SchemaGeneration::ProjectOnlyWithTabOrder => {
+            vec![PROJECT_ONLY]
+        }
     };
     tables.extend_from_slice(SHARED_TABLES);
+    if matches!(
+        generation,
+        SchemaGeneration::WorkspaceOwnedWithTabOrder | SchemaGeneration::ProjectOnlyWithTabOrder
+    ) {
+        let issue = tables
+            .iter_mut()
+            .find(|(table, _)| *table == "worktracker_issue")
+            .expect("the ownership manifest includes Issue");
+        *issue = ISSUE_WITH_TAB_ORDER;
+    }
     tables
 }
 
@@ -75,6 +91,28 @@ const PROJECT_ONLY: (&str, &[&str]) = (
         "created_at",
         "updated_at",
         "onboarding_required",
+    ],
+);
+
+const ISSUE_WITH_TAB_ORDER: (&str, &[&str]) = (
+    "worktracker_issue",
+    &[
+        "id",
+        "project_id",
+        "type",
+        "issue_type_id",
+        "parent_id",
+        "module_id",
+        "state_id",
+        "state_revision",
+        "name",
+        "sequence_id",
+        "is_archived",
+        "rank",
+        "description",
+        "workspace_tab_order",
+        "created_at",
+        "updated_at",
     ],
 );
 
@@ -194,7 +232,9 @@ mod tests {
     fn ownership_manifest_has_one_classification_per_table() {
         for generation in [
             SchemaGeneration::WorkspaceOwned,
+            SchemaGeneration::WorkspaceOwnedWithTabOrder,
             SchemaGeneration::ProjectOnly,
+            SchemaGeneration::ProjectOnlyWithTabOrder,
         ] {
             for (table, columns) in owned_tables(generation) {
                 assert!(table.starts_with("worktracker_"));
@@ -208,5 +248,24 @@ mod tests {
         assert!(slice2_tables.contains("worktracker_provider"));
         assert!(slice2_tables.contains("worktracker_agentmodel"));
         assert!(slice2_tables.contains("worktracker_reasoninglevel"));
+    }
+
+    #[test]
+    fn post_0049_shapes_own_the_workspace_tab_order_column() {
+        for generation in [
+            SchemaGeneration::WorkspaceOwnedWithTabOrder,
+            SchemaGeneration::ProjectOnlyWithTabOrder,
+        ] {
+            let (_, columns) = owned_tables(generation)
+                .into_iter()
+                .find(|(table, _)| *table == "worktracker_issue")
+                .unwrap();
+            assert!(columns.contains(&"workspace_tab_order"));
+        }
+        let (_, baseline) = owned_tables(SchemaGeneration::ProjectOnly)
+            .into_iter()
+            .find(|(table, _)| *table == "worktracker_issue")
+            .unwrap();
+        assert!(!baseline.contains(&"workspace_tab_order"));
     }
 }

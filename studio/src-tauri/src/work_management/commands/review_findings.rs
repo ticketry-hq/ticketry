@@ -160,6 +160,7 @@ pub async fn create_review_finding(
         is_archived: Set(false),
         rank: Set(rank),
         description: Set(description.join("\n")),
+        workspace_tab_order: Set(serde_json::json!([])),
         created_at: Set(now),
         updated_at: Set(now),
     }

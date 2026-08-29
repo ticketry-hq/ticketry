@@ -13,6 +13,7 @@ import {
 } from "../../../../../state/clientStore";
 import { useVisibleTerminalHistory } from "../terminals/useWorkspaceTerminalSessions";
 import type { TaskWorkspaceTabIdentity } from "./useTaskWorkspaceTabNavigation";
+import { orderVisibleWorkspaceTabs } from "../../../../../features/workspace-tabs/ordering";
 
 export function useWorkspaceTabPresentation({
   bucket,
@@ -22,6 +23,7 @@ export function useWorkspaceTabPresentation({
   terminalTabs,
   activeTerminalId,
   resumableSessions,
+  savedTabOrder,
 }: {
   bucket: string | null;
   projectId: string | null;
@@ -30,6 +32,7 @@ export function useWorkspaceTabPresentation({
   terminalTabs: readonly SessionTab[];
   activeTerminalId: string | null;
   resumableSessions: readonly ResumableTerminalSession[];
+  savedTabOrder: readonly TaskWorkspaceTabIdentity[];
 }) {
   const workspaces = useTicketWorkspaceStore((state) => state.workspaces);
   const workspace = bucket
@@ -79,14 +82,33 @@ export function useWorkspaceTabPresentation({
   }
   if (activeKind === "doc" && !activeDocument) activeKind = "details";
 
-  const navigableTabs: TaskWorkspaceTabIdentity[] = [
+  const persistentDefaultTabs: TaskWorkspaceTabIdentity[] = [
     { kind: "details" },
     ...openDocuments.map((document) => ({
       kind: "doc" as const,
       id: document.id,
     })),
-    ...terminalIds.map((id) => ({ kind: "terminal" as const, id })),
+    ...terminalTabs.map((tab) => ({
+      kind: "terminal" as const,
+      id: tab.meta.agentRunId ?? tab.id,
+    })),
   ];
+  const orderedPersistentTabs = orderVisibleWorkspaceTabs(
+    persistentDefaultTabs,
+    savedTabOrder,
+  );
+  const navigableTabs: TaskWorkspaceTabIdentity[] = [];
+  for (const identity of orderedPersistentTabs) {
+    if (identity.kind !== "terminal") {
+      navigableTabs.push(identity);
+      continue;
+    }
+    const tab = terminalTabs.find(
+      (candidate) =>
+        (candidate.meta.agentRunId ?? candidate.id) === identity.id,
+    );
+    if (tab) navigableTabs.push({ kind: "terminal", id: tab.id });
+  }
   const activeTab: TaskWorkspaceTabIdentity =
     activeKind === "doc" && activeDocument
       ? { kind: "doc", id: activeDocument.id }

@@ -6,7 +6,7 @@ import {
   GeneratedWorkTrackerWorkItemFieldsFragmentDoc,
   UpdateWorkTrackerWorkspaceTabOrderDocument,
   type GeneratedWorkTrackerWorkItemFieldsFragment,
-} from "../work-items/generated/workItems.documents";
+} from "../work-items";
 import {
   workspaceTabOrderFromJson,
   type WorkspaceTabIdentity,

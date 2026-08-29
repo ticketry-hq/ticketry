@@ -69,11 +69,14 @@ export { rankBetween } from "./utilities/rank";
 export { reachable } from "./utilities/dependencyGraph";
 export type { DependencyEdgeField } from "./utilities/dependencyGraph";
 export {
+  GeneratedWorkTrackerWorkItemFieldsFragmentDoc,
+  UpdateWorkTrackerWorkspaceTabOrderDocument,
   WorkTrackerModuleOpenDocument,
   WorkTrackerWorkItemDocument,
   WorkTrackerWorkItemsDocument,
 } from "./generated/workItems.documents";
 export type {
+  GeneratedWorkTrackerWorkItemFieldsFragment,
   WorkTrackerModuleOpenQuery,
   WorkTrackerModuleOpenQueryVariables,
   WorkTrackerWorkItemQuery,

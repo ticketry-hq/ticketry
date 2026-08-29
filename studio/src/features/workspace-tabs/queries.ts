@@ -4,7 +4,7 @@ import { studioApolloClient } from "../../shared/apollo/client";
 import {
   GeneratedWorkTrackerWorkItemFieldsFragmentDoc,
   WorkTrackerWorkItemDocument,
-} from "../work-items/generated/workItems.documents";
+} from "../work-items";
 import {
   workspaceTabOrderFromJson,
   type WorkspaceTabOrder,

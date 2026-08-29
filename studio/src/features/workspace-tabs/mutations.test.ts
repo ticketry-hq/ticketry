@@ -2,7 +2,7 @@ import { waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { createBrowserRuntime, initializeStudioRuntime } from "../../runtime";
 import { studioApolloClient, resetStudioApolloClient } from "../../shared/apollo/client";
-import { GeneratedWorkTrackerWorkItemFieldsFragmentDoc } from "../work-items/generated/workItems.documents";
+import { GeneratedWorkTrackerWorkItemFieldsFragmentDoc } from "../work-items";
 import { saveWorkspaceTabOrder } from "./mutations";
 import type { WorkspaceTabIdentity } from "./types";
 

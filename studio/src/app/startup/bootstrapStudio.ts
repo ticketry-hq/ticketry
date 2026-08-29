@@ -2,16 +2,8 @@ import {
   getOnboardingRequiredSnapshot,
   loadWorkspaceState,
 } from "../onboarding/onboardingStore";
-import {
-  getConfigSnapshot,
-  isSidebarEnabled,
-  loadConfig,
-  selectProfile,
-  sidebarPaneComposition,
-  type SidebarPaneComposition,
-} from "../../features/studio/stores/configStore";
-import { getProjectsSnapshot } from "../../features/projects";
-import { useStudioStore } from "../../features/projects";
+import { loadModuleLinks } from "../../features/module-links";
+import { loadProjects, useStudioStore } from "../../features/projects";
 import { resolveDefaultProject } from "../../features/studio/lib/defaultProject";
 import { loadKeybindingOverrides } from "../navigation/keymapSettings";
 import {
@@ -22,25 +14,33 @@ import {
 
 export type BootstrapOutcome = "provisioning" | "unavailable" | "ready";
 
+/**
+ * Open Studio on the installation project.
+ *
+ * There is one project, so startup selects it rather than asking. Nothing here
+ * consults a profile file, a profile index, a feature flag, or a recent-project
+ * list: the only remembered navigation is the one module this webview was last
+ * working in, and it is only honoured once its Module Link is in the cache.
+ */
 export async function bootstrapStudio(): Promise<BootstrapOutcome> {
   try {
     await loadBootstrapData();
-
-    const profileIndex = preferredProfileIndex();
-    if (profileIndex === null) return "provisioning";
-
-    await selectProfile(profileIndex);
-    await restoreWorkspace(profileIndex);
+    await restoreWorkspace();
     return "ready";
   } catch (error) {
-    console.warn("[BootstrapGate] owned profile resolve failed", error);
+    console.warn("[BootstrapGate] installation project resolve failed", error);
     return error instanceof TypeError ? "unavailable" : "provisioning";
   }
 }
 
 async function loadBootstrapData(): Promise<void> {
   await Promise.all([
-    loadConfig(),
+    // The project list has to be in the cache before the installation project
+    // can be resolved from it.
+    loadProjects(),
+    // Module folders gate module selection and every launch, so the links are
+    // read before the restored workspace asks for one.
+    loadModuleLinks(),
     loadKeybindingOverrides(),
     // Never rejects: the store swallows its own failure so a flaky workspace
     // endpoint cannot flip the bootstrap outcome away from "ready".
@@ -48,44 +48,9 @@ async function loadBootstrapData(): Promise<void> {
   ]);
 }
 
-function preferredProfileIndex(): number | null {
-  const { profiles, recentProfileIndex } = getConfigSnapshot();
-  if (profiles.length === 0) return null;
-
-  const recentIndexIsValid =
-    recentProfileIndex !== null &&
-    recentProfileIndex >= 0 &&
-    recentProfileIndex < profiles.length;
-
-  return recentIndexIsValid ? recentProfileIndex : 0;
-}
-
-async function restoreWorkspace(profileIndex: number): Promise<void> {
-  const config = getConfigSnapshot();
-  const projectsEnabled = config.features.projects;
-  if (!isSidebarEnabled(config)) {
-    await selectResolvedProject();
-    focusVisiblePane("tasks");
-    return;
-  }
-
-  if (!projectsEnabled) {
-    await selectResolvedProject();
-    useClientStore.getState().setSidebarVisible(true);
-    focusVisiblePane("modules");
-    return;
-  }
-
-  const profile = getConfigSnapshot().profiles[profileIndex];
-  const recentProject = getProjectsSnapshot().find(
-    (project) => project.id === profile?.recent_project_id,
-  );
-
-  if (recentProject) {
-    await useStudioStore.getState().selectProject(recentProject.id);
-    focusVisiblePane("modules");
-    return;
-  }
+async function restoreWorkspace(): Promise<void> {
+  const project = await resolveDefaultProject();
+  await useStudioStore.getState().selectProject(project.id);
 
   // A pending first run may be replaying over webview-local preferences from
   // an established workspace. Leave that preference intact for the tour to
@@ -93,27 +58,16 @@ async function restoreWorkspace(profileIndex: number): Promise<void> {
   if (!getOnboardingRequiredSnapshot()) {
     useClientStore.getState().setSidebarVisible(true);
   }
-  focusVisiblePane("projects");
-}
-
-async function selectResolvedProject(): Promise<void> {
-  const resolved = await resolveDefaultProject();
-  await useStudioStore.getState().selectProject(resolved.id);
+  // Selecting the project restores the remembered module when it is still
+  // present and linked, so the pane to open is whichever one now has content.
+  const moduleRestored = useClientStore.getState().selectedModuleId !== null;
+  focusVisiblePane(moduleRestored ? "tasks" : "modules");
 }
 
 function focusVisiblePane(preferredPane: FocusedPane): void {
   const { sidebarVisible, setFocusedPane } = useClientStore.getState();
   const projectIsSelected = useStudioStore.getState().selectedProjectId !== null;
-  const config = getConfigSnapshot();
-  const paneComposition: SidebarPaneComposition = sidebarPaneComposition(
-    config.features.projects,
-    isSidebarEnabled(config),
-  );
-  const visiblePanes = visiblePaneOrder(
-    sidebarVisible,
-    projectIsSelected,
-    paneComposition,
-  );
+  const visiblePanes = visiblePaneOrder(sidebarVisible, projectIsSelected);
 
   setFocusedPane(
     visiblePanes.includes(preferredPane) ? preferredPane : "tasks",

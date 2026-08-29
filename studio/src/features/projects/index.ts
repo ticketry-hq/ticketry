@@ -44,7 +44,6 @@ export { planModuleReorder } from "./internal/moduleReorder";
 export type { ModuleReorderPlan } from "./internal/moduleReorder";
 export {
   applyCanonicalModuleOrder,
-  resolveStartProject,
   usesManualModuleOrder,
 } from "./selectors";
 export {

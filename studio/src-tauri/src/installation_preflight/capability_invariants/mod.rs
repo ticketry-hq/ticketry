@@ -17,6 +17,7 @@
 pub mod documents;
 pub mod effect_journals;
 pub mod graph_execution;
+pub mod module_links;
 pub mod runs;
 pub mod settings;
 pub mod status_events;
@@ -39,6 +40,7 @@ pub fn invariants() -> Vec<Invariant> {
     all.extend(status_events::invariants());
     all.extend(documents::invariants());
     all.extend(worktrees::invariants());
+    all.extend(module_links::invariants());
     all.extend(graph_execution::invariants());
     all.extend(terminals::invariants());
     all.extend(effect_journals::invariants());

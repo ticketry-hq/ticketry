@@ -13,7 +13,6 @@ use muxed_studio_lib::execution_graph::{ExecutionMode, GraphAccess};
 use muxed_studio_lib::execution_reconciliation::ExecutionReconciliationService;
 use muxed_studio_lib::graph_run_service::GraphRunCaller;
 use muxed_studio_lib::graph_run_service::{GraphRunRequest, GraphRunService};
-use muxed_studio_lib::settings_persistence::ProfileStore;
 use muxed_studio_lib::terminal_launch::{
     TerminalLaunchBoundary, TerminalLaunchCheckpoint, TerminalLaunchError, TerminalLaunchRuntime,
     TerminalLaunchService, TerminalRuntimeObservation, VerifiedTerminalRuntime,
@@ -80,7 +79,7 @@ async fn create_press_policy_refresh_inert_success_and_reset_are_serialized() {
         ))
         .await
         .unwrap();
-    let service = service(&database, harness.data_directory());
+    let service = service(&database);
     let request = |mode| GraphRunRequest {
         root_id: TASK_ID.to_owned(),
         access: GraphAccess::caller_roots(PROJECT_ID, [TASK_ID]),
@@ -177,7 +176,7 @@ async fn graph_run_graphql_contract_returns_authoritative_models_and_child_ids()
     let harness = TerminalLifecycleHarness::start().await;
     let database = harness.database().await;
     seed(&database, harness.data_directory()).await;
-    let service = service(&database, harness.data_directory());
+    let service = service(&database);
     let context = Box::leak(Box::new(BuilderContext::default()));
     let builder = muxed_studio_lib::entities::work_management::register_entity_modules(
         Builder::new(context, database.clone()),
@@ -284,7 +283,7 @@ async fn serial_skips_a_blocked_lower_child_and_parallel_press_races_launch_once
         ))
         .await
         .unwrap();
-    let service = service(&database, harness.data_directory());
+    let service = service(&database);
     let serial = service
         .create_or_press(GraphRunRequest {
             root_id: TASK_ID.to_owned(),
@@ -367,7 +366,9 @@ async fn committed_claim_survives_a_stopped_response_and_reconciles_the_same_gen
     let before_commit = launch_service(database.clone(), runtime.clone())
         .stopping_once_at(TerminalLaunchBoundary::MaterialPrepared);
     let before_commit_service =
-        service_with_terminal(&database, harness.data_directory(), before_commit);
+        service_with_terminal(
+        &database,
+        before_commit);
     let request = GraphRunRequest {
         root_id: TASK_ID.to_owned(),
         access: GraphAccess::project(PROJECT_ID),
@@ -390,7 +391,9 @@ async fn committed_claim_survives_a_stopped_response_and_reconciles_the_same_gen
 
     let terminal = launch_service(database.clone(), runtime.clone())
         .stopping_once_at(TerminalLaunchBoundary::EffectPrepared);
-    let service = service_with_terminal(&database, harness.data_directory(), terminal.clone());
+    let service = service_with_terminal(
+        &database,
+        terminal.clone());
 
     let stopped = service.create_or_press(request.clone()).await.unwrap_err();
     assert_eq!(stopped.code_str(), "terminal_launch_injected_stop");
@@ -421,7 +424,7 @@ async fn deliberate_retry_requires_settled_cleanup_and_reuses_the_child_claim() 
         ))
         .await
         .unwrap();
-    let service = service(&database, harness.data_directory());
+    let service = service(&database);
     let request = GraphRunRequest {
         root_id: TASK_ID.to_owned(),
         access: GraphAccess::project(PROJECT_ID),
@@ -484,7 +487,7 @@ async fn serial_advancement_treats_satisfaction_and_termination_as_symmetric_fac
         ))
         .await
         .unwrap();
-    let first_service = service(&database, harness.data_directory());
+    let first_service = service(&database);
     let request = GraphRunRequest {
         root_id: TASK_ID.to_owned(),
         access: GraphAccess::project(PROJECT_ID),
@@ -539,7 +542,7 @@ async fn serial_advancement_treats_satisfaction_and_termination_as_symmetric_fac
         ))
         .await
         .unwrap();
-    let service = service(&database, harness.data_directory());
+    let service = service(&database);
     let first = service
         .create_or_press(GraphRunRequest {
             root_id: TASK_ID.to_owned(),
@@ -585,10 +588,7 @@ async fn durable_external_blocker_event_advances_only_its_relevant_armed_root() 
         .unwrap();
     let runtime = Arc::new(Runtime::default());
     let terminal = launch_service(database.clone(), runtime);
-    let policy = LaunchPolicyResolver::new(
-        database.clone(),
-        ProfileStore::new(harness.data_directory().join("profiles.json")),
-    );
+    let policy = LaunchPolicyResolver::new(database.clone());
     let graph_runs = GraphRunService::new(database.clone(), policy.clone(), terminal.clone());
     let armed = graph_runs
         .create_or_press(GraphRunRequest {
@@ -640,10 +640,7 @@ async fn an_invalid_armed_root_does_not_starve_a_later_ready_root() {
         .await
         .unwrap();
     let terminal = launch_service(database.clone(), Arc::new(Runtime::default()));
-    let policy = LaunchPolicyResolver::new(
-        database.clone(),
-        ProfileStore::new(harness.data_directory().join("profiles.json")),
-    );
+    let policy = LaunchPolicyResolver::new(database.clone());
     GraphRunService::new(database.clone(), policy.clone(), terminal.clone())
         .create_or_press(GraphRunRequest {
             root_id: TASK_ID.to_owned(),
@@ -676,24 +673,17 @@ async fn an_invalid_armed_root_does_not_starve_a_later_ready_root() {
     assert_eq!(report.roots[1].launched_task_ids, [BLOCKED]);
 }
 
-fn service(database: &DatabaseConnection, directory: &std::path::Path) -> GraphRunService {
-    let policy = LaunchPolicyResolver::new(
-        database.clone(),
-        ProfileStore::new(directory.join("profiles.json")),
-    );
+fn service(database: &DatabaseConnection) -> GraphRunService {
+    let policy = LaunchPolicyResolver::new(database.clone());
     let terminal = launch_service(database.clone(), Arc::new(Runtime::default()));
     GraphRunService::new(database.clone(), policy, terminal)
 }
 
 fn service_with_terminal(
     database: &DatabaseConnection,
-    directory: &std::path::Path,
     terminal: TerminalLaunchService,
 ) -> GraphRunService {
-    let policy = LaunchPolicyResolver::new(
-        database.clone(),
-        ProfileStore::new(directory.join("profiles.json")),
-    );
+    let policy = LaunchPolicyResolver::new(database.clone());
     GraphRunService::new(database.clone(), policy, terminal)
 }
 
@@ -739,12 +729,18 @@ async fn seed(database: &DatabaseConnection, directory: &std::path::Path) {
         .unwrap();
     std::fs::write(
         directory.join("profiles.json"),
-        format!(
-            r#"{{"recent_profile_index":0,"profiles":[{{"name":"Local","workspace_slug":"terminal-harness","module_links":[{{"module_id":"{compact_module}","path":"{}"}}]}}]}}"#,
-            directory.display()
-        ),
+        r#"{"recent_profile_index":0,"profiles":[{"name":"Local","workspace_slug":"terminal-harness"}]}"#,
     )
     .unwrap();
+    // The folder a graph run launches in is the Module's typed link. The
+    // profile above still decides which workspace may launch at all.
+    muxed_studio_lib::module_links::schema::install(database)
+        .await
+        .unwrap();
+    muxed_studio_lib::module_links::ModuleLinkStore::new(database.clone())
+        .set(&compact_module, &directory.display().to_string())
+        .await
+        .expect("link the harness module");
 }
 
 fn task_ids(result: &muxed_studio_lib::graph_run_service::GraphRunResult) -> Vec<&str> {

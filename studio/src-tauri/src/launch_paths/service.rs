@@ -25,10 +25,9 @@ use crate::documents::design_directory::{self, ModuleIdentity, TaskIdentity, SPE
 use crate::entities::documents::design_document;
 use crate::entities::work_management::issue;
 use crate::entities::worktrees::worktree;
-use crate::settings_persistence::ProfileStore;
 use crate::worktree_status::identity::{canonical_uuid, compact_uuid};
 use crate::worktree_status::owner::{self, WorktreeOwner};
-use crate::worktree_status::repository::module_folder;
+use crate::module_links::resolution;
 
 use super::error::{LaunchPathsError, LaunchPathsErrorCode};
 use super::request::{LaunchPathsRequest, LaunchScope, SUPPORTED_VERSION};
@@ -39,17 +38,16 @@ use super::view::{LaunchPathsView, WorktreeUse, WORKTREE_CHECKOUT_MISSING, WORKT
 /// every bit as live as an `active` one.
 const USABLE_WORKTREE_STATES: &[&str] = &["active", "conflict"];
 
-/// Resolves launch directories. Cloning is cheap: both fields are already
-/// reference-counted handles.
+/// Resolves launch directories. Cloning is cheap: the connection is already a
+/// reference-counted handle.
 #[derive(Clone)]
 pub struct LaunchPathsService {
     database: DatabaseConnection,
-    profiles: ProfileStore,
 }
 
 impl LaunchPathsService {
-    pub fn new(database: DatabaseConnection, profiles: ProfileStore) -> Self {
-        Self { database, profiles }
+    pub fn new(database: DatabaseConnection) -> Self {
+        Self { database }
     }
 
     pub async fn resolve(
@@ -66,24 +64,13 @@ impl LaunchPathsService {
         }
     }
 
-    pub(crate) fn preflight_module_folder(
+    /// Prove, before a launch commits to it, that the module's linked folder
+    /// is one this machine can actually run in.
+    pub(crate) async fn preflight_module_folder(
         &self,
         module_id: &str,
-    ) -> Result<PathBuf, super::ModuleFolderFailure> {
-        let catalog = self.profiles.read();
-        let folder = catalog
-            .recent_profile_index
-            .and_then(|index| usize::try_from(index).ok())
-            .and_then(|index| catalog.profiles.get(index))
-            .and_then(|profile| {
-                profile
-                    .module_links
-                    .iter()
-                    .rev()
-                    .find(|link| compact_uuid(&link.module_id) == compact_uuid(module_id))
-            })
-            .map(|link| link.path.as_str());
-        super::validate_module_folder(folder)
+    ) -> Result<PathBuf, resolution::ModuleFolderRefusal> {
+        resolution::usable_folder(&self.database, module_id).await
     }
 
     // -----------------------------------------------------------------
@@ -120,7 +107,7 @@ impl LaunchPathsService {
         let (worktree_root, usage) = self.worktree_root(&owner).await?;
         let root = match worktree_root.clone() {
             Some(root) => Some(root),
-            None => module_folder(&self.profiles, &module_id).filter(|folder| folder.is_dir()),
+            None => resolution::resolved_folder(&self.database, &module_id).await,
         };
 
         let module = self.module_identity(&module_id).await?;
@@ -196,7 +183,7 @@ impl LaunchPathsService {
                 LaunchPathsError::identity_required("A scratch launch needs a module identity.")
             })?;
         let module = self.module_identity(module_id).await?;
-        let root = module_folder(&self.profiles, module_id).filter(|folder| folder.is_dir());
+        let root = resolution::resolved_folder(&self.database, module_id).await;
         let relative = module
             .as_ref()
             .map(|module| design_directory::planning_design_dir(module, &request.agent_run_id));

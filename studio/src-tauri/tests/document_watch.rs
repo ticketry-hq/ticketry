@@ -21,7 +21,6 @@ use muxed_studio_lib::document_watch::filesystem_events::{
 use muxed_studio_lib::document_watch::DocumentWatchSupervisor;
 use muxed_studio_lib::documents::{DocumentFactRecorder, DocumentsService, TaskRegistryScope};
 use muxed_studio_lib::runs_persistence::RunsServices;
-use muxed_studio_lib::settings_persistence::{ModuleLink, Profile, ProfileCatalog, ProfileStore};
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection};
 use tokio::sync::mpsc;
 
@@ -103,7 +102,7 @@ impl Fixture {
     }
 
     fn documents(&self) -> DocumentsService {
-        DocumentsService::new(self.database.clone(), Some(self.profiles())).publishing(Some(
+        DocumentsService::new(self.database.clone()).publishing(Some(
             DocumentFactRecorder::new(
                 RunsServices::new(self.database.clone())
                     .outbox()
@@ -113,26 +112,19 @@ impl Fixture {
         ))
     }
 
-    fn profiles(&self) -> ProfileStore {
-        let store = ProfileStore::new(self.path().join("profiles.json"));
-        store
-            .replace(&ProfileCatalog {
-                recent_profile_index: Some(0),
-                profiles: vec![Profile {
-                    name: "Local".to_owned(),
-                    workspace_slug: "meml".to_owned(),
-                    agent_prompt: None,
-                    agent_prompts: Default::default(),
-                    module_links: vec![ModuleLink {
-                        module_id: PUBLIC_MODULE.to_owned(),
-                        path: self.path().join("checkout").to_string_lossy().into_owned(),
-                    }],
-                    recent_project_id: None,
-                    recent_module_ids: Default::default(),
-                }],
-            })
-            .expect("write the profile catalog");
-        store
+    /// Link the module to a real local folder, which is where an authorized
+    /// root is resolved from.
+    async fn link_module(&self) {
+        muxed_studio_lib::module_links::schema::install(&self.database)
+            .await
+            .expect("install the Module Link schema");
+        muxed_studio_lib::module_links::ModuleLinkStore::new(self.database.clone())
+            .set(
+                PUBLIC_MODULE,
+                &self.path().join("checkout").to_string_lossy(),
+            )
+            .await
+            .expect("link the fixture module");
     }
 
     /// The registry rows for the task bucket, without reconciling anything.
@@ -246,10 +238,12 @@ async fn fixture() -> Fixture {
         ))
         .await
         .expect("create the document-watch fixture schema");
-    Fixture {
+    let fixture = Fixture {
         directory,
         database,
-    }
+    };
+    fixture.link_module().await;
+    fixture
 }
 
 fn write(root: &Path, relative: &str, body: &str) {

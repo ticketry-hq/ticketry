@@ -15,7 +15,7 @@ import {
   ModuleFolderSelection,
   useModuleFolderSelection,
 } from "../agents/terminal/ModuleFolderSelection";
-import { setModuleFolder, useConfig } from "../studio/stores/configStore";
+import { setModuleFolder } from "../module-links";
 
 const REFUSAL_MESSAGE: Record<string, string> = {
   module_folder_unset: "This module has no folder yet.",
@@ -35,8 +35,7 @@ export function ModuleFolderRequired({
   reason: string;
   onLinked: () => void;
 }) {
-  const { profiles, recentProfileIndex } = useConfig();
-  const selection = useModuleFolderSelection({ profiles, recentProfileIndex });
+  const selection = useModuleFolderSelection();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const path = selection.value.trim();

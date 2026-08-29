@@ -4,7 +4,7 @@ import { useModalStore } from "../../../app/modal/modalStore";
 import { useClientStore } from "../../../state/clientStore";
 import { useStudioStore } from "../../projects";
 import { MODAL_ACTIONS } from "../../../app/navigation/keymapRegistry";
-import { setModuleFolder, useConfig } from "../stores/configStore";
+import { setModuleFolder } from "../../module-links";
 import {
   ModuleFolderSelection,
   useModuleFolderSelection,
@@ -34,7 +34,6 @@ const FOLDER_REFUSAL_MESSAGE: Record<ModuleFolderRefusal, string> = {
 export function AddModule({ runtime }: { runtime?: StudioRuntime } = {}) {
   const selectedProjectId = useStudioStore((s) => s.selectedProjectId);
   const popModal = useModalStore((s) => s.popModal);
-  const { profiles, recentProfileIndex } = useConfig();
 
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
@@ -48,11 +47,7 @@ export function AddModule({ runtime }: { runtime?: StudioRuntime } = {}) {
   const moduleFolderErrorId = useId();
   const submittingRef = useRef(false);
   const createdModuleIdRef = useRef<string | null>(null);
-  const folderSelection = useModuleFolderSelection({
-    profiles,
-    recentProfileIndex,
-    runtime,
-  });
+  const folderSelection = useModuleFolderSelection({ runtime });
 
   useEffect(() => {
     setFolderError(null);

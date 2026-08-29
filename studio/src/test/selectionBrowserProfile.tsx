@@ -2,7 +2,6 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import { TasksPane } from "../app/shell/ticket-workspace/tasks/TasksPane";
 import { useStudioStore, setStatesSorted } from "../features/projects";
-import { seedConfig } from "../features/studio/stores/configStore";
 import { WorkTrackerModuleOpenDocument } from "../features/work-items/generated/workItems.documents";
 import { createBrowserRuntime, initializeStudioRuntime } from "../runtime";
 import { StudioApolloProvider } from "../shared/apollo/StudioApolloProvider";
@@ -130,7 +129,6 @@ setStatesSorted("project-1", [{
   sort_order: 0,
   is_protected: false,
 }]);
-seedConfig({ features: { sidebar: true, projects: true } });
 useStudioStore.setState({ selectedProjectId: "project-1" });
 useClientStore.setState({
   selectedModuleId: "module-1",

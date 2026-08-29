@@ -22,6 +22,7 @@ pub mod installation_preflight;
 pub mod launch_authority;
 pub mod launch_paths;
 pub mod launch_planning;
+pub mod module_links;
 pub mod native_terminal;
 pub mod query_root;
 pub mod run_now;

@@ -107,7 +107,6 @@ async fn schema() -> GraphQlEndpoint {
         None,
         None,
         None,
-        None,
     )
     .unwrap();
     GraphQlEndpoint::new(schema)

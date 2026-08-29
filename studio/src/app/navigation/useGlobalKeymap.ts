@@ -1,6 +1,5 @@
 import { useEffect, useRef } from "react";
 import { useModalStore } from "../modal/modalStore";
-import { isSidebarEnabled } from "../../features/studio/stores/configStore";
 import { useClientStore } from "../../state/clientStore";
 import { isTypingTarget } from "../../shared/utilities/keyboard";
 import {
@@ -38,7 +37,7 @@ export function useGlobalKeymap(taskRows: TreeRow[] = EMPTY_TASK_ROWS): void {
   useEffect(() => {
     function onCaptureKeyDown(event: KeyboardEvent): void {
       const ui = useClientStore.getState();
-      const sidebarVisible = isSidebarEnabled() && ui.sidebarVisible;
+      const sidebarVisible = ui.sidebarVisible;
       if (hasOpenModal()) return;
 
       const actionId = studioKeymapRegistry.resolve("capture", event);
@@ -60,7 +59,7 @@ export function useGlobalKeymap(taskRows: TreeRow[] = EMPTY_TASK_ROWS): void {
 
     function onKeyDown(event: KeyboardEvent): void {
       const ui = useClientStore.getState();
-      const sidebarVisible = isSidebarEnabled() && ui.sidebarVisible;
+      const sidebarVisible = ui.sidebarVisible;
       if (!sidebarVisible && routeThreeZoneBodyEngagement(event)) return;
       const captureAction = studioKeymapRegistry.resolve("capture", event);
       if (

@@ -15,8 +15,7 @@ use std::path::PathBuf;
 
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 
-use crate::entities::work_management::issue;
-use crate::settings_persistence::ProfileStore;
+use crate::entities::work_management::{issue, project, workspace};
 use crate::worktree_status::owner::{self, WorktreeOwner};
 use crate::worktree_status::repository::{self, RepositoryResolution};
 use crate::worktree_status::GitPort;
@@ -51,19 +50,19 @@ pub(crate) enum PlanResolution {
 
 pub(crate) async fn derive(
     work_items: &DatabaseConnection,
-    profiles: &ProfileStore,
     git: &GitPort,
     requested_task_id: &str,
 ) -> Result<PlanResolution, WorktreeCreateError> {
     let owner = owner::resolve(work_items, requested_task_id).await?;
-    let repository = match repository::resolve(profiles, git, owner.module_id.as_deref()).await? {
+    let repository = match repository::resolve(work_items, git, owner.module_id.as_deref()).await?
+    {
         RepositoryResolution::Repository(repository) => repository,
         RepositoryResolution::NoRepository(reason) => {
             return Ok(PlanResolution::NoRepository(reason))
         }
     };
     Ok(PlanResolution::Plan(Box::new(
-        for_owner(work_items, profiles, owner, repository).await?,
+        for_owner(work_items, owner, repository).await?,
     )))
 }
 
@@ -72,7 +71,6 @@ pub(crate) async fn derive(
 /// module rather than from the caller.
 pub(crate) async fn for_owner(
     work_items: &DatabaseConnection,
-    profiles: &ProfileStore,
     owner: WorktreeOwner,
     repository: PathBuf,
 ) -> Result<CreatePlan, WorktreeCreateError> {
@@ -94,19 +92,27 @@ pub(crate) async fn for_owner(
         checkout,
         ticket_seq: Some(top_level.sequence_id),
         project_id: Some(top_level.project_id.clone()),
-        workspace_slug: workspace_slug(profiles),
+        workspace_slug: workspace_slug(work_items, &top_level.project_id).await?,
         owner,
     })
 }
 
-/// The selected profile's workspace, recorded on the row exactly as the
-/// shipping implementation records it. It is metadata, never authority.
-fn workspace_slug(profiles: &ProfileStore) -> Option<String> {
-    let catalog = profiles.read();
-    let index = usize::try_from(catalog.recent_profile_index.unwrap_or(0)).ok()?;
-    catalog
-        .profiles
-        .get(index)
-        .map(|profile| profile.workspace_slug.clone())
-        .filter(|slug| !slug.is_empty())
+/// The workspace the owning project belongs to, recorded on the row as
+/// metadata. It is derived from the Work Item graph, never from a caller and
+/// never from local configuration.
+async fn workspace_slug(
+    work_items: &DatabaseConnection,
+    project_id: &str,
+) -> Result<Option<String>, WorktreeCreateError> {
+    let Some(project) = project::Entity::find_by_id(project_id.to_owned())
+        .one(work_items)
+        .await?
+    else {
+        return Ok(None);
+    };
+    Ok(workspace::Entity::find_by_id(project.workspace_id)
+        .one(work_items)
+        .await?
+        .map(|row| row.slug)
+        .filter(|slug| !slug.is_empty()))
 }

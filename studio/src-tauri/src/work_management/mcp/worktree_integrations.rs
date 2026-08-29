@@ -13,13 +13,9 @@
 
 use sea_orm::DatabaseConnection;
 
-use crate::settings_persistence::ProfileStore;
 use crate::worktree_integrate::WorktreeIntegrateService;
 
-pub(super) async fn compose(
-    database: &DatabaseConnection,
-    profiles: &ProfileStore,
-) -> Option<WorktreeIntegrateService> {
+pub(super) async fn compose(database: &DatabaseConnection) -> Option<WorktreeIntegrateService> {
     if let Err(error) = crate::workspace_operations::schema::install(database).await {
         eprintln!("Ticketry could not install the Workspace Operation journal: {error}");
         return None;
@@ -32,7 +28,6 @@ pub(super) async fn compose(
     }
     Some(WorktreeIntegrateService::new(
         database.clone(),
-        profiles.clone(),
         crate::workspace_operations::WorkspaceOperationJournal::new(database.clone()),
         Some(
             crate::runs_persistence::RunsServices::new(database.clone())

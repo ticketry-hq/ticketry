@@ -39,7 +39,7 @@ pub async fn initialize(
 ) -> Result<FoundationRuntime, FoundationInitializationError> {
     let database = database::open(database_path).await?;
     let schema = crate::query_root::foundation_schema_with_terminal_services(
-        database, None, None, None, None, None, None, None, None, None, None,
+        database, None, None, None, None, None, None, None, None, None,
     )?;
     Ok(FoundationRuntime {
         endpoint: GraphQlEndpoint::new(schema),
@@ -63,7 +63,6 @@ pub async fn initialize_with_worktracker_and_install(
     let schema = crate::query_root::foundation_schema_with_terminal_services(
         foundation_database,
         Some(worktracker_database),
-        None,
         None,
         None,
         None,
@@ -121,7 +120,6 @@ pub async fn initialize_with_keybinding_settings_and_install(
         None,
         None,
         None,
-        None,
     )?;
     api.install_endpoint(GraphQlEndpoint::new(schema))
         .map_err(|error| {
@@ -140,28 +138,15 @@ pub async fn initialize_with_worktracker_commands_and_install(
     media_root: &Path,
     api: &tauri_graphql::TransportApiImpl,
 ) -> Result<ComposedCommandRuntime, FoundationInitializationError> {
-    let settings_stores = media_root
-        .parent()
-        .map(crate::settings_persistence::SettingsStores::new)
-        .ok_or_else(|| {
-            FoundationInitializationError::new(
-                FoundationInitializationErrorCode::SettingsDatabaseOpen,
-                format!(
-                    "the media root {} has no settings directory",
-                    media_root.display()
-                ),
-            )
-        })?;
     let composed = initialize_with_worktracker_commands_and_install_inner(
         foundation_database_path,
         worktracker_database_path,
         media_root,
         None,
-        settings_stores.clone(),
         api,
     )
     .await?;
-    Ok(ComposedCommandRuntime::new(composed, &settings_stores))
+    Ok(ComposedCommandRuntime::new(composed))
 }
 
 /// Compose and install the authored-command schema, handing back the command
@@ -171,7 +156,6 @@ async fn initialize_with_worktracker_commands_and_install_inner(
     worktracker_database_path: &Path,
     media_root: &Path,
     readiness_data_directory: Option<&Path>,
-    settings_stores: crate::settings_persistence::SettingsStores,
     api: &tauri_graphql::TransportApiImpl,
 ) -> Result<composed_commands::ComposedWorktracker, FoundationInitializationError> {
     let foundation_database = database::open(foundation_database_path).await?;
@@ -192,24 +176,6 @@ async fn initialize_with_worktracker_commands_and_install_inner(
                     error.to_string(),
                 )
             })?;
-    if let Some(workspace) = crate::work_management::read_queries::workspace(&worktracker_database)
-        .await
-        .map_err(|error| {
-            FoundationInitializationError::new(
-                FoundationInitializationErrorCode::SettingsDatabaseOpen,
-                error.to_string(),
-            )
-        })?
-    {
-        settings_stores
-            .ensure_local_profile("Local", &workspace.slug)
-            .map_err(|error| {
-                FoundationInitializationError::new(
-                    FoundationInitializationErrorCode::SettingsDatabaseOpen,
-                    error.to_string(),
-                )
-            })?;
-    }
     // Where the durable outbox is adopted, authored writes publish their facts
     // through it. Before adoption the same commands run unchanged and publish
     // nothing, so composing this schema can never make a write depend on a
@@ -228,12 +194,8 @@ async fn initialize_with_worktracker_commands_and_install_inner(
     // idempotent rather than an adoption. A journal that cannot be installed
     // simply leaves creation uncomposed: the capability reports itself
     // unavailable instead of running Git without a recovery record.
-    let worktrees = compose_worktree_operations(
-        &worktracker_database,
-        &settings_stores,
-        work_facts.is_some(),
-    )
-    .await;
+    let worktrees =
+        compose_worktree_operations(&worktracker_database, work_facts.is_some()).await;
     // Document saves are Workspace Operations over the same journal. One
     // bounded pass finishes a rename a previous process staged and abandoned,
     // before any window can ask for that document again.
@@ -250,11 +212,8 @@ async fn initialize_with_worktracker_commands_and_install_inner(
     // through this service, the desktop asset protocol serves bytes through it,
     // and the watcher supervisor settles through it, so path authorization and
     // fact publication have exactly one implementation in the process.
-    let documents = crate::documents::DocumentsService::new(
-        worktracker_database.clone(),
-        Some(settings_stores.profiles().clone()),
-    )
-    .publishing(document_facts(&worktracker_database).await);
+    let documents = crate::documents::DocumentsService::new(worktracker_database.clone())
+        .publishing(document_facts(&worktracker_database).await);
     let document_watch = compose_document_watch(&documents).await;
     let viewer_ownership =
         crate::viewer_ownership::ViewerOwnershipService::new(worktracker_database.clone());
@@ -265,10 +224,7 @@ async fn initialize_with_worktracker_commands_and_install_inner(
             std::sync::Arc::new(terminal_runtime.clone()),
         )
         .with_authority(std::sync::Arc::new(
-            crate::launch_authority::LaunchAuthorityService::new(
-                worktracker_database.clone(),
-                settings_stores.profiles().clone(),
-            ),
+            crate::launch_authority::LaunchAuthorityService::new(worktracker_database.clone()),
         )),
         viewers: viewer_ownership.clone(),
         output_activity: crate::terminal_output_activity::TerminalOutputActivityService::production(
@@ -283,7 +239,6 @@ async fn initialize_with_worktracker_commands_and_install_inner(
         )),
         Some(crate::work_management::commands::attachments::AttachmentStorage::new(media_root)),
         Some(settings_repository),
-        Some(settings_stores),
         readiness_data_directory.map(Path::to_path_buf),
         work_facts,
         worktree_operations,
@@ -367,7 +322,6 @@ async fn compose_document_watch(
 /// half-finished tree.
 async fn compose_worktree_operations(
     worktracker_database: &sea_orm::DatabaseConnection,
-    settings_stores: &crate::settings_persistence::SettingsStores,
     outbox_adopted: bool,
 ) -> ComposedWorktreeOperations {
     if let Err(error) = crate::workspace_operations::schema::install(worktracker_database).await {
@@ -389,7 +343,6 @@ async fn compose_worktree_operations(
     let locks = crate::worktree_status::RepositoryLocks::shared();
     let create = crate::worktree_create::WorktreeCreateService::new(
         worktracker_database.clone(),
-        settings_stores.profiles().clone(),
         journal.clone(),
         events.clone(),
         locks.clone(),
@@ -400,7 +353,6 @@ async fn compose_worktree_operations(
     }
     let discard = crate::worktree_discard::WorktreeDiscardService::new(
         worktracker_database.clone(),
-        settings_stores.profiles().clone(),
         journal.clone(),
         events.clone(),
         locks.clone(),
@@ -412,14 +364,8 @@ async fn compose_worktree_operations(
         eprintln!("Ticketry could not reconcile abandoned worktree discards: {error}");
         reconciled = false;
     }
-    let integrations_reconciled = compose_worktree_integrations(
-        worktracker_database,
-        settings_stores,
-        journal,
-        events,
-        locks,
-    )
-    .await;
+    let integrations_reconciled =
+        compose_worktree_integrations(worktracker_database, journal, events, locks).await;
     ComposedWorktreeOperations {
         operations: Some(crate::worktree_operations::WorktreeOperations::new(
             create, discard,
@@ -446,7 +392,6 @@ struct ComposedWorktreeOperations {
 /// Ticketry was closed looks like.
 async fn compose_worktree_integrations(
     worktracker_database: &sea_orm::DatabaseConnection,
-    settings_stores: &crate::settings_persistence::SettingsStores,
     journal: crate::workspace_operations::WorkspaceOperationJournal,
     events: Option<crate::runs_persistence::StatusEventRepository>,
     locks: crate::worktree_status::RepositoryLocks,
@@ -461,7 +406,6 @@ async fn compose_worktree_integrations(
     let mut reconciled = true;
     let integrations = crate::worktree_integrate::WorktreeIntegrateService::new(
         worktracker_database.clone(),
-        settings_stores.profiles().clone(),
         journal,
         events,
         locks,
@@ -514,6 +458,32 @@ async fn compose_document_saves(
         return false;
     }
     true
+}
+
+/// Import legacy profile module folders into typed Module Link rows.
+///
+/// The importer is handed a connection opened against this installation's own
+/// state database. It never resolves the established data directory itself, so
+/// an import cannot reach an installation the caller did not name.
+async fn import_module_links(data_directory: &Path) -> Result<(), FoundationInitializationError> {
+    let database = crate::work_management::open_for_commands(&data_directory.join("state.db"))
+        .await
+        .map_err(|error| {
+            FoundationInitializationError::new(
+                FoundationInitializationErrorCode::ModuleLinkImport,
+                error.to_string(),
+            )
+        })?;
+    let outcome = crate::module_links::import(&database, data_directory)
+        .await
+        .map_err(|error| {
+            FoundationInitializationError::new(
+                FoundationInitializationErrorCode::ModuleLinkImport,
+                error.to_string(),
+            )
+        });
+    let _ = database.close().await;
+    outcome.map(drop)
 }
 
 /// Perform the checked one-writer handoff before exposing authored commands.
@@ -576,6 +546,11 @@ pub async fn adopt_worktracker_and_install(
                 error.to_string(),
             )
         })?;
+    // Typed Module Links are imported once the settings store is Rust-owned
+    // and its profile snapshot is verified, so the rows commit while their
+    // legacy source is still recoverable. The import is idempotent: every
+    // later launch re-runs it and changes nothing.
+    import_module_links(data_directory).await?;
     // The Runs write lease changes hands here, before any Rust Runs command is
     // reachable. An unknown or corrupt Runs schema refuses adoption and leaves
     // the pre-cutover snapshot restorable.
@@ -620,21 +595,17 @@ pub async fn adopt_worktracker_and_install(
             .await
             .map_err(installation_adoption_error)?;
     }
-    // Build the local settings stores here, not inside composition, so the
-    // adopted runtime hands out the very instance the schema mutates.
-    let settings_stores = crate::settings_persistence::SettingsStores::new(data_directory);
     let composed = initialize_with_worktracker_commands_and_install_inner(
         foundation_database_path,
         &data_directory.join("state.db"),
         &data_directory.join("media"),
         Some(data_directory),
-        settings_stores.clone(),
         api,
     )
     .await?;
     verify_graphql_readiness(api).await?;
     Ok(AdoptedWorktracker {
-        runtime: ComposedCommandRuntime::new(composed, &settings_stores),
+        runtime: ComposedCommandRuntime::new(composed),
     })
 }
 
@@ -713,36 +684,6 @@ async fn verify_graphql_readiness(
 pub async fn generated_schema_sdl() -> Result<String, FoundationInitializationError> {
     let database = database::in_memory().await?;
     crate::query_root::generated_contract_schema(database).map(|schema| schema.sdl())
-}
-
-pub async fn initialize_with_profile_settings_and_install(
-    foundation_database_path: &Path,
-    data_directory: &Path,
-    api: &tauri_graphql::TransportApiImpl,
-) -> Result<(), FoundationInitializationError> {
-    let foundation_database = database::open(foundation_database_path).await?;
-    let schema = crate::query_root::foundation_schema_with_terminal_services(
-        foundation_database,
-        None,
-        None,
-        None,
-        None,
-        Some(crate::settings_persistence::SettingsStores::new(
-            data_directory,
-        )),
-        None,
-        None,
-        None,
-        None,
-        None,
-    )?;
-    api.install_endpoint(GraphQlEndpoint::new(schema))
-        .map_err(|error| {
-            FoundationInitializationError::new(
-                FoundationInitializationErrorCode::EndpointInstall,
-                format!("could not install the GraphQL endpoint: {error}"),
-            )
-        })
 }
 
 pub fn export_transport_bindings(path: impl AsRef<Path>) -> Result<(), String> {

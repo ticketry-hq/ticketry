@@ -65,11 +65,6 @@ export function moduleTreeFromWorkItems(
   return { rootIds, children, order };
 }
 
-export const getConfig: RetiredOperation = retiredOperation;
-export const postProfile: RetiredOperation = retiredOperation;
-export const putProfile: RetiredOperation = retiredOperation;
-export const deleteProfile: RetiredOperation = retiredOperation;
-export const patchConfig: RetiredOperation = retiredOperation;
 export const listProjects: RetiredOperation = retiredOperation;
 export const getWorkspace: RetiredOperation = retiredOperation;
 export const acknowledgeOnboarding: RetiredOperation = retiredOperation;

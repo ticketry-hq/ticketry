@@ -7,7 +7,6 @@ use crate::launch_planning::{
     build_document_chat_prompt, build_instant_prompt, build_planning_prompt, provider_contract,
     DocumentChatPrompt, InstantPrompt, PlanningPrompt, Provider,
 };
-use crate::settings_persistence::ProfileStore;
 use crate::terminal_launch::{CreateTerminalSession, TerminalLaunchKind};
 use crate::work_management::launch_policy::{
     CallerScope, LaunchPolicyRequest, LaunchPolicyResolver,
@@ -36,16 +35,14 @@ pub trait InteractiveLaunchAuthority: Send + Sync + 'static {
 #[derive(Clone)]
 pub struct LaunchAuthorityService {
     database: DatabaseConnection,
-    profiles: ProfileStore,
     paths: LaunchPathsService,
 }
 
 impl LaunchAuthorityService {
-    pub fn new(database: DatabaseConnection, profiles: ProfileStore) -> Self {
+    pub fn new(database: DatabaseConnection) -> Self {
         Self {
-            paths: LaunchPathsService::new(database.clone(), profiles.clone()),
+            paths: LaunchPathsService::new(database.clone()),
             database,
-            profiles,
         }
     }
 }
@@ -82,7 +79,7 @@ impl LaunchAuthorityService {
         &self,
         request: &CreateTerminalSession,
     ) -> Result<ResolvedLaunchMaterial, LaunchAuthorityError> {
-        let decision = LaunchPolicyResolver::new(self.database.clone(), self.profiles.clone())
+        let decision = LaunchPolicyResolver::new(self.database.clone())
             .resolve(LaunchPolicyRequest {
                 task_id: request.issue_id.clone(),
                 destination_state_id: None,
@@ -129,7 +126,7 @@ impl LaunchAuthorityService {
         let module = facts::module_prompt_facts(
             &self.database,
             &request.module_id,
-            local_module_folder(&self.profiles, &request.module_id),
+            local_module_folder(&self.database, &request.module_id).await,
         )
         .await?;
         let prompt = build_planning_prompt(&PlanningPrompt {
@@ -157,7 +154,7 @@ impl LaunchAuthorityService {
         let module = facts::module_prompt_facts(
             &self.database,
             &request.module_id,
-            local_module_folder(&self.profiles, &request.module_id),
+            local_module_folder(&self.database, &request.module_id).await,
         )
         .await?;
         let contract = provider_contract(
@@ -187,7 +184,8 @@ impl LaunchAuthorityService {
         })?;
         let prompt = build_document_chat_prompt(&DocumentChatPrompt {
             document_relative_path: document_relative_path.clone(),
-            local_module_folder: local_module_folder(&self.profiles, &request.module_id)
+            local_module_folder: local_module_folder(&self.database, &request.module_id)
+                .await
                 .unwrap_or_default(),
             user_input: submitted(request.prompt.as_deref()).map(str::to_owned),
         });

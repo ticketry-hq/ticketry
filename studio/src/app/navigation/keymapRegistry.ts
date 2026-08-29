@@ -7,7 +7,6 @@ import {
   type KeyChord,
   type KeymapContext,
 } from "./keymapBindings";
-import { isSidebarEnabled } from "../../features/studio/stores/configStore";
 import { studioRuntime, type StudioPlatform } from "../../runtime";
 
 const DEFAULT_BINDINGS_IN_CONTEXT_PRECEDENCE =
@@ -123,9 +122,7 @@ class KeymapRegistry {
   }
 
   getConfigurableBindings(): EffectiveBinding[] {
-    return CONFIGURABLE_BINDINGS_IN_CONTEXT_PRECEDENCE.filter((binding) =>
-      availableInInstallation(binding)
-    ).map(
+    return CONFIGURABLE_BINDINGS_IN_CONTEXT_PRECEDENCE.map(
       ({ context, actionId, chord: bindingChord }) => ({
         context,
         actionId,
@@ -137,9 +134,7 @@ class KeymapRegistry {
   }
 
   getDefaultBindings(): EffectiveBinding[] {
-    return CONFIGURABLE_BINDINGS_IN_CONTEXT_PRECEDENCE.filter((binding) =>
-      availableInInstallation(binding)
-    ).map(
+    return CONFIGURABLE_BINDINGS_IN_CONTEXT_PRECEDENCE.map(
       ({ context, actionId, chord: bindingChord }) => ({
         context,
         actionId,
@@ -153,7 +148,6 @@ class KeymapRegistry {
     predicate: (binding: EffectiveBinding) => boolean,
   ): EffectiveBinding | null {
     for (const binding of CONFIGURABLE_BINDINGS_IN_CONTEXT_PRECEDENCE) {
-      if (!availableInInstallation(binding)) continue;
       const effectiveChord =
         this.overrides.get(bindingKey(binding.context, binding.actionId)) ??
         binding.chord;
@@ -249,13 +243,8 @@ function isBindingRegistered(
   platform: StudioPlatform,
 ): boolean {
   return (
-    availableOnPlatform(binding, platform) &&
-    availableInInstallation(binding)
+    availableOnPlatform(binding, platform)
   );
-}
-
-function availableInInstallation(binding: BindingDefinition): boolean {
-  return binding.actionId !== "toggle-sidebar" || isSidebarEnabled();
 }
 
 const DEFAULT_BINDINGS_BY_CONTEXT = new Map<

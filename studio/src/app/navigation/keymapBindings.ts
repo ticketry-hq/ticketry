@@ -147,9 +147,6 @@ export const DEFAULT_BINDINGS: readonly BindingDefinition[] = [
     defaultAliases: [chord("Enter", { meta: true })],
   },
 
-  paneBinding("projects.next", "ArrowDown"),
-  paneBinding("projects.previous", "ArrowUp"),
-  paneBinding("projects.activate", "Enter"),
   paneBinding("modules.next", "ArrowDown"),
   paneBinding("modules.previous", "ArrowUp"),
   paneBinding("modules.activate", "Enter"),

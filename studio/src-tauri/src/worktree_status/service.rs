@@ -1,14 +1,13 @@
 //! The one place a worktree status answer is assembled.
 //!
 //! The caller supplies a Work Item identity and nothing else. Ownership,
-//! module, configured folder, repository, branch, base, and checkout identity
-//! are all derived here from trusted data, and the live facts are read from
-//! Git under the owning repository's lock.
+//! module, linked folder, repository, branch, base, and checkout identity are
+//! all derived here from trusted data, and the live facts are read from Git
+//! under the owning repository's lock.
 
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 
 use crate::entities::worktrees::worktree;
-use crate::settings_persistence::ProfileStore;
 
 use super::error::WorktreeStatusError;
 use super::git::GitPort;
@@ -23,27 +22,21 @@ use super::view::WorktreeStatusView;
 #[derive(Clone)]
 pub struct WorktreeStatusService {
     work_items: DatabaseConnection,
-    profiles: ProfileStore,
     git: GitPort,
     locks: RepositoryLocks,
 }
 
 impl WorktreeStatusService {
-    pub fn new(work_items: DatabaseConnection, profiles: ProfileStore) -> Self {
-        Self::with_locks(work_items, profiles, RepositoryLocks::new())
+    pub fn new(work_items: DatabaseConnection) -> Self {
+        Self::with_locks(work_items, RepositoryLocks::new())
     }
 
     /// Share one set of repository locks with the other worktree capabilities
     /// in this process, so a status read and a creation never observe the same
     /// repository at the same time.
-    pub fn with_locks(
-        work_items: DatabaseConnection,
-        profiles: ProfileStore,
-        locks: RepositoryLocks,
-    ) -> Self {
+    pub fn with_locks(work_items: DatabaseConnection, locks: RepositoryLocks) -> Self {
         Self {
             work_items,
-            profiles,
             git: GitPort::new(),
             locks,
         }
@@ -102,7 +95,8 @@ impl WorktreeStatusService {
         &self,
         owner: &WorktreeOwner,
     ) -> Result<WorktreeStatusView, WorktreeStatusError> {
-        match repository::resolve(&self.profiles, &self.git, owner.module_id.as_deref()).await? {
+        match repository::resolve(&self.work_items, &self.git, owner.module_id.as_deref()).await?
+        {
             RepositoryResolution::Repository(_) => Ok(WorktreeStatusView::none(owner)),
             RepositoryResolution::NoRepository(reason) => {
                 Ok(WorktreeStatusView::no_repository(owner, reason))

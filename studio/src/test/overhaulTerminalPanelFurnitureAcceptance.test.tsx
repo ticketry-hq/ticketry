@@ -25,7 +25,7 @@ import { StudioFooter } from "../app/shell/StudioFooter";
 import { useTerminalStore } from "../features/agents/terminal/internal/sessionStore";
 import { useTerminalForegroundStore } from "../features/agents/terminal/internal/foregroundStore";
 import { useStudioStore } from "../features/projects/store";
-import { seedConfig } from "../features/studio/stores/configStore";
+import { seedModuleLinks } from "../features/module-links";
 import { useModuleShellStore } from "../features/terminal-panel/moduleShellStore";
 import { useTerminalPanelStore } from "../features/terminal-panel/panelStore";
 import { TerminalPanel } from "../features/terminal-panel/TerminalPanel";
@@ -285,19 +285,9 @@ describe("terminal panel furniture acceptance", () => {
       editViewBodyEngaged: false,
     });
     useStudioStore.setState({ selectedProjectId: "project-1" });
-    seedConfig({
-      profiles: [
-        {
-          name: "local",
-          workspace_slug: "meml",
-          agent_prompt: null,
-          agent_prompts: {},
-          module_links: [{ module_id: "module-1", path: "/repo/module-1" }],
-          recent_project_id: null,
-        },
-      ],
-      recentProfileIndex: 0,
-    });
+    seedModuleLinks([
+      { id: "link-module-1", moduleId: "module-1", path: "/repo/module-1" },
+    ]);
   });
 
   afterEach(() => {

@@ -15,7 +15,6 @@ use muxed_studio_lib::documents::save::{staging_file_name, DocumentSaveService, 
 use muxed_studio_lib::documents::DocumentFactRecorder;
 use muxed_studio_lib::graphql_foundation::initialize_with_worktracker_commands_and_install;
 use muxed_studio_lib::runs_persistence::RunsServices;
-use muxed_studio_lib::settings_persistence::{ModuleLink, Profile, ProfileCatalog, ProfileStore};
 use muxed_studio_lib::workspace_operations::{
     schema as journal_schema, WorkspaceOperationIntent, WorkspaceOperationJournal,
     WorkspaceOperationKind,
@@ -88,27 +87,6 @@ impl Fixture {
         )
     }
 
-    fn profiles(&self) -> ProfileStore {
-        let store = ProfileStore::new(self.path().join("profiles.json"));
-        store
-            .replace(&ProfileCatalog {
-                recent_profile_index: Some(0),
-                profiles: vec![Profile {
-                    name: "Local".to_owned(),
-                    workspace_slug: "meml".to_owned(),
-                    agent_prompt: None,
-                    agent_prompts: Default::default(),
-                    module_links: vec![ModuleLink {
-                        module_id: PUBLIC_MODULE.to_owned(),
-                        path: self.path().join("checkout").to_string_lossy().into_owned(),
-                    }],
-                    recent_project_id: None,
-                    recent_module_ids: Default::default(),
-                }],
-            })
-            .expect("write the profile catalog");
-        store
-    }
 }
 
 /// A state.db carrying the adopted Documents shape, the durable outbox, and one
@@ -196,7 +174,6 @@ async fn fixture() -> Fixture {
 
 /// Compose the shipping schema over this fixture.
 async fn install(fixture: &Fixture) -> TransportApiImpl {
-    fixture.profiles();
     let api = TransportApiImpl::new();
     initialize_with_worktracker_commands_and_install(
         &fixture.path().join("rust-core.sqlite3"),

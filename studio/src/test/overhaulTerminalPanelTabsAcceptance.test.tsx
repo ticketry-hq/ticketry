@@ -19,7 +19,7 @@ import {
   useTerminalStore,
 } from "../features/agents/terminal/internal/sessionStore";
 import { useStudioStore } from "../features/projects/store";
-import { seedConfig } from "../features/studio/stores/configStore";
+import { seedModuleLinks } from "../features/module-links";
 import { ACTIVE_SHELL_KEY } from "../features/terminal-panel/activeShellMemory";
 import { useModuleShellStore } from "../features/terminal-panel/moduleShellStore";
 import { useTerminalPanelStore } from "../features/terminal-panel/panelStore";
@@ -165,22 +165,10 @@ describe("terminal panel tab acceptance", () => {
       activeByTask: {},
     });
     useStudioStore.setState({ selectedProjectId: "project-1" });
-    seedConfig({
-      profiles: [
-        {
-          name: "local",
-          workspace_slug: "meml",
-          agent_prompt: null,
-          agent_prompts: {},
-          module_links: [
-            { module_id: "module-1", path: "/repo/module-1" },
-            { module_id: "module-2", path: "/repo/module-2" },
-          ],
-          recent_project_id: null,
-        },
-      ],
-      recentProfileIndex: 0,
-    });
+    seedModuleLinks([
+      { id: "link-module-1", moduleId: "module-1", path: "/repo/module-1" },
+      { id: "link-module-2", moduleId: "module-2", path: "/repo/module-2" },
+    ]);
   });
 
   afterEach(() => {

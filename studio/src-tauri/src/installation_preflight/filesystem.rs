@@ -103,6 +103,12 @@ const PATH_COLUMNS: &[PathColumn] = &[
         identity: "id",
         kind: Recorded::ContainedRelative,
     },
+    PathColumn {
+        table: "module_links",
+        column: "path",
+        identity: "id",
+        kind: Recorded::ExternalRoot,
+    },
 ];
 
 /// The entries inside the data directory Ticketry itself owns.
@@ -111,6 +117,7 @@ const OWNED_ENTRIES: &[(&str, Owned)] = &[
     ("worktrees", Owned::Directory),
     ("profiles.json", Owned::File),
     ("features.json", Owned::File),
+    (crate::module_links::receipt::RECEIPT_FILE, Owned::File),
     ("sidecar.log", Owned::File),
 ];
 

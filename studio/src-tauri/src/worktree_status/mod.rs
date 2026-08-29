@@ -11,12 +11,12 @@
 //! * **Ownership is derived.** One top-level Work Item owns the checkout and
 //!   its descendants share it. A module is a container and never an owner.
 //!   Studio supplies an identity; parents, modules, and repositories are
-//!   resolved here from the Work Item graph and the selected profile.
+//!   resolved here from the Work Item graph and each Module's typed link.
 //! * **Absence is data.** `none` (a repository exists but no worktree does)
 //!   and `no_repo` (nothing could enclose this Work Item) are ordinary
 //!   results. Only an unreadable database, an unrunnable Git, or an unknown
 //!   Work Item is an error.
-//! * **Nothing falls back.** If the profile, module link, folder, or
+//! * **Nothing falls back.** If the module, its link, the folder, or the
 //!   repository cannot be resolved, no Git command runs, so a status read can
 //!   never end up describing an arbitrary working directory.
 //!
@@ -31,7 +31,7 @@ mod live_facts;
 // Ownership, repository resolution, and the checkout registry are the trusted
 // derivations every worktree capability shares, so `crate::worktree_create`
 // and `crate::worktree_discard` resolve through these rather than repeating
-// the Work Item graph, the profile rules, or Git's own bookkeeping.
+// the Work Item graph, the link rules, or Git's own bookkeeping.
 pub(crate) mod owner;
 pub(crate) mod registry;
 pub(crate) mod repository;

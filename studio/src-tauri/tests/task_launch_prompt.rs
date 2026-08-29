@@ -9,7 +9,6 @@ use common::terminal_lifecycle_harness::{TerminalLifecycleHarness, MODULE_ID, TA
 use muxed_studio_lib::entities::terminals::launch_material;
 use muxed_studio_lib::execution_reconciliation::ExecutionReconciliationService;
 use muxed_studio_lib::run_now::{RunNowCaller, RunNowRequest, RunNowService};
-use muxed_studio_lib::settings_persistence::ProfileStore;
 use muxed_studio_lib::terminal_launch::{
     TerminalLaunchBoundary, TerminalLaunchCheckpoint, TerminalLaunchError, TerminalLaunchRuntime,
     TerminalRuntimeObservation, VerifiedTerminalRuntime,
@@ -67,10 +66,7 @@ async fn policy_driven_task_launches_include_the_work_item_description() {
     let database = harness.database().await;
     seed(&database, harness.data_directory()).await;
     let terminal = launch_service(database.clone(), Arc::new(Runtime::default()));
-    let resolver = LaunchPolicyResolver::new(
-        database.clone(),
-        ProfileStore::new(harness.data_directory().join("profiles.json")),
-    );
+    let resolver = LaunchPolicyResolver::new(database.clone());
 
     let run_now = RunNowService::new(database.clone(), resolver.clone(), terminal.clone(), None)
         .execute(RunNowRequest {
@@ -198,13 +194,18 @@ async fn seed(database: &sea_orm::DatabaseConnection, directory: &std::path::Pat
         .unwrap();
     std::fs::write(
         directory.join("profiles.json"),
-        format!(
-            r#"{{"recent_profile_index":0,"profiles":[{{"name":"Local","workspace_slug":"terminal-harness","module_links":[{{"module_id":"{}","path":"{}"}}]}}]}}"#,
-            compact(MODULE_ID),
-            directory.display()
-        ),
+        r#"{"recent_profile_index":0,"profiles":[{"name":"Local","workspace_slug":"terminal-harness"}]}"#,
     )
     .unwrap();
+    // The folder the prompt names is the Module's typed link. The profile above
+    // still decides which workspace may launch at all.
+    muxed_studio_lib::module_links::schema::install(database)
+        .await
+        .unwrap();
+    muxed_studio_lib::module_links::ModuleLinkStore::new(database.clone())
+        .set(&compact(MODULE_ID), &directory.display().to_string())
+        .await
+        .expect("link the harness module");
 }
 
 fn compact(value: &str) -> String {

@@ -51,7 +51,6 @@ async fn schema() -> (GraphQlEndpoint, String) {
         None,
         None,
         None,
-        None,
     )
     .unwrap();
     let sdl = schema.sdl();

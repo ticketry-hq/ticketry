@@ -1,6 +1,5 @@
 import { createApolloStore } from "../../shared/apollo/localState";
 import { ApiError } from "../../shared/api/errors";
-import * as recentProjects from "./utilities/recentProjects";
 import { toast } from "../../state/clientStore";
 import { useClientStore } from "../../state/clientStore";
 import {
@@ -22,13 +21,28 @@ import type {
   View,
 } from "../../shared/api/types";
 import { loadIssueTypes } from "../settings";
-import { getConfigSnapshot } from "../studio/stores/configStore";
+import { getModuleFolder } from "../module-links";
+import { readRecentModule } from "../../state/persistence";
 
 const VIEWS: View[] = ["backlog", "settings"];
 
 /** Coerce a raw URL segment to a known view, defaulting to backlog. */
 export function normalizeView(raw: string | undefined): View {
   return raw && (VIEWS as string[]).includes(raw) ? (raw as View) : "backlog";
+}
+
+/**
+ * The remembered module, only when it is still a module of this project and its
+ * folder link is already known. A module with no link would open the folder
+ * prompt, and restoring a selection must never prompt.
+ */
+function restorableRecentModuleId(projectId: string): string | null {
+  const moduleId = readRecentModule();
+  if (!moduleId) return null;
+  const isCurrent = getModulesSnapshot(projectId).some(
+    (module) => module.id === moduleId,
+  );
+  return isCurrent && getModuleFolder(moduleId) ? moduleId : null;
 }
 
 function errMessage(e: unknown): string {
@@ -67,8 +81,8 @@ interface StudioState {
 
 /**
  * Outcome of a delete. `redirect` is true only when the *selected* project was
- * removed and the caller must navigate; `targetId` is the most-recently-used
- * surviving project to open, or null when none remain (→ create screen).
+ * removed and the caller must navigate; `targetId` is a surviving project to
+ * open, or null when none remain (→ create screen).
  */
 export interface DeleteProjectResult {
   redirect: boolean;
@@ -91,9 +105,6 @@ export const useStudioStore = createApolloStore<StudioState>("studio", (set, get
 
   async selectProject(id) {
     if (get().selectedProjectId === id) return;
-    // "Used" = updated on every project switch (#665); the MRU order survives
-    // reload and drives both startup selection and post-delete redirect.
-    recentProjects.touch(id);
     set({ selectedProjectId: id, error: null });
     useClientStore.setState({
       selectedModuleId: null,
@@ -102,16 +113,9 @@ export const useStudioStore = createApolloStore<StudioState>("studio", (set, get
     });
     try {
       await loadModules(id);
-      const { recentProfileIndex, profiles } = getConfigSnapshot();
-      const recentModuleId =
-        recentProfileIndex === null
-          ? undefined
-          : profiles[recentProfileIndex]?.recent_module_ids?.[id];
-      if (
-        recentModuleId &&
-        getModulesSnapshot(id).some((module) => module.id === recentModuleId)
-      ) {
-        await useClientStore.getState().selectModule(recentModuleId);
+      const restorable = restorableRecentModuleId(id);
+      if (restorable) {
+        await useClientStore.getState().selectModule(restorable);
       }
     } catch (e) {
       set({ error: errMessage(e) });
@@ -202,9 +206,10 @@ export const useStudioStore = createApolloStore<StudioState>("studio", (set, get
     if (!wasSelected) return { redirect: false, targetId: null };
 
     // The open project is gone: drop any selection it owned (not auto-cleared)
-    // and resolve the MRU survivor for the caller to navigate to.
+    // and hand the caller the first surviving project to navigate to.
     useClientStore.getState().selectionClear();
-    const targetId = recentProjects.resolveStartProject(getProjectsSnapshot(), id);
+    const targetId =
+      getProjectsSnapshot().find((project) => project.id !== id)?.id ?? null;
     return { redirect: true, targetId };
   },
 }));

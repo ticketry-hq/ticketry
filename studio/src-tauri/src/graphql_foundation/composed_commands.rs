@@ -2,17 +2,14 @@
 //!
 //! Opening `work_management::open_for_commands` again hands back a second
 //! SeaORM pool and re-runs the transition-occurrence and launch-policy DDL,
-//! each statement taking an exclusive write lock on `state.db`. A second
-//! `ProfileStore` is worse than wasteful: its mutation lock is per instance,
-//! so two stores over `profiles.json` no longer serialise with each other.
-//! Composition therefore publishes what it built instead of letting later
-//! callers rebuild it.
+//! each statement taking an exclusive write lock on `state.db`. Composition
+//! therefore publishes what it built instead of letting later callers rebuild
+//! it.
 
 use sea_orm::DatabaseConnection;
 
 use crate::document_watch::DocumentWatchSupervisor;
 use crate::documents::DocumentsService;
-use crate::settings_persistence::{ProfileStore, SettingsStores};
 
 /// The handles a completed one-writer handoff leaves for the desktop shell.
 pub struct AdoptedWorktracker {
@@ -39,12 +36,11 @@ pub(crate) struct ComposedWorktracker {
     pub(crate) output_activity: crate::terminal_output_activity::TerminalOutputActivityService,
 }
 
-/// The live command connection, profile store, and workspace services held by
-/// the installed GraphQL schema.
+/// The live command connection and workspace services held by the installed
+/// GraphQL schema.
 #[derive(Clone)]
 pub struct ComposedCommandRuntime {
     commands: DatabaseConnection,
-    profiles: ProfileStore,
     documents: DocumentsService,
     document_watch: Option<DocumentWatchSupervisor>,
     workspace_reconciled: bool,
@@ -54,10 +50,9 @@ pub struct ComposedCommandRuntime {
 }
 
 impl ComposedCommandRuntime {
-    pub(crate) fn new(composed: ComposedWorktracker, settings: &SettingsStores) -> Self {
+    pub(crate) fn new(composed: ComposedWorktracker) -> Self {
         Self {
             commands: composed.commands,
-            profiles: settings.profiles().clone(),
             documents: composed.documents,
             document_watch: composed.document_watch,
             workspace_reconciled: composed.workspace_reconciled,
@@ -87,12 +82,6 @@ impl ComposedCommandRuntime {
     /// The same pool the authored GraphQL commands write through.
     pub fn commands(&self) -> &DatabaseConnection {
         &self.commands
-    }
-
-    /// The same store the local-settings GraphQL fields mutate through, so
-    /// its mutation lock keeps serialising every writer in this process.
-    pub fn profiles(&self) -> &ProfileStore {
-        &self.profiles
     }
 
     pub fn viewer_ownership(&self) -> &crate::viewer_ownership::ViewerOwnershipService {

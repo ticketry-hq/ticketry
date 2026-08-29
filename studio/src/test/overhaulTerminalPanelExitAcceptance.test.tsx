@@ -36,7 +36,7 @@ import type { RunRecord } from "../features/agents/status/types";
 import { useTerminalForegroundStore } from "../features/agents/terminal/internal/foregroundStore";
 import { useTerminalStore } from "../features/agents/terminal/internal/sessionStore";
 import { useStudioStore } from "../features/projects/store";
-import { seedConfig } from "../features/studio/stores/configStore";
+import { seedModuleLinks } from "../features/module-links";
 import { selectLiveTerminalStops } from "../features/studio/lib/liveTerminalCycle";
 import { useModuleShellStore } from "../features/terminal-panel/moduleShellStore";
 import { useTerminalPanelStore } from "../features/terminal-panel/panelStore";
@@ -235,19 +235,9 @@ describe("terminal panel shell exit acceptance", () => {
       activeByTask: {},
     });
     useStudioStore.setState({ selectedProjectId: "project-1" });
-    seedConfig({
-      profiles: [
-        {
-          name: "local",
-          workspace_slug: "meml",
-          agent_prompt: null,
-          agent_prompts: {},
-          module_links: [{ module_id: "module-1", path: "/repo/module-1" }],
-          recent_project_id: null,
-        },
-      ],
-      recentProfileIndex: 0,
-    });
+    seedModuleLinks([
+      { id: "link-module-1", moduleId: "module-1", path: "/repo/module-1" },
+    ]);
   });
 
   afterEach(() => {

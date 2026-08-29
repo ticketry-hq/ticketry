@@ -70,8 +70,7 @@ fn error(code: &'static str, message: &str) -> LaunchPolicyError {
 fn recoverable_codes_cover_repairable_configuration() {
     for code in [
         "provider_not_activated",
-        "profile_not_configured",
-        "profile_workspace_mismatch",
+        "module_folder_unusable",
         "module_not_found",
         "unsupported_model",
         "unsupported_reasoning",
@@ -99,14 +98,14 @@ async fn repeating_a_rejection_replaces_the_stored_diagnosis() {
         &database,
         "auto_start",
         "occurrence-1",
-        &error("profile_not_configured", "No selected local profile."),
+        &error("module_folder_unusable", "The Module has no linked folder."),
     )
     .await
     .unwrap();
 
     let row = rejection(&database, "occurrence-1").await;
-    assert_eq!(row.code, "profile_not_configured");
-    assert_eq!(row.message, "No selected local profile.");
+    assert_eq!(row.code, "module_folder_unusable");
+    assert_eq!(row.message, "The Module has no linked folder.");
     assert_eq!(
         launch_policy_rejection::Entity::find()
             .count(&database)

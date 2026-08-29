@@ -919,7 +919,7 @@ async fn the_journal_intent_is_immutable_once_durable() {
 async fn the_journal_is_absent_from_the_public_graphql_surface() {
     let (_directory, database, _journal) = journal().await;
     let schema = muxed_studio_lib::query_root::foundation_schema(
-        database, None, None, None, None, None, None, None, None, None,
+        database, None, None, None, None, None, None, None, None,
     )
     .unwrap();
     let sdl = schema.sdl();

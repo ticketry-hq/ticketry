@@ -7,8 +7,8 @@ const api = vi.hoisted(() => ({
   listIssueTypes: vi.fn(),
   listModules: vi.fn(),
   listProjects: vi.fn(),
-  putProfile: vi.fn(),
   updateProject: vi.fn(),
+  writeModuleLink: vi.fn(),
 }));
 
 const moduleFolderValidationApi = vi.hoisted(() => ({
@@ -45,9 +45,9 @@ vi.mock("../features/workflows/queries/readTransport", async () => ({
   readWorkflowIssueTypes: api.listIssueTypes,
 }));
 
-vi.mock("../features/settings/profileTransport", async () => ({
-  ...(await vi.importActual("../features/settings/profileTransport")),
-  putProfile: api.putProfile,
+vi.mock("../features/module-links/moduleLinkTransport", async () => ({
+  ...(await vi.importActual("../features/module-links/moduleLinkTransport")),
+  writeModuleLink: api.writeModuleLink,
 }));
 
 vi.mock("../features/settings/queries", async () => ({
@@ -95,9 +95,10 @@ import {
 } from "../features/projects";
 import { useStudioStore } from "../features/projects/store";
 import {
-  getConfigSnapshot,
-  seedConfig,
-} from "../features/studio/stores/configStore";
+  getModuleFolder,
+  getModuleLinks,
+  seedModuleLinks,
+} from "../features/module-links";
 import type { Module, Project } from "../shared/api/types";
 import { useClientStore } from "../state/clientStore";
 
@@ -194,9 +195,8 @@ function expectCreationFlowIntact(): void {
   );
   // Selection and the module-folder link still follow the created module.
   expect(useClientStore.getState().selectedModuleId).toBe(NEW_MODULE_ID);
-  expect(api.putProfile.mock.calls[0][1].module_links).toEqual([
-    { module_id: NEW_MODULE_ID, path: "/repos/newest" },
-  ]);
+  expect(api.writeModuleLink).toHaveBeenCalledWith(NEW_MODULE_ID, "/repos/newest");
+  expect(getModuleFolder(NEW_MODULE_ID)).toBe("/repos/newest");
   // The sidebar's add control stays after its module rows.
   expect(sidebarRows().at(-1)).toBe("+ Add Module");
   expect(screen.getByRole("button", { name: "+ Add Module" })).toBeVisible();
@@ -238,29 +238,17 @@ describe("module creation front-placement acceptance", () => {
       ]);
     api.listModules.mockReset().mockResolvedValue(EXISTING);
     api.updateProject.mockReset();
-    api.putProfile
+    api.writeModuleLink
       .mockReset()
-      .mockImplementation(async (_index: number, body: unknown) => ({
-        recent_profile_index: 0,
-        features: getConfigSnapshot().features,
-        profiles: [body],
-      }));
+      .mockImplementation(async (moduleId: string, path: string) => {
+        seedModuleLinks([
+          ...getModuleLinks().filter((link) => link.moduleId !== moduleId),
+          { id: `link-${moduleId}`, moduleId, path },
+        ]);
+      });
     registerModuleRecencyProvider(async () => ({}));
     resetNewlyCreatedModules();
-    seedConfig({
-      profiles: [
-        {
-          name: "Local",
-          workspace_slug: "meml",
-          agent_prompt: null,
-          agent_prompts: {},
-          module_links: [],
-          recent_project_id: PROJECT_ID,
-          recent_module_ids: {},
-        },
-      ],
-      recentProfileIndex: 0,
-    });
+    seedModuleLinks([]);
     useStudioStore.setState({ selectedProjectId: PROJECT_ID, error: null });
     useClientStore.setState({ selectedModuleId: null, modulesCursorId: null });
     useModalStore.setState({ modalStack: [{ type: "add-module" }] });

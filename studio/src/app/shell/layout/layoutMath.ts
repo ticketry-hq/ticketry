@@ -1,70 +1,37 @@
-import type { SidebarPaneComposition } from "../../../features/studio/stores/configStore";
-
-// Persisted layout order: projects, modules, tasks, workspace.
-export const DEFAULT_PANEL_LAYOUT = [18, 18, 36, 28];
+// Persisted layout order: modules, tasks, workspace. There is one installation
+// project, so the sidebar holds the modules pane alone.
+export const DEFAULT_PANEL_LAYOUT = [18, 44, 38];
 
 export function splitWorkArea(layout: number[]): [number, number] {
-  const total = layout[2] + layout[3];
+  const total = layout[1] + layout[2];
   if (total <= 0) return [50, 50];
 
-  return [(layout[2] / total) * 100, (layout[3] / total) * 100];
+  return [(layout[1] / total) * 100, (layout[2] / total) * 100];
 }
 
 export function outerPanelLayout(
   layout: number[],
   sidebarVisible: boolean,
-  paneComposition: SidebarPaneComposition,
 ): number[] {
   if (!sidebarVisible) return [100];
 
-  switch (paneComposition) {
-    case "absent":
-      return [100];
-    case "modules": {
-      const visibleTotal = layout[1] + layout[2] + layout[3];
-      if (visibleTotal <= 0) return [50, 50];
-      return [
-        (layout[1] / visibleTotal) * 100,
-        ((layout[2] + layout[3]) / visibleTotal) * 100,
-      ];
-    }
-    case "projects-and-modules":
-      return [layout[0], layout[1], layout[2] + layout[3]];
-  }
+  const total = layout[0] + layout[1] + layout[2];
+  if (total <= 0) return [50, 50];
+  return [(layout[0] / total) * 100, ((layout[1] + layout[2]) / total) * 100];
 }
 
 export function mergeOuterPanelLayout(
   layout: number[],
   outer: number[],
-  paneComposition: SidebarPaneComposition,
 ): number[] | null {
-  switch (paneComposition) {
-    case "absent":
-      return outer.length === 1 ? layout : null;
-    case "modules": {
-      if (outer.length !== 2) return null;
-      const [tasksRatio, workspaceRatio] = splitWorkArea(layout);
-      const availableTotal = Math.max(0, 100 - layout[0]);
-      const workAreaSize = outer[1] * (availableTotal / 100);
-      return [
-        layout[0],
-        outer[0] * (availableTotal / 100),
-        workAreaSize * (tasksRatio / 100),
-        workAreaSize * (workspaceRatio / 100),
-      ];
-    }
-    case "projects-and-modules": {
-      if (outer.length !== 3) return null;
-      const [tasksRatio, workspaceRatio] = splitWorkArea(layout);
-      const workAreaSize = outer[2];
-      return [
-        outer[0],
-        outer[1],
-        workAreaSize * (tasksRatio / 100),
-        workAreaSize * (workspaceRatio / 100),
-      ];
-    }
-  }
+  if (outer.length !== 2) return null;
+  const [tasksRatio, workspaceRatio] = splitWorkArea(layout);
+  const workAreaSize = outer[1];
+  return [
+    outer[0],
+    workAreaSize * (tasksRatio / 100),
+    workAreaSize * (workspaceRatio / 100),
+  ];
 }
 
 export function mergeWorkAreaLayout(
@@ -73,14 +40,12 @@ export function mergeWorkAreaLayout(
 ): number[] | null {
   if (workArea.length !== 2) return null;
 
-  const sidebarTotal = layout[0] + layout[1];
-  const visibleTotal = Math.max(0, 100 - sidebarTotal);
+  const visibleTotal = Math.max(0, 100 - layout[0]);
   const workAreaTotal = workArea[0] + workArea[1];
   if (visibleTotal <= 0 || workAreaTotal <= 0) return null;
 
   return [
     layout[0],
-    layout[1],
     visibleTotal * (workArea[0] / workAreaTotal),
     visibleTotal * (workArea[1] / workAreaTotal),
   ];

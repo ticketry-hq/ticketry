@@ -38,18 +38,12 @@ pub(crate) fn launch_rust_runtime(
         Arc::new(composed.terminal_runtime().clone()),
     )
     .with_authority(Arc::new(
-        crate::launch_authority::LaunchAuthorityService::new(
-            database.clone(),
-            composed.profiles().clone(),
-        ),
+        crate::launch_authority::LaunchAuthorityService::new(database.clone()),
     ));
     launch_runtime.configure_terminal_authority(
         crate::terminal_lifecycle::TerminalRuntimeAuthority {
             database: database.clone(),
-            paths: crate::launch_paths::LaunchPathsService::new(
-                database.clone(),
-                composed.profiles().clone(),
-            ),
+            paths: crate::launch_paths::LaunchPathsService::new(database.clone()),
             hook_runner,
             hook_spool_directory: spool_directory.clone(),
             mcp_url: String::new(),
@@ -115,10 +109,7 @@ pub(crate) fn launch_rust_runtime(
     );
     let execution_service = crate::execution_reconciliation::ExecutionReconciliationService::new(
         database.clone(),
-        crate::work_management::launch_policy::LaunchPolicyResolver::new(
-            database.clone(),
-            composed.profiles().clone(),
-        ),
+        crate::work_management::launch_policy::LaunchPolicyResolver::new(database.clone()),
         terminal_launch.clone(),
     );
     let execution_runtime = tauri::async_runtime::block_on(

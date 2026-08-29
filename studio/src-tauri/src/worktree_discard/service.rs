@@ -26,7 +26,6 @@ use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 
 use crate::entities::worktrees::worktree;
 use crate::runs_persistence::StatusEventRepository;
-use crate::settings_persistence::ProfileStore;
 use crate::workspace_operations::{
     WorkspaceOperationJournal, WorkspaceOperationOutcome, WorkspaceOperationReconciler,
 };
@@ -56,14 +55,13 @@ impl WorktreeDiscardService {
     /// discard can never observe one repository at the same moment.
     pub fn new(
         work_items: DatabaseConnection,
-        profiles: ProfileStore,
         journal: WorkspaceOperationJournal,
         events: Option<StatusEventRepository>,
         locks: RepositoryLocks,
     ) -> Self {
         Self {
             executor: DiscardExecutor::new(work_items.clone(), journal, events, locks.clone()),
-            status: WorktreeStatusService::with_locks(work_items, profiles, locks),
+            status: WorktreeStatusService::with_locks(work_items, locks),
         }
     }
 

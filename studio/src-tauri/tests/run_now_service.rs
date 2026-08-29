@@ -7,7 +7,6 @@ use std::sync::{
 use async_trait::async_trait;
 use muxed_studio_lib::{
     run_now::{RunNowCaller, RunNowLauncher, RunNowRequest, RunNowRun, RunNowService},
-    settings_persistence::ProfileStore,
     work_management::{
         entities::{issue, launch_policy_decision, transition_occurrence},
         launch_policy::{LaunchPolicyDecision, LaunchPolicyResolver},
@@ -215,17 +214,14 @@ async fn fixture(failure: Option<&str>) -> Fixture {
     writer.close().await.unwrap();
     std::fs::write(
         directory.path().join("profiles.json"),
-        format!(
-            r#"{{"recent_profile_index":0,"profiles":[{{"name":"Local","workspace_slug":"meml","module_links":[{{"module_id":"{MODULE}","path":"{}"}}]}}]}}"#,
-            directory.path().display()
-        ),
+        r#"{"recent_profile_index":0,"profiles":[{"name":"Local","workspace_slug":"meml"}]}"#,
     )
     .unwrap();
     let database = open_for_commands(&path).await.unwrap();
-    let policy = LaunchPolicyResolver::new(
-        database.clone(),
-        ProfileStore::new(directory.path().join("profiles.json")),
-    );
+    // The folder a launch runs in is the module's typed link, so the policy
+    // resolves it from the installation rather than from the profile.
+    link_module(&database, &directory.path().display().to_string()).await;
+    let policy = LaunchPolicyResolver::new(database.clone());
     let launches = Arc::new(AtomicUsize::new(0));
     let service = RunNowService::with_launcher(
         database.clone(),
@@ -244,6 +240,17 @@ async fn fixture(failure: Option<&str>) -> Fixture {
         service,
         launches,
     }
+}
+
+/// Point the fixture module at one local folder, through the one write seam.
+async fn link_module(database: &DatabaseConnection, folder: &str) {
+    muxed_studio_lib::module_links::schema::install(database)
+        .await
+        .expect("install the Module Link schema");
+    muxed_studio_lib::module_links::ModuleLinkStore::new(database.clone())
+        .set(MODULE, folder)
+        .await
+        .expect("link the fixture module");
 }
 
 fn human(id_or_key: &str) -> RunNowRequest {
@@ -531,13 +538,7 @@ async fn eligibility_origin_policy_skill_and_folder_refusals_precede_the_move() 
     }
 
     let folder_fixture = fixture(None).await;
-    std::fs::write(
-        folder_fixture._directory.path().join("profiles.json"),
-        format!(
-            r#"{{"recent_profile_index":0,"profiles":[{{"name":"Local","workspace_slug":"meml","module_links":[{{"module_id":"{MODULE}","path":"/path/that/does/not/exist"}}]}}]}}"#
-        ),
-    )
-    .unwrap();
+    link_module(&folder_fixture.database, "/path/that/does/not/exist").await;
     let refusal = folder_fixture
         .service
         .execute(human(TASK))
@@ -549,24 +550,6 @@ async fn eligibility_origin_policy_skill_and_folder_refusals_precede_the_move() 
         Some(IDEAS)
     );
     assert_eq!(folder_fixture.launches.load(Ordering::SeqCst), 0);
-
-    let profile_fixture = fixture(None).await;
-    std::fs::write(
-        profile_fixture._directory.path().join("profiles.json"),
-        r#"{"recent_profile_index":null,"profiles":[]}"#,
-    )
-    .unwrap();
-    let refusal = profile_fixture
-        .service
-        .execute(human(TASK))
-        .await
-        .unwrap_err();
-    assert_eq!(refusal.code, "profile_not_configured");
-    assert_eq!(
-        state_id(&profile_fixture.database).await.as_deref(),
-        Some(IDEAS)
-    );
-    assert_eq!(profile_fixture.launches.load(Ordering::SeqCst), 0);
 }
 
 #[tokio::test]

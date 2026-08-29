@@ -637,7 +637,6 @@ async fn graphql_report_accepts_only_the_terminal_session_identity() {
         None,
         None,
         None,
-        None,
     )
     .unwrap();
     let sdl = schema.sdl();

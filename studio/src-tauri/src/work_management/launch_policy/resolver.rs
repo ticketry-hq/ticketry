@@ -1,7 +1,5 @@
 use sea_orm::DatabaseConnection;
 
-use crate::settings_persistence::ProfileStore;
-
 use super::catalog::CatalogReader;
 use super::context::LaunchContextReader;
 use super::rows::{canonical_uuid, PolicyReader};
@@ -12,12 +10,11 @@ use super::{CallerScope, LaunchPolicyDecision, LaunchPolicyError, LaunchPolicyRe
 #[derive(Clone)]
 pub struct LaunchPolicyResolver {
     database: DatabaseConnection,
-    profiles: ProfileStore,
 }
 
 impl LaunchPolicyResolver {
-    pub fn new(database: DatabaseConnection, profiles: ProfileStore) -> Self {
-        Self { database, profiles }
+    pub fn new(database: DatabaseConnection) -> Self {
+        Self { database }
     }
 
     pub async fn resolve(
@@ -70,10 +67,9 @@ impl LaunchPolicyResolver {
                 ),
             ));
         }
-        let (selected_profile, module_link) =
-            LaunchContextReader::new(&self.database, &self.profiles)
-                .resolve(&task)
-                .await?;
+        let module_link = LaunchContextReader::new(&self.database)
+            .resolve(&task)
+            .await?;
 
         Ok(LaunchPolicyDecision {
             version: DECISION_VERSION,
@@ -92,7 +88,6 @@ impl LaunchPolicyResolver {
             provider: selection.provider,
             model: selection.model,
             reasoning: selection.reasoning,
-            selected_profile,
             module_link,
         })
     }

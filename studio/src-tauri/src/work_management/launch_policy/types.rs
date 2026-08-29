@@ -42,13 +42,6 @@ pub struct LaunchPolicyRequest {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub struct SelectedProfileInput {
-    pub index: i32,
-    pub name: String,
-    pub workspace_slug: String,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct ModuleLinkInput {
     pub module_id: String,
     pub path: Option<String>,
@@ -73,7 +66,6 @@ pub struct LaunchPolicyDecision {
     pub provider: String,
     pub model: Option<String>,
     pub reasoning: Option<String>,
-    pub selected_profile: SelectedProfileInput,
     pub module_link: ModuleLinkInput,
 }
 

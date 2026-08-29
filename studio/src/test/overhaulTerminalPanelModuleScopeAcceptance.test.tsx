@@ -21,12 +21,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("./legacyApiFixture", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./legacyApiFixture")>()),
   getTasks: vi.fn(),
-  putProfile: vi.fn(),
-}));
-
-vi.mock("../features/settings/profileTransport", async () => ({
-  ...(await vi.importActual("../features/settings/profileTransport")),
-  putProfile: vi.fn(),
 }));
 
 vi.mock("../features/work-items/queries/readTransport", async () => ({
@@ -40,15 +34,11 @@ import { useModalStore } from "../app/modal/modalStore";
 import { useTerminalStore } from "../features/agents/terminal/internal/sessionStore";
 import { useTerminalForegroundStore } from "../features/agents/terminal/internal/foregroundStore";
 import { useStudioStore } from "../features/projects/store";
-import {
-  getConfigSnapshot,
-  seedConfig,
-} from "../features/studio/stores/configStore";
+import { seedModuleLinks } from "../features/module-links";
 import { useModuleShellStore } from "../features/terminal-panel/moduleShellStore";
 import { PANEL_OPEN_KEY } from "../features/terminal-panel/panelOpenMemory";
 import { useTerminalPanelStore } from "../features/terminal-panel/panelStore";
 import { TerminalPanel } from "../features/terminal-panel/TerminalPanel";
-import * as profileTransport from "../features/settings/profileTransport";
 import * as workItemReadTransport from "../features/work-items/queries/readTransport";
 import { useClientStore } from "../state/clientStore";
 import { TERMINAL_PANEL_KEY } from "../state/persistence";
@@ -85,7 +75,6 @@ vi.mock(
 );
 
 const getTasks = workItemReadTransport.readModuleTreeRecords as ReturnType<typeof vi.fn>;
-const putProfile = profileTransport.putProfile as ReturnType<typeof vi.fn>;
 
 class ResizeObserverStub {
   observe() {}
@@ -140,11 +129,6 @@ describe("terminal panel module scope acceptance", () => {
       states: [],
       workItems: [],
     });
-    putProfile.mockReset().mockImplementation(async (_index, profile) => ({
-      recent_profile_index: 0,
-      features: getConfigSnapshot().features,
-      profiles: [profile],
-    }));
     useTerminalStore.setState({ sessions: {}, sessionByRun: {} });
     useTerminalForegroundStore.setState({ claims: {}, hostTargets: {} });
     shellApi.createModuleShell.mockReset();
@@ -168,22 +152,10 @@ describe("terminal panel module scope acceptance", () => {
       editViewBodyEngaged: false,
     });
     useStudioStore.setState({ selectedProjectId: "project-1" });
-    seedConfig({
-      profiles: [
-        {
-          name: "local",
-          workspace_slug: "meml",
-          agent_prompt: null,
-          agent_prompts: {},
-          module_links: [
-            { module_id: "module-1", path: "/repo/module-1" },
-            { module_id: "module-2", path: "/repo/module-2" },
-          ],
-          recent_project_id: "project-1",
-        },
-      ],
-      recentProfileIndex: 0,
-    });
+    seedModuleLinks([
+      { id: "link-module-1", moduleId: "module-1", path: "/repo/module-1" },
+      { id: "link-module-2", moduleId: "module-2", path: "/repo/module-2" },
+    ]);
   });
 
   afterEach(() => {

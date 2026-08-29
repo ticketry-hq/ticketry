@@ -16,6 +16,11 @@ vi.mock("./legacyApiFixture", async (importOriginal) => ({
   ...catalogApi,
 }));
 
+vi.mock("../features/studio/lib/defaultProject", async () => ({
+  ...(await vi.importActual("../features/studio/lib/defaultProject")),
+  resolveDefaultProject: vi.fn(),
+}));
+
 vi.mock("../features/workflows/providerQueries", () => ({
   setProviderCapabilities: vi.fn(),
   loadProviderCapabilities: catalogApi.getLaunchProviderCapabilities,
@@ -36,11 +41,12 @@ vi.mock("../features/workflows/providerQueries", () => ({
 }));
 
 import OnboardingWelcome from "../app/onboarding/OnboardingWelcome";
+import * as defaultProject from "../features/studio/lib/defaultProject";
 import { useOnboardingTourStore } from "../app/onboarding/onboardingTourStore";
 import { useStudioStore } from "../features/projects/store";
-import { seedConfig } from "../features/studio/stores/configStore";
 
-const createProject = vi.fn();
+const resolveDefaultProject =
+  defaultProject.resolveDefaultProject as ReturnType<typeof vi.fn>;
 const selectProject = vi.fn();
 let releaseSelection = () => {};
 
@@ -53,10 +59,9 @@ describe("onboarding acceptance", () => {
     catalogApi.putProviderCatalog.mockReset().mockImplementation(async (value) => ({
       value,
     }));
-    seedConfig({ features: { sidebar: true, projects: true } });
     useOnboardingTourStore.getState().reset();
-    createProject.mockReset().mockResolvedValue({
-      id: "created-project",
+    resolveDefaultProject.mockReset().mockResolvedValue({
+      id: "installation-project",
       name: "Coding",
       slug: "CDN",
       description: "",
@@ -69,32 +74,28 @@ describe("onboarding acceptance", () => {
         };
       }),
     );
-    useStudioStore.setState({
-      selectedProjectId: null,
-      createProjectWithError: createProject,
-      selectProject,
-    });
+    useStudioStore.setState({ selectedProjectId: null, selectProject });
   });
 
-  it("[overhaul-26] selects the first project before its guided tour starts", async () => {
+  it("[overhaul-26] selects the installation project before its guided tour starts", async () => {
     render(<OnboardingWelcome />);
 
     expect(screen.queryByRole("button", { name: "Skip" })).not.toBeInTheDocument();
     fireEvent.click(await screen.findByRole("checkbox", { name: "I use codex" }));
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    await screen.findByRole("heading", { name: "Your first project" });
-    fireEvent.click(screen.getByTestId("onboarding-create-project"));
+    // One installation project: nobody is asked to name or choose one.
+    expect(screen.queryByRole("heading", { name: "Your first project" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Get started" }));
 
     await waitFor(() =>
-      expect(selectProject).toHaveBeenCalledWith("created-project"),
+      expect(selectProject).toHaveBeenCalledWith("installation-project"),
     );
     expect(useOnboardingTourStore.getState().step).toBe("inactive");
     releaseSelection();
     await waitFor(() =>
-      expect(useOnboardingTourStore.getState().step).toBe("projects-pane"),
+      expect(useOnboardingTourStore.getState().step).toBe("module-create"),
     );
-    expect(useStudioStore.getState().selectedProjectId).toBe("created-project");
-    expect(useOnboardingTourStore.getState().projectId).toBe("created-project");
+    expect(useStudioStore.getState().selectedProjectId).toBe("installation-project");
+    expect(useOnboardingTourStore.getState().projectId).toBe("installation-project");
   });
 
   it("keeps a provider selection when a late catalog response repeats the initial value", async () => {

@@ -242,9 +242,10 @@ impl TerminalLaunchRuntime for InteractiveTerminalLaunchRuntime {
         authority
             .paths
             .preflight_module_folder(&request.module_id)
+            .await
             .map(drop)
-            .map_err(|failure| {
-                TerminalLaunchError::new(TerminalLaunchErrorCode::UnusableFolder, failure.message())
+            .map_err(|refusal| {
+                TerminalLaunchError::new(TerminalLaunchErrorCode::UnusableFolder, refusal.message())
             })
     }
 
@@ -285,10 +286,11 @@ impl TerminalLaunchRuntime for InteractiveTerminalLaunchRuntime {
             let working_directory = authority
                 .paths
                 .preflight_module_folder(&material.module_id)
-                .map_err(|failure| {
+                .await
+                .map_err(|refusal| {
                     TerminalLaunchError::new(
                         TerminalLaunchErrorCode::UnusableFolder,
-                        failure.message(),
+                        refusal.message(),
                     )
                 })?;
             let command =
@@ -328,8 +330,9 @@ impl TerminalLaunchRuntime for InteractiveTerminalLaunchRuntime {
         authority
             .paths
             .preflight_module_folder(&material.module_id)
-            .map_err(|failure| {
-                TerminalLaunchError::new(TerminalLaunchErrorCode::UnusableFolder, failure.message())
+            .await
+            .map_err(|refusal| {
+                TerminalLaunchError::new(TerminalLaunchErrorCode::UnusableFolder, refusal.message())
             })?;
         let resume = if let Some(source_id) = material.resume_from_agent_run_id.as_deref() {
             let source = crate::entities::runs::agent_run::Entity::find_by_id(source_id)

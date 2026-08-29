@@ -15,7 +15,6 @@ import {
   useTerminalStore,
   type SessionMeta,
 } from "../features/agents/terminal";
-import { seedConfig } from "../features/studio/stores/configStore";
 import { setStatesSorted } from "../features/projects";
 import { useClientStore, type EditViewZone } from "../state/clientStore";
 import { workItem } from "./seam";
@@ -187,7 +186,6 @@ describe("overhaul acceptance — Edit view navigation zones", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     localStorage.clear();
-    seedConfig({ features: { sidebar: true, projects: true } });
     useStudioStore.setState({ selectedProjectId: "project-1" });
     useClientStore.setState({
       selectedModuleId: "module-1",

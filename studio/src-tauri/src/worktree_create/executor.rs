@@ -31,7 +31,6 @@ use serde_json::json;
 
 use crate::entities::worktrees::worktree;
 use crate::runs_persistence::StatusEventRepository;
-use crate::settings_persistence::ProfileStore;
 use crate::workspace_operations::{
     ClaimedOperation, WorkspaceOperationExecutor, WorkspaceOperationJournal,
     WorkspaceOperationOutcome,
@@ -51,7 +50,6 @@ use super::settlement::{self, SettledWorktree};
 #[derive(Clone)]
 pub(crate) struct CreateExecutor {
     work_items: DatabaseConnection,
-    profiles: ProfileStore,
     journal: WorkspaceOperationJournal,
     events: Option<StatusEventRepository>,
     locks: RepositoryLocks,
@@ -61,14 +59,12 @@ pub(crate) struct CreateExecutor {
 impl CreateExecutor {
     pub(crate) fn new(
         work_items: DatabaseConnection,
-        profiles: ProfileStore,
         journal: WorkspaceOperationJournal,
         events: Option<StatusEventRepository>,
         locks: RepositoryLocks,
     ) -> Self {
         Self {
             work_items,
-            profiles,
             journal,
             events,
             locks,
@@ -78,10 +74,6 @@ impl CreateExecutor {
 
     pub(crate) fn work_items(&self) -> &DatabaseConnection {
         &self.work_items
-    }
-
-    pub(crate) fn profiles(&self) -> &ProfileStore {
-        &self.profiles
     }
 
     pub(crate) fn git(&self) -> &GitPort {
@@ -101,7 +93,7 @@ impl CreateExecutor {
     ) -> Result<Result<CreatePlan, WorkspaceOperationOutcome>, WorktreeCreateError> {
         let owner = owner::resolve(&self.work_items, &intent.top_level_row_id).await?;
         let repository = match repository_resolution::resolve(
-            &self.profiles,
+            &self.work_items,
             &self.git,
             owner.module_id.as_deref(),
         )
@@ -115,7 +107,7 @@ impl CreateExecutor {
                 )))
             }
         };
-        let plan = plan::for_owner(&self.work_items, &self.profiles, owner, repository).await?;
+        let plan = plan::for_owner(&self.work_items, owner, repository).await?;
         if !intent.matches(&plan) {
             return Ok(Err(conflicted(
                 "worktree_repository_mismatch",

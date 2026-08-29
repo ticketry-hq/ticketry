@@ -10,7 +10,6 @@ use muxed_studio_lib::documents::{
     registry_refresh, DocumentsService, TaskRegistryScope, SCRATCH_TASK_ID,
 };
 use muxed_studio_lib::graphql_foundation::initialize_with_worktracker_commands_and_install;
-use muxed_studio_lib::settings_persistence::{ModuleLink, Profile, ProfileCatalog, ProfileStore};
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection};
 use tauri_graphql::{TransportApi, TransportApiImpl};
 
@@ -36,30 +35,22 @@ impl Fixture {
     }
 
     fn service(&self) -> DocumentsService {
-        DocumentsService::new(self.database.clone(), Some(self.profiles()))
+        DocumentsService::new(self.database.clone())
     }
 
-    /// A selected profile that points the module at a real local folder.
-    fn profiles(&self) -> ProfileStore {
-        let store = ProfileStore::new(self.path().join("profiles.json"));
-        store
-            .replace(&ProfileCatalog {
-                recent_profile_index: Some(0),
-                profiles: vec![Profile {
-                    name: "Local".to_owned(),
-                    workspace_slug: "meml".to_owned(),
-                    agent_prompt: None,
-                    agent_prompts: Default::default(),
-                    module_links: vec![ModuleLink {
-                        module_id: PUBLIC_MODULE.to_owned(),
-                        path: self.path().join("checkout").to_string_lossy().into_owned(),
-                    }],
-                    recent_project_id: None,
-                    recent_module_ids: Default::default(),
-                }],
-            })
-            .expect("write the profile catalog");
-        store
+    /// Link the module to a real local folder, which is where an authorized
+    /// root is resolved from.
+    async fn link_module(&self) {
+        muxed_studio_lib::module_links::schema::install(&self.database)
+            .await
+            .expect("install the Module Link schema");
+        muxed_studio_lib::module_links::ModuleLinkStore::new(self.database.clone())
+            .set(
+                PUBLIC_MODULE,
+                &self.path().join("checkout").to_string_lossy(),
+            )
+            .await
+            .expect("link the fixture module");
     }
 }
 
@@ -123,17 +114,17 @@ async fn fixture() -> Fixture {
         ))
         .await
         .expect("create the Documents fixture schema");
-    Fixture {
+    let fixture = Fixture {
         directory,
         database,
-    }
+    };
+    fixture.link_module().await;
+    fixture
 }
 
 /// Compose the shipping schema over this fixture: registry refresh writes
-/// rows, so it needs the same writable composition production installs, and
-/// the selected profile it resolves module folders through.
+/// rows, so it needs the same writable composition production installs.
 async fn install(fixture: &Fixture) -> TransportApiImpl {
-    fixture.profiles();
     let api = TransportApiImpl::new();
     initialize_with_worktracker_commands_and_install(
         &fixture.path().join("rust-core.sqlite3"),

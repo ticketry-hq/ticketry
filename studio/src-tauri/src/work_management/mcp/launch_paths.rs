@@ -18,7 +18,6 @@ use sea_orm::DatabaseConnection;
 use serde_json::{json, Value};
 
 use crate::launch_paths::{LaunchPathsRequest, LaunchPathsService};
-use crate::settings_persistence::ProfileStore;
 
 #[derive(Clone)]
 pub(super) struct LaunchPathsIngressState {
@@ -27,13 +26,9 @@ pub(super) struct LaunchPathsIngressState {
 }
 
 impl LaunchPathsIngressState {
-    pub(super) fn new(
-        database: DatabaseConnection,
-        profiles: ProfileStore,
-        credential: String,
-    ) -> Self {
+    pub(super) fn new(database: DatabaseConnection, credential: String) -> Self {
         Self {
-            service: LaunchPathsService::new(database, profiles),
+            service: LaunchPathsService::new(database),
             credential: Arc::new(credential),
         }
     }

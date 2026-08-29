@@ -10,7 +10,7 @@ import type {
   TerminalCreateRequest,
 } from "../../agents/terminal/create/types";
 import { useModalStore } from "../../../app/modal/modalStore";
-import { getConfigSnapshot, getModuleFolder } from "../stores/configStore";
+import { getModuleFolder } from "../../module-links";
 import { TEMP_TASK_ID } from "../../agents/types";
 import { useStudioStore } from "../../projects";
 import { useClientStore } from "../../../state/clientStore";
@@ -36,10 +36,7 @@ function studioPlanFlow(): TerminalCreateFlow {
   });
   return {
     hasModuleFolder(moduleId) {
-      const { recentProfileIndex, profiles } = getConfigSnapshot();
-      const profile =
-        recentProfileIndex !== null ? profiles[recentProfileIndex] : null;
-      return Boolean(getModuleFolder(profile, moduleId));
+      return Boolean(getModuleFolder(moduleId));
     },
     openFolderGate(req) {
       // Resume the same launch after the folder saves: chain through the prompt
@@ -94,14 +91,12 @@ export function startPlanFlow(): void {
  * 2) Otherwise push PromptInput with `next: agent-picker, mode: instant`.
  */
 export function startInstantChangeFlow(): void {
-  const cfg = getConfigSnapshot();
   const tasks = {
     ...useStudioStore.getState(),
     ...useClientStore.getState(),
   };
   const modal = useModalStore.getState();
 
-  const { recentProfileIndex, profiles } = cfg;
   const { selectedProjectId, selectedModuleId } = tasks;
   if (!selectedProjectId || !selectedModuleId) return;
   const agentPayload = {
@@ -111,9 +106,7 @@ export function startInstantChangeFlow(): void {
     onLaunched: selectScratchWorkspace,
   };
 
-  const profile =
-    recentProfileIndex !== null ? profiles[recentProfileIndex] : null;
-  const folder = getModuleFolder(profile, selectedModuleId);
+  const folder = getModuleFolder(selectedModuleId);
 
   if (!folder) {
     modal.pushModal({
@@ -160,14 +153,10 @@ function selectedTaskLaunchContext(): {
 
 /** Equivalent entry for `o` (open agent on selected task). */
 export function startOpenFlow(): void {
-  const cfg = getConfigSnapshot();
   const modal = useModalStore.getState();
-  const { recentProfileIndex, profiles } = cfg;
   const context = selectedTaskLaunchContext();
   if (!context) return;
-  const profile =
-    recentProfileIndex !== null ? profiles[recentProfileIndex] : null;
-  const folder = getModuleFolder(profile, context.moduleId);
+  const folder = getModuleFolder(context.moduleId);
   if (!folder) {
     modal.pushModal({
       type: "module-folder",
@@ -187,14 +176,10 @@ export function startOpenFlow(): void {
 
 /** Entry for shift+enter (open with prompt). */
 export function startOpenWithPromptFlow(): void {
-  const cfg = getConfigSnapshot();
   const modal = useModalStore.getState();
-  const { recentProfileIndex, profiles } = cfg;
   const context = selectedTaskLaunchContext();
   if (!context) return;
-  const profile =
-    recentProfileIndex !== null ? profiles[recentProfileIndex] : null;
-  const folder = getModuleFolder(profile, context.moduleId);
+  const folder = getModuleFolder(context.moduleId);
   if (!folder) {
     modal.pushModal({
       type: "module-folder",

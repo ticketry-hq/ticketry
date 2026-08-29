@@ -8,13 +8,12 @@ vi.mock("./legacyApiFixture", async () => {
   return {
     ...actual,
     getTasks: vi.fn(),
-    putProfile: vi.fn(),
   };
 });
 
-vi.mock("../features/settings/profileTransport", async () => ({
-  ...(await vi.importActual("../features/settings/profileTransport")),
-  putProfile: vi.fn(),
+vi.mock("../features/module-links/moduleLinkTransport", async () => ({
+  ...(await vi.importActual("../features/module-links/moduleLinkTransport")),
+  writeModuleLink: vi.fn(),
 }));
 
 vi.mock("../features/work-items/queries/readTransport", async () => ({
@@ -25,33 +24,22 @@ vi.mock("../features/work-items/queries/readTransport", async () => ({
 import { ModalHost, useModalStore } from "../app/modal";
 import { useStudioStore } from "../features/projects/store";
 import {
-  getConfigSnapshot,
-  seedConfig,
-} from "../features/studio/stores/configStore";
-import * as profileTransport from "../features/settings/profileTransport";
+  getModuleFolder,
+  getModuleLinks,
+  seedModuleLinks,
+} from "../features/module-links";
+import * as moduleLinkTransport from "../features/module-links/moduleLinkTransport";
 import * as workItemReadTransport from "../features/work-items/queries/readTransport";
 import { useClientStore } from "../state/clientStore";
 
 const getTasks = workItemReadTransport.readModuleTreeRecords as ReturnType<typeof vi.fn>;
-const putProfile = profileTransport.putProfile as ReturnType<typeof vi.fn>;
+const writeModuleLink = moduleLinkTransport.writeModuleLink as ReturnType<typeof vi.fn>;
 
-function seedActiveProfile(): void {
-  seedConfig({
-    recentProfileIndex: 0,
-    profiles: [
-      {
-        name: "Local",
-        workspace_slug: "meml",
-        agent_prompt: null,
-        agent_prompts: {},
-        module_links: [
-          { module_id: "module-current", path: "/repos/current" },
-        ],
-        recent_project_id: "project-1",
-        recent_module_ids: { "project-1": "module-current" },
-      },
-    ],
-  });
+function seedLinkedModule(): void {
+  // A folder belongs to its Module and to nothing else.
+  seedModuleLinks([
+    { id: "link-module-current", moduleId: "module-current", path: "/repos/current" },
+  ]);
 }
 
 describe("module-folder selection acceptance", () => {
@@ -63,12 +51,15 @@ describe("module-folder selection acceptance", () => {
       states: [],
       workItems: [],
     });
-    putProfile.mockReset().mockImplementation(async (_index, profile) => ({
-      recent_profile_index: 0,
-      features: getConfigSnapshot().features,
-      profiles: [profile],
-    }));
-    seedActiveProfile();
+    writeModuleLink
+      .mockReset()
+      .mockImplementation(async (moduleId: string, path: string) => {
+        seedModuleLinks([
+          ...getModuleLinks().filter((link) => link.moduleId !== moduleId),
+          { id: `link-${moduleId}`, moduleId, path },
+        ]);
+      });
+    seedLinkedModule();
     useStudioStore.setState({ selectedProjectId: "project-1" });
     useClientStore.setState({
       selectedModuleId: "module-current",
@@ -78,19 +69,6 @@ describe("module-folder selection acceptance", () => {
   });
 
   it("preserves the current module when the pathless-module prompt is cancelled", async () => {
-    seedConfig((state) => ({
-      recentProfileIndex: 1,
-      profiles: [
-        {
-          ...state.profiles[0],
-          module_links: [
-            ...state.profiles[0].module_links,
-            { module_id: "module-new", path: "/repos/inactive" },
-          ],
-        },
-        { ...state.profiles[0], name: "Active" },
-      ],
-    }));
     await useClientStore.getState().selectModule("module-new");
 
     expect(useClientStore.getState().selectedModuleId).toBe("module-current");
@@ -116,7 +94,7 @@ describe("module-folder selection acceptance", () => {
   });
 
   it("preserves the current module when the folder link cannot be saved", async () => {
-    putProfile.mockRejectedValueOnce(new Error("save failed"));
+    writeModuleLink.mockRejectedValueOnce(new Error("save failed"));
     await useClientStore.getState().selectModule("module-new");
     render(<ModalHost />);
     await act(async () => {
@@ -132,10 +110,11 @@ describe("module-folder selection acceptance", () => {
       await screen.findByRole("alert"),
     ).toHaveTextContent("Could not save the module folder");
     expect(useClientStore.getState().selectedModuleId).toBe("module-current");
+    expect(getModuleFolder("module-new")).toBeUndefined();
     expect(getTasks).not.toHaveBeenCalled();
   });
 
-  it("resumes module selection only after the active profile link is saved", async () => {
+  it("resumes module selection only after the module link is saved", async () => {
     await useClientStore.getState().selectModule("module-new");
     render(<ModalHost />);
     await act(async () => {
@@ -152,15 +131,9 @@ describe("module-folder selection acceptance", () => {
     await waitFor(() => {
       expect(useClientStore.getState().selectedModuleId).toBe("module-new");
     });
-    expect(putProfile).toHaveBeenCalledWith(
-      0,
-      expect.objectContaining({
-        module_links: [
-          { module_id: "module-current", path: "/repos/current" },
-          { module_id: "module-new", path: "/repos/new" },
-        ],
-      }),
-    );
+    expect(writeModuleLink).toHaveBeenCalledWith("module-new", "/repos/new");
+    expect(getModuleFolder("module-current")).toBe("/repos/current");
+    expect(getModuleFolder("module-new")).toBe("/repos/new");
     expect(getTasks).toHaveBeenCalledWith("project-1", "module-new");
   });
 });

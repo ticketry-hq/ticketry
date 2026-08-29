@@ -17,8 +17,8 @@
 //!   caller to aim.
 //! * **Every directory is derived here.** Ownership comes from the Work Item
 //!   graph, the checkout comes from the worktree index, the folder comes from
-//!   the selected profile, and the design directory comes from the canonical
-//!   layout contract. A caller cannot widen any of them.
+//!   the module's typed link, and the design directory comes from the
+//!   canonical layout contract. A caller cannot widen any of them.
 //! * **Nothing is created, saved, pruned, discarded, or integrated.** The one
 //!   filesystem effect is materializing the derived design directory the run
 //!   is about to write into, which is the same directory discovery already

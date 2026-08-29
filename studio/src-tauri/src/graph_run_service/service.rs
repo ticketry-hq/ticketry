@@ -60,7 +60,6 @@ struct GraphRunPolicySnapshot<'a> {
     model: Option<&'a str>,
     reasoning: Option<&'a str>,
     required_skills: &'a [String],
-    selected_profile_index: i32,
     module_id: &'a str,
     module_link_path: Option<&'a str>,
 }
@@ -239,7 +238,6 @@ impl GraphRunService {
             model: decision.model.as_deref(),
             reasoning: decision.reasoning.as_deref(),
             required_skills: &decision.required_skills,
-            selected_profile_index: decision.selected_profile.index,
             module_id: &decision.module_link.module_id,
             module_link_path: decision.module_link.path.as_deref(),
         })

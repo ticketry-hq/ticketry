@@ -1,20 +1,19 @@
 //! Authored settings persistence installed after the checked desktop handoff.
 //!
-//! App settings, local profiles, and installation feature flags share the
-//! established data directory while Django effects retain read-only access.
+//! App settings and the provider catalog share the established data directory
+//! while Django effects retain read-only access. The pre-Rust `profiles.json`
+//! and `features.json` files are read-only history; see
+//! [`legacy_profile_files`].
 
 mod adoption;
 mod app_settings;
 mod atomic_json;
 pub(crate) use crate::entities::settings as entities;
 mod error;
-mod features;
 mod global_launch_default;
-mod graphql_types;
 pub mod keybindings;
+mod legacy_profile_files;
 pub mod ownership_manifest;
-mod profile_graphql;
-mod profiles;
 mod provider_catalog;
 mod provider_catalog_provisioning;
 mod provider_catalog_read;
@@ -26,12 +25,12 @@ pub use adoption::{
 };
 pub use app_settings::{AppSetting, AppSettingRepository, SettingKey, SettingScope};
 pub use error::SettingsPersistenceError;
-pub use features::{FeatureFlags, FeatureStore};
 pub use global_launch_default::{
     parse_global_launch_default, read_global_launch_default, GlobalLaunchDefault,
 };
-pub use profile_graphql::SettingsStores;
-pub use profiles::{ModuleLink, Profile, ProfileCatalog, ProfileStore};
+pub use legacy_profile_files::{ModuleLink, Profile, ProfileCatalog};
+pub(crate) use atomic_json::write_json_atomically;
+pub(crate) use legacy_profile_files::read_profile_file;
 pub use provider_catalog::{
     ProviderCatalog, ProviderCatalogError, ProviderCatalogService, ProviderCatalogUpdate,
 };
@@ -39,5 +38,3 @@ pub(crate) use provider_catalog_provisioning::provision as provision_provider_ca
 pub use readiness::{
     publish as publish_readiness, published_readiness_is_complete, Slice2Readiness,
 };
-
-pub(crate) use profile_graphql::register as register_profile_graphql;

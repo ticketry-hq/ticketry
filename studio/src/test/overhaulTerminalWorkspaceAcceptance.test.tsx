@@ -8,7 +8,6 @@ import {
   useTerminalStore,
   type SessionMeta,
 } from "../features/agents/terminal";
-import { seedConfig } from "../features/studio/stores/configStore";
 import { useClientStore } from "../state/clientStore";
 import {
   installDesktopGraphQlRuntime,
@@ -123,7 +122,6 @@ describe("overhaul acceptance — terminals", () => {
     vi.resetAllMocks();
     installDesktopGraphQlRuntime(terminalSessionReadExecutor(terminalReads));
     localStorage.clear();
-    seedConfig({ features: { sidebar: true, projects: true } });
     useStudioStore.setState({ selectedProjectId: "project-1" });
     useClientStore.setState({
       selectedModuleId: "module-1",

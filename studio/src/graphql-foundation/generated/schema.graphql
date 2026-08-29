@@ -426,52 +426,6 @@ type LifecycleAccepted {
 	event_cursor: Int
 }
 
-type LocalFeatureFlags {
-	sidebar: Boolean!
-	projects: Boolean!
-}
-
-input LocalFeatureFlagsInput {
-	sidebar: Boolean!
-	projects: Boolean!
-}
-
-type LocalModuleLink {
-	module_id: String!
-	path: String!
-}
-
-input LocalModuleLinkInput {
-	module_id: String!
-	path: String!
-}
-
-type LocalProfile {
-	name: String!
-	workspace_slug: String!
-	agent_prompt: String
-	agent_prompts: Json!
-	module_links: [LocalModuleLink!]!
-	recent_project_id: String
-	recent_module_ids: Json!
-}
-
-input LocalProfileInput {
-	name: String!
-	workspace_slug: String!
-	agent_prompt: String
-	agent_prompts: Json
-	module_links: [LocalModuleLinkInput!]
-	recent_project_id: String
-	recent_module_ids: Json
-}
-
-type LocalSettings {
-	recent_profile_index: Int
-	profiles: [LocalProfile!]!
-	features: LocalFeatureFlags!
-}
-
 type MigrationProbes {
 	id: Int!
 	value: String!
@@ -516,9 +470,59 @@ input MigrationProbesOrderInput {
 	value: OrderByEnum
 }
 
+input ModuleLinkPathInput {
+	path: String!
+}
+
+type ModuleLinks {
+	id: String!
+	moduleId: String!
+	path: String!
+	createdAt: String!
+	updatedAt: String!
+	issue: WorktrackerIssue
+}
+
+type ModuleLinksConnection {
+	pageInfo: PageInfo!
+	paginationInfo: PaginationInfo
+	nodes: [ModuleLinks!]!
+	edges: [ModuleLinksEdge!]!
+}
+
+type ModuleLinksEdge {
+	cursor: String!
+	node: ModuleLinks!
+}
+
+input ModuleLinksFilterInput {
+	id: StringFilterInput
+	moduleId: StringFilterInput
+	path: StringFilterInput
+	createdAt: TextFilterInput
+	updatedAt: TextFilterInput
+	and: [ModuleLinksFilterInput!]
+	or: [ModuleLinksFilterInput!]
+	not: ModuleLinksFilterInput
+}
+
+input ModuleLinksHavingInput {
+	issue: WorktrackerIssueFilterInput
+}
+
+input ModuleLinksOrderInput {
+	id: OrderByEnum
+	moduleId: OrderByEnum
+	path: OrderByEnum
+	createdAt: OrderByEnum
+	updatedAt: OrderByEnum
+}
+
 type Mutation {
 	migrationProbesCreateOne(data: MigrationProbesInsertInput!): MigrationProbesBasic!
 	worktrackerIssuetypeCreateOne(data: WorktrackerIssuetypeInsertInput!): WorktrackerIssuetypeBasic!
+	set_module_link(module_id: String!, link: ModuleLinkPathInput!): ModuleLinks!
+	clear_module_link(module_id: String!): Boolean!
 	worktree_create(task_id: String!, operation_id: String!): WorktreeStatusView!
 	worktree_discard(task_id: String!, operation_id: String!): WorktreeDiscardResult!
 	acknowledge_onboarding: WorktrackerWorkspace!
@@ -543,11 +547,6 @@ type Mutation {
 	delete_state(state_id: String!): Boolean!
 	update_keybinding_setting(value: Json!): KeybindingSetting!
 	update_provider_catalog(activated_providers: [String!]!, default_provider: String, default_model: String, default_reasoning: String): ProviderCatalog!
-	add_local_profile(profile: LocalProfileInput!): LocalSettings!
-	replace_local_profile(index: Int!, profile: LocalProfileInput!): LocalSettings!
-	delete_local_profile(index: Int!): LocalSettings!
-	select_local_profile(index: Int!): LocalSettings!
-	replace_feature_flags(features: LocalFeatureFlagsInput!): LocalSettings!
 	retry_automation_attempt(attempt_id: String!): AutomationAttemptProjection!
 	dismiss_automation_attempt(attempt_id: String!): AutomationAttemptProjection!
 	ingest_agent_lifecycle(agent_run_id: String!, kind: String!, occurred_at: String!, provider_session_id: String): LifecycleAccepted!
@@ -625,11 +624,11 @@ type Query {
 	worktrackerAgentmodelreasoninglevel(filters: WorktrackerAgentmodelreasoninglevelFilterInput, having: WorktrackerAgentmodelreasoninglevelHavingInput, orderBy: WorktrackerAgentmodelreasoninglevelOrderInput, pagination: PaginationInput): WorktrackerAgentmodelreasoninglevelConnection!
 	worktrackerReasoninglevel(filters: WorktrackerReasoninglevelFilterInput, having: WorktrackerReasoninglevelHavingInput, orderBy: WorktrackerReasoninglevelOrderInput, pagination: PaginationInput): WorktrackerReasoninglevelConnection!
 	graphRuns(filters: GraphRunsFilterInput, having: GraphRunsHavingInput, orderBy: GraphRunsOrderInput, pagination: PaginationInput): GraphRunsConnection!
+	moduleLinks(filters: ModuleLinksFilterInput, having: ModuleLinksHavingInput, orderBy: ModuleLinksOrderInput, pagination: PaginationInput): ModuleLinksConnection!
 	worktrees(filters: WorktreesFilterInput, having: WorktreesHavingInput, orderBy: WorktreesOrderInput, pagination: PaginationInput): WorktreesConnection!
 	worktree_status(task_id: String!): WorktreeStatusView!
 	keybinding_setting: KeybindingSetting
 	provider_catalog: ProviderCatalog!
-	local_settings: LocalSettings!
 	automation_attempts(project_id: String!, task_id: String): [AutomationAttemptProjection!]!
 	agent_run_holdings(project_id: String!, task_id: String): [AgentRunHolding!]!
 	agentRuns(filters: AgentRunsFilterInput, having: AgentRunsHavingInput, orderBy: AgentRunsOrderInput, pagination: PaginationInput): AgentRunsConnection!

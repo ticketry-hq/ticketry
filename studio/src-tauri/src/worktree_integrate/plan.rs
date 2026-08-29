@@ -18,7 +18,6 @@ use std::path::PathBuf;
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 
 use crate::entities::worktrees::worktree;
-use crate::settings_persistence::ProfileStore;
 use crate::worktree_status::owner::{self, WorktreeOwner};
 use crate::worktree_status::repository::{self, RepositoryResolution};
 use crate::worktree_status::GitPort;
@@ -66,7 +65,6 @@ pub(crate) enum PlanResolution {
 
 pub(crate) async fn derive(
     work_items: &DatabaseConnection,
-    profiles: &ProfileStore,
     git: &GitPort,
     task_id: &str,
 ) -> Result<PlanResolution, WorktreeIntegrateError> {
@@ -75,14 +73,15 @@ pub(crate) async fn derive(
     let Some(row) = row_for(work_items, &top_level_row_id).await? else {
         return Ok(PlanResolution::NoWorktree);
     };
-    let repository = match repository::resolve(profiles, git, owner.module_id.as_deref()).await? {
+    let repository = match repository::resolve(work_items, git, owner.module_id.as_deref()).await?
+    {
         RepositoryResolution::Repository(repository) => repository,
         RepositoryResolution::NoRepository(reason) => {
             return Ok(PlanResolution::NoRepository(reason))
         }
     };
-    // The row records where the checkout was cut; the profile records where the
-    // module points now. Landing is only defined when they are the same
+    // The row records where the checkout was cut; the module's link records
+    // where it points now. Landing is only defined when they are the same
     // repository, so a repointed module is reported rather than merged into.
     if !same_path(&row.repo_root, &repository) {
         return Ok(PlanResolution::Mismatched {

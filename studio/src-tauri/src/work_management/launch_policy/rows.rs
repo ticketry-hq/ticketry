@@ -31,12 +31,16 @@ impl<'a> PolicyReader<'a> {
             .ok_or_else(|| {
                 LaunchPolicyError::rejected("task_not_found", "Task project not found.")
             })?;
-        let workspace = workspace::Entity::find_by_id(&project.workspace_id)
+        // Read for existence only: a task whose workspace row is gone is not
+        // launchable. The slug itself is not launch authority and is not carried
+        // into the decision.
+        workspace::Entity::find_by_id(&project.workspace_id)
             .one(self.database)
             .await?
             .ok_or_else(|| {
                 LaunchPolicyError::rejected("task_not_found", "Task workspace not found.")
-            })?;
+            })
+            .map(drop)?;
         Ok(TaskRow {
             id: issue.id,
             project_id: issue.project_id,
@@ -45,7 +49,6 @@ impl<'a> PolicyReader<'a> {
             parent_id: issue.parent_id,
             module_id: issue.module_id,
             workflow_revision: kind.workflow_revision,
-            workspace_slug: workspace.slug,
         })
     }
 
@@ -107,7 +110,6 @@ pub(super) struct TaskRow {
     pub(super) parent_id: Option<String>,
     pub(super) module_id: Option<String>,
     pub(super) workflow_revision: i32,
-    pub(super) workspace_slug: String,
 }
 
 pub(super) struct BindingRow {

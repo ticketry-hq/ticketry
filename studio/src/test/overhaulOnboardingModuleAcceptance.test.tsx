@@ -10,8 +10,8 @@ const api = vi.hoisted(() => ({
   listIssueTypes: vi.fn(),
   listModules: vi.fn(),
   listProjects: vi.fn(),
-  putProfile: vi.fn(),
   putProviderCatalog: vi.fn(),
+  writeModuleLink: vi.fn(),
 }));
 
 const moduleFolderValidationApi = vi.hoisted(() => ({
@@ -73,9 +73,9 @@ vi.mock("../features/settings/queries", async () => ({
   loadIssueTypes: api.listIssueTypes,
 }));
 
-vi.mock("../features/settings/profileTransport", async () => ({
-  ...(await vi.importActual("../features/settings/profileTransport")),
-  putProfile: api.putProfile,
+vi.mock("../features/module-links/moduleLinkTransport", async () => ({
+  ...(await vi.importActual("../features/module-links/moduleLinkTransport")),
+  writeModuleLink: api.writeModuleLink,
 }));
 
 vi.mock("../features/workflows/providerQueries", () => ({
@@ -116,10 +116,7 @@ import { useOnboardingTourStore } from "../app/onboarding/onboardingTourStore";
 import { ModulesPane } from "../app/shell/sidebar/modules/ModulesPane";
 import { useStudioStore } from "../features/projects/store";
 import { AddModule } from "../features/studio/modals/AddModule";
-import {
-  getConfigSnapshot,
-  seedConfig,
-} from "../features/studio/stores/configStore";
+import { getModuleLinks, seedModuleLinks } from "../features/module-links";
 import type { StudioRuntime } from "../runtime";
 import { useClientStore } from "../state/clientStore";
 
@@ -157,21 +154,13 @@ function folderPickerRuntime(): StudioRuntime {
   };
 }
 
-const profile = (moduleLinks: Array<{ module_id: string; path: string }> = []) => ({
-  name: "Local",
-  workspace_slug: "meml",
-  agent_prompt: null,
-  agent_prompts: {},
-  module_links: moduleLinks,
-  recent_project_id: "project-1",
-  recent_module_ids: {},
-});
-
-const configResponse = (body: ReturnType<typeof profile>) => ({
-  recent_profile_index: 0,
-  features: getConfigSnapshot().features,
-  profiles: [body],
-});
+/** Stand in for the host's authoritative link row. */
+const acceptModuleLink = async (moduleId: string, path: string) => {
+  seedModuleLinks([
+    ...getModuleLinks().filter((link) => link.moduleId !== moduleId),
+    { id: `link-${moduleId}`, moduleId, path },
+  ]);
+};
 
 beforeEach(() => {
   api.createModule.mockReset();
@@ -204,14 +193,10 @@ beforeEach(() => {
   ]);
   api.listModules.mockReset().mockResolvedValue([]);
   api.listProjects.mockReset().mockResolvedValue([]);
-  api.putProfile.mockReset();
+  api.writeModuleLink.mockReset().mockImplementation(acceptModuleLink);
   api.putProviderCatalog.mockReset().mockImplementation(async (value) => ({ value }));
 
-  seedConfig({
-    profiles: [profile()],
-    recentProfileIndex: 0,
-    features: { sidebar: true, projects: false },
-  });
+  seedModuleLinks([]);
   useOnboardingTourStore.getState().reset();
   useStudioStore.setState({
     selectedProjectId: null,
@@ -267,9 +252,10 @@ describe("onboarding and module-folder acceptance", () => {
       name: "General",
       project_id: "project-1",
     });
-    api.putProfile
+    api.writeModuleLink
+      .mockReset()
       .mockRejectedValueOnce(new Error("disk unavailable"))
-      .mockImplementation(async (_index, body) => configResponse(body));
+      .mockImplementation(acceptModuleLink);
 
     render(
       <>
@@ -431,7 +417,7 @@ describe("onboarding and module-folder acceptance", () => {
     );
     expect(folderInput).toHaveAttribute("aria-invalid", "true");
     expect(api.createModule).not.toHaveBeenCalled();
-    expect(api.putProfile).not.toHaveBeenCalled();
+    expect(api.writeModuleLink).not.toHaveBeenCalled();
   });
 
   it("[overhaul-29c] keeps modal teaching cards beside their fields inside the modal", async () => {
@@ -495,9 +481,10 @@ describe("onboarding and module-folder acceptance", () => {
       name: "Runtime",
       project_id: "project-1",
     });
-    api.putProfile
+    api.writeModuleLink
+      .mockReset()
       .mockRejectedValueOnce(new Error("disk unavailable"))
-      .mockImplementation(async (_index, body) => configResponse(body));
+      .mockImplementation(acceptModuleLink);
 
     render(<AddModule />);
     fireEvent.change(screen.getByPlaceholderText("Module name"), {
@@ -518,7 +505,7 @@ describe("onboarding and module-folder acceptance", () => {
   });
 
   it("[overhaul-31] preserves selection on cancel and save failure, then resumes after a valid link", async () => {
-    seedConfig({ profiles: [profile([{ module_id: "module-old", path: "/repos/old" }])] });
+    seedModuleLinks([{ id: "link-module-old", moduleId: "module-old", path: "/repos/old" }]);
     useStudioStore.setState({ selectedProjectId: "project-1" });
     useClientStore.setState({ selectedModuleId: "module-old", selectedTaskId: "story-old" });
 
@@ -530,9 +517,10 @@ describe("onboarding and module-folder acceptance", () => {
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(useClientStore.getState().selectedModuleId).toBe("module-old");
 
-    api.putProfile
+    api.writeModuleLink
+      .mockReset()
       .mockRejectedValueOnce(new Error("disk unavailable"))
-      .mockImplementation(async (_index, body) => configResponse(body));
+      .mockImplementation(acceptModuleLink);
     await act(async () => {
       await useClientStore.getState().selectModule("module-new");
     });

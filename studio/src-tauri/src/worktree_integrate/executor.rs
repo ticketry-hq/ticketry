@@ -34,7 +34,6 @@ use sea_orm::DatabaseConnection;
 use serde_json::{json, Value};
 
 use crate::runs_persistence::StatusEventRepository;
-use crate::settings_persistence::ProfileStore;
 use crate::workspace_operations::{
     ClaimedOperation, WorkspaceOperationExecutor, WorkspaceOperationJournal,
     WorkspaceOperationOutcome,
@@ -61,7 +60,6 @@ enum Landing {
 #[derive(Clone)]
 pub(crate) struct IntegrateExecutor {
     work_items: DatabaseConnection,
-    profiles: ProfileStore,
     journal: WorkspaceOperationJournal,
     events: Option<StatusEventRepository>,
     locks: RepositoryLocks,
@@ -71,14 +69,12 @@ pub(crate) struct IntegrateExecutor {
 impl IntegrateExecutor {
     pub(crate) fn new(
         work_items: DatabaseConnection,
-        profiles: ProfileStore,
         journal: WorkspaceOperationJournal,
         events: Option<StatusEventRepository>,
         locks: RepositoryLocks,
     ) -> Self {
         Self {
             work_items,
-            profiles,
             journal,
             events,
             locks,
@@ -88,10 +84,6 @@ impl IntegrateExecutor {
 
     pub(crate) fn work_items(&self) -> &DatabaseConnection {
         &self.work_items
-    }
-
-    pub(crate) fn profiles(&self) -> &ProfileStore {
-        &self.profiles
     }
 
     pub(crate) fn git(&self) -> &GitPort {
@@ -112,7 +104,6 @@ impl IntegrateExecutor {
     ) -> Result<Result<IntegrationPlan, WorkspaceOperationOutcome>, WorktreeIntegrateError> {
         let resolved = plan::derive(
             &self.work_items,
-            &self.profiles,
             &self.git,
             &intent.top_level_row_id,
         )

@@ -33,7 +33,6 @@ pub fn foundation_schema(
     worktracker_commands: Option<crate::work_management::commands::CommandDatabase>,
     attachment_storage: Option<crate::work_management::commands::attachments::AttachmentStorage>,
     settings_repository: Option<crate::settings_persistence::AppSettingRepository>,
-    settings_stores: Option<crate::settings_persistence::SettingsStores>,
     readiness_data_directory: Option<PathBuf>,
     work_facts: Option<crate::work_management::commands::status_facts::WorkFactRecorder>,
     worktree_operations: Option<crate::worktree_operations::WorktreeOperations>,
@@ -45,7 +44,6 @@ pub fn foundation_schema(
         worktracker_commands,
         attachment_storage,
         settings_repository,
-        settings_stores,
         readiness_data_directory,
         work_facts,
         worktree_operations,
@@ -60,7 +58,6 @@ pub(crate) fn foundation_schema_with_terminal_services(
     worktracker_commands: Option<crate::work_management::commands::CommandDatabase>,
     attachment_storage: Option<crate::work_management::commands::attachments::AttachmentStorage>,
     settings_repository: Option<crate::settings_persistence::AppSettingRepository>,
-    settings_stores: Option<crate::settings_persistence::SettingsStores>,
     readiness_data_directory: Option<PathBuf>,
     work_facts: Option<crate::work_management::commands::status_facts::WorkFactRecorder>,
     worktree_operations: Option<crate::worktree_operations::WorktreeOperations>,
@@ -77,7 +74,6 @@ pub(crate) fn foundation_schema_with_terminal_services(
         worktracker_commands,
         attachment_storage,
         settings_repository,
-        settings_stores,
         readiness_data_directory,
         work_facts,
         worktree_operations,
@@ -101,7 +97,6 @@ pub(crate) fn generated_contract_schema(
         None,
         None,
         None,
-        None,
         EntityContract {
             foundation_entities: true,
             product_generated_mutations: true,
@@ -115,7 +110,6 @@ fn build_schema(
     worktracker_commands: Option<crate::work_management::commands::CommandDatabase>,
     attachment_storage: Option<crate::work_management::commands::attachments::AttachmentStorage>,
     settings_repository: Option<crate::settings_persistence::AppSettingRepository>,
-    settings_stores: Option<crate::settings_persistence::SettingsStores>,
     readiness_data_directory: Option<PathBuf>,
     work_facts: Option<crate::work_management::commands::status_facts::WorkFactRecorder>,
     worktree_operations: Option<crate::worktree_operations::WorktreeOperations>,
@@ -129,39 +123,25 @@ fn build_schema(
     let entity_database = worktracker_database
         .clone()
         .unwrap_or_else(|| database.clone());
-    let graph_run_service = match (
-        worktracker_database.as_ref(),
-        settings_stores.as_ref(),
-        terminal_services.as_ref(),
-    ) {
-        (Some(work_items), Some(settings), Some(terminals)) => {
+    let graph_run_service = match (worktracker_database.as_ref(), terminal_services.as_ref()) {
+        (Some(work_items), Some(terminals)) => {
             Some(crate::graph_run_service::GraphRunService::production(
                 work_items.clone(),
                 crate::work_management::launch_policy::LaunchPolicyResolver::new(
                     work_items.clone(),
-                    settings.profiles().clone(),
                 ),
                 terminals.launch.clone(),
             ))
         }
         _ => None,
     };
-    let run_now_service = match (
-        worktracker_database.as_ref(),
-        settings_stores.as_ref(),
-        terminal_services.as_ref(),
-    ) {
-        (Some(work_items), Some(settings), Some(terminals)) => {
-            Some(crate::run_now::RunNowService::new(
-                work_items.clone(),
-                crate::work_management::launch_policy::LaunchPolicyResolver::new(
-                    work_items.clone(),
-                    settings.profiles().clone(),
-                ),
-                terminals.launch.clone(),
-                work_facts.clone(),
-            ))
-        }
+    let run_now_service = match (worktracker_database.as_ref(), terminal_services.as_ref()) {
+        (Some(work_items), Some(terminals)) => Some(crate::run_now::RunNowService::new(
+            work_items.clone(),
+            crate::work_management::launch_policy::LaunchPolicyResolver::new(work_items.clone()),
+            terminals.launch.clone(),
+            work_facts.clone(),
+        )),
         _ => None,
     };
     let mut builder = Builder::new(&CONTEXT, entity_database.clone());
@@ -189,13 +169,16 @@ fn build_schema(
     } else {
         builder
     };
+    // The Module Link is Rust-authored and lives in the same store, so its
+    // generated read graph and its one restricted write register alongside the
+    // WorkTracker entities they name.
+    let builder = crate::module_links::register_graphql(builder);
     let builder = crate::worktree_persistence::register_graphql(builder);
     let builder = crate::worktree_status::register_graphql(builder);
     let builder = crate::worktree_create::register_graphql(builder);
     let builder = crate::worktree_discard::register_graphql(builder);
     let builder = crate::work_management::graphql::register(builder);
     let builder = crate::settings_persistence::schema::register(builder);
-    let builder = crate::settings_persistence::register_profile_graphql(builder);
     let builder = crate::runs_persistence::register_graphql(builder);
     let builder = crate::terminal_persistence::register_graphql(builder);
     let builder = crate::terminal_resume::register_graphql(builder);
@@ -250,12 +233,7 @@ fn build_schema(
     if let Some(documents) = documents {
         schema = schema.data(documents);
     } else if let Some(work_items) = &worktracker_database {
-        schema = schema.data(crate::documents::DocumentsService::new(
-            work_items.clone(),
-            settings_stores
-                .as_ref()
-                .map(|stores| stores.profiles().clone()),
-        ));
+        schema = schema.data(crate::documents::DocumentsService::new(work_items.clone()));
     }
     // Saving a document is a Workspace Operation over the same registry rows,
     // so it needs that store and the publisher discovery already uses. The
@@ -278,12 +256,9 @@ fn build_schema(
     // same lock rather than opening two independent sets.
     if let Some(worktree_operations) = &worktree_operations {
         schema = schema.data(worktree_operations.status_service().clone());
-    } else if let (Some(work_items), Some(settings_stores)) =
-        (&worktracker_database, &settings_stores)
-    {
+    } else if let Some(work_items) = &worktracker_database {
         schema = schema.data(crate::worktree_status::WorktreeStatusService::new(
             work_items.clone(),
-            settings_stores.profiles().clone(),
         ));
     }
     // Each write publishes itself, so a resolver reaches its own service and
@@ -340,9 +315,6 @@ fn build_schema(
     }
     if let Some(settings_repository) = settings_repository {
         schema = schema.data(settings_repository);
-    }
-    if let Some(settings_stores) = settings_stores {
-        schema = schema.data(settings_stores);
     }
     if let Some(data_directory) = readiness_data_directory {
         // Runs status and Runs commands consult their own gate, because the

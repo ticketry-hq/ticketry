@@ -224,6 +224,9 @@ impl ExecutionHarness {
         if seed_fresh_campaign {
             fixture::seed_campaign(&commands).await;
         }
+        // A module's local folder is its typed link, so it is recorded once the
+        // Modules themselves exist rather than written into a profile file.
+        link_modules(&commands, &data_directory).await;
         let spool_directory =
             muxed_studio_lib::terminal_lifecycle::ensure_hook_spool_directory(&data_directory)
                 .expect("create the provider hook spool directory");
@@ -235,7 +238,6 @@ impl ExecutionHarness {
             .with_authority(Arc::new(
                 muxed_studio_lib::launch_authority::LaunchAuthorityService::new(
                     commands.clone(),
-                    composed.profiles().clone(),
                 ),
             ));
         if let Some(boundary) = self.options.stop_once_at {
@@ -264,10 +266,7 @@ impl ExecutionHarness {
             .terminal_runtime()
             .configure(TerminalRuntimeAuthority {
                 database: commands.clone(),
-                paths: muxed_studio_lib::launch_paths::LaunchPathsService::new(
-                    commands.clone(),
-                    composed.profiles().clone(),
-                ),
+                paths: muxed_studio_lib::launch_paths::LaunchPathsService::new(commands.clone()),
                 hook_runner: provider_directory(&data_directory).join("ticketry-hook-runner"),
                 hook_spool_directory: spool_directory.clone(),
                 mcp_url: format!("http://{}/mcp", mcp.address()),
@@ -308,7 +307,7 @@ impl ExecutionHarness {
         let execution = ExecutionReconciliationRuntime::start(
             ExecutionReconciliationService::new(
                 commands.clone(),
-                LaunchPolicyResolver::new(commands, composed.profiles().clone()),
+                LaunchPolicyResolver::new(commands),
                 launch.clone(),
             ),
             Arc::clone(&terminal),
@@ -350,7 +349,7 @@ impl ExecutionHarness {
         let commands = composed.commands().clone();
         ExecutionReconciliationService::new(
             commands.clone(),
-            LaunchPolicyResolver::new(commands, composed.profiles().clone()),
+            LaunchPolicyResolver::new(commands),
             self.launch
                 .as_ref()
                 .expect("launch service is composed")
@@ -504,18 +503,14 @@ fn approve_disposable_provider(data_directory: &Path) {
     );
 }
 
-/// Point the only selected profile's module links at the data directory, so
-/// launch-path resolution has a real usable folder to resolve.
+/// The selected profile a launch decision needs. Module folders are no longer
+/// part of it: those are each Module's own typed link.
 fn approve_module_link(data_directory: &Path) {
     let profiles = json!({
         "recent_profile_index": 0,
         "profiles": [{
             "name": "Local",
             "workspace_slug": "slice6-execution",
-            "module_links": [
-                {"module_id": compact(fixture::CAMPAIGN_MODULE), "path": data_directory},
-                {"module_id": compact(fixture::FOREIGN_MODULE), "path": data_directory},
-            ],
         }],
     });
     std::fs::write(
@@ -523,6 +518,17 @@ fn approve_module_link(data_directory: &Path) {
         serde_json::to_string(&profiles).expect("profiles fixture is serializable"),
     )
     .expect("write the profile fixture");
+}
+
+/// Link every fixture Module to the data directory, so launch-path resolution
+/// has a real usable folder to resolve. A Module that is not seeded in this
+/// campaign simply has no link, which is ordinary data.
+async fn link_modules(commands: &sea_orm::DatabaseConnection, data_directory: &Path) {
+    let store = muxed_studio_lib::module_links::ModuleLinkStore::new(commands.clone());
+    let folder = data_directory.display().to_string();
+    for module in [fixture::CAMPAIGN_MODULE, fixture::FOREIGN_MODULE] {
+        let _ = store.set(module, &folder).await;
+    }
 }
 
 /// Selected profiles and durable rows store compact identities.

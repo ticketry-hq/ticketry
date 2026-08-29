@@ -72,11 +72,11 @@ pub async fn preflight(data_directory: &Path) -> Result<(), SettingsPersistenceE
     database.close().await?;
     classify_local_file(
         &data_directory.join(OWNED_ASSETS[0]),
-        super::profiles::validate_file,
+        super::legacy_profile_files::validate_profile_file,
     )?;
     classify_local_file(
         &data_directory.join(OWNED_ASSETS[1]),
-        super::features::validate_file,
+        super::legacy_profile_files::validate_feature_file,
     )?;
     Ok(())
 }
@@ -99,11 +99,11 @@ pub async fn adopt(data_directory: &Path) -> Result<AdoptionEvidence, SettingsPe
     let observed_row_counts = row_counts(&database).await?;
     let profiles_source = classify_local_file(
         &data_directory.join(OWNED_ASSETS[0]),
-        super::profiles::validate_file,
+        super::legacy_profile_files::validate_profile_file,
     )?;
     let features_source = classify_local_file(
         &data_directory.join(OWNED_ASSETS[1]),
-        super::features::validate_file,
+        super::legacy_profile_files::validate_feature_file,
     )?;
     let profiles_digest = digest_optional(&data_directory.join(OWNED_ASSETS[0]))?;
     let features_digest = digest_optional(&data_directory.join(OWNED_ASSETS[1]))?;
@@ -154,12 +154,12 @@ pub async fn adopt(data_directory: &Path) -> Result<AdoptionEvidence, SettingsPe
     verify_asset_snapshot(
         profiles_snapshot.as_deref(),
         profiles_digest.as_deref(),
-        super::profiles::validate_file,
+        super::legacy_profile_files::validate_profile_file,
     )?;
     verify_asset_snapshot(
         features_snapshot.as_deref(),
         features_digest.as_deref(),
-        super::features::validate_file,
+        super::legacy_profile_files::validate_feature_file,
     )?;
 
     let writable = connect(&database_path, false).await?;

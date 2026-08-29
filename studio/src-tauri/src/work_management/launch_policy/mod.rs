@@ -26,7 +26,6 @@ pub use resolver::LaunchPolicyResolver;
 pub use retry::prepare_pending_retries;
 pub use types::{
     CallerScope, LaunchPolicyDecision, LaunchPolicyError, LaunchPolicyRequest, ModuleLinkInput,
-    SelectedProfileInput,
 };
 
 /// Create both halves of the durable launch ledger: the decisions the resolver

@@ -1,12 +1,11 @@
 //! The authoritative sources a launch is resolved from: the provider catalog,
-//! the selected profile's module folder, and the run's derived directories.
+//! the module's typed link, and the run's derived directories.
 
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 
 use crate::entities::work_management::provider;
 use crate::launch_paths::{LaunchPathsRequest, LaunchPathsService, LaunchPathsView, LaunchScope};
 use crate::launch_planning::Provider;
-use crate::settings_persistence::ProfileStore;
 use crate::terminal_launch::{CreateTerminalSession, TerminalLaunchKind};
 use crate::worktree_status::repository::module_folder;
 
@@ -44,9 +43,13 @@ pub(super) async fn activated_provider(
     Ok(row.slug)
 }
 
-/// The module's configured local folder, as prompt text names it.
-pub(super) fn local_module_folder(profiles: &ProfileStore, module_id: &str) -> Option<String> {
-    module_folder(profiles, module_id)
+/// The module's linked local folder, as prompt text names it.
+pub(super) async fn local_module_folder(
+    database: &DatabaseConnection,
+    module_id: &str,
+) -> Option<String> {
+    module_folder(database, module_id)
+        .await
         .map(|path| path.to_string_lossy().into_owned())
         .filter(|path| !path.is_empty())
 }

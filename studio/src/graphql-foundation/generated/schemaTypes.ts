@@ -459,56 +459,6 @@ export type LifecycleAccepted = {
   state?: Maybe<Scalars['String']['output']>;
 };
 
-export type LocalFeatureFlags = {
-  __typename?: 'LocalFeatureFlags';
-  projects: Scalars['Boolean']['output'];
-  sidebar: Scalars['Boolean']['output'];
-};
-
-export type LocalFeatureFlagsInput = {
-  projects: Scalars['Boolean']['input'];
-  sidebar: Scalars['Boolean']['input'];
-};
-
-export type LocalModuleLink = {
-  __typename?: 'LocalModuleLink';
-  module_id: Scalars['String']['output'];
-  path: Scalars['String']['output'];
-};
-
-export type LocalModuleLinkInput = {
-  module_id: Scalars['String']['input'];
-  path: Scalars['String']['input'];
-};
-
-export type LocalProfile = {
-  __typename?: 'LocalProfile';
-  agent_prompt?: Maybe<Scalars['String']['output']>;
-  agent_prompts: Scalars['Json']['output'];
-  module_links: Array<LocalModuleLink>;
-  name: Scalars['String']['output'];
-  recent_module_ids: Scalars['Json']['output'];
-  recent_project_id?: Maybe<Scalars['String']['output']>;
-  workspace_slug: Scalars['String']['output'];
-};
-
-export type LocalProfileInput = {
-  agent_prompt?: InputMaybe<Scalars['String']['input']>;
-  agent_prompts?: InputMaybe<Scalars['Json']['input']>;
-  module_links?: InputMaybe<Array<LocalModuleLinkInput>>;
-  name: Scalars['String']['input'];
-  recent_module_ids?: InputMaybe<Scalars['Json']['input']>;
-  recent_project_id?: InputMaybe<Scalars['String']['input']>;
-  workspace_slug: Scalars['String']['input'];
-};
-
-export type LocalSettings = {
-  __typename?: 'LocalSettings';
-  features: LocalFeatureFlags;
-  profiles: Array<LocalProfile>;
-  recent_profile_index?: Maybe<Scalars['Int']['output']>;
-};
-
 export type MigrationProbes = {
   __typename?: 'MigrationProbes';
   id: Scalars['Int']['output'];
@@ -557,10 +507,61 @@ export type MigrationProbesOrderInput = {
   value?: InputMaybe<OrderByEnum>;
 };
 
+export type ModuleLinkPathInput = {
+  path: Scalars['String']['input'];
+};
+
+export type ModuleLinks = {
+  __typename?: 'ModuleLinks';
+  createdAt: Scalars['String']['output'];
+  id: Scalars['String']['output'];
+  issue?: Maybe<WorktrackerIssue>;
+  moduleId: Scalars['String']['output'];
+  path: Scalars['String']['output'];
+  updatedAt: Scalars['String']['output'];
+};
+
+export type ModuleLinksConnection = {
+  __typename?: 'ModuleLinksConnection';
+  edges: Array<ModuleLinksEdge>;
+  nodes: Array<ModuleLinks>;
+  pageInfo: PageInfo;
+  paginationInfo?: Maybe<PaginationInfo>;
+};
+
+export type ModuleLinksEdge = {
+  __typename?: 'ModuleLinksEdge';
+  cursor: Scalars['String']['output'];
+  node: ModuleLinks;
+};
+
+export type ModuleLinksFilterInput = {
+  and?: InputMaybe<Array<ModuleLinksFilterInput>>;
+  createdAt?: InputMaybe<TextFilterInput>;
+  id?: InputMaybe<StringFilterInput>;
+  moduleId?: InputMaybe<StringFilterInput>;
+  not?: InputMaybe<ModuleLinksFilterInput>;
+  or?: InputMaybe<Array<ModuleLinksFilterInput>>;
+  path?: InputMaybe<StringFilterInput>;
+  updatedAt?: InputMaybe<TextFilterInput>;
+};
+
+export type ModuleLinksHavingInput = {
+  issue?: InputMaybe<WorktrackerIssueFilterInput>;
+};
+
+export type ModuleLinksOrderInput = {
+  createdAt?: InputMaybe<OrderByEnum>;
+  id?: InputMaybe<OrderByEnum>;
+  moduleId?: InputMaybe<OrderByEnum>;
+  path?: InputMaybe<OrderByEnum>;
+  updatedAt?: InputMaybe<OrderByEnum>;
+};
+
 export type Mutation = {
   __typename?: 'Mutation';
   acknowledge_onboarding: WorktrackerWorkspace;
-  add_local_profile: LocalSettings;
+  clear_module_link: Scalars['Boolean']['output'];
   create_issue_type_transition: WorktrackerIssuetypetransition;
   create_project: WorktrackerProject;
   create_state: WorktrackerState;
@@ -568,7 +569,6 @@ export type Mutation = {
   create_work_item: WorktrackerIssue;
   delete_issue_type: Scalars['Boolean']['output'];
   delete_issue_type_transition: Scalars['Boolean']['output'];
-  delete_local_profile: LocalSettings;
   delete_project: Scalars['Boolean']['output'];
   delete_state: Scalars['Boolean']['output'];
   delete_viewer_lease?: Maybe<AgentRunViewerLeases>;
@@ -585,12 +585,10 @@ export type Mutation = {
   reorder_issue_types: Array<WorktrackerIssuetype>;
   reorder_states: Array<WorktrackerState>;
   reorder_work_item: WorktrackerIssue;
-  replace_feature_flags: LocalSettings;
-  replace_local_profile: LocalSettings;
   retry_automation_attempt: AutomationAttemptProjection;
   run_now: RunNowPayload;
   save_design_document: DocumentSaveOutcome;
-  select_local_profile: LocalSettings;
+  set_module_link: ModuleLinks;
   terminal_output_observe: TerminalOutputObservation;
   terminal_session_create: AgentTerminalSessions;
   terminal_session_update: AgentTerminalSessions;
@@ -609,8 +607,8 @@ export type Mutation = {
 };
 
 
-export type MutationAdd_Local_ProfileArgs = {
-  profile: LocalProfileInput;
+export type MutationClear_Module_LinkArgs = {
+  module_id: Scalars['String']['input'];
 };
 
 
@@ -667,11 +665,6 @@ export type MutationDelete_Issue_Type_TransitionArgs = {
   issue_type_id: Scalars['String']['input'];
   to_state_id: Scalars['String']['input'];
   workflow_revision: Scalars['Int']['input'];
-};
-
-
-export type MutationDelete_Local_ProfileArgs = {
-  index: Scalars['Int']['input'];
 };
 
 
@@ -771,17 +764,6 @@ export type MutationReorder_Work_ItemArgs = {
 };
 
 
-export type MutationReplace_Feature_FlagsArgs = {
-  features: LocalFeatureFlagsInput;
-};
-
-
-export type MutationReplace_Local_ProfileArgs = {
-  index: Scalars['Int']['input'];
-  profile: LocalProfileInput;
-};
-
-
 export type MutationRetry_Automation_AttemptArgs = {
   attempt_id: Scalars['String']['input'];
 };
@@ -801,8 +783,9 @@ export type MutationSave_Design_DocumentArgs = {
 };
 
 
-export type MutationSelect_Local_ProfileArgs = {
-  index: Scalars['Int']['input'];
+export type MutationSet_Module_LinkArgs = {
+  link: ModuleLinkPathInput;
+  module_id: Scalars['String']['input'];
 };
 
 
@@ -991,8 +974,8 @@ export type Query = {
   directory_completions: Array<Scalars['String']['output']>;
   graphRuns: GraphRunsConnection;
   keybinding_setting?: Maybe<KeybindingSetting>;
-  local_settings: LocalSettings;
   migrationProbes: MigrationProbesConnection;
+  moduleLinks: ModuleLinksConnection;
   provider_catalog: ProviderCatalog;
   resumable_terminal_sessions: Array<AgentRuns>;
   worktrackerAgentmodel: WorktrackerAgentmodelConnection;
@@ -1074,6 +1057,14 @@ export type QueryMigrationProbesArgs = {
   filters?: InputMaybe<MigrationProbesFilterInput>;
   having?: InputMaybe<MigrationProbesHavingInput>;
   orderBy?: InputMaybe<MigrationProbesOrderInput>;
+  pagination?: InputMaybe<PaginationInput>;
+};
+
+
+export type QueryModuleLinksArgs = {
+  filters?: InputMaybe<ModuleLinksFilterInput>;
+  having?: InputMaybe<ModuleLinksHavingInput>;
+  orderBy?: InputMaybe<ModuleLinksOrderInput>;
   pagination?: InputMaybe<PaginationInput>;
 };
 

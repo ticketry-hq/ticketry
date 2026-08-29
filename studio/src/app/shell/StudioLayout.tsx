@@ -7,18 +7,13 @@ import { TicketWorkspace } from "./ticket-workspace/TicketWorkspace";
 export function StudioLayout() {
   const {
     layout,
-    paneComposition,
     sidebarVisible,
     outerGroupRef,
     workAreaGroupRef,
     handleOuterLayout,
     handleWorkAreaLayout,
   } = useStudioPanelLayout();
-  const outerLayout = outerPanelLayout(
-    layout,
-    sidebarVisible,
-    paneComposition,
-  );
+  const outerLayout = outerPanelLayout(layout, sidebarVisible);
   const [tasksSize, workspaceSize] = splitWorkArea(layout);
 
   return (
@@ -28,9 +23,7 @@ export function StudioLayout() {
       className="h-full w-full"
       onLayout={handleOuterLayout}
     >
-      {sidebarVisible && paneComposition !== "absent" ? (
-        <StudioSidebar layout={layout} paneComposition={paneComposition} />
-      ) : null}
+      {sidebarVisible ? <StudioSidebar layout={layout} /> : null}
       <Panel defaultSize={outerLayout.at(-1)} minSize={30} order={3}>
         <TicketWorkspace
           tasksSize={tasksSize}

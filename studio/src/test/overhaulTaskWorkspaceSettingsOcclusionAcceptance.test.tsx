@@ -24,7 +24,6 @@ import { useAgentStatusStore } from "../features/agents/status/testStore";
 import { useTerminalForegroundStore } from "../features/agents/terminal/internal/foregroundStore";
 import { useTerminalStore } from "../features/agents/terminal/internal/sessionStore";
 import { useStudioStore } from "../features/projects/store";
-import { seedConfig } from "../features/studio/stores/configStore";
 import { useClientStore } from "../state/clientStore";
 import {
   installDesktopGraphQlRuntime,
@@ -219,7 +218,6 @@ describe("overhaul acceptance — Task workspace Settings occlusion", () => {
       configurable: true,
     });
 
-    seedConfig({ features: { sidebar: true, projects: true } });
     useStudioStore.setState({ selectedProjectId: "project-1" });
     useTerminalForegroundStore.setState({ claims: {}, hostTargets: {} });
     useModalStore.setState({ modalStack: [], presentedNoticeIds: new Set() });

@@ -7,6 +7,7 @@ pub enum FoundationInitializationErrorCode {
     DatabaseOpen,
     WorktrackerDatabaseOpen,
     SettingsDatabaseOpen,
+    ModuleLinkImport,
     Migration,
     Schema,
     EndpointInstall,

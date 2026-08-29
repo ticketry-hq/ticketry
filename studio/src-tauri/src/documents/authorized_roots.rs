@@ -3,17 +3,16 @@
 //! A root is never accepted from a caller. It is derived from owned data:
 //! the roots already registered for this bucket, the design directories of the
 //! bucket's own Agent Runs, and — for a task — the canonical design directory
-//! resolved from the selected profile's module folder. Anything else is simply
-//! not a place Ticketry reads documents from.
+//! resolved from the module's linked folder. Anything else is simply not a
+//! place Ticketry reads documents from.
 
 use std::collections::BTreeSet;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, ExprTrait, QueryFilter};
 
 use crate::entities::runs::agent_run;
 use crate::entities::work_management::issue;
-use crate::settings_persistence::ProfileStore;
 
 use super::design_directory::{self, ModuleIdentity, TaskIdentity};
 use super::error::DocumentsError;
@@ -74,23 +73,19 @@ pub(super) async fn scratch_run_roots(
         .collect())
 }
 
-/// The canonical task design directory under the selected profile's module
-/// folder, when one is configured and present.
+/// The canonical task design directory under the module's linked folder, when
+/// the module is linked and the folder is present.
 ///
-/// Every step can legitimately be missing — no profile, no module link, a
-/// moved folder, an unknown module or Work Item — and each of those only costs
-/// the discovery of files that are not registered yet, never the listing.
+/// Every step can legitimately be missing — no module link, a moved folder, an
+/// unknown module or Work Item — and each of those only costs the discovery of
+/// files that are not registered yet, never the listing.
 pub(super) async fn canonical_task_root(
     database: &DatabaseConnection,
-    profiles: &ProfileStore,
     project_id: &str,
     module_id: &str,
     task_id: &str,
 ) -> Option<String> {
-    let folder = module_folder(profiles, module_id)?;
-    if !folder.is_dir() {
-        return None;
-    }
+    let folder = crate::module_links::resolution::resolved_folder(database, module_id).await?;
     // Both rows are read through the generated entity, and both must belong to
     // the project the caller named. A module or Work Item from another project
     // resolves to nothing rather than to a directory in someone else's folder.
@@ -127,23 +122,6 @@ pub(super) async fn canonical_task_root(
     )
 }
 
-/// The selected profile's local folder for one module. Only the selected
-/// profile is consulted, because that is the profile the rest of Ticketry
-/// launches and reads against.
-fn module_folder(profiles: &ProfileStore, module_id: &str) -> Option<PathBuf> {
-    let catalog = profiles.read();
-    let index = usize::try_from(catalog.recent_profile_index.unwrap_or(0)).ok()?;
-    let profile = catalog.profiles.get(index)?;
-    profile
-        .module_links
-        .iter()
-        .rev()
-        .find(|link| compact_uuid(&link.module_id) == compact_uuid(module_id))
-        .map(|link| link.path.trim().to_owned())
-        .filter(|path| !path.is_empty())
-        .map(PathBuf::from)
-}
-
 /// Whether a registered root still resolves to a readable directory. A root
 /// that does not is skipped rather than reported: its rows are pruned by the
 /// ordinary missing-file pass.
@@ -164,70 +142,4 @@ pub(crate) fn canonical_root(root: &str) -> String {
         .canonicalize()
         .map(|resolved| resolved.to_string_lossy().into_owned())
         .unwrap_or_else(|_| root.to_owned())
-}
-
-#[cfg(test)]
-mod tests {
-    use std::path::Path;
-
-    use crate::settings_persistence::{ModuleLink, Profile, ProfileCatalog, ProfileStore};
-
-    use super::*;
-
-    fn store(directory: &Path, links: Vec<ModuleLink>) -> ProfileStore {
-        let store = ProfileStore::new(directory.join("profiles.json"));
-        store
-            .replace(&ProfileCatalog {
-                recent_profile_index: Some(0),
-                profiles: vec![Profile {
-                    name: "Local".to_owned(),
-                    workspace_slug: "meml".to_owned(),
-                    agent_prompt: None,
-                    agent_prompts: Default::default(),
-                    module_links: links,
-                    recent_project_id: None,
-                    recent_module_ids: Default::default(),
-                }],
-            })
-            .expect("write the profile catalog");
-        store
-    }
-
-    #[test]
-    fn a_module_folder_is_resolved_through_either_identity_spelling() {
-        let directory = tempfile::tempdir().expect("create a settings directory");
-        let profiles = store(
-            directory.path(),
-            vec![ModuleLink {
-                module_id: "cf2de16defbd4106b0e4ceab58b90b22".to_owned(),
-                path: "/repos/ticketry".to_owned(),
-            }],
-        );
-
-        assert_eq!(
-            module_folder(&profiles, "cf2de16d-efbd-4106-b0e4-ceab58b90b22"),
-            Some(PathBuf::from("/repos/ticketry"))
-        );
-    }
-
-    #[test]
-    fn an_unconfigured_or_blank_module_link_resolves_to_no_folder() {
-        let directory = tempfile::tempdir().expect("create a settings directory");
-        let profiles = store(
-            directory.path(),
-            vec![ModuleLink {
-                module_id: "cf2de16d-efbd-4106-b0e4-ceab58b90b22".to_owned(),
-                path: "   ".to_owned(),
-            }],
-        );
-
-        assert_eq!(
-            module_folder(&profiles, "cf2de16d-efbd-4106-b0e4-ceab58b90b22"),
-            None
-        );
-        assert_eq!(
-            module_folder(&profiles, "11111111-1111-1111-1111-111111111111"),
-            None
-        );
-    }
 }

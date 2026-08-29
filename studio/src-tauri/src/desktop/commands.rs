@@ -31,14 +31,12 @@ pub(crate) async fn desktop_launch_default_coding_agent(
     if window.label() != MAIN_WINDOW_LABEL {
         return Err("agent launch is restricted to the local main window".to_owned());
     }
-    // Reuse the pool and profile store composition already opened. A pool per
-    // click would re-run the launch-policy DDL and take an exclusive write
-    // lock on a `state.db` several writers are already sharing.
+    // Reuse the pool composition already opened. A pool per click would
+    // re-run the launch-policy DDL and take an exclusive write lock on a
+    // `state.db` several writers are already sharing.
     let database = launch.commands()?;
-    let resolver = work_management::launch_policy::LaunchPolicyResolver::new(
-        database.clone(),
-        launch.profiles()?,
-    );
+    let resolver =
+        work_management::launch_policy::LaunchPolicyResolver::new(database.clone());
     let decision = resolver
         .resolve(work_management::launch_policy::LaunchPolicyRequest {
             task_id: issue_id,

@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use muxed_studio_lib::graphql_foundation::initialize_with_worktracker_commands_and_install;
-use sea_orm::{ConnectionTrait, Database};
+use sea_orm::{ConnectionTrait, Database, DatabaseConnection};
 use tauri_graphql::{TransportApi, TransportApiImpl};
 
 const WORKSPACE: &str = "90000000000000000000000000000000";
@@ -105,6 +105,17 @@ fn checkout(repository_root: &Path, path: &Path, branch: &str, base_commit: &str
 // ---------------------------------------------------------------------------
 // Ticketry fixtures
 // ---------------------------------------------------------------------------
+
+/// Point the fixture module at one local folder, through the one write seam.
+async fn link_module(database: &DatabaseConnection, folder: &Path) {
+    muxed_studio_lib::module_links::schema::install(database)
+        .await
+        .expect("install the Module Link schema");
+    muxed_studio_lib::module_links::ModuleLinkStore::new(database.clone())
+        .set(MODULE, &folder.display().to_string())
+        .await
+        .expect("link the fixture module");
+}
 
 struct Fixture {
     directory: tempfile::TempDir,
@@ -235,22 +246,10 @@ async fn fixture() -> Fixture {
         ))
         .await
         .expect("create the worktree status fixture");
+    // A module's repository is its typed link, so a status read resolves it
+    // from the installation rather than from whichever profile is selected.
+    link_module(&writer, &repository_root).await;
     drop(writer);
-
-    write(
-        &directory.path().join("profiles.json"),
-        &serde_json::json!({
-            "recent_profile_index": 0,
-            "profiles": [{
-                "name": "Local",
-                "workspace_slug": "meml",
-                "module_links": [
-                    { "module_id": MODULE, "path": repository_root.display().to_string() }
-                ]
-            }]
-        })
-        .to_string(),
-    );
 
     let api = TransportApiImpl::new();
     initialize_with_worktracker_commands_and_install(
@@ -326,30 +325,24 @@ async fn a_module_with_no_configured_folder_reports_no_repository() {
     assert_eq!(status["kind"], "no_repo");
     assert_eq!(
         status["reason"],
-        "no local folder is configured for this module"
+        "no local folder is linked to this module"
     );
     assert_eq!(status["path"], serde_json::Value::Null);
 }
 
 #[tokio::test]
-async fn a_configured_folder_outside_git_reports_no_repository() {
+async fn a_linked_folder_outside_git_reports_no_repository() {
     let fixture = fixture().await;
     let plain = fixture.directory.path().join("plain-folder");
     std::fs::create_dir_all(&plain).expect("create a non-repository folder");
-    write(
-        &fixture.directory.path().join("profiles.json"),
-        &serde_json::json!({
-            "recent_profile_index": 0,
-            "profiles": [{
-                "name": "Local",
-                "workspace_slug": "meml",
-                "module_links": [
-                    { "module_id": MODULE, "path": plain.display().to_string() }
-                ]
-            }]
-        })
-        .to_string(),
-    );
+    let writer = Database::connect(format!(
+        "sqlite:{}?mode=rw",
+        fixture.directory.path().join("state.db").display()
+    ))
+    .await
+    .expect("open the fixture writer");
+    link_module(&writer, &plain).await;
+    drop(writer);
 
     let status = fixture.worktree(PARENT_TASK).await;
 

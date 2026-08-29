@@ -1,5 +1,5 @@
 use muxed_studio_lib::{
-    settings_persistence::ProfileStore,
+    module_links,
     work_management::{
         launch_policy::{self, CallerScope, LaunchPolicyRequest, LaunchPolicyResolver},
         open_for_commands,
@@ -163,20 +163,21 @@ async fn fixture() -> (tempfile::TempDir, DatabaseConnection, LaunchPolicyResolv
         .await
         .unwrap();
     writer.close().await.unwrap();
-    std::fs::write(
-        directory.path().join("profiles.json"),
-        format!(
-            r#"{{"recent_profile_index":0,"profiles":[{{"name":"Local","workspace_slug":"meml","module_links":[{{"module_id":"{MODULE}","path":"{}"}}]}}]}}"#,
-            directory.path().display()
-        ),
-    )
-    .unwrap();
     let database = open_for_commands(&path).await.unwrap();
-    let resolver = LaunchPolicyResolver::new(
-        database.clone(),
-        ProfileStore::new(directory.path().join("profiles.json")),
-    );
+    // The folder a launch runs in is the Module's typed link, and it is the
+    // only thing that decides where a launch may run.
+    module_links::schema::install(&database).await.unwrap();
+    link(&database, &directory.path().display().to_string()).await;
+    let resolver = LaunchPolicyResolver::new(database.clone());
     (directory, database, resolver)
+}
+
+/// Point the fixture module at one local folder.
+async fn link(database: &sea_orm::DatabaseConnection, path: &str) {
+    module_links::ModuleLinkStore::new(database.clone())
+        .set(MODULE, path)
+        .await
+        .expect("link the fixture module");
 }
 
 fn request(scope: CallerScope, key: &str) -> LaunchPolicyRequest {
@@ -220,8 +221,6 @@ async fn all_doors_share_one_complete_versioned_snapshot() {
             ),
             ("codex", Some("gpt-5.6"), Some("high"))
         );
-        assert_eq!(decision.selected_profile.index, 0);
-        assert_eq!(decision.selected_profile.workspace_slug, "meml");
         assert_eq!(
             decision.module_link.module_id,
             uuid::Uuid::parse_str(MODULE).unwrap().to_string()
@@ -290,29 +289,26 @@ async fn resolution_rejects_every_established_policy_failure_code() {
 }
 
 #[tokio::test]
-async fn resolution_rejects_every_unusable_selected_module_folder() {
-    let cases = ["unset", "relative", "missing", "file"];
-    for case in cases {
-        let (directory, _database, resolver) = fixture().await;
-        let path = match case {
-            "unset" => String::new(),
-            "relative" => "relative/repository".to_owned(),
-            "missing" => directory.path().join("missing").display().to_string(),
+async fn resolution_rejects_every_unusable_linked_module_folder() {
+    for case in ["unlinked", "missing", "file"] {
+        let (directory, database, resolver) = fixture().await;
+        match case {
+            "unlinked" => {
+                module_links::ModuleLinkStore::new(database.clone())
+                    .clear(MODULE)
+                    .await
+                    .unwrap();
+            }
+            "missing" => {
+                link(&database, &directory.path().join("missing").display().to_string()).await;
+            }
             "file" => {
                 let path = directory.path().join("regular-file");
                 std::fs::write(&path, b"not a directory").unwrap();
-                path.display().to_string()
+                link(&database, &path.display().to_string()).await;
             }
             _ => unreachable!(),
-        };
-        std::fs::write(
-            directory.path().join("profiles.json"),
-            format!(
-                r#"{{"recent_profile_index":0,"profiles":[{{"name":"Local","workspace_slug":"meml","module_links":[{{"module_id":"{MODULE}","path":{}}}]}}]}}"#,
-                serde_json::to_string(&path).unwrap(),
-            ),
-        )
-        .unwrap();
+        }
 
         let error = resolver
             .resolve(request(CallerScope::Interactive, case))
@@ -322,39 +318,49 @@ async fn resolution_rejects_every_unusable_selected_module_folder() {
     }
 }
 
+/// A folder shape no row may hold is refused where it is written, so a launch
+/// never has to resolve one.
 #[tokio::test]
-async fn resolution_rejects_when_no_profile_is_selected() {
-    let (directory, _database, resolver) = fixture().await;
-    std::fs::write(
-        directory.path().join("profiles.json"),
-        r#"{"recent_profile_index":null,"profiles":[]}"#,
-    )
-    .unwrap();
+async fn a_module_folder_no_row_may_hold_is_refused_at_the_write_boundary() {
+    let (_directory, database, _resolver) = fixture().await;
+    let store = module_links::ModuleLinkStore::new(database.clone());
+
+    for path in ["", "   ", "relative/repository"] {
+        let error = store
+            .set(MODULE, path)
+            .await
+            .expect_err("the store refuses a path no folder could be");
+        assert_eq!(error.code(), module_links::ModuleLinkErrorCode::InvalidPath);
+    }
+}
+
+/// A launch is refused when the Module carries no typed link. No profile file,
+/// profile index, or feature flag takes part in that decision.
+#[tokio::test]
+async fn resolution_rejects_a_module_with_no_typed_link() {
+    let (_directory, database, resolver) = fixture().await;
+    module_links::ModuleLinkStore::new(database.clone())
+        .clear(MODULE)
+        .await
+        .expect("unlink the fixture module");
 
     let error = resolver
-        .resolve(request(CallerScope::Interactive, "no-profile"))
+        .resolve(request(CallerScope::Interactive, "no-link"))
         .await
         .unwrap_err();
-    assert_eq!(error.code(), "profile_not_configured");
+    assert_eq!(error.code(), "module_folder_unusable");
 }
 
 #[cfg(unix)]
 #[tokio::test]
-async fn resolution_rejects_an_inaccessible_selected_module_folder() {
+async fn resolution_rejects_an_inaccessible_linked_module_folder() {
     use std::os::unix::fs::PermissionsExt;
 
-    let (directory, _database, resolver) = fixture().await;
+    let (directory, database, resolver) = fixture().await;
     let blocked = directory.path().join("blocked");
     std::fs::create_dir(&blocked).unwrap();
+    link(&database, &blocked.display().to_string()).await;
     std::fs::set_permissions(&blocked, std::fs::Permissions::from_mode(0o600)).unwrap();
-    std::fs::write(
-        directory.path().join("profiles.json"),
-        format!(
-            r#"{{"recent_profile_index":0,"profiles":[{{"name":"Local","workspace_slug":"meml","module_links":[{{"module_id":"{MODULE}","path":{}}}]}}]}}"#,
-            serde_json::to_string(&blocked.display().to_string()).unwrap(),
-        ),
-    )
-    .unwrap();
 
     let error = resolver
         .resolve(request(CallerScope::Interactive, "inaccessible"))

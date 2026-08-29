@@ -27,7 +27,6 @@ async fn migration_probes_are_only_composed_into_the_isolated_foundation_schema(
         None,
         None,
         None,
-        None,
     )
     .expect("build isolated foundation schema")
     .sdl();
@@ -41,7 +40,6 @@ async fn migration_probes_are_only_composed_into_the_isolated_foundation_schema(
     let product_schema = muxed_studio_lib::query_root::foundation_schema(
         foundation_database,
         Some(worktracker_database),
-        None,
         None,
         None,
         None,

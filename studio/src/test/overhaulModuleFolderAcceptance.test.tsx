@@ -1,12 +1,9 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ModuleFolder } from "../features/agents/terminal/ModuleFolder";
-import {
-  getConfigSnapshot,
-  seedConfig,
-} from "../features/studio/stores/configStore";
 import { useModalStore } from "../app/modal";
-import * as profileTransport from "../features/settings/profileTransport";
+import { getModuleFolder, seedModuleLinks } from "../features/module-links";
+import * as moduleLinkTransport from "../features/module-links/moduleLinkTransport";
 
 const { selectModule } = vi.hoisted(() => ({
   selectModule: vi.fn(),
@@ -22,19 +19,7 @@ describe("module-folder selection acceptance", () => {
   beforeEach(() => {
     selectModule.mockReset();
     selectModule.mockResolvedValue(undefined);
-    seedConfig({
-      profiles: [
-        {
-          name: "local",
-          workspace_slug: "meml",
-          agent_prompt: null,
-          agent_prompts: {},
-          module_links: [],
-          recent_project_id: null,
-        },
-      ],
-      recentProfileIndex: 0,
-    });
+    seedModuleLinks([]);
     useModalStore.setState({
       modalStack: [
         {
@@ -46,11 +31,13 @@ describe("module-folder selection acceptance", () => {
   });
 
   it("rejects blank folders, then trims the saved path before resuming selection", async () => {
-    const putProfile = vi.spyOn(profileTransport, "putProfile").mockResolvedValue({
-      recent_profile_index: 0,
-      features: getConfigSnapshot().features,
-      profiles: getConfigSnapshot().profiles,
-    });
+    // The write lands in the link graph, so the fake stands in for the host's
+    // authoritative row rather than for a rewritten profile.
+    const writeModuleLink = vi
+      .spyOn(moduleLinkTransport, "writeModuleLink")
+      .mockImplementation(async (moduleId, path) => {
+        seedModuleLinks([{ id: `link-${moduleId}`, moduleId, path }]);
+      });
     render(
       <ModuleFolder
         payload={{ moduleId: "module-1", resumeModuleSelection: true }}
@@ -64,7 +51,7 @@ describe("module-folder selection acceptance", () => {
     fireEvent.change(input, { target: { value: "   " } });
     fireEvent.keyDown(input, { key: "Enter" });
     expect(save).toBeDisabled();
-    expect(putProfile).not.toHaveBeenCalled();
+    expect(writeModuleLink).not.toHaveBeenCalled();
     expect(selectModule).not.toHaveBeenCalled();
     expect(useModalStore.getState().modalStack).toHaveLength(1);
 
@@ -75,9 +62,8 @@ describe("module-folder selection acceptance", () => {
       await Promise.resolve();
     });
 
-    expect(putProfile.mock.calls[0][1].module_links).toEqual([
-      { module_id: "module-1", path: "/repos/ticketry" },
-    ]);
+    expect(writeModuleLink).toHaveBeenCalledWith("module-1", "/repos/ticketry");
+    expect(getModuleFolder("module-1")).toBe("/repos/ticketry");
     expect(selectModule).toHaveBeenCalledWith("module-1");
     expect(useModalStore.getState().modalStack).toEqual([]);
   });

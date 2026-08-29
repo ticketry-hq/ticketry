@@ -19,7 +19,6 @@ use std::sync::Arc;
 use sea_orm::DatabaseConnection;
 
 use crate::runs_persistence::StatusEventRepository;
-use crate::settings_persistence::ProfileStore;
 use crate::workspace_operations::{
     WorkspaceOperationJournal, WorkspaceOperationOutcome, WorkspaceOperationReconciler,
 };
@@ -44,7 +43,6 @@ pub struct WorktreeCreateService {
 impl WorktreeCreateService {
     pub fn new(
         work_items: DatabaseConnection,
-        profiles: ProfileStore,
         journal: WorkspaceOperationJournal,
         events: Option<StatusEventRepository>,
         locks: RepositoryLocks,
@@ -52,12 +50,11 @@ impl WorktreeCreateService {
         Self {
             executor: CreateExecutor::new(
                 work_items.clone(),
-                profiles.clone(),
                 journal,
                 events,
                 locks.clone(),
             ),
-            status: WorktreeStatusService::with_locks(work_items, profiles, locks),
+            status: WorktreeStatusService::with_locks(work_items, locks),
         }
     }
 
@@ -88,7 +85,6 @@ impl WorktreeCreateService {
     ) -> Result<WorktreeStatusView, WorktreeCreateError> {
         let plan = match plan::derive(
             self.executor.work_items(),
-            self.executor.profiles(),
             self.executor.git(),
             task_id,
         )

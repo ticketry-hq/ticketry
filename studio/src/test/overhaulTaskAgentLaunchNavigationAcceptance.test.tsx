@@ -43,8 +43,6 @@ describe("overhaul acceptance — pending task agent launch navigation", () => {
           moduleId: "module-574",
           taskKey: "CODING-574",
           taskName: "Retain pending task launch",
-          profileReady: true,
-          profile: null,
         },
         bucket: "task-574",
         projectId: "project-574",

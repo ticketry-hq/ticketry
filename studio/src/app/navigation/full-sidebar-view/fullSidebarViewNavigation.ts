@@ -41,7 +41,6 @@ import {
 } from "../navigationContext";
 
 const FOCUSED_PANE_ACTIONS: Record<FocusedPane, ReadonlySet<string>> = {
-  projects: new Set(["projects.next", "projects.previous", "projects.activate"]),
   modules: new Set(["modules.next", "modules.previous", "modules.activate"]),
   tasks: new Set([
     "tasks.next",
@@ -88,8 +87,6 @@ export function routeFullSidebarViewFocusedPaneNavigation(
 ): boolean {
   const ctx = createNavigationContext(event, taskRows);
   switch (ctx.ui.focusedPane) {
-    case "projects":
-      return routeProjectsPane(ctx, actionId);
     case "modules":
       return routeModulesPane(ctx, actionId);
     case "tasks":
@@ -157,30 +154,6 @@ function cycleLiveTerminal(
     .acquire(foregroundKey(session), "studio");
   terminal.focusSession(next.sessionId);
   useClientStore.setState({ focusedPane: "details-or-terminal" });
-}
-
-function routeProjectsPane(
-  { event, tasks, ui }: NavigationContext,
-  actionId: string | null,
-): boolean {
-  const orderedIds = tasks.projects.map((project) => project.id);
-  const cursorId = resolveCursorId(ui.projectsCursorId, orderedIds);
-
-  if (actionId === "projects.next" || actionId === "projects.previous") {
-    consume(event);
-    ui.moveProjectsCursor(
-      actionId === "projects.next" ? 1 : -1,
-      orderedIds,
-    );
-    return true;
-  }
-
-  if (actionId !== "projects.activate") return false;
-
-  consume(event);
-  const project = tasks.projects.find((candidate) => candidate.id === cursorId);
-  if (project) void tasks.selectProject(project.id);
-  return true;
 }
 
 function routeModulesPane(

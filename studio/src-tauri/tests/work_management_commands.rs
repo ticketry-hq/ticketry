@@ -2166,16 +2166,8 @@ async fn composition_hands_back_the_command_connection_and_profile_store_it_open
         .unwrap();
     assert_eq!(decisions, 0);
 
-    // The returned profile store is the instance composition seeded and the
-    // GraphQL local-settings fields mutate, not a second store over the same
-    // file with its own mutation lock.
-    let seeded = runtime.profiles().read();
-    assert_eq!(
-        seeded
-            .profiles
-            .first()
-            .map(|profile| profile.workspace_slug.as_str()),
-        Some("meml")
-    );
-    assert!(directory.path().join("profiles.json").is_file());
+    // Composition creates no profile file: a fresh install carries no legacy
+    // configuration for anything to depend on.
+    assert!(!directory.path().join("profiles.json").exists());
+    assert!(!directory.path().join("features.json").exists());
 }

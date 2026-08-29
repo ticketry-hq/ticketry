@@ -1,11 +1,10 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 use std::fs;
 use std::sync::Arc;
 
 use muxed_studio_lib::settings_persistence::{
-    adopt, AppSetting, AppSettingRepository, FeatureFlags, FeatureStore, JsonSourceClassification,
-    ModuleLink, Profile, ProfileCatalog, ProfileStore, SettingKey, SettingScope, Slice2Readiness,
-    SourceClassification,
+    adopt, AppSetting, AppSettingRepository, JsonSourceClassification, ModuleLink, SettingKey,
+    SettingScope, Slice2Readiness, SourceClassification,
 };
 use sea_orm::{ConnectionTrait, Database};
 
@@ -84,18 +83,6 @@ async fn fixture() -> tempfile::TempDir {
         .expect("create settings schema");
     database.close().await.expect("close settings fixture");
     directory
-}
-
-fn profile(name: &str) -> Profile {
-    Profile {
-        name: name.to_owned(),
-        workspace_slug: "meml".to_owned(),
-        agent_prompt: None,
-        agent_prompts: BTreeMap::new(),
-        module_links: Vec::new(),
-        recent_project_id: None,
-        recent_module_ids: BTreeMap::new(),
-    }
 }
 
 #[tokio::test]
@@ -263,42 +250,6 @@ async fn scoped_settings_round_trip_restart_and_concurrent_updates() {
     assert_eq!(values.len(), 12);
 }
 
-#[test]
-fn profile_and_feature_fallbacks_preserve_malformed_files() {
-    let directory = tempfile::tempdir().unwrap();
-    let profiles_path = directory.path().join("profiles.json");
-    let features_path = directory.path().join("features.json");
-    fs::write(&profiles_path, b"{broken").unwrap();
-    fs::write(&features_path, b"[]").unwrap();
-    let profiles = ProfileStore::new(&profiles_path);
-    let features = FeatureStore::new(&features_path);
-
-    assert_eq!(profiles.read(), ProfileCatalog::default());
-    assert_eq!(features.read(), FeatureFlags::default());
-    assert_eq!(
-        profiles
-            .replace(&ProfileCatalog {
-                recent_profile_index: Some(0),
-                profiles: vec![profile("Must not replace")],
-            })
-            .unwrap_err()
-            .code(),
-        "configuration_corrupt"
-    );
-    assert_eq!(
-        features
-            .replace(FeatureFlags {
-                sidebar: true,
-                projects: true,
-            })
-            .unwrap_err()
-            .code(),
-        "configuration_corrupt"
-    );
-    assert_eq!(fs::read(profiles_path).unwrap(), b"{broken");
-    assert_eq!(fs::read(features_path).unwrap(), b"[]");
-}
-
 #[tokio::test]
 async fn adoption_refuses_malformed_json_before_snapshot_or_ledger() {
     let directory = fixture().await;
@@ -334,55 +285,53 @@ async fn settings_storage_has_no_generated_crud_surface() {
     assert!(!sdl.contains("AppSetting"));
 }
 
+/// `profiles.json` is history. Nothing in the shipping composition writes it,
+/// so the only supported access is the Module Link importer's read — including
+/// the historical `module_folders` spelling an older release wrote.
 #[test]
-fn legacy_profiles_normalize_in_memory_and_concurrent_updates_are_serialized() {
+fn the_legacy_profile_file_is_read_only_history() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("profiles.json");
-    fs::write(
-        &path,
-        br#"{
+    let original = br#"{
             "recent_profile_index": 0,
             "profiles": [{
                 "name": "Legacy",
                 "workspace_slug": "meml",
                 "module_folders": {"module-a": "/src/a"}
             }]
-        }"#,
-    )
-    .unwrap();
-    let store = Arc::new(ProfileStore::new(&path));
+        }"#;
+    fs::write(&path, original).unwrap();
+
+    let source = muxed_studio_lib::module_links::legacy_source::locate(directory.path())
+        .expect("the live profile file is a supported legacy source");
+    let catalog = muxed_studio_lib::module_links::legacy_source::read(&source).unwrap();
+
     assert_eq!(
-        store.read().profiles[0].module_links,
+        catalog.profiles[0].module_links,
         vec![ModuleLink {
             module_id: "module-a".to_owned(),
             path: "/src/a".to_owned(),
         }]
     );
+    // Reading never repairs, rewrites, or migrates the file in place.
+    assert_eq!(fs::read(&path).unwrap(), original);
+}
 
-    let mut threads = Vec::new();
-    for index in 0..8 {
-        let store = store.clone();
-        threads.push(std::thread::spawn(move || {
-            store
-                .update(|catalog| {
-                    catalog.profiles.push(profile(&format!("Profile {index}")));
-                    Ok(())
-                })
-                .unwrap();
-        }));
-    }
-    for thread in threads {
-        thread.join().unwrap();
-    }
-    let restarted = ProfileStore::new(&path).read();
-    assert_eq!(restarted.profiles.len(), 9);
-    let names = restarted
-        .profiles
-        .iter()
-        .map(|profile| profile.name.as_str())
-        .collect::<BTreeSet<_>>();
-    assert!(names.contains("Legacy"));
-    assert!(names.contains("Profile 7"));
+/// A malformed legacy file is refused rather than replaced with a default, so
+/// the only recoverable copy of a user's configuration is never overwritten.
+#[test]
+fn a_malformed_legacy_profile_file_is_refused_and_left_intact() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("profiles.json");
+    fs::write(&path, b"{broken").unwrap();
+
+    let source =
+        muxed_studio_lib::module_links::legacy_source::locate(directory.path()).expect("located");
+    let error = muxed_studio_lib::module_links::legacy_source::read(&source)
+        .expect_err("a malformed profile file cannot be adopted");
+
+    assert_eq!(error.code().as_str(), "module_link_legacy_source_unreadable");
+    assert_eq!(fs::read(&path).unwrap(), b"{broken");
 }
 
 #[test]

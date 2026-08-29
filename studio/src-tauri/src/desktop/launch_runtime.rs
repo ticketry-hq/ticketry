@@ -1,7 +1,7 @@
 //! The composed command handles interactive launches reuse.
 //!
-//! Adoption already opens one writable WorkTracker pool and one profile store
-//! for the installed GraphQL schema. Opening them again per launch click adds
+//! Adoption already opens one writable WorkTracker pool for the installed
+//! GraphQL schema. Opening it again per launch click adds
 //! a second pool plus a full `CREATE TABLE IF NOT EXISTS` pass, and every one
 //! of those DDL statements takes an exclusive write lock on `state.db` that
 //! process-local GraphQL, settings, and MCP tasks already share.
@@ -13,7 +13,6 @@ use sea_orm::DatabaseConnection;
 
 use crate::documents::DocumentsService;
 use crate::graphql_foundation::ComposedCommandRuntime;
-use crate::settings_persistence::ProfileStore;
 
 /// Managed state for the lifetime of the process. Empty until adoption
 /// succeeds; a launch attempted before that is a startup failure, not a
@@ -37,10 +36,6 @@ impl DesktopLaunchRuntime {
 
     pub(crate) fn commands(&self) -> Result<&DatabaseConnection, String> {
         self.composed().map(ComposedCommandRuntime::commands)
-    }
-
-    pub(crate) fn profiles(&self) -> Result<ProfileStore, String> {
-        self.composed().map(|runtime| runtime.profiles().clone())
     }
 
     /// The Documents boundary the desktop document protocol serves bytes
@@ -119,6 +114,6 @@ mod tests {
         let runtime = DesktopLaunchRuntime::new();
 
         assert!(runtime.commands().is_err());
-        assert!(runtime.profiles().is_err());
+        assert!(runtime.documents().is_err());
     }
 }

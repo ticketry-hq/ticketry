@@ -1,19 +1,16 @@
 use sea_orm::DatabaseConnection;
 use serde_json::{json, Value};
 
-use crate::settings_persistence::ProfileStore;
-
 use super::{mark_delivered, record, CallerScope, LaunchPolicyRequest, LaunchPolicyResolver};
 
 /// Resolve, durably record, and submit one desktop interactive request.
 pub async fn submit_interactive(
     database: &DatabaseConnection,
-    profiles: ProfileStore,
     backend_base_url: &str,
     api_key: &str,
     task_id: String,
 ) -> Result<Value, String> {
-    let resolver = LaunchPolicyResolver::new(database.clone(), profiles);
+    let resolver = LaunchPolicyResolver::new(database.clone());
     let decision = resolver
         .resolve(LaunchPolicyRequest {
             task_id,

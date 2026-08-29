@@ -21,6 +21,9 @@ const normalizedEntityKeyFields = {
   GraphRuns: ["rootId"],
   Worktrees: ["id"],
   DesignDocuments: ["id"],
+  // A Module has at most one link, so the Module is the link's identity: an
+  // optimistic write and the row the host returns address the same cache entry.
+  ModuleLinks: ["moduleId"],
   TicketryLocalState: ["id"],
 } as const satisfies Record<string, readonly string[]>;
 

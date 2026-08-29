@@ -303,6 +303,17 @@ impl Fixture {
     }
 }
 
+/// Point one module at one local repository, through the one write seam.
+async fn link_module(database: &DatabaseConnection, module_id: &str, repository: &Path) {
+    muxed_studio_lib::module_links::schema::install(database)
+        .await
+        .expect("install the Module Link schema");
+    muxed_studio_lib::module_links::ModuleLinkStore::new(database.clone())
+        .set(module_id, &repository.display().to_string())
+        .await
+        .expect("link the fixture module");
+}
+
 async fn rows(database: &DatabaseConnection, sql: &str) -> Vec<sea_orm::QueryResult> {
     database
         .query_all_raw(Statement::from_string(DbBackend::Sqlite, sql.to_owned()))
@@ -442,26 +453,11 @@ async fn fixture() -> Fixture {
         ))
         .await
         .expect("create the worktree discard fixture");
+    // A module's repository is its typed link, so a discard resolves it from
+    // the installation rather than from whichever profile is selected.
+    link_module(&writer, MODULE, &repository_root).await;
+    link_module(&writer, SECOND_MODULE, &second_repository_root).await;
     drop(writer);
-
-    write(
-        &directory.path().join("profiles.json"),
-        &serde_json::json!({
-            "recent_profile_index": 0,
-            "profiles": [{
-                "name": "Local",
-                "workspace_slug": "meml",
-                "module_links": [
-                    { "module_id": MODULE, "path": repository_root.display().to_string() },
-                    {
-                        "module_id": SECOND_MODULE,
-                        "path": second_repository_root.display().to_string()
-                    }
-                ]
-            }]
-        })
-        .to_string(),
-    );
 
     let api = TransportApiImpl::new();
     install(&api, directory.path()).await;

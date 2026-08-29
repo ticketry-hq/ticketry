@@ -26,8 +26,6 @@ describe("overhaul acceptance — task agent launch interaction", () => {
           moduleId: "module-572",
           taskKey: "CODING-572",
           taskName: "Harden launcher",
-          profileReady: true,
-          profile: null,
         },
         bucket: "task-572",
         projectId: "project-572",
@@ -93,8 +91,6 @@ describe("overhaul acceptance — task agent launch interaction", () => {
       moduleId: "module-572",
       taskKey: "CODING-572",
       taskName: "Harden launcher",
-      profileReady: true,
-      profile: null,
     };
     const view = (launchContext: WorkspaceLauncherContext, bucket = "task-572") =>
       workspaceView({
@@ -132,7 +128,6 @@ describe("overhaul acceptance — task agent launch interaction", () => {
     mounted.rerender(
       view({
         kind: "scratch",
-        profileReady: true,
         onChooseMode: vi.fn(),
       }),
     );

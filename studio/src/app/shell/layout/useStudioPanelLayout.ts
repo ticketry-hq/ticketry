@@ -1,10 +1,5 @@
 import { useEffect, useRef } from "react";
 import type { ImperativePanelGroupHandle } from "react-resizable-panels";
-import {
-  isSidebarEnabled,
-  sidebarPaneComposition,
-  useConfig,
-} from "../../../features/studio/stores/configStore";
 import { useClientStore } from "../../../state/clientStore";
 import {
   DEFAULT_PANEL_LAYOUT,
@@ -15,11 +10,6 @@ import {
 } from "./layoutMath";
 
 export function useStudioPanelLayout() {
-  const config = useConfig();
-  const paneComposition = sidebarPaneComposition(
-    config.features.projects,
-    isSidebarEnabled(config),
-  );
   const sidebarVisible = useClientStore((state) => state.sidebarVisible);
   const panelLayout = useClientStore((state) => state.panelLayout);
   const setPanelLayout = useClientStore((state) => state.setPanelLayout);
@@ -40,16 +30,14 @@ export function useStudioPanelLayout() {
   function applyLayout(sizes: number[], isSidebarVisible: boolean) {
     skipNextOuterLayout.current = true;
     skipNextWorkAreaLayout.current = true;
-    outerGroupRef.current?.setLayout(
-      outerPanelLayout(sizes, isSidebarVisible, paneComposition),
-    );
+    outerGroupRef.current?.setLayout(outerPanelLayout(sizes, isSidebarVisible));
     workAreaGroupRef.current?.setLayout(splitWorkArea(sizes));
   }
 
   useEffect(() => {
     previousSidebarVisible.current = sidebarVisible;
     applyLayout(panelLayout ?? DEFAULT_PANEL_LAYOUT, sidebarVisible);
-  }, [sidebarVisible, panelLayout, paneComposition]);
+  }, [sidebarVisible, panelLayout]);
 
   function handleOuterLayout(sizes: number[]) {
     if (skipNextOuterLayout.current) {
@@ -57,12 +45,11 @@ export function useStudioPanelLayout() {
       return;
     }
 
-    if (!sidebarVisible || paneComposition === "absent") return;
+    if (!sidebarVisible) return;
 
     const nextLayout = mergeOuterPanelLayout(
       panelLayout ?? DEFAULT_PANEL_LAYOUT,
       sizes,
-      paneComposition,
     );
     if (nextLayout) setPanelLayout(nextLayout);
   }
@@ -82,7 +69,6 @@ export function useStudioPanelLayout() {
 
   return {
     layout,
-    paneComposition,
     sidebarVisible,
     outerGroupRef,
     workAreaGroupRef,

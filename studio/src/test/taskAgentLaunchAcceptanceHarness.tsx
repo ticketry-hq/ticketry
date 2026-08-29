@@ -94,7 +94,6 @@ const { SelectedTicketContent } = await import(
   "../app/shell/ticket-workspace/selected-ticket/SelectedTicketContent"
 );
 const { useTerminalStore } = await import("../features/agents/terminal");
-const { seedConfig } = await import("../features/studio/stores/configStore");
 const { setProviderCapabilities } = await import(
   "../features/workflows/providerQueries"
 );
@@ -126,7 +125,6 @@ beforeEach(() => {
       global_default: null,
     },
   });
-  seedConfig({ features: { sidebar: true, projects: true } });
   useClientStore.setState({
     workspaces: {},
     activeByTask: {},

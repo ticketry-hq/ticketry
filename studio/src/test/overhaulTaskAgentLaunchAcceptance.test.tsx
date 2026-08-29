@@ -27,8 +27,6 @@ describe("overhaul acceptance — task agent launch", () => {
           moduleId: "module-570",
           taskKey: "CODING-570",
           taskName: "Launch a fresh task-scoped agent",
-          profileReady: true,
-          profile: null,
         },
       }),
     );
@@ -69,7 +67,7 @@ describe("overhaul acceptance — task agent launch", () => {
     });
   });
 
-  it("[overhaul-129] honors provider and profile availability without changing the scratch launcher", async () => {
+  it("[overhaul-129] honors provider availability without changing the scratch launcher", async () => {
     const taskContext = {
       kind: "task" as const,
       taskId: "task-571",
@@ -77,8 +75,6 @@ describe("overhaul acceptance — task agent launch", () => {
       moduleId: "module-571",
       taskKey: "CODING-571",
       taskName: "Honor provider availability in task agent launches",
-      profileReady: true,
-      profile: null,
     };
     const renderLauncher = (launchContext: WorkspaceLauncherContext = taskContext) =>
       render(
@@ -102,14 +98,6 @@ describe("overhaul acceptance — task agent launch", () => {
     expect(screen.getAllByRole("menuitem", { name: "claude" })).toHaveLength(1);
     expect(screen.queryByRole("menuitem", { name: "gemini" })).not.toBeInTheDocument();
     expect(screen.queryByRole("menuitem", { name: "unsupported-provider" })).not.toBeInTheDocument();
-    mounted.unmount();
-
-    mounted = renderLauncher({ ...taskContext, profileReady: false });
-    const profileBlocked = screen.getByRole("button", { name: "＋ Agent" });
-    expect(profileBlocked).toBeDisabled();
-    expect(profileBlocked).toHaveAccessibleDescription(
-      "A ready Studio profile is required to launch a run",
-    );
     mounted.unmount();
 
     clearProviderHolding();
@@ -146,7 +134,6 @@ describe("overhaul acceptance — task agent launch", () => {
     const chooseScratchMode = vi.fn();
     renderLauncher({
       kind: "scratch",
-      profileReady: true,
       onChooseMode: chooseScratchMode,
     });
     fireEvent.click(screen.getByRole("button", { name: "＋ Agent" }));

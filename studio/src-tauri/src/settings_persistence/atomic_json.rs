@@ -52,6 +52,14 @@ pub(crate) fn write_json<T: Serialize>(
     result
 }
 
+/// Replace `path` with the pretty-printed encoding of `value`, atomically.
+pub(crate) fn write_json_atomically<T: Serialize>(
+    path: &Path,
+    value: &T,
+) -> Result<(), SettingsPersistenceError> {
+    write_json(path, value, &RealAtomicFileOperations)
+}
+
 fn temporary_path(path: &Path) -> PathBuf {
     let file_name = path
         .file_name()

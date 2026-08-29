@@ -1,32 +1,17 @@
 import { useState } from "react";
 import { studioRuntime, type StudioRuntime } from "../../../runtime";
 import { isAbsoluteFolderPath } from "../../studio/lib/moduleFolderPath";
-
-interface FolderProfile {
-  module_links?: Array<{ module_id: string; path: string }>;
-}
+import { recentModuleFolders, useModuleLinks } from "../../module-links";
 
 export function useModuleFolderSelection({
-  profiles,
-  recentProfileIndex,
   initialValue = "",
   runtime = studioRuntime(),
 }: {
-  profiles: FolderProfile[];
-  recentProfileIndex: number | null;
   initialValue?: string;
   runtime?: StudioRuntime;
-}) {
-  const profile =
-    recentProfileIndex !== null ? profiles[recentProfileIndex] : null;
-  const recentFolders = Array.from(
-    new Set(
-      (profile?.module_links ?? [])
-        .map((link) => link.path)
-        .reverse()
-        .filter(isAbsoluteFolderPath),
-    ),
-  );
+} = {}) {
+  // Folders already linked to some Module are the ones worth offering again.
+  const recentFolders = recentModuleFolders(useModuleLinks());
   const [value, setValue] = useState(initialValue);
   const [highlight, setHighlight] = useState(-1);
   const isValid = isAbsoluteFolderPath(value);

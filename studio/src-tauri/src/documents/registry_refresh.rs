@@ -18,7 +18,6 @@ use std::collections::BTreeSet;
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder};
 
 use crate::entities::documents::design_document;
-use crate::settings_persistence::ProfileStore;
 
 use super::authorized_roots;
 use super::error::DocumentsError;
@@ -50,23 +49,15 @@ pub struct TaskRegistryScope {
 pub async fn refresh_task(
     database: &DatabaseConnection,
     facts: Option<&DocumentFactRecorder>,
-    profiles: Option<&ProfileStore>,
     scope: &TaskRegistryScope,
 ) -> Result<Vec<design_document::Model>, DocumentsError> {
     let rows = list_for_task(database, &scope.task_id).await?;
     let mut roots: BTreeSet<String> = rows.iter().map(|row| row.root_dir.clone()).collect();
     roots.extend(authorized_roots::task_run_roots(database, &scope.task_id).await?);
-    if let (Some(profiles), Some(project_id), Some(module_id)) =
-        (profiles, &scope.project_id, &scope.module_id)
-    {
-        if let Some(canonical) = authorized_roots::canonical_task_root(
-            database,
-            profiles,
-            project_id,
-            module_id,
-            &scope.task_id,
-        )
-        .await
+    if let (Some(project_id), Some(module_id)) = (&scope.project_id, &scope.module_id) {
+        if let Some(canonical) =
+            authorized_roots::canonical_task_root(database, project_id, module_id, &scope.task_id)
+                .await
         {
             roots.insert(canonical);
         }

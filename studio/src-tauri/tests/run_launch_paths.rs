@@ -13,7 +13,6 @@ use std::process::Command;
 use muxed_studio_lib::launch_paths::{
     LaunchPathsErrorCode, LaunchPathsRequest, LaunchPathsService,
 };
-use muxed_studio_lib::settings_persistence::ProfileStore;
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection};
 
 const WORKSPACE: &str = "90000000000000000000000000000000";
@@ -240,24 +239,17 @@ async fn fixture() -> Fixture {
         .await
         .expect("create the launch paths fixture");
 
-    let profiles_path = directory.path().join("profiles.json");
-    std::fs::write(
-        &profiles_path,
-        serde_json::json!({
-            "recent_profile_index": 0,
-            "profiles": [{
-                "name": "Local",
-                "workspace_slug": "meml",
-                "module_links": [
-                    { "module_id": MODULE, "path": repository_root.display().to_string() }
-                ]
-            }]
-        })
-        .to_string(),
-    )
-    .expect("write the profile catalog");
+    // The module's folder is a typed link, so a launch resolves it from the
+    // installation rather than from whichever profile happens to be selected.
+    muxed_studio_lib::module_links::schema::install(&database)
+        .await
+        .expect("install the Module Link schema");
+    muxed_studio_lib::module_links::ModuleLinkStore::new(database.clone())
+        .set(MODULE, &repository_root.display().to_string())
+        .await
+        .expect("link the fixture module");
 
-    let service = LaunchPathsService::new(database.clone(), ProfileStore::new(profiles_path));
+    let service = LaunchPathsService::new(database.clone());
     Fixture {
         directory,
         service,

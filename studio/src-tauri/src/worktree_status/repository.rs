@@ -1,10 +1,10 @@
-//! From the selected profile to a canonical repository.
+//! From the Module's typed link to a canonical repository.
 //!
-//! A worktree can only exist inside the repository that encloses the module's
-//! configured local folder. Every step of that resolution can legitimately be
-//! missing — no profile is selected, the module has no link, the folder was
-//! moved, the folder is not in Git — and each of those is ordinary data rather
-//! than a failure.
+//! A worktree can only exist inside the repository that encloses the folder
+//! the Module is linked to. Every step of that resolution can legitimately be
+//! missing — the Work Item has no module, the module has no link, the folder
+//! was moved, the folder is not in Git — and each of those is ordinary data
+//! rather than a failure.
 //!
 //! What must never happen is a fallback. If the folder cannot be resolved, no
 //! Git command runs at all, so a status read can never silently describe
@@ -12,11 +12,10 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::settings_persistence::ProfileStore;
+use sea_orm::DatabaseConnection;
 
 use super::error::WorktreeStatusError;
 use super::git::GitPort;
-use super::identity::compact_uuid;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum RepositoryResolution {
@@ -28,7 +27,7 @@ pub(crate) enum RepositoryResolution {
 }
 
 pub(crate) async fn resolve(
-    profiles: &ProfileStore,
+    database: &DatabaseConnection,
     git: &GitPort,
     module_id: Option<&str>,
 ) -> Result<RepositoryResolution, WorktreeStatusError> {
@@ -37,14 +36,14 @@ pub(crate) async fn resolve(
             "this Work Item has no module to resolve a local folder from",
         ));
     };
-    let Some(folder) = module_folder(profiles, module_id) else {
+    let Some(folder) = module_folder(database, module_id).await else {
         return Ok(RepositoryResolution::NoRepository(
-            "no local folder is configured for this module",
+            "no local folder is linked to this module",
         ));
     };
     if !folder.is_dir() {
         return Ok(RepositoryResolution::NoRepository(
-            "the local folder configured for this module is not available",
+            "the local folder linked to this module is not available",
         ));
     }
     discover(git, &folder).await
@@ -68,98 +67,94 @@ pub(crate) async fn discover(
     ))
 }
 
-/// The selected profile's folder for one module. Only the selected profile is
-/// consulted, because that is the profile whose folders the rest of Ticketry
-/// launches and reads against.
+/// The folder one Module is linked to, as recorded on its typed link.
 ///
-/// Shared with [`crate::launch_paths`], so a run and a worktree can never
-/// disagree about which folder a module is configured against.
-pub(crate) fn module_folder(profiles: &ProfileStore, module_id: &str) -> Option<PathBuf> {
-    let catalog = profiles.read();
-    let index = usize::try_from(catalog.recent_profile_index.unwrap_or(0)).ok()?;
-    let profile = catalog.profiles.get(index)?;
-    profile
-        .module_links
-        .iter()
-        .rev()
-        .find(|link| compact_uuid(&link.module_id) == compact_uuid(module_id))
-        .map(|link| link.path.trim().to_owned())
-        .filter(|path| !path.is_empty())
-        .map(PathBuf::from)
+/// The link is the only source. No profile is consulted and no selection
+/// index is involved, so a run, a worktree, and a design directory can never
+/// disagree about which folder a Module is checked out into.
+///
+/// Shared with [`crate::launch_paths`] through
+/// [`crate::module_links::resolution`].
+pub(crate) async fn module_folder(
+    database: &DatabaseConnection,
+    module_id: &str,
+) -> Option<PathBuf> {
+    crate::module_links::resolution::linked_folder(database, module_id)
+        .await
+        .ok()
+        .flatten()
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::settings_persistence::{ModuleLink, Profile, ProfileCatalog};
+    use sea_orm::Database;
+
+    use crate::module_links::test_support;
 
     use super::*;
 
-    fn store(directory: &Path, links: Vec<ModuleLink>) -> ProfileStore {
-        let store = ProfileStore::new(directory.join("profiles.json"));
-        store
-            .replace(&ProfileCatalog {
-                recent_profile_index: Some(0),
-                profiles: vec![Profile {
-                    name: "Local".to_owned(),
-                    workspace_slug: "meml".to_owned(),
-                    agent_prompt: None,
-                    agent_prompts: Default::default(),
-                    module_links: links,
-                    recent_project_id: None,
-                    recent_module_ids: Default::default(),
-                }],
-            })
-            .expect("write the profile catalog");
-        store
+    const MODULE: &str = "00000000-0000-0000-0000-0000000002c1";
+
+    /// An installation that knows one Module.
+    async fn installation() -> DatabaseConnection {
+        let database = Database::connect("sqlite::memory:")
+            .await
+            .expect("open an in-memory installation");
+        test_support::install(&database).await;
+        test_support::module(&database, MODULE, "Studio").await;
+        database
     }
 
     #[tokio::test]
-    async fn an_unconfigured_module_is_normal_data_and_runs_no_git() {
-        let directory = tempfile::tempdir().expect("create a settings directory");
-        let profiles = store(directory.path(), Vec::new());
+    async fn an_unlinked_module_is_normal_data_and_runs_no_git() {
+        let database = installation().await;
 
-        let resolution = resolve(
-            &profiles,
-            &GitPort::new(),
-            Some("00000000-0000-0000-0000-0000000002c1"),
-        )
-        .await
-        .expect("resolution reports data rather than failing");
+        let resolution = resolve(&database, &GitPort::new(), Some(MODULE))
+            .await
+            .expect("resolution reports data rather than failing");
 
         assert_eq!(
             resolution,
-            RepositoryResolution::NoRepository("no local folder is configured for this module")
+            RepositoryResolution::NoRepository("no local folder is linked to this module")
         );
     }
 
     #[tokio::test]
-    async fn a_configured_folder_that_moved_never_falls_back_to_another_directory() {
-        let directory = tempfile::tempdir().expect("create a settings directory");
-        let profiles = store(
-            directory.path(),
-            vec![ModuleLink {
-                module_id: "00000000-0000-0000-0000-0000000002c1".to_owned(),
-                path: directory
-                    .path()
-                    .join("missing-checkout")
-                    .display()
-                    .to_string(),
-            }],
-        );
-
-        let resolution = resolve(
-            &profiles,
-            &GitPort::new(),
-            Some("00000000-0000-0000-0000-0000000002c1"),
+    async fn a_linked_folder_that_moved_never_falls_back_to_another_directory() {
+        let directory = tempfile::tempdir().expect("create a fixture root");
+        let database = installation().await;
+        test_support::link(
+            &database,
+            MODULE,
+            &directory.path().join("missing-checkout").display().to_string(),
         )
-        .await
-        .expect("resolution reports data rather than failing");
+        .await;
+
+        let resolution = resolve(&database, &GitPort::new(), Some(MODULE))
+            .await
+            .expect("resolution reports data rather than failing");
 
         assert_eq!(
             resolution,
             RepositoryResolution::NoRepository(
-                "the local folder configured for this module is not available"
+                "the local folder linked to this module is not available"
             )
+        );
+    }
+
+    #[tokio::test]
+    async fn either_identity_spelling_resolves_the_same_link() {
+        let directory = tempfile::tempdir().expect("create a fixture root");
+        let database = installation().await;
+        test_support::link(&database, MODULE, &directory.path().display().to_string()).await;
+
+        assert_eq!(
+            module_folder(&database, MODULE).await,
+            module_folder(&database, "000000000000000000000000000002c1").await
+        );
+        assert_eq!(
+            module_folder(&database, MODULE).await,
+            Some(PathBuf::from(directory.path()))
         );
     }
 }

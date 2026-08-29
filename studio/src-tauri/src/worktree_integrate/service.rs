@@ -17,7 +17,6 @@ use std::sync::Arc;
 use sea_orm::DatabaseConnection;
 
 use crate::runs_persistence::StatusEventRepository;
-use crate::settings_persistence::ProfileStore;
 use crate::workspace_operations::{
     WorkspaceOperationJournal, WorkspaceOperationOutcome, WorkspaceOperationReconciler,
 };
@@ -47,13 +46,12 @@ pub struct WorktreeIntegrateService {
 impl WorktreeIntegrateService {
     pub fn new(
         work_items: DatabaseConnection,
-        profiles: ProfileStore,
         journal: WorkspaceOperationJournal,
         events: Option<StatusEventRepository>,
         locks: RepositoryLocks,
     ) -> Self {
         Self {
-            executor: IntegrateExecutor::new(work_items, profiles, journal, events, locks),
+            executor: IntegrateExecutor::new(work_items, journal, events, locks),
         }
     }
 
@@ -135,7 +133,6 @@ impl WorktreeIntegrateService {
         }
         let plan = match plan::derive(
             self.executor.work_items(),
-            self.executor.profiles(),
             self.executor.git(),
             &completed,
         )

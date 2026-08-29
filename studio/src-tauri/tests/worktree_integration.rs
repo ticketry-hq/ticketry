@@ -22,7 +22,6 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use muxed_studio_lib::runs_persistence::RunsServices;
-use muxed_studio_lib::settings_persistence::ProfileStore;
 use muxed_studio_lib::workspace_operations::{self, WorkspaceOperationJournal};
 use muxed_studio_lib::worktree_integrate::{
     DeliveryOutcome, IntegrationDelivery, WorktreeIntegrateService, MAX_DELIVERY_BATCH,
@@ -206,7 +205,6 @@ impl Fixture {
         let database = self.database().await;
         WorktreeIntegrateService::new(
             database.clone(),
-            ProfileStore::new(self.directory.path().join("profiles.json")),
             WorkspaceOperationJournal::new(database.clone()),
             Some(
                 RunsServices::new(database.clone())
@@ -459,6 +457,9 @@ async fn install(database: &DatabaseConnection) {
     workspace_operations::schema::install(database)
         .await
         .expect("install the Workspace Operation journal");
+    muxed_studio_lib::module_links::schema::install(database)
+        .await
+        .expect("install the Module Link schema");
 }
 
 /// One module over one real repository, a parent story with a child, the
@@ -580,22 +581,13 @@ async fn fixture() -> Fixture {
         .await
         .expect("create the worktree integration fixture");
     install(&writer).await;
+    // The module's repository is a typed link, so integration resolves it from
+    // the installation rather than from a selected profile.
+    muxed_studio_lib::module_links::ModuleLinkStore::new(writer.clone())
+        .set(MODULE, &repository_root.display().to_string())
+        .await
+        .expect("link the fixture module");
     drop(writer);
-
-    write(
-        &directory.path().join("profiles.json"),
-        &serde_json::json!({
-            "recent_profile_index": 0,
-            "profiles": [{
-                "name": "Local",
-                "workspace_slug": "meml",
-                "module_links": [
-                    { "module_id": MODULE, "path": repository_root.display().to_string() }
-                ]
-            }]
-        })
-        .to_string(),
-    );
 
     Fixture {
         directory,

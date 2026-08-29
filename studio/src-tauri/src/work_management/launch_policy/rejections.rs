@@ -2,7 +2,7 @@
 //!
 //! A rejection records why an occurrence did not become a launch decision. Most
 //! reasons describe configuration the user can still correct — a deactivated
-//! provider, an unselected profile, a catalogue entry that moved — so the row is
+//! provider, an unlinked module folder, a catalogue entry that moved — so the row is
 //! a diagnosis, not a verdict: the occurrence stays eligible for re-resolution
 //! until it either succeeds or fails for a reason no configuration can repair.
 
@@ -20,7 +20,7 @@ use super::LaunchPolicyError;
 use crate::work_management::entities::{launch_policy_rejection, transition_occurrence};
 
 /// Codes describing a fixable configuration state. Reactivating the provider,
-/// selecting a profile, or repairing the binding must let the pending
+/// linking the Module's folder, or repairing the binding must let the pending
 /// occurrence launch, so these rejections never retire the occurrence.
 pub const RECOVERABLE_CODES: &[&str] = &[
     "agent_not_configured",
@@ -32,8 +32,6 @@ pub const RECOVERABLE_CODES: &[&str] = &[
     "model_required",
     "module_folder_unusable",
     "module_not_found",
-    "profile_not_configured",
-    "profile_workspace_mismatch",
     "prompt_not_configured",
     "provider_not_activated",
     "unattended_launch_unsupported",

@@ -5,6 +5,7 @@ export const PANEL_LAYOUT_KEY = "studio.panelLayout:v1";
 export const EXPANDED_IDS_KEY = "studio.expandedSubtasks:v1";
 export const COLLAPSED_STATE_IDS_KEY = "studio.collapsedStates:v2";
 export const TASK_SELECTIONS_KEY = "studio.selectedTaskByModule:v1";
+export const RECENT_MODULE_KEY = "studio.recentModule:v1";
 export const TERMINAL_PANEL_KEY = "studio.terminalPanel:v1";
 
 const LEGACY_SIDEBAR_KEYS = ["plane-tui:sidebar-visible"];
@@ -42,12 +43,38 @@ export function writeSidebarVisible(visible: boolean): void {
   }
 }
 
+/**
+ * The one module this installation was last working in.
+ *
+ * This is the single client-local navigation value that survives a reload. It
+ * is not a map keyed by project — there is one installation project — and it is
+ * deliberately not server state: which module a person had open is a property
+ * of this webview, not of the Module.
+ */
+export function readRecentModule(): string | null {
+  try {
+    return localStorage.getItem(RECENT_MODULE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function writeRecentModule(moduleId: string): void {
+  try {
+    localStorage.setItem(RECENT_MODULE_KEY, moduleId);
+  } catch {
+    /* unavailable storage leaves the in-memory selection intact */
+  }
+}
+
+/** Panel sizes, migrating the retired leading projects-pane slot away. */
 export function readPanelLayout(): number[] | null {
   try {
     const raw = readVersionedItem(PANEL_LAYOUT_KEY, LEGACY_PANEL_LAYOUT_KEYS);
     if (!raw) return null;
     const parsed: unknown = JSON.parse(raw);
-    return isPanelLayout(parsed) ? parsed : null;
+    if (!isPanelLayout(parsed)) return null;
+    return parsed.length === 4 ? parsed.slice(1) : parsed;
   } catch {
     return null;
   }

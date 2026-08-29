@@ -10,7 +10,6 @@ use std::path::PathBuf;
 use sea_orm::{DatabaseConnection, EntityTrait};
 
 use crate::entities::documents::design_document;
-use crate::settings_persistence::ProfileStore;
 
 use super::asset_access::{self, DocumentAsset};
 use super::error::DocumentsError;
@@ -18,16 +17,10 @@ use super::registry_facts::DocumentFactRecorder;
 use super::registry_refresh::{self, TaskRegistryScope};
 
 /// Handles the composed schema and the desktop shell share. Cloning is cheap:
-/// both fields are already reference-counted handles to one connection and one
-/// serialized profile store.
+/// the connection is already a reference-counted handle.
 #[derive(Clone)]
 pub struct DocumentsService {
     database: DatabaseConnection,
-    /// The selected profile's module folders, where a composition has them.
-    /// Without them the canonical design directory cannot be re-resolved, so
-    /// discovery is limited to roots the registry and Agent Runs already name
-    /// — which is exactly the pre-configuration situation anyway.
-    profiles: Option<ProfileStore>,
     /// The durable outbox, where it has been adopted. Without it every
     /// invariant still runs and the registry still converges; only the live
     /// publication is missing, and a caller's own response remains authoritative.
@@ -35,10 +28,9 @@ pub struct DocumentsService {
 }
 
 impl DocumentsService {
-    pub fn new(database: DatabaseConnection, profiles: Option<ProfileStore>) -> Self {
+    pub fn new(database: DatabaseConnection) -> Self {
         Self {
             database,
-            profiles,
             facts: None,
         }
     }
@@ -57,14 +49,6 @@ impl DocumentsService {
         self.facts.as_ref()
     }
 
-    /// Whether this boundary can resolve the canonical design directory for a
-    /// Work Item, rather than only the roots the registry already names. The
-    /// Slice 4 readiness gate composes this: a runtime that cannot resolve an
-    /// authorized root cannot discover a document nobody registered yet.
-    pub fn resolves_authorized_roots(&self) -> bool {
-        self.profiles.is_some()
-    }
-
     /// Whether registry settlements reach the durable status outbox. Without it
     /// the registry still converges, but no live fact reaches a second window,
     /// so the gate treats it as not ready rather than quietly degraded.
@@ -77,13 +61,7 @@ impl DocumentsService {
         &self,
         scope: TaskRegistryScope,
     ) -> Result<Vec<design_document::Model>, DocumentsError> {
-        registry_refresh::refresh_task(
-            &self.database,
-            self.facts.as_ref(),
-            self.profiles.as_ref(),
-            &scope,
-        )
-        .await
+        registry_refresh::refresh_task(&self.database, self.facts.as_ref(), &scope).await
     }
 
     /// Reconcile and return one module's scratch documents.

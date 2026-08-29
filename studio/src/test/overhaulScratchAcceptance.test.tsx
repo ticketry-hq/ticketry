@@ -6,7 +6,6 @@ import { useAgentStatusStore } from "../features/agents/status/testStore";
 import { scratchBucketId, useTerminalStore } from "../features/agents/terminal";
 import { TEMP_TASK_ID } from "../features/agents/types";
 import { useStudioStore } from "../features/projects/store";
-import { seedConfig } from "../features/studio/stores/configStore";
 import { useClientStore } from "../state/clientStore";
 import {
   installDesktopGraphQlRuntime,
@@ -24,7 +23,6 @@ describe("overhaul acceptance — module scratch workspace", () => {
   beforeEach(() => {
     installDesktopGraphQlRuntime(terminalSessionReadExecutor(emptyTerminalReads));
     localStorage.clear();
-    seedConfig({ features: { sidebar: true, projects: true } });
     useStudioStore.setState({ selectedProjectId: "project-1" });
     useClientStore.setState({
       selectedModuleId: "module-1",
@@ -65,7 +63,6 @@ describe("overhaul acceptance — module scratch workspace", () => {
         details={<SelectedTicketDetails />}
         launchContext={{
           kind: "scratch",
-          profileReady: true,
           onChooseMode: launch,
         }}
       />,

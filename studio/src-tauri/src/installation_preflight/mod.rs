@@ -216,6 +216,7 @@ mod tests {
             "runs_launch_effects",
             "terminal_cleanup_effects",
             "workspace_operations",
+            "module_links",
         ] {
             assert!(
                 queries.contains(table),

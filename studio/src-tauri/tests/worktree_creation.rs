@@ -265,6 +265,17 @@ impl Fixture {
     }
 }
 
+/// Point one module at one local repository, through the one write seam.
+async fn link_module(database: &DatabaseConnection, module_id: &str, repository: &Path) {
+    muxed_studio_lib::module_links::schema::install(database)
+        .await
+        .expect("install the Module Link schema");
+    muxed_studio_lib::module_links::ModuleLinkStore::new(database.clone())
+        .set(module_id, &repository.display().to_string())
+        .await
+        .expect("link the fixture module");
+}
+
 async fn rows(database: &DatabaseConnection, sql: &str) -> Vec<sea_orm::QueryResult> {
     database
         .query_all_raw(Statement::from_string(DbBackend::Sqlite, sql.to_owned()))
@@ -412,26 +423,11 @@ async fn fixture() -> Fixture {
         ))
         .await
         .expect("create the worktree creation fixture");
+    // A module's repository is its typed link, so a creation resolves it from
+    // the installation rather than from whichever profile is selected.
+    link_module(&writer, MODULE, &repository_root).await;
+    link_module(&writer, SECOND_MODULE, &second_repository_root).await;
     drop(writer);
-
-    write(
-        &directory.path().join("profiles.json"),
-        &serde_json::json!({
-            "recent_profile_index": 0,
-            "profiles": [{
-                "name": "Local",
-                "workspace_slug": "meml",
-                "module_links": [
-                    { "module_id": MODULE, "path": repository_root.display().to_string() },
-                    {
-                        "module_id": SECOND_MODULE,
-                        "path": second_repository_root.display().to_string()
-                    }
-                ]
-            }]
-        })
-        .to_string(),
-    );
 
     let api = TransportApiImpl::new();
     install(&api, directory.path()).await;
@@ -557,7 +553,7 @@ async fn a_child_creates_and_then_shares_its_top_level_parents_checkout() {
 }
 
 #[tokio::test]
-async fn a_work_item_with_no_configured_repository_reports_no_repo_rather_than_failing() {
+async fn a_work_item_with_no_linked_repository_reports_no_repo_rather_than_failing() {
     let fixture = fixture().await;
 
     let created = fixture
@@ -567,7 +563,7 @@ async fn a_work_item_with_no_configured_repository_reports_no_repo_rather_than_f
     assert_eq!(created["kind"], "no_repo");
     assert_eq!(
         created["reason"],
-        "no local folder is configured for this module"
+        "no local folder is linked to this module"
     );
     assert!(fixture.rows().await.is_empty());
     assert!(
@@ -850,23 +846,8 @@ async fn a_repository_that_moved_under_a_prepared_operation_becomes_a_conflict()
     let operation = prepared_operation(&fixture, PARENT_TASK).await;
     // The module is repointed at a different repository while the operation is
     // still open. Its intent no longer describes anything that may be created.
-    write(
-        &fixture.directory.path().join("profiles.json"),
-        &serde_json::json!({
-            "recent_profile_index": 0,
-            "profiles": [{
-                "name": "Local",
-                "workspace_slug": "meml",
-                "module_links": [
-                    {
-                        "module_id": MODULE,
-                        "path": fixture.second_repository_root.display().to_string()
-                    }
-                ]
-            }]
-        })
-        .to_string(),
-    );
+    let repointed = fixture.second_repository_root.clone();
+    link_module(&fixture.database().await, MODULE, &repointed).await;
 
     fixture.restart().await;
 

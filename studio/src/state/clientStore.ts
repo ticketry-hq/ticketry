@@ -1,12 +1,5 @@
 import { createApolloStore } from "../shared/apollo/localState";
-import {
-  getConfigSnapshot,
-  getModuleFolder,
-  isSidebarEnabled,
-  sidebarPaneComposition,
-  updateProfile,
-  type SidebarPaneComposition,
-} from "../features/studio/stores/configStore";
+import { getModuleFolder } from "../features/module-links";
 import { useModalStore } from "../app/modal/modalStore";
 import { useStudioStore } from "../features/projects";
 import type {
@@ -31,14 +24,11 @@ import {
   rememberTaskSelection,
   writeCollapsedStateIds,
   writeExpandedIdsByModule,
+  writeRecentModule,
   writeSidebarVisible,
 } from "./persistence";
 
-export type FocusedPane =
-  | "projects"
-  | "modules"
-  | "tasks"
-  | "details-or-terminal";
+export type FocusedPane = "modules" | "tasks" | "details-or-terminal";
 
 /**
  * The edit view's navigation zones. `terminal-panel` is only reachable while
@@ -99,7 +89,6 @@ export interface ClientState {
   editViewZone: EditViewZone;
   editViewBodyEngaged: boolean;
   navigationModality: NavigationModality;
-  projectsCursorId: string | null;
   modulesCursorId: string | null;
 
   sidebarVisible: boolean;
@@ -145,9 +134,7 @@ export interface ClientState {
   setEditViewBodyEngaged: (engaged: boolean) => void;
   setNavigationModality: (modality: NavigationModality) => void;
   cycleEditViewZone: () => void;
-  moveProjectsCursor: (delta: -1 | 1, orderedIds: string[]) => void;
   moveModulesCursor: (delta: -1 | 1, orderedIds: string[]) => void;
-  setProjectsCursor: (id: string | null) => void;
   setModulesCursor: (id: string | null) => void;
 
   toggleSidebar: () => void;
@@ -195,12 +182,7 @@ export const DEFAULT_WORKSPACE: TicketWorkspaceViewState = {
   closedDocIds: [],
 };
 
-const PANE_ORDER: FocusedPane[] = [
-  "projects",
-  "modules",
-  "tasks",
-  "details-or-terminal",
-];
+const PANE_ORDER: FocusedPane[] = ["modules", "tasks", "details-or-terminal"];
 const SUCCESS_TTL_MS = 4_000;
 const ERROR_TTL_MS = 8_000;
 
@@ -233,7 +215,7 @@ function zoneEntryEngagement(
   state: { editViewZone: EditViewZone; editViewBodyEngaged: boolean; sidebarVisible: boolean },
   entering: EditViewZone,
 ): boolean {
-  const inEditView = !isSidebarEnabled() || !state.sidebarVisible;
+  const inEditView = !state.sidebarVisible;
   // The panel holds nothing but a shell, so entering it commits to typing.
   if (entering === "terminal-panel") return inEditView;
   if (entering === "active-tab-body" && state.editViewZone === entering) {
@@ -242,24 +224,21 @@ function zoneEntryEngagement(
   return false;
 }
 
+/**
+ * The panes a person can move focus between, left to right.
+ *
+ * The sidebar holds one pane — the installation project's modules — because
+ * there is one project and therefore nothing to choose between. Hiding the
+ * sidebar leaves the edit view's two panes.
+ */
 export function visiblePaneOrder(
   sidebarVisible: boolean,
   hasSelectedProject: boolean,
-  paneComposition: SidebarPaneComposition,
 ): FocusedPane[] {
   if (!sidebarVisible) return ["tasks", "details-or-terminal"];
-  switch (paneComposition) {
-    case "absent":
-      return ["tasks", "details-or-terminal"];
-    case "modules":
-      return PANE_ORDER.filter(
-        (pane) => pane !== "projects" && (hasSelectedProject || pane !== "modules"),
-      );
-    case "projects-and-modules":
-      return PANE_ORDER.filter(
-        (pane) => hasSelectedProject || pane !== "modules",
-      );
-  }
+  return PANE_ORDER.filter(
+    (pane) => hasSelectedProject || pane !== "modules",
+  );
 }
 
 export function resolveCursorId(
@@ -286,14 +265,6 @@ function hasProject(): boolean {
   return useStudioStore.getState().selectedProjectId !== null;
 }
 
-function currentSidebarPaneComposition(): SidebarPaneComposition {
-  const config = getConfigSnapshot();
-  return sidebarPaneComposition(
-    config.features.projects,
-    isSidebarEnabled(config),
-  );
-}
-
 function nextExpandedMap(
   current: Readonly<Record<string, string[]>>,
   moduleId: string,
@@ -314,7 +285,6 @@ export const useClientStore = createApolloStore<ClientState>("client", (set, get
   editViewZone: "stories",
   editViewBodyEngaged: false,
   navigationModality: "keyboard",
-  projectsCursorId: null,
   modulesCursorId: null,
   sidebarVisible: readSidebarVisible(),
   panelLayout: readPanelLayout(),
@@ -329,10 +299,7 @@ export const useClientStore = createApolloStore<ClientState>("client", (set, get
   async selectModule(id) {
     const projectId = useStudioStore.getState().selectedProjectId;
     if (!projectId) return;
-    const { recentProfileIndex, profiles } = getConfigSnapshot();
-    const profile =
-      recentProfileIndex === null ? undefined : profiles[recentProfileIndex];
-    if (!getModuleFolder(profile, id)) {
+    if (!getModuleFolder(id)) {
       useModalStore.getState().pushModal({
         type: "module-folder",
         payload: { moduleId: id, resumeModuleSelection: true },
@@ -344,24 +311,11 @@ export const useClientStore = createApolloStore<ClientState>("client", (set, get
       selectedTaskId: null,
       workspaceSelection: { kind: "task" },
     });
+    // The one client-local navigation value: which module this webview was
+    // last working in. Nothing about the Module itself is written here.
+    writeRecentModule(id);
     const { loadModuleTree } = await import("../features/work-items");
-    const persistRecentModule =
-      profile && profile.recent_module_ids?.[projectId] !== id
-        ? updateProfile(recentProfileIndex!, {
-            ...profile,
-            recent_project_id: projectId,
-            recent_module_ids: {
-              ...(profile.recent_module_ids ?? {}),
-              [projectId]: id,
-            },
-          }).catch((error) => {
-            console.warn("[clientStore] persist recent module failed", error);
-          })
-        : Promise.resolve();
-    const [tree] = await Promise.all([
-      loadModuleTree(projectId, id),
-      persistRecentModule,
-    ]);
+    const tree = await loadModuleTree(projectId, id);
     if (
       useStudioStore.getState().selectedProjectId !== projectId ||
       get().selectedModuleId !== id
@@ -487,37 +441,21 @@ export const useClientStore = createApolloStore<ClientState>("client", (set, get
 
   focusLeft() {
     const { focusedPane, sidebarVisible } = get();
-    const hasSelectedProject = hasProject();
-    const paneComposition = currentSidebarPaneComposition();
-    const order = visiblePaneOrder(
-      sidebarVisible,
-      hasSelectedProject,
-      paneComposition,
-    );
+    const order = visiblePaneOrder(sidebarVisible, hasProject());
     const index = order.indexOf(focusedPane);
     if (index > 0) {
       set({ focusedPane: order[index - 1] });
       return;
     }
-    if (!sidebarVisible && paneComposition !== "absent") {
+    if (!sidebarVisible) {
       writeSidebarVisible(true);
-      set({
-        sidebarVisible: true,
-        focusedPane:
-          hasSelectedProject || paneComposition === "modules"
-            ? "modules"
-            : "projects",
-      });
+      set({ sidebarVisible: true, focusedPane: "modules" });
     }
   },
 
   focusRight() {
     const { focusedPane, sidebarVisible } = get();
-    const order = visiblePaneOrder(
-      sidebarVisible,
-      hasProject(),
-      currentSidebarPaneComposition(),
-    );
+    const order = visiblePaneOrder(sidebarVisible, hasProject());
     const index = order.indexOf(focusedPane);
     if (index >= 0 && index < order.length - 1) {
       set({ focusedPane: order[index + 1] });
@@ -547,9 +485,7 @@ export const useClientStore = createApolloStore<ClientState>("client", (set, get
     const state = get();
     set({
       editViewBodyEngaged:
-        engaged &&
-        (!isSidebarEnabled() || !state.sidebarVisible) &&
-        isEngageableZone(state.editViewZone),
+        engaged && !state.sidebarVisible && isEngageableZone(state.editViewZone),
     });
   },
 
@@ -563,20 +499,10 @@ export const useClientStore = createApolloStore<ClientState>("client", (set, get
     get().setEditViewZone(order[next]);
   },
 
-  moveProjectsCursor(delta, orderedIds) {
-    set((state) => ({
-      projectsCursorId: moveCursorId(state.projectsCursorId, delta, orderedIds),
-    }));
-  },
-
   moveModulesCursor(delta, orderedIds) {
     set((state) => ({
       modulesCursorId: moveCursorId(state.modulesCursorId, delta, orderedIds),
     }));
-  },
-
-  setProjectsCursor(projectsCursorId) {
-    set({ projectsCursorId });
   },
 
   setModulesCursor(modulesCursorId) {

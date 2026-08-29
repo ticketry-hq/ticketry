@@ -102,26 +102,11 @@ impl McpRuntime {
             .map_err(|error| format!("could not inspect WorkTracker MCP listener: {error}"))?;
         let cancellation = CancellationToken::new();
         let ingress_database = database.clone();
-        // One profile store for every capability on this listener, so a launch
-        // policy decision and the directories that launch runs in are always
-        // read from the same selected profile.
-        let profiles = crate::settings_persistence::ProfileStore::new(
-            configuration
-                .database_path
-                .parent()
-                .unwrap_or_else(|| std::path::Path::new("."))
-                .join("profiles.json"),
-        );
-        let launch_paths_state = launch_paths::LaunchPathsIngressState::new(
-            database.clone(),
-            profiles.clone(),
-            ingress_credential.clone(),
-        );
-        let integrations = worktree_integrations::compose(&database, &profiles).await;
-        let launch_policy = crate::work_management::launch_policy::LaunchPolicyResolver::new(
-            database.clone(),
-            profiles.clone(),
-        );
+        let launch_paths_state =
+            launch_paths::LaunchPathsIngressState::new(database.clone(), ingress_credential.clone());
+        let integrations = worktree_integrations::compose(&database).await;
+        let launch_policy =
+            crate::work_management::launch_policy::LaunchPolicyResolver::new(database.clone());
         let graph_runs = terminal_launch.clone().map(|terminal_launch| {
             crate::graph_run_service::GraphRunService::production(
                 database.clone(),

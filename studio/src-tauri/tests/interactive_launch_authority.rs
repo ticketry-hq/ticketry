@@ -4,7 +4,6 @@
 
 use muxed_studio_lib::{
     launch_authority::{InteractiveLaunchAuthority, LaunchAuthorityService},
-    settings_persistence::ProfileStore,
     terminal_launch::{CreateTerminalSession, TerminalLaunchKind},
     work_management::open_for_commands,
 };
@@ -163,16 +162,20 @@ async fn fixture() -> Fixture {
     writer.close().await.unwrap();
     std::fs::write(
         directory.path().join("profiles.json"),
-        format!(
-            r#"{{"recent_profile_index":0,"profiles":[{{"name":"Local","workspace_slug":"meml","module_links":[{{"module_id":"{MODULE}","path":"{folder}"}}]}}]}}"#
-        ),
+        r#"{"recent_profile_index":0,"profiles":[{"name":"Local","workspace_slug":"meml"}]}"#,
     )
     .unwrap();
     let database = open_for_commands(&path).await.unwrap();
-    let authority = LaunchAuthorityService::new(
-        database,
-        ProfileStore::new(directory.path().join("profiles.json")),
-    );
+    // The folder a launch runs in is the module's typed link, not a profile
+    // entry, so the prompt facts and the design directory resolve from here.
+    muxed_studio_lib::module_links::schema::install(&database)
+        .await
+        .unwrap();
+    muxed_studio_lib::module_links::ModuleLinkStore::new(database.clone())
+        .set(MODULE, &folder)
+        .await
+        .expect("link the fixture module");
+    let authority = LaunchAuthorityService::new(database);
     Fixture {
         _directory: directory,
         authority,

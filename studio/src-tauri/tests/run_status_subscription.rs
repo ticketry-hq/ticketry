@@ -36,7 +36,6 @@ async fn installed() -> (tempfile::TempDir, DatabaseConnection, TransportApiImpl
         None,
         None,
         None,
-        None,
     )
     .expect("build the foundation schema with the status subscription");
     let api = TransportApiImpl::new();
@@ -208,7 +207,7 @@ async fn a_status_stream_without_installed_runs_services_reports_unavailable() {
     // The probe schema installs no Runs services, which is how Studio can
     // reach the transport before adoption completes.
     let schema = muxed_studio_lib::query_root::foundation_schema(
-        database, None, None, None, None, None, None, None, None, None,
+        database, None, None, None, None, None, None, None, None,
     )
     .expect("build the schema without Runs services");
     let api = TransportApiImpl::new();

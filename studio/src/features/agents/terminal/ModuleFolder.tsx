@@ -1,11 +1,7 @@
 import { useRef, useState } from "react";
 import { ModalShell } from "../../../app/modal/ModalShell";
 import { useModalStore, type StandardModalType } from "../../../app/modal/modalStore";
-import {
-  getModuleFolder,
-  setModuleFolder,
-  useConfig,
-} from "../../studio/stores/configStore";
+import { setModuleFolder, useModuleFolder } from "../../module-links";
 import { MODAL_ACTIONS } from "../../../app/navigation/keymapRegistry";
 import { studioRuntime, type StudioRuntime } from "../../../runtime";
 import {
@@ -30,22 +26,17 @@ export function ModuleFolder({
   payload?: ModuleFolderPayload;
   runtime?: StudioRuntime;
 }) {
-  const { profiles, recentProfileIndex } = useConfig();
   const popModal = useModalStore((s) => s.popModal);
   const pushModal = useModalStore((s) => s.pushModal);
 
-  const profile =
-    recentProfileIndex !== null ? profiles[recentProfileIndex] : null;
   const moduleId = payload?.moduleId;
-  const initial = moduleId ? (getModuleFolder(profile, moduleId) ?? "") : "";
+  const initial = useModuleFolder(moduleId) ?? "";
 
   const [savedValue, setSavedValue] = useState(initial);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const saveInFlight = useRef(false);
   const selection = useModuleFolderSelection({
-    profiles,
-    recentProfileIndex,
     initialValue: initial,
     runtime,
   });

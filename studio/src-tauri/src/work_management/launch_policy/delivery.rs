@@ -109,7 +109,7 @@ fn request(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::work_management::launch_policy::{ModuleLinkInput, SelectedProfileInput};
+    use crate::work_management::launch_policy::ModuleLinkInput;
 
     fn decision(decision_id: &str) -> LaunchPolicyDecision {
         LaunchPolicyDecision {
@@ -129,11 +129,6 @@ mod tests {
             provider: "codex".to_owned(),
             model: Some("gpt-test".to_owned()),
             reasoning: None,
-            selected_profile: SelectedProfileInput {
-                index: 0,
-                name: "Local".to_owned(),
-                workspace_slug: "test".to_owned(),
-            },
             module_link: ModuleLinkInput {
                 module_id: "module".to_owned(),
                 path: Some("/tmp/module".to_owned()),

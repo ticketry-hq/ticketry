@@ -21,7 +21,6 @@ import {
   useTerminalStore,
   type SessionMeta,
 } from "../features/agents/terminal";
-import { seedConfig } from "../features/studio/stores/configStore";
 import { useClientStore } from "../state/clientStore";
 import type { RunRecord } from "../features/agents/status";
 import {
@@ -132,7 +131,6 @@ describe("overhaul acceptance — terminal outcome authority", () => {
     vi.setSystemTime(new Date(LAUNCHED_AT));
     installDesktopGraphQlRuntime(terminalSessionReadExecutor(terminalReads));
     localStorage.clear();
-    seedConfig({ features: { sidebar: true, projects: true } });
     useStudioStore.setState({ selectedProjectId: "project-1" });
     useClientStore.setState({
       selectedModuleId: "module-1",

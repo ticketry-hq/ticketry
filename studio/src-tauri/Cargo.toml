@@ -92,6 +92,7 @@ rmcp = { version = "=3.0.0", features = ["transport-streamable-http-server"] }
 sea-orm = { version = "=2.0.1", features = ["runtime-tokio-rustls", "seaography", "sqlx-postgres", "sqlx-sqlite"] }
 sea-orm-migration = { version = "=2.0.1", features = ["runtime-tokio-rustls", "sqlx-sqlite"] }
 seaography = { version = "=2.0.0-rc.9", default-features = false, features = ["field-camel-case", "macros", "with-chrono", "with-json"] }
+seaolim = { git = "https://github.com/charleeagni/seaolim", rev = "29f24172be1ab423e9b8b14b11ba1fa73452f1cd" }
 serde.workspace = true
 serde_json.workspace = true
 sha2 = "0.10"
@@ -106,6 +107,7 @@ uuid = { version = "1.24", features = ["v4", "v5"] }
 
 [dev-dependencies]
 log = "=0.4.33"
+syn = { version = "=2.0.119", features = ["full", "visit"] }
 tempfile = "=3.23.0"
 
 [workspace]

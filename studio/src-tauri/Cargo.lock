@@ -5215,6 +5215,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "seaolim"
+version = "0.1.0"
+source = "git+https://github.com/charleeagni/seaolim?rev=29f24172be1ab423e9b8b14b11ba1fa73452f1cd#29f24172be1ab423e9b8b14b11ba1fa73452f1cd"
+dependencies = [
+ "sea-orm",
+ "seaography",
+ "tokio",
+]
+
+[[package]]
 name = "security-framework"
 version = "3.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6677,9 +6687,11 @@ dependencies = [
  "sea-orm",
  "sea-orm-migration",
  "seaography",
+ "seaolim",
  "serde",
  "serde_json",
  "sha2 0.10.9",
+ "syn 2.0.119",
  "tauri",
  "tauri-build",
  "tauri-graphql",

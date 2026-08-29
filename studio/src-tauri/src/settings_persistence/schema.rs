@@ -6,8 +6,8 @@ use seaography::{
 };
 
 use super::{
-    keybindings, AppSettingRepository, GlobalLaunchDefault, ProviderCatalog, ProviderCatalogError,
-    ProviderCatalogService, ProviderCatalogUpdate, SettingsPersistenceError,
+    app_setting, keybindings, AppSettingRepository, GlobalLaunchDefault, ProviderCatalog,
+    ProviderCatalogError, ProviderCatalogService, ProviderCatalogUpdate, SettingsPersistenceError,
 };
 use crate::work_management::read_types::StringList;
 
@@ -17,7 +17,7 @@ pub struct SettingsQueries;
 impl SettingsQueries {
     async fn keybinding_setting(
         ctx: &Context<'_>,
-    ) -> Result<Option<keybindings::KeybindingSetting>> {
+    ) -> Result<Option<super::entities::app_settings::Model>> {
         keybindings::read(repository(ctx)?)
             .await
             .map_err(|error| settings_error(error, "Keyboard shortcuts could not be loaded."))
@@ -32,15 +32,6 @@ pub struct SettingsMutations;
 
 #[CustomFields]
 impl SettingsMutations {
-    async fn update_keybinding_setting(
-        ctx: &Context<'_>,
-        value: keybindings::JsonValue,
-    ) -> Result<keybindings::KeybindingSetting> {
-        keybindings::update(repository(ctx)?, value)
-            .await
-            .map_err(|error| settings_error(error, "Keyboard shortcuts could not be saved."))
-    }
-
     async fn update_provider_catalog(
         ctx: &Context<'_>,
         activated_providers: StringList,
@@ -70,8 +61,8 @@ impl SettingsMutations {
     }
 }
 
-pub fn register(mut builder: seaography::Builder) -> seaography::Builder {
-    builder.register_custom_output::<keybindings::KeybindingSetting>();
+pub fn register(builder: seaography::Builder) -> seaography::Builder {
+    let mut builder = app_setting::register(builder);
     builder.register_custom_output::<GlobalLaunchDefault>();
     builder.register_custom_output::<ProviderCatalog>();
     builder.register_custom_query::<SettingsQueries>();
@@ -93,7 +84,7 @@ fn repository<'a>(ctx: &'a Context<'a>) -> Result<&'a AppSettingRepository> {
     })
 }
 
-fn settings_error(error: SettingsPersistenceError, message: &'static str) -> Error {
+pub(super) fn settings_error(error: SettingsPersistenceError, message: &'static str) -> Error {
     Error::new(message)
         .extend_with(|_, extension| extension.set("code", error.code()))
         .extend_with(|_, extension| extension.set("detail", error.to_string()))

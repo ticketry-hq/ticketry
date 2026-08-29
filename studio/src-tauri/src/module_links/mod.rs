@@ -16,9 +16,9 @@
 //! * [`schema`] installs the authored tables and refuses an unknown shape.
 //! * [`local_path`] decides which folder values a row may ever hold.
 //! * [`identity`] decides what a link is called, deterministically.
-//! * [`store`] is the one write seam; every write goes through it.
+//! * [`store`] owns the model rules shared by host and GraphQL writes.
 //! * [`resolution`] answers the one runtime question: where is this Module?
-//! * [`graphql`] is the public contract: generated reads, one restricted write.
+//! * [`module_link`] owns generated reads and the restricted mutation views.
 //! * [`legacy_source`] decides which profile file an import may read.
 //! * [`legacy_import`] performs the one-way, idempotent, reversible import.
 //! * [`receipt`] is the durable artifact that makes the import reversible.
@@ -27,7 +27,6 @@
 //! a database, resolves the established data directory, or holds a default, so
 //! an import can only ever reach the installation it was handed.
 
-pub mod graphql;
 pub mod identity;
 pub mod legacy_import;
 pub mod legacy_source;
@@ -37,6 +36,8 @@ pub mod receipt;
 pub mod resolution;
 pub mod schema;
 pub(crate) mod store;
+
+mod module_link;
 
 #[cfg(test)]
 pub(crate) mod test_support;
@@ -48,7 +49,7 @@ mod error;
 pub use error::{ModuleLinkError, ModuleLinkErrorCode};
 pub use legacy_import::{import, rollback, ImportOutcome, RollbackOutcome};
 pub use local_path::{LocalModulePath, LocalPathDefect};
+pub use module_link::register as register_graphql;
 pub use receipt::{ImportReceipt, LinkStatus, SkipReason};
-pub use graphql::register as register_graphql;
 pub use resolution::{ModuleFolderRefusal, FOLDER_INVALID, NOT_LINKED, STORE_UNAVAILABLE};
 pub use store::{ModuleLinkRecord, ModuleLinkStore};

@@ -110,17 +110,11 @@ pub async fn initialize_with_keybinding_settings_and_install(
                     error.to_string(),
                 )
             })?;
-    let schema = crate::query_root::foundation_schema_with_terminal_services(
+    let settings_database = settings_repository.database();
+    let schema = crate::query_root::keybinding_settings_schema(
         foundation_database,
-        None,
-        None,
-        None,
-        Some(settings_repository),
-        None,
-        None,
-        None,
-        None,
-        None,
+        settings_database,
+        settings_repository,
     )?;
     api.install_endpoint(GraphQlEndpoint::new(schema))
         .map_err(|error| {

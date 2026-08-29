@@ -80,6 +80,7 @@ pub(crate) fn foundation_schema_with_terminal_services(
         documents,
         terminal_services,
         contract,
+        None,
     )
 }
 
@@ -101,6 +102,31 @@ pub(crate) fn generated_contract_schema(
             foundation_entities: true,
             product_generated_mutations: true,
         },
+        None,
+    )
+}
+
+pub(crate) fn keybinding_settings_schema(
+    database: DatabaseConnection,
+    settings_database: DatabaseConnection,
+    settings_repository: crate::settings_persistence::AppSettingRepository,
+) -> Result<Schema, FoundationInitializationError> {
+    build_schema(
+        database,
+        None,
+        None,
+        None,
+        Some(settings_repository),
+        None,
+        None,
+        None,
+        None,
+        None,
+        EntityContract {
+            foundation_entities: true,
+            product_generated_mutations: false,
+        },
+        Some(settings_database),
     )
 }
 
@@ -116,13 +142,16 @@ fn build_schema(
     documents: Option<crate::documents::DocumentsService>,
     terminal_services: Option<TerminalServices>,
     contract: EntityContract,
+    entity_database_override: Option<DatabaseConnection>,
 ) -> Result<Schema, FoundationInitializationError> {
     // Seaography has one generated-entity connection per schema. Product
     // schemas therefore use WorkTracker's state.db; the disposable foundation
     // database remains the connection only for the isolated probe schema.
-    let entity_database = worktracker_database
-        .clone()
-        .unwrap_or_else(|| database.clone());
+    let entity_database = entity_database_override.unwrap_or_else(|| {
+        worktracker_database
+            .clone()
+            .unwrap_or_else(|| database.clone())
+    });
     let graph_run_service = match (worktracker_database.as_ref(), terminal_services.as_ref()) {
         (Some(work_items), Some(terminals)) => {
             Some(crate::graph_run_service::GraphRunService::production(

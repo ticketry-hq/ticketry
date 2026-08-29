@@ -6,6 +6,7 @@
 //! [`legacy_profile_files`].
 
 mod adoption;
+mod app_setting;
 mod app_settings;
 mod atomic_json;
 pub(crate) use crate::entities::settings as entities;

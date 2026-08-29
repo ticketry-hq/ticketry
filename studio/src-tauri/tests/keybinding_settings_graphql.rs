@@ -109,6 +109,18 @@ async fn valid_keybindings_round_trip_with_bound_identity_timestamp_and_restart(
     initialize_with_keybinding_settings_and_install(&foundation_path, &settings_path, &api)
         .await
         .expect("install keybinding GraphQL");
+    let repository = AppSettingRepository::open(&settings_path)
+        .await
+        .expect("open settings repository");
+    repository
+        .put(&AppSetting {
+            scope: SettingScope::new("host").unwrap(),
+            key: SettingKey::new("unrelated").unwrap(),
+            value: r#"{"kept":true}"#.to_owned(),
+            updated_at: "2026-08-12T12:00:00+00:00".to_owned(),
+        })
+        .await
+        .expect("seed unrelated setting");
     let overrides = serde_json::json!([
         {
             "context": "global",
@@ -138,6 +150,16 @@ async fn valid_keybindings_round_trip_with_bound_identity_timestamp_and_restart(
         .as_str()
         .is_some_and(|value| !value.is_empty()));
     let updated_at = setting["updated_at"].clone();
+    let unrelated = repository
+        .get(
+            &SettingScope::new("host").unwrap(),
+            &SettingKey::new("unrelated").unwrap(),
+        )
+        .await
+        .expect("read unrelated setting")
+        .expect("unrelated setting remains");
+    assert_eq!(unrelated.value, r#"{"kept":true}"#);
+    assert_eq!(unrelated.updated_at, "2026-08-12T12:00:00+00:00");
 
     let restarted_api = TransportApiImpl::new();
     initialize_with_keybinding_settings_and_install(
@@ -158,6 +180,21 @@ async fn valid_keybindings_round_trip_with_bound_identity_timestamp_and_restart(
     assert_eq!(persisted["key"], "keybindings");
     assert_eq!(persisted["value"], overrides);
     assert_eq!(persisted["updated_at"], updated_at);
+}
+
+#[tokio::test]
+async fn mutation_contract_exposes_only_the_json_value_for_the_fixed_setting() {
+    let sdl = muxed_studio_lib::graphql_foundation::generated_schema_sdl()
+        .await
+        .expect("build GraphQL contract");
+
+    assert!(sdl.contains("update_keybinding_setting(value: Json!): KeybindingSetting!"));
+    assert!(!sdl.contains("keybindingSettingCreateOne"));
+    assert!(!sdl.contains("keybindingSettingCreateBatch"));
+    assert!(!sdl.contains("keybindingSettingUpdate"));
+    assert!(!sdl.contains("keybindingSettingDelete"));
+    assert!(!sdl.contains("KeybindingSettingBasic"));
+    assert!(!sdl.contains("KeybindingSettingInsertInput"));
 }
 
 #[tokio::test]

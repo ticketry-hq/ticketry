@@ -47,6 +47,12 @@ pub struct ModuleLinkStore {
     database: DatabaseConnection,
 }
 
+/// The one-row persistence choice after Module Link rules have run.
+pub(crate) enum PreparedModuleLink {
+    Insert(module_link::ActiveModel),
+    Update(module_link::ActiveModel),
+}
+
 impl ModuleLinkStore {
     /// Bind the store to a connection the caller opened.
     #[must_use]
@@ -98,31 +104,41 @@ impl ModuleLinkStore {
         module_id: &str,
         path: &str,
     ) -> Result<ModuleLinkRecord, ModuleLinkError> {
+        let record = match Self::prepare_set(&self.database, module_id, path).await? {
+            PreparedModuleLink::Insert(active) => active.insert(&self.database).await?,
+            PreparedModuleLink::Update(active) => active.update(&self.database).await?,
+        };
+        Ok(record.into())
+    }
+
+    /// Prepare one identity-bound upsert for a caller-owned transaction.
+    pub(crate) async fn prepare_set(
+        database: &impl ConnectionTrait,
+        module_id: &str,
+        path: &str,
+    ) -> Result<PreparedModuleLink, ModuleLinkError> {
         let path = LocalModulePath::parse(path).map_err(ModuleLinkError::invalid_path)?;
         let module_id = compact_module_id(module_id);
         let module_id = module_id.as_str();
-        if !module_exists(&self.database, module_id).await? {
+        if !module_exists(database, module_id).await? {
             return Err(ModuleLinkError::unknown_module(module_id));
         }
         let now = crate::work_management::commands::timestamp::now();
-        let record = match find(&self.database, module_id).await? {
+        Ok(match find(database, module_id).await? {
             Some(existing) => {
                 let mut active: module_link::ActiveModel = existing.into();
                 active.path = Set(path.into_string());
                 active.updated_at = Set(now);
-                active.update(&self.database).await?
+                PreparedModuleLink::Update(active)
             }
-            None => module_link::ActiveModel {
+            None => PreparedModuleLink::Insert(module_link::ActiveModel {
                 id: Set(link_id_for_module(module_id)),
                 module_id: Set(module_id.to_owned()),
                 path: Set(path.into_string()),
                 created_at: Set(now),
                 updated_at: Set(now),
-            }
-            .insert(&self.database)
-            .await?,
-        };
-        Ok(record.into())
+            }),
+        })
     }
 
     /// Forget the folder a Module was checked out into.

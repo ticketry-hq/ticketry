@@ -366,9 +366,15 @@ async fn generated_graphql_query_and_restricted_mutation_use_the_catalog_service
             "reasoning": "high"
         })
     );
+    let models = response["data"]["update_provider_catalog"]["agent_models"]
+        .as_array()
+        .expect("agent model rows");
+    let selected = models
+        .iter()
+        .find(|model| model["name"] == "gpt-5.4")
+        .expect("selected model row");
     assert_eq!(
-        response["data"]["update_provider_catalog"]["agent_models"][1]["reasoning_levels"]["nodes"]
-            [0]["reasoning_level_id"],
+        selected["reasoning_levels"]["nodes"][0]["reasoning_level_id"],
         "30000000-0000-0000-0000-000000000001"
     );
 }

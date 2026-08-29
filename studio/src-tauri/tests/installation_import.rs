@@ -69,6 +69,33 @@ async fn imports_a_current_postgres_snapshot_and_switches_once() {
         .join("database-url.postgresql-rollback")
         .is_file());
     assert_imported_reads(&directory.path().join("state.db")).await;
+    let imported_database = Database::connect(format!(
+        "sqlite:{}?mode=rw",
+        directory.path().join("state.db").display()
+    ))
+    .await
+    .expect("open imported target for final-schema migrations");
+    muxed_studio_lib::work_management::final_schema_migrations::install(&imported_database)
+        .await
+        .expect("run the ordinary final-schema chain over the PostgreSQL import");
+    let spark = imported_database
+        .query_one_raw(Statement::from_string(
+            DbBackend::Sqlite,
+            "SELECT COUNT(*) AS count FROM worktracker_agentmodel model
+             JOIN worktracker_provider provider ON provider.id=model.provider_id
+             WHERE provider.slug='codex' AND model.name='gpt-5.3-codex-spark'"
+                .to_owned(),
+        ))
+        .await
+        .expect("read imported Spark model")
+        .expect("Spark count row")
+        .try_get::<i64>("", "count")
+        .expect("Spark count");
+    assert_eq!(spark, 1);
+    imported_database
+        .close()
+        .await
+        .expect("close imported target");
 
     let ready = adoption::open_readiness(directory.path(), imported)
         .await

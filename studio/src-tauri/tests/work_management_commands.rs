@@ -1,14 +1,16 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use muxed_studio_lib::graphql_foundation::initialize_with_worktracker_commands_and_install;
 use muxed_studio_lib::work_management::commands::{
     attachments, blockers, catalog, hierarchy, reorder, state_configuration, work_items, workflow,
 };
 use muxed_studio_lib::work_management::entities::{
-    attachment, issue, issue_type, issue_type_transition, launch_binding, project, state,
+    attachment, issue, issue_type, issue_type_transition, launch_binding, module_presentation,
+    project, state,
 };
 use muxed_studio_lib::work_management::{
-    open_for_commands, workspace_tab_order, workspace_tab_order_migration,
+    module_presentation_migration, open_for_commands, workspace_tab_order,
+    workspace_tab_order_migration,
 };
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, ConnectionTrait, Database, EntityTrait, PaginatorTrait,
@@ -24,6 +26,47 @@ const BACKLOG: &str = "40000000000000000000000000000001";
 const DONE: &str = "40000000000000000000000000000002";
 const READY: &str = "40000000000000000000000000000003";
 const CANCELLED: &str = "40000000000000000000000000000004";
+
+async fn module_presentation_ranks(
+    database: &sea_orm::DatabaseConnection,
+) -> HashMap<String, String> {
+    let modules = issue::Entity::find()
+        .filter(issue::Column::Type.eq("module"))
+        .all(database)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|row| (row.id, row.name))
+        .collect::<HashMap<_, _>>();
+    module_presentation::Entity::find()
+        .all(database)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|row| (modules[&row.module_id].clone(), row.rank))
+        .collect()
+}
+
+async fn ordered_module_names(database: &sea_orm::DatabaseConnection) -> Vec<String> {
+    let presentations = module_presentation::Entity::find()
+        .order_by_asc(module_presentation::Column::Rank)
+        .order_by_asc(module_presentation::Column::ModuleId)
+        .all(database)
+        .await
+        .unwrap();
+    let mut names = Vec::with_capacity(presentations.len());
+    for presentation in presentations {
+        names.push(
+            issue::Entity::find_by_id(presentation.module_id)
+                .one(database)
+                .await
+                .unwrap()
+                .unwrap()
+                .name,
+        );
+    }
+    names
+}
 
 async fn fixture() -> (tempfile::TempDir, sea_orm::DatabaseConnection) {
     let directory = tempfile::tempdir().expect("create command fixture directory");
@@ -136,6 +179,9 @@ async fn fixture() -> (tempfile::TempDir, sea_orm::DatabaseConnection) {
     workspace_tab_order_migration::install(&database)
         .await
         .expect("install workspace-tab ordering");
+    module_presentation_migration::install(&database)
+        .await
+        .expect("install module presentation");
     let issue_column_count = database
         .query_all_raw(sea_orm::Statement::from_string(
             sea_orm::DbBackend::Sqlite,
@@ -782,7 +828,7 @@ async fn invalid_hierarchy_targets_and_foreign_creation_are_atomic() {
         .execute_unprepared(&format!(
             r#"
             INSERT INTO worktracker_project VALUES
-                ('11000000000000000000000000000000','Foreign','FOREIGN','',1,0,0,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP, 0);
+                ('11000000000000000000000000000000','Foreign','FOREIGN','',1,0,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,0);
             INSERT INTO worktracker_issue VALUES
                 ('20000000000000000000000000000001','{PROJECT}','module','{MODULE_TYPE}',NULL,NULL,NULL,1,'Module',1,0,'a','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'[]'),
                 ('21000000000000000000000000000001','11000000000000000000000000000000','module','{MODULE_TYPE}',NULL,NULL,NULL,0,'Foreign module',1,0,'a','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'[]'),
@@ -892,7 +938,7 @@ async fn task_reorder_matches_django_boundaries_and_rolls_back_invalid_neighbors
         .await
         .unwrap();
 
-    reorder::reorder(
+    reorder::reorder_work_item(
         &database,
         reorder::ReorderWorkItem {
             id: c.clone(),
@@ -916,7 +962,7 @@ async fn task_reorder_matches_django_boundaries_and_rolls_back_invalid_neighbors
         .unwrap();
     assert!(top.rank < first.rank);
 
-    reorder::reorder(
+    reorder::reorder_work_item(
         &database,
         reorder::ReorderWorkItem {
             id: c.clone(),
@@ -952,7 +998,7 @@ async fn task_reorder_matches_django_boundaries_and_rolls_back_invalid_neighbors
         .unwrap()
         .unwrap()
         .state_revision;
-    let invalid = reorder::reorder(
+    let invalid = reorder::reorder_work_item(
         &database,
         reorder::ReorderWorkItem {
             id: a,
@@ -1008,9 +1054,17 @@ async fn first_module_drag_is_atomic_and_manual_order_survives_reopen() {
             ))
             .await
             .unwrap();
+        module_presentation::ActiveModel {
+            module_id: Set((*id).to_owned()),
+            rank: Set(String::new()),
+            tab_hidden: Set(false),
+        }
+        .insert(&database)
+        .await
+        .unwrap();
     }
 
-    let stale = reorder::reorder(
+    let stale = reorder::reorder_module_presentation(
         &database,
         reorder::ReorderWorkItem {
             id: ids[0].to_owned(),
@@ -1023,21 +1077,14 @@ async fn first_module_drag_is_atomic_and_manual_order_survives_reopen() {
     .await
     .unwrap_err();
     assert_eq!(stale.code(), "validation");
-    let unchanged = project::Entity::find_by_id(PROJECT)
-        .one(&database)
-        .await
-        .unwrap()
-        .unwrap();
-    assert!(!unchanged.manual_module_order);
-    assert!(issue::Entity::find()
-        .filter(issue::Column::Type.eq("module"))
+    assert!(module_presentation::Entity::find()
         .all(&database)
         .await
         .unwrap()
         .iter()
         .all(|row| row.rank.is_empty()));
 
-    let inverted = reorder::reorder(
+    let inverted = reorder::reorder_module_presentation(
         &database,
         reorder::ReorderWorkItem {
             id: ids[0].to_owned(),
@@ -1050,23 +1097,14 @@ async fn first_module_drag_is_atomic_and_manual_order_survives_reopen() {
     .await
     .unwrap_err();
     assert_eq!(inverted.code(), "validation");
-    assert!(
-        !project::Entity::find_by_id(PROJECT)
-            .one(&database)
-            .await
-            .unwrap()
-            .unwrap()
-            .manual_module_order
-    );
-    assert!(issue::Entity::find()
-        .filter(issue::Column::Type.eq("module"))
+    assert!(module_presentation::Entity::find()
         .all(&database)
         .await
         .unwrap()
         .iter()
         .all(|row| row.rank.is_empty()));
 
-    reorder::reorder(
+    reorder::reorder_module_presentation(
         &database,
         reorder::ReorderWorkItem {
             id: ids[0].to_owned(),
@@ -1083,35 +1121,17 @@ async fn first_module_drag_is_atomic_and_manual_order_survives_reopen() {
     let reopened = open_for_commands(&directory.path().join("state.db"))
         .await
         .unwrap();
-    assert!(
-        project::Entity::find_by_id(PROJECT)
-            .one(&reopened)
-            .await
-            .unwrap()
-            .unwrap()
-            .manual_module_order
-    );
-    let durable_order = issue::Entity::find()
-        .filter(issue::Column::Type.eq("module"))
-        .order_by_asc(issue::Column::Rank)
-        .order_by_asc(issue::Column::Id)
+    assert!(module_presentation::Entity::find()
         .all(&reopened)
         .await
         .unwrap()
-        .into_iter()
-        .map(|row| row.name)
-        .collect::<Vec<_>>();
+        .iter()
+        .all(|row| !row.rank.is_empty()));
+    let durable_order = ordered_module_names(&reopened).await;
     assert_eq!(durable_order, ["A", "C", "B"]);
 
-    let fixed = issue::Entity::find()
-        .filter(issue::Column::Type.eq("module"))
-        .all(&reopened)
-        .await
-        .unwrap()
-        .into_iter()
-        .map(|row| (row.name, row.rank))
-        .collect::<std::collections::HashMap<_, _>>();
-    reorder::reorder(
+    let fixed = module_presentation_ranks(&reopened).await;
+    reorder::reorder_module_presentation(
         &reopened,
         reorder::ReorderWorkItem {
             id: ids[0].to_owned(),
@@ -1123,14 +1143,7 @@ async fn first_module_drag_is_atomic_and_manual_order_survives_reopen() {
     )
     .await
     .unwrap();
-    let later = issue::Entity::find()
-        .filter(issue::Column::Type.eq("module"))
-        .all(&reopened)
-        .await
-        .unwrap()
-        .into_iter()
-        .map(|row| (row.name, row.rank))
-        .collect::<std::collections::HashMap<_, _>>();
+    let later = module_presentation_ranks(&reopened).await;
     assert_eq!(later["B"], fixed["B"]);
     assert_eq!(later["C"], fixed["C"]);
     assert_ne!(later["A"], fixed["A"]);
@@ -1244,6 +1257,14 @@ async fn graphql_exposes_only_authored_mutations_and_structured_errors() {
             ))
             .await
             .unwrap();
+        module_presentation::ActiveModel {
+            module_id: Set((*id).to_owned()),
+            rank: Set(String::new()),
+            tab_hidden: Set(false),
+        }
+        .insert(&database)
+        .await
+        .unwrap();
     }
     let api = TransportApiImpl::new();
     initialize_with_worktracker_commands_and_install(
@@ -1279,6 +1300,7 @@ async fn graphql_exposes_only_authored_mutations_and_structured_errors() {
         "worktrackerIssuetypeCreateOne",
         "create_work_item",
         "update_work_item",
+        "reorder_module_presentation",
         "reorder_work_item",
         "delete_work_item",
         "remove_state_from_issue_type_workflow",
@@ -1416,7 +1438,7 @@ async fn graphql_exposes_only_authored_mutations_and_structured_errors() {
         &api.clone()
             .graphql_execute(
                 serde_json::json!({
-                    "query": "mutation { reorder_work_item(id: \"20000000-0000-0000-0000-000000000001\", after_id: \"20000000-0000-0000-0000-000000000003\", initial_order_ids: [\"20000000-0000-0000-0000-000000000003\", \"20000000-0000-0000-0000-000000000002\", \"20000000-0000-0000-0000-000000000001\"]) { id rank } }"
+                    "query": "mutation { reorder_module_presentation(module_id: \"20000000-0000-0000-0000-000000000001\", after_id: \"20000000-0000-0000-0000-000000000003\", initial_order_ids: [\"20000000-0000-0000-0000-000000000003\", \"20000000-0000-0000-0000-000000000002\", \"20000000-0000-0000-0000-000000000001\"]) { moduleId rank } }"
                 })
                 .to_string(),
             )
@@ -1425,14 +1447,14 @@ async fn graphql_exposes_only_authored_mutations_and_structured_errors() {
     .unwrap();
     assert!(module_reorder.get("errors").is_none(), "{module_reorder}");
     assert_eq!(
-        module_reorder["data"]["reorder_work_item"]["id"],
-        "20000000-0000-0000-0000-000000000001"
+        module_reorder["data"]["reorder_module_presentation"]["moduleId"],
+        "20000000000000000000000000000001"
     );
     let manual_order: serde_json::Value = serde_json::from_str(
         &api.clone()
             .graphql_execute(
                 serde_json::json!({
-                    "query": "{ modules: worktrackerIssue(filters: { projectId: { eq: \"10000000000000000000000000000000\" }, type: { eq: \"module\" } }, orderBy: { rank: ASC }) { nodes { name } } }"
+                    "query": "{ modules: worktrackerModulepresentation(orderBy: { rank: ASC }) { nodes { module { name } } } }"
                 })
                 .to_string(),
             )
@@ -1444,7 +1466,7 @@ async fn graphql_exposes_only_authored_mutations_and_structured_errors() {
             .as_array()
             .unwrap()
             .iter()
-            .map(|module| module["name"].as_str().unwrap())
+            .map(|module| module["module"]["name"].as_str().unwrap())
             .collect::<Vec<_>>(),
         ["A", "C", "B"]
     );
@@ -1976,7 +1998,7 @@ async fn blocker_replacement_rejects_bad_graphs_atomically_and_survives_restart(
     let foreign = "50000000000000000000000000000009";
     database.execute_unprepared(&format!(r#"
         INSERT INTO worktracker_project VALUES
-            ('11000000000000000000000000000000', 'Other', 'OTH', '', 1, 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0);
+            ('11000000000000000000000000000000', 'Other', 'OTH', '', 1, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0);
         INSERT INTO worktracker_issue VALUES
             ('{foreign}', '11000000000000000000000000000000', 'task', '{TASK_TYPE}', NULL, NULL, NULL, 0, 'Foreign', 1, 0, 'A', '', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, '[]')
     "#)).await.unwrap();

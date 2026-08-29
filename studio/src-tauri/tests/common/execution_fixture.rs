@@ -437,6 +437,7 @@ async fn insert_issue(
         is_archived: Set(is_archived),
         rank: Set(rank.to_owned()),
         description: Set(String::new()),
+        workspace_tab_order: Set(serde_json::json!([])),
         created_at: Set(now),
         updated_at: Set(now),
     }

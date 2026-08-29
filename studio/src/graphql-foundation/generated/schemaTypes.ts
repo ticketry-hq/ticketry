@@ -896,6 +896,7 @@ export type MutationUpdate_Work_ItemArgs = {
 
 export type MutationUpsert_Issue_Type_Launch_BindingArgs = {
   auto_start?: InputMaybe<Scalars['Boolean']['input']>;
+  entry_skill?: InputMaybe<Scalars['String']['input']>;
   issue_type_id: Scalars['String']['input'];
   model_id?: InputMaybe<Scalars['String']['input']>;
   prompt?: InputMaybe<Scalars['String']['input']>;
@@ -1817,6 +1818,7 @@ export type WorktrackerLaunchbinding = {
   agentModel?: Maybe<WorktrackerAgentmodel>;
   autoStart: Scalars['Boolean']['output'];
   createdAt: Scalars['String']['output'];
+  entrySkill?: Maybe<Scalars['String']['output']>;
   id: Scalars['Int']['output'];
   issueType?: Maybe<WorktrackerIssuetype>;
   issueTypeId: Scalars['String']['output'];
@@ -1849,6 +1851,7 @@ export type WorktrackerLaunchbindingFilterInput = {
   and?: InputMaybe<Array<WorktrackerLaunchbindingFilterInput>>;
   autoStart?: InputMaybe<BooleanFilterInput>;
   createdAt?: InputMaybe<TextFilterInput>;
+  entrySkill?: InputMaybe<StringFilterInput>;
   id?: InputMaybe<IntegerFilterInput>;
   issueTypeId?: InputMaybe<StringFilterInput>;
   modelId?: InputMaybe<StringFilterInput>;
@@ -1872,6 +1875,7 @@ export type WorktrackerLaunchbindingHavingInput = {
 export type WorktrackerLaunchbindingOrderInput = {
   autoStart?: InputMaybe<OrderByEnum>;
   createdAt?: InputMaybe<OrderByEnum>;
+  entrySkill?: InputMaybe<OrderByEnum>;
   id?: InputMaybe<OrderByEnum>;
   issueTypeId?: InputMaybe<OrderByEnum>;
   modelId?: InputMaybe<OrderByEnum>;

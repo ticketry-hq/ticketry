@@ -51,6 +51,7 @@ fragment GeneratedWorkTrackerIssueTypeFields on WorktrackerIssuetype {
       state: stateId
       prompt
       required_skills: requiredSkills
+      entry_skill: entrySkill
       model: modelId
       reasoning: reasoningId
       auto_start: autoStart

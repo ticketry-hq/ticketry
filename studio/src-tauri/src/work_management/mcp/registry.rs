@@ -124,7 +124,7 @@ pub fn tools() -> Vec<Tool> {
         }), &["project_id", "task_id", "status_name"]),
         tool("upsert_issue_type_workflow_launch_binding", "Create or replace one state's launch binding at the supplied revision.", json!({
             "type_id": {"type": "string"}, "state_id": {"type": "string"}, "workflow_revision": {"type": "integer"},
-            "prompt": nullable_string(), "agent": nullable_string(), "model": nullable_string(), "reasoning": nullable_string(), "required_skills": nullable_strings()
+            "prompt": nullable_string(), "agent": nullable_string(), "model": nullable_string(), "reasoning": nullable_string(), "required_skills": nullable_strings(), "entry_skill": nullable_string()
         }), &["type_id", "state_id", "workflow_revision"]),
     ]
 }
@@ -209,6 +209,14 @@ mod tests {
         assert_eq!(
             transition.input_schema["properties"]["agent_allowed"]["default"],
             true
+        );
+        let launch_binding = tools
+            .iter()
+            .find(|tool| tool.name == "upsert_issue_type_workflow_launch_binding")
+            .unwrap();
+        assert_eq!(
+            launch_binding.input_schema["properties"]["entry_skill"],
+            nullable_string()
         );
     }
 }

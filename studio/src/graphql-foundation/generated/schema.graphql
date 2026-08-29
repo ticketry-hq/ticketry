@@ -543,7 +543,7 @@ type Mutation {
 	update_issue_type_transition(issue_type_id: String!, from_state_id: String!, to_state_id: String!, agent_allowed: Boolean!, workflow_revision: Int!): WorktrackerIssuetypetransition!
 	delete_issue_type_transition(issue_type_id: String!, from_state_id: String!, to_state_id: String!, workflow_revision: Int!): Boolean!
 	remove_state_from_issue_type_workflow(issue_type_id: String!, state_id: String!, workflow_revision: Int!): Boolean!
-	upsert_issue_type_launch_binding(issue_type_id: String!, state_id: String!, workflow_revision: Int!, prompt: String, required_skills: [String!], model_id: String, reasoning_id: String, auto_start: Boolean, subtree_run_enabled: Boolean): WorktrackerLaunchbinding!
+	upsert_issue_type_launch_binding(issue_type_id: String!, state_id: String!, workflow_revision: Int!, prompt: String, required_skills: [String!], entry_skill: String, model_id: String, reasoning_id: String, auto_start: Boolean, subtree_run_enabled: Boolean): WorktrackerLaunchbinding!
 	delete_state(state_id: String!): Boolean!
 	update_keybinding_setting(value: Json!): KeybindingSetting!
 	update_provider_catalog(activated_providers: [String!]!, default_provider: String, default_model: String, default_reasoning: String): ProviderCatalog!
@@ -1154,6 +1154,7 @@ type WorktrackerLaunchbinding {
 	stateId: String!
 	prompt: String!
 	requiredSkills: Json!
+	entrySkill: String
 	modelId: String
 	reasoningId: String
 	autoStart: Boolean!
@@ -1184,6 +1185,7 @@ input WorktrackerLaunchbindingFilterInput {
 	stateId: StringFilterInput
 	prompt: StringFilterInput
 	requiredSkills: JsonFilterInput
+	entrySkill: StringFilterInput
 	modelId: StringFilterInput
 	reasoningId: StringFilterInput
 	autoStart: BooleanFilterInput
@@ -1208,6 +1210,7 @@ input WorktrackerLaunchbindingOrderInput {
 	stateId: OrderByEnum
 	prompt: OrderByEnum
 	requiredSkills: OrderByEnum
+	entrySkill: OrderByEnum
 	modelId: OrderByEnum
 	reasoningId: OrderByEnum
 	autoStart: OrderByEnum

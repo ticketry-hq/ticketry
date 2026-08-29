@@ -60,7 +60,8 @@ async fn fixture() -> (tempfile::TempDir, sea_orm::DatabaseConnection) {
         CREATE TABLE worktracker_launchbinding (
             id integer PRIMARY KEY AUTOINCREMENT, issue_type_id char(32) NOT NULL,
             state_id char(32) NOT NULL, prompt text NOT NULL,
-            required_skills text NOT NULL, model_id char(32), reasoning_id char(32),
+            required_skills text NOT NULL, entry_skill varchar(128),
+            model_id char(32), reasoning_id char(32),
             auto_start bool NOT NULL, subtree_run_enabled bool NOT NULL,
             created_at datetime NOT NULL, updated_at datetime NOT NULL,
             UNIQUE(issue_type_id, state_id)
@@ -309,6 +310,7 @@ async fn launch_binding_patch_preserves_omissions_and_does_not_revision_a_noop()
             workflow_revision: 1,
             prompt: workflow::PatchValue::Value("Initial".to_owned()),
             required_skills: workflow::PatchValue::Value(vec!["tdd".to_owned()]),
+            entry_skill: workflow::PatchValue::Value("tdd".to_owned()),
             model_id: workflow::PatchValue::Unset,
             reasoning_id: workflow::PatchValue::Unset,
             auto_start: workflow::PatchValue::Unset,
@@ -325,6 +327,7 @@ async fn launch_binding_patch_preserves_omissions_and_does_not_revision_a_noop()
             workflow_revision: 2,
             prompt: workflow::PatchValue::Unset,
             required_skills: workflow::PatchValue::Unset,
+            entry_skill: workflow::PatchValue::Unset,
             model_id: workflow::PatchValue::Unset,
             reasoning_id: workflow::PatchValue::Unset,
             auto_start: workflow::PatchValue::Value(false),
@@ -340,6 +343,7 @@ async fn launch_binding_patch_preserves_omissions_and_does_not_revision_a_noop()
         .unwrap();
     assert_eq!(row.prompt, "Initial");
     assert_eq!(row.required_skills, serde_json::json!(["tdd"]));
+    assert_eq!(row.entry_skill.as_deref(), Some("tdd"));
     assert_eq!(
         issue_type::Entity::find_by_id(STORY)
             .one(&database)

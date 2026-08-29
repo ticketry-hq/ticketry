@@ -5,6 +5,7 @@ pub mod commands;
 pub mod database;
 pub use crate::entities::work_management as entities;
 pub(crate) mod graphql;
+pub mod launch_binding_entry_skill_migration;
 pub mod launch_policy;
 pub mod mcp;
 pub mod ownership_manifest;

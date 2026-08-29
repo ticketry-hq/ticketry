@@ -115,6 +115,23 @@ fn provider_model_and_reasoning_options_keep_the_established_cli_shapes() {
 }
 
 #[test]
+fn every_claude_launch_uses_the_200_token_autocompact_window() {
+    for kind in [
+        LaunchKind::Task,
+        LaunchKind::Resume {
+            provider_session_id: "session-1".into(),
+        },
+    ] {
+        let plan = materialize(
+            &durable(Provider::Claude, kind),
+            &authority(Provider::Claude),
+        )
+        .unwrap();
+        assert!(contains_sequence(&plan.argv, &["--autocompact", "200"]));
+    }
+}
+
+#[test]
 fn every_provider_builds_native_resume_argv() {
     for provider in [
         Provider::Claude,

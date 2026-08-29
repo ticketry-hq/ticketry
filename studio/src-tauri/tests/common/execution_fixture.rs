@@ -170,6 +170,7 @@ pub async fn seed_campaign(database: &DatabaseConnection) {
             state_id: Set(state_id.to_owned()),
             prompt: Set("Implement the slice.".to_owned()),
             required_skills: Set(serde_json::json!([])),
+            entry_skill: Set(None),
             model_id: Set(Some(model.id.clone())),
             reasoning_id: Set(None),
             auto_start: Set(auto_start),

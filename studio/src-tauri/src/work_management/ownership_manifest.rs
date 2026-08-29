@@ -18,18 +18,79 @@ pub enum SchemaGeneration {
     ProjectOnly,
 }
 
+/// Which shape of the launch-binding row a database is in.
+///
+/// Adoption runs before the entry-skill migration on a first launch and after
+/// it on every launch that follows, so both shapes are recognized rather than
+/// one of them being refused.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum LaunchBindingShape {
+    /// The launch binding has no entry skill yet.
+    WithoutEntrySkill,
+    /// The launch binding carries its nullable entry skill.
+    WithEntrySkill,
+}
+
 /// The tables and columns Rust commands may mutate in `generation`.
 #[must_use]
 pub fn owned_tables(
     generation: SchemaGeneration,
+    launch_binding: LaunchBindingShape,
 ) -> Vec<(&'static str, &'static [&'static str])> {
     let mut tables = match generation {
         SchemaGeneration::WorkspaceOwned => vec![WORKSPACE, PROJECT_UNDER_WORKSPACE],
         SchemaGeneration::ProjectOnly => vec![PROJECT_ONLY],
     };
     tables.extend_from_slice(SHARED_TABLES);
+    tables.push(launch_binding_table(launch_binding));
     tables
 }
+
+/// The launch-binding columns of `shape`.
+#[must_use]
+pub fn launch_binding_table(
+    shape: LaunchBindingShape,
+) -> (&'static str, &'static [&'static str]) {
+    match shape {
+        LaunchBindingShape::WithoutEntrySkill => LAUNCH_BINDING,
+        LaunchBindingShape::WithEntrySkill => LAUNCH_BINDING_WITH_ENTRY_SKILL,
+    }
+}
+
+const LAUNCH_BINDING: (&str, &[&str]) = (
+    "worktracker_launchbinding",
+    &[
+        "id",
+        "issue_type_id",
+        "state_id",
+        "prompt",
+        "required_skills",
+        "auto_start",
+        "created_at",
+        "updated_at",
+        "subtree_run_enabled",
+        "model_id",
+        "reasoning_id",
+    ],
+);
+
+const LAUNCH_BINDING_WITH_ENTRY_SKILL: (&str, &[&str]) = (
+    "worktracker_launchbinding",
+    &[
+        "id",
+        "issue_type_id",
+        "state_id",
+        "prompt",
+        "required_skills",
+        "entry_skill",
+        "auto_start",
+        "created_at",
+        "updated_at",
+        "subtree_run_enabled",
+        "model_id",
+        "reasoning_id",
+    ],
+);
 
 /// The Workspace table, present only before onboarding moved onto Project.
 const WORKSPACE: (&str, &[&str]) = (
@@ -121,22 +182,6 @@ const SHARED_TABLES: &[(&str, &[&str])] = &[
         ],
     ),
     (
-        "worktracker_launchbinding",
-        &[
-            "id",
-            "issue_type_id",
-            "state_id",
-            "prompt",
-            "required_skills",
-            "auto_start",
-            "created_at",
-            "updated_at",
-            "subtree_run_enabled",
-            "model_id",
-            "reasoning_id",
-        ],
-    ),
-    (
         "worktracker_issue",
         &[
             "id",
@@ -180,7 +225,10 @@ mod tests {
 
     #[test]
     fn the_project_only_shape_drops_workspace_and_owns_onboarding() {
-        let tables = owned_tables(SchemaGeneration::ProjectOnly);
+        let tables = owned_tables(
+            SchemaGeneration::ProjectOnly,
+            LaunchBindingShape::WithEntrySkill,
+        );
         assert!(!tables.iter().any(|(table, _)| *table == WORKSPACE.0));
         let (_, columns) = tables
             .iter()
@@ -190,18 +238,40 @@ mod tests {
         assert!(!columns.contains(&"workspace_id"));
     }
 
+    /// The entry-skill column is the only difference between the two shapes.
+    #[test]
+    fn the_entry_skill_shape_adds_exactly_that_column() {
+        let (without, before) = launch_binding_table(LaunchBindingShape::WithoutEntrySkill);
+        let (with, after) = launch_binding_table(LaunchBindingShape::WithEntrySkill);
+        assert_eq!(without, with);
+        assert!(!before.contains(&"entry_skill"));
+        assert!(after.contains(&"entry_skill"));
+        let added = after
+            .iter()
+            .filter(|column| !before.contains(column))
+            .collect::<Vec<_>>();
+        assert_eq!(added, [&"entry_skill"]);
+    }
+
     #[test]
     fn ownership_manifest_has_one_classification_per_table() {
         for generation in [
             SchemaGeneration::WorkspaceOwned,
             SchemaGeneration::ProjectOnly,
         ] {
-            for (table, columns) in owned_tables(generation) {
-                assert!(table.starts_with("worktracker_"));
-                assert!(!columns.is_empty());
+            for launch_binding in [
+                LaunchBindingShape::WithoutEntrySkill,
+                LaunchBindingShape::WithEntrySkill,
+            ] {
+                for (table, columns) in owned_tables(generation, launch_binding) {
+                    assert!(table.starts_with("worktracker_"));
+                    assert!(!columns.is_empty());
+                }
             }
         }
-        let slice2_tables = crate::settings_persistence::ownership_manifest::OWNED_TABLES
+        let slice2_tables = crate::settings_persistence::ownership_manifest::owned_tables(
+            LaunchBindingShape::WithEntrySkill,
+        )
             .iter()
             .map(|(table, _)| *table)
             .collect::<std::collections::BTreeSet<_>>();

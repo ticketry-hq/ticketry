@@ -457,6 +457,10 @@ export const useWorkflowEditorStore = createApolloStore<WorkflowEditorState>("wo
           ...binding,
           required_skills:
             binding.required_skills ?? current?.required_skills ?? [],
+          entry_skill:
+            binding.entry_skill === undefined
+              ? current?.entry_skill ?? null
+              : binding.entry_skill,
         },
         revision,
         current?.auto_start ?? false,

@@ -36,6 +36,10 @@ pub fn owned_ledgers() -> Vec<(&'static str, i32)> {
             crate::work_management::project_onboarding_migration::VERSION,
         ),
         (
+            crate::work_management::launch_binding_entry_skill_migration::LEDGER_TABLE,
+            crate::work_management::launch_binding_entry_skill_migration::VERSION,
+        ),
+        (
             "ticketry_settings_adoption",
             crate::settings_persistence::ownership_manifest::VERSION,
         ),

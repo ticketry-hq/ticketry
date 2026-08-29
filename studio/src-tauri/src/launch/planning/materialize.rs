@@ -9,6 +9,8 @@ use super::{
     MaterializedLaunch, Provider, RuntimeSettings,
 };
 
+const CLAUDE_AUTOCOMPACT_TOKENS: &str = "200";
+
 /// Values supplied only by trusted desktop services immediately before tmux
 /// creation. This value is intentionally not serializable or deserializable.
 #[derive(Clone, Debug)]
@@ -167,6 +169,8 @@ fn provider_argv(
                 binary,
                 "--permission-mode".into(),
                 "auto".into(),
+                "--autocompact".into(),
+                CLAUDE_AUTOCOMPACT_TOKENS.into(),
                 "--resume".into(),
                 provider_session_id.clone(),
             ],
@@ -204,7 +208,13 @@ fn provider_argv(
     }
     Ok(match durable.provider {
         Provider::Claude => [
-            vec![binary, "--permission-mode".into(), "auto".into()],
+            vec![
+                binary,
+                "--permission-mode".into(),
+                "auto".into(),
+                "--autocompact".into(),
+                CLAUDE_AUTOCOMPACT_TOKENS.into(),
+            ],
             options,
             vec![prompt],
         ]

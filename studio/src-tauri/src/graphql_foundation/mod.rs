@@ -183,6 +183,14 @@ async fn initialize_with_worktracker_commands_and_install_inner(
                 format!("could not move onboarding onto the project: {error}"),
             )
         })?;
+    crate::work_management::launch_binding_entry_skill_migration::install(&worktracker_database)
+        .await
+        .map_err(|error| {
+            FoundationInitializationError::new(
+                FoundationInitializationErrorCode::WorktrackerDatabaseOpen,
+                format!("could not give launch bindings an entry skill: {error}"),
+            )
+        })?;
     let settings_repository =
         crate::settings_persistence::AppSettingRepository::open(worktracker_database_path)
             .await

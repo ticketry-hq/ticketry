@@ -38,6 +38,7 @@ pub struct PatchLaunchBinding {
     pub workflow_revision: i32,
     pub prompt: PatchValue<String>,
     pub required_skills: PatchValue<Vec<String>>,
+    pub entry_skill: PatchValue<String>,
     pub model_id: PatchValue<String>,
     pub reasoning_id: PatchValue<String>,
     pub auto_start: PatchValue<bool>,
@@ -62,6 +63,7 @@ pub async fn patch_launch_binding(
     // rather than letting a toggle conjure an unconfigured row.
     let describes_a_binding = !matches!(input.prompt, PatchValue::Unset)
         || !matches!(input.required_skills, PatchValue::Unset)
+        || !matches!(input.entry_skill, PatchValue::Unset)
         || !matches!(model_patch, PatchValue::Unset)
         || !matches!(reasoning_patch, PatchValue::Unset);
     let transaction = database.begin().await?;
@@ -116,6 +118,10 @@ pub async fn patch_launch_binding(
         Vec::new(),
         "required_skills",
     )?;
+    let entry_skill = optional_text_value(
+        input.entry_skill,
+        current.as_ref().and_then(|row| row.entry_skill.clone()),
+    );
     let model_id = nullable_value(
         model_patch,
         current.as_ref().and_then(|row| row.model_id.clone()),
@@ -146,6 +152,7 @@ pub async fn patch_launch_binding(
         LaunchBindingCandidate {
             prompt: &prompt,
             required_skills: &required_skills,
+            entry_skill: entry_skill.as_deref(),
             model_id: model_id.as_deref(),
             reasoning_id: reasoning_id.as_deref(),
             auto_start,
@@ -156,6 +163,7 @@ pub async fn patch_launch_binding(
     if let Some(row) = &current {
         if row.prompt == prompt
             && row.required_skills == serde_json::json!(required_skills)
+            && row.entry_skill == entry_skill
             && row.model_id == model_id
             && row.reasoning_id == reasoning_id
             && row.auto_start == auto_start
@@ -172,6 +180,7 @@ pub async fn patch_launch_binding(
             let mut active: launch_binding::ActiveModel = row.into();
             active.prompt = Set(prompt);
             active.required_skills = Set(serde_json::json!(required_skills));
+            active.entry_skill = Set(entry_skill);
             active.model_id = Set(model_id);
             active.reasoning_id = Set(reasoning_id);
             active.auto_start = Set(auto_start);
@@ -186,6 +195,7 @@ pub async fn patch_launch_binding(
                 state_id: Set(state_id),
                 prompt: Set(prompt),
                 required_skills: Set(serde_json::json!(required_skills)),
+                entry_skill: Set(entry_skill),
                 model_id: Set(model_id),
                 reasoning_id: Set(reasoning_id),
                 auto_start: Set(auto_start),
@@ -229,6 +239,13 @@ fn nullable_value<T>(patch: PatchValue<T>, current: Option<T>) -> Option<T> {
         PatchValue::Null => None,
         PatchValue::Value(value) => Some(value),
     }
+}
+
+fn optional_text_value(patch: PatchValue<String>, current: Option<String>) -> Option<String> {
+    nullable_value(patch, current).and_then(|value| {
+        let value = value.trim().to_owned();
+        (!value.is_empty()).then_some(value)
+    })
 }
 
 fn required_value<T>(

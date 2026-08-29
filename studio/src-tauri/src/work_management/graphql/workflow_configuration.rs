@@ -120,6 +120,7 @@ impl WorkflowConfigurationMutations {
         workflow_revision: i32,
         prompt: GraphqlPatchString,
         required_skills: GraphqlPatchStringList,
+        entry_skill: GraphqlPatchString,
         model_id: GraphqlPatchString,
         reasoning_id: GraphqlPatchString,
         auto_start: GraphqlPatchBool,
@@ -134,6 +135,7 @@ impl WorkflowConfigurationMutations {
                 workflow_revision,
                 prompt: prompt.0,
                 required_skills: required_skills.0.map(|value| value.0),
+                entry_skill: entry_skill.0,
                 model_id: model_id.0,
                 reasoning_id: reasoning_id.0,
                 auto_start: auto_start.0,
@@ -150,5 +152,54 @@ impl WorkflowConfigurationMutations {
             .await
             .map_err(command_error)?;
         Ok(true)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeSet;
+
+    use sea_orm::Database;
+
+    #[tokio::test]
+    async fn launch_binding_graph_and_restricted_update_allowlist_entry_skill() {
+        let database = Database::connect("sqlite::memory:").await.unwrap();
+        let schema = crate::query_root::generated_contract_schema(database).unwrap();
+        let sdl = schema.sdl();
+        let model = sdl
+            .split("type WorktrackerLaunchbinding {")
+            .nth(1)
+            .unwrap()
+            .split('}')
+            .next()
+            .unwrap();
+        assert!(model.contains("entrySkill: String"), "{model}");
+
+        let arguments = sdl
+            .split("upsert_issue_type_launch_binding(")
+            .nth(1)
+            .unwrap()
+            .split("): WorktrackerLaunchbinding!")
+            .next()
+            .unwrap();
+        let actual = arguments
+            .split(',')
+            .filter_map(|argument| argument.trim().split_once(':').map(|(name, _)| name))
+            .collect::<BTreeSet<_>>();
+        assert_eq!(
+            actual,
+            BTreeSet::from([
+                "auto_start",
+                "entry_skill",
+                "issue_type_id",
+                "model_id",
+                "prompt",
+                "reasoning_id",
+                "required_skills",
+                "state_id",
+                "subtree_run_enabled",
+                "workflow_revision",
+            ])
+        );
     }
 }

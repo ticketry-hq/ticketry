@@ -45,6 +45,25 @@ export function launchBindingsByStateId(
 
 const text = (value: string | null | undefined) => value?.trim() ?? "";
 
+const USER_INVOKE_ONLY_SKILLS = new Set([
+  "grill-with-docs",
+  "implement",
+  "setup-matt-pocock-skills",
+  "to-spec",
+  "to-tickets",
+]);
+
+export function entrySkillWarning(
+  requiredSkills: string[],
+  entrySkill: string | null | undefined,
+): string | null {
+  const misplaced = requiredSkills.filter(
+    (skill) => USER_INVOKE_ONLY_SKILLS.has(skill) && skill !== text(entrySkill),
+  );
+  if (misplaced.length === 0) return null;
+  return `${misplaced.join(", ")} can only start through user input. Select it as the entry skill.`;
+}
+
 export function validateLaunchBindingOptions(
   binding: LaunchBindingInput,
   capabilities: ProviderCapabilities[],

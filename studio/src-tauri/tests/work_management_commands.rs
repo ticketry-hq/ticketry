@@ -97,7 +97,8 @@ async fn fixture() -> (tempfile::TempDir, sea_orm::DatabaseConnection) {
             CREATE TABLE worktracker_launchbinding (
                 id integer PRIMARY KEY AUTOINCREMENT, issue_type_id char(32) NOT NULL,
                 state_id char(32) NOT NULL, prompt text NOT NULL,
-                required_skills text NOT NULL, model_id char(32), reasoning_id char(32),
+                required_skills text NOT NULL, entry_skill varchar(128),
+                model_id char(32), reasoning_id char(32),
                 auto_start bool NOT NULL, subtree_run_enabled bool NOT NULL,
                 created_at datetime NOT NULL, updated_at datetime NOT NULL,
                 UNIQUE(issue_type_id, state_id)
@@ -1570,6 +1571,7 @@ async fn workflow_configuration_compare_and_set_is_atomic_and_prunes_unreachable
             workflow_revision: 2,
             prompt: workflow::PatchValue::Value("Implement the work item.".to_owned()),
             required_skills: workflow::PatchValue::Unset,
+            entry_skill: workflow::PatchValue::Unset,
             model_id: workflow::PatchValue::Unset,
             reasoning_id: workflow::PatchValue::Unset,
             auto_start: workflow::PatchValue::Value(true),
@@ -1903,6 +1905,7 @@ async fn launch_binding_patch_preserves_omitted_fields_and_skips_noop_revision()
             workflow_revision: 1,
             prompt: workflow::PatchValue::Value("Initial prompt".to_owned()),
             required_skills: workflow::PatchValue::Value(vec!["tdd".to_owned()]),
+            entry_skill: workflow::PatchValue::Value("tdd".to_owned()),
             model_id: workflow::PatchValue::Unset,
             reasoning_id: workflow::PatchValue::Unset,
             auto_start: workflow::PatchValue::Unset,
@@ -1927,6 +1930,7 @@ async fn launch_binding_patch_preserves_omitted_fields_and_skips_noop_revision()
             workflow_revision: 2,
             prompt: workflow::PatchValue::Unset,
             required_skills: workflow::PatchValue::Unset,
+            entry_skill: workflow::PatchValue::Unset,
             model_id: workflow::PatchValue::Unset,
             reasoning_id: workflow::PatchValue::Unset,
             auto_start: workflow::PatchValue::Value(false),
@@ -1943,6 +1947,7 @@ async fn launch_binding_patch_preserves_omitted_fields_and_skips_noop_revision()
         .unwrap();
     assert_eq!(row.prompt, "Initial prompt");
     assert_eq!(row.required_skills, serde_json::json!(["tdd"]));
+    assert_eq!(row.entry_skill.as_deref(), Some("tdd"));
     assert!(!row.auto_start);
     assert_eq!(
         issue_type::Entity::find_by_id(TASK_TYPE)
@@ -1966,6 +1971,7 @@ async fn automation_flags_ride_the_launch_binding_patch_and_need_a_configured_bi
             workflow_revision: 1,
             prompt: workflow::PatchValue::Unset,
             required_skills: workflow::PatchValue::Unset,
+            entry_skill: workflow::PatchValue::Unset,
             model_id: workflow::PatchValue::Unset,
             reasoning_id: workflow::PatchValue::Unset,
             auto_start: workflow::PatchValue::Value(true),
@@ -2000,6 +2006,7 @@ async fn automation_flags_ride_the_launch_binding_patch_and_need_a_configured_bi
             workflow_revision: 1,
             prompt: workflow::PatchValue::Value("Implement it.".to_owned()),
             required_skills: workflow::PatchValue::Unset,
+            entry_skill: workflow::PatchValue::Unset,
             model_id: workflow::PatchValue::Unset,
             reasoning_id: workflow::PatchValue::Unset,
             auto_start: workflow::PatchValue::Unset,
@@ -2029,6 +2036,7 @@ async fn automation_flags_ride_the_launch_binding_patch_and_need_a_configured_bi
                     workflow_revision: revision,
                     prompt: workflow::PatchValue::Unset,
                     required_skills: workflow::PatchValue::Unset,
+                    entry_skill: workflow::PatchValue::Unset,
                     model_id: workflow::PatchValue::Unset,
                     reasoning_id: workflow::PatchValue::Unset,
                     auto_start,

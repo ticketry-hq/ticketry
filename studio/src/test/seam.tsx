@@ -433,6 +433,7 @@ class BoundaryFixture implements StudioFixture {
           state: item.state,
           prompt: null,
           required_skills: [],
+          entry_skill: null,
           model: null,
           reasoning: null,
           auto_start: false,

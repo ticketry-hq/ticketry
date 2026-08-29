@@ -77,16 +77,21 @@ export function routeThreeZoneBodyEngagement(event: KeyboardEvent): boolean {
   ) {
     event.preventDefault();
     event.stopImmediatePropagation();
-    ui.setEditViewBodyEngaged(false);
-    ui.setNavigationModality("keyboard");
-    // Focus lands on the zone the developer was typing in, so the panel stays
-    // open and stays the current zone.
-    document
-      .querySelector<HTMLElement>(
-        `[data-navigation-zone="${ui.editViewZone}"]`,
-      )
-      ?.focus({ preventScroll: true });
+    disengageEditViewBody();
   }
+  return true;
+}
+
+/** Leaves typing mode and returns focus to the current navigation zone. */
+export function disengageEditViewBody(): boolean {
+  const ui = useClientStore.getState();
+  if (!isEngageableZone(ui.editViewZone) || !ui.editViewBodyEngaged) return false;
+
+  ui.setEditViewBodyEngaged(false);
+  ui.setNavigationModality("keyboard");
+  document
+    .querySelector<HTMLElement>(`[data-navigation-zone="${ui.editViewZone}"]`)
+    ?.focus({ preventScroll: true });
   return true;
 }
 

@@ -95,3 +95,15 @@ async fn public_sdl_excludes_runtime_and_launch_material() {
         assert!(!sdl.contains(protected), "public SDL contains {protected}");
     }
 }
+
+#[tokio::test]
+async fn terminal_create_action_decision_keeps_the_full_sdl_and_entity_result() {
+    let actual = muxed_studio_lib::graphql_foundation::generated_schema_sdl()
+        .await
+        .expect("build shipping schema");
+    let checked_in = include_str!("../../src/graphql-foundation/generated/schema.graphql");
+    assert_eq!(actual.trim(), checked_in.trim(), "full SDL drifted");
+    assert!(actual.contains(
+        "terminal_session_create(client_request_id: String!, project_id: String, issue_id: String, module_id: String!, target_id: String, kind: String!, provider: String, working_directory_identity: String, columns: Int!, rows: Int!, model: String, reasoning: String, policy_reference: String, prompt: String, resume_from_agent_run_id: String, automation_attempt_id: String, required_skills: [String!], design_directory_identity: String, document_relative_path: String): AgentTerminalSessions!"
+    ));
+}

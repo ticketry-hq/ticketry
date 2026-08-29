@@ -11,6 +11,8 @@ mod journal;
 mod runtime;
 mod service;
 
+pub mod action_compatibility;
+
 pub use checkpoint::{CleanupCheckpoint, CleanupCheckpoints};
 pub use effect::{CleanupCause, CleanupEffectIdentity};
 pub use error::{TerminalCleanupError, TerminalCleanupErrorCode};

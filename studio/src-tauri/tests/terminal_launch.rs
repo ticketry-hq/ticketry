@@ -598,6 +598,99 @@ async fn graphql_create_contract_returns_a_stable_typed_error() {
 }
 
 #[tokio::test]
+async fn action_candidate_preparation_is_one_recoverable_commit() {
+    let harness = TerminalLifecycleHarness::start().await;
+    let database = harness.database().await;
+    let runtime = Arc::new(RecordingRuntime::new(database.clone()));
+
+    for (index, boundary, committed) in [
+        (0, TerminalLaunchBoundary::MaterialPrepared, false),
+        (1, TerminalLaunchBoundary::EffectPrepared, true),
+    ] {
+        let request_id = format!("terminal-action-prepare-{index}");
+        let stopped = launch_service(database.clone(), runtime.clone())
+            .stopping_once_at(boundary)
+            .create(request(&request_id, TerminalLaunchKind::Task))
+            .await;
+        assert!(stopped.is_err(), "{boundary:?} must stop the response");
+
+        let expected = i64::from(committed);
+        assert_eq!(
+            request_count(&database, "runs_launch_effects", &request_id).await,
+            expected,
+            "{boundary:?}: effect"
+        );
+        assert_eq!(
+            request_count(&database, "terminal_launch_material", &request_id).await,
+            expected,
+            "{boundary:?}: material"
+        );
+        assert_eq!(
+            run_count(&database, "agent_runs", &request_id).await,
+            expected,
+            "{boundary:?}: run"
+        );
+        assert_eq!(
+            status_count(&database, &request_id).await,
+            expected,
+            "{boundary:?}: starting status"
+        );
+        assert_eq!(
+            run_count(&database, "agent_terminal_sessions", &request_id).await,
+            0,
+            "{boundary:?}: session must not precede verified tmux"
+        );
+    }
+    assert_eq!(runtime.runtime_count(), 0);
+}
+
+#[tokio::test]
+async fn action_candidate_session_insert_rolls_back_with_effect_and_run_settlement() {
+    let harness = TerminalLifecycleHarness::start().await;
+    let database = harness.database().await;
+    let runtime = Arc::new(RecordingRuntime::new(database.clone()));
+    let request_id = "terminal-action-settlement";
+    let launch = request(request_id, TerminalLaunchKind::Task);
+
+    let stopped = launch_service(database.clone(), runtime.clone())
+        .stopping_once_at(TerminalLaunchBoundary::SessionInserted)
+        .create(launch.clone())
+        .await;
+    assert!(stopped.is_err());
+
+    assert_eq!(runtime.runtime_count(), 1, "verified tmux survives");
+    assert_eq!(
+        run_count(&database, "agent_terminal_sessions", request_id).await,
+        0,
+        "the in-transaction session insert must roll back"
+    );
+    assert_eq!(effect_state(&database, request_id).await, "leased");
+    assert_eq!(
+        status_count(&database, request_id).await,
+        1,
+        "the running lifecycle fact must roll back with the session"
+    );
+
+    expire_launch_leases(&database).await;
+    let recovery = launch_service(database.clone(), runtime.clone());
+    recovery.reconcile().await.unwrap();
+    let replay = recovery.create(launch).await.unwrap();
+
+    assert_eq!(
+        runtime.create_count(),
+        1,
+        "recovery must not duplicate tmux"
+    );
+    assert_eq!(effect_state(&database, request_id).await, "applied");
+    assert_eq!(
+        run_count(&database, "agent_terminal_sessions", request_id).await,
+        1
+    );
+    assert_eq!(status_count(&database, request_id).await, 2);
+    assert_eq!(replay.agent_run_id, run_id(&database, request_id).await);
+}
+
+#[tokio::test]
 async fn crash_boundaries_recover_one_verified_launch_without_duplicate_facts() {
     let harness = TerminalLifecycleHarness::start().await;
     let database = harness.database().await;

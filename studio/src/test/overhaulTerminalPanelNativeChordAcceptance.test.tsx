@@ -15,11 +15,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useGlobalKeymap } from "../app/navigation/useGlobalKeymap";
 import { NATIVE_TERMINAL_CHORD_EVENT } from "../app/navigation/nativeTerminalChords";
+import { WorkTrackerProjectOpenDocument } from "../features/projects/generated/projects.documents";
+import { useStudioStore } from "../features/projects";
 import {
   isTerminalPanelOpenIn,
   useTerminalPanelStore,
 } from "../features/terminal-panel";
+import { compactWorktrackerId } from "../shared/api/generatedWorktracker";
+import type { Module, Project } from "../shared/api/types";
+import { studioApolloClient } from "../shared/apollo/client";
 import { useClientStore } from "../state/clientStore";
+import { projectOpenFixture } from "./projectOpenFixture";
 
 const runtime = vi.hoisted(() => ({ desktop: true }));
 
@@ -96,6 +102,52 @@ describe("terminal panel — native chord", () => {
     });
     expect(isTerminalPanelOpenIn("module-1")).toBe(false);
 
+    keymap.unmount();
+  });
+
+  it("switches visible module positions from an engaged native terminal", async () => {
+    const project: Project = {
+      id: "project-1",
+      name: "Project",
+      slug: "PRJ",
+      description: "",
+    };
+    const modules = ["One", "Hidden", "Three"].map((name, index): Module => ({
+      id: `module-${index + 1}`,
+      name,
+      project_id: project.id,
+      key: `PRJ-${index + 1}`,
+      sequence_id: index + 1,
+      is_archived: false,
+      issue_type: "module-type",
+    }));
+    const opened = projectOpenFixture(
+      { ...project, manual_module_order: true },
+      modules,
+    );
+    const hidden = opened.data.module_presentations.nodes.find(
+      (presentation) => presentation.module_id === "module-2",
+    );
+    if (hidden) hidden.tab_hidden = true;
+    studioApolloClient().writeQuery({
+      query: WorkTrackerProjectOpenDocument,
+      variables: { projectId: compactWorktrackerId(project.id) },
+      data: opened.data,
+    });
+    useStudioStore.setState({ selectedProjectId: project.id, error: null });
+    const selectModule = vi.fn(async (moduleId: string) => {
+      useClientStore.setState({ selectedModuleId: moduleId });
+    });
+    useClientStore.setState({
+      selectedModuleId: "module-1",
+      selectModule,
+    });
+    const keymap = renderHook(() => useGlobalKeymap());
+    await act(async () => {});
+
+    act(() => host.reportChord("module-position-2"));
+
+    expect(selectModule).toHaveBeenCalledWith("module-3");
     keymap.unmount();
   });
 

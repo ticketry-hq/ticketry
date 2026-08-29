@@ -9,6 +9,7 @@ import {
 } from "../../shared/api/generatedWorktracker";
 import type { Module, ModulePresentation } from "../../shared/api/types";
 import { studioApolloClient } from "../../shared/apollo/client";
+import { getModulesSnapshot } from "../projects/queries";
 
 function presentationsFromRows(
   rows: ReadonlyArray<{
@@ -71,5 +72,14 @@ export function visibleModules(
   presentations: readonly ModulePresentation[] | undefined,
 ): Module[] {
   const hiddenIds = hiddenModuleIds(presentations);
-  return modules.filter((module) => !hiddenIds.has(module.id));
+  return modules.filter(
+    (module) => !module.is_archived && !hiddenIds.has(module.id),
+  );
+}
+
+export function getVisibleModulesSnapshot(projectId: string | null): Module[] {
+  return visibleModules(
+    getModulesSnapshot(projectId),
+    getModulePresentationsSnapshot(projectId),
+  );
 }

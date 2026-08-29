@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef } from "react";
 import { useModalStore } from "../../modal/modalStore";
 import {
   ModulePicker,
+  useModuleJumpBadges,
   useModulePresentations,
   useSetModuleTabHidden,
   visibleModules,
@@ -27,6 +28,8 @@ export function ModuleTabStrip() {
   const setTabHidden = useSetModuleTabHidden();
   const loading = modulesQuery.isPending;
   const pushModal = useModalStore((state) => state.pushModal);
+  const modalOpen = useModalStore((state) => state.modalStack.length > 0);
+  const moduleJumpBadges = useModuleJumpBadges(!modalOpen);
   const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const dragDrop = useModuleReorderDrag(selectedProjectId, "horizontal");
 
@@ -100,7 +103,7 @@ export function ModuleTabStrip() {
         className="flex min-w-0 flex-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         {!loading
-          ? shownModules.map((module) => (
+          ? shownModules.map((module, index) => (
               <ModuleTab
                 key={module.id}
                 module={module}
@@ -108,6 +111,7 @@ export function ModuleTabStrip() {
                 dropIntent={dragDrop.dropIntentFor(module.id)}
                 onSelect={handleSelect}
                 onHide={handleHide}
+                jumpBadge={moduleJumpBadges.get(index + 1)}
                 registerRef={registerRef}
                 dragSourceProps={dragDrop.dragSourcePropsFor(module.id)}
                 dropTargetProps={dragDrop.dropTargetPropsFor(module.id)}

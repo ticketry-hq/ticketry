@@ -3,6 +3,10 @@ import {
   useModuleLifecycleCounts,
 } from "../../../features/agents/status";
 import { LifecycleBadge } from "../../../features/agents/terminal";
+import {
+  ModuleJumpBadge,
+  type ModuleJumpBadgePresentation,
+} from "../../../features/module-tabs";
 import type {
   DragSourceProps,
   DropIntent,
@@ -38,6 +42,7 @@ interface ModuleTabProps {
   dropIntent: DropIntent | null;
   onSelect: (moduleId: string) => void;
   onHide: (moduleId: string) => void;
+  jumpBadge?: ModuleJumpBadgePresentation;
   registerRef: (moduleId: string, node: HTMLButtonElement | null) => void;
   dragSourceProps?: DragSourceProps;
   dropTargetProps?: DropTargetProps;
@@ -49,6 +54,7 @@ export function ModuleTab({
   dropIntent,
   onSelect,
   onHide,
+  jumpBadge,
   registerRef,
   dragSourceProps,
   dropTargetProps,
@@ -93,6 +99,7 @@ export function ModuleTab({
         ) : null}
         <span className="truncate">{module.name}</span>
         <ModuleLifecycleChicklets moduleId={module.id} />
+        {jumpBadge ? <ModuleJumpBadge badge={jumpBadge} /> : null}
       </button>
       <button
         type="button"

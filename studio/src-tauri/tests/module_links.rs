@@ -64,6 +64,7 @@ async fn installation() -> (tempfile::TempDir, DatabaseConnection) {
                 state_revision bigint NOT NULL, name varchar(512) NOT NULL,
                 sequence_id integer NOT NULL, is_archived bool NOT NULL,
                 rank varchar(64) NOT NULL, description text NOT NULL,
+                workspace_tab_order text NOT NULL,
                 created_at datetime NOT NULL, updated_at datetime NOT NULL
             );
             INSERT INTO worktracker_project VALUES
@@ -76,11 +77,11 @@ async fn installation() -> (tempfile::TempDir, DatabaseConnection) {
                  CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
             INSERT INTO worktracker_issue VALUES
                 ('{STUDIO}', '{PROJECT}', 'module', '{MODULE_TYPE}', NULL, NULL, NULL,
-                 1, 'Studio', 1, 0, 'a', '', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+                 1, 'Studio', 1, 0, 'a', '', '[]', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
                 ('{SERVICE}', '{PROJECT}', 'module', '{MODULE_TYPE}', NULL, NULL, NULL,
-                 1, 'Service', 2, 0, 'b', '', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+                 1, 'Service', 2, 0, 'b', '', '[]', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
                 ('{TASK}', '{PROJECT}', 'task', '{TASK_TYPE}', NULL, '{STUDIO}', NULL,
-                 1, 'A task', 3, 0, 'c', '', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+                 1, 'A task', 3, 0, 'c', '', '[]', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
             "#
         ))
         .await
@@ -163,7 +164,11 @@ async fn an_import_creates_one_row_per_supported_legacy_link() {
         .iter()
         .all(|link| link.status == LinkStatus::Imported));
     assert_eq!(
-        outcome.receipt.source.as_ref().map(|source| source.name.as_str()),
+        outcome
+            .receipt
+            .source
+            .as_ref()
+            .map(|source| source.name.as_str()),
         Some("profiles.json")
     );
     // The legacy source is still exactly where it was.
@@ -209,7 +214,13 @@ async fn one_module_can_hold_only_one_link() {
 async fn the_write_boundary_refuses_a_path_no_row_may_hold() {
     let (directory, database) = installation().await;
     let store = ModuleLinkStore::new(database.clone());
-    for candidate in ["", " ", "relative/path", " /repos/ticketry", "/repos/../elsewhere"] {
+    for candidate in [
+        "",
+        " ",
+        "relative/path",
+        " /repos/ticketry",
+        "/repos/../elsewhere",
+    ] {
         let refused = store.set(STUDIO, candidate).await;
         assert_eq!(
             refused.err().map(|error| error.code()),
@@ -474,7 +485,11 @@ async fn an_import_reads_the_preserved_snapshot_when_the_live_file_is_gone() {
         .expect("import from the preserved snapshot");
 
     assert_eq!(
-        outcome.receipt.source.as_ref().map(|source| source.name.as_str()),
+        outcome
+            .receipt
+            .source
+            .as_ref()
+            .map(|source| source.name.as_str()),
         Some(legacy_source::PRESERVED_PROFILES[0])
     );
     assert_eq!(
@@ -583,7 +598,11 @@ async fn the_installed_schema_is_the_one_the_ownership_manifest_declares() {
             .collect::<BTreeSet<_>>();
         assert_eq!(
             installed,
-            columns.iter().copied().map(str::to_owned).collect::<BTreeSet<_>>(),
+            columns
+                .iter()
+                .copied()
+                .map(str::to_owned)
+                .collect::<BTreeSet<_>>(),
             "{table} does not match its manifest",
         );
     }
@@ -627,7 +646,10 @@ fn no_supported_django_generation_or_postgresql_staging_schema_carries_these_tab
 fn no_importer_reaches_a_database_its_caller_did_not_name() {
     let mut sources = Vec::new();
     collect_rust_sources(&crate_root().join("src/module_links"), &mut sources);
-    assert!(sources.len() >= 8, "the capability's sources were not found");
+    assert!(
+        sources.len() >= 8,
+        "the capability's sources were not found"
+    );
 
     for path in sources {
         let source = std::fs::read_to_string(&path).expect("read a capability source");
@@ -694,8 +716,7 @@ async fn contract_sdl() -> String {
     let mut builder = Builder::new(context, database);
     builder.mutation = Object::new("Mutation");
     builder.schema = Schema::build("Query", Some("Mutation"), None);
-    let mut builder =
-        muxed_studio_lib::entities::work_management::register_entity_modules(builder);
+    let mut builder = muxed_studio_lib::entities::work_management::register_entity_modules(builder);
     // The Work Item graph names Agent Runs, so the read graph only closes once
     // that entity is registered alongside it.
     seaography::register_entity!(builder, agent_run, mutation: false);
@@ -704,6 +725,195 @@ async fn contract_sdl() -> String {
         .finish()
         .expect("build the Module Link contract")
         .sdl()
+}
+
+async fn executable_contract(
+    database: DatabaseConnection,
+    writable: bool,
+) -> seaography::async_graphql::dynamic::Schema {
+    use muxed_studio_lib::entities::runs::agent_run;
+    use seaography::{
+        async_graphql::dynamic::{Object, Schema},
+        Builder, BuilderContext,
+    };
+
+    let context = Box::leak(Box::new(BuilderContext::default()));
+    let mut builder = Builder::new(context, database.clone());
+    builder.mutation = Object::new("Mutation");
+    builder.schema = Schema::build("Query", Some("Mutation"), None);
+    let mut builder = muxed_studio_lib::entities::work_management::register_entity_modules(builder);
+    seaography::register_entity!(builder, agent_run, mutation: false);
+    let builder = muxed_studio_lib::module_links::register_graphql(builder);
+    let mut schema = builder.schema_builder().data(database.clone());
+    if writable {
+        schema =
+            schema.data(muxed_studio_lib::work_management::commands::CommandDatabase(database));
+    }
+    schema
+        .finish()
+        .expect("build the executable Module Link contract")
+}
+
+async fn execute_contract(
+    schema: &seaography::async_graphql::dynamic::Schema,
+    query: &str,
+    variables: serde_json::Value,
+) -> serde_json::Value {
+    use seaography::async_graphql::{Request, Variables};
+
+    serde_json::to_value(
+        schema
+            .execute(Request::new(query).variables(Variables::from_json(variables)))
+            .await,
+    )
+    .expect("encode the Module Link GraphQL response")
+}
+
+async fn stored_link(
+    database: &DatabaseConnection,
+    module_id: &str,
+) -> Option<(
+    String,
+    String,
+    sea_orm::prelude::DateTime,
+    sea_orm::prelude::DateTime,
+)> {
+    database
+        .query_one_raw(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
+            "SELECT id, path, created_at, updated_at FROM module_links WHERE module_id = ?"
+                .to_owned(),
+            [module_id.into()],
+        ))
+        .await
+        .expect("read the stored Module Link")
+        .map(|row| {
+            (
+                row.try_get("", "id").expect("link id"),
+                row.try_get("", "path").expect("link path"),
+                row.try_get("", "created_at").expect("created timestamp"),
+                row.try_get("", "updated_at").expect("updated timestamp"),
+            )
+        })
+}
+
+const SET_LINK: &str = r#"
+    mutation SetModuleLink($moduleId: String!, $path: String!) {
+      set_module_link(module_id: $moduleId, link: { path: $path }) {
+        id
+        moduleId
+        path
+        createdAt
+        updatedAt
+      }
+    }
+"#;
+
+#[tokio::test]
+async fn set_view_derives_server_fields_and_returns_the_persisted_row() {
+    let (directory, database) = installation().await;
+    let first_folder = directory.path().join("first");
+    let second_folder = directory.path().join("second");
+    std::fs::create_dir(&first_folder).expect("create the first linked folder");
+    std::fs::create_dir(&second_folder).expect("create the second linked folder");
+    let schema = executable_contract(database.clone(), true).await;
+
+    let first = execute_contract(
+        &schema,
+        SET_LINK,
+        serde_json::json!({"moduleId": STUDIO, "path": first_folder}),
+    )
+    .await;
+    assert!(first.get("errors").is_none(), "{first:#}");
+    let first_result = &first["data"]["set_module_link"];
+    let first_stored = stored_link(&database, STUDIO)
+        .await
+        .expect("stored first link");
+    assert_eq!(first_result["id"], identity::link_id_for_module(STUDIO));
+    assert_eq!(first_result["moduleId"], STUDIO);
+    assert_eq!(first_result["path"], first_stored.1);
+    assert_eq!(first_result["id"], first_stored.0);
+
+    tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+    let second = execute_contract(
+        &schema,
+        SET_LINK,
+        serde_json::json!({"moduleId": STUDIO, "path": second_folder}),
+    )
+    .await;
+    assert!(second.get("errors").is_none(), "{second:#}");
+    let second_result = &second["data"]["set_module_link"];
+    let second_stored = stored_link(&database, STUDIO)
+        .await
+        .expect("stored second link");
+    assert_eq!(second_result["id"], first_result["id"]);
+    assert_eq!(second_result["createdAt"], first_result["createdAt"]);
+    assert_ne!(second_result["updatedAt"], first_result["updatedAt"]);
+    assert_eq!(second_result["path"], second_stored.1);
+    assert_eq!(second_stored.0, first_stored.0);
+    assert_eq!(second_stored.2, first_stored.2);
+    assert!(second_stored.3 > first_stored.3);
+}
+
+#[tokio::test]
+async fn set_view_preserves_folder_module_and_ownership_errors() {
+    let (directory, database) = installation().await;
+    let schema = executable_contract(database.clone(), true).await;
+    let missing = directory.path().join("missing");
+    let invalid_folder = execute_contract(
+        &schema,
+        SET_LINK,
+        serde_json::json!({"moduleId": STUDIO, "path": missing}),
+    )
+    .await;
+    assert_eq!(
+        invalid_folder["errors"][0]["extensions"]["code"],
+        "module_link_folder_invalid"
+    );
+
+    let unknown_module = execute_contract(
+        &schema,
+        SET_LINK,
+        serde_json::json!({"moduleId": ABSENT_MODULE, "path": directory.path()}),
+    )
+    .await;
+    assert_eq!(
+        unknown_module["errors"][0]["extensions"]["code"],
+        "module_link_module_unknown"
+    );
+
+    let unavailable_schema = executable_contract(database, false).await;
+    let unavailable = execute_contract(
+        &unavailable_schema,
+        SET_LINK,
+        serde_json::json!({"moduleId": STUDIO, "path": directory.path()}),
+    )
+    .await;
+    assert_eq!(
+        unavailable["errors"][0]["extensions"]["code"],
+        "module_link_write_unavailable"
+    );
+}
+
+#[tokio::test]
+async fn clear_view_reports_presence_and_is_idempotent() {
+    let (directory, database) = installation().await;
+    ModuleLinkStore::new(database.clone())
+        .set(STUDIO, "/repos/studio")
+        .await
+        .expect("seed one Module Link");
+    let schema = executable_contract(database.clone(), true).await;
+    let clear = r#"mutation ClearModuleLink($moduleId: String!) {
+        clear_module_link(module_id: $moduleId)
+    }"#;
+
+    let removed = execute_contract(&schema, clear, serde_json::json!({"moduleId": STUDIO})).await;
+    let repeated = execute_contract(&schema, clear, serde_json::json!({"moduleId": STUDIO})).await;
+
+    assert_eq!(removed["data"]["clear_module_link"], true);
+    assert_eq!(repeated["data"]["clear_module_link"], false);
+    assert!(stored_link(&database, STUDIO).await.is_none());
+    drop(directory);
 }
 
 #[tokio::test]
@@ -738,7 +948,10 @@ async fn every_public_write_binds_its_module_and_allowlists_only_the_path() {
         sdl.contains("set_module_link(module_id: String!, link: ModuleLinkPathInput!)"),
         "{sdl}"
     );
-    assert!(sdl.contains("clear_module_link(module_id: String!)"), "{sdl}");
+    assert!(
+        sdl.contains("clear_module_link(module_id: String!)"),
+        "{sdl}"
+    );
 
     let input = sdl
         .split("input ModuleLinkPathInput {")

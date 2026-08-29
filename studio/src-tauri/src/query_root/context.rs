@@ -14,6 +14,29 @@ use crate::entities::worktrees::worktree;
 pub(super) fn builder_context() -> BuilderContext {
     let mut context = BuilderContext::default();
 
+    let default_entity_type_name = std::mem::replace(
+        &mut context.entity_object.type_name,
+        Box::new(|_| unreachable!("the default entity type namer was replaced")),
+    );
+    context.entity_object.type_name = Box::new(move |entity_name| {
+        if entity_name == "app_settings" {
+            "KeybindingSetting".to_owned()
+        } else {
+            default_entity_type_name(entity_name)
+        }
+    });
+    let default_column_name = std::mem::replace(
+        &mut context.entity_object.column_name,
+        Box::new(|_, _| unreachable!("the default column namer was replaced")),
+    );
+    context.entity_object.column_name = Box::new(move |entity_name, column_name| {
+        if entity_name == "KeybindingSetting" {
+            column_name.to_owned()
+        } else {
+            default_column_name(entity_name, column_name)
+        }
+    });
+
     add_uuid_columns::<entities::project::Entity>(
         &mut context,
         [entities::project::Column::Id],
@@ -119,6 +142,7 @@ pub(super) fn builder_context() -> BuilderContext {
             crate::entities::execution::graph_run::Column::ProjectId,
         ],
     );
+    add_app_setting_value_column(&mut context);
     // Derived, Git-owned, and server-owned Worktree columns are never part of
     // a generated input, whatever the entity's mutation registration is.
     crate::worktree::persistence::column_policy::apply(&mut context);
@@ -136,6 +160,32 @@ pub(super) fn builder_context() -> BuilderContext {
     );
 
     context
+}
+
+fn add_app_setting_value_column(context: &mut BuilderContext) {
+    use crate::entities::settings::app_settings;
+
+    let mut options = ColumnOptions::default();
+    options.output_type = Some(seaography::async_graphql::dynamic::TypeRef::named_nn(
+        context.types.json_type.clone(),
+    ));
+    options.output_conversion = Some(Arc::new(|value| match value {
+        sea_orm::Value::String(Some(value)) => {
+            let value = serde_json::from_str(value)
+                .map_err(|error| seaography::async_graphql::Error::new(error.to_string()))?;
+            let value = seaography::async_graphql::Value::from_json(value)
+                .map_err(|error| seaography::async_graphql::Error::new(error.to_string()))?;
+            Ok(Some(FieldValue::value(value)))
+        }
+        sea_orm::Value::String(None) => Ok(None),
+        value => Err(seaography::async_graphql::Error::new(format!(
+            "expected a JSON string column, received {value:?}"
+        ))),
+    }));
+    context.types.column_options.insert(
+        EntityColumnId::of::<app_settings::Entity>(&app_settings::Column::Value),
+        options,
+    );
 }
 
 fn add_uuid_columns<T>(context: &mut BuilderContext, columns: impl IntoIterator<Item = T::Column>)

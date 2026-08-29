@@ -80,6 +80,10 @@ impl AppSettingRepository {
         })
     }
 
+    pub(crate) fn database(&self) -> DatabaseConnection {
+        self.database.clone()
+    }
+
     pub async fn get(
         &self,
         scope: &SettingScope,

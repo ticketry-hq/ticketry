@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 
-import { useStudioStore } from "../projects/store";
+import { useStudioStore } from "../projects";
 import { useClientStore } from "../../state/clientStore";
 import {
   getModulePresentationsSnapshot,

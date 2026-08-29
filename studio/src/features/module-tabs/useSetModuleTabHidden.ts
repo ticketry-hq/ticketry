@@ -1,7 +1,6 @@
 import { useCallback } from "react";
 
-import { setModuleTabHidden } from "../projects/modulePresentationTransport";
-import { useStudioStore } from "../projects/store";
+import { setModuleTabHidden, useStudioStore } from "../projects";
 import { apiErrorMessage } from "../../shared/api/errors";
 import { toast } from "../../state/clientStore";
 

@@ -2,14 +2,14 @@ import { skipToken, useQuery } from "@apollo/client/react";
 
 import {
   WorkTrackerProjectOpenDocument,
-} from "../projects/generated/projects.documents";
+  getModulesSnapshot,
+} from "../projects";
 import {
   compactWorktrackerId,
   publicWorktrackerId,
 } from "../../shared/api/generatedWorktracker";
 import type { Module, ModulePresentation } from "../../shared/api/types";
 import { studioApolloClient } from "../../shared/apollo/client";
-import { getModulesSnapshot } from "../projects/queries";
 
 function presentationsFromRows(
   rows: ReadonlyArray<{

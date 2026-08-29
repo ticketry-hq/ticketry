@@ -1,6 +1,6 @@
 use seaography::Builder;
 
-use super::generated_mutations::{register_generated_mutations, GeneratedMutations};
+use super::migration_probe;
 use crate::entities::foundation::migration_probes;
 
 /// Register entities owned by the isolated GraphQL foundation database.
@@ -18,9 +18,5 @@ use crate::entities::foundation::migration_probes;
 /// create-one through the shipping transport.
 pub(crate) fn register_entity_modules(mut builder: Builder) -> Builder {
     seaography::register_entity!(builder, migration_probes, mutation: false);
-    register_generated_mutations::<migration_probes::Entity, migration_probes::ActiveModel>(
-        &mut builder,
-        GeneratedMutations::CREATE_ONE,
-    );
-    builder
+    migration_probe::register_views(builder)
 }

@@ -98,7 +98,6 @@ const moduleData = {
         __typename: "WorktrackerProject" as const,
         id: "project-1",
         slug: "T",
-        manual_module_order: false,
       },
     }],
   },

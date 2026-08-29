@@ -98,7 +98,6 @@ pub async fn create_project(
         description: Set(input.description.unwrap_or_default()),
         seq_counter: Set(0),
         state_revision: Set(0),
-        manual_module_order: Set(false),
         created_at: Set(now),
         updated_at: Set(now),
         // A project created from inside a running Studio has no first-run

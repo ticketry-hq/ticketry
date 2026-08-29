@@ -465,7 +465,7 @@ class BoundaryFixture implements StudioFixture {
       is_archived: false,
       issue_type: "module",
       rank: String(index),
-      project: { __typename: "WorktrackerProject", id: this.projectId(), slug: "T", manual_module_order: false },
+      project: { __typename: "WorktrackerProject", id: this.projectId(), slug: "T" },
     }));
     const providerCatalog = {
       __typename: "WorktrackerProviderCatalog",
@@ -494,9 +494,13 @@ class BoundaryFixture implements StudioFixture {
         project: { __typename: "WorktrackerProjectConnection", nodes: [{
           __typename: "WorktrackerProject",
           id: this.projectId(), name: "Project", slug: "project", description: "",
-          manual_module_order: false, created_at: createdAt,
+          created_at: createdAt,
         }] },
         modules: { __typename: "WorktrackerIssueConnection", nodes: moduleRows() },
+        module_presentations: {
+          __typename: "WorktrackerModulepresentationConnection",
+          nodes: [],
+        },
         states: { __typename: "WorktrackerStateConnection", nodes: stateRows() },
         issue_types: { __typename: "WorktrackerIssuetypeConnection", nodes: issueTypeRows() },
         provider_catalog: providerCatalog,
@@ -509,10 +513,16 @@ class BoundaryFixture implements StudioFixture {
       return { issue_types: { __typename: "WorktrackerIssuetypeConnection", nodes: issueTypeRows() } } as TResult;
     }
     if (documentOperationName(document) === "WorkTrackerProjects") {
-      return { projects: { __typename: "WorktrackerProjectConnection", nodes: [{
-        __typename: "WorktrackerProject", id: this.projectId(), name: "Project",
-        slug: "project", description: "", manual_module_order: false, created_at: createdAt,
-      }] } } as TResult;
+      return {
+        projects: { __typename: "WorktrackerProjectConnection", nodes: [{
+          __typename: "WorktrackerProject", id: this.projectId(), name: "Project",
+          slug: "project", description: "", created_at: createdAt,
+        }] },
+        module_presentations: {
+          __typename: "WorktrackerModulepresentationConnection",
+          nodes: [],
+        },
+      } as TResult;
     }
     if (documentOperationName(document) === "LoadProviderCatalog") {
       return { provider_catalog: providerCatalog } as TResult;
@@ -727,7 +737,6 @@ class BoundaryFixture implements StudioFixture {
           id: this.projectId(),
           name: "Project",
           slug: "project",
-          manual_module_order: false,
         },
       ]);
     }

@@ -65,8 +65,8 @@ Ticketry's Rust GraphQL surface is migration-first and generated-contract-first:
   model CRUD may be a named domain operation. Record every exception and its
   reason in the route/operation registry; keep that registry exactly equal to
   the live GraphQL mutation surface. The current exceptions are work-item
-  reorder, state reorder, issue-type reorder, remove-state-from-workflow, and
-  onboarding acknowledgement.
+  reorder, module-presentation reorder, state reorder, issue-type reorder,
+  remove-state-from-workflow, and onboarding acknowledgement.
 - **Require evidence for deviations.** Stop before adding replacement CRUD,
   per-field/per-relationship RPCs, a DAO or repository that mirrors SeaORM,
   mirrored DTOs, `mutation: false`, or generated-file patches. Record the exact

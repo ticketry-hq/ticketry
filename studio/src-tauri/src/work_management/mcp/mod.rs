@@ -102,8 +102,10 @@ impl McpRuntime {
             .map_err(|error| format!("could not inspect WorkTracker MCP listener: {error}"))?;
         let cancellation = CancellationToken::new();
         let ingress_database = database.clone();
-        let launch_paths_state =
-            launch_paths::LaunchPathsIngressState::new(database.clone(), ingress_credential.clone());
+        let launch_paths_state = launch_paths::LaunchPathsIngressState::new(
+            database.clone(),
+            ingress_credential.clone(),
+        );
         let integrations = worktree_integrations::compose(&database).await;
         let launch_policy =
             crate::work_management::launch_policy::LaunchPolicyResolver::new(database.clone());

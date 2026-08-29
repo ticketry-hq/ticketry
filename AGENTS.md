@@ -36,8 +36,9 @@ enter through the restricted WorkItem update contract; hierarchy, dependency,
 transition, and revision code remains internal and transactional. Only behavior
 that cannot be represented as model CRUD may become a named domain operation,
 and it must be recorded in the route/operation registry with the reason. The
-current exceptions are work-item reorder, state reorder, issue-type reorder,
-remove-state-from-workflow, and onboarding acknowledgement. Do not add
+current exceptions are work-item reorder, module-presentation reorder, state
+reorder, issue-type reorder, remove-state-from-workflow, and onboarding
+acknowledgement. Do not add
 replacement CRUD, DAO/repository layers that mirror SeaORM, mirrored DTOs,
 `mutation: false`, or generated-file patches without a written exception that
 identifies the missing behavior, rejected framework/database facilities, the

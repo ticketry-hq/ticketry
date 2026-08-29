@@ -583,6 +583,7 @@ export type Mutation = {
   refresh_task_document_registry: Array<DesignDocuments>;
   remove_state_from_issue_type_workflow: Scalars['Boolean']['output'];
   reorder_issue_types: Array<WorktrackerIssuetype>;
+  reorder_module_presentation: WorktrackerModulepresentation;
   reorder_states: Array<WorktrackerState>;
   reorder_work_item: WorktrackerIssue;
   retry_automation_attempt: AutomationAttemptProjection;
@@ -595,6 +596,7 @@ export type Mutation = {
   update_issue_type: WorktrackerIssuetype;
   update_issue_type_transition: WorktrackerIssuetypetransition;
   update_keybinding_setting: KeybindingSetting;
+  update_module_presentation: WorktrackerModulepresentation;
   update_project: WorktrackerProject;
   update_provider_catalog: ProviderCatalog;
   update_state: WorktrackerState;
@@ -754,6 +756,14 @@ export type MutationReorder_Issue_TypesArgs = {
 };
 
 
+export type MutationReorder_Module_PresentationArgs = {
+  after_id?: InputMaybe<Scalars['String']['input']>;
+  before_id?: InputMaybe<Scalars['String']['input']>;
+  initial_order_ids?: InputMaybe<Array<Scalars['String']['input']>>;
+  module_id: Scalars['String']['input'];
+};
+
+
 export type MutationReorder_StatesArgs = {
   ordered_ids: Array<Scalars['String']['input']>;
   project_id: Scalars['String']['input'];
@@ -848,6 +858,12 @@ export type MutationUpdate_Issue_Type_TransitionArgs = {
 
 export type MutationUpdate_Keybinding_SettingArgs = {
   value: Scalars['Json']['input'];
+};
+
+
+export type MutationUpdate_Module_PresentationArgs = {
+  module_id: Scalars['String']['input'];
+  tab_hidden: Scalars['Boolean']['input'];
 };
 
 
@@ -991,6 +1007,7 @@ export type Query = {
   worktrackerIssuetype: WorktrackerIssuetypeConnection;
   worktrackerIssuetypetransition: WorktrackerIssuetypetransitionConnection;
   worktrackerLaunchbinding: WorktrackerLaunchbindingConnection;
+  worktrackerModulepresentation: WorktrackerModulepresentationConnection;
   worktrackerProject: WorktrackerProjectConnection;
   worktrackerProvider: WorktrackerProviderConnection;
   worktrackerReasoninglevel: WorktrackerReasoninglevelConnection;
@@ -1140,6 +1157,14 @@ export type QueryWorktrackerLaunchbindingArgs = {
   filters?: InputMaybe<WorktrackerLaunchbindingFilterInput>;
   having?: InputMaybe<WorktrackerLaunchbindingHavingInput>;
   orderBy?: InputMaybe<WorktrackerLaunchbindingOrderInput>;
+  pagination?: InputMaybe<PaginationInput>;
+};
+
+
+export type QueryWorktrackerModulepresentationArgs = {
+  filters?: InputMaybe<WorktrackerModulepresentationFilterInput>;
+  having?: InputMaybe<WorktrackerModulepresentationHavingInput>;
+  orderBy?: InputMaybe<WorktrackerModulepresentationOrderInput>;
   pagination?: InputMaybe<PaginationInput>;
 };
 
@@ -1483,6 +1508,7 @@ export type WorktrackerIssue = {
   name: Scalars['String']['output'];
   parent?: Maybe<WorktrackerIssue>;
   parentId?: Maybe<Scalars['String']['output']>;
+  presentation: WorktrackerModulepresentationConnection;
   project?: Maybe<WorktrackerProject>;
   projectId: Scalars['String']['output'];
   rank: Scalars['String']['output'];
@@ -1534,6 +1560,13 @@ export type WorktrackerIssueChildrenArgs = {
 export type WorktrackerIssueModuleMembersArgs = {
   filters?: InputMaybe<WorktrackerIssueFilterInput>;
   orderBy?: InputMaybe<WorktrackerIssueOrderInput>;
+  pagination?: InputMaybe<PaginationInput>;
+};
+
+
+export type WorktrackerIssuePresentationArgs = {
+  filters?: InputMaybe<WorktrackerModulepresentationFilterInput>;
+  orderBy?: InputMaybe<WorktrackerModulepresentationOrderInput>;
   pagination?: InputMaybe<PaginationInput>;
 };
 
@@ -1626,6 +1659,7 @@ export type WorktrackerIssueHavingInput = {
   module?: InputMaybe<WorktrackerIssueFilterInput>;
   moduleMembers?: InputMaybe<WorktrackerIssueFilterInput>;
   parent?: InputMaybe<WorktrackerIssueFilterInput>;
+  presentation?: InputMaybe<WorktrackerModulepresentationFilterInput>;
   project?: InputMaybe<WorktrackerProjectFilterInput>;
   state?: InputMaybe<WorktrackerStateFilterInput>;
 };
@@ -1887,6 +1921,47 @@ export type WorktrackerLaunchbindingOrderInput = {
   updatedAt?: InputMaybe<OrderByEnum>;
 };
 
+export type WorktrackerModulepresentation = {
+  __typename?: 'WorktrackerModulepresentation';
+  module?: Maybe<WorktrackerIssue>;
+  moduleId: Scalars['String']['output'];
+  rank: Scalars['String']['output'];
+  tabHidden: Scalars['Boolean']['output'];
+};
+
+export type WorktrackerModulepresentationConnection = {
+  __typename?: 'WorktrackerModulepresentationConnection';
+  edges: Array<WorktrackerModulepresentationEdge>;
+  nodes: Array<WorktrackerModulepresentation>;
+  pageInfo: PageInfo;
+  paginationInfo?: Maybe<PaginationInfo>;
+};
+
+export type WorktrackerModulepresentationEdge = {
+  __typename?: 'WorktrackerModulepresentationEdge';
+  cursor: Scalars['String']['output'];
+  node: WorktrackerModulepresentation;
+};
+
+export type WorktrackerModulepresentationFilterInput = {
+  and?: InputMaybe<Array<WorktrackerModulepresentationFilterInput>>;
+  moduleId?: InputMaybe<StringFilterInput>;
+  not?: InputMaybe<WorktrackerModulepresentationFilterInput>;
+  or?: InputMaybe<Array<WorktrackerModulepresentationFilterInput>>;
+  rank?: InputMaybe<StringFilterInput>;
+  tabHidden?: InputMaybe<BooleanFilterInput>;
+};
+
+export type WorktrackerModulepresentationHavingInput = {
+  module?: InputMaybe<WorktrackerIssueFilterInput>;
+};
+
+export type WorktrackerModulepresentationOrderInput = {
+  moduleId?: InputMaybe<OrderByEnum>;
+  rank?: InputMaybe<OrderByEnum>;
+  tabHidden?: InputMaybe<OrderByEnum>;
+};
+
 export type WorktrackerProject = {
   __typename?: 'WorktrackerProject';
   createdAt: Scalars['String']['output'];
@@ -1894,7 +1969,6 @@ export type WorktrackerProject = {
   id: Scalars['String']['output'];
   issue: WorktrackerIssueConnection;
   issueType: WorktrackerIssuetypeConnection;
-  manualModuleOrder: Scalars['Boolean']['output'];
   name: Scalars['String']['output'];
   onboardingRequired: Scalars['Boolean']['output'];
   seqCounter: Scalars['Int']['output'];
@@ -1944,7 +2018,6 @@ export type WorktrackerProjectFilterInput = {
   createdAt?: InputMaybe<TextFilterInput>;
   description?: InputMaybe<StringFilterInput>;
   id?: InputMaybe<StringFilterInput>;
-  manualModuleOrder?: InputMaybe<BooleanFilterInput>;
   name?: InputMaybe<StringFilterInput>;
   not?: InputMaybe<WorktrackerProjectFilterInput>;
   onboardingRequired?: InputMaybe<BooleanFilterInput>;
@@ -1965,7 +2038,6 @@ export type WorktrackerProjectOrderInput = {
   createdAt?: InputMaybe<OrderByEnum>;
   description?: InputMaybe<OrderByEnum>;
   id?: InputMaybe<OrderByEnum>;
-  manualModuleOrder?: InputMaybe<OrderByEnum>;
   name?: InputMaybe<OrderByEnum>;
   onboardingRequired?: InputMaybe<OrderByEnum>;
   seqCounter?: InputMaybe<OrderByEnum>;

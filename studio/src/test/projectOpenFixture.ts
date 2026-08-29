@@ -4,16 +4,17 @@ import { WorkTrackerModuleOpenDocument } from "../features/work-items/generated/
 import { studioApolloClient } from "../shared/apollo/client";
 
 export function projectOpenFixture(
-  project: Project,
+  project: Project & { readonly manual_module_order?: boolean },
   modules: Module[],
 ): ProjectOpenResult {
+  const { manual_module_order: manualModuleOrder = false, ...graphqlProject } = project;
   const projectRow = {
     __typename: "WorktrackerProject",
-    ...project,
+    ...graphqlProject,
     created_at: "2026-01-01T00:00:00Z",
   };
   return {
-    project,
+    project: graphqlProject,
     modules,
     data: {
       project: { __typename: "WorktrackerProjectConnection", nodes: [projectRow] },
@@ -32,9 +33,22 @@ export function projectOpenFixture(
             __typename: "WorktrackerProject",
             id: project.id,
             slug: project.slug,
-            manual_module_order: project.manual_module_order,
           },
         })),
+      },
+      module_presentations: {
+        __typename: "WorktrackerModulepresentationConnection",
+        nodes: manualModuleOrder ? modules.map((module, index) => ({
+          __typename: "WorktrackerModulepresentation",
+          module_id: module.id,
+          rank: String(index).padStart(8, "0"),
+          tab_hidden: false,
+          module: {
+            __typename: "WorktrackerIssue",
+            id: module.id,
+            project_id: project.id,
+          },
+        })) : [],
       },
       states: { __typename: "WorktrackerStateConnection", nodes: [] },
       issue_types: { __typename: "WorktrackerIssuetypeConnection", nodes: [] },
@@ -46,7 +60,7 @@ export function projectOpenFixture(
         reasoning_levels: [],
         global_default: null,
       },
-    } as ProjectOpenResult["data"],
+    } as unknown as ProjectOpenResult["data"],
   };
 }
 

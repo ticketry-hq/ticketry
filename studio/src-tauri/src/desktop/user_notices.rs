@@ -21,15 +21,13 @@ pub(crate) struct UserNotice {
     pub(crate) acknowledgement_label: String,
 }
 
-pub(crate) fn mcp_unavailable(message: &str, recovery: &str) -> UserNotice {
+pub(crate) fn mcp_unavailable() -> UserNotice {
     UserNotice {
         id: "mcp-unavailable".to_owned(),
         severity: UserNoticeSeverity::Warning,
-        title: "External MCP unavailable".to_owned(),
-        message: format!(
-            "Ticketry is running, but external MCP connections are unavailable: {message}. {recovery}"
-        ),
-        acknowledgement_label: "Continue without MCP".to_owned(),
+        title: "Agent launches unavailable".to_owned(),
+        message: "Ticketry could not start its MCP listener. Agent launches are blocked until this Ticketry instance owns an MCP listener. Local shells remain available. Restart Ticketry to retry.".to_owned(),
+        acknowledgement_label: "Understood".to_owned(),
     }
 }
 
@@ -39,14 +37,19 @@ mod tests {
     use crate::desktop::service_state::USER_NOTICE_EVENT;
 
     #[test]
-    fn mcp_bind_failure_notice_keeps_the_desktop_usable() {
-        let notice = mcp_unavailable(
-            "could not reserve a loopback port",
-            "Restart Ticketry to request another loopback endpoint.",
-        );
+    fn mcp_bind_failure_notice_describes_the_fail_closed_boundary() {
+        let notice = mcp_unavailable();
+
         assert_eq!(notice.id, "mcp-unavailable");
         assert_eq!(notice.severity, UserNoticeSeverity::Warning);
-        assert!(notice.message.contains("request another loopback endpoint"));
+        assert_eq!(notice.title, "Agent launches unavailable");
+        assert_eq!(
+            notice.message,
+            "Ticketry could not start its MCP listener. Agent launches are blocked until this Ticketry instance owns an MCP listener. Local shells remain available. Restart Ticketry to retry."
+        );
+        assert_eq!(notice.acknowledgement_label, "Understood");
+        assert!(!notice.message.contains("8123"));
+        assert!(!notice.message.contains("credential"));
     }
 
     #[test]

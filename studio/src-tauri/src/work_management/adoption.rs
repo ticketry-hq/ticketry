@@ -259,11 +259,20 @@ async fn schema_generation(
         table_exists(database, super::project_onboarding_migration::LEDGER_TABLE).await?;
     let workspace_tab_order =
         table_exists(database, super::workspace_tab_order_migration::LEDGER_TABLE).await?;
-    match (project_only, workspace_tab_order) {
-        (false, false) => Ok(SchemaGeneration::WorkspaceOwned),
-        (false, true) => Ok(SchemaGeneration::WorkspaceOwnedWithTabOrder),
-        (true, false) => Ok(SchemaGeneration::ProjectOnly),
-        (true, true) => Ok(SchemaGeneration::ProjectOnlyWithTabOrder),
+    let module_presentation =
+        table_exists(database, super::module_presentation_migration::LEDGER_TABLE).await?;
+    match (project_only, workspace_tab_order, module_presentation) {
+        (false, false, false) => Ok(SchemaGeneration::WorkspaceOwned),
+        (false, true, false) => Ok(SchemaGeneration::WorkspaceOwnedWithTabOrder),
+        (false, true, true) => {
+            Ok(SchemaGeneration::WorkspaceOwnedWithTabOrderAndModulePresentation)
+        }
+        (true, false, false) => Ok(SchemaGeneration::ProjectOnly),
+        (true, true, false) => Ok(SchemaGeneration::ProjectOnlyWithTabOrder),
+        (true, true, true) => Ok(SchemaGeneration::ProjectOnlyWithTabOrderAndModulePresentation),
+        _ => Err(AdoptionError::new(
+            "module-presentation migration ledger exists without workspace-tab ordering",
+        )),
     }
 }
 

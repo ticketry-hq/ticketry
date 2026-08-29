@@ -11,7 +11,6 @@ import {
   loadProjects,
   updateProjectRecord,
 } from "./queries";
-import { markModuleCreated } from "./internal/newlyCreatedModules";
 import { createWorkItem } from "../work-items";
 import type {
   Module,
@@ -159,10 +158,7 @@ export const useStudioStore = createApolloStore<StudioState>("studio", (set, get
       issue_type_id: moduleType.id,
       parent_id: null,
     });
-    // Recorded before the reload so the canonical order that reload produces
-    // already leads with the new module, in either ordering mode (#366).
-    markModuleCreated(projectId, created.id);
-    // Reload so both normal create and guided create preserve the same ordering.
+    // Reload so every surface adopts the server's canonical presentation order.
     await loadModules(projectId).catch(() => {});
     return created;
   },

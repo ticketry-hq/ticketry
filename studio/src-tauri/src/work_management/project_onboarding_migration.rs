@@ -149,9 +149,7 @@ pub async fn installation_project_id(
     for (rank, slug) in PREFERRED_PROJECT_SLUGS.iter().enumerate() {
         ranking = ranking.case(Expr::col(project::Column::Slug).eq(*slug), rank as i32);
     }
-    let ranking: Expr = ranking
-        .finally(PREFERRED_PROJECT_SLUGS.len() as i32)
-        .into();
+    let ranking: Expr = ranking.finally(PREFERRED_PROJECT_SLUGS.len() as i32).into();
 
     project::Entity::find()
         // Only the identity is selected, so this reads the same on the schema
@@ -283,7 +281,12 @@ async fn write_ledger(database: &impl ConnectionTrait) -> Result<(), DbErr> {
             Alias::new("migration_id").into_iden(),
             Alias::new("source_commit").into_iden(),
         ])
-        .values_panic([1.into(), VERSION.into(), MIGRATION_ID.into(), SOURCE_COMMIT.into()])
+        .values_panic([
+            1.into(),
+            VERSION.into(),
+            MIGRATION_ID.into(),
+            SOURCE_COMMIT.into(),
+        ])
         .to_owned();
     database.execute(&insert).await?;
     Ok(())

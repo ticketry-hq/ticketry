@@ -14,6 +14,18 @@ pub(super) async fn authoritative_work_item(
         .ok_or_else(authored_result_missing)
 }
 
+pub(super) async fn authoritative_module_presentation(
+    database: &sea_orm::DatabaseConnection,
+    module_id: &str,
+) -> Result<super::entities::module_presentation::Model> {
+    use sea_orm::EntityTrait;
+    super::entities::module_presentation::Entity::find_by_id(compact_uuid(module_id))
+        .one(database)
+        .await
+        .map_err(read_error)?
+        .ok_or_else(authored_result_missing)
+}
+
 pub(super) async fn authoritative_project(
     database: &sea_orm::DatabaseConnection,
     id: &str,

@@ -34,9 +34,13 @@ function catalog(subtreeRunEnabled: boolean, workflowRevision: number) {
     project: { __typename: "WorktrackerProjectConnection", nodes: [{
       __typename: "WorktrackerProject",
       id: "project-1", name: "Project", slug: "PROJECT", description: "",
-      manual_module_order: false, created_at: "",
+      created_at: "",
     }] },
     modules: { __typename: "WorktrackerIssueConnection", nodes: [] },
+    module_presentations: {
+      __typename: "WorktrackerModulepresentationConnection",
+      nodes: [],
+    },
     states: { __typename: "WorktrackerStateConnection", nodes: [{ __typename: "WorktrackerState", ...state }] },
     issue_types: { __typename: "WorktrackerIssuetypeConnection", nodes: [{
       __typename: "WorktrackerIssuetype",

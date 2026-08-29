@@ -6,6 +6,7 @@ mod error;
 mod fractional_rank;
 pub mod hierarchy;
 mod identifiers;
+pub mod module_presentation;
 pub mod reorder;
 mod review_findings;
 pub(crate) mod reviewed_defaults;

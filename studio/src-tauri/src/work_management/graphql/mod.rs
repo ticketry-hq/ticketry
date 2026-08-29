@@ -1,5 +1,7 @@
 mod catalog;
 mod issue_type_contract;
+mod module_presentations;
+mod operation_registry;
 mod patch_input;
 mod support;
 mod work_items;
@@ -16,7 +18,9 @@ pub(crate) fn register_generated_mutations(builder: seaography::Builder) -> seao
 }
 
 pub(crate) fn register(mut builder: seaography::Builder) -> seaography::Builder {
+    operation_registry::assert_complete();
     builder.register_custom_mutation::<catalog::CatalogMutations>();
+    builder.register_custom_mutation::<module_presentations::ModulePresentationMutations>();
     builder.register_custom_mutation::<work_items::WorkItemMutations>();
     builder.register_custom_mutation::<workflow_configuration::WorkflowConfigurationMutations>();
     builder

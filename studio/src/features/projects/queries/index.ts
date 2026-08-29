@@ -13,9 +13,6 @@ import {
   deleteProject as removeProject,
   updateProject as writeProjectUpdate,
 } from "../mutationTransport";
-import { applyCanonicalModuleOrder } from "../utilities/canonicalModuleOrder";
-import { forgetAcceptedManualModuleOrder } from "../internal/acceptedManualModuleOrder";
-import { forgetNewlyCreatedModules } from "../internal/newlyCreatedModules";
 import {
   modulesFromProjectOpen,
   projectsFromResult,
@@ -27,13 +24,12 @@ import {
 const EMPTY_PROJECTS: Project[] = [];
 const EMPTY_MODULES: Module[] = [];
 
-function canonicalModules(projectId: string, data: {
-  project: { nodes: Array<{ manual_module_order: boolean }> };
-  modules: Parameters<typeof modulesFromProjectOpen>[0]["modules"];
-}): Module[] {
-  const modules = modulesFromProjectOpen(data as Parameters<typeof modulesFromProjectOpen>[0]);
-  // The consolidated query is already ordered by the server. Automatic
-  // activity ordering is applied by the asynchronous open path below.
+function canonicalModules(
+  projectId: string,
+  data: Parameters<typeof modulesFromProjectOpen>[0],
+): Module[] {
+  const modules = modulesFromProjectOpen(data);
+  // The adapter joins ModulePresentation ranks onto the generated module read.
   void projectId;
   return modules;
 }
@@ -69,11 +65,7 @@ export async function loadModules(
     variables: { projectId: compactWorktrackerId(projectId) },
     data: opened.data,
   });
-  const ordered = await applyCanonicalModuleOrder(
-    projectId,
-    opened.modules,
-    opened.project.manual_module_order,
-  );
+  const ordered = opened.modules;
   seedModules(projectId, ordered);
   return ordered;
 }
@@ -180,8 +172,6 @@ export async function deleteProjectRecord(id: string): Promise<void> {
   });
   studioApolloClient().cache.gc();
   seedProjects(getProjectsSnapshot().filter((project) => project.id !== id));
-  forgetAcceptedManualModuleOrder(id);
-  forgetNewlyCreatedModules(id);
 }
 
 export function seedProjects(projects: Project[]): void {
@@ -196,7 +186,6 @@ export function seedProjects(projects: Project[]): void {
           name: project.name,
           slug: project.slug,
           description: project.description,
-          manual_module_order: project.manual_module_order ?? false,
           created_at: new Date(index).toISOString(),
         })),
       },
@@ -231,7 +220,6 @@ export function seedModules(projectId: string, modules: Module[]): void {
             __typename: "WorktrackerProject" as const,
             id: compactWorktrackerId(projectId),
             slug: current.project.nodes[0]?.slug ?? module.key.split("-")[0] ?? "",
-            manual_module_order: current.project.nodes[0]?.manual_module_order ?? false,
           },
         })),
       },

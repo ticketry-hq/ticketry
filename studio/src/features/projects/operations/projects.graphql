@@ -69,7 +69,6 @@ query WorkTrackerProjects {
       name
       slug
       description
-      manual_module_order: manualModuleOrder
       created_at: createdAt
     }
   }
@@ -82,7 +81,6 @@ query WorkTrackerProjectOpen($projectId: String!) {
       name
       slug
       description
-      manual_module_order: manualModuleOrder
       created_at: createdAt
     }
   }
@@ -102,7 +100,15 @@ query WorkTrackerProjectOpen($projectId: String!) {
       is_archived: isArchived
       issue_type: issueTypeId
       rank
-      project { id slug manual_module_order: manualModuleOrder }
+      project { id slug }
+    }
+  }
+  module_presentations: worktrackerModulepresentation {
+    nodes {
+      module_id: moduleId
+      rank
+      tab_hidden: tabHidden
+      module { id project_id: projectId }
     }
   }
   states: worktrackerState(
@@ -166,7 +172,6 @@ mutation CreateWorkTrackerProject($name: String!, $slug: String!, $description: 
     name
     slug
     description
-    manual_module_order: manualModuleOrder
   }
 }
 
@@ -176,10 +181,37 @@ mutation UpdateWorkTrackerProject($id: String!, $name: String, $description: Str
     name
     slug
     description
-    manual_module_order: manualModuleOrder
   }
 }
 
 mutation DeleteWorkTrackerProject($id: String!) {
   delete_project(id: $id)
+}
+
+mutation ReorderWorkTrackerModulePresentation(
+  $moduleId: String!
+  $beforeId: String
+  $afterId: String
+  $initialOrderIds: [String!]
+) {
+  reorder_module_presentation(
+    module_id: $moduleId
+    before_id: $beforeId
+    after_id: $afterId
+    initial_order_ids: $initialOrderIds
+  ) {
+    __typename
+    module_id: moduleId
+    rank
+    tab_hidden: tabHidden
+  }
+}
+
+mutation UpdateWorkTrackerModulePresentation($moduleId: String!, $tabHidden: Boolean!) {
+  update_module_presentation(module_id: $moduleId, tab_hidden: $tabHidden) {
+    __typename
+    module_id: moduleId
+    rank
+    tab_hidden: tabHidden
+  }
 }

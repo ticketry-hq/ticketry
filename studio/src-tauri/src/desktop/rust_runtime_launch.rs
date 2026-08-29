@@ -7,7 +7,7 @@ use tauri::Manager;
 
 use crate::data_directory::established_data_directory;
 use crate::desktop::launch_runtime::DesktopLaunchRuntime;
-use crate::desktop::mcp_runtime::{configured_mcp_port, start_in_process_mcp};
+use crate::desktop::mcp_runtime::{configured_mcp_port, owned_mcp_url, start_in_process_mcp};
 use crate::desktop::packaged_binaries::hook_runner_binary;
 use crate::desktop::runtime_configuration::rust_runtime_configuration;
 use crate::desktop::service_health::ServiceHealth;
@@ -59,19 +59,18 @@ pub(crate) fn launch_rust_runtime(
         Some(terminal_launch.clone()),
     )) {
         Ok(runtime) => Some(runtime),
-        Err(message) => {
-            state.retain_notice(crate::desktop::user_notices::mcp_unavailable(
-                &message,
-                "Restart Ticketry to request another loopback endpoint.",
-            ));
+        Err(diagnostic) => {
+            eprintln!(
+                "Ticketry could not start its WorkTracker MCP listener; provider launches remain blocked: {diagnostic}"
+            );
+            state.retain_notice(crate::desktop::user_notices::mcp_unavailable());
             None
         }
     };
     if let Some(runtime) = mcp_runtime.as_ref() {
-        launch_runtime.replace_terminal_mcp_authority(
-            format!("http://{}/mcp", runtime.address()),
-            runtime.authority(),
-        )?;
+        let mcp_url = owned_mcp_url(Some(runtime.address()))
+            .ok_or_else(|| "the owned MCP listener did not publish an endpoint".to_owned())?;
+        launch_runtime.replace_terminal_mcp_authority(mcp_url, runtime.authority())?;
     }
 
     tauri::async_runtime::block_on(runs_handoff::open_gate(

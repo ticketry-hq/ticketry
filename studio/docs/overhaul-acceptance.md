@@ -156,6 +156,7 @@ named gate before the full Studio suite, typecheck, and build.
 | 171 | A WorkItem's Apollo-owned workspace tab order interleaves Details, documents, and terminals across reload, close and reopen, dormant periods, and newly visible tabs. |
 | 172 | Workspace tabs stay locked until their saved order loads, then show horizontal drag placement, suppress the drop click, serialize saves, retain the active tab in view, and roll back a failed optimistic save. |
 | 173 | Live-terminal cycling reads each candidate WorkItem's Apollo-owned saved order, including workspaces that have not been opened, before selecting the next terminal. |
+| 174 | When Ticketry cannot own an MCP listener, Studio says agent launches are blocked, local shells remain available, restart retries listener startup, and the acknowledgement does not claim to continue without MCP. |
 
 Each executable case carries one stable `[overhaul-NN]` marker. The gate has a
 contract test that fails if a marker is missing or duplicated. When a Studio UI

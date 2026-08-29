@@ -29,12 +29,12 @@ vi.mock("../features/projects/queries/readTransport", async () => {
     readOnboardingProjects: vi.fn(),
   };
 });
-vi.mock("../features/work-items/mutationTransport", async () => {
-  const actual = await vi.importActual<typeof import("../features/work-items/mutationTransport")>(
-    "../features/work-items/mutationTransport",
+vi.mock("../features/projects/modulePresentationTransport", async () => {
+  const actual = await vi.importActual<typeof import("../features/projects/modulePresentationTransport")>(
+    "../features/projects/modulePresentationTransport",
   );
   const api = await import("./legacyApiFixture");
-  return { ...actual, reorderWorkItem: api.reorderWorkItem };
+  return { ...actual, reorderModulePresentation: api.reorderWorkItem };
 });
 
 import { useAgentStatusStore } from "../features/agents/status/testStore";

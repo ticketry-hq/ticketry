@@ -10,7 +10,7 @@ mod common;
 use common::execution_fixture as fixture;
 use common::execution_harness::{public_id, ExecutionHarness, HarnessOptions};
 use common::execution_legacy_fixture as legacy_fixture;
-use muxed_studio_lib::terminal_launch::TerminalLaunchBoundary;
+use muxed_studio_lib::terminal::launch::TerminalLaunchBoundary;
 use sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, Statement};
 use serde_json::{json, Value};
 

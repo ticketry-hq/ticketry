@@ -15,6 +15,7 @@ const buttonClass =
 export default function OnboardingTour({ onSelectStory }: Props) {
   const step = useOnboardingTourStore((state) => state.step);
   const storyId = useOnboardingTourStore((state) => state.storyId);
+  const projectId = useOnboardingTourStore((state) => state.projectId);
   const reset = useOnboardingTourStore((state) => state.reset);
   const addModuleOpen = useModalStore(
     (state) => state.modalStack.at(-1)?.type === "add-module",
@@ -36,11 +37,13 @@ export default function OnboardingTour({ onSelectStory }: Props) {
   if (step === "inactive") return null;
 
   const dismiss = async () => {
-    if (busy) return;
+    if (busy || !projectId) return;
     setBusy(true);
     setError(null);
     try {
-      await acknowledgeOnboarding();
+      // The tour was started for one project, so its acknowledgement is bound
+      // to that project rather than to whichever one resolves first later.
+      await acknowledgeOnboarding(projectId);
       reset();
     } catch (cause) {
       setError(apiErrorMessage(cause));

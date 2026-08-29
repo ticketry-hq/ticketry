@@ -7,7 +7,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use muxed_studio_lib::worktree_persistence::{
+use muxed_studio_lib::worktree::persistence::{
     adopt, preflight, worktrees_adopted, SourceClassification, WorktreePersistenceErrorCode,
     LEDGER_TABLE,
 };

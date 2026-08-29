@@ -9,8 +9,8 @@
 use muxed_studio_lib::entities::work_management;
 use muxed_studio_lib::entities::worktrees::worktree;
 use muxed_studio_lib::graphql_foundation::generated_schema_sdl;
-use muxed_studio_lib::worktree_persistence::column_policy;
-use muxed_studio_lib::worktree_persistence::ownership_manifest::{
+use muxed_studio_lib::worktree::persistence::column_policy;
+use muxed_studio_lib::worktree::persistence::ownership_manifest::{
     GENERATED_MUTATION_GAPS, PROTECTED_COLUMNS,
 };
 use sea_orm::Database;

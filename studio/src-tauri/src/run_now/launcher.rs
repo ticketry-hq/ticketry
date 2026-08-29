@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use sea_orm::DatabaseConnection;
 
-use crate::terminal_launch::TerminalLaunchService;
+use crate::terminal::launch::TerminalLaunchService;
 use crate::work_management::launch_policy::{self, LaunchPolicyDecision};
 
 use super::RunNowRun;

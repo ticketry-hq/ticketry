@@ -13,7 +13,7 @@
 use sea_orm::DbErr;
 
 use crate::documents::DocumentsError;
-use crate::workspace_operations::{WorkspaceOperationError, WorkspaceOperationErrorCode};
+use crate::workspace::operations::{WorkspaceOperationError, WorkspaceOperationErrorCode};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[non_exhaustive]
@@ -110,7 +110,7 @@ fn sanitized_detail(detail: &str) -> Option<String> {
     if detail.is_empty() {
         return None;
     }
-    Some(crate::workspace_operations::redact_diagnostic(detail))
+    Some(crate::workspace::operations::redact_diagnostic(detail))
 }
 
 impl std::fmt::Display for DocumentSaveError {

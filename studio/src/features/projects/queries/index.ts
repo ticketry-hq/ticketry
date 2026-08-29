@@ -19,9 +19,9 @@ import { forgetNewlyCreatedModules } from "../internal/newlyCreatedModules";
 import {
   modulesFromProjectOpen,
   projectsFromResult,
+  readOnboardingProjects,
   readProjects,
   readProjectOpen,
-  readWorkspace,
 } from "./readTransport";
 
 const EMPTY_PROJECTS: Project[] = [];
@@ -239,4 +239,4 @@ export function seedModules(projectId: string, modules: Module[]): void {
   });
 }
 
-export { readProjectOpen, readWorkspace };
+export { readOnboardingProjects, readProjectOpen };

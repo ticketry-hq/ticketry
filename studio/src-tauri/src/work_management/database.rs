@@ -118,7 +118,7 @@ mod tests {
     use sea_orm::{ConnectionTrait, Database, DbBackend, EntityTrait, PaginatorTrait, Statement};
 
     use super::open;
-    use crate::work_management::entities::workspace;
+    use crate::work_management::entities::project;
 
     #[tokio::test]
     async fn connection_reads_wal_and_rejects_writes() {
@@ -131,16 +131,20 @@ mod tests {
             .execute_unprepared(
                 r#"
                 PRAGMA journal_mode=WAL;
-                CREATE TABLE worktracker_workspace (
+                CREATE TABLE worktracker_project (
                     id char(32) NOT NULL PRIMARY KEY,
-                    slug varchar(255) NOT NULL UNIQUE,
                     name varchar(255) NOT NULL,
+                    slug varchar(64) NOT NULL,
+                    description text NOT NULL,
+                    seq_counter integer NOT NULL,
+                    state_revision bigint NOT NULL,
+                    manual_module_order bool NOT NULL,
                     created_at datetime NOT NULL,
                     updated_at datetime NOT NULL,
                     onboarding_required bool NOT NULL
                 );
-                INSERT INTO worktracker_workspace VALUES
-                    ('00000000000000000000000000000001', 'first', 'First',
+                INSERT INTO worktracker_project VALUES
+                    ('00000000000000000000000000000001', 'First', 'CDN', '', 0, 0, 0,
                      '2026-08-12 00:00:00', '2026-08-12 00:00:00', 0);
                 "#,
             )
@@ -150,18 +154,18 @@ mod tests {
         let reader = open(&path).await.expect("open read-only connection");
         writer
             .execute_unprepared(
-                r#"INSERT INTO worktracker_workspace VALUES
-                    ('00000000000000000000000000000002', 'second', 'Second',
+                r#"INSERT INTO worktracker_project VALUES
+                    ('00000000000000000000000000000002', 'Second', 'SEC', '', 0, 0, 0,
                      '2026-08-12 00:00:00', '2026-08-12 00:00:00', 0)"#,
             )
             .await
             .expect("commit a row to the WAL");
 
-        let workspaces = workspace::Entity::find()
+        let projects = project::Entity::find()
             .all(&reader)
             .await
             .expect("read rows including the committed WAL row");
-        assert_eq!(workspaces.len(), 2);
+        assert_eq!(projects.len(), 2);
 
         let query_only = reader
             .query_one_raw(Statement::from_string(
@@ -176,11 +180,11 @@ mod tests {
         assert_eq!(query_only, 1);
 
         let write = reader
-            .execute_unprepared("DELETE FROM worktracker_workspace")
+            .execute_unprepared("DELETE FROM worktracker_project")
             .await;
         assert!(write.is_err(), "read-only connection unexpectedly wrote");
         assert_eq!(
-            workspace::Entity::find()
+            project::Entity::find()
                 .count(&writer)
                 .await
                 .expect("count fixture rows"),

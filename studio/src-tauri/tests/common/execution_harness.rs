@@ -23,15 +23,15 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, MutexGuard};
 use std::time::Duration;
 
-use muxed_studio_lib::execution_reconciliation::{
+use muxed_studio_lib::execution::reconciliation::{
     ExecutionReconciliationConfig, ExecutionReconciliationRuntime, ExecutionReconciliationService,
 };
 use muxed_studio_lib::graphql_foundation::{
     adopt_worktracker_and_install, ComposedCommandRuntime, InstallationOwnership,
 };
 use muxed_studio_lib::runs_persistence::{publish_readiness, Slice3Readiness};
-use muxed_studio_lib::terminal_launch::{TerminalLaunchBoundary, TerminalLaunchService};
-use muxed_studio_lib::terminal_lifecycle::{
+use muxed_studio_lib::terminal::launch::{TerminalLaunchBoundary, TerminalLaunchService};
+use muxed_studio_lib::terminal::lifecycle::{
     ProductionTerminalLifecycleWork, TerminalLifecycleConfig, TerminalLifecycleRuntime,
     TerminalRuntimeAuthority,
 };
@@ -214,9 +214,9 @@ impl ExecutionHarness {
         .expect("open the local settings gate");
         publish_readiness(&data_directory, &Slice3Readiness::complete())
             .expect("open the Runs GraphQL gate");
-        muxed_studio_lib::workspace_handoff::publish_readiness(
+        muxed_studio_lib::workspace::handoff::publish_readiness(
             &data_directory,
-            &muxed_studio_lib::workspace_handoff::Slice4Readiness::complete(),
+            &muxed_studio_lib::workspace::handoff::Slice4Readiness::complete(),
         )
         .expect("open the workspace gate");
         let composed = adopted.runtime;
@@ -228,7 +228,7 @@ impl ExecutionHarness {
         // Modules themselves exist rather than written into a profile file.
         link_modules(&commands, &data_directory).await;
         let spool_directory =
-            muxed_studio_lib::terminal_lifecycle::ensure_hook_spool_directory(&data_directory)
+            muxed_studio_lib::terminal::lifecycle::ensure_hook_spool_directory(&data_directory)
                 .expect("create the provider hook spool directory");
 
         // The interactive runtime is shared with the GraphQL composition, so
@@ -236,7 +236,7 @@ impl ExecutionHarness {
         let launch_runtime = Arc::new(composed.terminal_runtime().clone());
         let mut launch = TerminalLaunchService::new(commands.clone(), launch_runtime.clone())
             .with_authority(Arc::new(
-                muxed_studio_lib::launch_authority::LaunchAuthorityService::new(
+                muxed_studio_lib::launch::authority::LaunchAuthorityService::new(
                     commands.clone(),
                 ),
             ));
@@ -266,7 +266,7 @@ impl ExecutionHarness {
             .terminal_runtime()
             .configure(TerminalRuntimeAuthority {
                 database: commands.clone(),
-                paths: muxed_studio_lib::launch_paths::LaunchPathsService::new(commands.clone()),
+                paths: muxed_studio_lib::launch::paths::LaunchPathsService::new(commands.clone()),
                 hook_runner: provider_directory(&data_directory).join("ticketry-hook-runner"),
                 hook_spool_directory: spool_directory.clone(),
                 mcp_url: format!("http://{}/mcp", mcp.address()),
@@ -282,10 +282,10 @@ impl ExecutionHarness {
         )
         .expect("open the provider hook spool");
         let reconciliation =
-            muxed_studio_lib::terminal_reconciliation::TerminalReconciliationService::new(
+            muxed_studio_lib::terminal::reconciliation::TerminalReconciliationService::new(
                 commands.clone(),
                 launch_runtime,
-                Arc::new(muxed_studio_lib::terminal_cleanup::TmuxCleanupRuntime),
+                Arc::new(muxed_studio_lib::terminal::cleanup::TmuxCleanupRuntime),
             );
         let terminal = Arc::new(
             TerminalLifecycleRuntime::start(

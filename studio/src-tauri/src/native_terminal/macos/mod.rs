@@ -7,7 +7,7 @@ use super::visibility::NativeTerminalVisibility;
 use super::worker::{run_native_worker, NativeViewerCommand, NativeWorkerExit};
 use super::NativeTerminalFrame;
 use crate::native_terminal::chords::{ChordSink, StudioChord, NATIVE_CHORD_EVENT};
-use crate::terminal_viewer::attachment::{
+use crate::terminal::viewer::attachment::{
     TerminalCommandAttachment, TerminalCommandAttachmentControl,
 };
 use rand::Rng;

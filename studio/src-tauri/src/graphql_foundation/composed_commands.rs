@@ -8,7 +8,7 @@
 
 use sea_orm::DatabaseConnection;
 
-use crate::document_watch::DocumentWatchSupervisor;
+use crate::documents::watch::DocumentWatchSupervisor;
 use crate::documents::DocumentsService;
 
 /// The handles a completed one-writer handoff leaves for the desktop shell.
@@ -32,8 +32,8 @@ pub(crate) struct ComposedWorktracker {
     /// repository is meant to stay deferred without disabling unrelated ones.
     pub(crate) workspace_reconciled: bool,
     pub(crate) viewer_ownership: crate::viewer_ownership::ViewerOwnershipService,
-    pub(crate) terminal_runtime: crate::terminal_lifecycle::InteractiveTerminalLaunchRuntime,
-    pub(crate) output_activity: crate::terminal_output_activity::TerminalOutputActivityService,
+    pub(crate) terminal_runtime: crate::terminal::lifecycle::InteractiveTerminalLaunchRuntime,
+    pub(crate) output_activity: crate::terminal::output_activity::TerminalOutputActivityService,
 }
 
 /// The live command connection and workspace services held by the installed
@@ -45,8 +45,8 @@ pub struct ComposedCommandRuntime {
     document_watch: Option<DocumentWatchSupervisor>,
     workspace_reconciled: bool,
     viewer_ownership: crate::viewer_ownership::ViewerOwnershipService,
-    terminal_runtime: crate::terminal_lifecycle::InteractiveTerminalLaunchRuntime,
-    output_activity: crate::terminal_output_activity::TerminalOutputActivityService,
+    terminal_runtime: crate::terminal::lifecycle::InteractiveTerminalLaunchRuntime,
+    output_activity: crate::terminal::output_activity::TerminalOutputActivityService,
 }
 
 impl ComposedCommandRuntime {
@@ -88,13 +88,13 @@ impl ComposedCommandRuntime {
         &self.viewer_ownership
     }
 
-    pub fn terminal_runtime(&self) -> &crate::terminal_lifecycle::InteractiveTerminalLaunchRuntime {
+    pub fn terminal_runtime(&self) -> &crate::terminal::lifecycle::InteractiveTerminalLaunchRuntime {
         &self.terminal_runtime
     }
 
     pub fn output_activity(
         &self,
-    ) -> &crate::terminal_output_activity::TerminalOutputActivityService {
+    ) -> &crate::terminal::output_activity::TerminalOutputActivityService {
         &self.output_activity
     }
 }

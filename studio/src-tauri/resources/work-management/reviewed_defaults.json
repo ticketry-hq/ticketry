@@ -13,13 +13,13 @@
     {
       "name": "Ideas",
       "group": "backlog",
-      "color": "#D12771",
+      "color": "#60646C",
       "autoStart": true
     },
     {
       "name": "Grill",
       "group": "backlog",
-      "color": "#60646C",
+      "color": "#FA4D56",
       "autoStart": false
     },
     {
@@ -43,7 +43,7 @@
     {
       "name": "Review",
       "group": "started",
-      "color": "#D6409F",
+      "color": "#08BDBA",
       "autoStart": false
     },
     {

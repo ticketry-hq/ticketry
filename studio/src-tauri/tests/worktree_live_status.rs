@@ -12,7 +12,6 @@ use muxed_studio_lib::graphql_foundation::initialize_with_worktracker_commands_a
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection};
 use tauri_graphql::{TransportApi, TransportApiImpl};
 
-const WORKSPACE: &str = "90000000000000000000000000000000";
 const PROJECT: &str = "10000000000000000000000000000000";
 const TASK_TYPE: &str = "30000000000000000000000000000001";
 const MODULE_TYPE: &str = "30000000000000000000000000000003";
@@ -166,17 +165,13 @@ async fn fixture() -> Fixture {
         .execute_unprepared(&format!(
             r#"
             PRAGMA journal_mode=WAL;
-            CREATE TABLE worktracker_workspace (
-                id char(32) PRIMARY KEY, slug varchar(255) NOT NULL UNIQUE,
-                name varchar(255) NOT NULL, created_at datetime NOT NULL,
-                updated_at datetime NOT NULL, onboarding_required bool NOT NULL
-            );
             CREATE TABLE worktracker_project (
-                id char(32) PRIMARY KEY, workspace_id char(32) NOT NULL,
+                id char(32) PRIMARY KEY,
                 name varchar(255) NOT NULL, slug varchar(64) NOT NULL,
                 description text NOT NULL, seq_counter integer NOT NULL,
                 state_revision bigint NOT NULL, manual_module_order bool NOT NULL,
-                created_at datetime NOT NULL, updated_at datetime NOT NULL
+                created_at datetime NOT NULL, updated_at datetime NOT NULL,
+                onboarding_required bool NOT NULL
             );
             CREATE TABLE worktracker_state (
                 id char(32) PRIMARY KEY, project_id char(32) NOT NULL,
@@ -212,12 +207,9 @@ async fn fixture() -> Fixture {
                 ephemeral BOOLEAN NOT NULL, created_at VARCHAR NOT NULL,
                 updated_at VARCHAR NOT NULL
             );
-            INSERT INTO worktracker_workspace VALUES
-                ('{WORKSPACE}', 'meml', 'Memory Lane', CURRENT_TIMESTAMP,
-                 CURRENT_TIMESTAMP, 0);
             INSERT INTO worktracker_project VALUES
-                ('{PROJECT}', '{WORKSPACE}', 'Coding', 'CODIN', '', 900, 1, 0,
-                 CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+                ('{PROJECT}', 'Coding', 'CODIN', '', 900, 1, 0,
+                 CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0);
             INSERT INTO worktracker_state VALUES
                 ('{BACKLOG}', '{PROJECT}', 'Backlog', 'backlog', '', 0, 0,
                  CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);

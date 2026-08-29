@@ -66,7 +66,7 @@ export function moduleTreeFromWorkItems(
 }
 
 export const listProjects: RetiredOperation = retiredOperation;
-export const getWorkspace: RetiredOperation = retiredOperation;
+export const getOnboardingProjects: RetiredOperation = retiredOperation;
 export const acknowledgeOnboarding: RetiredOperation = retiredOperation;
 export const createProject: RetiredOperation = retiredOperation;
 export const createProjectSummary: RetiredOperation = retiredOperation;

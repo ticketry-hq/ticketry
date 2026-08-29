@@ -1,6 +1,6 @@
 //! Discovering, authorizing, and serving design documents.
 //!
-//! [`crate::documents_persistence`] owns the adopted `design_documents` table
+//! [`crate::documents::persistence`] owns the adopted `design_documents` table
 //! and its generated Seaography contract. This module owns everything the
 //! filesystem side of that contract needs: the canonical design-directory
 //! layout, recursive discovery, the authorization boundary every byte is read
@@ -22,6 +22,8 @@ mod registry_plan;
 mod registry_settlement;
 mod schema;
 mod service;
+pub mod persistence;
+pub mod watch;
 
 pub(crate) mod authorized_roots;
 pub mod registry_facts;
@@ -39,7 +41,7 @@ pub(crate) use registry_settlement::RegistrationIdentity;
 
 /// Register the authored Documents operations on the composed schema. The
 /// generated `designDocuments` read contract is registered separately by
-/// [`crate::documents_persistence`].
+/// [`crate::documents::persistence`].
 pub(crate) fn register_graphql(builder: seaography::Builder) -> seaography::Builder {
     save::register_graphql(schema::register(builder))
 }

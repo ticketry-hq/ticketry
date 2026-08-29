@@ -14,7 +14,7 @@ use crate::desktop::service_health::ServiceHealth;
 use crate::desktop::service_state::DesktopServiceState;
 use crate::desktop::{runs_handoff, workspace_handoff};
 use crate::settings_persistence;
-use crate::terminal_lifecycle::{
+use crate::terminal::lifecycle::{
     ProductionTerminalLifecycleWork, TerminalLifecycleConfig, TerminalLifecycleRuntime,
 };
 
@@ -31,19 +31,19 @@ pub(crate) fn launch_rust_runtime(
     let launch_runtime = application.state::<DesktopLaunchRuntime>();
     let composed = launch_runtime.composed_runtime()?.clone();
     let database = composed.commands().clone();
-    let spool_directory = crate::terminal_lifecycle::ensure_hook_spool_directory(&data_directory)?;
+    let spool_directory = crate::terminal::lifecycle::ensure_hook_spool_directory(&data_directory)?;
 
-    let terminal_launch = crate::terminal_launch::TerminalLaunchService::new(
+    let terminal_launch = crate::terminal::launch::TerminalLaunchService::new(
         database.clone(),
         Arc::new(composed.terminal_runtime().clone()),
     )
     .with_authority(Arc::new(
-        crate::launch_authority::LaunchAuthorityService::new(database.clone()),
+        crate::launch::authority::LaunchAuthorityService::new(database.clone()),
     ));
     launch_runtime.configure_terminal_authority(
-        crate::terminal_lifecycle::TerminalRuntimeAuthority {
+        crate::terminal::lifecycle::TerminalRuntimeAuthority {
             database: database.clone(),
-            paths: crate::launch_paths::LaunchPathsService::new(database.clone()),
+            paths: crate::launch::paths::LaunchPathsService::new(database.clone()),
             hook_runner,
             hook_spool_directory: spool_directory.clone(),
             mcp_url: String::new(),
@@ -87,10 +87,10 @@ pub(crate) fn launch_rust_runtime(
         crate::hook_spool::DEFAULT_BATCH_SIZE,
     )
     .map_err(|error| format!("terminal lifecycle startup failed: {error}"))?;
-    let reconciliation = crate::terminal_reconciliation::TerminalReconciliationService::new(
+    let reconciliation = crate::terminal::reconciliation::TerminalReconciliationService::new(
         database.clone(),
         Arc::new(composed.terminal_runtime().clone()),
-        Arc::new(crate::terminal_cleanup::TmuxCleanupRuntime::default()),
+        Arc::new(crate::terminal::cleanup::TmuxCleanupRuntime::default()),
     );
     let terminal_runtime = Arc::new(
         tauri::async_runtime::block_on(TerminalLifecycleRuntime::start(
@@ -107,16 +107,16 @@ pub(crate) fn launch_rust_runtime(
         ))
         .map_err(|error| format!("terminal lifecycle startup failed: {error}"))?,
     );
-    let execution_service = crate::execution_reconciliation::ExecutionReconciliationService::new(
+    let execution_service = crate::execution::reconciliation::ExecutionReconciliationService::new(
         database.clone(),
         crate::work_management::launch_policy::LaunchPolicyResolver::new(database.clone()),
         terminal_launch.clone(),
     );
     let execution_runtime = tauri::async_runtime::block_on(
-        crate::execution_reconciliation::ExecutionReconciliationRuntime::start(
+        crate::execution::reconciliation::ExecutionReconciliationRuntime::start(
             execution_service,
             Arc::clone(&terminal_runtime),
-            crate::execution_reconciliation::ExecutionReconciliationConfig::default(),
+            crate::execution::reconciliation::ExecutionReconciliationConfig::default(),
         ),
     )
     .map_err(|error| format!("execution reconciliation startup failed: {error}"))?;
@@ -153,9 +153,9 @@ pub(crate) fn launch_rust_runtime(
         .output_sweep
         .lock()
         .expect("output sweep lock poisoned") = Some(
-        crate::terminal_output_activity::LiveOutputSweepRuntime::start(
+        crate::terminal::output_activity::LiveOutputSweepRuntime::start(
             composed.output_activity().clone(),
-            crate::terminal_output_activity::configured_sweep_interval(),
+            crate::terminal::output_activity::configured_sweep_interval(),
         ),
     );
     state.publish(application.handle(), ServiceHealth::ready());

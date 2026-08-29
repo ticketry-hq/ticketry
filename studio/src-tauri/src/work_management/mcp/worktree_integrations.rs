@@ -13,10 +13,10 @@
 
 use sea_orm::DatabaseConnection;
 
-use crate::worktree_integrate::WorktreeIntegrateService;
+use crate::worktree::integrate::WorktreeIntegrateService;
 
 pub(super) async fn compose(database: &DatabaseConnection) -> Option<WorktreeIntegrateService> {
-    if let Err(error) = crate::workspace_operations::schema::install(database).await {
+    if let Err(error) = crate::workspace::operations::schema::install(database).await {
         eprintln!("Ticketry could not install the Workspace Operation journal: {error}");
         return None;
     }
@@ -28,7 +28,7 @@ pub(super) async fn compose(database: &DatabaseConnection) -> Option<WorktreeInt
     }
     Some(WorktreeIntegrateService::new(
         database.clone(),
-        crate::workspace_operations::WorkspaceOperationJournal::new(database.clone()),
+        crate::workspace::operations::WorkspaceOperationJournal::new(database.clone()),
         Some(
             crate::runs_persistence::RunsServices::new(database.clone())
                 .outbox()
@@ -37,6 +37,6 @@ pub(super) async fn compose(database: &DatabaseConnection) -> Option<WorktreeInt
         ),
         // The process-wide locks, so a landing here and a creation composed in
         // the GraphQL schema never touch one repository at the same moment.
-        crate::worktree_status::RepositoryLocks::shared(),
+        crate::worktree::status::RepositoryLocks::shared(),
     ))
 }

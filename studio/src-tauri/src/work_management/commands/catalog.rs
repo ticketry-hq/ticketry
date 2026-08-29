@@ -1,23 +1,20 @@
 use std::collections::{HashMap, HashSet};
 
-use rand::seq::SliceRandom;
-use sea_orm::{
-    sea_query::Expr, ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait,
-    PaginatorTrait, QueryFilter, QueryOrder, Set, TransactionTrait,
-};
-use serde::Deserialize;
-
 use super::identifiers::{database_uuid, new_database_uuid};
+use super::reviewed_defaults;
 use super::status_facts::{
     record_workflow_state, stamp, WorkFactRecorder, WorkflowStateChange, WorkflowStateFact,
 };
 use super::CommandError;
 use crate::work_management::entities::{
-    issue, issue_type, issue_type_transition, launch_binding, project, state, workspace,
+    issue, issue_type, issue_type_transition, launch_binding, project, state,
+};
+use rand::seq::SliceRandom;
+use sea_orm::{
+    sea_query::Expr, ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait,
+    PaginatorTrait, QueryFilter, Set, TransactionTrait,
 };
 
-const REVIEWED_DEFAULTS: &str =
-    include_str!("../../../resources/work-management/reviewed_defaults.json");
 const GROUPS: &[&str] = &["backlog", "unstarted", "started", "completed", "cancelled"];
 const PALETTE: &[&str] = &[
     "#8A3FFC", "#33B1FF", "#007D79", "#FF7EB6", "#FA4D56", "#FFF1F1", "#6FDC8C", "#4589FF",
@@ -29,7 +26,6 @@ pub struct CreateProject {
     pub name: String,
     pub slug: String,
     pub description: Option<String>,
-    pub workspace_slug: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -79,22 +75,7 @@ pub async fn create_project(
             "Project key must be exactly three letters, using only A-Z.",
         ));
     }
-    let selected_workspace = match input.workspace_slug {
-        Some(slug) => workspace::Entity::find()
-            .filter(workspace::Column::Slug.eq(slug))
-            .one(database)
-            .await?
-            .ok_or_else(|| CommandError::NotFound("Workspace not found.".to_owned()))?,
-        None => workspace::Entity::find()
-            .order_by_asc(workspace::Column::CreatedAt)
-            .one(database)
-            .await?
-            .ok_or_else(|| {
-                CommandError::NotFound("No workspace to create the project under.".to_owned())
-            })?,
-    };
     if project::Entity::find()
-        .filter(project::Column::WorkspaceId.eq(&selected_workspace.id))
         .filter(project::Column::Slug.eq(&slug))
         .one(database)
         .await?
@@ -105,14 +86,13 @@ pub async fn create_project(
         )));
     }
 
-    let defaults: Defaults = serde_json::from_str(REVIEWED_DEFAULTS)
+    let defaults = reviewed_defaults::load()
         .map_err(|_| CommandError::Storage("Reviewed project defaults are invalid.".to_owned()))?;
     let transaction = database.begin().await?;
     let id = new_database_uuid();
     let now = super::timestamp::now();
     project::ActiveModel {
         id: Set(id.clone()),
-        workspace_id: Set(selected_workspace.id),
         name: Set(name),
         slug: Set(slug),
         description: Set(input.description.unwrap_or_default()),
@@ -121,6 +101,10 @@ pub async fn create_project(
         manual_module_order: Set(false),
         created_at: Set(now),
         updated_at: Set(now),
+        // A project created from inside a running Studio has no first-run
+        // welcome to show. Onboarding is pending only for an installation that
+        // has no project at all, or for one migrated with the flag still set.
+        onboarding_required: Set(false),
     }
     .insert(&transaction)
     .await?;
@@ -232,14 +216,20 @@ pub async fn create_project(
     Ok(id)
 }
 
-pub async fn acknowledge_onboarding(database: &DatabaseConnection) -> Result<String, CommandError> {
-    let row = workspace::Entity::find()
-        .order_by_asc(workspace::Column::CreatedAt)
+/// Clear the named project's pending onboarding.
+///
+/// The caller names the project, so an acknowledgement is bound to the identity
+/// it was shown for rather than to whichever project happens to sort first.
+pub async fn acknowledge_onboarding(
+    database: &DatabaseConnection,
+    project_id: &str,
+) -> Result<String, CommandError> {
+    let id = database_uuid(project_id, "project_id")?;
+    let row = project::Entity::find_by_id(&id)
         .one(database)
         .await?
-        .ok_or_else(|| CommandError::NotFound("Workspace not found.".to_owned()))?;
-    let id = row.id.clone();
-    let mut active: workspace::ActiveModel = row.into();
+        .ok_or_else(|| CommandError::NotFound("Project not found.".to_owned()))?;
+    let mut active: project::ActiveModel = row.into();
     active.onboarding_required = Set(false);
     active.updated_at = Set(super::timestamp::now());
     active.update(database).await?;
@@ -682,42 +672,4 @@ fn valid_text(value: &str, field: &'static str, max: usize) -> Result<String, Co
         ));
     }
     Ok(value.to_owned())
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct Defaults {
-    states: Vec<StateSeed>,
-    issue_types: Vec<String>,
-    required_skills: HashMap<String, Vec<String>>,
-    prompts: HashMap<String, HashMap<String, String>>,
-    workflows: HashMap<String, WorkflowSeed>,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct StateSeed {
-    name: String,
-    group: String,
-    color: String,
-    #[serde(default)]
-    auto_start: bool,
-}
-
-#[derive(Deserialize)]
-struct WorkflowSeed {
-    start: String,
-    states: HashSet<String>,
-    transitions: Vec<(String, String, TransitionSeed)>,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct TransitionSeed {
-    #[serde(default = "allowed")]
-    agent_allowed: bool,
-}
-
-fn allowed() -> bool {
-    true
 }

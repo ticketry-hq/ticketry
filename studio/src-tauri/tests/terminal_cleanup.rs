@@ -11,7 +11,7 @@ use muxed_studio_lib::entities::{
     runs::agent_run,
     terminals::{cleanup_effect, session},
 };
-use muxed_studio_lib::terminal_cleanup::{
+use muxed_studio_lib::terminal::cleanup::{
     AuthenticatedAgentRun, CleanupCause, CleanupCheckpoint, CleanupCheckpoints, CleanupKillResult,
     CleanupRuntimeObservation, TerminalCleanupError, TerminalCleanupRuntime,
     TerminalCleanupService, TerminationPatch,

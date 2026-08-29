@@ -34,11 +34,6 @@ async fn fixture() -> (tempfile::TempDir, sea_orm::DatabaseConnection) {
             r#"
             PRAGMA journal_mode=WAL;
             PRAGMA foreign_keys=ON;
-            CREATE TABLE worktracker_workspace (
-                id char(32) PRIMARY KEY, slug varchar(255) NOT NULL UNIQUE,
-                name varchar(255) NOT NULL, created_at datetime NOT NULL,
-                updated_at datetime NOT NULL, onboarding_required bool NOT NULL
-            );
             CREATE TABLE app_settings (
                 scope varchar NOT NULL, "key" varchar NOT NULL,
                 value varchar NOT NULL, updated_at varchar NOT NULL,
@@ -49,11 +44,12 @@ async fn fixture() -> (tempfile::TempDir, sea_orm::DatabaseConnection) {
                 activated bool NOT NULL, supports_unattended bool NOT NULL
             );
             CREATE TABLE worktracker_project (
-                id char(32) PRIMARY KEY, workspace_id char(32) NOT NULL,
+                id char(32) PRIMARY KEY,
                 name varchar(255) NOT NULL, slug varchar(64) NOT NULL,
                 description text NOT NULL, seq_counter integer NOT NULL,
                 state_revision bigint NOT NULL, manual_module_order bool NOT NULL,
-                created_at datetime NOT NULL, updated_at datetime NOT NULL
+                created_at datetime NOT NULL, updated_at datetime NOT NULL,
+                onboarding_required bool NOT NULL
             );
             CREATE TABLE worktracker_state (
                 id char(32) PRIMARY KEY, project_id char(32) NOT NULL,
@@ -106,9 +102,6 @@ async fn fixture() -> (tempfile::TempDir, sea_orm::DatabaseConnection) {
                 created_at datetime NOT NULL, updated_at datetime NOT NULL,
                 UNIQUE(issue_type_id, state_id)
             );
-            INSERT INTO worktracker_workspace VALUES
-                ('90000000000000000000000000000000', 'meml', 'Memory Lane',
-                 CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0);
             INSERT INTO worktracker_provider VALUES
                 ('50000000000000000000000000000001', 'codex', 1, 1);
             INSERT INTO app_settings VALUES
@@ -116,8 +109,8 @@ async fn fixture() -> (tempfile::TempDir, sea_orm::DatabaseConnection) {
                  '{{"global_default":{{"provider":"codex","model":null,"reasoning":null}}}}',
                  CURRENT_TIMESTAMP);
             INSERT INTO worktracker_project VALUES
-                ('{PROJECT}', '90000000000000000000000000000000', 'Memory Lane',
-                 'MEM', '', 20, 7, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+                ('{PROJECT}', 'Memory Lane',
+                 'MEM', '', 20, 7, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0);
             INSERT INTO worktracker_state VALUES
                 ('{BACKLOG}', '{PROJECT}', 'Backlog', 'backlog', '', 0, 0,
                  CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
@@ -502,7 +495,7 @@ async fn invalid_hierarchy_targets_and_foreign_creation_are_atomic() {
         .execute_unprepared(&format!(
             r#"
             INSERT INTO worktracker_project VALUES
-                ('11000000000000000000000000000000','90000000000000000000000000000000','Foreign','FOREIGN','',1,0,0,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP);
+                ('11000000000000000000000000000000','Foreign','FOREIGN','',1,0,0,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP, 0);
             INSERT INTO worktracker_issue VALUES
                 ('20000000000000000000000000000001','{PROJECT}','module','{MODULE_TYPE}',NULL,NULL,NULL,1,'Module',1,0,'a','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP),
                 ('21000000000000000000000000000001','11000000000000000000000000000000','module','{MODULE_TYPE}',NULL,NULL,NULL,0,'Foreign module',1,0,'a','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP),
@@ -1272,7 +1265,7 @@ async fn graphql_exposes_only_authored_mutations_and_structured_errors() {
         &api.clone()
             .graphql_execute(
                 serde_json::json!({
-                    "query": "mutation { create_project(name: \"Second\", slug: \"sec\", workspace_slug: \"meml\") { id slug } }"
+                    "query": "mutation { create_project(name: \"Second\", slug: \"sec\") { id slug } }"
                 })
                 .to_string(),
             )
@@ -1696,7 +1689,7 @@ async fn blocker_replacement_rejects_bad_graphs_atomically_and_survives_restart(
     let foreign = "50000000000000000000000000000009";
     database.execute_unprepared(&format!(r#"
         INSERT INTO worktracker_project VALUES
-            ('11000000000000000000000000000000', '90000000000000000000000000000000', 'Other', 'OTH', '', 1, 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+            ('11000000000000000000000000000000', 'Other', 'OTH', '', 1, 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0);
         INSERT INTO worktracker_issue VALUES
             ('{foreign}', '11000000000000000000000000000000', 'task', '{TASK_TYPE}', NULL, NULL, NULL, 0, 'Foreign', 1, 0, 'A', '', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
     "#)).await.unwrap();

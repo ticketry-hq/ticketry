@@ -7,7 +7,6 @@ import {
   orderedTaskSections,
   searchHits,
   STATE_HEADER,
-  taskRevealPath,
   type TreeWorkItem,
   visibleRows,
 } from "../selectors";

@@ -17,7 +17,7 @@ use crate::desktop::lifecycle::{
 use crate::desktop::service_state::DesktopServiceState;
 use crate::desktop::startup::initialize_services;
 use crate::native_terminal::focus_trace;
-use crate::terminal_viewer::webview_commands;
+use crate::terminal::viewer::webview_commands;
 use crate::{graphql_foundation, native_terminal};
 
 pub fn run() {

@@ -3,11 +3,11 @@ use std::path::Path;
 use sea_orm::DatabaseConnection;
 use serde_json::{json, Map, Value};
 
-use crate::execution_graph::GraphAccess;
+use crate::execution::graph::GraphAccess;
 use crate::graph_run_service::{GraphRunRequest, GraphRunService};
 use crate::run_now::{RunNowCaller, RunNowRequest, RunNowService};
-use crate::terminal_cleanup::TerminalCleanupService;
-use crate::terminal_launch::TerminalLaunchService;
+use crate::terminal::cleanup::TerminalCleanupService;
+use crate::terminal::launch::TerminalLaunchService;
 use crate::work_management::commands::{
     attachments, status_facts::WorkFactRecorder, work_items, workflow, CommandError,
 };
@@ -162,7 +162,7 @@ async fn dispatch_checked(
             // edges inside it are returned; MCP must not restate it.
             let access = GraphAccess::caller_roots(&task.project_id, [&task.id]);
             Ok(DispatchOutput::direct(
-                match crate::execution_graph::dependency_graph(database, &task.id, &access).await {
+                match crate::execution::graph::dependency_graph(database, &task.id, &access).await {
                     Ok(graph) => json!({
                         "root_id": graph.root_id,
                         "nodes": graph

@@ -9,10 +9,10 @@ use common::terminal_lifecycle_harness::{
     TerminalLifecycleHarness, MODULE_ID, PROJECT_ID, TASK_ID,
 };
 use muxed_studio_lib::entities::terminals::launch_material;
-use muxed_studio_lib::launch_authority::{
+use muxed_studio_lib::launch::authority::{
     InteractiveLaunchAuthority, LaunchAuthorityError, ResolvedLaunchMaterial,
 };
-use muxed_studio_lib::terminal_launch::{
+use muxed_studio_lib::terminal::launch::{
     CreateTerminalSession, TerminalLaunchBoundary, TerminalLaunchCheckpoint, TerminalLaunchError,
     TerminalLaunchKind, TerminalLaunchRuntime, TerminalLaunchService, TerminalRuntimeObservation,
     VerifiedTerminalRuntime,

@@ -17,7 +17,7 @@ use axum::{
 use sea_orm::DatabaseConnection;
 use serde_json::{json, Value};
 
-use crate::launch_paths::{LaunchPathsRequest, LaunchPathsService};
+use crate::launch::paths::{LaunchPathsRequest, LaunchPathsService};
 
 #[derive(Clone)]
 pub(super) struct LaunchPathsIngressState {

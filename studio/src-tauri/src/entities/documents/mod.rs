@@ -10,7 +10,7 @@ pub const DESIGN_DOCUMENT_OBJECT: &str = "DesignDocuments";
 /// Register the generated Design Document read contract.
 ///
 /// `mutation: false` keeps Seaography rc.9's all-or-nothing bundle private.
-/// See [`crate::documents_persistence::generated_mutation_audit`] for the
+/// See [`crate::documents::persistence::generated_mutation_audit`] for the
 /// four-operation audit that decision records.
 ///
 /// The table carries no foreign key: `task_id` also holds the scratch sentinel

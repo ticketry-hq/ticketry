@@ -1,9 +1,7 @@
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 
 use super::LaunchPolicyError;
-use crate::work_management::entities::{
-    issue, issue_type, launch_binding, project, state, workspace,
-};
+use crate::work_management::entities::{issue, issue_type, launch_binding, project, state};
 
 pub(super) struct PolicyReader<'a> {
     database: &'a DatabaseConnection,
@@ -25,22 +23,16 @@ impl<'a> PolicyReader<'a> {
             .one(self.database)
             .await?
             .ok_or_else(|| LaunchPolicyError::rejected("task_not_found", "Task type not found."))?;
-        let project = project::Entity::find_by_id(&issue.project_id)
+        if project::Entity::find_by_id(&issue.project_id)
             .one(self.database)
             .await?
-            .ok_or_else(|| {
-                LaunchPolicyError::rejected("task_not_found", "Task project not found.")
-            })?;
-        // Read for existence only: a task whose workspace row is gone is not
-        // launchable. The slug itself is not launch authority and is not carried
-        // into the decision.
-        workspace::Entity::find_by_id(&project.workspace_id)
-            .one(self.database)
-            .await?
-            .ok_or_else(|| {
-                LaunchPolicyError::rejected("task_not_found", "Task workspace not found.")
-            })
-            .map(drop)?;
+            .is_none()
+        {
+            return Err(LaunchPolicyError::rejected(
+                "task_not_found",
+                "Task project not found.",
+            ));
+        }
         Ok(TaskRow {
             id: issue.id,
             project_id: issue.project_id,

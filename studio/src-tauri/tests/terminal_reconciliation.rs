@@ -14,13 +14,13 @@ use muxed_studio_lib::entities::{
     runs::{agent_run, launch_effect, status_event},
     terminals::{cleanup_effect, session},
 };
-use muxed_studio_lib::terminal_cleanup::{
+use muxed_studio_lib::terminal::cleanup::{
     CleanupCause, CleanupRuntimeObservation, TerminalCleanupService,
 };
-use muxed_studio_lib::terminal_launch::{
+use muxed_studio_lib::terminal::launch::{
     CreateTerminalSession, TerminalLaunchBoundary, TerminalLaunchKind,
 };
-use muxed_studio_lib::terminal_reconciliation::{
+use muxed_studio_lib::terminal::reconciliation::{
     ReconciliationCheckpoint, RecordedSessionDecision, UnrecordedRuntimeDecision,
     MAX_RECORDED_SESSION_BATCH,
 };
@@ -637,7 +637,7 @@ async fn terminal_events(database: &sea_orm::DatabaseConnection, run_id: &str) -
 }
 
 fn inspected(
-    report: &muxed_studio_lib::terminal_reconciliation::TerminalReconciliationReport,
+    report: &muxed_studio_lib::terminal::reconciliation::TerminalReconciliationReport,
 ) -> BTreeSet<String> {
     report
         .sessions
@@ -647,7 +647,7 @@ fn inspected(
 }
 
 fn decision(
-    sessions: &[muxed_studio_lib::terminal_reconciliation::ReconciledSession],
+    sessions: &[muxed_studio_lib::terminal::reconciliation::ReconciledSession],
     run_id: &str,
 ) -> RecordedSessionDecision {
     sessions

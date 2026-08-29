@@ -602,7 +602,7 @@ fn no_supported_django_generation_or_postgresql_staging_schema_carries_these_tab
     let provisioning =
         std::fs::read_to_string(crate_root().join("src/installation_adoption/provisioning.v1.sql"))
             .expect("read the checked fresh-provisioning schema");
-    let classification = muxed_studio_lib::installation_classification::manifest();
+    let classification = muxed_studio_lib::installation::classification::manifest();
 
     for table in ownership_manifest::owned_tables() {
         assert!(

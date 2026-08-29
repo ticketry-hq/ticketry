@@ -3,7 +3,7 @@ mod common;
 use common::terminal_lifecycle_harness::{
     TerminalLifecycleHarness, MODULE_ID, PROJECT_ID, TASK_ID,
 };
-use muxed_studio_lib::terminal_resume::{
+use muxed_studio_lib::terminal::resume::{
     ResumableConversationService, RESUMABLE_LIMIT, RESUMABLE_STATEMENT_LIMIT,
 };
 use sea_orm::{ConnectionTrait, DbBackend, Statement};

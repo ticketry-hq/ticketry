@@ -1,36 +1,85 @@
 //! Checked write-ownership closure for the WorkTracker cutover.
+//!
+//! The closure has two shapes, because onboarding moved onto Project and the
+//! Workspace table was removed after the handoff was designed. Adoption reads
+//! the shape the database is actually in — the Workspace shape before that
+//! migration, the project-only shape after it — so reopening a migrated
+//! installation is recognized rather than refused.
 
 pub const VERSION: i32 = 1;
 pub const CURRENT_DJANGO_LEAF: &str = "0042_merge_singular_idea_state";
 
-/// Tables Rust commands may mutate after the one-writer handoff.
-pub const OWNED_TABLES: &[(&str, &[&str])] = &[
-    (
-        "worktracker_workspace",
-        &[
-            "id",
-            "slug",
-            "name",
-            "onboarding_required",
-            "created_at",
-            "updated_at",
-        ],
-    ),
-    (
-        "worktracker_project",
-        &[
-            "id",
-            "workspace_id",
-            "name",
-            "slug",
-            "description",
-            "seq_counter",
-            "state_revision",
-            "manual_module_order",
-            "created_at",
-            "updated_at",
-        ],
-    ),
+/// Which shape of the ownership closure a database is in.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SchemaGeneration {
+    /// Onboarding still lives on a Workspace row that owns every project.
+    WorkspaceOwned,
+    /// Onboarding lives on Project and the Workspace table is gone.
+    ProjectOnly,
+}
+
+/// The tables and columns Rust commands may mutate in `generation`.
+#[must_use]
+pub fn owned_tables(
+    generation: SchemaGeneration,
+) -> Vec<(&'static str, &'static [&'static str])> {
+    let mut tables = match generation {
+        SchemaGeneration::WorkspaceOwned => vec![WORKSPACE, PROJECT_UNDER_WORKSPACE],
+        SchemaGeneration::ProjectOnly => vec![PROJECT_ONLY],
+    };
+    tables.extend_from_slice(SHARED_TABLES);
+    tables
+}
+
+/// The Workspace table, present only before onboarding moved onto Project.
+const WORKSPACE: (&str, &[&str]) = (
+    "worktracker_workspace",
+    &[
+        "id",
+        "slug",
+        "name",
+        "onboarding_required",
+        "created_at",
+        "updated_at",
+    ],
+);
+
+/// Project while a Workspace still owns it.
+const PROJECT_UNDER_WORKSPACE: (&str, &[&str]) = (
+    "worktracker_project",
+    &[
+        "id",
+        "workspace_id",
+        "name",
+        "slug",
+        "description",
+        "seq_counter",
+        "state_revision",
+        "manual_module_order",
+        "created_at",
+        "updated_at",
+    ],
+);
+
+/// Project once it owns onboarding and no Workspace exists.
+const PROJECT_ONLY: (&str, &[&str]) = (
+    "worktracker_project",
+    &[
+        "id",
+        "name",
+        "slug",
+        "description",
+        "seq_counter",
+        "state_revision",
+        "manual_module_order",
+        "created_at",
+        "updated_at",
+        "onboarding_required",
+    ],
+);
+
+/// Every other owned table, identical in both shapes.
+const SHARED_TABLES: &[(&str, &[&str])] = &[
     (
         "worktracker_state",
         &[
@@ -130,10 +179,27 @@ mod tests {
     use super::*;
 
     #[test]
+    fn the_project_only_shape_drops_workspace_and_owns_onboarding() {
+        let tables = owned_tables(SchemaGeneration::ProjectOnly);
+        assert!(!tables.iter().any(|(table, _)| *table == WORKSPACE.0));
+        let (_, columns) = tables
+            .iter()
+            .find(|(table, _)| *table == "worktracker_project")
+            .expect("the project-only shape still owns Project");
+        assert!(columns.contains(&"onboarding_required"));
+        assert!(!columns.contains(&"workspace_id"));
+    }
+
+    #[test]
     fn ownership_manifest_has_one_classification_per_table() {
-        for (table, columns) in OWNED_TABLES {
-            assert!(table.starts_with("worktracker_"));
-            assert!(!columns.is_empty());
+        for generation in [
+            SchemaGeneration::WorkspaceOwned,
+            SchemaGeneration::ProjectOnly,
+        ] {
+            for (table, columns) in owned_tables(generation) {
+                assert!(table.starts_with("worktracker_"));
+                assert!(!columns.is_empty());
+            }
         }
         let slice2_tables = crate::settings_persistence::ownership_manifest::OWNED_TABLES
             .iter()

@@ -14,7 +14,7 @@ use std::path::Path;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 
-use crate::workspace_operations::{WorkspaceOperationIntent, WorkspaceOperationKind};
+use crate::workspace::operations::{WorkspaceOperationIntent, WorkspaceOperationKind};
 
 /// The intent schema version this build writes and decodes.
 pub(crate) const INTENT_VERSION: i32 = 1;

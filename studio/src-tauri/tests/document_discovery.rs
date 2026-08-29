@@ -85,19 +85,14 @@ async fn fixture() -> Fixture {
             created_at DATETIME NOT NULL DEFAULT '2026-01-01 00:00:00',
             updated_at DATETIME NOT NULL DEFAULT '2026-01-01 00:00:00'
         );
-        CREATE TABLE worktracker_workspace (
-            id TEXT PRIMARY KEY, slug TEXT NOT NULL, name TEXT NOT NULL,
-            onboarding_required BOOLEAN NOT NULL DEFAULT 0,
-            created_at DATETIME NOT NULL DEFAULT '2026-01-01 00:00:00',
-            updated_at DATETIME NOT NULL DEFAULT '2026-01-01 00:00:00'
-        );
         CREATE TABLE worktracker_project (
-            id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, name TEXT NOT NULL,
+            id TEXT PRIMARY KEY, name TEXT NOT NULL,
             slug TEXT NOT NULL, description TEXT NOT NULL DEFAULT '',
             seq_counter INTEGER NOT NULL DEFAULT 0, state_revision INTEGER NOT NULL DEFAULT 0,
             manual_module_order BOOLEAN NOT NULL DEFAULT 0,
             created_at DATETIME NOT NULL DEFAULT '2026-01-01 00:00:00',
-            updated_at DATETIME NOT NULL DEFAULT '2026-01-01 00:00:00'
+            updated_at DATETIME NOT NULL DEFAULT '2026-01-01 00:00:00',
+            onboarding_required bool NOT NULL
         );
         CREATE TABLE agent_runs (
             id TEXT PRIMARY KEY, issue_id TEXT NOT NULL, ticket_seq INTEGER, agent TEXT NOT NULL,

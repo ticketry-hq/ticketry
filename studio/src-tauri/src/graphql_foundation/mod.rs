@@ -167,6 +167,22 @@ async fn initialize_with_worktracker_commands_and_install_inner(
                 error.to_string(),
             )
         })?;
+    crate::work_management::workflow_color_migration::install(&worktracker_database)
+        .await
+        .map_err(|error| {
+            FoundationInitializationError::new(
+                FoundationInitializationErrorCode::WorktrackerDatabaseOpen,
+                format!("could not adopt reviewed workflow-state colors: {error}"),
+            )
+        })?;
+    crate::work_management::project_onboarding_migration::install(&worktracker_database)
+        .await
+        .map_err(|error| {
+            FoundationInitializationError::new(
+                FoundationInitializationErrorCode::WorktrackerDatabaseOpen,
+                format!("could not move onboarding onto the project: {error}"),
+            )
+        })?;
     let settings_repository =
         crate::settings_persistence::AppSettingRepository::open(worktracker_database_path)
             .await
@@ -217,17 +233,17 @@ async fn initialize_with_worktracker_commands_and_install_inner(
     let document_watch = compose_document_watch(&documents).await;
     let viewer_ownership =
         crate::viewer_ownership::ViewerOwnershipService::new(worktracker_database.clone());
-    let terminal_runtime = crate::terminal_lifecycle::InteractiveTerminalLaunchRuntime::new();
+    let terminal_runtime = crate::terminal::lifecycle::InteractiveTerminalLaunchRuntime::new();
     let terminal_services = Some(crate::query_root::TerminalServices {
-        launch: crate::terminal_launch::TerminalLaunchService::new(
+        launch: crate::terminal::launch::TerminalLaunchService::new(
             worktracker_database.clone(),
             std::sync::Arc::new(terminal_runtime.clone()),
         )
         .with_authority(std::sync::Arc::new(
-            crate::launch_authority::LaunchAuthorityService::new(worktracker_database.clone()),
+            crate::launch::authority::LaunchAuthorityService::new(worktracker_database.clone()),
         )),
         viewers: viewer_ownership.clone(),
-        output_activity: crate::terminal_output_activity::TerminalOutputActivityService::production(
+        output_activity: crate::terminal::output_activity::TerminalOutputActivityService::production(
             worktracker_database.clone(),
         ),
     });
@@ -295,8 +311,8 @@ async fn document_facts(
 /// Supervision then continues in the background.
 async fn compose_document_watch(
     documents: &crate::documents::DocumentsService,
-) -> Option<crate::document_watch::DocumentWatchSupervisor> {
-    let supervisor = crate::document_watch::DocumentWatchSupervisor::new(documents);
+) -> Option<crate::documents::watch::DocumentWatchSupervisor> {
+    let supervisor = crate::documents::watch::DocumentWatchSupervisor::new(documents);
     if let Err(error) = supervisor.reconcile().await {
         // Live discovery is an optimization over rescanning, so failing to
         // start it degrades promptness rather than the capability.
@@ -324,7 +340,7 @@ async fn compose_worktree_operations(
     worktracker_database: &sea_orm::DatabaseConnection,
     outbox_adopted: bool,
 ) -> ComposedWorktreeOperations {
-    if let Err(error) = crate::workspace_operations::schema::install(worktracker_database).await {
+    if let Err(error) = crate::workspace::operations::schema::install(worktracker_database).await {
         eprintln!("Ticketry could not install the Workspace Operation journal: {error}");
         return ComposedWorktreeOperations {
             operations: None,
@@ -339,9 +355,9 @@ async fn compose_worktree_operations(
             .clone()
     });
     let journal =
-        crate::workspace_operations::WorkspaceOperationJournal::new(worktracker_database.clone());
-    let locks = crate::worktree_status::RepositoryLocks::shared();
-    let create = crate::worktree_create::WorktreeCreateService::new(
+        crate::workspace::operations::WorkspaceOperationJournal::new(worktracker_database.clone());
+    let locks = crate::worktree::status::RepositoryLocks::shared();
+    let create = crate::worktree::create::WorktreeCreateService::new(
         worktracker_database.clone(),
         journal.clone(),
         events.clone(),
@@ -351,7 +367,7 @@ async fn compose_worktree_operations(
         eprintln!("Ticketry could not reconcile abandoned worktree operations: {error}");
         reconciled = false;
     }
-    let discard = crate::worktree_discard::WorktreeDiscardService::new(
+    let discard = crate::worktree::discard::WorktreeDiscardService::new(
         worktracker_database.clone(),
         journal.clone(),
         events.clone(),
@@ -367,7 +383,7 @@ async fn compose_worktree_operations(
     let integrations_reconciled =
         compose_worktree_integrations(worktracker_database, journal, events, locks).await;
     ComposedWorktreeOperations {
-        operations: Some(crate::worktree_operations::WorktreeOperations::new(
+        operations: Some(crate::worktree::operations::WorktreeOperations::new(
             create, discard,
         )),
         reconciled: reconciled && integrations_reconciled,
@@ -379,7 +395,7 @@ async fn compose_worktree_operations(
 /// needs both: a composed capability whose backlog was never drained is not one
 /// a window may be pointed at yet.
 struct ComposedWorktreeOperations {
-    operations: Option<crate::worktree_operations::WorktreeOperations>,
+    operations: Option<crate::worktree::operations::WorktreeOperations>,
     reconciled: bool,
 }
 
@@ -392,19 +408,19 @@ struct ComposedWorktreeOperations {
 /// Ticketry was closed looks like.
 async fn compose_worktree_integrations(
     worktracker_database: &sea_orm::DatabaseConnection,
-    journal: crate::workspace_operations::WorkspaceOperationJournal,
+    journal: crate::workspace::operations::WorkspaceOperationJournal,
     events: Option<crate::runs_persistence::StatusEventRepository>,
-    locks: crate::worktree_status::RepositoryLocks,
+    locks: crate::worktree::status::RepositoryLocks,
 ) -> bool {
     // Before the Worktree index is adopted there is no checkout to land and no
     // row to remove, so integration composes to nothing rather than querying a
     // table this store does not have yet. Nothing to reconcile is a completed
     // pass, not a failed one.
-    if !crate::worktree_persistence::worktrees_adopted(worktracker_database).await {
+    if !crate::worktree::persistence::worktrees_adopted(worktracker_database).await {
         return true;
     }
     let mut reconciled = true;
-    let integrations = crate::worktree_integrate::WorktreeIntegrateService::new(
+    let integrations = crate::worktree::integrate::WorktreeIntegrateService::new(
         worktracker_database.clone(),
         journal,
         events,
@@ -415,7 +431,7 @@ async fn compose_worktree_integrations(
         reconciled = false;
     }
     if let Err(error) = integrations
-        .deliver_pending(crate::worktree_integrate::MAX_DELIVERY_BATCH)
+        .deliver_pending(crate::worktree::integrate::MAX_DELIVERY_BATCH)
         .await
     {
         eprintln!("Ticketry could not deliver completed worktree integrations: {error}");
@@ -436,7 +452,7 @@ async fn compose_document_saves(
     worktracker_database: &sea_orm::DatabaseConnection,
     outbox_adopted: bool,
 ) -> bool {
-    if let Err(error) = crate::workspace_operations::schema::install(worktracker_database).await {
+    if let Err(error) = crate::workspace::operations::schema::install(worktracker_database).await {
         eprintln!("Ticketry could not install the Workspace Operation journal: {error}");
         return false;
     }
@@ -450,7 +466,7 @@ async fn compose_document_saves(
     });
     let service = crate::documents::save::DocumentSaveService::new(
         worktracker_database.clone(),
-        crate::workspace_operations::WorkspaceOperationJournal::new(worktracker_database.clone()),
+        crate::workspace::operations::WorkspaceOperationJournal::new(worktracker_database.clone()),
         facts,
     );
     if let Err(error) = service.reconciler().reconcile().await {
@@ -500,7 +516,7 @@ pub async fn adopt_worktracker_and_install(
     //
     let installation = match ownership {
         InstallationOwnership::Owned => Some(
-            crate::installation_adoption::adopt(data_directory)
+            crate::installation::adoption::adopt(data_directory)
                 .await
                 .map_err(installation_adoption_error)?,
         ),
@@ -563,19 +579,19 @@ pub async fn adopt_worktracker_and_install(
     // Terminal persistence depends on the adopted Agent Run and Launch Effect
     // identities. Refuse an unknown Terminal leaf before the product schema or
     // any Rust terminal writer becomes reachable.
-    crate::terminal_persistence::preflight(data_directory)
+    crate::terminal::persistence::preflight(data_directory)
         .await
         .map_err(terminal_adoption_error)?;
-    crate::terminal_persistence::adopt(data_directory)
+    crate::terminal::persistence::adopt(data_directory)
         .await
         .map_err(terminal_adoption_error)?;
     // Execution campaigns depend on adopted Work Management, Runs, and
     // Terminal identities. Classify and validate them only after those three
     // stores are ready, and before any future Graph Run command is composed.
-    crate::execution_persistence::preflight(data_directory)
+    crate::execution::persistence::preflight(data_directory)
         .await
         .map_err(execution_adoption_error)?;
-    crate::execution_persistence::adopt(data_directory)
+    crate::execution::persistence::adopt(data_directory)
         .await
         .map_err(execution_adoption_error)?;
     // The Documents and Worktrees write leases change hands here, after Runs
@@ -583,7 +599,7 @@ pub async fn adopt_worktracker_and_install(
     // before any workspace command is composed. An unknown or malformed
     // Documents, Worktree, or journal schema refuses the handoff and leaves the
     // pre-cutover snapshots restorable.
-    crate::workspace_handoff::adopt(data_directory)
+    crate::workspace::handoff::adopt(data_directory)
         .await
         .map_err(workspace_adoption_error)?;
     // Every capability has handed over, so the durable status-event ledger the
@@ -591,7 +607,7 @@ pub async fn adopt_worktracker_and_install(
     // last handoff and before the endpoint is installed, because the endpoint
     // is what makes a mutation reachable.
     if let Some(installation) = installation {
-        crate::installation_adoption::open_readiness(data_directory, installation)
+        crate::installation::adoption::open_readiness(data_directory, installation)
             .await
             .map_err(installation_adoption_error)?;
     }
@@ -610,7 +626,7 @@ pub async fn adopt_worktracker_and_install(
 }
 
 fn installation_adoption_error(
-    error: crate::installation_adoption::AdoptionFailure,
+    error: crate::installation::adoption::AdoptionFailure,
 ) -> FoundationInitializationError {
     FoundationInitializationError::new(
         FoundationInitializationErrorCode::WorktrackerDatabaseOpen,
@@ -619,7 +635,7 @@ fn installation_adoption_error(
 }
 
 fn workspace_adoption_error(
-    error: crate::workspace_handoff::WorkspaceHandoffError,
+    error: crate::workspace::handoff::WorkspaceHandoffError,
 ) -> FoundationInitializationError {
     FoundationInitializationError::new(
         FoundationInitializationErrorCode::WorktrackerDatabaseOpen,
@@ -640,7 +656,7 @@ fn runs_adoption_error(
 }
 
 fn terminal_adoption_error(
-    error: crate::terminal_persistence::TerminalPersistenceError,
+    error: crate::terminal::persistence::TerminalPersistenceError,
 ) -> FoundationInitializationError {
     FoundationInitializationError::new(
         FoundationInitializationErrorCode::WorktrackerDatabaseOpen,
@@ -649,7 +665,7 @@ fn terminal_adoption_error(
 }
 
 fn execution_adoption_error(
-    error: crate::execution_persistence::ExecutionPersistenceError,
+    error: crate::execution::persistence::ExecutionPersistenceError,
 ) -> FoundationInitializationError {
     FoundationInitializationError::new(
         FoundationInitializationErrorCode::WorktrackerDatabaseOpen,

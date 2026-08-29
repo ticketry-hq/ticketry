@@ -8,7 +8,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use muxed_studio_lib::documents_persistence::{
+use muxed_studio_lib::documents::persistence::{
     adopt, documents_adopted, preflight, DocumentsPersistenceErrorCode, SourceClassification,
     LEDGER_TABLE,
 };

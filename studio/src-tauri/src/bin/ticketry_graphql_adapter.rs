@@ -12,8 +12,8 @@ use axum::{
     Router,
 };
 use futures_util::StreamExt;
-use muxed_studio_lib::launch_paths::LaunchPathsService;
-use muxed_studio_lib::terminal_lifecycle::TerminalRuntimeAuthority;
+use muxed_studio_lib::launch::paths::LaunchPathsService;
+use muxed_studio_lib::terminal::lifecycle::TerminalRuntimeAuthority;
 use muxed_studio_lib::work_management::mcp::{McpRuntime, RunAuthority};
 use serde::Deserialize;
 use tauri_graphql::{TransportApi, TransportApiImpl};
@@ -59,9 +59,9 @@ fn publish_development_readiness(
         data_directory,
         &muxed_studio_lib::runs_persistence::Slice3Readiness::complete(),
     )?;
-    muxed_studio_lib::workspace_handoff::publish_readiness(
+    muxed_studio_lib::workspace::handoff::publish_readiness(
         data_directory,
-        &muxed_studio_lib::workspace_handoff::Slice4Readiness::complete(),
+        &muxed_studio_lib::workspace::handoff::Slice4Readiness::complete(),
     )?;
     Ok(())
 }
@@ -99,15 +99,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // launch paths, and the run authority stay identical across runtimes.
     let hook_runner = hook_runner::HookRunnerResolver::from_environment().resolve()?;
     let database = adopted.runtime.commands().clone();
-    let profiles = adopted.runtime.profiles().clone();
     let hook_spool_directory =
-        muxed_studio_lib::terminal_lifecycle::ensure_hook_spool_directory(&data_directory)?;
+        muxed_studio_lib::terminal::lifecycle::ensure_hook_spool_directory(&data_directory)?;
     adopted
         .runtime
         .terminal_runtime()
         .configure(TerminalRuntimeAuthority {
             database: database.clone(),
-            paths: LaunchPathsService::new(database.clone(), profiles.clone()),
+            paths: LaunchPathsService::new(database.clone()),
             hook_runner,
             hook_spool_directory,
             mcp_url: String::new(),
@@ -275,7 +274,7 @@ mod tests {
             muxed_studio_lib::runs_persistence::published_readiness_is_complete(directory.path())
         );
         assert!(
-            muxed_studio_lib::workspace_handoff::published_readiness_is_complete(directory.path())
+            muxed_studio_lib::workspace::handoff::published_readiness_is_complete(directory.path())
         );
     }
 

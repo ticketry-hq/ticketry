@@ -5,23 +5,14 @@
 
 pub mod data_directory;
 pub mod desktop;
-pub mod document_watch;
 pub mod documents;
-pub mod documents_persistence;
+pub mod execution;
 pub mod entities;
-pub mod execution_graph;
-pub mod execution_persistence;
-pub mod execution_reconciliation;
 pub mod graph_run_service;
 pub mod graphql_foundation;
 pub mod hook_spool;
-pub mod installation_adoption;
-pub mod installation_classification;
-pub mod installation_import;
-pub mod installation_preflight;
-pub mod launch_authority;
-pub mod launch_paths;
-pub mod launch_planning;
+pub mod installation;
+pub mod launch;
 pub mod module_links;
 pub mod native_terminal;
 pub mod query_root;
@@ -29,27 +20,13 @@ pub mod run_now;
 pub mod runs_persistence;
 pub mod settings_persistence;
 pub mod temporary_profile;
-pub mod terminal_cleanup;
-pub mod terminal_launch;
-pub mod terminal_lifecycle;
-pub mod terminal_output_activity;
-pub mod terminal_persistence;
-pub mod terminal_reconciliation;
-pub mod terminal_resume;
-pub mod terminal_viewer;
+pub mod terminal;
 pub mod tmux_adapter;
 pub mod tool_discovery;
 pub mod viewer_ownership;
 pub mod work_management;
-pub mod workspace_handoff;
-pub mod workspace_operations;
-pub mod worktree_create;
-pub mod worktree_discard;
-pub mod worktree_facts;
-pub mod worktree_integrate;
-pub mod worktree_operations;
-pub mod worktree_persistence;
-pub mod worktree_status;
+pub mod workspace;
+pub mod worktree;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {

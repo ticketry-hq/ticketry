@@ -26,18 +26,6 @@ pub(super) async fn authoritative_project(
         .ok_or_else(authored_result_missing)
 }
 
-pub(super) async fn authoritative_workspace(
-    database: &sea_orm::DatabaseConnection,
-    id: &str,
-) -> Result<super::entities::workspace::Model> {
-    use sea_orm::EntityTrait;
-    super::entities::workspace::Entity::find_by_id(id)
-        .one(database)
-        .await
-        .map_err(read_error)?
-        .ok_or_else(authored_result_missing)
-}
-
 pub(super) async fn authoritative_state(
     database: &sea_orm::DatabaseConnection,
     id: &str,

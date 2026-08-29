@@ -7,11 +7,11 @@
 //! missing child handoff fails here rather than in Review.
 
 use muxed_studio_lib::graphql_foundation::generated_schema_sdl;
-use muxed_studio_lib::terminal_persistence::aggregate_seaography_audit::{
+use muxed_studio_lib::terminal::persistence::aggregate_seaography_audit::{
     AUDITED_MODULES, CUSTOM_MUTATIONS, CUSTOM_OUTPUTS, CUSTOM_QUERIES, NEEDS_PROOF,
     NON_SEAORM_CRUD_PATHS, RAW_SQL_EVIDENCE_ONLY, REGISTERED_ENTITIES, VERDICT,
 };
-use muxed_studio_lib::terminal_persistence::child_seaography_handoffs::{
+use muxed_studio_lib::terminal::persistence::child_seaography_handoffs::{
     reconciled_handoffs, CHILD_HANDOFFS,
 };
 use std::collections::BTreeSet;

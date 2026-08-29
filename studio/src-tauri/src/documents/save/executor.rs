@@ -27,7 +27,7 @@ use sea_orm::DatabaseConnection;
 use serde_json::json;
 
 use crate::documents::registry_facts::DocumentFactRecorder;
-use crate::workspace_operations::{
+use crate::workspace::operations::{
     ClaimedOperation, WorkspaceOperationExecutor, WorkspaceOperationJournal,
     WorkspaceOperationOutcome,
 };
@@ -366,7 +366,7 @@ fn retryable(code: &str, message: impl Into<String>) -> WorkspaceOperationOutcom
 fn write_failed(code: &str, error: &std::io::Error) -> WorkspaceOperationOutcome {
     WorkspaceOperationOutcome::Failed {
         code: code.to_owned(),
-        message: crate::workspace_operations::redact_diagnostic(&error.to_string()),
+        message: crate::workspace::operations::redact_diagnostic(&error.to_string()),
         retryable: true,
         cleanup_confirmed: true,
     }
@@ -374,6 +374,6 @@ fn write_failed(code: &str, error: &std::io::Error) -> WorkspaceOperationOutcome
 
 fn settlement_failure(
     error: DocumentSaveError,
-) -> crate::workspace_operations::WorkspaceOperationError {
-    crate::workspace_operations::WorkspaceOperationError::settlement(error.to_string())
+) -> crate::workspace::operations::WorkspaceOperationError {
+    crate::workspace::operations::WorkspaceOperationError::settlement(error.to_string())
 }

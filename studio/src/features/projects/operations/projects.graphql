@@ -1,5 +1,5 @@
-query WorkTrackerWorkspace {
-  workspace: worktrackerWorkspace {
+query WorkTrackerOnboarding {
+  projects: worktrackerProject(orderBy: { createdAt: ASC, id: ASC }) {
     nodes {
       id
       slug
@@ -151,8 +151,8 @@ query WorkTrackerProjectIssueTypes($projectId: String!) {
   }
 }
 
-mutation AcknowledgeWorkTrackerOnboarding {
-  acknowledge_onboarding {
+mutation AcknowledgeWorkTrackerOnboarding($projectId: String!) {
+  acknowledge_onboarding(project_id: $projectId) {
     id
     slug
     name

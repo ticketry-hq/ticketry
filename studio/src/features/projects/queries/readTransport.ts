@@ -1,14 +1,14 @@
 import type { FetchPolicy } from "@apollo/client";
-import type { Module, Project, Workspace } from "../../../shared/api/types";
+import type { Module, OnboardingProject, Project } from "../../../shared/api/types";
 import {
   compactWorktrackerId,
   publicWorktrackerId,
 } from "../../../shared/api/generatedWorktracker";
 import { studioApolloClient } from "../../../shared/apollo/client";
 import {
+  WorkTrackerOnboardingDocument,
   WorkTrackerProjectOpenDocument,
   WorkTrackerProjectsDocument,
-  WorkTrackerWorkspaceDocument,
 } from "../generated/projects.documents";
 import type {
   WorkTrackerProjectOpenQuery,
@@ -93,12 +93,20 @@ export async function readModules(projectId: string): Promise<Module[]> {
   return (await readProjectOpen(projectId)).modules;
 }
 
-export async function readWorkspace(): Promise<Workspace> {
+/**
+ * Every project's onboarding state, in creation order.
+ *
+ * Onboarding belongs to the installation project, and which project that is
+ * depends on the slugs present, so the read returns the whole ordered list and
+ * lets the caller apply that one rule.
+ */
+export async function readOnboardingProjects(): Promise<OnboardingProject[]> {
   const { data } = await studioApolloClient().query({
-    query: WorkTrackerWorkspaceDocument,
+    query: WorkTrackerOnboardingDocument,
     fetchPolicy: "network-only",
   });
-  const workspace = data!.workspace.nodes[0];
-  if (!workspace) throw new Error("The WorkTracker workspace is unavailable.");
-  return { ...workspace, id: publicWorktrackerId(workspace.id) };
+  return data!.projects.nodes.map((project) => ({
+    ...project,
+    id: publicWorktrackerId(project.id),
+  }));
 }

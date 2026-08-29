@@ -35,7 +35,7 @@ vi.mock("../features/projects/queries/readTransport", async () => {
       if (!project) throw new Error(`Project ${projectId} was not found.`);
       return projectOpenFixture(project, modules);
     },
-    readWorkspace: vi.fn(),
+    readOnboardingProjects: vi.fn(),
   };
 });
 

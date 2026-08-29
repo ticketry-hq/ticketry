@@ -64,7 +64,7 @@ impl ModuleLinkMutations {
         // Validation runs before persistence, not only before launch: a folder
         // the user cannot launch in is a mistake to report while they are still
         // looking at the picker.
-        crate::launch_paths::validate_module_folder(Some(link.path.trim()))
+        crate::launch::paths::validate_module_folder(Some(link.path.trim()))
             .map_err(|failure| refusal(resolution::ModuleFolderRefusal::from(failure)))?;
         let store = ModuleLinkStore::new(database.clone());
         store

@@ -8,6 +8,7 @@ pub mod hierarchy;
 mod identifiers;
 pub mod reorder;
 mod review_findings;
+pub(crate) mod reviewed_defaults;
 pub mod state_configuration;
 pub mod status_facts;
 pub(crate) mod timestamp;

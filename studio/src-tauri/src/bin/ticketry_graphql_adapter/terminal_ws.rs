@@ -14,7 +14,7 @@ use std::sync::Arc;
 use axum::extract::ws::{CloseFrame, Message, Utf8Bytes, WebSocket};
 use serde::{Deserialize, Serialize};
 
-use muxed_studio_lib::terminal_viewer::attachment::{TerminalAttachment, TerminalAttachmentError};
+use muxed_studio_lib::terminal::viewer::attachment::{TerminalAttachment, TerminalAttachmentError};
 use muxed_studio_lib::viewer_ownership::ViewerOwnershipService;
 
 use super::viewer_session;

@@ -15,7 +15,6 @@ use muxed_studio_lib::{
 };
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection, EntityTrait, PaginatorTrait};
 
-const WORKSPACE: &str = "10000000000000000000000000000000";
 const PROJECT: &str = "20000000000000000000000000000000";
 const STORY: &str = "30000000000000000000000000000000";
 const MODULE_TYPE: &str = "30000000000000000000000000000001";
@@ -90,17 +89,13 @@ async fn fixture(failure: Option<&str>) -> Fixture {
                 value varchar NOT NULL, updated_at varchar NOT NULL,
                 PRIMARY KEY(scope, "key")
             );
-            CREATE TABLE worktracker_workspace (
-                id char(32) PRIMARY KEY, slug varchar(48) NOT NULL,
-                name varchar(255) NOT NULL, onboarding_required bool NOT NULL,
-                created_at datetime NOT NULL, updated_at datetime NOT NULL
-            );
             CREATE TABLE worktracker_project (
-                id char(32) PRIMARY KEY, workspace_id char(32) NOT NULL,
+                id char(32) PRIMARY KEY,
                 name varchar(255) NOT NULL, slug varchar(64) NOT NULL,
                 description text NOT NULL, seq_counter integer NOT NULL,
                 state_revision bigint NOT NULL, manual_module_order bool NOT NULL,
-                created_at datetime NOT NULL, updated_at datetime NOT NULL
+                created_at datetime NOT NULL, updated_at datetime NOT NULL,
+                onboarding_required bool NOT NULL
             );
             CREATE TABLE worktracker_state (
                 id char(32) PRIMARY KEY, project_id char(32) NOT NULL,
@@ -177,11 +172,9 @@ async fn fixture(failure: Option<&str>) -> Fixture {
                 output_sequence bigint NOT NULL DEFAULT 0, last_output_at text,
                 agent text
             );
-            INSERT INTO worktracker_workspace VALUES
-                ('{WORKSPACE}', 'meml', 'Memory', 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
             INSERT INTO worktracker_project VALUES
-                ('{PROJECT}', '{WORKSPACE}', 'Main', 'MEML', '', 9, 4, 0,
-                 CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+                ('{PROJECT}', 'Main', 'MEML', '', 9, 4, 0,
+                 CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0);
             INSERT INTO worktracker_state VALUES
                 ('{IDEAS}', '{PROJECT}', 'Ideas', 'backlog', '', 0, 0,
                  CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),

@@ -6,7 +6,6 @@ use sea_orm::entity::prelude::*;
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub id: String,
-    pub workspace_id: String,
     pub name: String,
     pub slug: String,
     pub description: String,
@@ -15,8 +14,7 @@ pub struct Model {
     pub manual_module_order: bool,
     pub created_at: DateTime,
     pub updated_at: DateTime,
-    #[sea_orm(belongs_to, from = "workspace_id", to = "id")]
-    pub workspace: BelongsTo<super::workspace::Entity>,
+    pub onboarding_required: bool,
     #[sea_orm(has_many)]
     pub states: HasMany<super::state::Entity>,
     #[sea_orm(has_many)]

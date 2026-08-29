@@ -8,7 +8,7 @@
 
 use muxed_studio_lib::work_management::entities::{
     agent_model, issue, issue_blocker, issue_type, issue_type_transition, launch_binding, project,
-    provider, state, workspace,
+    provider, state,
 };
 use sea_orm::{
     ActiveModelTrait, ActiveValue::NotSet, ColumnTrait, DatabaseConnection, EntityTrait,
@@ -35,7 +35,6 @@ pub const FOREIGN_PROJECT: &str = "00000000000000000000000000090401";
 pub const FOREIGN_MODULE: &str = "00000000000000000000000000090405";
 pub const FOREIGN_ROOT: &str = "00000000000000000000000000090430";
 
-const WORKSPACE: &str = "00000000000000000000000000090300";
 const TODO: &str = "00000000000000000000000000090310";
 const IMPLEMENT: &str = "00000000000000000000000000090311";
 const REVIEW: &str = "00000000000000000000000000090312";
@@ -43,7 +42,6 @@ const DONE: &str = "00000000000000000000000000090313";
 const MODULE_TYPE: &str = "00000000000000000000000000090320";
 const TASK_TYPE: &str = "00000000000000000000000000090321";
 
-const FOREIGN_WORKSPACE: &str = "00000000000000000000000000090400";
 const FOREIGN_TODO: &str = "00000000000000000000000000090410";
 const FOREIGN_MODULE_TYPE: &str = "00000000000000000000000000090420";
 const FOREIGN_TASK_TYPE: &str = "00000000000000000000000000090421";
@@ -72,35 +70,12 @@ pub async fn seed_campaign(database: &DatabaseConnection) {
         .expect("fixture timestamp")
         .naive_utc();
 
-    for (id, slug, name) in [
-        (WORKSPACE, "slice6-execution", "Slice 6 Execution"),
-        (FOREIGN_WORKSPACE, "slice6-foreign", "Slice 6 Foreign"),
-    ] {
-        workspace::ActiveModel {
-            id: Set(id.to_owned()),
-            slug: Set(slug.to_owned()),
-            name: Set(name.to_owned()),
-            onboarding_required: Set(false),
-            created_at: Set(now),
-            updated_at: Set(now),
-        }
-        .insert(&transaction)
-        .await
-        .expect("insert campaign workspace");
-    }
-
-    for (id, workspace_id, name, slug) in [
-        (CAMPAIGN_PROJECT, WORKSPACE, "Slice 6 Execution", "EXEC"),
-        (
-            FOREIGN_PROJECT,
-            FOREIGN_WORKSPACE,
-            "Slice 6 Foreign",
-            "FRGN",
-        ),
+    for (id, name, slug) in [
+        (CAMPAIGN_PROJECT, "Slice 6 Execution", "EXEC"),
+        (FOREIGN_PROJECT, "Slice 6 Foreign", "FRGN"),
     ] {
         project::ActiveModel {
             id: Set(id.to_owned()),
-            workspace_id: Set(workspace_id.to_owned()),
             name: Set(name.to_owned()),
             slug: Set(slug.to_owned()),
             description: Set(String::new()),
@@ -109,6 +84,7 @@ pub async fn seed_campaign(database: &DatabaseConnection) {
             manual_module_order: Set(false),
             created_at: Set(now),
             updated_at: Set(now),
+            onboarding_required: Set(false),
         }
         .insert(&transaction)
         .await

@@ -321,13 +321,13 @@ async fn graphql_create_returns_the_authoritative_generated_lease_model() {
         )
         .unwrap();
     let mut context = BuilderContext::default();
-    muxed_studio_lib::terminal_persistence::column_policy::apply(&mut context);
+    muxed_studio_lib::terminal::persistence::column_policy::apply(&mut context);
     let context = Box::leak(Box::new(context));
     let mut builder = Builder::new(context, database);
     builder.mutation = Object::new("Mutation");
     builder.schema = Schema::build("Query", Some("Mutation"), None);
     let builder = muxed_studio_lib::entities::work_management::register_entity_modules(builder);
-    let builder = muxed_studio_lib::terminal_persistence::register_graphql(builder);
+    let builder = muxed_studio_lib::terminal::persistence::register_graphql(builder);
     let builder = muxed_studio_lib::viewer_ownership::register_graphql(builder);
     let schema = builder.schema_builder().data(service).finish().unwrap();
     let request = Request::new(include_str!(

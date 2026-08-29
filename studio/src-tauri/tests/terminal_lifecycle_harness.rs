@@ -1,7 +1,7 @@
 use std::thread;
 use std::time::{Duration, Instant};
 
-use muxed_studio_lib::terminal_viewer::attachment::{
+use muxed_studio_lib::terminal::viewer::attachment::{
     AttachmentOutcome, TerminalAttachment, TerminalAttachmentError,
 };
 use sea_orm::{ConnectionTrait, DbBackend, Statement};

@@ -3,7 +3,7 @@ mod common;
 use std::path::Path;
 
 use common::execution_legacy_fixture as fixture;
-use muxed_studio_lib::execution_persistence::{self, SourceClassification};
+use muxed_studio_lib::execution::persistence::{self, SourceClassification};
 use sea_orm::{ConnectionTrait, Database, DbBackend, Statement};
 
 #[tokio::test]
@@ -30,21 +30,21 @@ async fn fresh_database_without_execution_history_installs_rust_schema_idempoten
     database.close().await.expect("close fresh state database");
 
     assert_eq!(
-        execution_persistence::preflight(directory.path())
+        persistence::preflight(directory.path())
             .await
             .expect("empty Execution history has a named bridge"),
-        SourceClassification::Django(execution_persistence::EMPTY_DJANGO_LEAF),
+        SourceClassification::Django(persistence::EMPTY_DJANGO_LEAF),
     );
-    let first = execution_persistence::adopt(directory.path())
+    let first = persistence::adopt(directory.path())
         .await
         .expect("fresh Execution history adopts");
-    let second = execution_persistence::adopt(directory.path())
+    let second = persistence::adopt(directory.path())
         .await
         .expect("fresh Execution schema reopens");
     assert_eq!(first.tables, second.tables);
     assert!(second.tables.values().all(|table| table.row_count == 0));
     assert_eq!(
-        execution_persistence::preflight(directory.path())
+        persistence::preflight(directory.path())
             .await
             .expect("installed Execution schema classifies"),
         SourceClassification::RustOwned,
@@ -57,20 +57,20 @@ async fn every_supported_execution_leaf_adopts_twice_without_row_drift() {
         let directory = tempfile::tempdir().expect("create Execution leaf fixture");
         fixture::migrate_leaf(directory.path(), leaf).await;
         assert_eq!(
-            execution_persistence::preflight(directory.path())
+            persistence::preflight(directory.path())
                 .await
                 .unwrap_or_else(|error| panic!("{leaf} must classify: {error}")),
             SourceClassification::Django(leaf),
         );
-        let first = execution_persistence::adopt(directory.path())
+        let first = persistence::adopt(directory.path())
             .await
             .unwrap_or_else(|error| panic!("{leaf} must adopt: {error}"));
-        let second = execution_persistence::adopt(directory.path())
+        let second = persistence::adopt(directory.path())
             .await
             .unwrap_or_else(|error| panic!("{leaf} must reopen: {error}"));
         assert_eq!(first.tables, second.tables, "{leaf} changed after reopen");
         assert_eq!(
-            execution_persistence::preflight(directory.path())
+            persistence::preflight(directory.path())
                 .await
                 .unwrap(),
             SourceClassification::RustOwned,
@@ -86,10 +86,10 @@ async fn adoption_preserves_campaign_identity_history_and_policy() {
         .await
         .expect("adopt Runs before campaign claims");
 
-    let first = execution_persistence::adopt(directory.path())
+    let first = persistence::adopt(directory.path())
         .await
         .unwrap();
-    let second = execution_persistence::adopt(directory.path())
+    let second = persistence::adopt(directory.path())
         .await
         .unwrap();
     assert_eq!(first.tables, second.tables);
@@ -151,7 +151,7 @@ async fn an_active_claim_is_adopted_when_its_runtime_names_the_child_in_either_f
     muxed_studio_lib::runs_persistence::adopt(directory.path())
         .await
         .expect("adopt Runs before campaign claims");
-    muxed_studio_lib::terminal_persistence::adopt(directory.path())
+    muxed_studio_lib::terminal::persistence::adopt(directory.path())
         .await
         .expect("adopt Terminal before campaign claims");
     // A real installation's Terminal Sessions carry the hyphenated Work Item
@@ -174,12 +174,12 @@ async fn an_active_claim_is_adopted_when_its_runtime_names_the_child_in_either_f
     )
     .await;
 
-    let evidence = execution_persistence::adopt(directory.path())
+    let evidence = persistence::adopt(directory.path())
         .await
         .expect("an active claim whose runtime names the same child is adoptable");
     assert_eq!(evidence.tables["launched_tasks"].row_count, 1);
     assert_eq!(
-        execution_persistence::preflight(directory.path())
+        persistence::preflight(directory.path())
             .await
             .unwrap(),
         SourceClassification::RustOwned,
@@ -210,7 +210,7 @@ async fn preflight_refuses_schema_policy_identity_and_runtime_drift_before_write
         let directory = tempfile::tempdir().expect("create rejected Execution fixture");
         fixture::provision_current(directory.path()).await;
         fixture::mutate(directory.path(), mutation).await;
-        execution_persistence::preflight(directory.path())
+        persistence::preflight(directory.path())
             .await
             .expect_err(label);
         assert!(!ledger_exists(directory.path()).await, "{label} wrote adoption ledger");

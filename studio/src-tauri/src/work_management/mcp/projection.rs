@@ -53,8 +53,24 @@ pub async fn resolve_state(
         .find(|state| state.name.eq_ignore_ascii_case(name))
 }
 
+/// Every project, with the installation's own project first.
+///
+/// An agent without launch context takes the first entry as the installation
+/// project, so this orders by the same resolution the rest of the app uses
+/// rather than by creation order alone. A database adopted from the Workspace
+/// era can hold several projects whose oldest is not the installation's, and
+/// leading with that one would point MCP at a different project than startup
+/// and onboarding resolved.
 pub async fn list_projects(database: &DatabaseConnection) -> Value {
-    let rows = read_queries::projects(database).await.unwrap_or_default();
+    let mut rows = read_queries::projects(database).await.unwrap_or_default();
+    if let Ok(Some(installation)) =
+        crate::work_management::project_onboarding_migration::installation_project_id(database)
+            .await
+    {
+        if let Some(position) = rows.iter().position(|row| same_id(&row.id, &installation)) {
+            rows[..=position].rotate_right(1);
+        }
+    }
     Value::Array(
         rows.into_iter()
             .map(|row| {

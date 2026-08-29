@@ -63,7 +63,7 @@ async fn adopted() -> (tempfile::TempDir, sea_orm::DatabaseConnection, RunsServi
     let path = directory.path().join("state.db");
     fixture(&path);
     adopt(directory.path()).await.unwrap();
-    muxed_studio_lib::terminal_persistence::adopt(directory.path())
+    muxed_studio_lib::terminal::persistence::adopt(directory.path())
         .await
         .unwrap();
     let database = Database::connect(format!("sqlite:{}?mode=rw", path.display()))

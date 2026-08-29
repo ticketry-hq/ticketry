@@ -34,9 +34,11 @@ async fn fixture(setting: Option<&str>) -> (tempfile::TempDir, DatabaseConnectio
                 id char(32) PRIMARY KEY, slug varchar(64) NOT NULL UNIQUE,
                 activated bool NOT NULL, supports_unattended bool NOT NULL
             );
-            CREATE TABLE worktracker_workspace (
-                id char(32) PRIMARY KEY, slug varchar(48) NOT NULL,
-                name varchar(255) NOT NULL, onboarding_required bool NOT NULL,
+            CREATE TABLE worktracker_project (
+                id char(32) PRIMARY KEY, slug varchar(64) NOT NULL UNIQUE,
+                name varchar(255) NOT NULL, description text NOT NULL,
+                seq_counter integer NOT NULL, state_revision bigint NOT NULL,
+                manual_module_order bool NOT NULL, onboarding_required bool NOT NULL,
                 created_at datetime NOT NULL, updated_at datetime NOT NULL
             );
             CREATE TABLE worktracker_reasoninglevel (

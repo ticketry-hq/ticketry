@@ -8,11 +8,6 @@ vi.mock("../features/projects/queries", async () => ({
   getModulesSnapshot: vi.fn(),
 }));
 
-vi.mock("../features/projects/queries/readTransport", async () => ({
-  ...(await vi.importActual("../features/projects/queries/readTransport")),
-  readWorkspace: vi.fn(),
-}));
-
 // The host read: bootstrap must have answered it before anything can prompt
 // for a folder, so the test replaces the read rather than the cache.
 vi.mock("../features/module-links", async () => ({
@@ -36,7 +31,6 @@ import * as moduleLinks from "../features/module-links";
 import { getModuleLinks, seedModuleLinks } from "../features/module-links";
 import { getProjectsSnapshot, seedProjects, useStudioStore } from "../features/projects";
 import * as projectQueries from "../features/projects/queries";
-import * as projectReadTransport from "../features/projects/queries/readTransport";
 import * as workItemReadTransport from "../features/work-items/queries/readTransport";
 import { useClientStore } from "../state/clientStore";
 import { RECENT_MODULE_KEY } from "../state/persistence";
@@ -46,7 +40,6 @@ const loadModules = projectQueries.loadModules as ReturnType<typeof vi.fn>;
 const getModulesSnapshot = projectQueries.getModulesSnapshot as ReturnType<
   typeof vi.fn
 >;
-const readWorkspace = projectReadTransport.readWorkspace as ReturnType<typeof vi.fn>;
 const loadModuleLinks = moduleLinks.loadModuleLinks as ReturnType<typeof vi.fn>;
 const readModuleTree = workItemReadTransport.readModuleTreeRecords as ReturnType<
   typeof vi.fn
@@ -95,14 +88,6 @@ describe("startup acceptance", () => {
     seedModuleLinks([]);
     loadModules.mockReset().mockResolvedValue(MODULES);
     getModulesSnapshot.mockReset().mockReturnValue(MODULES);
-    readWorkspace
-      .mockReset()
-      .mockResolvedValue({
-        id: "workspace-1",
-        name: "Ticketry",
-        slug: "tic",
-        onboarding_required: false,
-      });
     readModuleTree.mockReset().mockResolvedValue({
       rootIds: [],
       children: {},

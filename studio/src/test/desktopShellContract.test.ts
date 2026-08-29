@@ -141,7 +141,7 @@ describe("desktop shell security contract", () => {
   it("launches tmux directly in libghostty without a Ticketry byte bridge", async () => {
     const nativeTerminal = await nativeTerminalSources();
     const tmuxViewer = await text(
-      "../../src-tauri/src/terminal_viewer/tmux_client.rs",
+      "../../src-tauri/src/terminal/viewer/tmux_client.rs",
     );
     const tmuxAdapter = await text("../../src-tauri/src/tmux_adapter.rs");
     const main = await text("../../src-tauri/src/main.rs");

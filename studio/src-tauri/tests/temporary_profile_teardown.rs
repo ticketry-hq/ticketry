@@ -15,7 +15,7 @@ use muxed_studio_lib::entities::terminals::{cleanup_effect, session};
 use muxed_studio_lib::temporary_profile::{
     journal_profile_teardown, journal_terminal_cleanup, ProfileTeardownOutcome,
 };
-use muxed_studio_lib::terminal_cleanup::{
+use muxed_studio_lib::terminal::cleanup::{
     CleanupKillResult, CleanupRuntimeObservation, TerminalCleanupRuntime, TerminalCleanupService,
 };
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QueryOrder};

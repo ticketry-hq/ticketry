@@ -11,7 +11,7 @@ use crate::entities::{
     runs::{agent_run, launch_effect},
     terminals::session,
 };
-use crate::execution_graph::{
+use crate::execution::graph::{
     automatic_candidates, manual_candidates, scheduling_facts, ChildSchedulingFacts, ExecutionMode,
     GraphAccess,
 };

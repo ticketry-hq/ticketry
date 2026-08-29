@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use sea_orm::{ColumnTrait, DatabaseConnection, DbErr, EntityTrait, QueryFilter, QueryOrder};
 
-use super::entities::{issue, issue_blocker, project, workspace};
+use super::entities::{issue, issue_blocker, project};
 use super::read_types as output;
 
 mod catalog;
@@ -48,16 +48,34 @@ fn timestamp(value: sea_orm::prelude::DateTime) -> String {
     format!("{}Z", value.format("%Y-%m-%dT%H:%M:%S%.f"))
 }
 
-pub async fn workspace(database: &DatabaseConnection) -> Result<Option<output::Workspace>, DbErr> {
-    Ok(workspace::Entity::find()
+fn project_output(row: project::Model) -> output::Project {
+    output::Project {
+        id: uuid(&row.id),
+        name: row.name,
+        slug: row.slug,
+        description: row.description,
+        manual_module_order: row.manual_module_order,
+        onboarding_required: row.onboarding_required,
+    }
+}
+
+/// The installation's own project, resolved the way the whole app resolves it.
+///
+/// Onboarding, the local settings profile, and MCP discovery all mean the same
+/// project by "the installation project": the one carrying a recognized slug,
+/// or failing that the oldest. Reading it through one query keeps them agreed.
+pub async fn installation_project(
+    database: &DatabaseConnection,
+) -> Result<Option<output::Project>, DbErr> {
+    let Some(id) =
+        super::project_onboarding_migration::installation_project_id(database).await?
+    else {
+        return Ok(None);
+    };
+    Ok(project::Entity::find_by_id(id)
         .one(database)
         .await?
-        .map(|row| output::Workspace {
-            id: uuid(&row.id),
-            slug: row.slug,
-            name: row.name,
-            onboarding_required: row.onboarding_required,
-        }))
+        .map(project_output))
 }
 
 pub async fn projects(database: &DatabaseConnection) -> Result<Vec<output::Project>, DbErr> {
@@ -67,13 +85,7 @@ pub async fn projects(database: &DatabaseConnection) -> Result<Vec<output::Proje
         .all(database)
         .await?
         .into_iter()
-        .map(|row| output::Project {
-            id: uuid(&row.id),
-            name: row.name,
-            slug: row.slug,
-            description: row.description,
-            manual_module_order: row.manual_module_order,
-        })
+        .map(project_output)
         .collect())
 }
 

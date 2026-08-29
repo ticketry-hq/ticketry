@@ -4,7 +4,7 @@
 //! Django backend. The test is inert when that explicit disposable source is
 //! absent, so ordinary builds never contact a developer's database.
 
-use muxed_studio_lib::installation_adoption::{self, AdoptionPath, AdoptionPlan, Phase, Readiness};
+use muxed_studio_lib::installation::adoption::{self, AdoptionPath, AdoptionPlan, Phase, Readiness};
 use sea_orm::{ConnectionTrait, Database, DbBackend, Statement};
 
 #[tokio::test]
@@ -18,7 +18,7 @@ async fn imports_a_current_postgres_snapshot_and_switches_once() {
         .expect("enable disposable PostgreSQL source");
 
     let source_before = source_counts(&dsn).await;
-    let interrupted = installation_adoption::adopt_with(
+    let interrupted = adoption::adopt_with(
         directory.path(),
         &AdoptionPlan::failing_after(Phase::BridgeWork),
     )
@@ -36,7 +36,7 @@ async fn imports_a_current_postgres_snapshot_and_switches_once() {
             .starts_with(".postgres-import.")));
     assert_eq!(source_counts(&dsn).await, source_before);
 
-    let postflight = installation_adoption::adopt_with(
+    let postflight = adoption::adopt_with(
         directory.path(),
         &AdoptionPlan::failing_after(Phase::Postflight),
     )
@@ -57,7 +57,7 @@ async fn imports_a_current_postgres_snapshot_and_switches_once() {
     );
     assert_eq!(source_counts(&dsn).await, source_before);
 
-    let imported = installation_adoption::adopt(directory.path())
+    let imported = adoption::adopt(directory.path())
         .await
         .expect("import current PostgreSQL");
     assert_eq!(imported.path, AdoptionPath::Imported);
@@ -70,12 +70,12 @@ async fn imports_a_current_postgres_snapshot_and_switches_once() {
         .is_file());
     assert_imported_reads(&directory.path().join("state.db")).await;
 
-    let ready = installation_adoption::open_readiness(directory.path(), imported)
+    let ready = adoption::open_readiness(directory.path(), imported)
         .await
         .expect("open imported readiness");
     assert_eq!(ready.readiness, Readiness::Open);
 
-    let reopened = installation_adoption::adopt(directory.path())
+    let reopened = adoption::adopt(directory.path())
         .await
         .expect("reopen imported SQLite");
     assert_eq!(reopened.path, AdoptionPath::Reopened);
@@ -94,7 +94,7 @@ async fn imports_a_supported_historical_postgres_generation() {
         .expect("enable disposable historical source");
 
     let source_before = source_counts(&dsn).await;
-    let imported = installation_adoption::adopt(directory.path())
+    let imported = adoption::adopt(directory.path())
         .await
         .expect("import historical PostgreSQL");
     assert_eq!(imported.path, AdoptionPath::Imported);

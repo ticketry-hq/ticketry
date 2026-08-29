@@ -8,11 +8,11 @@ use crate::entities::{
     execution::{graph_run, launch_claim},
     work_management::issue,
 };
-use crate::execution_graph::{
+use crate::execution::graph::{
     automatic_candidates, manual_candidates, scheduling_facts, ExecutionMode, GraphAccess,
 };
-use crate::launch_authority::{compose_task_prompt, TaskPromptSource};
-use crate::terminal_launch::{CreateTerminalSession, TerminalLaunchKind, TerminalLaunchService};
+use crate::launch::authority::{compose_task_prompt, TaskPromptSource};
+use crate::terminal::launch::{CreateTerminalSession, TerminalLaunchKind, TerminalLaunchService};
 use crate::work_management::launch_policy::{
     CallerScope, LaunchPolicyDecision, LaunchPolicyRequest, LaunchPolicyResolver,
 };
@@ -131,7 +131,7 @@ impl GraphRunService {
     pub async fn delete(
         &self,
         root_id: &str,
-        access: &crate::execution_graph::GraphAccess,
+        access: &crate::execution::graph::GraphAccess,
     ) -> Result<DeletedGraphRunResult, GraphRunServiceError> {
         self.require_mutations_open()?;
         let _mutation = self.mutation_lock.lock().await;
@@ -418,7 +418,7 @@ impl GraphRunService {
     pub async fn reset(
         &self,
         root_id: &str,
-        access: &crate::execution_graph::GraphAccess,
+        access: &crate::execution::graph::GraphAccess,
     ) -> Result<ResetGraphRunResult, GraphRunServiceError> {
         let _mutation = self.mutation_lock.lock().await;
         self.reset_unlocked(root_id, access).await
@@ -427,7 +427,7 @@ impl GraphRunService {
     async fn reset_unlocked(
         &self,
         root_id: &str,
-        access: &crate::execution_graph::GraphAccess,
+        access: &crate::execution::graph::GraphAccess,
     ) -> Result<ResetGraphRunResult, GraphRunServiceError> {
         let root_id = compact(root_id);
         let root = issue::Entity::find_by_id(&root_id)

@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 
-use crate::execution_graph::has_live_work;
-use crate::terminal_launch::TerminalLaunchService;
+use crate::execution::graph::has_live_work;
+use crate::terminal::launch::TerminalLaunchService;
 use crate::work_management::commands::{
     status_facts::WorkFactRecorder,
     workflow::{
@@ -360,9 +360,6 @@ fn policy_remedy(code: &str) -> Option<&'static str> {
         "module_id_required" => Some("Place the Story under an active module."),
         "binding_not_configured" | "prompt_not_configured" => {
             Some("Configure the Story's Implement launch binding.")
-        }
-        "profile_not_configured" | "profile_workspace_mismatch" => {
-            Some("Select a local profile for this workspace.")
         }
         "module_folder_unusable" => Some("Configure an existing writable module folder."),
         "provider_not_activated" | "unknown_agent" | "agent_not_configured" => {

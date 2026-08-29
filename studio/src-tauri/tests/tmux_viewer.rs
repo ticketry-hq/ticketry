@@ -1,5 +1,5 @@
 use crate::common::isolated_tmux::{IsolatedTmux, TmuxEnvironmentOverride, RUN_ID, TMUX_ENV_LOCK};
-use muxed_studio_lib::terminal_viewer::attachment::{
+use muxed_studio_lib::terminal::viewer::attachment::{
     AttachmentOutcome, TerminalAttachment, TerminalAttachmentError, TerminalScrollDirection,
 };
 use std::io::Read;

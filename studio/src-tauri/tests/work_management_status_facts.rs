@@ -59,17 +59,13 @@ async fn fixture() -> (tempfile::TempDir, DatabaseConnection, WorkFactRecorder) 
         .execute_unprepared(&format!(
             r#"
             PRAGMA foreign_keys=ON;
-            CREATE TABLE worktracker_workspace (
-                id char(32) PRIMARY KEY, slug varchar(255) NOT NULL UNIQUE,
-                name varchar(255) NOT NULL, created_at datetime NOT NULL,
-                updated_at datetime NOT NULL, onboarding_required bool NOT NULL
-            );
             CREATE TABLE worktracker_project (
-                id char(32) PRIMARY KEY, workspace_id char(32) NOT NULL,
+                id char(32) PRIMARY KEY,
                 name varchar(255) NOT NULL, slug varchar(64) NOT NULL,
                 description text NOT NULL, seq_counter integer NOT NULL,
                 state_revision bigint NOT NULL, manual_module_order bool NOT NULL,
-                created_at datetime NOT NULL, updated_at datetime NOT NULL
+                created_at datetime NOT NULL, updated_at datetime NOT NULL,
+                onboarding_required bool NOT NULL
             );
             CREATE TABLE worktracker_state (
                 id char(32) PRIMARY KEY, project_id char(32) NOT NULL,
@@ -128,12 +124,9 @@ async fn fixture() -> (tempfile::TempDir, DatabaseConnection, WorkFactRecorder) 
                 work_item_id TEXT, payload TEXT NOT NULL,
                 committed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
-            INSERT INTO worktracker_workspace VALUES
-                ('90000000000000000000000000000000', 'meml', 'Memory Lane',
-                 CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0);
             INSERT INTO worktracker_project VALUES
-                ('{PROJECT}', '90000000000000000000000000000000', 'Memory Lane', 'MEM', '',
-                 20, 7, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+                ('{PROJECT}', 'Memory Lane', 'MEM', '',
+                 20, 7, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0);
             INSERT INTO worktracker_state VALUES
                 ('{BACKLOG}', '{PROJECT}', 'Backlog', 'backlog', '#111111', 0, 0,
                  CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),

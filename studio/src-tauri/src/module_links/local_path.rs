@@ -4,7 +4,7 @@
 //! readable, or a Git repository is a launch-time question, and answering it
 //! here would make an installation on a detached external volume unlinkable
 //! and would make a write depend on the state of the filesystem at that
-//! instant. [`crate::launch_paths`] still refuses an unusable folder before a
+//! instant. [`crate::launch::paths`] still refuses an unusable folder before a
 //! run starts; this boundary only refuses a value no folder could ever be.
 
 use std::path::{Component, Path};

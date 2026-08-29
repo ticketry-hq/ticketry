@@ -5,7 +5,7 @@ use std::sync::LazyLock;
 
 use muxed_studio_lib::entities::work_management::{
     agent_model, agent_model_reasoning_level, attachment, issue, issue_blocker, issue_type,
-    issue_type_transition, launch_binding, project, provider, reasoning_level, state, workspace,
+    issue_type_transition, launch_binding, project, provider, reasoning_level, state,
 };
 use sea_orm::Database;
 use seaography::{
@@ -23,7 +23,6 @@ async fn generated_crud_schema() -> Schema {
     builder.mutation = Object::new("Mutation");
     builder.schema = Schema::build("Query", Some("Mutation"), None);
 
-    seaography::register_entity!(builder, workspace);
     seaography::register_entity!(builder, project);
     seaography::register_entity!(builder, state);
     seaography::register_entity!(builder, issue_type);
@@ -48,7 +47,6 @@ async fn generated_crud_schema() -> Schema {
 async fn audit_schema_blindly_enables_every_generated_worktracker_bundle() {
     let sdl = generated_crud_schema().await.sdl();
     for entity in [
-        "worktrackerWorkspace",
         "worktrackerProject",
         "worktrackerState",
         "worktrackerIssuetype",

@@ -13,7 +13,7 @@ use std::sync::{
 };
 
 use async_trait::async_trait;
-use muxed_studio_lib::workspace_operations::{
+use muxed_studio_lib::workspace::operations::{
     schema, ClaimedOperation, ExternalObservation, OperationSubject, ReconciliationDecision,
     WorkspaceOperationError, WorkspaceOperationErrorCode, WorkspaceOperationExecutor,
     WorkspaceOperationIntent, WorkspaceOperationJournal, WorkspaceOperationKind,

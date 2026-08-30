@@ -1,5 +1,5 @@
 import { screen, waitFor } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { dragEvent, dataTransfer } from "./moduleDragGestures";
 import { fixture, mountStudio, workItem } from "./seam";
@@ -37,6 +37,7 @@ function storyDropTarget(id: string): HTMLElement {
 
 describe("story list reorder acceptance", () => {
   it("[overhaul-181] reorders root tasks through the GraphQL write path", async () => {
+    const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
     const http = fixture();
     const items = [
       workItem({ id: "story-a", name: "Story A", sequence_id: 1, rank: "a" }),
@@ -70,6 +71,16 @@ describe("story list reorder acceptance", () => {
       before_id: null,
       after_id: "story-a",
     })).resolves.toBeUndefined();
+    expect(info).toHaveBeenCalledWith(
+      "[story-move]",
+      "drop-resolved",
+      expect.objectContaining({
+        storyId: "story-c",
+        beforeId: null,
+        afterId: "story-a",
+        requiresTransition: false,
+      }),
+    );
     await waitFor(() => expect(
       Array.from(document.querySelectorAll<HTMLElement>("[data-task-id]"))
         .map((row) => row.dataset.taskId)

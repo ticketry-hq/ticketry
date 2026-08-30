@@ -5,7 +5,15 @@ export interface ScratchRow {
   moduleId: string;
 }
 
-export type PlanningRow = WorkItemRow | ScratchRow;
+export interface InstantRunRow {
+  kind: "instant-run";
+  runId: string;
+  moduleId: string;
+  name: string;
+  startedAt: string;
+}
+
+export type PlanningRow = WorkItemRow | ScratchRow | InstantRunRow;
 
 export const LOADING_PLACEHOLDER = Symbol("loading-placeholder");
 export const STATE_HEADER = Symbol("state-header");
@@ -23,5 +31,7 @@ export type PlanningTreeRow =
     };
 
 export function isPlanningRow(row: PlanningTreeRow): row is PlanningRow {
-  return row.kind === "work-item" || row.kind === "scratch";
+  return row.kind === "work-item" ||
+    row.kind === "scratch" ||
+    row.kind === "instant-run";
 }

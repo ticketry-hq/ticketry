@@ -422,6 +422,13 @@ export type IdentityFilterInput = {
   not_between?: InputMaybe<Array<Scalars['String']['input']>>;
 };
 
+export type InstantRunTicket = {
+  __typename?: 'InstantRunTicket';
+  agent_run_id: Scalars['String']['output'];
+  started_at: Scalars['String']['output'];
+  title: Scalars['String']['output'];
+};
+
 export type IntegerFilterInput = {
   between?: InputMaybe<Array<Scalars['Int']['input']>>;
   eq?: InputMaybe<Scalars['Int']['input']>;
@@ -593,6 +600,7 @@ export type Mutation = {
   terminal_output_observe: TerminalOutputObservation;
   terminal_session_create: AgentTerminalSessions;
   terminal_session_update: AgentTerminalSessions;
+  update_instant_launch_setting: KeybindingSetting;
   update_issue_type: WorktrackerIssuetype;
   update_issue_type_transition: WorktrackerIssuetypetransition;
   update_keybinding_setting: KeybindingSetting;
@@ -837,6 +845,12 @@ export type MutationTerminal_Session_UpdateArgs = {
 };
 
 
+export type MutationUpdate_Instant_Launch_SettingArgs = {
+  auto_close: Scalars['Boolean']['input'];
+  initial_prompt: Scalars['String']['input'];
+};
+
+
 export type MutationUpdate_Issue_TypeArgs = {
   color?: InputMaybe<Scalars['String']['input']>;
   id: Scalars['String']['input'];
@@ -994,6 +1008,8 @@ export type Query = {
   designDocuments: DesignDocumentsConnection;
   directory_completions: Array<Scalars['String']['output']>;
   graphRuns: GraphRunsConnection;
+  instant_launch_setting?: Maybe<KeybindingSetting>;
+  instant_run_tickets: Array<InstantRunTicket>;
   keybinding_setting?: Maybe<KeybindingSetting>;
   migrationProbes: MigrationProbesConnection;
   moduleLinks: ModuleLinksConnection;
@@ -1071,6 +1087,12 @@ export type QueryGraphRunsArgs = {
   having?: InputMaybe<GraphRunsHavingInput>;
   orderBy?: InputMaybe<GraphRunsOrderInput>;
   pagination?: InputMaybe<PaginationInput>;
+};
+
+
+export type QueryInstant_Run_TicketsArgs = {
+  module_id: Scalars['String']['input'];
+  project_id: Scalars['String']['input'];
 };
 
 

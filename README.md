@@ -27,16 +27,31 @@ installed `Ticketry` app without sharing data, tmux sessions, frontend ports,
 or MCP listeners. Frontend, Rust runtime, and MCP output is written to
 `.ticketry-dev/logs/ticketry.log`.
 
-Browser-only development uses a small Rust GraphQL adapter. It is a supporting
-tool for frontend work, not a separately deployable Ticketry backend:
+The production-data web launcher uses a small Rust GraphQL adapter. It shares
+`~/.config/ticketry/state.db` and the product tmux namespace with the installed
+app:
 
 ```bash
 npm run web
 ```
 
-The web launcher and installed app use the same product database and tmux
-namespace. Only one may run at a time. The second process refuses to open the
-data directory while the first process owns it.
+For browser development with the same per-worktree isolation as
+`desktop:dev`, use:
+
+```bash
+npm run web:dev
+```
+
+Add `--log-to-file` to mirror browser console records and Rust story-move
+diagnostics into `.ticketry-dev/logs/ticketry.log`:
+
+```bash
+npm run web -- --log-to-file
+```
+
+The production web launcher and installed app use the same product database
+and tmux namespace. Only one may run at a time. The second process refuses to
+open the data directory while the first process owns it.
 
 [`config/product-identity.json`](config/product-identity.json) owns the default
 data-directory name and the supported configuration variables. Set
@@ -47,6 +62,20 @@ Use `--temp-sqlite` with either command for a disposable profile. Ticketry
 starts that profile empty, removes it after a clean exit, and stops only tmux
 sessions created in its temporary namespace. Normal shutdown preserves
 intentional tmux sessions.
+
+## Production diagnostics
+
+Launch the installed executable with `--log-to-file` to record frontend and
+Rust diagnostics. Omitting the flag leaves production file logging off.
+
+```bash
+/Applications/Ticketry.app/Contents/MacOS/ticketry --log-to-file
+```
+
+The process writes `ticketry.log` in Ticketry's selected data directory, the
+same path shown by the startup failure screen. Story moves record drop
+resolution, state transition, rank allocation, GraphQL errors, and the final
+module refresh.
 
 ## Validation
 

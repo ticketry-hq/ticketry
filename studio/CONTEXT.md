@@ -11,15 +11,26 @@ run and ends when its required setup and agent choices are completed or dismisse
 _Avoid_: Launch modal, task popup
 
 **Scratch workspace**:
-A module-scoped Studio workspace for taskless Plan and Instant runs. It belongs
-to a real module but not to a work item.
+A module-scoped internal workspace for taskless Plan and Instant runs. It belongs
+to a real module but not to a work item. The Stories pane presents it through
+the Conversations section rather than naming Scratch in the UI.
 _Avoid_: Temporary task, fake issue, unscoped terminal
 
-**Scratch launch flow**:
-The Studio interaction that begins from a scratch workspace's Agent action,
-chooses Plan or Instant and one real module, then completes the shared setup,
-prompt, and provider choices before foregrounding the new taskless run.
-_Avoid_: Task-launch flow, scratch task creation
+**Conversations section**:
+The Stories-pane section that replaces the old Scratch section. It contains a
+New conversation launcher and one ticket row for each active taskless Instant
+conversation in the selected module. The header combines their lifecycle
+chicklets. New conversation immediately launches the configured global default
+model, and the user types their request in that conversation's terminal.
+_Avoid_: Scratch section, Instant section, temporary tasks
+
+**Conversation launch flow**:
+The Studio interaction that begins from New conversation and foregrounds the
+resulting taskless Instant run. Launch authority resolves provider, model,
+reasoning, standing instructions, and auto-close from Settings. The user types
+their first request directly in the terminal. There is no prompt, mode, or
+provider modal in this flow.
+_Avoid_: Scratch launch flow, Agent picker, task creation
 
 **Module scratch workspace**:
 The user-visible workspace for taskless Plan and Instant agent runs scoped to
@@ -27,12 +38,20 @@ one real module in the active project. Choosing another module opens that
 module's separate workspace; it does not retarget runs already opened here.
 _Avoid_: No-module workspace, shared scratch workspace
 
-**Scratch run chicklet**:
-A compact lifecycle-state summary shown on a module scratch workspace's Details
-surface for its module-scoped taskless runs. Like a Story's subtree lifecycle
-chicklets, each visible state has one glyph and count; it is neither a
-Stories-pane tree row nor a terminal tab.
+**Conversation chicklets**:
+A combined lifecycle-state summary in the Conversations header. Each visible
+Instant state has one glyph and count. Conversation rows do not repeat these
+chicklets.
 _Avoid_: Scratch child row, per-run chicklet, run tab
+
+**Instant ticket**:
+A Stories-pane row backed by one active, taskless Instant Agent Run. Its title
+uses the safe launch title available to Ticketry, and selecting it foregrounds
+the exact terminal conversation. It is presentation over an Agent Run, not a
+persisted WorkItem. The module-scoped workspace remains its internal owner. A
+selected row presents only that run's terminal and never a lifecycle chicklet
+or add-agent control.
+_Avoid_: Temporary task, fake issue, Instant WorkItem
 
 **Terminal panel**:
 The collapsible Studio surface along the bottom of the ticket workspace that

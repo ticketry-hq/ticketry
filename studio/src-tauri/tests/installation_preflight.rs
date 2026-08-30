@@ -291,6 +291,24 @@ async fn an_unreadable_rank_is_refused() {
 }
 
 #[tokio::test]
+async fn an_empty_legacy_module_rank_is_not_a_work_item_rank_defect() {
+    let installation = corpus::install("current-representative");
+    corpus::execute(
+        installation.path(),
+        "UPDATE worktracker_issue SET rank = '' WHERE \"type\" = 'module'",
+    )
+    .await;
+
+    let report = run(installation.path()).await;
+
+    assert_eq!(report.verdict(), Verdict::Adoptable);
+    assert!(report
+        .defects
+        .iter()
+        .all(|defect| defect.code != "work-item-rank-syntax"));
+}
+
+#[tokio::test]
 async fn a_work_item_whose_kind_contradicts_its_issue_type_is_refused() {
     let installation = corpus::install("current-representative");
     corpus::execute(

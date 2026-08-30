@@ -62,6 +62,7 @@ export function SelectedTicketContent({
   entrySignal = 0,
   onBeforeFirstTab,
   modal = false,
+  conversationRunId = null,
 }: {
   bucket: string | null;
   projectId: string | null;
@@ -73,6 +74,8 @@ export function SelectedTicketContent({
   onBeforeFirstTab?: () => void;
   /** True only when this workspace is hosted by the issue-drawer overlay. */
   modal?: boolean;
+  /** Restrict a Conversations row to the one terminal run that row owns. */
+  conversationRunId?: string | null;
 }) {
   const {
     sessions,
@@ -81,7 +84,12 @@ export function SelectedTicketContent({
     scratch,
     workspaceRuns,
     resumableSessions,
-  } = useWorkspaceTerminalSessions(bucket, projectId, moduleId);
+  } = useWorkspaceTerminalSessions(
+    bucket,
+    projectId,
+    moduleId,
+    conversationRunId,
+  );
   const {
     slugs: activatedProviders,
     loaded: providersLoaded,
@@ -167,11 +175,12 @@ export function SelectedTicketContent({
     moduleId,
     isScratchBucket(bucket),
   );
+  const workspaceDocuments = conversationRunId ? [] : documentQuery.documents;
 
   useStudioDocumentRestoration({
     bucket,
     owner,
-    documents: documentQuery.documents,
+    documents: workspaceDocuments,
     documentsFetched: documentQuery.isFetched,
     restoreRequestRef,
     restoreGenerationRef,
@@ -232,16 +241,17 @@ export function SelectedTicketContent({
     bucket,
     projectId,
     moduleId,
-    documents: documentQuery.documents,
+    documents: workspaceDocuments,
     terminalTabs: tabs,
     activeTerminalId: activeTermId,
     resumableSessions,
     savedTabOrder: savedTabOrder.order,
+    terminalOnly: Boolean(conversationRunId),
   });
   const workspaceTabReorder = useWorkspaceTabOrdering({
     workItemId: workspaceTabWorkItemId,
     savedOrder: savedTabOrder,
-    documents: documentQuery.documents,
+    documents: workspaceDocuments,
     openDocuments: openDocs,
     terminalTabs: tabs,
     resumableSessions,
@@ -292,7 +302,7 @@ export function SelectedTicketContent({
     activeDocument: activeDoc,
     activeTerminalId: activeTermId,
     terminalIds: termIds,
-    documents: documentQuery.documents,
+    documents: workspaceDocuments,
     sessions,
     isEditView,
     launchContext,

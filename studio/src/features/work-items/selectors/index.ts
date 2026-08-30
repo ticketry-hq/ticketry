@@ -21,6 +21,7 @@ export {
   STATE_HEADER,
 } from "./planningRows";
 export type {
+  InstantRunRow,
   PlanningRow,
   PlanningTreeRow,
   ScratchRow,

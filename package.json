@@ -16,7 +16,7 @@
     "catalog:sync": "npm --prefix docs/eventcatalog run sync",
     "dev": "npm run desktop:dev",
     "web": "node scripts/web-dev.mjs",
-    "web:dev": "npm run web",
+    "web:dev": "node scripts/web-dev.mjs --development-profile",
     "boundary:check": "node scripts/check-boundary.mjs",
     "caller:check": "node scripts/shipping-caller-gate.mjs",
     "desktop:build": "npm run desktop:build --workspace @worktracker/studio",

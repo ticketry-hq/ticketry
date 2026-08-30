@@ -1,6 +1,7 @@
 import React, { useMemo } from "react";
 import { formatWorkItemDisplayIdentifier } from "../../../../../features/work-items";
 import {
+  type InstantRunRow,
   type Row,
   type ScratchRow,
   type WorkItemRow,
@@ -8,7 +9,6 @@ import {
 import {
   AgentStateBadge,
   AutomationFailureChicklet,
-  ScratchStateBadge,
 } from "../../../../../features/agents/lifecycle";
 import { TEMP_TASK_ID } from "../../../../../features/agents/types";
 import { useStudioStore } from "../../../../../features/projects";
@@ -19,6 +19,7 @@ import {
 } from "../../../../../features/work-items";
 import { stateById, useCachedStates } from "../../../../../features/projects";
 import type { DragSourceProps } from "../../../../../shared/dragDrop/useAxisDragAndDrop";
+import { instantRunPlanningRowId } from "../internal/instantRunTicketNavigation";
 
 // Warm the description-editor chunk on first row hover so it is already
 // cached when a selected issue's details render. Fired at most once.
@@ -55,6 +56,13 @@ export const TaskRow = React.memo(function TaskRow({
   recordSelectionProfilePoint("task-row-render");
   return row.kind === "scratch" ? (
     <ScratchPlanningRow
+      row={row}
+      isSelected={isSelected}
+      onClick={onClick}
+      dragSourceProps={dragSourceProps}
+    />
+  ) : row.kind === "instant-run" ? (
+    <InstantRunPlanningRow
       row={row}
       isSelected={isSelected}
       onClick={onClick}
@@ -116,8 +124,35 @@ function WorkItemPlanningRow({
   );
 }
 
-function ScratchPlanningRow({
+function InstantRunPlanningRow({
   row,
+  isSelected,
+  onClick,
+  dragSourceProps,
+}: Pick<TaskRowProps, "isSelected" | "onClick" | "dragSourceProps"> & {
+  row: InstantRunRow;
+}) {
+  const id = instantRunPlanningRowId(row.runId);
+  return (
+    <PlanningRowView
+      id={id}
+      depth={0}
+      expandable={false}
+      expanded={false}
+      identifier=""
+      stateColor={null}
+      name={row.name}
+      isSelected={isSelected}
+      onClick={onClick}
+      onToggleExpand={() => undefined}
+      dragSourceProps={dragSourceProps}
+      descendantIds={[]}
+      showAgentBadges={false}
+    />
+  );
+}
+
+function ScratchPlanningRow({
   isSelected,
   onClick,
   dragSourceProps,
@@ -132,13 +167,13 @@ function ScratchPlanningRow({
       expanded={false}
       identifier=""
       stateColor={null}
-      name="Local scratch workspace"
+      name="New conversation"
       isSelected={isSelected}
       onClick={onClick}
       onToggleExpand={() => undefined}
       dragSourceProps={dragSourceProps}
       descendantIds={[]}
-      scratchModuleId={row.moduleId}
+      showAgentBadges={false}
     />
   );
 }
@@ -156,7 +191,7 @@ interface PlanningRowViewProps {
   onToggleExpand: (taskId: string) => void;
   dragSourceProps?: DragSourceProps;
   descendantIds: string[];
-  scratchModuleId?: string;
+  showAgentBadges?: boolean;
 }
 
 function PlanningRowView({
@@ -172,10 +207,9 @@ function PlanningRowView({
   onToggleExpand,
   dragSourceProps,
   descendantIds,
-  scratchModuleId,
+  showAgentBadges = true,
 }: PlanningRowViewProps) {
   const caret = expandable ? (expanded ? "▾" : "▸") : " ";
-  const isScratch = scratchModuleId !== undefined;
 
   return (
     <li
@@ -221,9 +255,7 @@ function PlanningRowView({
         name={name}
       />
 
-      {isScratch ? (
-        <ScratchTaskStateBadge moduleId={scratchModuleId} />
-      ) : (
+      {showAgentBadges ? (
         <>
           <AutomationFailureChicklet
             issueId={id}
@@ -236,21 +268,7 @@ function PlanningRowView({
             className="ml-2"
           />
         </>
-      )}
+      ) : null}
     </li>
-  );
-}
-
-// Only the scratch row needs module-scoped lifecycle status; keeping these
-// subscriptions here means ordinary rows never evaluate the agent-status
-// selector on status updates.
-function ScratchTaskStateBadge({ moduleId }: { moduleId: string }) {
-  const selectedProjectId = useStudioStore((state) => state.selectedProjectId);
-  return (
-    <ScratchStateBadge
-      projectId={selectedProjectId}
-      moduleId={moduleId}
-      className="ml-2"
-    />
   );
 }

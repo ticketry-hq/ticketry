@@ -373,10 +373,9 @@ describe("overhaul acceptance — terminals", () => {
       name: "Resume codex terminal",
     })).toHaveLength(1);
     expect(terminalApi.terminateTerminal).toHaveBeenCalledWith("run-old");
-    // Apollo refetches both mounted resumable holdings through the shared
-    // terminal refresh. The task read plus the standby scratch holding replace
-    // the single legacy cache invalidation this assertion used to count.
-    expect(terminalReads.readTaskResumableTerminalSessions).toHaveBeenCalledTimes(3);
+    // The shared refresh re-reads the valid task holding and ignores the
+    // skipped conversation holding because it has no project or module scope.
+    expect(terminalReads.readTaskResumableTerminalSessions).toHaveBeenCalledTimes(2);
     expect(terminalApi.terminateTerminal.mock.invocationCallOrder[0])
       .toBeLessThan(terminalReads.readTaskResumableTerminalSessions.mock.invocationCallOrder[1]);
     expect(screen.getByRole("textbox", { name: "Issue title draft" }))

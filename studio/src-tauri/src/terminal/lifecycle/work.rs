@@ -85,7 +85,16 @@ impl TerminalLifecycleWork for ProductionTerminalLifecycleWork {
             .iter()
             .any(|item| item.decision == RecordedSessionDecision::Unavailable);
         if report.inventory_unavailable || unavailable_session {
-            return Err("verified terminal runtime observation is unavailable".to_owned());
+            let detail = match TmuxAdapter::discover() {
+                Ok(adapter) => adapter
+                    .classified_inventory()
+                    .map(|_| "the follow-up inventory succeeded".to_owned())
+                    .unwrap_or_else(|error| error.to_string()),
+                Err(error) => error.to_string(),
+            };
+            return Err(format!(
+                "verified terminal runtime observation is unavailable: {detail}"
+            ));
         }
         Ok(report)
     }

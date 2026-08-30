@@ -16,6 +16,10 @@ import {
   transitionWorkItem,
   updateWorkItem,
 } from "./mutationTransport";
+import {
+  recordStoryMove,
+  storyMoveError,
+} from "./internal/storyMoveDiagnostics";
 
 export interface ModuleMembership {
   projectId: string;
@@ -246,18 +250,29 @@ export function useReorderWorkItem(membership: ModuleMembership) {
       ),
     ({ id }: ReorderWorkItemArgs) => id,
     (current, { beforeId, afterId }) => {
-      const beforeRank =
-        beforeId ? cachedModuleIssue(membership, beforeId)?.rank ?? cachedRank(beforeId) : null;
-      const afterRank =
-        afterId ? cachedModuleIssue(membership, afterId)?.rank ?? cachedRank(afterId) : null;
-      // Imported data can contain duplicate sibling ranks. The server repairs
-      // that collision transactionally; skip only the optimistic move so the
-      // authoritative reorder still reaches it.
-      if (beforeRank !== null && beforeRank === afterRank) return current;
-      return {
-        ...current,
-        rank: rankBetween(beforeRank, afterRank),
-      };
+      try {
+        const beforeRank =
+          beforeId ? cachedModuleIssue(membership, beforeId)?.rank ?? cachedRank(beforeId) : null;
+        const afterRank =
+          afterId ? cachedModuleIssue(membership, afterId)?.rank ?? cachedRank(afterId) : null;
+        // Imported data can contain duplicate sibling ranks. The server repairs
+        // that collision transactionally; skip only the optimistic move so the
+        // authoritative reorder still reaches it.
+        if (beforeRank !== null && beforeRank === afterRank) return current;
+        return {
+          ...current,
+          rank: rankBetween(beforeRank, afterRank),
+        };
+      } catch (error) {
+        recordStoryMove("optimistic-reorder-failed", {
+          id: current.id,
+          beforeId,
+          afterId,
+          moduleId: membership.moduleId,
+          error: storyMoveError(error),
+        }, "error");
+        throw error;
+      }
     },
     ({ id }) => cachedModuleIssue(membership, id),
   );

@@ -209,6 +209,7 @@ fn build_schema(
     let builder = crate::settings_persistence::schema::register(builder);
     let builder = crate::runs::register_graphql(builder);
     let builder = crate::terminal::persistence::register_graphql(builder);
+    let builder = crate::terminal::instant_run_ticket::register_graphql(builder);
     let builder = crate::terminal::resume::register_graphql(builder);
     let builder = crate::terminal::launch::register_graphql(builder);
     let builder = crate::terminal::cleanup::register_graphql(builder);

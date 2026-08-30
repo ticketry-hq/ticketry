@@ -13,6 +13,7 @@ import {
 import { useCachedStates } from "../../../features/projects";
 import { stateColor } from "../../../shared/utilities/display";
 import { useModuleOpen } from ".";
+import { useInstantRunTickets } from "../../agents/terminal/instantRunTickets";
 
 const EMPTY_EXPANDED_IDS: string[] = [];
 
@@ -28,6 +29,10 @@ export function useStoriesTree() {
   const selectedModuleId = useClientStore((s) => s.selectedModuleId);
   const { tree, items } = useModuleOpen(selectedModuleId);
   const states = useCachedStates(selectedProjectId);
+  const instantRunTickets = useInstantRunTickets(
+    selectedProjectId,
+    selectedModuleId,
+  );
   const loadingTasks = false;
   const rememberedExpandedIds = useClientStore((s) =>
     selectedModuleId
@@ -68,13 +73,20 @@ export function useStoriesTree() {
     if (selectedModuleId && !(loadingTasks && tree.order.length === 0)) {
       out.push({
         kind: STATE_HEADER,
-        key: "header-scratch",
+        key: "header-conversations",
         stateId: null,
-        stateName: "Scratch",
+        stateName: "Conversations",
         stateColor: "",
-        count: 1,
+        count: instantRunTickets.length,
       });
       out.push({ kind: "scratch", moduleId: selectedModuleId });
+      out.push(...instantRunTickets.map((ticket) => ({
+        kind: "instant-run" as const,
+        runId: ticket.agentRunId,
+        moduleId: selectedModuleId,
+        name: ticket.title,
+        startedAt: ticket.startedAt,
+      })));
     }
 
     const hits = isSearchActive
@@ -133,6 +145,7 @@ export function useStoriesTree() {
     expandedIds,
     loadingTasks,
     selectedModuleId,
+    instantRunTickets,
     collapsedStateIds,
     normalizedQuery,
     isSearchActive,

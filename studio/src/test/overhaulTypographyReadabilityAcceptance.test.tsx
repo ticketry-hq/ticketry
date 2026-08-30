@@ -3,11 +3,19 @@ import { describe, expect, it } from "vitest";
 
 describe("overhaul acceptance - typography readability", () => {
   it("[overhaul-160] preserves the established Studio face and native terminal readability", async () => {
-    const [surfaceSource, ghosttyTheme, launchMaterializer] = await Promise.all([
-      readFile(`${process.cwd()}/src/app/styles/studio-surface.css`, "utf8"),
-      readFile(`${process.cwd()}/src-tauri/native/ticketry-ghostty.conf`, "utf8"),
-      readFile(`${process.cwd()}/src-tauri/src/launch/planning/materialize.rs`, "utf8"),
-    ]);
+    const [surfaceSource, ghosttyTheme, launchMaterializer, hostedCommand] =
+      await Promise.all([
+        readFile(`${process.cwd()}/src/app/styles/studio-surface.css`, "utf8"),
+        readFile(`${process.cwd()}/src-tauri/native/ticketry-ghostty.conf`, "utf8"),
+        readFile(
+          `${process.cwd()}/src-tauri/src/launch/planning/materialize.rs`,
+          "utf8",
+        ),
+        readFile(
+          `${process.cwd()}/src-tauri/src/tmux_adapter/hosted_command.rs`,
+          "utf8",
+        ),
+      ]);
 
     expect(surfaceSource).toMatch(
       /\.studio-surface\s*\{[^}]*font-mono[^}]*\}/s,
@@ -27,5 +35,6 @@ describe("overhaul acceptance - typography readability", () => {
     }
     expect(launchMaterializer).toContain('(\"COLORTERM\".to_owned(), \"truecolor\".to_owned())');
     expect(launchMaterializer).toContain('(\"FORCE_COLOR\".to_owned(), \"1\".to_owned())');
+    expect(hostedCommand).toContain('OsString::from("NO_COLOR")');
   });
 });

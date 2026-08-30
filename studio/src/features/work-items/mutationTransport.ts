@@ -13,6 +13,10 @@ import {
 } from "./generated/workItems.documents";
 import type { GeneratedWorkTrackerWorkItemFieldsFragment } from "./generated/workItems.documents";
 import { workItemFromIssue } from "./issueAdapter";
+import {
+  recordStoryMove,
+  storyMoveError,
+} from "./internal/storyMoveDiagnostics";
 
 export interface WorkItemWriteOptions {
   optimistic?: GeneratedWorkTrackerWorkItemFieldsFragment;
@@ -59,8 +63,8 @@ export async function createWorkItem(
         };
       });
     },
-    refetchQueries: [WorkTrackerModuleOpenDocument],
-    awaitRefetchQueries: true,
+    refetchQueries: options.moduleId ? [WorkTrackerModuleOpenDocument] : [],
+    awaitRefetchQueries: Boolean(options.moduleId),
   });
   return workItemFromIssue(data!.create_work_item);
 }
@@ -90,17 +94,36 @@ export async function transitionWorkItem(
   stateId: string,
   options: WorkItemWriteOptions = {},
 ): Promise<WorkItem> {
-  const { data } = await studioApolloClient().mutate({
-    mutation: TransitionWorkTrackerWorkItemDocument,
-    variables: {
-      id: compactWorktrackerId(id),
-      targetStateId: compactWorktrackerId(stateId),
-    },
-    optimisticResponse: options.optimistic
-      ? { update_work_item: options.optimistic }
-      : undefined,
+  const variables = {
+    id: compactWorktrackerId(id),
+    targetStateId: compactWorktrackerId(stateId),
+  };
+  recordStoryMove("transition-requested", {
+    ...variables,
+    optimistic: Boolean(options.optimistic),
   });
-  return workItemFromIssue(data!.update_work_item);
+  try {
+    const { data } = await studioApolloClient().mutate({
+      mutation: TransitionWorkTrackerWorkItemDocument,
+      variables,
+      optimisticResponse: options.optimistic
+        ? { update_work_item: options.optimistic }
+        : undefined,
+    });
+    const item = workItemFromIssue(data!.update_work_item);
+    recordStoryMove("transition-succeeded", {
+      id: item.id,
+      stateId: item.state,
+      rank: item.rank,
+    });
+    return item;
+  } catch (error) {
+    recordStoryMove("transition-failed", {
+      ...variables,
+      error: storyMoveError(error),
+    }, "error");
+    throw error;
+  }
 }
 
 export async function reparentWorkItem(
@@ -151,28 +174,56 @@ export async function reorderWorkItem(
   options: WorkItemWriteOptions = {},
 ): Promise<WorkItem> {
   const client = studioApolloClient();
-  const { data } = await client.mutate({
-    mutation: ReorderWorkTrackerWorkItemDocument,
-    variables: {
-      id: compactWorktrackerId(id),
-      beforeId: neighbors.before_id ? compactWorktrackerId(neighbors.before_id) : null,
-      afterId: neighbors.after_id ? compactWorktrackerId(neighbors.after_id) : null,
-      initialOrderIds: neighbors.initial_order_ids?.map(compactWorktrackerId),
-    },
-    optimisticResponse: options.optimistic
-      ? { reorder_work_item: options.optimistic }
-      : undefined,
+  const variables = {
+    id: compactWorktrackerId(id),
+    beforeId: neighbors.before_id ? compactWorktrackerId(neighbors.before_id) : null,
+    afterId: neighbors.after_id ? compactWorktrackerId(neighbors.after_id) : null,
+    initialOrderIds: neighbors.initial_order_ids?.map(compactWorktrackerId),
+  };
+  let phase = "mutation";
+  recordStoryMove("reorder-requested", {
+    ...variables,
+    moduleId: options.moduleId ?? null,
+    optimistic: Boolean(options.optimistic),
   });
-  // Rebalancing can change every sibling rank. Fetch this exact module instead
-  // of relying on Apollo to discover an active query from the document alone.
-  if (options.moduleId) {
-    await client.query({
-      query: WorkTrackerModuleOpenDocument,
-      variables: { moduleId: compactWorktrackerId(options.moduleId) },
-      fetchPolicy: "network-only",
+  try {
+    const { data } = await client.mutate({
+      mutation: ReorderWorkTrackerWorkItemDocument,
+      variables,
+      optimisticResponse: options.optimistic
+        ? { reorder_work_item: options.optimistic }
+        : undefined,
     });
+    const item = workItemFromIssue(data!.reorder_work_item);
+    recordStoryMove("reorder-mutation-succeeded", {
+      id: item.id,
+      stateId: item.state,
+      rank: item.rank,
+    });
+    // Rebalancing can change every sibling rank. Fetch this exact module instead
+    // of relying on Apollo to discover an active query from the document alone.
+    if (options.moduleId) {
+      phase = "module-refresh";
+      await client.query({
+        query: WorkTrackerModuleOpenDocument,
+        variables: { moduleId: compactWorktrackerId(options.moduleId) },
+        fetchPolicy: "network-only",
+      });
+      recordStoryMove("reorder-refresh-succeeded", {
+        id: item.id,
+        moduleId: options.moduleId,
+      });
+    }
+    return item;
+  } catch (error) {
+    recordStoryMove("reorder-failed", {
+      ...variables,
+      moduleId: options.moduleId ?? null,
+      phase,
+      error: storyMoveError(error),
+    }, "error");
+    throw error;
   }
-  return workItemFromIssue(data!.reorder_work_item);
 }
 
 export async function deleteWorkItem(id: string): Promise<void> {

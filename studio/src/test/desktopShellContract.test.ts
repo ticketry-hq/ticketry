@@ -68,6 +68,7 @@ describe("desktop shell security contract", () => {
       windows: ["main"],
       permissions: [
         "allow-desktop-runtime-configuration",
+        "allow-desktop-file-logging-enabled",
         "allow-desktop-append-frontend-log",
         "allow-desktop-retry-services",
         "allow-desktop-pick-folder",
@@ -254,6 +255,8 @@ describe("desktop shell security contract", () => {
 
     expect(rootPackage.scripts).toMatchObject({
       "dev": "npm run desktop:dev",
+      "web": "node scripts/web-dev.mjs",
+      "web:dev": "node scripts/web-dev.mjs --development-profile",
       "desktop:dev": "npm run desktop:dev --workspace @worktracker/studio --",
       "desktop:build": "npm run desktop:build --workspace @worktracker/studio",
       "desktop:deploy": "npm run desktop:deploy --workspace @worktracker/studio",

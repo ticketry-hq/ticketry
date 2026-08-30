@@ -6,7 +6,8 @@ import StudioApp from "./app/StudioApp";
 import { ModalHost } from "./app/modal/ModalHost";
 import { DialogHost } from "./app/shell/DialogHost";
 import ToastHost from "./app/shell/ToastHost";
-import { installFrontendLogBridge } from "./shared/logging/frontendLogBridge";
+import { installDesktopFileLogging } from "./shared/logging/desktopFileLogging";
+import { installWebFileLogging } from "./shared/logging/webFileLogging";
 import { StudioApolloProvider } from "./shared/apollo/StudioApolloProvider";
 
 // Self-hosted fonts (Fontsource, upright variable axes only — no external
@@ -26,10 +27,6 @@ import {
   initializeBrowserRuntime,
   initializeStudioRuntime,
 } from "./runtime";
-
-if (import.meta.env.DEV && isTauri()) {
-  installFrontendLogBridge({ invoke });
-}
 
 if (isTauri()) {
   suppressNativeContextMenu();
@@ -53,8 +50,10 @@ const root = ReactDOM.createRoot(document.getElementById("root")!);
 async function startStudio(): Promise<void> {
   try {
     if (isTauri()) {
+      await installDesktopFileLogging({ invoke });
       initializeStudioRuntime(await createDesktopRuntime({ invoke, listen }));
     } else {
+      await installWebFileLogging();
       initializeBrowserRuntime();
     }
     root.render(

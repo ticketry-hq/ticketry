@@ -204,7 +204,7 @@ export function WorkspaceLauncher({
         aria-expanded={launchOpen}
         title={
           launchContext.kind === "scratch"
-            ? "Start a new Plan or Instant run"
+            ? "Start a new Plan or Instant conversation"
             : "Start a new agent run for this issue"
         }
         className="flex shrink-0 items-center border border-dashed border-pane-border px-2 py-0.5 text-xs text-text-muted transition-colors hover:border-focus-accent hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-pane-border disabled:hover:text-text-muted"

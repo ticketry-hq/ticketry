@@ -72,6 +72,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map(PathBuf::from)
         .ok_or("MUXED_DATA_DIR is required")?;
     std::fs::create_dir_all(&data_directory)?;
+    muxed_studio_lib::configure_file_logging(
+        &data_directory,
+        std::env::var_os("MUXED_DEVELOPMENT_LOG_PATH").map(PathBuf::from),
+    );
     let _data_directory_guard = muxed_studio_lib::data_directory::DataDirectoryGuard::acquire(
         &data_directory,
     )

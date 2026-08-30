@@ -64,22 +64,31 @@ pub(crate) async fn desktop_launch_default_coding_agent(
     Ok(serde_json::json!({ "agent_run_id": session.agent_run_id }))
 }
 
-/// Development-only bridge from the local main webview to the fixed log.
+/// Bridge from the local main webview to the optional process log.
 #[tauri::command]
 pub(crate) fn desktop_append_frontend_log(
     window: tauri::WebviewWindow,
     _state: tauri::State<'_, DesktopServiceState>,
+    log: tauri::State<'_, crate::diagnostics::FileLog>,
     level: String,
     message: String,
 ) -> Result<(), String> {
-    if !cfg!(debug_assertions) {
-        return Err("frontend log persistence is available only in development".to_owned());
-    }
     if window.label() != MAIN_WINDOW_LABEL {
         return Err("frontend logs are restricted to the local main window".to_owned());
     }
     let line = frontend_log_line(&level, &message)?;
-    append_frontend_log(&line)
+    append_frontend_log(&log, &line)
+}
+
+#[tauri::command]
+pub(crate) fn desktop_file_logging_enabled(
+    window: tauri::WebviewWindow,
+    log: tauri::State<'_, crate::diagnostics::FileLog>,
+) -> Result<bool, String> {
+    if window.label() != MAIN_WINDOW_LABEL {
+        return Err("file logging status is restricted to the local main window".to_owned());
+    }
+    Ok(log.is_enabled())
 }
 
 /// A startup failure is retried by restarting the one in-process runtime.

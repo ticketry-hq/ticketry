@@ -232,10 +232,11 @@ pub fn invariants() -> Vec<Invariant> {
         Invariant {
             code: "work-item-rank-syntax",
             area: Area::WorkManagement,
-            rule: "every rank is a non-empty base-62 key the ranking algebra can read",
-            requires: &["worktracker_issue.rank"],
+            rule: "every task rank is a non-empty base-62 key the ranking algebra can read",
+            requires: &["worktracker_issue.rank", "worktracker_issue.type"],
             query: "SELECT id AS identity FROM worktracker_issue
-                    WHERE rank = '' OR rank GLOB '*[^0-9A-Za-z]*'"
+                    WHERE \"type\" = 'task'
+                      AND (rank = '' OR rank GLOB '*[^0-9A-Za-z]*')"
                 .to_owned(),
         },
         Invariant {

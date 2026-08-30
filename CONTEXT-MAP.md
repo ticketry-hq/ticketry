@@ -6,8 +6,8 @@
   launch bindings, and the durable planning database.
 - **Agent Execution** owns dependency-graph runs, launch readiness, retry
   attempts, and durable agent-run lifecycle.
-- **Workspace Runtime** owns tmux-backed terminal sessions, document access, and
-  task worktrees.
+- **[Workspace Runtime](./studio/src-tauri/src/worktree/CONTEXT.md)** owns
+  tmux-backed terminal sessions, document access, and task worktrees.
 - **Studio Experience** owns the human-facing workspace, navigation, local view
   projections, editing interactions, and desktop API client.
 - **Desktop Runtime** owns the Tauri/webview boundary, in-process Rust tasks,

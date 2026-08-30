@@ -4,6 +4,7 @@ use muxed_studio_lib::work_management::workflow_color_migration::{
 use muxed_studio_lib::{
     graphql_foundation::initialize_with_worktracker_commands_and_install,
     installation::adoption::provisioning,
+    runs_persistence,
     work_management::{
         commands::catalog::{self, CreateProject},
         module_presentation_migration, open_for_commands, project_onboarding_migration,
@@ -273,7 +274,14 @@ async fn production_startup_adopts_old_colors_before_generated_state_reads() {
         ))
         .await
         .expect("restore pre-upgrade colors");
+    database
+        .execute_unprepared(&format!("DROP TABLE {LEDGER_TABLE}"))
+        .await
+        .expect("restore the pre-workflow-color migration checkpoint");
     database.close().await.expect("close pre-upgrade profile");
+    runs_persistence::adopt(directory.path())
+        .await
+        .expect("adopt the provisioned Runs schema before GraphQL startup");
 
     let api = TransportApiImpl::new();
     let _runtime = initialize_with_worktracker_commands_and_install(

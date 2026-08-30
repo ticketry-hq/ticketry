@@ -1,14 +1,13 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use muxed_studio_lib::{
-    installation::adoption::provisioning,
     settings_persistence::provider_catalog_migrations,
     work_management::{
-        launch_binding_entry_skill_migration, module_presentation_migration, open_for_commands,
+        launch_binding_entry_skill_migration, module_presentation_migration,
         project_onboarding_migration, workflow_color_migration, workspace_tab_order_migration,
     },
 };
-use sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, Statement};
+use sea_orm::{ConnectionTrait, Database, DatabaseConnection, DbBackend, Statement};
 
 const PROJECT: &str = "00000000000000000000000000001001";
 const GRILL: &str = "00000000000000000000000000001002";
@@ -19,17 +18,35 @@ const TASK: &str = "00000000000000000000000000001006";
 
 pub async fn fixture() -> (tempfile::TempDir, DatabaseConnection) {
     let directory = tempfile::tempdir().expect("create 0043 fixture directory");
-    provisioning::provision(directory.path())
+    let database = Database::connect(format!(
+        "sqlite:{}?mode=rwc",
+        directory.path().join("state.db").display()
+    ))
+    .await
+    .expect("open the 0043 fixture");
+    database
+        .execute_unprepared(include_str!(
+            "../../src/installation/adoption/provisioning.v1.sql"
+        ))
         .await
-        .expect("provision the generated 0043 schema");
-    let database = open_for_commands(&directory.path().join("state.db"))
-        .await
-        .expect("open the 0043 fixture");
+        .expect("install the generated 0043 schema");
     database
         .execute_unprepared(&format!(
             "PRAGMA foreign_keys = ON;
+             INSERT INTO worktracker_workspace
+                (id,slug,name,created_at,updated_at,onboarding_required)
+             VALUES
+                ('00000000000000000000000000001000','meml','meml',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,1);
+             INSERT INTO worktracker_project
+                (id,workspace_id,name,slug,description,seq_counter,state_revision,
+                 manual_module_order,created_at,updated_at)
+             VALUES
+                ('{PROJECT}','00000000000000000000000000001000','Coding','CDN','',0,0,1,
+                 CURRENT_TIMESTAMP,CURRENT_TIMESTAMP);
+             INSERT INTO worktracker_provider (id,slug,activated,supports_unattended)
+             VALUES ('00000000000000000000000000001009','codex',1,1);
              UPDATE worktracker_project
-                SET id='{PROJECT}', manual_module_order=1
+                SET manual_module_order=1
               WHERE slug='CDN';
              INSERT INTO worktracker_state
                 (id,name,\"group\",color,created_at,updated_at,project_id,sort_order,is_protected)

@@ -67,6 +67,7 @@ async fn fixture() -> (tempfile::TempDir, DatabaseConnection, LaunchPolicyResolv
                 state_revision bigint NOT NULL, name varchar(512) NOT NULL,
                 sequence_id integer NOT NULL, is_archived bool NOT NULL,
                 rank varchar(64) NOT NULL, description text NOT NULL,
+                workspace_tab_order JSON NOT NULL DEFAULT '[]',
                 created_at datetime NOT NULL, updated_at datetime NOT NULL
             );
             CREATE TABLE worktracker_provider (
@@ -124,9 +125,9 @@ async fn fixture() -> (tempfile::TempDir, DatabaseConnection, LaunchPolicyResolv
                  CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
             INSERT INTO worktracker_issue VALUES
                 ('{MODULE}', '{PROJECT}', 'module', '{TYPE}', NULL, NULL, NULL, 0,
-                 'Module', 1, 0, 'M', '', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+                 'Module', 1, 0, 'M', '', '[]', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
                 ('{TASK}', '{PROJECT}', 'task', '{TYPE}', '{MODULE}', '{MODULE}', '{STATE}', 0,
-                 'Task', 2, 0, 'N', '', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+                 'Task', 2, 0, 'N', '', '[]', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
             INSERT INTO worktracker_provider VALUES
                 ('{CODEX}', 'codex', 1, 1),
                 ('{CLAUDE}', 'claude', 1, 1),
@@ -426,10 +427,10 @@ async fn global_default_changes_apply_once_to_the_next_decision() {
 }
 
 #[tokio::test]
-async fn compatibility_failure_and_restart_keep_one_pending_identity() {
+async fn automatic_decision_and_restart_keep_one_pending_identity() {
     let (directory, database, resolver) = fixture().await;
     let decision = resolver
-        .resolve(request(CallerScope::Interactive, "request-1"))
+        .resolve(request(CallerScope::AutoStart, "request-1"))
         .await
         .unwrap();
     let recorded = launch_policy::record(&database, &decision).await.unwrap();

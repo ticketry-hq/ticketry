@@ -184,6 +184,7 @@ async fn fixture() -> Fixture {
                 state_revision bigint NOT NULL, name varchar(512) NOT NULL,
                 sequence_id integer NOT NULL, is_archived bool NOT NULL,
                 rank varchar(64) NOT NULL, description text NOT NULL,
+                workspace_tab_order JSON NOT NULL DEFAULT '[]',
                 created_at datetime NOT NULL, updated_at datetime NOT NULL,
                 UNIQUE(project_id, sequence_id)
             );
@@ -216,16 +217,16 @@ async fn fixture() -> Fixture {
                  CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
             INSERT INTO worktracker_issue VALUES
                 ('{MODULE}', '{PROJECT}', 'module', '{MODULE_TYPE}', NULL, NULL,
-                 '{BACKLOG}', 1, 'Ticketry', 880, 0, 'y', '',
+                 '{BACKLOG}', 1, 'Ticketry', 880, 0, 'y', '', '[]',
                  CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
                 ('{OTHER_MODULE}', '{PROJECT}', 'module', '{MODULE_TYPE}', NULL, NULL,
-                 '{BACKLOG}', 1, 'Unlinked', 879, 0, 'y', '',
+                 '{BACKLOG}', 1, 'Unlinked', 879, 0, 'y', '', '[]',
                  CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
                 ('{PARENT_TASK}', '{PROJECT}', 'task', '{TASK_TYPE}', '{MODULE}',
-                 '{MODULE}', '{BACKLOG}', 1, 'Parent story', 881, 0, 'z', '',
+                 '{MODULE}', '{BACKLOG}', 1, 'Parent story', 881, 0, 'z', '', '[]',
                  CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
                 ('{CHILD_TASK}', '{PROJECT}', 'task', '{TASK_TYPE}', '{PARENT_TASK}',
-                 '{MODULE}', '{BACKLOG}', 1, 'Child task', 882, 0, 'za', '',
+                 '{MODULE}', '{BACKLOG}', 1, 'Child task', 882, 0, 'za', '', '[]',
                  CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
             "#
         ))

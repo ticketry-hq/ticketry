@@ -51,6 +51,7 @@ async fn fixture() -> (tempfile::TempDir, sea_orm::DatabaseConnection) {
                 state_revision bigint NOT NULL, name varchar(512) NOT NULL,
                 sequence_id integer NOT NULL, is_archived bool NOT NULL,
                 rank varchar(64) NOT NULL, description text NOT NULL,
+                workspace_tab_order JSON NOT NULL DEFAULT '[]',
                 created_at datetime NOT NULL, updated_at datetime NOT NULL,
                 UNIQUE(project_id, sequence_id)
             );
@@ -81,7 +82,7 @@ async fn fixture() -> (tempfile::TempDir, sea_orm::DatabaseConnection) {
                  '{FROM}', 11, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
             INSERT INTO worktracker_issue VALUES
                 ('{ISSUE}', '{PROJECT}', 'task', '{ISSUE_TYPE}', NULL, NULL, '{FROM}',
-                 7, 'Occurrence seam', 1, 0, 'M', '', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+                 7, 'Occurrence seam', 1, 0, 'M', '', '[]', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
             INSERT INTO worktracker_issuetypetransition
                 (issue_type_id, from_state_id, to_state_id, agent_allowed)
                 VALUES ('{ISSUE_TYPE}', '{FROM}', '{TO}', 1);

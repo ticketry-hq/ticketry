@@ -37,11 +37,13 @@ jobs:
           npm run test --workspace @worktracker/studio
           npm run build
 
-      - name: Prepare native terminal renderer
-        run: npm run libghostty:prepare --workspace @worktracker/studio
+      - name: Prepare native desktop dependencies
+        run: |
+          npm run libghostty:prepare --workspace @worktracker/studio
+          npm run hook:prepare --workspace @worktracker/studio
 
       - name: Desktop Rust tests
-        run: cargo test --manifest-path studio/src-tauri/Cargo.toml --features native-libghostty
+        run: npm run rust:test --workspace @worktracker/studio
 
       - name: Frontend-to-agent desktop acceptance
         timeout-minutes: 30

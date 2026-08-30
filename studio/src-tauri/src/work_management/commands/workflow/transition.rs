@@ -59,6 +59,16 @@ pub async fn transition_with_expectation(
 ) -> Result<String, CommandError> {
     let id = database_uuid(&input.id, "id")?;
     let target_id = database_uuid(&input.target_state_id, "target_state_id")?;
+    crate::diagnostics::record_story_move(
+        "info",
+        "backend-transition-started",
+        serde_json::json!({
+            "id": id,
+            "target_state_id": target_id,
+            "origin": format!("{:?}", input.origin).to_lowercase(),
+            "guarded": expectation.is_some(),
+        }),
+    );
     let initial = issue::Entity::find_by_id(&id)
         .one(database)
         .await?
@@ -80,6 +90,20 @@ pub async fn transition_with_expectation(
         .one(&transaction)
         .await?
         .ok_or_else(|| CommandError::NotFound("Work-item type not found.".to_owned()))?;
+    crate::diagnostics::record_story_move(
+        "info",
+        "backend-transition-candidate-loaded",
+        serde_json::json!({
+            "id": current.id,
+            "project_id": current.project_id,
+            "issue_type_id": current.issue_type_id,
+            "source_state_id": current.state_id,
+            "target_state_id": target_id,
+            "rank": current.rank,
+            "state_revision": current.state_revision,
+            "workflow_revision": kind.workflow_revision,
+        }),
+    );
     if let Some(expected) = &expectation {
         let source_id = database_uuid(&expected.source_state_id, "source_state_id")?;
         if current.state_id.as_deref() != Some(source_id.as_str())
@@ -206,6 +230,17 @@ pub async fn transition_with_expectation(
     } else {
         current.rank.clone()
     };
+    crate::diagnostics::record_story_move(
+        "info",
+        "backend-transition-rank-computed",
+        serde_json::json!({
+            "id": current.id,
+            "source_state_id": current.state_id,
+            "target_state_id": target.id,
+            "old_rank": current.rank,
+            "new_rank": rank,
+        }),
+    );
     let revision = next_project_revision(&transaction, &current.project_id).await?;
     let old_cancelled = from
         .as_ref()
@@ -218,7 +253,7 @@ pub async fn transition_with_expectation(
     identity.is_archived = new_cancelled;
     let mut active: issue::ActiveModel = current.clone().into();
     active.state_id = Set(Some(target.id.clone()));
-    active.rank = Set(rank);
+    active.rank = Set(rank.clone());
     active.state_revision = Set(revision);
     active.is_archived = Set(new_cancelled);
     active.updated_at = Set(now.clone());
@@ -289,6 +324,17 @@ pub async fn transition_with_expectation(
     )
     .await?;
     transaction.commit().await?;
+    crate::diagnostics::record_story_move(
+        "info",
+        "backend-transition-committed",
+        serde_json::json!({
+            "id": id,
+            "target_state_id": target.id,
+            "rank": rank,
+            "state_revision": revision,
+            "archived_descendant_count": cascaded.len(),
+        }),
+    );
     if let Some(facts) = facts {
         facts.wake();
     }

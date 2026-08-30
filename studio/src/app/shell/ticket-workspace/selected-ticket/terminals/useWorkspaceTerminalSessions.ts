@@ -13,12 +13,22 @@ export function useWorkspaceTerminalSessions(
   bucket: string | null,
   projectId: string | null,
   moduleId: string | null,
+  conversationRunId: string | null = null,
 ) {
   const sessions = useTerminalStore((state) => state.sessions);
-  const tabs = useTaskSessions(bucket);
-  const activeTerminalId = useActiveSession(bucket);
+  const bucketTabs = useTaskSessions(bucket);
+  const tabs = conversationRunId
+    ? bucketTabs.filter((tab) => tab.meta.agentRunId === conversationRunId)
+    : bucketTabs;
+  const bucketActiveTerminalId = useActiveSession(bucket);
+  const conversationSessionId = useTerminalStore((state) =>
+    conversationRunId ? state.sessionByRun[conversationRunId] ?? null : null
+  );
+  const activeTerminalId = conversationRunId
+    ? conversationSessionId
+    : bucketActiveTerminalId;
   const scratch = isScratchBucket(bucket);
-  const resumableSessions = useResumableTerminalSessions(
+  const bucketResumableSessions = useResumableTerminalSessions(
     bucket && !scratch ? bucket : null,
     scratch ? projectId : null,
     scratch ? moduleId : null,
@@ -26,12 +36,17 @@ export function useWorkspaceTerminalSessions(
   const focusSession = useTerminalStore((state) => state.focusSession);
   const openSession = useTerminalStore((state) => state.openSession);
   const workspaceRuns = useAgentStatusSelection(
-    (holding) => selectWorkspaceTerminalRuns(
-      holding,
-      bucket,
-      projectId,
-      moduleId,
-    ),
+    (holding) => {
+      const runs = selectWorkspaceTerminalRuns(
+        holding,
+        bucket,
+        projectId,
+        moduleId,
+      );
+      return conversationRunId
+        ? runs.filter((run) => run.agent_run_id === conversationRunId)
+        : runs;
+    },
   );
 
   return {
@@ -40,7 +55,7 @@ export function useWorkspaceTerminalSessions(
     activeTerminalId,
     scratch,
     workspaceRuns,
-    resumableSessions,
+    resumableSessions: conversationRunId ? [] : bucketResumableSessions,
     focusSession,
     openSession,
   };

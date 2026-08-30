@@ -63,7 +63,7 @@ async fn resume_creates_new_history_and_retries_idempotently() {
             "UPDATE agent_terminal_sessions \
              SET runtime_namespace='tmux-source-installation', \
                  task_id='00000000-0000-0000-0000-000000008647', \
-                 module_id='00000000-0000-0000-0000-000000008644', \
+                 module_id='00000000-0000-0000-0000-000000009999', \
                  project_id='00000000-0000-0000-0000-000000008641' \
              WHERE agent_run_id='resume-source'",
         )

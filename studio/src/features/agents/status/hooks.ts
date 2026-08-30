@@ -6,6 +6,7 @@ import {
 } from "./apolloHolding";
 import {
   selectModuleLifecycleCounts,
+  selectConversationLifecycleChips,
   selectRunState,
   selectScratchLifecycleChips,
   selectScratchRunIds,
@@ -103,6 +104,14 @@ export const useScratchLifecycleChips = (
   moduleId: string,
 ) => useAgentStatusSelection(
   (holding) => selectScratchLifecycleChips(holding, projectId, moduleId),
+  selectionEqual,
+);
+
+export const useConversationLifecycleChips = (
+  projectId: string,
+  moduleId: string,
+) => useAgentStatusSelection(
+  (holding) => selectConversationLifecycleChips(holding, projectId, moduleId),
   selectionEqual,
 );
 

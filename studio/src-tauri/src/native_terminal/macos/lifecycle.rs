@@ -241,4 +241,3 @@ fn apply_frame(
         .map_err(|_| "timed out applying the native terminal frame".to_owned())?;
     TerminalGrid::new(size.columns, size.rows).map_err(str::to_owned)
 }
-

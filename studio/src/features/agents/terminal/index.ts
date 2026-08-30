@@ -93,6 +93,7 @@ export {
   ackTerminal,
   closeTerminal,
 } from "./internal/actions";
+export { launchInstantConversation } from "./instantConversationLaunch";
 
 // Shared terminal-create launcher (CODIN-839): folder gate → optional prompt →
 // required agent → scratch planning launch. Studio create surfaces consume the

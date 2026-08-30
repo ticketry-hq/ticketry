@@ -25,6 +25,7 @@ interface StateHeaderRowProps {
   stateId?: string | null;
   dropTargetProps?: DropTargetProps;
   showDropSeam?: boolean;
+  statusAdornment?: React.ReactNode;
 }
 
 const STAGE_ICON_BY_NAME: Readonly<
@@ -55,6 +56,7 @@ export const StateHeaderRow = React.memo(function StateHeaderRow({
   stateId,
   dropTargetProps,
   showDropSeam = false,
+  statusAdornment,
 }: StateHeaderRowProps) {
   const StageIcon = stageIconForName(stateName);
 
@@ -92,6 +94,9 @@ export const StateHeaderRow = React.memo(function StateHeaderRow({
         </span>
         <span className="font-bold">{stateName}</span>
         <span className="ml-2 text-text-muted">{count}</span>
+        {statusAdornment ? (
+          <span className="ml-auto pl-2">{statusAdornment}</span>
+        ) : null}
       </button>
       {stateId && onConfigure ? (
         <button

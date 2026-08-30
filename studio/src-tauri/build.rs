@@ -11,6 +11,7 @@ fn main() {
     tauri_build::try_build(tauri_build::Attributes::new().app_manifest(
         tauri_build::AppManifest::new().commands(&[
             "desktop_runtime_configuration",
+            "desktop_file_logging_enabled",
             "desktop_append_frontend_log",
             "desktop_retry_services",
             "desktop_pick_folder",

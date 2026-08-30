@@ -1,5 +1,5 @@
 {
-  "defaultDataDirectoryName": "worktracker-studio-rust",
+  "defaultDataDirectoryName": "ticketry",
   "dataDirectoryNameEnvironmentVariable": "TICKETRY_DATA_DIR_NAME",
   "dataDirectoryPathEnvironmentVariables": [
     "TICKETRY_DATA_DIR",
@@ -7,6 +7,7 @@
     "MUXED_DATA_DIR"
   ],
   "legacyDataDirectoryNames": [
+    "worktracker-studio-rust",
     "worktracker-studio"
   ]
 }

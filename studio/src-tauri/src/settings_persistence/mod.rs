@@ -12,6 +12,7 @@ mod atomic_json;
 pub(crate) use crate::entities::settings as entities;
 mod error;
 mod global_launch_default;
+pub mod instant_launch;
 pub mod keybindings;
 mod legacy_profile_files;
 pub mod ownership_manifest;

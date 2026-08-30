@@ -125,4 +125,3 @@ unsafe extern "C" fn report_grid_resize(context: *mut c_void, columns: u16, rows
     let worker = unsafe { &*(context as *const mpsc::Sender<NativeViewerCommand>) };
     let _ = worker.send(NativeViewerCommand::Resize(columns, rows));
 }
-

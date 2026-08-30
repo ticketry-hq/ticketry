@@ -7,6 +7,10 @@ import { ackTerminal } from "./actions";
 import type { TerminalClient } from "./terminalClient";
 import { terminalClientTransport } from "./terminalClientRuntime";
 import { launchFailureReason } from "./launchFailure";
+import {
+  recordTerminalPoolDisposal,
+  recordTerminalViewerEvent,
+} from "./terminalViewerDiagnostics";
 
 // CODIN-749 — shared terminal entry pool.
 //
@@ -144,6 +148,11 @@ export function syncEntries(sessions: Record<string, SessionMeta>): void {
     const entry = entries.get(id);
     entries.delete(id);
     if (entry) {
+      recordTerminalPoolDisposal({
+        sessionId: id,
+        agentRunId: entry.agentRunId,
+        reason: "store_session_removed",
+      });
       if (entry.suspendTimer) {
         clearTimeout(entry.suspendTimer);
         entry.suspendTimer = null;
@@ -168,6 +177,11 @@ export function getEntry(sessionId: string): SessionEntry | undefined {
 export function releasePooledTransport(sessionId: string): void {
   const entry = entries.get(sessionId);
   if (!entry?.ws) return;
+  recordTerminalPoolDisposal({
+    sessionId,
+    agentRunId: entry.agentRunId,
+    reason: "native_viewer_takeover",
+  });
   try {
     entry.ws.detach();
   } catch {
@@ -216,6 +230,12 @@ export function ensureConnected(sessionId: string, meta: SessionMeta): void {
       rows,
     },
     (event) => {
+      recordTerminalViewerEvent({
+        sessionId: liveId,
+        agentRunId: entry.agentRunId,
+        currentStatus: store().sessions[liveId]?.status ?? null,
+        event,
+      });
       if (event.type === "ready") {
         if (firstReady) {
           firstReady = false;

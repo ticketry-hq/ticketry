@@ -162,5 +162,3 @@ void muxed_ghostty_runtime_free(void *opaque) {
   if (runtime->config != NULL) ghostty_config_free(runtime->config);
   free(runtime);
 }
-
-

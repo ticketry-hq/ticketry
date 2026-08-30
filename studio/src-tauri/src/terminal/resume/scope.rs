@@ -79,13 +79,15 @@ impl ResumeScope {
         let module = compact(&request.module_id);
         match self {
             Self::Task { task_id } => {
+                // A Work Item can move between modules after a conversation
+                // ends. The task and project remain the resume boundary; the
+                // session's historical module placement does not.
                 matches!(
                     request.kind,
                     TerminalLaunchKind::Task | TerminalLaunchKind::Automation
                 ) && row.scope == "task"
                     && compact(&row.task_id) == *task_id
                     && compact(&row.project_id) == project
-                    && compact(&row.module_id) == module
             }
             Self::Scratch {
                 project_id,

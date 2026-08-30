@@ -5,6 +5,7 @@
 
 pub mod data_directory;
 pub mod desktop;
+pub(crate) mod diagnostics;
 pub mod documents;
 pub mod entities;
 pub mod execution;
@@ -30,5 +31,21 @@ pub mod worktree;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    desktop::run();
+    desktop::run(false);
+}
+
+pub fn run_with_file_logging(requested: bool) {
+    desktop::run(requested);
+}
+
+pub fn file_logging_requested(arguments: &[std::ffi::OsString]) -> bool {
+    diagnostics::file_logging_requested(arguments)
+}
+
+pub fn configure_file_logging(
+    data_directory: &std::path::Path,
+    log_path: Option<std::path::PathBuf>,
+) -> bool {
+    diagnostics::configure_process_file_log(log_path.is_some(), data_directory, log_path)
+        .is_enabled()
 }

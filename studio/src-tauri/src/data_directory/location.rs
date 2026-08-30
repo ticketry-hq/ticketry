@@ -1,7 +1,8 @@
 //! Where the data directory is.
 //!
-//! Browser development and installed desktop builds share one path. Resolving
-//! it never moves or copies configuration.
+//! Production web and installed desktop builds share one path. Development
+//! launchers select isolated paths through an explicit environment override.
+//! Resolving the product path never moves or copies configuration.
 
 use std::env;
 use std::ffi::{OsStr, OsString};
@@ -21,8 +22,8 @@ struct ProductIdentity {
     data_directory_path_environment_variables: Vec<String>,
 }
 
-/// The existing path shared by browser development and installed desktop
-/// builds.  This deliberately does not move or copy configuration.
+/// The product path shared by production web and installed desktop builds.
+/// This deliberately does not move or copy configuration.
 pub fn established_data_directory() -> Result<PathBuf, OwnershipError> {
     let identity = product_identity()?;
     resolve_data_directory(
@@ -104,6 +105,7 @@ mod tests {
     #[test]
     fn manifest_maps_the_product_to_its_default_profile() {
         let identity = product_identity().expect("product identity");
+        assert_eq!(identity.default_data_directory_name, "ticketry");
         assert_eq!(
             resolve(&identity, Some("/users/ticketry"), &[]).expect("default directory"),
             PathBuf::from("/users/ticketry/.config").join(&identity.default_data_directory_name)

@@ -22,7 +22,7 @@ pub struct ReorderWorkItem {
     pub initial_order_ids: Option<Vec<String>>,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ReorderKind {
     Module,
     Task,
@@ -50,6 +50,17 @@ async fn reorder(
     facts: Option<&WorkFactRecorder>,
     kind: ReorderKind,
 ) -> Result<String, CommandError> {
+    crate::diagnostics::record_story_move(
+        "info",
+        "backend-reorder-started",
+        serde_json::json!({
+            "kind": format!("{kind:?}").to_lowercase(),
+            "id": input.id,
+            "before_id": input.before_id,
+            "after_id": input.after_id,
+            "initial_order_ids": input.initial_order_ids,
+        }),
+    );
     let id = database_uuid(&input.id, "id")?;
     let initial = input
         .initial_order_ids
@@ -81,6 +92,19 @@ async fn reorder(
                 .to_owned(),
             )
         })?;
+    crate::diagnostics::record_story_move(
+        "info",
+        "backend-reorder-candidate-loaded",
+        serde_json::json!({
+            "id": candidate.id,
+            "project_id": candidate.project_id,
+            "module_id": candidate.module_id,
+            "parent_id": candidate.parent_id,
+            "state_id": candidate.state_id,
+            "rank": candidate.rank,
+            "is_archived": candidate.is_archived,
+        }),
+    );
     let transaction = database.begin().await?;
     // Reserve the SQLite writer slot before reading ranks. This is the local
     // equivalent of locking the project row for both first and later drags.
@@ -118,6 +142,11 @@ async fn reorder(
     }
 
     transaction.commit().await?;
+    crate::diagnostics::record_story_move(
+        "info",
+        "backend-reorder-committed",
+        serde_json::json!({"id": id}),
+    );
     if let Some(facts) = facts {
         facts.wake();
     }
@@ -176,6 +205,28 @@ async fn reorder_task(
 ) -> Result<(), CommandError> {
     let before = task_neighbor(database, &current, before_id).await?;
     let after = task_neighbor(database, &current, after_id).await?;
+    crate::diagnostics::record_story_move(
+        "info",
+        "backend-reorder-neighbors-loaded",
+        serde_json::json!({
+            "id": current.id,
+            "current_rank": current.rank,
+            "before": before.as_ref().map(|row| serde_json::json!({
+                "id": row.id,
+                "rank": row.rank,
+                "state_id": row.state_id,
+                "parent_id": row.parent_id,
+                "module_id": row.module_id,
+            })),
+            "after": after.as_ref().map(|row| serde_json::json!({
+                "id": row.id,
+                "rank": row.rank,
+                "state_id": row.state_id,
+                "parent_id": row.parent_id,
+                "module_id": row.module_id,
+            })),
+        }),
+    );
     let rank = match fractional_rank::between(
         before.as_ref().and_then(nonempty_issue_rank),
         after.as_ref().and_then(nonempty_issue_rank),
@@ -187,6 +238,16 @@ async fn reorder_task(
                 .zip(after.as_ref())
                 .is_some_and(|(before, after)| before.rank == after.rank) =>
         {
+            crate::diagnostics::record_story_move(
+                "warn",
+                "backend-reorder-duplicate-ranks",
+                serde_json::json!({
+                    "id": current.id,
+                    "before_id": before_id,
+                    "after_id": after_id,
+                    "rank": before.as_ref().map(|row| &row.rank),
+                }),
+            );
             return repair_duplicate_task_ranks(database, current, before_id, after_id, facts)
                 .await;
         }
@@ -196,6 +257,11 @@ async fn reorder_task(
             ));
         }
     };
+    crate::diagnostics::record_story_move(
+        "info",
+        "backend-reorder-rank-computed",
+        serde_json::json!({"id": current.id, "old_rank": current.rank, "new_rank": rank}),
+    );
     if rank == current.rank {
         return Ok(());
     }

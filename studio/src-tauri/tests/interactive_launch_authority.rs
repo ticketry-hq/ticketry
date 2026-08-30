@@ -25,6 +25,7 @@ const HIGH: &str = "90000000000000000000000000000000";
 struct Fixture {
     _directory: tempfile::TempDir,
     authority: LaunchAuthorityService,
+    database: DatabaseConnection,
     folder: String,
 }
 
@@ -74,6 +75,7 @@ async fn fixture() -> Fixture {
                 state_revision bigint NOT NULL, name varchar(512) NOT NULL,
                 sequence_id integer NOT NULL, is_archived bool NOT NULL,
                 rank varchar(64) NOT NULL, description text NOT NULL,
+                workspace_tab_order text NOT NULL DEFAULT '[]',
                 created_at datetime NOT NULL, updated_at datetime NOT NULL
             );
             CREATE TABLE worktracker_provider (
@@ -125,10 +127,10 @@ async fn fixture() -> Fixture {
                  CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
             INSERT INTO worktracker_issue VALUES
                 ('{MODULE}', '{PROJECT}', 'module', '{TYPE}', NULL, NULL, NULL, 0,
-                 'Terminal', 1, 0, 'M', '', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+                 'Terminal', 1, 0, 'M', '', '[]', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
                 ('{TASK}', '{PROJECT}', 'task', '{TYPE}', '{MODULE}', '{MODULE}', '{STATE}', 0,
                  'Resolve launch policy', 965, 0, 'N', '<p>First</p><ul><li>Second</li></ul>',
-                 CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+                 '[]', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
             INSERT INTO worktracker_provider VALUES
                 ('{CODEX}', 'codex', 1, 1),
                 ('{CLAUDE}', 'claude', 1, 1),
@@ -169,10 +171,11 @@ async fn fixture() -> Fixture {
         .set(MODULE, &folder)
         .await
         .expect("link the fixture module");
-    let authority = LaunchAuthorityService::new(database);
+    let authority = LaunchAuthorityService::new(database.clone());
     Fixture {
         _directory: directory,
         authority,
+        database,
         folder,
     }
 }
@@ -295,7 +298,7 @@ async fn a_planning_launch_builds_the_module_planning_prompt() {
 }
 
 #[tokio::test]
-async fn an_instant_launch_wraps_the_users_request_and_requires_one() {
+async fn an_instant_launch_wraps_a_submitted_request_or_waits_for_terminal_input() {
     let fixture = fixture().await;
 
     let resolved = fixture
@@ -311,8 +314,64 @@ async fn an_instant_launch_wraps_the_users_request_and_requires_one() {
     assert!(prompt.contains("terminate_current_run"));
 
     let mut silent = caller_request(TerminalLaunchKind::Instant);
-    silent.prompt = Some("   ".to_owned());
-    assert!(fixture.authority.resolve(&silent).await.is_err());
+    silent.prompt = None;
+    let prompt = fixture
+        .authority
+        .resolve(&silent)
+        .await
+        .expect("start an Instant conversation without a submitted request")
+        .prompt
+        .expect("launch authority supplies the conversation instructions");
+    assert!(prompt.contains("Wait for the user to type their first request in this terminal."));
+    assert!(!prompt.contains("User's request:"));
+}
+
+#[tokio::test]
+async fn an_unprompted_instant_launch_uses_the_global_default_model() {
+    let fixture = fixture().await;
+    let mut request = caller_request(TerminalLaunchKind::Instant);
+    request.provider = None;
+    request.prompt = None;
+
+    let resolved = fixture
+        .authority
+        .resolve(&request)
+        .await
+        .expect("resolve Instant from the global default");
+
+    assert_eq!(resolved.provider.as_deref(), Some("codex"));
+    assert_eq!(resolved.model.as_deref(), Some("gpt-5.6"));
+    assert_eq!(resolved.reasoning.as_deref(), Some("high"));
+    assert!(!resolved.prompt.unwrap().contains("caller-chosen"));
+}
+
+#[tokio::test]
+async fn instant_settings_add_standing_instructions_and_auto_close_authority() {
+    let fixture = fixture().await;
+    fixture
+        .database
+        .execute_unprepared(
+            r#"INSERT INTO app_settings VALUES (
+                'host', 'instant_launch',
+                '{"initial_prompt":"Never edit generated files directly.","auto_close":true}',
+                CURRENT_TIMESTAMP
+            )"#,
+        )
+        .await
+        .unwrap();
+
+    let resolved = fixture
+        .authority
+        .resolve(&caller_request(TerminalLaunchKind::Instant))
+        .await
+        .unwrap();
+    let prompt = resolved.prompt.unwrap();
+
+    assert!(
+        prompt.contains("Configured Instant instructions:\nNever edit generated files directly.")
+    );
+    assert!(!prompt.contains("May I terminate this run"));
+    assert!(prompt.contains("then invoke terminate_current_run"));
 }
 
 #[tokio::test]

@@ -6,6 +6,7 @@ use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 use crate::entities::work_management::provider;
 use crate::launch::paths::{LaunchPathsRequest, LaunchPathsService, LaunchPathsView, LaunchScope};
 use crate::launch::planning::Provider;
+use crate::settings_persistence::read_global_launch_default;
 use crate::terminal::launch::{CreateTerminalSession, TerminalLaunchKind};
 use crate::worktree::status::repository::module_folder;
 
@@ -41,6 +42,31 @@ pub(super) async fn activated_provider(
         ));
     }
     Ok(row.slug)
+}
+
+pub(super) struct DefaultScratchLaunch {
+    pub provider: String,
+    pub model: Option<String>,
+    pub reasoning: Option<String>,
+}
+
+/// Resolve a default-backed scratch launch from the catalog's validated global
+/// default. The caller contributes no launch material, and a missing or
+/// deactivated default is a refusal instead of an implicit provider fallback.
+pub(super) async fn default_scratch_launch(
+    database: &DatabaseConnection,
+) -> Result<DefaultScratchLaunch, LaunchAuthorityError> {
+    let default = read_global_launch_default(database).await?.ok_or_else(|| {
+        LaunchAuthorityError::unresolvable(
+            "Choose a default model in Settings before starting a conversation.",
+        )
+    })?;
+    let provider = activated_provider(database, Some(&default.provider)).await?;
+    Ok(DefaultScratchLaunch {
+        provider,
+        model: default.model,
+        reasoning: default.reasoning,
+    })
 }
 
 /// The module's linked local folder, as prompt text names it.

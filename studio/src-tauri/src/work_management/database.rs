@@ -60,6 +60,7 @@ pub async fn open_for_commands(path: &Path) -> Result<DatabaseConnection, ReadDa
                 .filename(&database_path)
                 .create_if_missing(false)
                 .busy_timeout(Duration::from_secs(5))
+                .pragma("journal_mode", "WAL")
                 .pragma("foreign_keys", "ON")
         });
 
@@ -115,9 +116,12 @@ pub async fn open(path: &Path) -> Result<DatabaseConnection, ReadDatabaseError> 
 
 #[cfg(test)]
 mod tests {
-    use sea_orm::{ConnectionTrait, Database, DbBackend, EntityTrait, PaginatorTrait, Statement};
+    use sea_orm::{
+        ConnectionTrait, Database, DbBackend, EntityTrait, PaginatorTrait, Statement,
+        TransactionTrait,
+    };
 
-    use super::open;
+    use super::{open, open_for_commands};
     use crate::work_management::entities::project;
 
     #[tokio::test]
@@ -190,5 +194,47 @@ mod tests {
                 .expect("count fixture rows"),
             2
         );
+    }
+
+    #[tokio::test]
+    async fn command_pool_writes_while_another_connection_is_reading() {
+        let directory = tempfile::tempdir().expect("create fixture directory");
+        let path = directory.path().join("state.db");
+        let setup = Database::connect(format!("sqlite:{}?mode=rwc", path.display()))
+            .await
+            .expect("open fixture writer");
+        setup
+            .execute_unprepared("CREATE TABLE lock_probe (id integer PRIMARY KEY)")
+            .await
+            .expect("create lock probe");
+        setup.close().await.expect("close fixture writer");
+
+        let commands = open_for_commands(&path).await.expect("open command pool");
+        let reader = commands.begin().await.expect("begin reader");
+        reader
+            .query_one_raw(Statement::from_string(
+                DbBackend::Sqlite,
+                "SELECT count(*) AS count FROM lock_probe".to_owned(),
+            ))
+            .await
+            .expect("hold a read snapshot");
+
+        commands
+            .execute_unprepared("INSERT INTO lock_probe DEFAULT VALUES")
+            .await
+            .expect("write while the read snapshot remains open");
+        reader.rollback().await.expect("close reader");
+
+        let journal_mode = commands
+            .query_one_raw(Statement::from_string(
+                DbBackend::Sqlite,
+                "PRAGMA journal_mode".to_owned(),
+            ))
+            .await
+            .expect("read journal mode")
+            .expect("journal mode row")
+            .try_get::<String>("", "journal_mode")
+            .expect("decode journal mode");
+        assert_eq!(journal_mode, "wal");
     }
 }

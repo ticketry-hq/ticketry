@@ -410,6 +410,12 @@ input IdentityFilterInput {
 	not_between: [String!]
 }
 
+type InstantRunTicket {
+	agent_run_id: String!
+	title: String!
+	started_at: String!
+}
+
 input IntegerFilterInput {
 	eq: Int
 	ne: Int
@@ -610,6 +616,7 @@ type Mutation {
 	delete_issue_type_transition(issue_type_id: String!, from_state_id: String!, to_state_id: String!, workflow_revision: Int!): Boolean!
 	remove_state_from_issue_type_workflow(issue_type_id: String!, state_id: String!, workflow_revision: Int!): Boolean!
 	upsert_issue_type_launch_binding(issue_type_id: String!, state_id: String!, workflow_revision: Int!, prompt: String, required_skills: [String!], model_id: String, reasoning_id: String, auto_start: Boolean, subtree_run_enabled: Boolean): WorktrackerLaunchbinding!
+	update_instant_launch_setting(initial_prompt: String!, auto_close: Boolean!): KeybindingSetting!
 	update_keybinding_setting(value: Json!): KeybindingSetting!
 	update_provider_catalog(activated_providers: [String!]!, default_provider: String, default_model: String, default_reasoning: String): ProviderCatalog!
 	retry_automation_attempt(attempt_id: String!): AutomationAttemptProjection!
@@ -717,12 +724,14 @@ type Query {
 	worktree_changes(task_id: String!): WorktreeChangesView!
 	module_version_control(module_id: String!): ModuleVersionControlView!
 	keybinding_setting: KeybindingSetting
+	instant_launch_setting: KeybindingSetting
 	provider_catalog: ProviderCatalog!
 	automation_attempts(project_id: String!, task_id: String): [AutomationAttemptProjection!]!
 	agent_run_holdings(project_id: String!, task_id: String): [AgentRunHolding!]!
 	agentRuns(filters: AgentRunsFilterInput, having: AgentRunsHavingInput, orderBy: AgentRunsOrderInput, pagination: PaginationInput): AgentRunsConnection!
 	agentTerminalSessions(filters: AgentTerminalSessionsFilterInput, having: AgentTerminalSessionsHavingInput, orderBy: AgentTerminalSessionsOrderInput, pagination: PaginationInput): AgentTerminalSessionsConnection!
 	agentRunViewerLeases(filters: AgentRunViewerLeasesFilterInput, having: AgentRunViewerLeasesHavingInput, orderBy: AgentRunViewerLeasesOrderInput, pagination: PaginationInput): AgentRunViewerLeasesConnection!
+	instant_run_tickets(project_id: String!, module_id: String!): [InstantRunTicket!]!
 	resumable_terminal_sessions(task_id: String, project_id: String, module_id: String): [AgentRuns!]!
 	designDocuments(filters: DesignDocumentsFilterInput, having: DesignDocumentsHavingInput, orderBy: DesignDocumentsOrderInput, pagination: PaginationInput): DesignDocumentsConnection!
 	directory_completions(path: String!): [String!]!

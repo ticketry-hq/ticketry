@@ -1,6 +1,7 @@
 //! Terminal capability: launch, lifecycle, persistence, reconciliation, and viewing of agent terminals.
 
 pub mod cleanup;
+pub mod instant_run_ticket;
 pub mod launch;
 pub mod lifecycle;
 pub mod output_activity;

@@ -1,6 +1,7 @@
 pub mod attachments;
 pub mod blockers;
 pub mod catalog;
+pub(crate) mod default_project_catalog;
 mod descriptions;
 mod error;
 mod fractional_rank;

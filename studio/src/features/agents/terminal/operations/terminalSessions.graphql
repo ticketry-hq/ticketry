@@ -6,6 +6,7 @@ fragment TerminalSessionFields on AgentTerminalSessions {
   created_at: createdAt
   agent_run: agentRun {
     id
+    agent
     launch_state: launchState
     launch_model: launchModel
   }

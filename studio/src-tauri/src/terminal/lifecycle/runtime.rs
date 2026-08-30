@@ -11,6 +11,11 @@ use tokio_util::sync::CancellationToken;
 
 use super::TerminalLifecycleWork;
 
+const STARTUP_RECONCILIATION_ATTEMPTS: usize = 3;
+const STARTUP_RECONCILIATION_RETRY_DELAY: Duration = Duration::from_millis(100);
+const RUNTIME_OBSERVATION_UNAVAILABLE: &str =
+    "verified terminal runtime observation is unavailable";
+
 #[derive(Clone, Copy, Debug)]
 pub struct TerminalLifecycleConfig {
     pub operation_timeout: Duration,
@@ -96,7 +101,10 @@ impl TerminalLifecycleRuntime {
             .required("initial provider hook drain", runtime.work.drain_spool())
             .await?;
         runtime
-            .required("initial terminal reconciliation", runtime.work.reconcile())
+            .required(
+                "initial terminal reconciliation",
+                runtime.reconcile_for_startup(),
+            )
             .await?;
         runtime
             .required(
@@ -112,6 +120,24 @@ impl TerminalLifecycleRuntime {
 
     pub fn is_ready(&self) -> bool {
         self.ready.load(Ordering::Acquire)
+    }
+
+    async fn reconcile_for_startup(
+        &self,
+    ) -> Result<crate::terminal::reconciliation::TerminalReconciliationReport, String> {
+        for attempt in 1..=STARTUP_RECONCILIATION_ATTEMPTS {
+            match self.work.reconcile().await {
+                Ok(report) => return Ok(report),
+                Err(error)
+                    if error.contains(RUNTIME_OBSERVATION_UNAVAILABLE)
+                        && attempt < STARTUP_RECONCILIATION_ATTEMPTS =>
+                {
+                    tokio::time::sleep(STARTUP_RECONCILIATION_RETRY_DELAY).await;
+                }
+                Err(error) => return Err(error),
+            }
+        }
+        unreachable!("the bounded startup reconciliation loop always returns")
     }
 
     /// Ask for a bounded pass. Concurrent callers coalesce into the current
@@ -265,6 +291,7 @@ mod tests {
         fail_reconciliation: AtomicUsize,
         drain_delay_ms: AtomicUsize,
         reconciliation_delay_ms: AtomicUsize,
+        unavailable_reconciliations: AtomicUsize,
     }
 
     impl FakeWork {
@@ -318,6 +345,8 @@ mod tests {
             self.active_reconciliations.fetch_sub(1, Ordering::SeqCst);
             if call == self.fail_reconciliation.load(Ordering::SeqCst) {
                 Err("injected observation failure".to_owned())
+            } else if call <= self.unavailable_reconciliations.load(Ordering::SeqCst) {
+                Err(RUNTIME_OBSERVATION_UNAVAILABLE.to_owned())
             } else {
                 Ok(Self::report())
             }
@@ -395,6 +424,44 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(10)).await;
         assert_eq!(work.reconciliations.load(Ordering::SeqCst), 1);
         assert_eq!(work.events(), ["schema", "spool", "reconcile"]);
+    }
+
+    #[tokio::test]
+    async fn startup_retries_a_transient_runtime_observation_failure() {
+        let work = Arc::new(FakeWork::default());
+        work.unavailable_reconciliations.store(1, Ordering::SeqCst);
+
+        let runtime = TerminalLifecycleRuntime::start(work.clone(), config(Duration::ZERO))
+            .await
+            .expect("the second verified observation opens readiness");
+
+        assert!(runtime.is_ready());
+        assert_eq!(work.reconciliations.load(Ordering::SeqCst), 2);
+        assert_eq!(
+            work.events(),
+            ["schema", "spool", "reconcile", "reconcile", "leases"]
+        );
+    }
+
+    #[tokio::test]
+    async fn startup_stays_closed_when_runtime_observation_remains_unavailable() {
+        let work = Arc::new(FakeWork::default());
+        work.unavailable_reconciliations
+            .store(STARTUP_RECONCILIATION_ATTEMPTS, Ordering::SeqCst);
+        let mut startup_config = config(Duration::ZERO);
+        startup_config.operation_timeout = Duration::from_millis(500);
+
+        let error = TerminalLifecycleRuntime::start(work.clone(), startup_config)
+            .await
+            .err()
+            .expect("startup must fail closed after the bounded retries");
+
+        assert!(error.to_string().contains(RUNTIME_OBSERVATION_UNAVAILABLE));
+        assert_eq!(
+            work.reconciliations.load(Ordering::SeqCst),
+            STARTUP_RECONCILIATION_ATTEMPTS
+        );
+        assert!(!work.events().contains(&"leases"));
     }
 
     #[tokio::test]

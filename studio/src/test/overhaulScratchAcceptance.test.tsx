@@ -72,7 +72,9 @@ describe("overhaul acceptance — module scratch workspace", () => {
       "aria-selected",
       "true",
     );
-    expect(screen.getByText("No active Scratch runs.")).toBeVisible();
+    expect(screen.getByText(
+      "Choose New conversation, then type directly in its terminal.",
+    )).toBeVisible();
 
     fireEvent.click(screen.getByRole("button", { name: "＋ Agent" }));
     fireEvent.click(await screen.findByRole("menuitem", { name: "Plan" }));
@@ -107,6 +109,8 @@ describe("overhaul acceptance — module scratch workspace", () => {
       );
     });
 
-    expect(screen.getByText("No active Scratch runs.")).toBeVisible();
+    expect(screen.getByText(
+      "Choose New conversation, then type directly in its terminal.",
+    )).toBeVisible();
   });
 });

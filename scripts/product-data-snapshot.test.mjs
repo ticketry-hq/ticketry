@@ -17,6 +17,7 @@ import {
   createProductDataSnapshot,
   resolveEstablishedProductDataDirectory,
   resolveProductDataDirectory,
+  sanitizeDevelopmentDataSnapshot,
 } from "./product-data-snapshot.mjs";
 
 const configuredPathVariable = productIdentity.dataDirectoryPathEnvironmentVariables[0];
@@ -91,6 +92,39 @@ test("a product snapshot uses SQLite backup and copies browser-visible companion
   assert.equal(readFileSync(path.join(snapshot, "state.db"), "utf8"), "snapshot of state.db");
   assert.equal(readFileSync(path.join(snapshot, "profiles.json"), "utf8"), "profiles");
   assert.equal(readFileSync(path.join(snapshot, "media", "document.txt"), "utf8"), "document");
+  rmSync(fixtureRoot, { recursive: true });
+});
+
+test("development sanitization removes runtime ownership without touching product data", () => {
+  const fixtureRoot = mkdtempSync(path.join(tmpdir(), "ticketry-development-sanitize-"));
+  const product = path.join(fixtureRoot, "product.db");
+  const snapshot = path.join(fixtureRoot, "snapshot", "state.db");
+  mkdirSync(path.dirname(snapshot), { recursive: true });
+  writeFileSync(product, "product rows");
+  writeFileSync(snapshot, "snapshot rows");
+  const calls = [];
+
+  sanitizeDevelopmentDataSnapshot({
+    snapshotDirectory: path.dirname(snapshot),
+    runner(command, args, options) {
+      calls.push({ command, args, options });
+    },
+  });
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].command, "sqlite3");
+  assert.equal(calls[0].args[0], snapshot);
+  assert.match(calls[0].args[1], /DROP TABLE agent_run_viewer_leases/);
+  assert.match(calls[0].args[1], /generation varchar\(64\) NOT NULL/);
+  assert.match(calls[0].args[1], /idx_agent_terminal_sessions_task_created/);
+  assert.match(calls[0].args[1], /launch_generation integer NOT NULL/);
+  assert.match(calls[0].args[1], /workspace_slug varchar/);
+  assert.match(calls[0].args[1], /DELETE FROM graph_runs/);
+  assert.match(
+    calls[0].args[1],
+    /UPDATE ticketry_launchpolicydecision[\s\S]*delivered_at IS NULL/,
+  );
+  assert.equal(readFileSync(product, "utf8"), "product rows");
   rmSync(fixtureRoot, { recursive: true });
 });
 

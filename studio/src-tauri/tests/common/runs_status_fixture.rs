@@ -25,11 +25,11 @@ pub async fn open() -> (tempfile::TempDir, DatabaseConnection) {
         );
         CREATE TABLE agent_runs (
             id TEXT PRIMARY KEY, issue_id TEXT NOT NULL, ticket_seq INTEGER, agent TEXT NOT NULL,
-            model TEXT, reasoning TEXT,
             status TEXT NOT NULL, started_at TEXT NOT NULL, ended_at TEXT, exit_code INTEGER,
             error TEXT, cwd TEXT, provider_session_id TEXT, lifecycle_state TEXT,
             lifecycle_updated_at TEXT, design_dir TEXT, resumed_from TEXT, scope TEXT NOT NULL,
-            launch_state TEXT, launch_model TEXT
+            launch_state TEXT, launch_model TEXT, initial_prompt TEXT, launch_reasoning TEXT,
+            launch_unattended BOOL NOT NULL DEFAULT 0
         );
         CREATE TABLE runs_status_events (
             cursor INTEGER PRIMARY KEY AUTOINCREMENT, event_id TEXT NOT NULL UNIQUE,

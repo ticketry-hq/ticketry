@@ -94,6 +94,7 @@ export {
   closeTerminal,
 } from "./internal/actions";
 export { launchInstantConversation } from "./instantConversationLaunch";
+export { useInstantRunTickets } from "./instantRunTickets";
 
 // Shared terminal-create launcher (CODIN-839): folder gate → optional prompt →
 // required agent → scratch planning launch. Studio create surfaces consume the

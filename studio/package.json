@@ -23,6 +23,7 @@
     "desktop:smoke:dev": "node scripts/desktop-smoke.mjs dev",
     "desktop:smoke:packaged": "node scripts/desktop-smoke.mjs packaged",
     "test:native-ghostty-command-routing": "sh scripts/test-native-ghostty-command-routing.sh",
+    "test:native-ghostty-clipboard": "sh scripts/test-native-ghostty-clipboard.sh",
     "test:native-ghostty-studio-chords": "sh scripts/test-native-ghostty-studio-chords.sh",
     "build": "npm run lint:client-store && tsc --noEmit && vite build",
     "lint:client-store": "eslint src/state",

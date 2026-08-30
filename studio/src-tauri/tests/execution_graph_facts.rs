@@ -294,6 +294,7 @@ async fn fixture() -> DatabaseConnection {
                 issue_type_id TEXT NOT NULL, parent_id TEXT, module_id TEXT, state_id TEXT,
                 state_revision INTEGER NOT NULL, name TEXT NOT NULL, sequence_id INTEGER NOT NULL,
                 is_archived BOOLEAN NOT NULL, rank TEXT NOT NULL, description TEXT NOT NULL,
+                workspace_tab_order JSON NOT NULL DEFAULT '[]',
                 created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL
             );
             CREATE INDEX issue_parent_scope ON worktracker_issue(parent_id, type, is_archived, sequence_id, id);
@@ -314,10 +315,12 @@ async fn fixture() -> DatabaseConnection {
             );
             CREATE TABLE agent_runs (
                 id TEXT PRIMARY KEY, issue_id TEXT NOT NULL, ticket_seq INTEGER, agent TEXT,
-                model TEXT, reasoning TEXT, status TEXT NOT NULL, started_at TEXT NOT NULL,
+                status TEXT NOT NULL, started_at TEXT NOT NULL,
                 ended_at TEXT, exit_code INTEGER, error TEXT, cwd TEXT, provider_session_id TEXT,
                 lifecycle_state TEXT, lifecycle_updated_at TEXT, design_dir TEXT, resumed_from TEXT,
-                scope TEXT NOT NULL, launch_state TEXT, launch_model TEXT
+                scope TEXT NOT NULL, launch_state TEXT, launch_model TEXT,
+                initial_prompt TEXT, launch_reasoning TEXT,
+                launch_unattended BOOLEAN NOT NULL DEFAULT 0
             );
             CREATE TABLE agent_terminal_sessions (
                 agent_run_id TEXT PRIMARY KEY, tmux_session_name TEXT NOT NULL, task_id TEXT NOT NULL,
@@ -558,8 +561,6 @@ async fn insert_run(
         issue_id: Set(task_id.to_owned()),
         ticket_seq: Set(None),
         agent: Set(Some("codex".to_owned())),
-        model: Set(None),
-        reasoning: Set(None),
         status: Set(if ended_at.is_some() {
             "exited"
         } else {
@@ -579,6 +580,9 @@ async fn insert_run(
         scope: Set("task".to_owned()),
         launch_state: Set(None),
         launch_model: Set(None),
+        initial_prompt: Set(None),
+        launch_reasoning: Set(None),
+        launch_unattended: Set(false),
     }
     .insert(database)
     .await

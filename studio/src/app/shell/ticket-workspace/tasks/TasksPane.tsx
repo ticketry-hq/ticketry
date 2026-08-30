@@ -4,7 +4,6 @@ import { useStudioStore } from "../../../../features/projects";
 import { useCachedStates } from "../../../../features/projects";
 import {
   isPlanningRow,
-  getWorkItemSnapshot,
   LOADING_PLACEHOLDER as PLACEHOLDER,
   STATE_HEADER as HEADER,
   type PlanningRow as Row,
@@ -12,6 +11,7 @@ import {
   useStoriesTree,
   useReorderWorkItem,
   useSetWorkItemState,
+  recordStoryMove,
 } from "../../../../features/work-items";
 import { TEMP_TASK_ID } from "../../../../features/agents/types";
 import { PaneShell } from "../../PaneShell";
@@ -35,7 +35,6 @@ import {
 } from "./internal/instantRunTicketNavigation";
 import { startInstantChangeFlow } from "../../../../features/studio/modals/PlanFeature";
 import { ConversationStateBadge } from "../../../../features/agents/lifecycle";
-import { recordStoryMove } from "../../../../features/work-items/internal/storyMoveDiagnostics";
 
 export {
   isPlanningRow,
@@ -121,6 +120,7 @@ export function TasksPane() {
   const {
     rows,
     tree,
+    itemsById,
     sectionIdsByState,
     loadingTasks,
     isSearchActive,
@@ -144,7 +144,7 @@ export function TasksPane() {
       payload: TicketDragPayload,
       resolved: { targetId: string; intent: "near" | "far" },
     ) => {
-      const source = getWorkItemSnapshot(payload.taskId);
+      const source = itemsById[payload.taskId];
       if (!source || !selectedProjectId || !selectedModuleId) {
         recordStoryMove("drop-rejected", {
           storyId: payload.taskId,
@@ -163,7 +163,7 @@ export function TasksPane() {
         : null;
       const target = headerStateId
         ? null
-        : getWorkItemSnapshot(resolved.targetId);
+        : itemsById[resolved.targetId];
       const destinationState = states.find(
         (state) => state.id === (headerStateId ?? target?.state),
       );
@@ -180,7 +180,7 @@ export function TasksPane() {
       }
 
       const sectionBlocks = visibleBlocks.filter((block) =>
-        getWorkItemSnapshot(block.rootId)?.state === destinationState.id,
+        itemsById[block.rootId]?.state === destinationState.id,
       );
       // Collapsed headers have no visible blocks. Rebuild their root-only
       // section from the ranked task list so a head drop still uses the real
@@ -240,6 +240,7 @@ export function TasksPane() {
     [
       reorder,
       setState,
+      itemsById,
       selectedModuleId,
       selectedProjectId,
       states,

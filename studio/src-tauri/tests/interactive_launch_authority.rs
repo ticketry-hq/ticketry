@@ -375,6 +375,37 @@ async fn instant_settings_add_standing_instructions_and_auto_close_authority() {
 }
 
 #[tokio::test]
+async fn every_document_producing_launch_names_the_watched_document_contract() {
+    let fixture = fixture().await;
+
+    for kind in [
+        TerminalLaunchKind::Task,
+        TerminalLaunchKind::Planning,
+        TerminalLaunchKind::Instant,
+    ] {
+        let resolved = fixture
+            .authority
+            .resolve(&caller_request(kind))
+            .await
+            .expect("resolve a document-producing launch");
+        let prompt = resolved.prompt.expect("the launch carries a prompt");
+
+        assert!(
+            prompt.contains(
+                "Ticketry watches this exact design directory recursively for .md and .html files."
+            ),
+            "{kind:?} prompt does not explain the document watcher"
+        );
+        assert!(
+            prompt.contains(
+                "Create every design or spec document inside this directory; files written elsewhere will not appear in Ticketry."
+            ),
+            "{kind:?} prompt does not constrain document placement"
+        );
+    }
+}
+
+#[tokio::test]
 async fn a_doc_chat_launch_names_the_registered_document_not_the_submitted_path() {
     let fixture = fixture().await;
     let mut request = caller_request(TerminalLaunchKind::DocumentChat);

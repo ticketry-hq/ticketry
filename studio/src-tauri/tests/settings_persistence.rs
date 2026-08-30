@@ -200,6 +200,29 @@ async fn refuses_an_unledgered_entry_skill_column() {
 }
 
 #[tokio::test]
+async fn adopts_the_django_ledgered_entry_skill_column() {
+    let directory = fixture().await;
+    let path = directory.path().join("state.db");
+    let database = Database::connect(format!("sqlite:{}?mode=rw", path.display()))
+        .await
+        .expect("open settings fixture");
+    database
+        .execute_unprepared(
+            "ALTER TABLE worktracker_launchbinding ADD COLUMN entry_skill varchar(128) NULL;
+             INSERT INTO django_migrations (app, name, applied)
+             VALUES ('worktracker', '0047_launch_binding_entry_skill', CURRENT_TIMESTAMP)",
+        )
+        .await
+        .expect("install the Django-ledgered entry-skill shape");
+    database.close().await.expect("close settings fixture");
+
+    let reopened = adopt(directory.path())
+        .await
+        .expect("adopt the Django-ledgered entry-skill shape");
+    assert_eq!(reopened.source, SourceClassification::DjangoCurrent);
+}
+
+#[tokio::test]
 async fn unknown_generation_fails_before_any_mutation() {
     let directory = fixture().await;
     let path = directory.path().join("state.db");

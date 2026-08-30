@@ -168,6 +168,8 @@ named gate before the full Studio suite, typecheck, and build.
 | 183 | A Module tab's close hover background remains a compact square inside the tab. |
 | 184 | Conversations replaces Scratch: its header combines lifecycle chicklets, New conversation immediately opens the global default model for terminal input, and each row shows only its own terminal with no row chicklet or add-agent control. |
 | 185 | Instant settings persist a standing initial prompt and the auto-close default used by new runs. |
+| 186 | Native Ghostty copy and paste use the macOS clipboard, preserve Ghostty's paste and OSC 52 confirmation boundary, and reject stale surface ownership. |
+| 187 | A locked startup database is presented as an actionable already-running message without exposing raw SQL. |
 
 Each executable case carries one stable `[overhaul-NN]` marker. The gate has a
 contract test that fails if a marker is missing or duplicated. When a Studio UI

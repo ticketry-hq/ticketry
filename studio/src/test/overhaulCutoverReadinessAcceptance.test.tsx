@@ -99,4 +99,25 @@ describe("cutover readiness", () => {
     expect(screen.getByText("/tmp/ticketry.log")).toBeInTheDocument();
     expect(screen.queryByText(/sidecar/i)).not.toBeInTheDocument();
   });
+
+  it("[overhaul-187] turns a locked startup database into an actionable launch message", () => {
+    render(
+      <ServiceHealthGate runtime={runtime({
+        state: "failed",
+        service: "runtime",
+        message: "Query Error: error returned from database: (code: 5) database is locked",
+        logPointer: "/tmp/ticketry.log",
+      })}>
+        <div>Studio</div>
+      </ServiceHealthGate>,
+    );
+
+    expect(screen.getByRole("heading", {
+      name: "Ticketry is already running or still closing",
+    })).toBeInTheDocument();
+    expect(screen.getByText(
+      "Quit other Ticketry windows, wait a few seconds, then reopen the app.",
+    )).toBeInTheDocument();
+    expect(screen.queryByText(/Query Error|database is locked/)).not.toBeInTheDocument();
+  });
 });

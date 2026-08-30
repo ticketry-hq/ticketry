@@ -148,4 +148,13 @@ mod tests {
         }
         assert!(AGENT_RUN_COLUMNS.contains(&"provider_session_id"));
     }
+
+    #[test]
+    fn agent_run_manifest_matches_the_installed_launch_snapshot_shape() {
+        for column in ["initial_prompt", "launch_reasoning", "launch_unattended"] {
+            assert!(AGENT_RUN_COLUMNS.contains(&column), "missing {column}");
+        }
+        assert!(!AGENT_RUN_COLUMNS.contains(&"model"));
+        assert!(!AGENT_RUN_COLUMNS.contains(&"reasoning"));
+    }
 }

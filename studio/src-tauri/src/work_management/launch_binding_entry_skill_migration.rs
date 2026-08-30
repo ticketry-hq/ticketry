@@ -12,6 +12,28 @@ pub const SOURCE_COMMIT: &str = "3a5f434a90696f40a4911e401a84db009cdfa4e7";
 const BINDING_TABLE: &str = "worktracker_launchbinding";
 const ENTRY_SKILL_COLUMN: &str = "entry_skill";
 
+pub async fn schema_has_migration_provenance(
+    database: &impl ConnectionTrait,
+) -> Result<bool, DbErr> {
+    if table_exists(database, LEDGER_TABLE).await? {
+        return Ok(true);
+    }
+    if !table_exists(database, "django_migrations").await? {
+        return Ok(false);
+    }
+    let row = database
+        .query_one_raw(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
+            "SELECT COUNT(*) AS count FROM django_migrations WHERE app = ? AND name = ?",
+            ["worktracker".into(), MIGRATION_ID.into()],
+        ))
+        .await?
+        .ok_or_else(|| {
+            DbErr::Custom("entry-skill migration provenance returned no row".to_owned())
+        })?;
+    Ok(row.try_get::<i64>("", "count")? == 1)
+}
+
 pub async fn install(database: &DatabaseConnection) -> Result<(), DbErr> {
     let transaction = database.begin().await?;
     if table_exists(&transaction, LEDGER_TABLE).await? {

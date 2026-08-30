@@ -19,6 +19,7 @@ import {
 } from "../../../documents/generated/documentRegistry.documents";
 import { WorktreeStatusDocument } from "../../worktrees/generated/worktreeStatus.documents";
 import { WorkTrackerProjectOpenDocument } from "../../../projects/generated/projects.documents";
+import { TaskResumableTerminalSessionsDocument } from "../../terminal/generated/terminalSessions.documents";
 
 const PROJECT = "11111111-1111-1111-1111-111111111111";
 const OTHER_PROJECT = "22222222-2222-2222-2222-222222222222";
@@ -207,8 +208,12 @@ describe("snapshot reconciliation", () => {
 
   it("prefers a terminal outcome over a stale live state", async () => {
     const transport = harness();
-    const refetch = vi.spyOn(studioApolloClient(), "refetchQueries")
-      .mockResolvedValue([]);
+    const refetch = vi.fn().mockResolvedValue({});
+    vi.spyOn(studioApolloClient(), "getObservableQueries").mockReturnValue(new Set([{
+      options: { query: TaskResumableTerminalSessionsDocument },
+      variables: { taskId: "task-1" },
+      refetch,
+    }]) as never);
     statusStreamFeed.start(PROJECT, { createProxy: transport.createProxy });
     await vi.advanceTimersByTimeAsync(0);
     transport.send(snapshot(10, [run()]));

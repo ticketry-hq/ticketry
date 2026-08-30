@@ -26,6 +26,7 @@ pub enum DjangoGeneration {
     Current,
     LegacyTerminalAuthority,
     Merged,
+    Final,
 }
 
 impl DjangoGeneration {
@@ -38,6 +39,7 @@ impl DjangoGeneration {
             Self::RunKindRemoved => 12,
             Self::Current => 13,
             Self::LegacyTerminalAuthority | Self::Merged => 15,
+            Self::Final => 17,
         }
     }
 
@@ -45,6 +47,7 @@ impl DjangoGeneration {
         match self {
             Self::LegacyTerminalAuthority => schema::LEGACY_TERMINAL_DJANGO_LEAF,
             Self::Merged => schema::MERGED_DJANGO_LEAF,
+            Self::Final => schema::FINAL_DJANGO_LEAF,
             _ => DJANGO_MIGRATIONS[self.number() - 1],
         }
     }
@@ -202,6 +205,7 @@ async fn classify(
         Some(schema::CURRENT_DJANGO_LEAF) => DjangoGeneration::Current,
         Some(schema::LEGACY_TERMINAL_DJANGO_LEAF) => DjangoGeneration::LegacyTerminalAuthority,
         Some(schema::MERGED_DJANGO_LEAF) => DjangoGeneration::Merged,
+        Some(schema::FINAL_DJANGO_LEAF) => DjangoGeneration::Final,
         _ => {
             return Err(incompatible(
                 "unknown Runs migration history; no named bridge matches",
@@ -226,13 +230,20 @@ async fn validate_manifest(
         .iter()
         .map(|value| (*value).to_owned())
         .collect::<BTreeSet<_>>();
-    if matches!(source, SourceClassification::Django(generation) if generation.number() < 13 || generation == DjangoGeneration::LegacyTerminalAuthority)
-    {
-        expected_agent.remove("model");
-        expected_agent.remove("reasoning");
+    if matches!(source, SourceClassification::Django(generation) if generation.number() < 17) {
+        expected_agent.remove("launch_unattended");
     }
-    if matches!(source, SourceClassification::Django(generation) if !matches!(generation, DjangoGeneration::LegacyTerminalAuthority | DjangoGeneration::Merged))
-    {
+    if matches!(source, SourceClassification::Django(generation) if generation.number() < 16) {
+        expected_agent.remove("launch_reasoning");
+    }
+    if matches!(
+        source,
+        SourceClassification::Django(DjangoGeneration::Current | DjangoGeneration::Merged)
+    ) {
+        expected_agent.insert("model".to_owned());
+        expected_agent.insert("reasoning".to_owned());
+    }
+    if matches!(source, SourceClassification::Django(generation) if generation.number() < 14) {
         expected_agent.remove("launch_state");
         expected_agent.remove("launch_model");
     }
@@ -240,21 +251,17 @@ async fn validate_manifest(
         source,
         SourceClassification::Django(DjangoGeneration::LegacyTerminalAuthority)
     ) {
-        expected_agent.insert("initial_prompt".to_owned());
+        // already part of the final owned shape
+    } else if matches!(source, SourceClassification::Django(generation) if generation.number() < 16)
+    {
+        expected_agent.remove("initial_prompt");
     }
     if matches!(source, SourceClassification::Django(generation) if generation != DjangoGeneration::Current)
         && agent.contains("run_kind")
     {
         expected_agent.insert("run_kind".to_owned());
     }
-    let rust_legacy_shape = source == SourceClassification::RustOwned
-        && agent
-            == AGENT_RUN_COLUMNS
-                .iter()
-                .map(|column| (*column).to_owned())
-                .chain(["initial_prompt".to_owned()])
-                .collect();
-    if agent != expected_agent && !rust_legacy_shape {
+    if agent != expected_agent {
         return Err(incompatible(format!(
             "unknown schema for agent_runs: observed {agent:?}"
         )));
@@ -385,20 +392,7 @@ async fn stable_digest(
     generation: DjangoGeneration,
 ) -> Result<String, RunsPersistenceError> {
     let mut hasher = Sha256::new();
-    let mut agent_columns = AGENT_RUN_COLUMNS.to_vec();
-    if !matches!(
-        generation,
-        DjangoGeneration::LegacyTerminalAuthority | DjangoGeneration::Merged
-    ) {
-        agent_columns.retain(|column| !matches!(*column, "launch_state" | "launch_model"));
-    }
-    if generation.number() < 13 || generation == DjangoGeneration::LegacyTerminalAuthority {
-        agent_columns.retain(|column| !matches!(*column, "model" | "reasoning"));
-    }
-    if generation == DjangoGeneration::LegacyTerminalAuthority {
-        agent_columns.push("initial_prompt");
-    }
-    digest_table(database, "agent_runs", &agent_columns, &mut hasher).await?;
+    digest_agent_runs(database, &mut hasher).await?;
     let mut attempt_columns = ATTEMPT_BASE_COLUMNS.to_vec();
     if generation.number() >= 9 {
         attempt_columns.extend(["error_details", "retryable"]);
@@ -414,6 +408,30 @@ async fn stable_digest(
     )
     .await?;
     Ok(format!("{:x}", hasher.finalize()))
+}
+
+async fn digest_agent_runs(
+    database: &impl ConnectionTrait,
+    hasher: &mut Sha256,
+) -> Result<(), RunsPersistenceError> {
+    let installed = schema::columns(database, "agent_runs").await?;
+    let expressions = AGENT_RUN_COLUMNS
+        .iter()
+        .map(|column| {
+            if installed.contains(*column) {
+                format!("\"{column}\"")
+            } else if *column == "launch_model" && installed.contains("model") {
+                "\"model\"".to_owned()
+            } else if *column == "launch_reasoning" && installed.contains("reasoning") {
+                "\"reasoning\"".to_owned()
+            } else if *column == "launch_unattended" {
+                "0".to_owned()
+            } else {
+                "NULL".to_owned()
+            }
+        })
+        .collect::<Vec<_>>();
+    digest_expressions(database, "agent_runs", &expressions, hasher).await
 }
 
 fn expected_migrations(generation: DjangoGeneration) -> Vec<String> {
@@ -443,6 +461,22 @@ fn expected_migrations(generation: DjangoGeneration) -> Vec<String> {
         .into_iter()
         .map(str::to_owned)
         .collect(),
+        DjangoGeneration::Final => [
+            &DJANGO_MIGRATIONS[..12],
+            &[
+                schema::CURRENT_DJANGO_LEAF,
+                "0013_agentrun_optional_agent",
+                "0014_agentrun_launch_metadata",
+                schema::LEGACY_TERMINAL_DJANGO_LEAF,
+                schema::MERGED_DJANGO_LEAF,
+                "0016_agentrun_launch_reasoning",
+                schema::FINAL_DJANGO_LEAF,
+            ],
+        ]
+        .concat()
+        .into_iter()
+        .map(str::to_owned)
+        .collect(),
         _ => DJANGO_MIGRATIONS[..generation.number()]
             .iter()
             .map(|value| (*value).to_owned())
@@ -456,6 +490,12 @@ async fn digest_generation(
 ) -> Result<DjangoGeneration, RunsPersistenceError> {
     if let SourceClassification::Django(generation) = source {
         return Ok(generation);
+    }
+    if schema::columns(database, "agent_runs")
+        .await?
+        .contains("launch_unattended")
+    {
+        return Ok(DjangoGeneration::Final);
     }
     let row = database
         .query_one_raw(Statement::from_string(
@@ -477,6 +517,7 @@ async fn digest_generation(
         schema::CURRENT_DJANGO_LEAF => Ok(DjangoGeneration::Current),
         schema::LEGACY_TERMINAL_DJANGO_LEAF => Ok(DjangoGeneration::LegacyTerminalAuthority),
         schema::MERGED_DJANGO_LEAF => Ok(DjangoGeneration::Merged),
+        schema::FINAL_DJANGO_LEAF => Ok(DjangoGeneration::Final),
         _ => Err(incompatible(
             "Runs ownership ledger has an unknown source leaf",
         )),
@@ -489,11 +530,20 @@ async fn digest_table(
     columns: &[&str],
     hasher: &mut Sha256,
 ) -> Result<(), RunsPersistenceError> {
-    let expression = columns
+    let expressions = columns
         .iter()
         .map(|column| format!("\"{column}\""))
-        .collect::<Vec<_>>()
-        .join(",");
+        .collect::<Vec<_>>();
+    digest_expressions(database, table, &expressions, hasher).await
+}
+
+async fn digest_expressions(
+    database: &impl ConnectionTrait,
+    table: &str,
+    expressions: &[String],
+    hasher: &mut Sha256,
+) -> Result<(), RunsPersistenceError> {
+    let expression = expressions.join(",");
     let query = format!("SELECT json_array({expression}) AS row_data FROM {table} ORDER BY id");
     hasher.update(table.as_bytes());
     for row in database

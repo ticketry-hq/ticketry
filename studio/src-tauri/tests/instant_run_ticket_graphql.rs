@@ -10,10 +10,11 @@ async fn schema() -> (GraphQlEndpoint, String) {
         .execute_unprepared(
             "CREATE TABLE agent_runs (\n\
                id TEXT PRIMARY KEY, issue_id TEXT NOT NULL, ticket_seq INTEGER, agent TEXT,\n\
-               model TEXT, reasoning TEXT, status TEXT NOT NULL, started_at TEXT NOT NULL,\n\
+               status TEXT NOT NULL, started_at TEXT NOT NULL,\n\
                ended_at TEXT, exit_code INTEGER, error TEXT, cwd TEXT, provider_session_id TEXT,\n\
                lifecycle_state TEXT, lifecycle_updated_at TEXT, design_dir TEXT, resumed_from TEXT,\n\
-               scope TEXT NOT NULL, launch_state TEXT, launch_model TEXT\n\
+               scope TEXT NOT NULL, launch_state TEXT, launch_model TEXT, initial_prompt TEXT,\n\
+               launch_reasoning TEXT, launch_unattended BOOL NOT NULL DEFAULT 0\n\
              );\n\
              CREATE TABLE terminal_launch_material (\n\
                effect_id TEXT PRIMARY KEY, agent_run_id TEXT NOT NULL UNIQUE, schema_version INTEGER NOT NULL,\n\

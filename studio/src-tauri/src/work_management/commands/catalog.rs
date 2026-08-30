@@ -110,6 +110,40 @@ pub async fn create_project(
     Ok(id)
 }
 
+/// Seed the reviewed catalog for the already-created installation Project.
+///
+/// First-launch provisioning must create its Project against the recorded
+/// Django leaf because that schema still requires a Workspace foreign key.
+/// Once that row exists, this uses the same catalog transaction as ordinary
+/// Project creation so fresh installations cannot drift into an unusable
+/// project with no Module type or workflow.
+pub(crate) async fn seed_empty_installation_project_catalog(
+    database: &DatabaseConnection,
+) -> Result<bool, CommandError> {
+    let Some(project_id) =
+        crate::work_management::project_onboarding_migration::installation_project_id(database)
+            .await?
+    else {
+        return Ok(false);
+    };
+    let transaction = database.begin().await?;
+    let state_count = state::Entity::find()
+        .filter(state::Column::ProjectId.eq(&project_id))
+        .count(&transaction)
+        .await?;
+    let issue_type_count = issue_type::Entity::find()
+        .filter(issue_type::Column::ProjectId.eq(&project_id))
+        .count(&transaction)
+        .await?;
+    if state_count != 0 || issue_type_count != 0 {
+        transaction.commit().await?;
+        return Ok(false);
+    }
+    default_project_catalog::seed(&transaction, &project_id).await?;
+    transaction.commit().await?;
+    Ok(true)
+}
+
 /// Clear the named project's pending onboarding.
 ///
 /// The caller names the project, so an acknowledgement is bound to the identity

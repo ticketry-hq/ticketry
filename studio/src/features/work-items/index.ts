@@ -63,6 +63,7 @@ export type {
   ScratchRow,
 } from "./selectors";
 export { formatWorkItemDisplayIdentifier } from "./displayIdentifier";
+export { recordStoryMove } from "./internal/storyMoveDiagnostics";
 export { usePlanningFilterStore } from "./internal/planningFilterStore";
 export { useClientStore } from "../../state/clientStore";
 export type { SelectionSurface } from "../../state/clientStore";

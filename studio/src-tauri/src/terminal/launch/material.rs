@@ -56,6 +56,8 @@ impl PreparedMaterial {
             snapshot: RunSnapshot {
                 model: self.request.model.clone(),
                 reasoning: self.request.reasoning.clone(),
+                initial_prompt: self.request.prompt.clone(),
+                unattended: matches!(self.request.kind, super::TerminalLaunchKind::Automation),
                 resumed_from: self.request.resume_from_agent_run_id.clone(),
                 launch_state: self.launch_state.clone(),
                 launch_model: matches!(

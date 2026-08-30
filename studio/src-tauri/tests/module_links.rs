@@ -100,6 +100,49 @@ fn write_profiles(data_directory: &Path, name: &str, body: &str) {
     std::fs::write(data_directory.join(name), body).expect("write the profile fixture");
 }
 
+#[tokio::test]
+async fn the_installed_local_path_shape_is_upgraded_without_losing_links() {
+    let database = Database::connect("sqlite::memory:")
+        .await
+        .expect("open legacy module-link fixture");
+    database
+        .execute_unprepared(&format!(
+            "CREATE TABLE worktracker_issue (id char(32) PRIMARY KEY);
+             INSERT INTO worktracker_issue VALUES ('{STUDIO}');
+             CREATE TABLE module_links (
+               id char(32) NOT NULL PRIMARY KEY,
+               local_path text NOT NULL,
+               created_at datetime NOT NULL,
+               updated_at datetime NOT NULL,
+               module_id char(32) NOT NULL UNIQUE REFERENCES worktracker_issue(id)
+             );
+             INSERT INTO module_links VALUES
+               ('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', '/repos/ticketry',
+                CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, '{STUDIO}')"
+        ))
+        .await
+        .expect("install the legacy module-link shape");
+
+    schema::install(&database)
+        .await
+        .expect("upgrade the installed module-link shape");
+    schema::verify(&database)
+        .await
+        .expect("verify the upgraded contract");
+    let path = database
+        .query_one_raw(Statement::from_string(
+            DbBackend::Sqlite,
+            "SELECT path FROM module_links WHERE module_id = '20000000000000000000000000000001'"
+                .to_owned(),
+        ))
+        .await
+        .expect("read upgraded link")
+        .expect("preserve upgraded link")
+        .try_get::<String>("", "path")
+        .expect("decode upgraded path");
+    assert_eq!(path, "/repos/ticketry");
+}
+
 /// One profile naming both modules, with folders that exist on this machine.
 fn two_linked_modules(studio: &Path, service: &Path) -> String {
     format!(
@@ -615,11 +658,11 @@ async fn the_installed_schema_is_the_one_the_ownership_manifest_declares() {
 #[test]
 fn no_supported_django_generation_or_postgresql_staging_schema_carries_these_tables() {
     let staging = std::fs::read_to_string(
-        crate_root().join("src/installation_import/postgres-staging-schemas.v1.json"),
+        crate_root().join("src/installation/import/postgres-staging-schemas.v1.json"),
     )
     .expect("read the checked PostgreSQL staging catalog");
     let provisioning =
-        std::fs::read_to_string(crate_root().join("src/installation_adoption/provisioning.v1.sql"))
+        std::fs::read_to_string(crate_root().join("src/installation/adoption/provisioning.v1.sql"))
             .expect("read the checked fresh-provisioning schema");
     let classification = muxed_studio_lib::installation::classification::manifest();
 

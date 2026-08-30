@@ -38,6 +38,7 @@ pub const AUTHORED_TABLES: &[&str] = &[LINK_TABLE, SCHEMA_TABLE];
 
 /// The link columns, at their checked shape.
 pub(crate) const LINK_COLUMNS: &[&str] = &["id", "module_id", "path", "created_at", "updated_at"];
+const LEGACY_LINK_COLUMNS: &[&str] = &["id", "module_id", "local_path", "created_at", "updated_at"];
 
 /// The schema-ledger columns, at their checked shape.
 pub(crate) const SCHEMA_COLUMNS: &[&str] = &["singleton", "version", "installed_at"];
@@ -53,6 +54,19 @@ pub(crate) const SCHEMA_COLUMNS: &[&str] = &["singleton", "version", "installed_
 /// release's.
 pub async fn install(database: &DatabaseConnection) -> Result<(), ModuleLinkError> {
     let transaction = database.begin().await?;
+    let installed = columns(&transaction, LINK_TABLE).await?;
+    let current = column_set(LINK_COLUMNS);
+    let legacy = column_set(LEGACY_LINK_COLUMNS);
+    if installed == legacy {
+        transaction
+            .execute_unprepared(LEGACY_LINK_MIGRATION)
+            .await?;
+    } else if !installed.is_empty() && installed != current {
+        return Err(ModuleLinkError::new(
+            ModuleLinkErrorCode::Schema,
+            "The module_links columns do not match a supported installed contract.",
+        ));
+    }
     transaction.execute_unprepared(FOCUSED_SCHEMA).await?;
     transaction
         .execute_raw(Statement::from_sql_and_values(
@@ -63,6 +77,10 @@ pub async fn install(database: &DatabaseConnection) -> Result<(), ModuleLinkErro
         .await?;
     transaction.commit().await?;
     verify(database).await
+}
+
+fn column_set(columns: &[&str]) -> BTreeSet<String> {
+    columns.iter().map(|column| (*column).to_owned()).collect()
 }
 
 /// Prove the installed schema matches the checked contract.
@@ -156,4 +174,20 @@ CREATE TABLE IF NOT EXISTS module_links (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS uniq_module_link_module
     ON module_links(module_id);
+"#;
+
+const LEGACY_LINK_MIGRATION: &str = r#"
+ALTER TABLE module_links RENAME TO ticketry_legacy_module_links;
+CREATE TABLE module_links (
+    id char(32) NOT NULL PRIMARY KEY,
+    module_id char(32) NOT NULL
+        REFERENCES worktracker_issue (id) ON DELETE CASCADE,
+    path varchar(1024) NOT NULL CHECK (path <> '' AND path = trim(path)),
+    created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+INSERT INTO module_links (id, module_id, path, created_at, updated_at)
+SELECT id, module_id, local_path, created_at, updated_at
+FROM ticketry_legacy_module_links;
+DROP TABLE ticketry_legacy_module_links;
 "#;

@@ -37,6 +37,7 @@ export function ServiceHealthGate({
     }), [reload, runtime]);
 
   if (health.state === "failed") {
+    const failure = failurePresentation(health.message);
     const retry = async () => {
       if (retryInFlight.current) return;
       retryInFlight.current = true;
@@ -55,10 +56,10 @@ export function ServiceHealthGate({
       <div className="flex h-full w-full items-center justify-center bg-pane-bg p-8">
         <div className="max-w-xl text-center">
           <h1 className="text-lg font-semibold text-text-primary">
-            {failureHeading(health.message)}
+            {failure.heading}
           </h1>
           <p className="mt-2 text-sm text-text-muted">
-            {health.message ?? "The local server stopped unexpectedly."}
+            {failure.message}
           </p>
           {health.logPointer && (
             <p className="mt-2 text-sm text-text-muted">
@@ -120,4 +121,21 @@ function failureHeading(message: string | null): string {
   if (message?.includes("PostflightFailed")) return "Ticketry could not verify the updated installation";
   if (message?.includes("recovery snapshot")) return "This installation needs recovery";
   return "Ticketry services could not start";
+}
+
+function failurePresentation(message: string | null): {
+  heading: string;
+  message: string;
+} {
+  if (message?.toLowerCase().includes("database is locked")) {
+    return {
+      heading: "Ticketry is already running or still closing",
+      message: "Quit other Ticketry windows, wait a few seconds, then reopen the app.",
+    };
+  }
+
+  return {
+    heading: failureHeading(message),
+    message: message ?? "The local server stopped unexpectedly.",
+  };
 }

@@ -415,11 +415,9 @@ async fn settings_digest(
 async fn effective_owned_tables(
     database: &impl ConnectionTrait,
 ) -> Result<Vec<(&'static str, Vec<&'static str>)>, SettingsPersistenceError> {
-    let entry_skill_installed = table_exists(
-        database,
-        crate::work_management::launch_binding_entry_skill_migration::LEDGER_TABLE,
-    )
-    .await?;
+    let entry_skill_installed = crate::work_management::launch_binding_entry_skill_migration::
+        schema_has_migration_provenance(database)
+        .await?;
     Ok(OWNED_TABLES
         .iter()
         .map(|(table, columns)| {

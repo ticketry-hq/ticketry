@@ -32,6 +32,8 @@ use super::{
 pub struct RunSnapshot {
     pub model: Option<String>,
     pub reasoning: Option<String>,
+    pub initial_prompt: Option<String>,
+    pub unattended: bool,
     pub cwd: Option<String>,
     pub design_dir: Option<String>,
     pub resumed_from: Option<String>,
@@ -305,8 +307,6 @@ async fn mint_or_validate_run(
         issue_id: Set(intent.issue_id.clone()),
         ticket_seq: NotSet,
         agent: Set(intent.provider.clone()),
-        model: Set(request.snapshot.model.clone()),
-        reasoning: Set(request.snapshot.reasoning.clone()),
         status: Set("running".to_owned()),
         started_at: Set(started_at.to_owned()),
         ended_at: NotSet,
@@ -321,6 +321,9 @@ async fn mint_or_validate_run(
         scope: Set(intent.scope.clone()),
         launch_state: Set(request.snapshot.launch_state.clone()),
         launch_model: Set(request.snapshot.launch_model.clone()),
+        initial_prompt: Set(request.snapshot.initial_prompt.clone()),
+        launch_reasoning: Set(request.snapshot.reasoning.clone()),
+        launch_unattended: Set(request.snapshot.unattended),
     }
     .insert(transaction)
     .await

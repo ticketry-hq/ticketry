@@ -26,6 +26,8 @@ identifier and a per-worktree development profile. It can run beside an
 installed `Ticketry` app without sharing data, tmux sessions, frontend ports,
 or MCP listeners. Frontend, Rust runtime, and MCP output is written to
 `.ticketry-dev/logs/ticketry.log`.
+Use `TICKETRY_DEV_DATA_DIR` only when a development profile needs an explicit
+location; product data-directory variables are ignored by the dev launcher.
 
 Browser-only development uses a small Rust GraphQL adapter. It is a supporting
 tool for frontend work, not a separately deployable Ticketry backend:
@@ -47,6 +49,20 @@ Use `--temp-sqlite` with either command for a disposable profile. Ticketry
 starts that profile empty, removes it after a clean exit, and stops only tmux
 sessions created in its temporary namespace. Normal shutdown preserves
 intentional tmux sessions.
+
+To populate a new worktree's isolated development profile from the installed
+app without changing live data, run:
+
+```bash
+npm run desktop:dev:seeded
+```
+
+The launcher takes a read-only SQLite snapshot, copies the product media and
+profile metadata, and removes live viewer leases, worktree ownership, execution
+claims, queued launch decisions, and armed graph campaigns from the copy. Work
+items, modules, settings, and historical runs remain available for testing. It
+refuses to overwrite an existing development profile; after the first seeded
+launch, use `npm run desktop:dev` to reuse that data.
 
 ## Validation
 

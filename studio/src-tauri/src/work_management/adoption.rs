@@ -255,12 +255,15 @@ async fn classify(database: &DatabaseConnection) -> Result<SourceClassification,
 async fn schema_generation(
     database: &DatabaseConnection,
 ) -> Result<SchemaGeneration, AdoptionError> {
-    let project_only =
-        table_exists(database, super::project_onboarding_migration::LEDGER_TABLE).await?;
+    let project_only = table_exists(database, super::project_onboarding_migration::LEDGER_TABLE)
+        .await?
+        || django_migration_applied(database, "0046_remove_workspace").await?;
     let workspace_tab_order =
-        table_exists(database, super::workspace_tab_order_migration::LEDGER_TABLE).await?;
+        table_exists(database, super::workspace_tab_order_migration::LEDGER_TABLE).await?
+            || django_migration_applied(database, "0049_issue_workspace_tab_order").await?;
     let module_presentation =
-        table_exists(database, super::module_presentation_migration::LEDGER_TABLE).await?;
+        table_exists(database, super::module_presentation_migration::LEDGER_TABLE).await?
+            || django_migration_applied(database, "0050_module_presentation").await?;
     match (project_only, workspace_tab_order, module_presentation) {
         (false, false, false) => Ok(SchemaGeneration::WorkspaceOwned),
         (false, true, false) => Ok(SchemaGeneration::WorkspaceOwnedWithTabOrder),
@@ -274,6 +277,25 @@ async fn schema_generation(
             "module-presentation migration ledger exists without workspace-tab ordering",
         )),
     }
+}
+
+async fn django_migration_applied(
+    database: &DatabaseConnection,
+    name: &str,
+) -> Result<bool, AdoptionError> {
+    if !table_exists(database, "django_migrations").await? {
+        return Ok(false);
+    }
+    let row = database
+        .query_one_raw(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
+            "SELECT COUNT(*) AS count FROM django_migrations WHERE app = ? AND name = ?",
+            ["worktracker".into(), name.into()],
+        ))
+        .await
+        .map_err(sqlite_error)?
+        .ok_or_else(|| AdoptionError::new("Django migration provenance returned no row"))?;
+    Ok(row.try_get::<i64>("", "count").map_err(sqlite_error)? == 1)
 }
 
 async fn validate_manifest(
@@ -371,11 +393,10 @@ async fn effective_owned_tables(
     database: &DatabaseConnection,
     generation: SchemaGeneration,
 ) -> Result<Vec<(&'static str, Vec<&'static str>)>, AdoptionError> {
-    let entry_skill_installed = table_exists(
-        database,
-        super::launch_binding_entry_skill_migration::LEDGER_TABLE,
-    )
-    .await?;
+    let entry_skill_installed =
+        super::launch_binding_entry_skill_migration::schema_has_migration_provenance(database)
+            .await
+            .map_err(sqlite_error)?;
     Ok(owned_tables(generation)
         .into_iter()
         .map(|(table, columns)| {
@@ -529,6 +550,35 @@ fn file_sha256(path: &Path) -> Result<String, AdoptionError> {
 
 fn hex_digest(bytes: &[u8]) -> String {
     bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use sea_orm::{ConnectionTrait, Database};
+
+    use super::{schema_generation, SchemaGeneration};
+
+    #[tokio::test]
+    async fn django_migration_history_selects_the_current_project_only_shape() {
+        let database = Database::connect("sqlite::memory:")
+            .await
+            .expect("open migration-history fixture");
+        database
+            .execute_unprepared(
+                "CREATE TABLE django_migrations (app TEXT NOT NULL, name TEXT NOT NULL);
+                 INSERT INTO django_migrations VALUES
+                   ('worktracker', '0046_remove_workspace'),
+                   ('worktracker', '0049_issue_workspace_tab_order'),
+                   ('worktracker', '0050_module_presentation')",
+            )
+            .await
+            .expect("record the current Django shape");
+
+        assert_eq!(
+            schema_generation(&database).await.expect("classify shape"),
+            SchemaGeneration::ProjectOnlyWithTabOrderAndModulePresentation,
+        );
+    }
 }
 fn sqlite_error(error: impl std::fmt::Display) -> AdoptionError {
     AdoptionError::new(format!("WorkTracker adoption SQLite failure: {error}"))

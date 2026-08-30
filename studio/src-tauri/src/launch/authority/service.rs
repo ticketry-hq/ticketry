@@ -225,8 +225,8 @@ impl LaunchAuthorityService {
         };
         Ok(ResolvedLaunchMaterial {
             provider: source.agent,
-            model: source.launch_model.or(source.model),
-            reasoning: source.reasoning,
+            model: source.launch_model,
+            reasoning: source.launch_reasoning,
             policy_reference: None,
             prompt: None,
             required_skills: Vec::new(),

@@ -59,6 +59,11 @@ pub struct DocumentChatPrompt {
 }
 
 const DESIGN_DOC_VISUAL_CONTRACT: &str = "Use a calm light surface, shared token palette, and system font. Keep a sticky header with an uppercase crumb, title, one-line summary, and status chips; add scroll-spy navigation and lead each section with a heading and short lede. Include a clickable SVG diagram whose side panel explains each node's responsibilities and non-responsibilities, with non-responsibilities in red and dashed strokes reserved for deferred seams; use the same convention for numbered sequence steps. Keep a requirement-trace table that highlights its matching diagram nodes, a color-coded file change-map tree, and a closing green acceptance-signal callout.";
+const WATCHED_DOCUMENT_CONTRACT: &str = "Ticketry watches this exact design directory recursively for .md and .html files.\nCreate every design or spec document inside this directory; files written elsewhere will not appear in Ticketry.";
+
+fn watched_design_directory(directory: &str) -> String {
+    format!("Design directory: {directory}\n{WATCHED_DOCUMENT_CONTRACT}\n")
+}
 
 pub fn build_task_prompt(input: &TaskPromptInput) -> String {
     let facts = &input.facts;
@@ -99,7 +104,7 @@ pub fn build_task_prompt(input: &TaskPromptInput) -> String {
     }
     if !facts.state.eq_ignore_ascii_case("ideas") {
         if let Some(directory) = input.design_directory.as_deref() {
-            prompt.push_str(&format!("Design directory: {directory}\n"));
+            prompt.push_str(&watched_design_directory(directory));
         }
     }
     prompt.push_str("Available tools: WorkTracker MCP server; coding agent status tool.");
@@ -134,7 +139,8 @@ pub fn build_planning_prompt(input: &PlanningPrompt) -> String {
         input.module_directory_name.as_deref(),
     ) {
         prompt.push_str(&format!(
-            "\n\nDesign directory: {directory}\nAfter you create a WorkTracker task for the planned feature, move this directory's contents to the task's canonical design directory spec/{module_name}/T<sequence>--<short-task-slug>/ (sequence = the new task's ticket number, slug = lowercase dashed words from its name) so the documents follow the task."
+            "\n\n{}After you create a WorkTracker task for the planned feature, move this directory's contents to the task's canonical design directory spec/{module_name}/T<sequence>--<short-task-slug>/ (sequence = the new task's ticket number, slug = lowercase dashed words from its name) so the documents follow the task.",
+            watched_design_directory(directory),
         ));
     }
     prompt.push_str("\n\nDo not start implementing. This is a planning session only.");
@@ -201,7 +207,7 @@ pub fn build_instant_prompt(input: &InstantPrompt) -> String {
     let design = input
         .design_directory
         .as_deref()
-        .map(|value| format!("Design directory: {value}\n"))
+        .map(watched_design_directory)
         .unwrap_or_default();
     format!(
         "You are an agent making a small, instant change in the '{}' module.\n\nContext:\n  Project: {}\n  Project ID:  {}\n  Module ID:   {}\n  Local Codebase: {}\n\nUser's request:\n  {}\n\nYour job:\n{}\n{}Do not create or update WorkTracker tasks for this work.",

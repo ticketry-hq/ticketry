@@ -8,6 +8,7 @@ pub const VERSION: i32 = 1;
 pub const CURRENT_DJANGO_LEAF: &str = "0013_agentrun_launch_configuration_snapshot";
 pub const LEGACY_TERMINAL_DJANGO_LEAF: &str = "0015_agentrun_initial_prompt";
 pub const MERGED_DJANGO_LEAF: &str = "0015_merge_20260819_1521";
+pub const FINAL_DJANGO_LEAF: &str = "0017_agentrun_launch_unattended";
 
 pub const AUTHORED_TABLES: &[&str] = &[
     "agent_runs",
@@ -22,8 +23,6 @@ pub(crate) const AGENT_RUN_COLUMNS: &[&str] = &[
     "issue_id",
     "ticket_seq",
     "agent",
-    "model",
-    "reasoning",
     "status",
     "started_at",
     "ended_at",
@@ -38,6 +37,9 @@ pub(crate) const AGENT_RUN_COLUMNS: &[&str] = &[
     "scope",
     "launch_state",
     "launch_model",
+    "initial_prompt",
+    "launch_reasoning",
+    "launch_unattended",
 ];
 
 pub(crate) const ATTEMPT_BASE_COLUMNS: &[&str] = &[
@@ -91,28 +93,14 @@ async fn bridge(
     let Some(source_leaf) = source_leaf else {
         return Ok(());
     };
-    if source_leaf == LEGACY_TERMINAL_DJANGO_LEAF {
-        transaction
-            .execute_unprepared(
-                "ALTER TABLE agent_runs ADD COLUMN model varchar NULL;\n\
-                 ALTER TABLE agent_runs ADD COLUMN reasoning varchar NULL;\n\
-                 UPDATE agent_runs SET model=launch_model WHERE model IS NULL;",
-            )
-            .await
-            .map_err(storage)?;
-        for migration in [CURRENT_DJANGO_LEAF, MERGED_DJANGO_LEAF] {
-            transaction
-                .execute_raw(Statement::from_sql_and_values(
-                    DbBackend::Sqlite,
-                    "INSERT INTO django_migrations (app, name, applied) VALUES ('runs', ?, CURRENT_TIMESTAMP)",
-                    [migration.into()],
-                ))
-                .await
-                .map_err(storage)?;
-        }
+    if source_leaf == FINAL_DJANGO_LEAF {
         return Ok(());
     }
-    if source_leaf == MERGED_DJANGO_LEAF {
+    if matches!(
+        source_leaf,
+        LEGACY_TERMINAL_DJANGO_LEAF | MERGED_DJANGO_LEAF
+    ) {
+        rebuild_premerge_agent_runs(transaction).await?;
         return Ok(());
     }
     let source_number = migration_number(source_leaf)?;
@@ -176,6 +164,12 @@ async fn rebuild_premerge_agent_runs(
         .map(|column| {
             if installed.contains(*column) {
                 format!("\"{column}\"")
+            } else if *column == "launch_model" && installed.contains("model") {
+                "\"model\"".to_owned()
+            } else if *column == "launch_reasoning" && installed.contains("reasoning") {
+                "\"reasoning\"".to_owned()
+            } else if *column == "launch_unattended" {
+                "0".to_owned()
             } else {
                 "NULL".to_owned()
             }
@@ -336,8 +330,6 @@ CREATE TABLE agent_runs__rust (
     issue_id char(32) NOT NULL REFERENCES worktracker_issue(id) DEFERRABLE INITIALLY DEFERRED,
     ticket_seq integer NULL,
     agent varchar NULL,
-    model varchar NULL,
-    reasoning varchar NULL,
     status varchar NOT NULL,
     started_at varchar NOT NULL,
     ended_at varchar NULL,
@@ -351,7 +343,10 @@ CREATE TABLE agent_runs__rust (
     resumed_from varchar NULL,
     scope varchar NOT NULL,
     launch_state varchar NULL,
-    launch_model varchar NULL
+    launch_model varchar NULL,
+    initial_prompt text NULL,
+    launch_reasoning varchar NULL,
+    launch_unattended bool NOT NULL DEFAULT 0
 );
 "#;
 

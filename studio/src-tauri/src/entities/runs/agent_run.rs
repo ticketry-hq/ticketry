@@ -9,8 +9,6 @@ pub struct Model {
     pub issue_id: String,
     pub ticket_seq: Option<i32>,
     pub agent: Option<String>,
-    pub model: Option<String>,
-    pub reasoning: Option<String>,
     pub status: String,
     pub started_at: String,
     pub ended_at: Option<String>,
@@ -27,6 +25,10 @@ pub struct Model {
     pub scope: String,
     pub launch_state: Option<String>,
     pub launch_model: Option<String>,
+    #[sea_orm(column_type = "Text", nullable)]
+    pub initial_prompt: Option<String>,
+    pub launch_reasoning: Option<String>,
+    pub launch_unattended: bool,
     #[sea_orm(belongs_to, from = "issue_id", to = "id")]
     pub issue: BelongsTo<crate::work_management::entities::issue::Entity>,
 }

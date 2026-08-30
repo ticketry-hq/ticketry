@@ -68,8 +68,6 @@ type AgentRuns {
 	issueId: String!
 	ticketSeq: Int
 	agent: String
-	model: String
-	reasoning: String
 	status: String!
 	startedAt: String!
 	endedAt: String
@@ -82,6 +80,9 @@ type AgentRuns {
 	scope: String!
 	launchState: String
 	launchModel: String
+	initialPrompt: String
+	launchReasoning: String
+	launchUnattended: Boolean!
 	issue: WorktrackerIssue
 }
 
@@ -102,8 +103,6 @@ input AgentRunsFilterInput {
 	issueId: StringFilterInput
 	ticketSeq: IntegerFilterInput
 	agent: StringFilterInput
-	model: StringFilterInput
-	reasoning: StringFilterInput
 	status: StringFilterInput
 	startedAt: StringFilterInput
 	endedAt: StringFilterInput
@@ -116,6 +115,9 @@ input AgentRunsFilterInput {
 	scope: StringFilterInput
 	launchState: StringFilterInput
 	launchModel: StringFilterInput
+	initialPrompt: StringFilterInput
+	launchReasoning: StringFilterInput
+	launchUnattended: BooleanFilterInput
 	and: [AgentRunsFilterInput!]
 	or: [AgentRunsFilterInput!]
 	not: AgentRunsFilterInput
@@ -130,8 +132,6 @@ input AgentRunsOrderInput {
 	issueId: OrderByEnum
 	ticketSeq: OrderByEnum
 	agent: OrderByEnum
-	model: OrderByEnum
-	reasoning: OrderByEnum
 	status: OrderByEnum
 	startedAt: OrderByEnum
 	endedAt: OrderByEnum
@@ -144,6 +144,9 @@ input AgentRunsOrderInput {
 	scope: OrderByEnum
 	launchState: OrderByEnum
 	launchModel: OrderByEnum
+	initialPrompt: OrderByEnum
+	launchReasoning: OrderByEnum
+	launchUnattended: OrderByEnum
 }
 
 type AgentTerminalSessions {

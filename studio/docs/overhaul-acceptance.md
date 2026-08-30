@@ -163,6 +163,11 @@ named gate before the full Studio suite, typecheck, and build.
 | 178 | While a native Ghostty view is engaged, only its live focused surface receives Ghostty-bound Command keys such as `Cmd++`; unbound application commands stay with AppKit, and retained or tearing-down viewers cannot query stale surfaces. |
 | 179 | Cmd+1 through Cmd+0 select the same canonical visible Module positions from WebView and focused native Ghostty input; hidden and archived Modules consume no position, and native keyboard engagement clears held-Command badges. |
 | 180 | Cmd+Escape from the live focused native terminal and the WebView leave typing through the same transition exactly once, return focus to the current zone, preserve the open terminal and workspace selection, ignore disposed viewers, and do not steal modal focus. |
+| 181 | Root tasks reorder through the GraphQL write path. |
+| 182 | Imported root tasks with equal ranks still send deterministic reorder neighbors. |
+| 183 | A Module tab's close hover background remains a compact square inside the tab. |
+| 184 | Native Ghostty copy and paste use the macOS clipboard, preserve Ghostty's paste and OSC 52 confirmation boundary, and reject stale surface ownership. |
+| 185 | A locked startup database is presented as an actionable already-running message without exposing raw SQL. |
 
 Each executable case carries one stable `[overhaul-NN]` marker. The gate has a
 contract test that fails if a marker is missing or duplicated. When a Studio UI

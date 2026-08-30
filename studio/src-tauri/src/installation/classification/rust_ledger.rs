@@ -79,6 +79,13 @@ pub fn owned_ledgers() -> Vec<(&'static str, i32)> {
     ]
 }
 
+fn supports_version(table: &str, version: i32, current: i32) -> bool {
+    if table == "ticketry_runs_adoption" {
+        return crate::runs_persistence::SUPPORTED_OWNERSHIP_VERSIONS.contains(&version);
+    }
+    version == current
+}
+
 /// Report Rust ownership when any capability ledger is present.
 ///
 /// Returns `None` when no ledger exists, which leaves the installation to the
@@ -103,7 +110,7 @@ pub async fn inspect(
                 ),
             ));
         }
-        if version != expected {
+        if !supports_version(table, version, expected) {
             return Err(ClassificationError::new(
                 Refusal::UnsupportedGeneration,
                 format!("{table} records unsupported ownership version {version}"),
@@ -145,4 +152,18 @@ async fn ledger_version(
             format!("{table} records an unreadable ownership version: {error}"),
         )
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::supports_version;
+
+    #[test]
+    fn runs_accepts_the_migratable_v1_ledger() {
+        assert!(supports_version("ticketry_runs_adoption", 1, 2));
+        assert!(supports_version("ticketry_runs_adoption", 2, 2));
+        assert!(!supports_version("ticketry_runs_adoption", 0, 2));
+        assert!(!supports_version("ticketry_runs_adoption", 3, 2));
+        assert!(!supports_version("ticketry_settings_adoption", 1, 2));
+    }
 }

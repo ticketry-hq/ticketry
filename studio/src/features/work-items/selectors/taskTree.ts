@@ -170,6 +170,36 @@ export function visibleRows(
   return rows;
 }
 
+const EMPTY_TASK_IDS: TaskId[] = [];
+
+export function descendantIdsByRowId(
+  tree: ModuleTree,
+  rows: readonly WorkItemRow[],
+): Record<TaskId, TaskId[]> {
+  const result: Record<TaskId, TaskId[]> = {};
+
+  for (const row of rows) {
+    if (row.expanded) {
+      result[row.id] = EMPTY_TASK_IDS;
+      continue;
+    }
+
+    const ids: TaskId[] = [];
+    const seen = new Set<TaskId>([row.id]);
+    const pending = [...(tree.children[row.id] ?? [])];
+    while (pending.length > 0) {
+      const id = pending.pop();
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      ids.push(id);
+      pending.push(...(tree.children[id] ?? []));
+    }
+    result[row.id] = ids.length > 0 ? ids : EMPTY_TASK_IDS;
+  }
+
+  return result;
+}
+
 export function selectModuleTaskOrder(
   tree: ModuleTree,
   itemsById: Readonly<Record<TaskId, TreeWorkItem>>,

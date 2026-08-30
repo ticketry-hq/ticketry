@@ -59,6 +59,9 @@ export function createApolloStore<T>(
     studioApolloClient().cache.writeFragment<LocalStateRecord<T>>({
       id: cacheId(),
       fragment: LocalStateFragment,
+      // Store hooks notify their own selectors below. Broadcasting this local
+      // row write would also diff every unrelated server-record watcher.
+      broadcast: false,
       data: {
         __typename: "TicketryLocalState",
         id,

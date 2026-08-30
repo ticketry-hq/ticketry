@@ -31,7 +31,6 @@ import {
 import {
   instantRunPlanningRowId,
   selectPlanningRowId,
-  useSelectedPlanningRowId,
 } from "./internal/instantRunTicketNavigation";
 import { startInstantChangeFlow } from "../../../../features/studio/modals/PlanFeature";
 import { ConversationStateBadge } from "../../../../features/agents/lifecycle";
@@ -85,6 +84,8 @@ type RenderBlock =
   | { kind: "row"; row: Exclude<TreeRow, Row> }
   | { kind: "block"; rows: Row[] };
 
+const EMPTY_DESCENDANT_IDS: string[] = [];
+
 function groupRootBlocks(rows: TreeRow[]): RenderBlock[] {
   const grouped: RenderBlock[] = [];
   for (const row of rows) {
@@ -103,7 +104,6 @@ function groupRootBlocks(rows: TreeRow[]): RenderBlock[] {
 export function TasksPane() {
   recordSelectionProfilePoint("tasks-pane-render");
   const selectedProjectId = useStudioStore((s) => s.selectedProjectId);
-  const selectedRowId = useSelectedPlanningRowId();
   const selectedModuleId = useClientStore((s) => s.selectedModuleId);
   const states = useCachedStates(selectedProjectId);
   const reorder = useReorderWorkItem({
@@ -121,6 +121,7 @@ export function TasksPane() {
   const {
     rows,
     tree,
+    descendantIdsByRowId,
     sectionIdsByState,
     loadingTasks,
     isSearchActive,
@@ -390,7 +391,11 @@ export function TasksPane() {
             <TaskRow
               key={planningRowId(row)}
               row={row}
-              isSelected={planningRowId(row) === selectedRowId}
+              descendantIds={
+                row.kind === "work-item"
+                  ? descendantIdsByRowId[row.id] ?? EMPTY_DESCENDANT_IDS
+                  : EMPTY_DESCENDANT_IDS
+              }
               onClick={handleSelect}
               onToggleExpand={handleToggleExpand}
               dragSourceProps={

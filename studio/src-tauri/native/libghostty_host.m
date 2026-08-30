@@ -18,6 +18,7 @@ typedef struct {
 // implementation file owns one concern.
 #include "libghostty_surface_owner.m"
 #include "libghostty_focus_trace.m"
+#include "libghostty_clipboard.m"
 #include "libghostty_runtime.m"
 #include "libghostty_key_event.m"
 #include "libghostty_studio_chord.m"

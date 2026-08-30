@@ -16,7 +16,7 @@ mod support;
 use support::{assert_final, fixture, table_exists};
 
 #[tokio::test]
-async fn full_0044_through_0051_chain_is_lossless_and_reopens() {
+async fn full_0044_through_0052_chain_is_lossless_and_reopens() {
     let (directory, database) = fixture().await;
     final_schema_migrations::install(&database)
         .await

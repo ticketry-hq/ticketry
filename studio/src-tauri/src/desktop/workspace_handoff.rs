@@ -122,7 +122,11 @@ fn unmet(readiness: &Slice4Readiness) -> String {
 /// The document and worktree fields Studio's production traffic depends on.
 /// Every one of them replaced a legacy REST route, so a missing field means the
 /// cutover would leave Studio with no writer rather than a slower one.
-const REQUIRED_QUERIES: &[&str] = &["directory_completions", "worktree_status"];
+const REQUIRED_QUERIES: &[&str] = &[
+    "directory_completions",
+    "worktree_changes",
+    "worktree_status",
+];
 const REQUIRED_MUTATIONS: &[&str] = &[
     "refresh_task_document_registry",
     "refresh_scratch_document_registry",

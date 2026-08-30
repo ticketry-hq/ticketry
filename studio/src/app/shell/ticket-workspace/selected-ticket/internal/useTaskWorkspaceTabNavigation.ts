@@ -1,19 +1,17 @@
 import { useEffect, useRef } from "react";
 import { isTypingTarget } from "../../../../../shared/utilities/keyboard";
 import { useClientStore } from "../../../../../state/clientStore";
+import type { WorkspaceTabIdentity } from "../../../../../features/workspace-tabs/types";
 
-export type TaskWorkspaceTabIdentity =
-  | { kind: "details" }
-  | { kind: "doc"; id: string }
-  | { kind: "terminal"; id: string };
+export type TaskWorkspaceTabIdentity = WorkspaceTabIdentity;
 
 function sameTab(
   left: TaskWorkspaceTabIdentity,
   right: TaskWorkspaceTabIdentity,
 ): boolean {
   if (left.kind !== right.kind) return false;
-  if (left.kind === "details") return true;
-  if (right.kind === "details") return false;
+  if (left.kind === "details" || left.kind === "changes") return true;
+  if (right.kind === "details" || right.kind === "changes") return false;
   return left.id === right.id;
 }
 

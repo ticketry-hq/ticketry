@@ -163,6 +163,26 @@ export function WorkspaceTabStrip({
             />
           );
         }
+        if (identity.kind === "changes") {
+          return (
+            <WorkspaceTab
+              key="changes"
+              label="Changes"
+              active={activeKind === "changes"}
+              highlighted={showTabHighlight && highlightedTab.kind === "changes"}
+              allowHoverEmphasis={allowTabHoverEmphasis}
+              onClick={() => {
+                if (!reorderDrag.consumePostDropClick()) {
+                  onSelectTab({ kind: "changes" });
+                }
+              }}
+              dropIntent={reorderDrag.dropIntentFor(identity)}
+              registerRef={(node) => registerTabRef(identity, node)}
+              dragSourceProps={reorderDrag.dragSourcePropsFor(identity)}
+              dropTargetProps={reorderDrag.dropTargetPropsFor(identity)}
+            />
+          );
+        }
         if (identity.kind === "doc") {
           const document = documentById.get(identity.id);
           if (!document) return null;

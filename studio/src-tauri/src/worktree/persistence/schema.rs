@@ -21,6 +21,24 @@ pub const ADOPTED_TABLE: &str = "worktrees";
 /// The ownership ledger this slice authors. It has never had a Django writer.
 pub const LEDGER_TABLE: &str = "ticketry_worktrees_adoption";
 
+pub(crate) const LEGACY_WORKTREE_COLUMNS: &[&str] = &[
+    "id",
+    "task_id",
+    "workspace_slug",
+    "project_id",
+    "module_id",
+    "ticket_seq",
+    "repo_root",
+    "path",
+    "branch",
+    "base_branch",
+    "base_commit",
+    "status",
+    "ephemeral",
+    "created_at",
+    "updated_at",
+];
+
 pub(crate) const WORKTREE_COLUMNS: &[&str] = &[
     "id",
     "task_id",
@@ -37,6 +55,7 @@ pub(crate) const WORKTREE_COLUMNS: &[&str] = &[
     "ephemeral",
     "created_at",
     "updated_at",
+    "pull_request_url",
 ];
 
 /// Persisted lifecycle states. Successful integration and discard delete the

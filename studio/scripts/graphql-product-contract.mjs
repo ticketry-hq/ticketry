@@ -5,6 +5,28 @@ import { typedDocumentTargets } from "./typed-document-generation.mjs";
 
 const FOUNDATION_MUTATIONS = ["migrationProbesCreateOne"];
 
+// These are named operations because Git writes are external effects, not
+// Worktree model CRUD. Keep the reason beside the exact public fields so the
+// product-contract drift check also guards this exception registry.
+const WORKTREE_GIT_OPERATION_EXCEPTIONS = {
+  module_checkout_commit: "Commit uncommitted files in the module's linked checkout.",
+  module_checkout_pull_request_create:
+    "Push committed module-checkout work when needed and create a ready GitHub pull request.",
+  module_checkout_push: "Push committed module-checkout work to its Git remote.",
+  worktree_commit: "Commit uncommitted files in an indexed task worktree.",
+  worktree_cleanup:
+    "After explicit confirmation, remove an eligible merged task checkout, its local branch, and its Worktree row while preserving remote state.",
+  worktree_pull_request_create:
+    "Push committed task-worktree work when needed, create a ready GitHub pull request, and map its confirmed URL.",
+  worktree_pull_request_follow_up:
+    "Create a user-confirmed follow-up for new branch work after a correct-base merge and replace the mapped URL.",
+  worktree_pull_request_merge_prepare:
+    "Recheck one mapped pull request and launch a policy-resolved agent in its existing task worktree when conflicts or failed required checks can be repaired on the branch.",
+  worktree_pull_request_replace:
+    "Create a user-confirmed replacement for a closed unmerged pull request and replace the mapped URL.",
+  worktree_push: "Push committed task-worktree work to its Git remote.",
+};
+
 const PRODUCT_MUTATIONS = [
   "acknowledge_onboarding",
   "clear_module_link",
@@ -24,6 +46,7 @@ const PRODUCT_MUTATIONS = [
   "graph_run_delete",
   "graph_run_update",
   "ingest_agent_lifecycle",
+  ...Object.keys(WORKTREE_GIT_OPERATION_EXCEPTIONS),
   "refresh_scratch_document_registry",
   "refresh_task_document_registry",
   "remove_state_from_issue_type_workflow",
@@ -83,8 +106,10 @@ const AUTHORED_QUERIES = [
   "automation_attempts",
   "directory_completions",
   "keybinding_setting",
+  "module_version_control",
   "provider_catalog",
   "resumable_terminal_sessions",
+  "worktree_changes",
   "worktree_status",
 ];
 

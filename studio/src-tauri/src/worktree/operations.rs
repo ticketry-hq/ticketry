@@ -11,6 +11,7 @@
 //! This is a composition seam, not an authority: neither service is reachable
 //! through the other, and each still owns its own restricted GraphQL mutation.
 
+use crate::worktree::changes::WorktreeChangesService;
 use crate::worktree::create::WorktreeCreateService;
 use crate::worktree::discard::WorktreeDiscardService;
 use crate::worktree::status::WorktreeStatusService;
@@ -39,5 +40,9 @@ impl WorktreeOperations {
     /// second, independent set.
     pub fn status_service(&self) -> &WorktreeStatusService {
         self.create.status_service()
+    }
+
+    pub fn changes_service(&self) -> WorktreeChangesService {
+        WorktreeChangesService::from_status(self.status_service().clone())
     }
 }

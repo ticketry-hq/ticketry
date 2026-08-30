@@ -46,7 +46,7 @@ pub(super) fn register(builder: &mut Builder) {
     builder.register_custom_mutation::<DiscardWorktreeView>();
 }
 
-fn service<'a>(ctx: &'a Context<'a>) -> Result<&'a WorktreeDiscardService> {
+pub(super) fn service<'a>(ctx: &'a Context<'a>) -> Result<&'a WorktreeDiscardService> {
     if !crate::workspace::handoff::gate::open(ctx) {
         return Err(crate::workspace::handoff::gate::unavailable());
     }
@@ -56,10 +56,12 @@ fn service<'a>(ctx: &'a Context<'a>) -> Result<&'a WorktreeDiscardService> {
     })
 }
 
-fn worktree_discard_error(error: WorktreeDiscardError) -> Error {
+pub(super) fn worktree_discard_error(error: WorktreeDiscardError) -> Error {
     let code = error.code_str();
+    let retryable = error.retryable();
     let message = error.to_string();
     Error::new(message.clone())
         .extend_with(|_, extension| extension.set("code", code))
+        .extend_with(move |_, extension| extension.set("retryable", retryable))
         .extend_with(move |_, extension| extension.set("detail", message))
 }

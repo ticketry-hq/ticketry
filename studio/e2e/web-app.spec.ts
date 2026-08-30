@@ -88,9 +88,9 @@ const names = {
   reorderSecond: "Complete reorder second",
   hierarchyParent: "Complete hierarchy parent",
   hierarchyChild: "Complete hierarchy child",
-  landing: "Complete automatic worktree landing",
-  landingConflict: "Complete conflicted worktree landing",
-  landingDirty: "Complete dirty worktree refusal",
+  landing: "Retain committed worktree on completion",
+  landingConflict: "Retain diverged worktree on completion",
+  landingDirty: "Retain dirty worktree on completion",
   runNow: "Complete safe Run now refusal",
   deletable: "Complete disposable",
 };
@@ -710,7 +710,7 @@ test.describe("complete browser application", () => {
       .toBeVisible();
   });
 
-  test("automatically lands a committed worktree when its Story reaches Done", async ({
+  test("keeps a committed worktree when its Story reaches Done until explicit discard", async ({
     page,
     request,
   }) => {
@@ -725,7 +725,7 @@ test.describe("complete browser application", () => {
     await worktree.getByRole("button", { name: "+ Create worktree" }).click();
     await created;
     await expect(worktree).toContainText(
-      /wt\/CODIN-\d+-complete-automatic-worktree-landing → main/,
+      /wt\/CODIN-\d+-retain-committed-worktree-on-completion → main/,
     );
 
     const status = (await graphql(request, WorktreeStatusDocument, {
@@ -737,8 +737,8 @@ test.describe("complete browser application", () => {
       clean: true,
     });
     expect(status.path).toBeTruthy();
-    const evidenceName = "automatic-worktree-landing-e2e.txt";
-    const evidence = "Landed automatically by the Rust completion hook.\n";
+    const evidenceName = "retained-worktree-e2e.txt";
+    const evidence = "Retained after Work Item completion.\n";
     await writeFile(join(status.path!, evidenceName), evidence);
     const gitEnvironment = {
       ...process.env,
@@ -752,7 +752,7 @@ test.describe("complete browser application", () => {
     });
     await execFileAsync(
       "git",
-      ["-C", status.path!, "commit", "-m", "E2E automatic worktree landing"],
+      ["-C", status.path!, "commit", "-m", "E2E retained worktree"],
       { env: gitEnvironment },
     );
 
@@ -763,18 +763,37 @@ test.describe("complete browser application", () => {
     await selectState(page, "Review");
     await selectState(page, "Done");
 
+    await expect.poll(async () => (
+      await graphql(request, WorktreeStatusDocument, {
+        taskId: fixture.landing.id,
+      })
+    ).worktree_status.kind, { timeout: 20_000 }).toBe("worktree");
+    await expect.poll(async () => {
+      try {
+        return await readFile(join(status.path!, evidenceName), "utf8");
+      } catch {
+        return null;
+      }
+    }).toBe(evidence);
+    await expect(worktree).toContainText(
+      "completion leaves this worktree unchanged",
+    );
+    await expect(worktree.getByRole("button", { name: "Discard" })).toBeVisible();
     await expect.poll(async () => {
       try {
         return await readFile(join(fixture.folder, evidenceName), "utf8");
       } catch {
         return null;
       }
-    }, { timeout: 20_000 }).toBe(evidence);
-    await expect.poll(async () => (
-      await graphql(request, WorktreeStatusDocument, {
-        taskId: fixture.landing.id,
-      })
-    ).worktree_status.kind, { timeout: 20_000 }).toBe("none");
+    }).toBeNull();
+
+    await page.reload();
+    await expect(page.getByTestId("status-row")).toContainText("Done");
+    const retained = page.getByTestId("worktree-block");
+    await expect(retained).toContainText(status.branch!);
+    await retained.getByRole("button", { name: "Discard" }).click();
+    await retained.getByRole("button", { name: "Yes, discard" }).click();
+    await expect(retained).toContainText("Runs in the primary checkout.");
     await expect.poll(async () => {
       try {
         await access(status.path!);
@@ -783,17 +802,9 @@ test.describe("complete browser application", () => {
         return false;
       }
     }).toBe(false);
-    await expect(worktree).toContainText("Runs in the primary checkout.");
-    await expect(worktree.getByRole("button", { name: "Discard" }))
-      .toHaveCount(0);
-
-    await page.reload();
-    await expect(page.getByTestId("status-row")).toContainText("Done");
-    await expect(page.getByTestId("worktree-block"))
-      .toContainText("Runs in the primary checkout.");
   });
 
-  test("keeps an automatic landing conflict isolated from the primary checkout", async ({
+  test("keeps diverged worktree and primary checkouts independent on Done", async ({
     page,
     request,
   }) => {
@@ -808,7 +819,7 @@ test.describe("complete browser application", () => {
     await worktree.getByRole("button", { name: "+ Create worktree" }).click();
     await created;
     await expect(worktree).toContainText(
-      /wt\/CODIN-\d+-complete-conflicted-worktree-landing/,
+      /wt\/CODIN-\d+-retain-diverged-worktree-on-completion/,
     );
 
     const status = (await graphql(request, WorktreeStatusDocument, {
@@ -850,11 +861,12 @@ test.describe("complete browser application", () => {
       await graphql(request, WorktreeStatusDocument, {
         taskId: fixture.landingConflict.id,
       })
-    ).worktree_status.conflict, { timeout: 20_000 }).toBe(true);
-    await expect(worktree).toContainText("Conflict");
+    ).worktree_status.kind, { timeout: 20_000 }).toBe("worktree");
     await expect(worktree).toContainText(
-      "Auto-land hit a merge conflict. Resolve it in the worktree",
+      "completion leaves this worktree unchanged",
     );
+    expect(await readFile(join(status.path!, "README.md"), "utf8"))
+      .toBe("task-side conflict\n");
     expect(await readFile(join(fixture.folder, "README.md"), "utf8"))
       .toBe(primaryContents);
     await expect.poll(async () => {
@@ -866,22 +878,9 @@ test.describe("complete browser application", () => {
       }
     }).toBe(false);
 
-    await worktree.getByRole("button", { name: "Discard" }).click();
-    await worktree.getByRole("button", { name: "Yes, discard" }).click();
-    await expect(worktree).toContainText("Runs in the primary checkout.");
-    await expect.poll(async () => {
-      try {
-        await access(status.path!);
-        return true;
-      } catch {
-        return false;
-      }
-    }).toBe(false);
-    expect(await readFile(join(fixture.folder, "README.md"), "utf8"))
-      .toBe(primaryContents);
   });
 
-  test("refuses to auto-land or discard uncommitted work when a Story reaches Done", async ({
+  test("keeps uncommitted work when a Story reaches Done", async ({
     page,
     request,
   }) => {
@@ -899,7 +898,7 @@ test.describe("complete browser application", () => {
       taskId: fixture.landingDirty.id,
     })).worktree_status;
     expect(status.path).toBeTruthy();
-    const protectedName = "uncommitted-auto-land-e2e.txt";
+    const protectedName = "uncommitted-retained-e2e.txt";
     const protectedContents = "Uncommitted work must survive completion.\n";
     await writeFile(join(status.path!, protectedName), protectedContents);
 
@@ -908,14 +907,10 @@ test.describe("complete browser application", () => {
     await selectState(page, "Implement");
     await selectState(page, "Review");
     await selectState(page, "Done");
-    // The standing Rust reconciler runs every second. Allow two passes before
-    // proving that its dirty-work refusal left both Git locations untouched.
-    await page.waitForTimeout(2_500);
-
-    const refusedStatus = (await graphql(request, WorktreeStatusDocument, {
+    const retainedStatus = (await graphql(request, WorktreeStatusDocument, {
       taskId: fixture.landingDirty.id,
     })).worktree_status;
-    expect(refusedStatus).toMatchObject({
+    expect(retainedStatus).toMatchObject({
       kind: "worktree",
       dirty: true,
       checkout_present: true,

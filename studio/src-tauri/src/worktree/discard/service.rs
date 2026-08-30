@@ -94,17 +94,66 @@ impl WorktreeDiscardService {
         };
         let plan = DiscardPlan::for_row(&row);
 
-        let prepared = self
-            .executor
-            .journal()
-            .prepare(identity::intent(operation_id, &plan))
-            .await?;
-        if prepared.reused {
-            if let Some(answer) = self.replayed(task_id, &prepared.operation).await? {
-                return Ok(answer);
+        self.execute(task_id, operation_id, identity::intent(operation_id, &plan))
+            .await
+    }
+
+    /// Remove an integrated task worktree only after explicit confirmation and
+    /// a fresh check of every cleanup precondition.
+    pub async fn cleanup(
+        &self,
+        task_id: &str,
+        operation_id: &str,
+        confirmed: bool,
+    ) -> Result<WorktreeDiscardResult, WorktreeDiscardError> {
+        if !confirmed {
+            return Err(WorktreeDiscardError::cleanup_confirmation_required());
+        }
+        let owner = owner::resolve(self.executor.work_items(), task_id).await?;
+        if let Some(operation) = self.executor.journal().find(operation_id).await? {
+            let existing = operation
+                .intent_payload()
+                .as_ref()
+                .and_then(identity::DiscardIntent::decode);
+            if existing.as_ref().is_some_and(|intent| {
+                intent.cleanup.is_some() && intent.top_level_row_id == owner.top_level_row_id()
+            }) {
+                return self
+                    .execute_prepared(task_id, operation_id, &operation)
+                    .await;
             }
         }
+        let row = worktree::Entity::find()
+            .filter(worktree::Column::TaskId.eq(owner.top_level_row_id()))
+            .one(self.executor.work_items())
+            .await?
+            .ok_or_else(WorktreeDiscardError::cleanup_ineligible)?;
+        let plan = DiscardPlan::for_row(&row);
+        let expectation = self.executor.prepare_cleanup(&plan).await?;
+        let intent = identity::cleanup_intent(operation_id, &plan, &expectation);
+        self.execute(task_id, operation_id, intent).await
+    }
 
+    async fn execute(
+        &self,
+        task_id: &str,
+        operation_id: &str,
+        intent: crate::workspace::operations::WorkspaceOperationIntent,
+    ) -> Result<WorktreeDiscardResult, WorktreeDiscardError> {
+        let prepared = self.executor.journal().prepare(intent).await?;
+        self.execute_prepared(task_id, operation_id, &prepared.operation)
+            .await
+    }
+
+    async fn execute_prepared(
+        &self,
+        task_id: &str,
+        operation_id: &str,
+        operation: &crate::workspace::operations::WorkspaceOperationRecord,
+    ) -> Result<WorktreeDiscardResult, WorktreeDiscardError> {
+        if let Some(answer) = self.replayed(task_id, operation).await? {
+            return Ok(answer);
+        }
         let claim = self
             .executor
             .journal()
@@ -115,7 +164,11 @@ impl WorktreeDiscardService {
                 WorktreeDiscardResult::settled(&result, self.status(task_id).await?),
             ),
             WorkspaceOperationOutcome::Conflicted { code, message, .. } => {
-                Err(WorktreeDiscardError::external_conflict(&code, &message))
+                if code == "worktree_cleanup_ineligible" {
+                    Err(WorktreeDiscardError::cleanup_ineligible())
+                } else {
+                    Err(WorktreeDiscardError::external_conflict(&code, &message))
+                }
             }
             WorkspaceOperationOutcome::Failed { code, message, .. } => {
                 Err(failure(&code, &message))

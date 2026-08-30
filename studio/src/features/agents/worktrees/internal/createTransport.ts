@@ -21,11 +21,7 @@ import {
   type WorktreeStatusPayload,
 } from "./statusTransport";
 import type { WorktreeContext, WorktreeStatus } from "./types";
-
-/** A stable identity for one user intent, reused across its retries. */
-export function newOperationId(): string {
-  return crypto.randomUUID();
-}
+export { newOperationId } from "./operationId";
 
 export function requestWorktreeCreate(
   taskId: string,

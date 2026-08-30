@@ -49,4 +49,4 @@ export const SCRATCH_RUN_TASK_ID = "00000000-0000-0000-0000-000000000000";
  * existing agent-workspace consumers keep one import site. */
 export type { DesignDoc } from "../documents/types";
 
-export type TabKind = "details" | "doc" | "terminal";
+export type TabKind = "details" | "changes" | "doc" | "terminal";

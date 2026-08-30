@@ -12,6 +12,7 @@ const MAX_WORKSPACE_ENTRIES = 100;
 
 export type StudioWorkspaceTarget =
   | { kind: "details" }
+  | { kind: "changes" }
   | { kind: "doc"; relPath: string }
   | { kind: "terminal"; agentRunId: string };
 
@@ -21,6 +22,7 @@ function parseStudioWorkspaceTarget(
   if (!value || typeof value !== "object") return null;
   const target = value as Record<string, unknown>;
   if (target.kind === "details") return { kind: "details" };
+  if (target.kind === "changes") return { kind: "changes" };
   if (target.kind === "doc" && typeof target.relPath === "string") {
     return { kind: "doc", relPath: target.relPath };
   }

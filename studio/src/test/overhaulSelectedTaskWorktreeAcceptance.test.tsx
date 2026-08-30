@@ -152,6 +152,9 @@ describe("overhaul acceptance — selected-task Details worktree", () => {
       },
     });
 
+    expect(
+      await screen.findByText(/completion leaves this worktree unchanged/),
+    ).toBeVisible();
     fireEvent.click(await screen.findByRole("button", { name: "Discard" }));
     fireEvent.click(screen.getByRole("button", { name: "Yes, discard" }));
     expect(await screen.findByText("Discard failed")).toBeVisible();

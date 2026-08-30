@@ -1,4 +1,4 @@
-//! The 0044 through 0051 parity chain, in source order.
+//! The 0044 through 0052 parity chain, in source order.
 
 use sea_orm::{DatabaseConnection, DbErr};
 
@@ -16,6 +16,7 @@ pub const ORDERED_MIGRATION_IDS: &[&str] = &[
     workspace_tab_order_migration::MIGRATION_ID,
     module_presentation_migration::MIGRATION_ID,
     provider_catalog_migrations::CODEX_SPARK_MIGRATION_ID,
+    crate::worktree::persistence::pull_request_url_migration::MIGRATION_ID,
 ];
 
 pub async fn install(database: &DatabaseConnection) -> Result<(), DbErr> {
@@ -39,7 +40,10 @@ pub async fn install(database: &DatabaseConnection) -> Result<(), DbErr> {
         .map_err(|error| step_error("0050", error))?;
     provider_catalog_migrations::install_codex_spark(database)
         .await
-        .map_err(|error| step_error("0051", error))
+        .map_err(|error| step_error("0051", error))?;
+    crate::worktree::persistence::pull_request_url_migration::install(database)
+        .await
+        .map_err(|error| step_error("0052", error))
 }
 
 fn step_error(step: &str, error: DbErr) -> DbErr {

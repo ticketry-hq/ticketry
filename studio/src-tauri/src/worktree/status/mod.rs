@@ -40,7 +40,7 @@ mod service;
 mod view;
 
 pub use error::{WorktreeStatusError, WorktreeStatusErrorCode};
-pub use git::GitPort;
+pub use git::{GitOutcome, GitPort};
 pub use repository_locks::RepositoryLocks;
 pub use service::WorktreeStatusService;
 pub use view::{WorktreeStatusView, KIND_NONE, KIND_NO_REPO, KIND_WORKTREE};

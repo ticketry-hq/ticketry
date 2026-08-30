@@ -28,6 +28,7 @@
 //! removal, after the prune, after the branch deletion, after the row deletion,
 //! or after the response was lost — converges on the same durable answer.
 
+mod cleanup;
 mod error;
 mod executor;
 mod git_effects;

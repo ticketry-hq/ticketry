@@ -1,0 +1,44 @@
+query WorktreeChanges($taskId: String!) {
+  worktree_changes(task_id: $taskId) {
+    task_id
+    top_level_task_id
+    is_shared
+    base_commit
+    committed_count
+    pull_request_url
+    pull_request_creation_eligible
+    work_item_done
+    closure_failure {
+      code
+      message
+      from_state
+      to_state
+    }
+    cleanup {
+      eligible
+      blocker
+      reason
+    }
+    pull_request {
+      url
+      state
+      target_branch
+      head_commit
+      integrated
+      post_merge_work
+      replacement_eligible
+      follow_up_eligible
+      merge_preparation_eligible
+      reason
+    }
+    clean
+    dirty
+    unpushed_count
+    truncated
+    files {
+      path
+      previous_path
+      status
+    }
+  }
+}

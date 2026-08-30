@@ -26,6 +26,7 @@ pub struct Model {
     pub ephemeral: bool,
     pub created_at: String,
     pub updated_at: String,
+    pub pull_request_url: Option<String>,
     #[sea_orm(belongs_to, from = "task_id", to = "id")]
     pub task: BelongsTo<crate::entities::work_management::issue::Entity>,
     #[sea_orm(belongs_to, from = "project_id", to = "id")]

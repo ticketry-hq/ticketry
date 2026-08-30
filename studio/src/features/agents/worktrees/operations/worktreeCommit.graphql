@@ -1,0 +1,9 @@
+mutation WorktreeCommit($taskId: String!, $operationId: String!, $message: String!) {
+  worktree_commit(task_id: $taskId, operation_id: $operationId, message: $message) {
+    operation_id
+    head_commit
+    dirty
+    unpushed_count
+    uncommitted_work_excluded
+  }
+}

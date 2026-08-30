@@ -34,6 +34,7 @@ use crate::workspace::operations::{
 };
 use crate::worktree::status::{GitPort, RepositoryLocks};
 
+use super::cleanup::{self, CleanupExpectation};
 use super::error::WorktreeDiscardError;
 use super::git_effects::{self, BranchState, CheckoutState, DiscardObservation};
 use super::identity::DiscardIntent;
@@ -87,6 +88,14 @@ impl DiscardExecutor {
 
     pub(crate) fn journal(&self) -> &WorkspaceOperationJournal {
         &self.journal
+    }
+
+    pub(crate) async fn prepare_cleanup(
+        &self,
+        plan: &DiscardPlan,
+    ) -> Result<CleanupExpectation, WorktreeDiscardError> {
+        let _guard = self.locks.acquire(&plan.repository).await;
+        cleanup::verify(&self.work_items, &self.git, plan).await
     }
 
     /// Re-read the row a journalled intent describes and prove it is still the
@@ -146,6 +155,32 @@ impl DiscardExecutor {
             Ok(plan) => plan,
             Err(outcome) => return outcome,
         };
+        if let Some(expected) = &intent.cleanup {
+            let observation = match self.observe(&plan).await {
+                Ok(observation) => observation,
+                Err(outcome) => return self.settled(claim, outcome).await,
+            };
+            if let Some((code, detail)) = observation.conflict() {
+                return self
+                    .settled(claim, conflicted(code, detail, json!({ "conflict": code })))
+                    .await;
+            }
+            if observation.checkout == CheckoutState::Present {
+                let verified = cleanup::verify(&self.work_items, &self.git, &plan).await;
+                if !matches!(verified, Ok(ref current) if current == expected) {
+                    return self
+                        .settled(
+                            claim,
+                            conflicted(
+                                "worktree_cleanup_ineligible",
+                                "This task worktree no longer satisfies every cleanup precondition.",
+                                json!({ "cleanupEligible": false }),
+                            ),
+                        )
+                        .await;
+                }
+            }
+        }
         match self.release(&plan).await {
             Ok(removal) => self.settle_discarded(claim, &plan, removal).await,
             Err(outcome) => self.settled(claim, outcome).await,

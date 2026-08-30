@@ -213,7 +213,7 @@ async fn request_sweep(
         return;
     }
 
-    loop {
+    for pass_number in 0..2 {
         state.requested.store(false, Ordering::Release);
         let pass = async {
             work.drain_spool().await?;
@@ -224,20 +224,12 @@ async fn request_sweep(
         if let Ok(Err(error)) = timeout(deadline, pass).await {
             eprintln!("Ticketry terminal sweep failed: {error}");
         }
-        if !state.requested.swap(false, Ordering::AcqRel) {
-            state.running.store(false, Ordering::Release);
-            if !state.requested.load(Ordering::Acquire) {
-                break;
-            }
-            if state
-                .running
-                .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
-                .is_err()
-            {
-                break;
-            }
+        let follow_up_requested = state.requested.swap(false, Ordering::AcqRel);
+        if !follow_up_requested || pass_number == 1 {
+            break;
         }
     }
+    state.running.store(false, Ordering::Release);
 }
 
 #[cfg(test)]
@@ -418,6 +410,45 @@ mod tests {
 
         assert_eq!(work.max_reconciliations.load(Ordering::SeqCst), 1);
         assert!(work.reconciliations.load(Ordering::SeqCst) <= baseline + 2);
+        runtime
+            .shutdown()
+            .await
+            .expect("shutdown terminal lifecycle");
+    }
+
+    #[tokio::test]
+    async fn continuous_requests_cannot_extend_an_owned_sweep_past_one_follow_up() {
+        let work = Arc::new(FakeWork::default());
+        work.reconciliation_delay_ms.store(20, Ordering::SeqCst);
+        let runtime = Arc::new(
+            TerminalLifecycleRuntime::start(work.clone(), config(Duration::ZERO))
+                .await
+                .expect("start terminal lifecycle"),
+        );
+        let baseline = work.reconciliations.load(Ordering::SeqCst);
+        let owner = {
+            let runtime = Arc::clone(&runtime);
+            tokio::spawn(async move { runtime.request_sweep().await })
+        };
+        tokio::time::sleep(Duration::from_millis(5)).await;
+        let requester = {
+            let runtime = Arc::clone(&runtime);
+            tokio::spawn(async move {
+                loop {
+                    runtime.request_sweep().await;
+                    tokio::task::yield_now().await;
+                }
+            })
+        };
+
+        timeout(Duration::from_millis(100), owner)
+            .await
+            .expect("the owning sweep must remain bounded")
+            .expect("owning sweep task");
+        requester.abort();
+
+        assert_eq!(work.max_reconciliations.load(Ordering::SeqCst), 1);
+        assert!(work.reconciliations.load(Ordering::SeqCst) >= baseline + 1);
         runtime
             .shutdown()
             .await

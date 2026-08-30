@@ -147,6 +147,7 @@ async fn verify(database: &DatabaseConnection) -> Result<(), AdoptionFailure> {
 async fn seed_installation_project(database: &DatabaseConnection) -> Result<(), AdoptionFailure> {
     let now = crate::installation::adoption::now_rfc3339();
     let workspace_id = uuid::Uuid::new_v4().simple().to_string();
+    let project_id = uuid::Uuid::new_v4().simple().to_string();
     database
         .execute_raw(Statement::from_sql_and_values(
             DbBackend::Sqlite,
@@ -170,7 +171,7 @@ async fn seed_installation_project(database: &DatabaseConnection) -> Result<(), 
               manual_module_order, created_at, updated_at) \
              VALUES (?, ?, ?, ?, '', 0, 0, 0, ?, ?)",
             [
-                uuid::Uuid::new_v4().simple().to_string().into(),
+                project_id.clone().into(),
                 workspace_id.into(),
                 INSTALLATION_PROJECT_NAME.into(),
                 INSTALLATION_PROJECT_SLUG.into(),
@@ -211,7 +212,68 @@ fn failed(detail: String) -> AdoptionFailure {
 
 #[cfg(test)]
 mod tests {
-    use super::{manifest, RECORDED_SCHEMA};
+    use sea_orm::{ConnectionTrait, Database, DbBackend, Statement, TryGetable};
+
+    use super::{build, manifest, RECORDED_SCHEMA};
+
+    #[tokio::test]
+    async fn first_launch_provisions_a_usable_project_catalog() {
+        let directory = tempfile::tempdir().expect("create provisioning directory");
+        let path = directory.path().join("state.db");
+        build(&path).await.expect("provision first-launch database");
+
+        let database = Database::connect(format!("sqlite:{}?mode=rw", path.display()))
+            .await
+            .expect("open provisioned database");
+        crate::work_management::final_schema_migrations::install(&database)
+            .await
+            .expect("install current WorkTracker schema");
+        assert!(
+            crate::work_management::commands::catalog::seed_empty_installation_project_catalog(
+                &database
+            )
+            .await
+            .expect("seed installation project catalog")
+        );
+        let rows = database
+            .query_all_raw(Statement::from_string(
+                DbBackend::Sqlite,
+                "SELECT name, level FROM worktracker_issuetype ORDER BY sort_order".to_owned(),
+            ))
+            .await
+            .expect("read provisioned issue types");
+        let types = rows
+            .iter()
+            .map(|row| {
+                (
+                    String::try_get(row, "", "name").expect("issue-type name"),
+                    String::try_get(row, "", "level").expect("issue-type level"),
+                )
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            types,
+            [
+                ("Module".to_owned(), "module".to_owned()),
+                ("Story".to_owned(), "task".to_owned()),
+                ("PathFind".to_owned(), "task".to_owned()),
+                ("Implementation".to_owned(), "task".to_owned()),
+            ],
+        );
+        let state_count = database
+            .query_one_raw(Statement::from_string(
+                DbBackend::Sqlite,
+                "SELECT COUNT(*) AS count FROM worktracker_state".to_owned(),
+            ))
+            .await
+            .expect("read provisioned state count")
+            .expect("state count row");
+        assert_eq!(
+            i64::try_get(&state_count, "", "count").expect("state count"),
+            8,
+        );
+    }
 
     #[test]
     fn the_recorded_schema_names_the_generation_it_reproduces() {

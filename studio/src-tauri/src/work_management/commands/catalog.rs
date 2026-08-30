@@ -109,6 +109,61 @@ pub async fn create_project(
     .insert(&transaction)
     .await?;
 
+    insert_project_catalog(&transaction, &id, &defaults, now).await?;
+    transaction.commit().await?;
+    Ok(id)
+}
+
+/// Seed the reviewed catalog for the already-created installation Project.
+///
+/// First-launch provisioning must create its Project against the recorded
+/// Django leaf because that schema still requires a Workspace foreign key.
+/// Once that row exists, this uses the same catalog transaction as ordinary
+/// Project creation so fresh installations cannot drift into an unusable
+/// project with no Module type or workflow.
+pub(crate) async fn seed_empty_installation_project_catalog(
+    database: &DatabaseConnection,
+) -> Result<bool, CommandError> {
+    let Some(project_id) =
+        crate::work_management::project_onboarding_migration::installation_project_id(database)
+            .await?
+    else {
+        return Ok(false);
+    };
+    let defaults = reviewed_defaults::load()
+        .map_err(|_| CommandError::Storage("Reviewed project defaults are invalid.".to_owned()))?;
+    let transaction = database.begin().await?;
+    let state_count = state::Entity::find()
+        .filter(state::Column::ProjectId.eq(&project_id))
+        .count(&transaction)
+        .await?;
+    let issue_type_count = issue_type::Entity::find()
+        .filter(issue_type::Column::ProjectId.eq(&project_id))
+        .count(&transaction)
+        .await?;
+    if state_count != 0 || issue_type_count != 0 {
+        transaction.commit().await?;
+        return Ok(false);
+    }
+    insert_project_catalog(
+        &transaction,
+        &project_id,
+        &defaults,
+        super::timestamp::now(),
+    )
+    .await?;
+    transaction.commit().await?;
+    Ok(true)
+}
+
+async fn insert_project_catalog(
+    transaction: &DatabaseTransaction,
+    project_id: &str,
+    defaults: &reviewed_defaults::Defaults,
+    now: sea_orm::prelude::DateTime,
+) -> Result<(), CommandError> {
+    let id = project_id.to_owned();
+
     let mut state_ids = HashMap::new();
     for (sort_order, seed) in defaults.states.iter().enumerate() {
         let state_id = new_database_uuid();
@@ -124,7 +179,7 @@ pub async fn create_project(
             created_at: Set(now),
             updated_at: Set(now),
         }
-        .insert(&transaction)
+        .insert(transaction)
         .await?;
     }
 
@@ -158,7 +213,7 @@ pub async fn create_project(
             created_at: Set(now),
             updated_at: Set(now),
         }
-        .insert(&transaction)
+        .insert(transaction)
         .await?;
     }
 
@@ -172,7 +227,7 @@ pub async fn create_project(
                 to_state_id: Set(state_ids[to].clone()),
                 agent_allowed: Set(metadata.agent_allowed),
             }
-            .insert(&transaction)
+            .insert(transaction)
             .await?;
         }
     }
@@ -208,12 +263,11 @@ pub async fn create_project(
                 created_at: Set(now),
                 updated_at: Set(now),
             }
-            .insert(&transaction)
+            .insert(transaction)
             .await?;
         }
     }
-    transaction.commit().await?;
-    Ok(id)
+    Ok(())
 }
 
 /// Clear the named project's pending onboarding.

@@ -37,17 +37,23 @@ class DataTransferStub {
   dropEffect = "none";
   effectAllowed = "uninitialized";
   private readonly data = new Map<string, string>();
+  private readsProtected = false;
 
   get types() {
     return [...this.data.keys()];
   }
 
   getData(type: string) {
+    if (this.readsProtected) return "";
     return this.data.get(type) ?? "";
   }
 
   setData(type: string, value: string) {
     this.data.set(type, value);
+  }
+
+  protectReads() {
+    this.readsProtected = true;
   }
 }
 
@@ -325,6 +331,30 @@ describe("useAxisDragAndDrop", () => {
       targetId: null,
       intent: null,
     });
+  });
+
+  it("commits an active drop when the webview protects drag data", () => {
+    const onDrop = vi.fn();
+    const { result } = renderController("vertical", { onDrop });
+    const transfer = startDrag(result);
+    const target = document.createElement("div");
+    target.getBoundingClientRect = () =>
+      ({ top: 0, left: 0, width: 100, height: 100 }) as DOMRect;
+    const props = result.current.getDropTargetProps("target");
+
+    transfer.protectReads();
+    act(() =>
+      props.onDragOver(
+        dragEvent(transfer, { clientY: 25, currentTarget: target }),
+      ),
+    );
+    act(() => props.onDrop(dragEvent(transfer, { currentTarget: target })));
+
+    expect(onDrop).toHaveBeenCalledWith(
+      { id: "source" },
+      { targetId: "target", intent: "near" },
+      expect.anything(),
+    );
   });
 
   it("clears target and intent when a drag is cancelled", () => {

@@ -4,7 +4,6 @@ import { useStudioStore } from "../../../../features/projects";
 import { useCachedStates } from "../../../../features/projects";
 import {
   isPlanningRow,
-  getWorkItemSnapshot,
   LOADING_PLACEHOLDER as PLACEHOLDER,
   STATE_HEADER as HEADER,
   type PlanningRow as Row,
@@ -110,6 +109,7 @@ export function TasksPane() {
   const {
     rows,
     tree,
+    itemsById,
     sectionIdsByState,
     loadingTasks,
     isSearchActive,
@@ -133,21 +133,21 @@ export function TasksPane() {
       payload: TicketDragPayload,
       resolved: { targetId: string; intent: "near" | "far" },
     ) => {
-      const source = getWorkItemSnapshot(payload.taskId);
+      const source = itemsById[payload.taskId];
       if (!source || !selectedProjectId || !selectedModuleId) return;
       const headerStateId = resolved.targetId.startsWith("state:")
         ? resolved.targetId.slice("state:".length)
         : null;
       const target = headerStateId
         ? null
-        : getWorkItemSnapshot(resolved.targetId);
+        : itemsById[resolved.targetId];
       const destinationState = states.find(
         (state) => state.id === (headerStateId ?? target?.state),
       );
       if (!destinationState?.id) return;
 
       const sectionBlocks = visibleBlocks.filter((block) =>
-        getWorkItemSnapshot(block.rootId)?.state === destinationState.id,
+        itemsById[block.rootId]?.state === destinationState.id,
       );
       // Collapsed headers have no visible blocks. Rebuild their root-only
       // section from the ranked task list so a head drop still uses the real
@@ -186,6 +186,7 @@ export function TasksPane() {
     [
       reorder,
       setState,
+      itemsById,
       selectedModuleId,
       selectedProjectId,
       states,

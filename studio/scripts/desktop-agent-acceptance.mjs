@@ -1,6 +1,6 @@
 import { spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
-import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import net from "node:net";
 import path from "node:path";
 import process from "node:process";
@@ -88,7 +88,19 @@ async function stopProcess(child) {
   await killed;
 }
 
+async function closeStudio(browser, child) {
+  if (browser) await browser.closeWindow().catch(() => {});
+  if (!child || child.exitCode !== null || child.signalCode !== null) return;
+  const exited = once(child, "exit").then(() => true);
+  const graceful = await Promise.race([
+    exited,
+    new Promise((resolve) => setTimeout(() => resolve(false), 15_000)),
+  ]);
+  if (!graceful) await stopProcess(child);
+}
+
 function spawnTicketry(binary, environment, stdout, stderr) {
+  const stderrStart = stderr.length;
   const child = spawn(binary, [], {
     cwd: repositoryRoot,
     env: { ...process.env, ...environment },
@@ -96,6 +108,12 @@ function spawnTicketry(binary, environment, stdout, stderr) {
   });
   child.stdout.on("data", (chunk) => stdout.push(chunk));
   child.stderr.on("data", (chunk) => stderr.push(chunk));
+  child.once("exit", (code, signal) => {
+    const diagnostic = Buffer.concat(stderr.slice(stderrStart)).toString("utf8").trim();
+    console.error(
+      `Disposable Ticketry exited (code=${code ?? "none"}, signal=${signal ?? "none"}, webdriver=${environment.TAURI_WEBDRIVER_PORT}).${diagnostic ? `\n${diagnostic}` : ""}`,
+    );
+  });
   return child;
 }
 
@@ -105,6 +123,7 @@ async function connectToStudio(port, child) {
     hostname: "127.0.0.1",
     port,
     logLevel: "warn",
+    connectionRetryCount: 0,
     capabilities: {
       "wdio:tauriServiceOptions": { windowLabel: "main" },
     },
@@ -317,6 +336,127 @@ function tmuxCapture(root) {
   return result.status === 0 ? result.stdout : "<no private tmux pane output>\n";
 }
 
+function readPasteboard() {
+  const result = spawnSync("/usr/bin/pbpaste", [], { encoding: "utf8" });
+  return result.status === 0 ? result.stdout : null;
+}
+
+function writePasteboard(value) {
+  const result = spawnSync("/usr/bin/pbcopy", [], {
+    encoding: "utf8",
+    input: value,
+  });
+  if (result.status !== 0) throw new Error("could not write the macOS pasteboard");
+}
+
+function sendPasteAndReturn(processId, focusPoint) {
+  if (!Number.isInteger(processId) || processId <= 0) {
+    throw new Error(`invalid Ticketry process id: ${processId}`);
+  }
+  const script = `
+tell application "System Events"
+  set ticketryProcess to first process whose unix id is ${processId}
+  set frontmost of ticketryProcess to true
+  click at {${focusPoint.x}, ${focusPoint.y}}
+  delay 0.2
+  keystroke "u" using control down
+  delay 0.1
+  keystroke "v" using command down
+  delay 0.1
+  key code 36
+end tell
+`;
+  const result = spawnSync("/usr/bin/osascript", ["-e", script], {
+    encoding: "utf8",
+  });
+  if (result.status !== 0) {
+    throw new Error(
+      `could not send native paste to Ticketry: ${result.stderr.trim() || result.stdout.trim()}`,
+    );
+  }
+}
+
+function submitNativeTerminalCommand(processId, focusPoint, command) {
+  writePasteboard(command);
+  sendPasteAndReturn(processId, focusPoint);
+}
+
+function sendSelectAllAndCopy(processId, focusPoint) {
+  const script = `
+tell application "System Events"
+  set ticketryProcess to first process whose unix id is ${processId}
+  set frontmost of ticketryProcess to true
+  click at {${focusPoint.x}, ${focusPoint.y}}
+  delay 0.1
+  keystroke "a" using command down
+  delay 0.1
+  keystroke "c" using command down
+end tell
+`;
+  const result = spawnSync("/usr/bin/osascript", ["-e", script], {
+    encoding: "utf8",
+  });
+  if (result.status !== 0) {
+    throw new Error(
+      `could not send native copy to Ticketry: ${result.stderr.trim() || result.stdout.trim()}`,
+    );
+  }
+}
+
+async function waitForTmuxOutput(root, expected, timeoutMs = 15_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (tmuxCapture(root).includes(expected)) return;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error(
+    `terminal output did not contain ${JSON.stringify(expected)}:\n${tmuxCapture(root)}`,
+  );
+}
+
+async function verifyNativeTerminalClipboardAndColor(browser, processId, root, artifacts) {
+  const host = await browser.$('[data-testid="native-terminal-host"]');
+  await host.waitForDisplayed({ timeout: 30_000 });
+  const [hostLocation, hostSize, windowRect] = await Promise.all([
+    host.getLocation(),
+    host.getSize(),
+    browser.getWindowRect(),
+  ]);
+  const focusPoint = {
+    x: Math.round(windowRect.x + hostLocation.x + hostSize.width / 2),
+    y: Math.round(windowRect.y + hostLocation.y + hostSize.height / 2),
+  };
+
+  submitNativeTerminalCommand(
+    processId,
+    focusPoint,
+    "printf '\\033[31mTICKETRY_RED\\033[0m \\033[32mTICKETRY_GREEN\\033[0m \\033[34mTICKETRY_BLUE\\033[0m\\n'",
+  );
+  await waitForTmuxOutput(root, "TICKETRY_RED TICKETRY_GREEN TICKETRY_BLUE");
+  await browser.saveScreenshot(path.join(artifacts, "native-terminal-color.png"));
+
+  const pasteToken = `ticketry-paste-${Date.now()}`;
+  submitNativeTerminalCommand(
+    processId,
+    focusPoint,
+    `printf 'TICKETRY_PASTED:%s\\n' '${pasteToken}'`,
+  );
+  await waitForTmuxOutput(root, `TICKETRY_PASTED:${pasteToken}`);
+
+  const copiedToken = `ticketry-copy-${Date.now()}`;
+  submitNativeTerminalCommand(processId, focusPoint, "clear");
+  await new Promise((resolve) => setTimeout(resolve, 250));
+  submitNativeTerminalCommand(processId, focusPoint, `printf '${copiedToken}\\n'`);
+  await waitForTmuxOutput(root, copiedToken);
+  await new Promise((resolve) => setTimeout(resolve, 250));
+  writePasteboard("ticketry-copy-sentinel");
+  sendSelectAllAndCopy(processId, focusPoint);
+  await browser.waitUntil(async () => readPasteboard()?.includes(copiedToken), {
+    timeout: 15_000,
+    timeoutMsg: "Command-A then Command-C did not copy native terminal text",
+  });
+}
+
 async function waitForTmuxEmpty(root, timeoutMs = 15_000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -360,7 +500,7 @@ async function main() {
       "--debug",
       "--no-bundle",
       "--features",
-      "desktop-acceptance",
+      "desktop-acceptance,native-libghostty",
     ], { cwd: studioRoot });
   }
 
@@ -380,10 +520,25 @@ async function main() {
   const hook = path.join(applicationDirectory, "ticketry-hook");
   copyFileSync(builtBinary, binary);
   copyFileSync(tools.hook, hook);
+  copyFileSync(
+    path.join(path.dirname(builtBinary), "ticketry-ghostty.conf"),
+    path.join(applicationDirectory, "ticketry-ghostty.conf"),
+  );
+  cpSync(
+    path.join(path.dirname(builtBinary), "ghostty"),
+    path.join(applicationDirectory, "ghostty"),
+    { recursive: true },
+  );
+  cpSync(
+    path.join(path.dirname(builtBinary), "terminfo"),
+    path.join(applicationDirectory, "terminfo"),
+    { recursive: true },
+  );
   chmodSync(binary, 0o755);
   chmodSync(hook, 0o755);
   const stdout = [];
   const stderr = [];
+  const originalPasteboard = readPasteboard();
   let port = await availablePort();
   let mcpPort = await availablePort();
   while (mcpPort === port) mcpPort = await availablePort();
@@ -421,6 +576,7 @@ async function main() {
     await click(await browser.$("aria/Open terminal panel"));
     const localShell = await browser.$("aria/Shell 1");
     await localShell.waitForDisplayed({ timeout: 30_000 });
+    await verifyNativeTerminalClipboardAndColor(browser, child.pid, root, artifacts);
     await click(await browser.$("aria/Close shell 1"));
     await localShell.waitForDisplayed({ timeout: 20_000, reverse: true });
     // Shell tabs disappear immediately while durable termination finishes in
@@ -435,9 +591,9 @@ async function main() {
     );
     await refusedLaunch.waitForDisplayed({ timeout: 20_000 });
 
-    await browser.deleteSession();
+    const firstBrowser = browser;
     browser = undefined;
-    await stopProcess(child);
+    await closeStudio(firstBrowser, child);
     await closeServer(mcpBlocker);
     mcpBlocker = undefined;
 
@@ -517,9 +673,9 @@ async function main() {
     await (await browser.$("aria/Resume Ideas codex terminal")).waitForDisplayed({ timeout: 30_000 });
     await waitForTmuxEmpty(root);
 
-    await browser.deleteSession();
+    const secondBrowser = browser;
     browser = undefined;
-    await stopProcess(child);
+    await closeStudio(secondBrowser, child);
 
     port = await availablePort();
     child = spawnTicketry(binary, {
@@ -532,9 +688,9 @@ async function main() {
     await waitForState(browser, "Done");
     await (await browser.$("aria/Resume Ideas codex terminal")).waitForDisplayed({ timeout: 30_000 });
 
-    await browser.deleteSession();
+    const finalBrowser = browser;
     browser = undefined;
-    await stopProcess(child);
+    await closeStudio(finalBrowser, child);
     const hookEvidence = readFileSync(path.join(root, "provider-hooks.log"), "utf8");
     for (const event of ["SessionStart", "UserPromptSubmit", "PostToolUse", "Stop"]) {
       if (!hookEvidence.includes(event)) {
@@ -573,13 +729,14 @@ async function main() {
     console.error(`Desktop acceptance failed. Artifacts: ${artifacts}`);
     throw error;
   } finally {
-    if (browser) await browser.deleteSession().catch(() => {});
-    await stopProcess(child);
+    await closeStudio(browser, child);
+    browser = undefined;
     await closeServer(mcpBlocker).catch(() => {});
     spawnSync(tmux, ["-L", "ticketry-e2e", "kill-server"], {
       env: { ...process.env, TMUX_TMPDIR: tmuxDirectory },
       stdio: "ignore",
     });
+    if (originalPasteboard !== null) writePasteboard(originalPasteboard);
     if (!failed && !retain) rmSync(root, { recursive: true, force: true });
     else if (!failed) console.log(`Desktop acceptance retained: ${root}`);
   }

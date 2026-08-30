@@ -19,6 +19,7 @@ import {
 } from "../graphql-foundation/typedDocument";
 import { readStatusFact } from "../features/agents/status/stream/statusFacts";
 import { studioApolloClient } from "../shared/apollo/client";
+import { TaskResumableTerminalSessionsDocument } from "../features/agents/terminal/generated/terminalSessions.documents";
 
 const runtime = vi.hoisted(() => ({ desktop: true }));
 
@@ -63,6 +64,14 @@ function desktopRuntime(
   };
 }
 
+function mockTaskTerminalHolding(refetch: ReturnType<typeof vi.fn>): void {
+  vi.spyOn(studioApolloClient(), "getObservableQueries").mockReturnValue(new Set([{
+    options: { query: TaskResumableTerminalSessionsDocument },
+    variables: { taskId: "task-1" },
+    refetch,
+  }]) as never);
+}
+
 describe("desktop terminal transport acceptance", () => {
   beforeEach(() => {
     runtime.desktop = true;
@@ -91,8 +100,6 @@ describe("desktop terminal transport acceptance", () => {
     initializeStudioRuntime(
       desktopRuntime((routes) => routes.graphQl(execute as never)),
     );
-    vi.spyOn(studioApolloClient(), "refetchQueries").mockResolvedValue([]);
-
     await createDefaultInteractiveTaskLaunch({
       projectId: "project-1",
       moduleId: "module-1",
@@ -110,8 +117,9 @@ describe("desktop terminal transport acceptance", () => {
     initializeStudioRuntime(
       desktopRuntime((routes) => routes.graphQl(execute as never)),
     );
-    vi.spyOn(studioApolloClient(), "refetchQueries")
-      .mockRejectedValue(new Error("resumable holdings unavailable"));
+    mockTaskTerminalHolding(
+      vi.fn().mockRejectedValue(new Error("resumable holdings unavailable")),
+    );
 
     await expect(terminateTerminalSession("run-created")).resolves.toEqual({
       agent_run_id: "run-created",
@@ -200,8 +208,8 @@ describe("desktop terminal transport acceptance", () => {
     initializeStudioRuntime(
       desktopRuntime((routes) => routes.graphQl(execute as never)),
     );
-    const refetch = vi.spyOn(studioApolloClient(), "refetchQueries")
-      .mockResolvedValue([]);
+    const refetch = vi.fn().mockResolvedValue(undefined);
+    mockTaskTerminalHolding(refetch);
 
     await expect(runWorkItemNow("task-1")).resolves.toMatchObject({
       target_id: "task-1",

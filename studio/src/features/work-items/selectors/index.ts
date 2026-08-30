@@ -2,6 +2,7 @@ import type { Module, State, WorkItem } from "../../../shared/api/types";
 import { RESOLVED_GROUPS } from "../../../shared/utilities/display";
 
 export {
+  descendantIdsByRowId,
   orderedTaskSections,
   orderIdsByRank,
   searchHits,
@@ -21,6 +22,7 @@ export {
   STATE_HEADER,
 } from "./planningRows";
 export type {
+  InstantRunRow,
   PlanningRow,
   PlanningTreeRow,
   ScratchRow,

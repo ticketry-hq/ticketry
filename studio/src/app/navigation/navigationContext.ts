@@ -16,6 +16,10 @@ import {
   planningRowId,
 } from "../shell/ticket-workspace/tasks/TasksPane";
 import { focusIdeaEntry } from "../shell/ticket-workspace/tasks/storiesFocus";
+import {
+  currentPlanningRowId,
+  selectPlanningRowId,
+} from "../shell/ticket-workspace/tasks/internal/instantRunTicketNavigation";
 
 type Direction = 1 | -1;
 
@@ -35,6 +39,7 @@ export interface NavigationTasks {
   selectedProjectId: string | null;
   selectedModuleId: string | null;
   selectedTaskId: string | null;
+  selectedPlanningRowId: string | null;
   selectProject: (id: string) => Promise<void>;
   selectModule: (id: string) => Promise<void>;
 }
@@ -64,6 +69,7 @@ export function createNavigationContext(
       selectedProjectId: project.selectedProjectId,
       selectedModuleId: ui.selectedModuleId,
       selectedTaskId: ui.selectedTaskId,
+      selectedPlanningRowId: currentPlanningRowId(),
       selectProject: project.selectProject,
       selectModule: ui.selectModule,
     },
@@ -89,10 +95,7 @@ export function selectedTaskIndex(
 export function selectTaskAt(rows: TreeRow[], index: number): void {
   const row = rows[index];
   if (!row || !isPlanningRow(row)) return;
-  useClientStore.setState({
-    selectedTaskId: planningRowId(row),
-    workspaceSelection: { kind: "task" },
-  });
+  selectPlanningRowId(planningRowId(row));
 }
 
 export function moveTaskSelection(
@@ -100,7 +103,10 @@ export function moveTaskSelection(
   direction: Direction,
 ): boolean {
   consume(ctx.event);
-  const selected = selectedTaskIndex(ctx.taskRows, ctx.tasks.selectedTaskId);
+  const selected = selectedTaskIndex(
+    ctx.taskRows,
+    ctx.tasks.selectedPlanningRowId,
+  );
   const firstTask = taskIndexFrom(ctx.taskRows, -1, 1);
   if (direction === -1 && selected === firstTask) {
     focusIdeaEntry();
@@ -118,7 +124,10 @@ export function moveTaskSelection(
 }
 
 export function currentTaskRow(ctx: NavigationContext): WorkItemRow | null {
-  const selected = selectedTaskIndex(ctx.taskRows, ctx.tasks.selectedTaskId);
+  const selected = selectedTaskIndex(
+    ctx.taskRows,
+    ctx.tasks.selectedPlanningRowId,
+  );
   const row = ctx.taskRows[selected];
   return row?.kind === "work-item" ? row : null;
 }

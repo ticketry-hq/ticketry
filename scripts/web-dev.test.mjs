@@ -2,17 +2,25 @@ import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { Readable } from "node:stream";
 import test from "node:test";
 import { productIdentity } from "./product-identity.mjs";
+import {
+  formatWebFrontendLogPayload,
+  webFrontendLogPlugin,
+} from "../studio/scripts/web-frontend-log-plugin.mjs";
+import { loadWebDevDefaults } from "./web-dev-defaults.mjs";
 
 import {
   buildWebDevelopmentEnvironment,
   buildWebFrontendCommand,
   buildWebHookRunnerCommand,
   cleanupTemporaryWebLaunch,
+  configuredWebPort,
   parseWebDevOptions,
   selectWebPort,
   waitUntilGraphqlReady,
+  withWebFileLogging,
 } from "./web-dev.mjs";
 
 const installedDataDirectory = path.join(
@@ -20,11 +28,166 @@ const installedDataDirectory = path.join(
   productIdentity.defaultDataDirectoryName,
 );
 
-test("web development accepts only the disposable-data option", () => {
-  assert.deepEqual(parseWebDevOptions([]), { temporarySqlite: false });
-  assert.deepEqual(parseWebDevOptions(["--temp-sqlite"]), { temporarySqlite: true });
-  assert.deepEqual(parseWebDevOptions(["--", "--temp-sqlite"]), { temporarySqlite: true });
+test("local web defaults apply without overriding explicit environment", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "ticketry-web-defaults-test-"));
+  const configPath = path.join(directory, "web-defaults.json");
+  writeFileSync(configPath, JSON.stringify({
+    environment: {
+      MUXED_DATA_DIR: "/configured/data",
+      MUXED_DESKTOP_MCP_PORT: "8124",
+      MUXED_TMUX_SOCKET: "configured-socket",
+    },
+    logToFile: true,
+  }));
+
+  assert.deepEqual(loadWebDevDefaults({
+    configPath,
+    environment: { MUXED_DATA_DIR: "/explicit/data", PRESERVED: "yes" },
+  }), {
+    environment: {
+      MUXED_DATA_DIR: "/explicit/data",
+      MUXED_DESKTOP_MCP_PORT: "8124",
+      MUXED_TMUX_SOCKET: "configured-socket",
+      PRESERVED: "yes",
+    },
+    logToFile: true,
+    reuseGraphqlAdapter: false,
+  });
+  rmSync(directory, { recursive: true });
+});
+
+test("missing local web defaults preserve the existing launcher behavior", () => {
+  assert.deepEqual(loadWebDevDefaults({
+    configPath: "/missing/ticketry-web-defaults.json",
+    environment: { PRESERVED: "yes" },
+  }), {
+    environment: { PRESERVED: "yes" },
+    logToFile: false,
+    reuseGraphqlAdapter: false,
+  });
+});
+
+test("authoritative local web defaults replace inherited profile settings", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "ticketry-web-override-test-"));
+  const configPath = path.join(directory, "web-defaults.json");
+  writeFileSync(configPath, JSON.stringify({
+    environment: {
+      MUXED_DATA_DIR: "/configured/data",
+      MUXED_DESKTOP_MCP_PORT: "8124",
+    },
+    overrideEnvironment: true,
+    reuseGraphqlAdapter: true,
+  }));
+
+  const defaults = loadWebDevDefaults({
+    configPath,
+    environment: { MUXED_DATA_DIR: "/inherited/data" },
+  });
+  assert.deepEqual(defaults.environment, {
+    MUXED_DATA_DIR: "/configured/data",
+    MUXED_DESKTOP_MCP_PORT: "8124",
+  });
+  assert.equal(defaults.reuseGraphqlAdapter, true);
+  rmSync(directory, { recursive: true });
+});
+
+test("adapter reuse validates configured ports without requiring availability", () => {
+  assert.equal(configuredWebPort("8799", "adapter"), 8799);
+  assert.throws(() => configuredWebPort("occupied", "adapter"), /adapter must be a port/);
+  assert.throws(() => configuredWebPort("70000", "adapter"), /adapter must be a port/);
+});
+
+test("web development accepts the disposable-data and file-logging options", () => {
+  assert.deepEqual(parseWebDevOptions([]), {
+    developmentProfile: false,
+    temporarySqlite: false,
+    logToFile: false,
+  });
+  assert.deepEqual(parseWebDevOptions(["--temp-sqlite"]), {
+    developmentProfile: false,
+    temporarySqlite: true,
+    logToFile: false,
+  });
+  assert.deepEqual(parseWebDevOptions(["--", "--log-to-file"]), {
+    developmentProfile: false,
+    temporarySqlite: false,
+    logToFile: true,
+  });
+  assert.deepEqual(parseWebDevOptions(["--log-to-file", "--temp-sqlite"]), {
+    developmentProfile: false,
+    temporarySqlite: true,
+    logToFile: true,
+  });
+  assert.deepEqual(parseWebDevOptions(["--development-profile"]), {
+    developmentProfile: true,
+    temporarySqlite: false,
+    logToFile: false,
+  });
   assert.throws(() => parseWebDevOptions(["--unknown"]), /usage: npm run web/);
+});
+
+test("web file logging reaches the browser and Rust adapter only when requested", () => {
+  const inherited = {
+    PRESERVED: "yes",
+    MUXED_DEVELOPMENT_LOG_PATH: "/stale/log",
+    VITE_TICKETRY_WEB_FILE_LOGGING: "true",
+  };
+  assert.deepEqual(withWebFileLogging(inherited, {
+    enabled: false,
+    logPath: "/workspace/ticketry.log",
+  }), { PRESERVED: "yes" });
+  assert.deepEqual(withWebFileLogging(inherited, {
+    enabled: true,
+    logPath: "/workspace/ticketry.log",
+  }), {
+    PRESERVED: "yes",
+    MUXED_DEVELOPMENT_LOG_PATH: "/workspace/ticketry.log",
+    VITE_TICKETRY_WEB_FILE_LOGGING: "true",
+  });
+});
+
+test("web frontend logging validates and flattens browser records", () => {
+  assert.equal(
+    formatWebFrontendLogPayload({ level: "error", message: "move failed\nconflict" }),
+    "[frontend][error] move failed\\nconflict",
+  );
+  assert.equal(formatWebFrontendLogPayload({ level: "fatal", message: "no" }), null);
+  assert.equal(formatWebFrontendLogPayload({ level: "info", message: 42 }), null);
+});
+
+test("web frontend logging exposes its route only when enabled", async () => {
+  let disabledMiddleware;
+  webFrontendLogPlugin({ enabled: false }).configureServer({
+    middlewares: { use(candidate) { disabledMiddleware = candidate; } },
+  });
+  assert.equal(disabledMiddleware, undefined);
+
+  let middleware;
+  const lines = [];
+  webFrontendLogPlugin({
+    enabled: true,
+    writeLine(line) { lines.push(line); },
+  }).configureServer({
+    middlewares: { use(candidate) { middleware = candidate; } },
+  });
+
+  const request = Readable.from([
+    Buffer.from(JSON.stringify({ level: "info", message: "story move complete" })),
+  ]);
+  request.url = "/__ticketry/frontend-log";
+  request.method = "POST";
+  const headers = new Map();
+  const response = {
+    statusCode: 0,
+    setHeader(name, value) { headers.set(name, value); },
+    end(body = "") { this.body = body; },
+  };
+  await middleware(request, response, () => assert.fail("route should be handled"));
+
+  assert.equal(response.statusCode, 204);
+  assert.equal(response.body, "");
+  assert.equal(headers.get("cache-control"), "no-store");
+  assert.deepEqual(lines, ["[frontend][info] story move complete"]);
 });
 
 test("an explicit data directory bypasses product data discovery", () => {
@@ -68,6 +231,32 @@ test("web development uses the installed desktop profile and tmux namespace", ()
   assert.equal(launch.temporarySqlite, false);
   assert.equal("MUXED_FORCE_SQLITE" in launch.environment, false);
   assert.equal(launch.environment.MUXED_TMUX_SOCKET, "muxed");
+});
+
+test("web development mode uses the desktop per-worktree profile", () => {
+  const calls = [];
+  const developmentDataDirectory = "/users/ticketry/.config/ticketry-development/repository";
+  const launch = buildWebDevelopmentEnvironment({
+    cwd: "/repository",
+    environment: { HOME: "/users/ticketry" },
+    developmentProfile: true,
+    resolveProductData() {
+      assert.fail("development mode must not resolve product data");
+    },
+    resolveDevelopmentData(options) {
+      calls.push(options);
+      return developmentDataDirectory;
+    },
+  });
+
+  assert.deepEqual(calls, [{
+    cwd: "/repository",
+    environment: { HOME: "/users/ticketry" },
+  }]);
+  assert.equal(launch.dataDirectory, developmentDataDirectory);
+  assert.equal(launch.developmentProfile, true);
+  assert.equal(launch.productDataDirectory, null);
+  assert.match(launch.environment.MUXED_TMUX_SOCKET, /^muxed-dev-[0-9a-f]{16}$/);
 });
 
 test("an explicit tmux namespace is preserved for the product profile", () => {

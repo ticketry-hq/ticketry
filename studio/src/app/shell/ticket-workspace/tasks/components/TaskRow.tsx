@@ -1,6 +1,10 @@
-import React, { useMemo } from "react";
-import { formatWorkItemDisplayIdentifier } from "../../../../../features/work-items";
+import React from "react";
 import {
+  formatWorkItemDisplayIdentifier,
+  useWorkItem,
+} from "../../../../../features/work-items";
+import {
+  type InstantRunRow,
   type Row,
   type ScratchRow,
   type WorkItemRow,
@@ -8,17 +12,15 @@ import {
 import {
   AgentStateBadge,
   AutomationFailureChicklet,
-  ScratchStateBadge,
 } from "../../../../../features/agents/lifecycle";
 import { TEMP_TASK_ID } from "../../../../../features/agents/types";
-import { useStudioStore } from "../../../../../features/projects";
 import { WorkItemRowLabel } from "./WorkItemRowLabel";
-import { useClientStore } from "../../../../../state/clientStore";
-import {
-  useModuleOpen,
-} from "../../../../../features/work-items";
 import { stateById, useCachedStates } from "../../../../../features/projects";
 import type { DragSourceProps } from "../../../../../shared/dragDrop/useAxisDragAndDrop";
+import {
+  instantRunPlanningRowId,
+  usePlanningRowSelected,
+} from "../internal/instantRunTicketNavigation";
 
 // Warm the description-editor chunk on first row hover so it is already
 // cached when a selected issue's details render. Fired at most once.
@@ -37,7 +39,7 @@ const recordSelectionProfilePoint = (point: string) => {
 
 interface TaskRowProps {
   row: Row;
-  isSelected: boolean;
+  descendantIds: string[];
   // Id-taking handlers keep the parent's props referentially stable across
   // renders, so React.memo actually skips unchanged rows.
   onClick: (taskId: string) => void;
@@ -45,16 +47,63 @@ interface TaskRowProps {
   dragSourceProps?: DragSourceProps;
 }
 
+function sameIds(left: readonly string[], right: readonly string[]): boolean {
+  return left === right || (
+    left.length === right.length && left.every((id, index) => id === right[index])
+  );
+}
+
+function sameRow(left: Row, right: Row): boolean {
+  if (left === right) return true;
+  if (left.kind === "work-item" && right.kind === "work-item") {
+    return left.id === right.id
+      && left.depth === right.depth
+      && left.parentId === right.parentId
+      && left.expandable === right.expandable
+      && left.expanded === right.expanded;
+  }
+  if (left.kind === "scratch" && right.kind === "scratch") {
+    return left.moduleId === right.moduleId;
+  }
+  if (left.kind === "instant-run" && right.kind === "instant-run") {
+    return left.runId === right.runId
+      && left.moduleId === right.moduleId
+      && left.name === right.name
+      && left.startedAt === right.startedAt;
+  }
+  return false;
+}
+
+function sameTaskRowProps(left: TaskRowProps, right: TaskRowProps): boolean {
+  return sameRow(left.row, right.row)
+    && sameIds(left.descendantIds, right.descendantIds)
+    && left.onClick === right.onClick
+    && left.onToggleExpand === right.onToggleExpand
+    && left.dragSourceProps === right.dragSourceProps;
+}
+
 export const TaskRow = React.memo(function TaskRow({
   row,
-  isSelected,
+  descendantIds,
   onClick,
   onToggleExpand,
   dragSourceProps,
 }: TaskRowProps) {
-  recordSelectionProfilePoint("task-row-render");
+  const id = row.kind === "work-item"
+    ? row.id
+    : row.kind === "instant-run"
+      ? instantRunPlanningRowId(row.runId)
+      : TEMP_TASK_ID;
+  const isSelected = usePlanningRowSelected(id);
   return row.kind === "scratch" ? (
     <ScratchPlanningRow
+      row={row}
+      isSelected={isSelected}
+      onClick={onClick}
+      dragSourceProps={dragSourceProps}
+    />
+  ) : row.kind === "instant-run" ? (
+    <InstantRunPlanningRow
       row={row}
       isSelected={isSelected}
       onClick={onClick}
@@ -63,39 +112,25 @@ export const TaskRow = React.memo(function TaskRow({
   ) : (
     <WorkItemPlanningRow
       row={row}
+      descendantIds={descendantIds}
       isSelected={isSelected}
       onClick={onClick}
       onToggleExpand={onToggleExpand}
       dragSourceProps={dragSourceProps}
     />
   );
-});
+}, sameTaskRowProps);
 
 function WorkItemPlanningRow({
   row,
+  descendantIds,
   isSelected,
   onClick,
   onToggleExpand,
   dragSourceProps,
-}: Omit<TaskRowProps, "row"> & { row: WorkItemRow }) {
-  const projectId = useStudioStore((state) => state.selectedProjectId);
-  const states = useCachedStates(projectId);
-  const moduleId = useClientStore((state) => state.selectedModuleId);
-  const { tree, items } = useModuleOpen(moduleId);
-  const task = items.find((item) => item.id === row.id);
-  const descendantIds = useMemo(() => {
-    const ids: string[] = [];
-    const seen = new Set([row.id]);
-    const pending = [...(tree.children[row.id] ?? [])];
-    while (pending.length) {
-      const id = pending.pop();
-      if (!id || seen.has(id)) continue;
-      seen.add(id);
-      ids.push(id);
-      pending.push(...(tree.children[id] ?? []));
-    }
-    return ids;
-  }, [row.id, tree]);
+}: Omit<TaskRowProps, "row"> & { row: WorkItemRow; isSelected: boolean }) {
+  const { data: task } = useWorkItem(row.id);
+  const states = useCachedStates(task?.project_id ?? null);
   if (!task) return null;
 
   return (
@@ -111,18 +146,47 @@ function WorkItemPlanningRow({
       onClick={onClick}
       onToggleExpand={onToggleExpand}
       dragSourceProps={dragSourceProps}
-      descendantIds={row.expanded ? [] : descendantIds}
+      descendantIds={descendantIds}
+    />
+  );
+}
+
+function InstantRunPlanningRow({
+  row,
+  isSelected,
+  onClick,
+  dragSourceProps,
+}: Pick<TaskRowProps, "onClick" | "dragSourceProps"> & {
+  row: InstantRunRow;
+  isSelected: boolean;
+}) {
+  const id = instantRunPlanningRowId(row.runId);
+  return (
+    <PlanningRowView
+      id={id}
+      depth={0}
+      expandable={false}
+      expanded={false}
+      identifier=""
+      stateColor={null}
+      name={row.name}
+      isSelected={isSelected}
+      onClick={onClick}
+      onToggleExpand={() => undefined}
+      dragSourceProps={dragSourceProps}
+      descendantIds={[]}
+      showAgentBadges={false}
     />
   );
 }
 
 function ScratchPlanningRow({
-  row,
   isSelected,
   onClick,
   dragSourceProps,
-}: Pick<TaskRowProps, "isSelected" | "onClick" | "dragSourceProps"> & {
+}: Pick<TaskRowProps, "onClick" | "dragSourceProps"> & {
   row: ScratchRow;
+  isSelected: boolean;
 }) {
   return (
     <PlanningRowView
@@ -132,13 +196,13 @@ function ScratchPlanningRow({
       expanded={false}
       identifier=""
       stateColor={null}
-      name="Local scratch workspace"
+      name="New conversation"
       isSelected={isSelected}
       onClick={onClick}
       onToggleExpand={() => undefined}
       dragSourceProps={dragSourceProps}
       descendantIds={[]}
-      scratchModuleId={row.moduleId}
+      showAgentBadges={false}
     />
   );
 }
@@ -156,7 +220,7 @@ interface PlanningRowViewProps {
   onToggleExpand: (taskId: string) => void;
   dragSourceProps?: DragSourceProps;
   descendantIds: string[];
-  scratchModuleId?: string;
+  showAgentBadges?: boolean;
 }
 
 function PlanningRowView({
@@ -172,10 +236,10 @@ function PlanningRowView({
   onToggleExpand,
   dragSourceProps,
   descendantIds,
-  scratchModuleId,
+  showAgentBadges = true,
 }: PlanningRowViewProps) {
+  recordSelectionProfilePoint("task-row-render");
   const caret = expandable ? (expanded ? "▾" : "▸") : " ";
-  const isScratch = scratchModuleId !== undefined;
 
   return (
     <li
@@ -221,9 +285,7 @@ function PlanningRowView({
         name={name}
       />
 
-      {isScratch ? (
-        <ScratchTaskStateBadge moduleId={scratchModuleId} />
-      ) : (
+      {showAgentBadges ? (
         <>
           <AutomationFailureChicklet
             issueId={id}
@@ -236,21 +298,7 @@ function PlanningRowView({
             className="ml-2"
           />
         </>
-      )}
+      ) : null}
     </li>
-  );
-}
-
-// Only the scratch row needs module-scoped lifecycle status; keeping these
-// subscriptions here means ordinary rows never evaluate the agent-status
-// selector on status updates.
-function ScratchTaskStateBadge({ moduleId }: { moduleId: string }) {
-  const selectedProjectId = useStudioStore((state) => state.selectedProjectId);
-  return (
-    <ScratchStateBadge
-      projectId={selectedProjectId}
-      moduleId={moduleId}
-      className="ml-2"
-    />
   );
 }

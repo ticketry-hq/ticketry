@@ -46,9 +46,11 @@ pub struct PlanningPrompt {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InstantPrompt {
     pub module: ModulePromptFacts,
-    pub user_input: String,
+    pub user_input: Option<String>,
+    pub initial_prompt: Option<String>,
     pub design_directory: Option<String>,
     pub allow_self_termination: bool,
+    pub auto_close: bool,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -143,15 +145,35 @@ pub fn build_planning_prompt(input: &PlanningPrompt) -> String {
 
 pub fn build_instant_prompt(input: &InstantPrompt) -> String {
     let module = &input.module;
+    let user_input = input
+        .user_input
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
     let mut steps: Vec<Vec<&str>> = Vec::new();
-    if input.allow_self_termination {
+    if user_input.is_none() {
         steps.push(vec![
-            "Before beginning any work, ask the user exactly once: 'May I terminate this run",
-            "after I successfully complete this requested change?' Wait for their response.",
-            "Only an explicit affirmative response authorizes self-termination. Refusal,",
-            "an ambiguous response, or no response means the run must stay open. Remember",
-            "that decision for this run and this request; do not ask again.",
+            "Wait for the user to type their first request in this terminal.",
+            "Do not inspect files, make changes, or ask questions before that request arrives.",
         ]);
+    }
+    if input.allow_self_termination && !input.auto_close {
+        steps.push(if user_input.is_some() {
+            vec![
+                "Before beginning any work, ask the user exactly once: 'May I terminate this run",
+                "after I successfully complete this requested change?' Wait for their response.",
+                "Only an explicit affirmative response authorizes self-termination. Refusal,",
+                "an ambiguous response, or no response means the run must stay open. Remember",
+                "that decision for this run and this request; do not ask again.",
+            ]
+        } else {
+            vec![
+                "After the user sends a request and before beginning work, ask exactly once:",
+                "'May I terminate this run after I successfully complete this requested change?'",
+                "Wait for their response. Only an explicit affirmative response authorizes",
+                "self-termination. Refusal, ambiguity, or no response means the run stays open.",
+            ]
+        });
     }
     steps.extend([
         vec![
@@ -172,7 +194,12 @@ pub fn build_instant_prompt(input: &InstantPrompt) -> String {
             "'n' (Plan Feature) flow instead of done instantly.",
         ],
     ]);
-    if input.allow_self_termination {
+    if input.allow_self_termination && input.auto_close {
+        steps.extend([
+            vec!["After the work completes successfully and is validated, briefly report what changed,", "then invoke terminate_current_run with no arguments."],
+            vec!["Never invoke self-termination when the work is blocked, failed, ambiguous, or", "larger than expected. Do not update any WorkTracker task state."],
+        ]);
+    } else if input.allow_self_termination {
         steps.extend([
             vec!["After the work completes successfully and is validated, briefly report what changed.", "Only after that report, and only if the user explicitly authorized it, invoke", "terminate_current_run with no arguments."],
             vec!["Never invoke self-termination when the work is blocked, failed, ambiguous, or", "larger than expected. Without explicit authorization, leave the run open.", "Do not update any WorkTracker task state."],
@@ -203,10 +230,20 @@ pub fn build_instant_prompt(input: &InstantPrompt) -> String {
         .as_deref()
         .map(|value| format!("Design directory: {value}\n"))
         .unwrap_or_default();
+    let configured = input
+        .initial_prompt
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(|value| format!("Configured Instant instructions:\n{value}\n\n"))
+        .unwrap_or_default();
+    let request = user_input
+        .map(|value| format!("User's request:\n  {value}\n\n"))
+        .unwrap_or_default();
     format!(
-        "You are an agent making a small, instant change in the '{}' module.\n\nContext:\n  Project: {}\n  Project ID:  {}\n  Module ID:   {}\n  Local Codebase: {}\n\nUser's request:\n  {}\n\nYour job:\n{}\n{}Do not create or update WorkTracker tasks for this work.",
+        "You are an agent making a small, instant change in the '{}' module.\n\nContext:\n  Project: {}\n  Project ID:  {}\n  Module ID:   {}\n  Local Codebase: {}\n\n{}{}Your job:\n{}\n{}Do not create or update WorkTracker tasks for this work.",
         module.name, module.project_slug, module.project_id, module.module_id,
-        module.local_codebase.as_deref().unwrap_or("(not set)"), input.user_input, jobs, design,
+        module.local_codebase.as_deref().unwrap_or("(not set)"), configured, request, jobs, design,
     )
 }
 
@@ -328,12 +365,29 @@ mod tests {
 
         let instant = build_instant_prompt(&InstantPrompt {
             module: module(),
-            user_input: "Change only 'x' → \"λ\".".into(),
+            user_input: Some("Change only 'x' → \"λ\".".into()),
+            initial_prompt: Some("Keep generated files untouched.".into()),
             design_directory: Some("spec/module/Scratch/run-2".into()),
             allow_self_termination: true,
+            auto_close: false,
         });
         assert!(instant.contains("Change only 'x' → \"λ\"."));
+        assert!(
+            instant.contains("Configured Instant instructions:\nKeep generated files untouched.")
+        );
+        assert!(instant.contains("May I terminate this run"));
         assert!(instant.contains("terminate_current_run"));
+
+        let auto_closing = build_instant_prompt(&InstantPrompt {
+            module: module(),
+            user_input: Some("Change x.".into()),
+            initial_prompt: None,
+            design_directory: None,
+            allow_self_termination: true,
+            auto_close: true,
+        });
+        assert!(!auto_closing.contains("May I terminate this run"));
+        assert!(auto_closing.contains("then invoke terminate_current_run"));
 
         let document = build_document_chat_prompt(&DocumentChatPrompt {
             document_relative_path: "HLD 'final'.html".into(),

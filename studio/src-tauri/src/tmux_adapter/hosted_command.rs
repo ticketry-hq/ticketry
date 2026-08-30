@@ -104,12 +104,19 @@ impl Drop for LaunchWrapper {
 }
 
 fn shell_join(command: &ApprovedArgv) -> Result<String, TmuxAdapterError> {
-    std::iter::once(command.executable.as_os_str())
-        .chain(command.arguments.iter().map(OsString::as_os_str))
-        .map(|value| value.to_str().ok_or(TmuxAdapterError::InvalidOperation))
-        .map(|value| value.map(shell_quote))
-        .collect::<Result<Vec<_>, _>>()
-        .map(|parts| parts.join(" "))
+    [
+        OsString::from("/usr/bin/env"),
+        OsString::from("-u"),
+        OsString::from("NO_COLOR"),
+    ]
+    .iter()
+    .map(OsString::as_os_str)
+    .chain(std::iter::once(command.executable.as_os_str()))
+    .chain(command.arguments.iter().map(OsString::as_os_str))
+    .map(|value| value.to_str().ok_or(TmuxAdapterError::InvalidOperation))
+    .map(|value| value.map(shell_quote))
+    .collect::<Result<Vec<_>, _>>()
+    .map(|parts| parts.join(" "))
 }
 
 fn path_text(path: &Path) -> Result<&str, TmuxAdapterError> {
@@ -164,6 +171,22 @@ mod tests {
     use std::collections::BTreeMap;
 
     use super::*;
+
+    #[test]
+    fn hosted_commands_remove_inherited_no_color() {
+        let command = ApprovedArgv {
+            executable: PathBuf::from("/bin/echo"),
+            arguments: vec![OsString::from("hello")],
+            working_directory: PathBuf::from("/tmp"),
+            environment: BTreeMap::new(),
+        };
+
+        let hosted = HostedCommand::prepare("color-unit-test", &command).unwrap();
+        assert_eq!(
+            hosted.tmux_command().to_string_lossy(),
+            "'/usr/bin/env' '-u' 'NO_COLOR' '/bin/echo' 'hello'"
+        );
+    }
 
     #[test]
     fn oversized_command_uses_a_private_self_removing_wrapper() {

@@ -9,9 +9,8 @@ import type { WorkspaceLauncherContext } from "./SelectedTicketContent";
 import { SelectedTicketDetails } from "./details/SelectedTicketDetails";
 import { SelectedTicketContent } from "./SelectedTicketContent";
 import {
-  startInstantChangeFlow,
-  startPlanFlow,
-} from "../../../../features/studio/modals/PlanFeature";
+  useSelectedInstantRunId,
+} from "../tasks/internal/instantRunTicketNavigation";
 import { StateConfigurationPanel } from "../../../../features/workflows";
 
 /** Adapts Studio selection state to the selected-ticket workspace. */
@@ -20,6 +19,7 @@ export function SelectedTicket() {
   const selectedProjectId = useStudioStore((s) => s.selectedProjectId);
   const selectedModuleId = useClientStore((s) => s.selectedModuleId);
   const workspaceSelection = useClientStore((s) => s.workspaceSelection);
+  const conversationRunId = useSelectedInstantRunId();
   const states = useCachedStates(selectedProjectId);
   const dismissStateConfiguration = useClientStore(
     (s) => s.dismissStateConfiguration,
@@ -41,15 +41,7 @@ export function SelectedTicket() {
           taskKey: task?.id ?? selectedTaskId,
           taskName: task?.name ?? "",
         }
-      : selectedTaskId === TEMP_TASK_ID && selectedProjectId && selectedModuleId
-        ? {
-            kind: "scratch",
-            onChooseMode: (mode) => {
-              if (mode === "plan") startPlanFlow();
-              else startInstantChangeFlow();
-            },
-          }
-        : null;
+      : null;
   const configuredState =
     workspaceSelection.kind === "state-configuration" &&
     workspaceSelection.projectId === selectedProjectId
@@ -66,6 +58,7 @@ export function SelectedTicket() {
           owner="studio"
           details={<SelectedTicketDetails />}
           launchContext={launchContext}
+          conversationRunId={conversationRunId}
         />
         {configuredState ? (
           <StateConfigurationPanel

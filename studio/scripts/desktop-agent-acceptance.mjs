@@ -453,22 +453,26 @@ async function main() {
     if (await restoredPanel.isDisplayed().catch(() => false)) {
       const restoredShell = await browser.$("aria/Shell 1");
       await restoredShell.waitForDisplayed({ timeout: 20_000 });
-      await click(await browser.$("aria/Close shell 1"));
-      await restoredShell.waitForDisplayed({ timeout: 20_000, reverse: true });
-      await waitForTmuxEmpty(root);
+      if (!existsSync(tools.marker)) {
+        await click(await browser.$("aria/Close shell 1"));
+        await restoredShell.waitForDisplayed({ timeout: 20_000, reverse: true });
+        await waitForTmuxEmpty(root);
+      }
       await click(await browser.$("aria/Minimize terminal panel"));
     }
     story.launch = await browser.$("aria/Run agent");
     await waitForState(browser, "Ideas");
     writeFileSync(path.join(root, "provider-task"), `${story.taskId}\nCoding\n`);
-    await click(story.launch);
-    const toast = await browser.$(
-      '//*[@data-testid and starts-with(@data-testid,"toast-") and contains(.,"Agent run")]',
-    );
-    await toast.waitForDisplayed({ timeout: 20_000 });
-    const launchResult = await toast.getText();
-    if (!launchResult.includes("Agent run started.")) {
-      throw new Error(`Run agent failed through the visible UI: ${launchResult}`);
+    if (!existsSync(tools.marker)) {
+      await click(story.launch);
+      const toast = await browser.$(
+        '//*[@data-testid and starts-with(@data-testid,"toast-") and contains(.,"Agent run")]',
+      );
+      await toast.waitForDisplayed({ timeout: 20_000 });
+      const launchResult = await toast.getText();
+      if (!launchResult.includes("Agent run started.")) {
+        throw new Error(`Run agent failed through the visible UI: ${launchResult}`);
+      }
     }
     const deadline = Date.now() + 20_000;
     while (!existsSync(tools.marker) && Date.now() < deadline) {
@@ -510,6 +514,20 @@ async function main() {
       timeout: 30_000,
       timeoutMsg: "the module lifecycle badge did not clear after completion",
     });
+
+    const openTerminalPanel = await browser.$("aria/Open terminal panel");
+    if (await openTerminalPanel.isDisplayed().catch(() => false)) {
+      await click(openTerminalPanel);
+    }
+    const completedShell = await browser.$("aria/Shell 1");
+    if (await completedShell.isDisplayed().catch(() => false)) {
+      await click(await browser.$("aria/Close shell 1"));
+      await completedShell.waitForDisplayed({ timeout: 20_000, reverse: true });
+    }
+    const minimizeCompletedPanel = await browser.$("aria/Minimize terminal panel");
+    if (await minimizeCompletedPanel.isDisplayed().catch(() => false)) {
+      await click(minimizeCompletedPanel);
+    }
 
     await browser.refresh();
     await openExistingStory(browser, story.taskId);

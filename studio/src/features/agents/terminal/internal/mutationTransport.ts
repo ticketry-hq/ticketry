@@ -11,6 +11,10 @@ import {
 import type {
   CreateTerminalSessionMutationVariables as CreateTerminalSessionVariables,
 } from "../generated/terminalSessions.documents";
+import {
+  isTerminalProvider,
+  type TerminalProvider,
+} from "../presentation/providerPresentation";
 
 const DEFAULT_COLUMNS = 80;
 const DEFAULT_ROWS = 24;
@@ -105,6 +109,57 @@ export interface DefaultInteractiveTaskLaunchInput {
   readonly projectId: string;
   readonly issueId: string;
   readonly moduleId: string;
+}
+
+export interface DefaultInstantConversationLaunchInput {
+  readonly projectId: string;
+  readonly moduleId: string;
+}
+
+export interface CreatedInstantConversation {
+  readonly agent_run_id: string;
+  readonly agent: TerminalProvider;
+}
+
+/**
+ * Create one Instant conversation ready for terminal input. Provider, model,
+ * standing instructions, and auto-close policy come from Rust launch authority.
+ */
+export async function createDefaultInstantConversation(
+  input: DefaultInstantConversationLaunchInput,
+): Promise<CreatedInstantConversation> {
+  const variables = {
+    clientRequestId: crypto.randomUUID(),
+    projectId: input.projectId,
+    issueId: input.moduleId,
+    moduleId: input.moduleId,
+    targetId: input.moduleId,
+    kind: "instant",
+    workingDirectoryIdentity: `module:${compactIdentity(input.moduleId)}`,
+    columns: DEFAULT_COLUMNS,
+    rows: DEFAULT_ROWS,
+  } as const;
+  const result = await studioRuntime().writeWorkTracker({
+    graphQl: async (execute) => {
+      try {
+        const response = await retryTransport(() =>
+          execute(CreateTerminalSessionDocument, variables)
+        );
+        const agent = response.terminal_session.agent_run?.agent ?? null;
+        if (!isTerminalProvider(agent)) {
+          throw new Error("The launched conversation has no terminal provider.");
+        }
+        return {
+          agent_run_id: response.terminal_session.agent_run_id,
+          agent,
+        };
+      } catch (error) {
+        return graphQlMutationError(error);
+      }
+    },
+  });
+  await refreshTerminalHoldings();
+  return result;
 }
 
 /**

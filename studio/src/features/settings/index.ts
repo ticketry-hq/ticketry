@@ -14,6 +14,7 @@ export {
   useSubtreeRunCapabilitiesQuery,
 } from "./queries";
 export { useSettingsStore } from "./store";
+export { InstantSettingsPanel } from "./instant/InstantSettingsPanel";
 export {
   LoadKeybindingSettingDocument,
   UpdateKeybindingSettingDocument,

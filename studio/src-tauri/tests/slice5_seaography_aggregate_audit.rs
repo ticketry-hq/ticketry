@@ -55,7 +55,7 @@ fn field_names(block: &str) -> Vec<String> {
 
 fn mentions_a_terminal_model(field: &str) -> bool {
     let field = field.to_lowercase();
-    ["terminal", "viewer_lease", "viewerlease"]
+    ["terminal", "viewer_lease", "viewerlease", "instant_run"]
         .iter()
         .any(|marker| field.contains(marker))
 }

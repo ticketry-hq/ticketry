@@ -15,7 +15,9 @@ use crate::work_management::launch_policy::{
 use super::error::LaunchAuthorityError;
 use super::facts;
 use super::material::ResolvedLaunchMaterial;
-use super::sources::{activated_provider, launch_paths, local_module_folder, submitted};
+use super::sources::{
+    activated_provider, default_scratch_launch, launch_paths, local_module_folder, submitted,
+};
 use super::task_prompt::{compose_task_prompt, TaskPromptSource};
 
 /// The seam the Terminal Launch service resolves an interactive request
@@ -142,14 +144,16 @@ impl LaunchAuthorityService {
         &self,
         request: &CreateTerminalSession,
     ) -> Result<ResolvedLaunchMaterial, LaunchAuthorityError> {
-        let provider = activated_provider(&self.database, request.provider.as_deref()).await?;
-        let user_input = submitted(request.prompt.as_deref())
-            .ok_or_else(|| {
-                LaunchAuthorityError::unresolvable(
-                    "An instant change needs the change the user asked for.",
-                )
-            })?
-            .to_owned();
+        let default = if submitted(request.provider.as_deref()).is_none() {
+            Some(default_scratch_launch(&self.database).await?)
+        } else {
+            None
+        };
+        let provider = match &default {
+            Some(default) => default.provider.clone(),
+            None => activated_provider(&self.database, request.provider.as_deref()).await?,
+        };
+        let user_input = submitted(request.prompt.as_deref()).map(str::to_owned);
         let paths = launch_paths(&self.paths, request).await?;
         let module = facts::module_prompt_facts(
             &self.database,
@@ -161,13 +165,21 @@ impl LaunchAuthorityService {
             Provider::try_from(provider.as_str())
                 .map_err(|error| LaunchAuthorityError::unresolvable(error.to_string()))?,
         );
+        let settings = crate::settings_persistence::instant_launch::load(&self.database).await?;
         let prompt = build_instant_prompt(&InstantPrompt {
             module,
             user_input,
+            initial_prompt: Some(settings.initial_prompt),
             design_directory: paths.design_directory_relative.clone(),
             allow_self_termination: contract.supports_worktracker_mcp,
+            auto_close: settings.auto_close,
         });
-        Ok(self.scratch_material(provider, prompt))
+        let mut material = self.scratch_material(provider, prompt);
+        if let Some(default) = default {
+            material.model = default.model;
+            material.reasoning = default.reasoning;
+        }
+        Ok(material)
     }
 
     /// A doc-chat launch names its document from the registry, so the prompt

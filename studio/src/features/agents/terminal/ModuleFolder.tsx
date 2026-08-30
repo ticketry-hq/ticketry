@@ -17,6 +17,8 @@ export interface ModuleFolderPayload {
   moduleId?: string;
   /** Resume a module switch that was gated on this folder link. */
   resumeModuleSelection?: boolean;
+  /** Continue a non-modal action after the folder is saved. */
+  onSaved?: () => void;
 }
 
 export function ModuleFolder({
@@ -67,6 +69,7 @@ export function ModuleFolder({
       if (payload?.next) {
         pushModal({ type: payload.next, payload: payload.nextPayload });
       }
+      payload?.onSaved?.();
     } finally {
       saveInFlight.current = false;
       setBusy(false);

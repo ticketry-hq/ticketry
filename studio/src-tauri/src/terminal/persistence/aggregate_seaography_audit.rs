@@ -84,14 +84,24 @@ pub struct CustomField {
     pub evidence: &'static str,
 }
 
-/// The one custom read in the slice.
-pub const CUSTOM_QUERIES: &[CustomField] = &[CustomField {
-    field: "resumable_terminal_sessions",
-    kind: CustomFieldKind::Query,
-    returns: "AgentRuns",
-    override_reason: "select the newest ended Agent Run per provider conversation while excluding live conversations and live successors; generated entity reads cannot express that cross-row projection",
-    evidence: "terminal::resume::operation_registry::CUSTOM_QUERIES",
-}];
+/// Custom reads whose projections cannot be expressed by generated model
+/// filtering without publishing protected storage.
+pub const CUSTOM_QUERIES: &[CustomField] = &[
+    CustomField {
+        field: "resumable_terminal_sessions",
+        kind: CustomFieldKind::Query,
+        returns: "AgentRuns",
+        override_reason: "select the newest ended Agent Run per provider conversation while excluding live conversations and live successors; generated entity reads cannot express that cross-row projection",
+        evidence: "terminal::resume::operation_registry::CUSTOM_QUERIES",
+    },
+    CustomField {
+        field: "instant_run_tickets",
+        kind: CustomFieldKind::Query,
+        returns: "InstantRunTicket",
+        override_reason: "derive a safe display title from private launch material while filtering to live Instant Agent Runs; registering that model would publish the full prompt and filesystem identities",
+        evidence: "terminal::instant_run_ticket::operation_registry::CUSTOM_QUERIES",
+    },
+];
 
 /// Every custom write in the slice. Each one is a restricted, identity-bound,
 /// model-shaped seam over SeaORM, not a per-field RPC.
@@ -140,15 +150,23 @@ pub const CUSTOM_MUTATIONS: &[CustomField] = &[
     },
 ];
 
-/// The one custom output type. It is computed observation state, not a mirror
-/// of a model the generated contract already publishes.
-pub const CUSTOM_OUTPUTS: &[CustomField] = &[CustomField {
-    field: "TerminalOutputObservation",
-    kind: CustomFieldKind::Output,
-    returns: "computed: advanced, output_sequence, last_output_at",
-    override_reason: "the mutation reports whether this capture advanced the durable sequence, which is a decision rather than stored columns",
-    evidence: "terminal::session::views::observe_output registers it beside its one mutation",
-}];
+/// Computed output types, neither of which mirrors a generated model.
+pub const CUSTOM_OUTPUTS: &[CustomField] = &[
+    CustomField {
+        field: "TerminalOutputObservation",
+        kind: CustomFieldKind::Output,
+        returns: "computed: advanced, output_sequence, last_output_at",
+        override_reason: "the mutation reports whether this capture advanced the durable sequence, which is a decision rather than stored columns",
+        evidence: "terminal::session::views::observe_output registers it beside its one mutation",
+    },
+    CustomField {
+        field: "InstantRunTicket",
+        kind: CustomFieldKind::Output,
+        returns: "computed: agent_run_id, title, started_at",
+        override_reason: "title is a bounded safe projection of only the user's Instant request, not a stored model or the private launch prompt",
+        evidence: "terminal::instant_run_ticket registers it beside instant_run_tickets",
+    },
+];
 
 /// Ordinary model CRUD reached through anything other than SeaORM. The slice
 /// keeps this empty; the integration test proves it.
@@ -193,6 +211,7 @@ pub const AUDITED_MODULES: &[&str] = &[
     "src/terminal/reconciliation",
     "src/terminal/lifecycle",
     "src/terminal/output_activity",
+    "src/terminal/instant_run_ticket",
     "src/terminal/resume",
     "src/terminal/viewer",
     "src/viewer_ownership",
@@ -222,9 +241,9 @@ mod tests {
     #[test]
     fn the_recorded_counts_are_the_audited_counts() {
         assert_eq!(REGISTERED_ENTITIES.len(), 3);
-        assert_eq!(CUSTOM_QUERIES.len(), 1);
+        assert_eq!(CUSTOM_QUERIES.len(), 2);
         assert_eq!(CUSTOM_MUTATIONS.len(), 6);
-        assert_eq!(CUSTOM_OUTPUTS.len(), 1);
+        assert_eq!(CUSTOM_OUTPUTS.len(), 2);
         assert_eq!(RAW_SQL_EVIDENCE_ONLY.len(), 3);
     }
 

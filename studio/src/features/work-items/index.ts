@@ -59,6 +59,7 @@ export type {
   WorkItemRow,
   PlanningRow,
   PlanningTreeRow,
+  InstantRunRow,
   ScratchRow,
 } from "./selectors";
 export { formatWorkItemDisplayIdentifier } from "./displayIdentifier";

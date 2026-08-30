@@ -15,7 +15,11 @@ function ScratchDetails({
   const chips = useScratchLifecycleChips(projectId ?? "", moduleId ?? "");
 
   if (chips.length === 0) {
-    return <div className="text-text-muted">No active Scratch runs.</div>;
+    return (
+      <div className="text-text-muted">
+        Choose New conversation, then type directly in its terminal.
+      </div>
+    );
   }
 
   return <ScratchStateBadge projectId={projectId} moduleId={moduleId} />;

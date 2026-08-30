@@ -71,10 +71,10 @@ describe("overhaul acceptance — work-item rows", () => {
 
     const stories = await screen.findByRole("region", { name: "Stories" });
     const scratch = within(stories).getByRole("treeitem", {
-      name: /Local scratch workspace/,
+      name: /New conversation/,
     });
     expect(scratch.querySelector("[data-task-id-token]")).toBeNull();
-    expect(scratch.lastElementChild).toHaveTextContent("Local scratch workspace");
+    expect(scratch.lastElementChild).toHaveTextContent("New conversation");
     const unresolved = await within(stories).findByRole("treeitem", {
       name: /Unresolved work item/,
     });

@@ -6,8 +6,9 @@ use seaography::{
 };
 
 use super::{
-    app_setting, keybindings, AppSettingRepository, GlobalLaunchDefault, ProviderCatalog,
-    ProviderCatalogError, ProviderCatalogService, ProviderCatalogUpdate, SettingsPersistenceError,
+    app_setting, instant_launch, keybindings, AppSettingRepository, GlobalLaunchDefault,
+    ProviderCatalog, ProviderCatalogError, ProviderCatalogService, ProviderCatalogUpdate,
+    SettingsPersistenceError,
 };
 use crate::work_management::read_types::StringList;
 
@@ -21,6 +22,14 @@ impl SettingsQueries {
         keybindings::read(repository(ctx)?)
             .await
             .map_err(|error| settings_error(error, "Keyboard shortcuts could not be loaded."))
+    }
+
+    async fn instant_launch_setting(
+        ctx: &Context<'_>,
+    ) -> Result<Option<super::entities::app_settings::Model>> {
+        instant_launch::read(repository(ctx)?)
+            .await
+            .map_err(|error| settings_error(error, "Instant settings could not be loaded."))
     }
 
     async fn provider_catalog(ctx: &Context<'_>) -> Result<ProviderCatalog> {
@@ -79,7 +88,7 @@ fn provider_catalog<'a>(ctx: &'a Context<'a>) -> Result<&'a ProviderCatalogServi
 
 fn repository<'a>(ctx: &'a Context<'a>) -> Result<&'a AppSettingRepository> {
     ctx.data::<AppSettingRepository>().map_err(|_| {
-        Error::new("Keyboard shortcut storage is unavailable.")
+        Error::new("Settings storage is unavailable.")
             .extend_with(|_, extension| extension.set("code", "settings_store_unavailable"))
     })
 }

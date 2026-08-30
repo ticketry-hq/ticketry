@@ -8,7 +8,7 @@ use crate::desktop::data_directory::{
     data_directory_ownership_for_startup, release_data_directory_ownership,
 };
 use crate::desktop::document_protocol;
-use crate::desktop::environment::automated_startup_exit_requested;
+use crate::desktop::environment::{automated_startup_exit_requested, development_log_path};
 use crate::desktop::launch_runtime::DesktopLaunchRuntime;
 use crate::desktop::lifecycle::{
     detach_transient_viewers, lifecycle_action, shutdown_rust_runtime, DesktopLifecycleAction,
@@ -20,8 +20,13 @@ use crate::native_terminal::focus_trace;
 use crate::terminal::viewer::webview_commands;
 use crate::{graphql_foundation, native_terminal};
 
-pub fn run() {
+pub fn run(file_logging_requested: bool) {
     let ownership = data_directory_ownership_for_startup();
+    let file_log = crate::diagnostics::configure_process_file_log(
+        file_logging_requested,
+        &ownership.data_directory,
+        development_log_path(),
+    );
     if let Some(error) = ownership.startup_error.as_deref() {
         eprintln!("Ticketry could not acquire data-directory ownership: {error}");
     }
@@ -32,6 +37,7 @@ pub fn run() {
     let builder = builder.plugin(tauri_plugin_wdio_webdriver::init());
     let application = match builder
         .manage(ownership)
+        .manage(file_log)
         .manage(DesktopServiceState::new())
         .manage(DesktopLaunchRuntime::new())
         .manage(webview_commands::ViewerCommandState::new())
@@ -41,6 +47,7 @@ pub fn run() {
                 commands::desktop_runtime_configuration,
                 commands::desktop_launch_default_coding_agent,
                 commands::desktop_append_frontend_log,
+                commands::desktop_file_logging_enabled,
                 commands::desktop_retry_services,
                 commands::desktop_pick_folder,
                 commands::desktop_validate_module_folder,

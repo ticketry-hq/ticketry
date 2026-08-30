@@ -99,14 +99,32 @@ async fn install(database: &DatabaseConnection) -> Result<(), AdoptionFailure> {
                 "the recorded migration provenance could not be applied: {error}"
             ))
         })?;
-    seed_installation_project(database).await?;
+    let project_id = seed_installation_project(database).await?;
     crate::settings_persistence::provision_provider_catalog(database)
         .await
         .map_err(|error| {
             failed(format!(
                 "the provider catalog could not be created: {error}"
             ))
-        })
+        })?;
+    crate::work_management::final_schema_migrations::install(database)
+        .await
+        .map_err(|error| {
+            failed(format!(
+                "the provisioned schema could not reach the Rust leaf: {error}"
+            ))
+        })?;
+    crate::work_management::commands::default_project_catalog::seed(database, &project_id)
+        .await
+        .map_err(|error| {
+            let detail = std::error::Error::source(&error)
+                .map(ToString::to_string)
+                .unwrap_or_else(|| error.to_string());
+            failed(format!(
+                "the installation catalog could not be created: {detail}"
+            ))
+        })?;
+    Ok(())
 }
 
 /// Refuse a provisioned database that is not the recorded current generation.
@@ -144,9 +162,12 @@ async fn verify(database: &DatabaseConnection) -> Result<(), AdoptionFailure> {
 /// project-onboarding migration transfers that flag onto this project and drops
 /// the Workspace table during the same startup, which leaves a first launch at
 /// exactly the shape an adopted installation reaches.
-async fn seed_installation_project(database: &DatabaseConnection) -> Result<(), AdoptionFailure> {
+async fn seed_installation_project(
+    database: &DatabaseConnection,
+) -> Result<String, AdoptionFailure> {
     let now = crate::installation::adoption::now_rfc3339();
     let workspace_id = uuid::Uuid::new_v4().simple().to_string();
+    let project_id = uuid::Uuid::new_v4().simple().to_string();
     database
         .execute_raw(Statement::from_sql_and_values(
             DbBackend::Sqlite,
@@ -170,7 +191,7 @@ async fn seed_installation_project(database: &DatabaseConnection) -> Result<(), 
               manual_module_order, created_at, updated_at) \
              VALUES (?, ?, ?, ?, '', 0, 0, 0, ?, ?)",
             [
-                uuid::Uuid::new_v4().simple().to_string().into(),
+                project_id.clone().into(),
                 workspace_id.into(),
                 INSTALLATION_PROJECT_NAME.into(),
                 INSTALLATION_PROJECT_SLUG.into(),
@@ -184,7 +205,7 @@ async fn seed_installation_project(database: &DatabaseConnection) -> Result<(), 
                 "the installation project could not be created: {error}"
             ))
         })?;
-    Ok(())
+    Ok(project_id)
 }
 
 async fn open(staged: &Path) -> Result<DatabaseConnection, AdoptionFailure> {
@@ -212,6 +233,8 @@ fn failed(detail: String) -> AdoptionFailure {
 #[cfg(test)]
 mod tests {
     use super::{manifest, RECORDED_SCHEMA};
+    use crate::work_management::entities::{issue_type, state};
+    use sea_orm::{DatabaseConnection, EntityTrait};
 
     #[test]
     fn the_recorded_schema_names_the_generation_it_reproduces() {
@@ -259,5 +282,34 @@ mod tests {
     fn the_provenance_records_the_generation_the_schema_reproduces() {
         assert!(super::RECORDED_LEDGER
             .contains(&format!("generation: {}", manifest().current_generation)));
+    }
+
+    #[tokio::test]
+    async fn a_fresh_installation_project_has_its_reviewed_catalog() {
+        let directory = tempfile::tempdir().expect("create a data directory");
+        super::provision(directory.path())
+            .await
+            .expect("provision a fresh installation");
+        let database: DatabaseConnection = super::open(&directory.path().join("state.db"))
+            .await
+            .expect("open the provisioned database");
+
+        let states = state::Entity::find()
+            .all(&database)
+            .await
+            .expect("read provisioned states");
+        let issue_types = issue_type::Entity::find()
+            .all(&database)
+            .await
+            .expect("read provisioned issue types");
+
+        assert!(!states.is_empty());
+        assert!(issue_types
+            .iter()
+            .any(|issue_type| issue_type.name == "Module" && issue_type.level == "module"));
+        assert!(issue_types
+            .iter()
+            .any(|issue_type| issue_type.name == "Story" && issue_type.level == "task"));
+        database.close().await.expect("close provisioned database");
     }
 }

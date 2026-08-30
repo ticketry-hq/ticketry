@@ -1,3 +1,4 @@
+use muxed_studio_lib::file_logging_requested;
 use muxed_studio_lib::temporary_profile::{TemporarySqliteProfile, TEMP_SQLITE_FLAG};
 
 fn main() {
@@ -19,7 +20,7 @@ fn main() {
     } else {
         None
     };
-    muxed_studio_lib::run();
+    muxed_studio_lib::run_with_file_logging(file_logging_requested(&arguments));
     // Teardown journals the profile's terminal cleanup before its database can
     // be removed. See `muxed_studio_lib::temporary_profile`.
     drop(temporary_profile);

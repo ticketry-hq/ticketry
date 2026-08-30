@@ -353,6 +353,13 @@ impl TmuxAdapter {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
         command.env_remove("TMUX");
+        // Finder launches GUI applications without a locale. In that mode tmux
+        // sanitizes control characters in format strings, turning the tabs in
+        // our inventory format into underscores and making valid rows
+        // unparseable. Pin the client locale instead of depending on the
+        // process that launched Ticketry.
+        command.env_remove("LC_ALL");
+        command.env("LC_CTYPE", "UTF-8");
         if let Some(directory) = &self.socket_directory {
             command.env("TMUX_TMPDIR", directory);
         }
@@ -460,5 +467,27 @@ mod tests {
             command,
             "'-u' 'TMUX' '-u' 'LC_ALL' 'TERM=xterm-256color' 'LC_CTYPE=UTF-8' 'TMUX_TMPDIR=/tmp/tmux' '/approved/tmux' '-L' 'ticketry-dev' 'attach-session' '-t' 'pt-run-123'",
         );
+    }
+
+    #[test]
+    fn tmux_commands_pin_utf8_for_inventory_delimiters() {
+        let adapter = TmuxAdapter {
+            executable: PathBuf::from("/approved/tmux"),
+            socket: "ticketry-dev".to_owned(),
+            socket_directory: None,
+        };
+        let command = adapter.command();
+        let environment = command
+            .get_envs()
+            .map(|(name, value)| {
+                (
+                    name.to_string_lossy().into_owned(),
+                    value.map(|value| value.to_string_lossy().into_owned()),
+                )
+            })
+            .collect::<std::collections::BTreeMap<_, _>>();
+
+        assert_eq!(environment.get("LC_ALL"), Some(&None));
+        assert_eq!(environment.get("LC_CTYPE"), Some(&Some("UTF-8".to_owned())));
     }
 }

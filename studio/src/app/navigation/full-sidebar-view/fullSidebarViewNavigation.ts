@@ -252,9 +252,17 @@ function routeTasksPane(
 
 function openAgentPicker(ctx: NavigationContext): boolean {
   consume(ctx.event);
-  const selected = selectedTaskIndex(ctx.taskRows, ctx.tasks.selectedTaskId);
+  const selected = selectedTaskIndex(
+    ctx.taskRows,
+    ctx.tasks.selectedPlanningRowId,
+  );
   const row = ctx.taskRows[selected];
-  if (!row || row.kind !== "work-item") return true;
+  if (!row) return true;
+  if (row.kind === "scratch") {
+    startInstantChangeFlow();
+    return true;
+  }
+  if (row.kind !== "work-item") return true;
 
   const { selectedProjectId, selectedModuleId } = ctx.tasks;
   if (!selectedProjectId || !selectedModuleId) return true;
@@ -295,7 +303,10 @@ function expandOrEnterTask(ctx: NavigationContext): boolean {
   }
   if (row.expandable && row.expanded) {
     consume(ctx.event);
-    const selected = selectedTaskIndex(ctx.taskRows, ctx.tasks.selectedTaskId);
+    const selected = selectedTaskIndex(
+      ctx.taskRows,
+      ctx.tasks.selectedPlanningRowId,
+    );
     selectTaskAt(ctx.taskRows, selected + 1);
     return true;
   }

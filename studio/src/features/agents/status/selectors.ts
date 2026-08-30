@@ -142,12 +142,40 @@ export function selectScratchLifecycleChips(
   projectId: string,
   moduleId: string,
 ): TaskLifecycleChip[] {
+  return selectModuleScopedLifecycleChips(
+    state,
+    projectId,
+    moduleId,
+    (run) => run.scope === "plan" || run.scope === "instant",
+  );
+}
+
+/** Lifecycle chicklets for the Instant runs listed under Conversations. */
+export function selectConversationLifecycleChips(
+  state: AgentStatusData,
+  projectId: string,
+  moduleId: string,
+): TaskLifecycleChip[] {
+  return selectModuleScopedLifecycleChips(
+    state,
+    projectId,
+    moduleId,
+    (run) => run.scope === "instant",
+  );
+}
+
+function selectModuleScopedLifecycleChips(
+  state: AgentStatusData,
+  projectId: string,
+  moduleId: string,
+  includes: (run: RunRecord) => boolean,
+): TaskLifecycleChip[] {
   if (state.projectId !== projectId) return [];
 
   const counts = new Map<RunPresentationState, number>();
   for (const run of Object.values(state.runs)) {
     if (run.module_id !== moduleId) continue;
-    if (run.scope !== "plan" && run.scope !== "instant") continue;
+    if (!includes(run)) continue;
     const presented = projectRunPresentation(run);
     if (!isLiveAgentRunState(presented)) continue;
     if (!LIFECYCLE_STATE_ORDER.includes(presented)) continue;

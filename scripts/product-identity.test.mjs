@@ -8,6 +8,7 @@ import {
 } from "./product-identity.mjs";
 
 test("the product identity maps installed and web runtimes to its default profile", () => {
+  assert.equal(productIdentity.defaultDataDirectoryName, "ticketry");
   assert.equal(
     resolveProductDataDirectory({ environment: { HOME: "/users/ticketry" } }),
     path.join(
@@ -15,6 +16,10 @@ test("the product identity maps installed and web runtimes to its default profil
       productIdentity.defaultDataDirectoryName,
     ),
   );
+});
+
+test("the former installed profile remains recorded as a legacy location", () => {
+  assert.ok(productIdentity.legacyDataDirectoryNames.includes("worktracker-studio-rust"));
 });
 
 test("a configured directory name replaces the manifest default", () => {

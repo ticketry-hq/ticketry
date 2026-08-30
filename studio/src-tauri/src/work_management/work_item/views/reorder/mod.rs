@@ -25,7 +25,17 @@ impl ReorderWorkItemMutation {
         initial_order_ids: Option<output::StringList>,
     ) -> Result<crate::entities::work_management::issue::Model> {
         let database = command_database(ctx)?;
-        let id = reorder::reorder_work_item(
+        crate::diagnostics::record_story_move(
+            "info",
+            "graphql-reorder-requested",
+            serde_json::json!({
+                "id": id,
+                "before_id": before_id,
+                "after_id": after_id,
+                "initial_order_ids": initial_order_ids.as_ref().map(|ids| &ids.0),
+            }),
+        );
+        let result = reorder::reorder_work_item(
             database,
             reorder::ReorderWorkItem {
                 id,
@@ -35,9 +45,39 @@ impl ReorderWorkItemMutation {
             },
             work_facts(ctx),
         )
-        .await
-        .map_err(command_error)?;
-        authoritative_work_item(database, &id).await
+        .await;
+        let id = match result {
+            Ok(id) => {
+                crate::diagnostics::record_story_move(
+                    "info",
+                    "graphql-reorder-succeeded",
+                    serde_json::json!({"id": id}),
+                );
+                id
+            }
+            Err(error) => {
+                crate::diagnostics::record_story_move(
+                    "error",
+                    "graphql-reorder-failed",
+                    serde_json::json!({
+                        "code": error.code(),
+                        "field": error.field_name(),
+                        "message": error.to_string(),
+                        "debug": format!("{error:?}"),
+                    }),
+                );
+                return Err(command_error(error));
+            }
+        };
+        let authoritative = authoritative_work_item(database, &id).await;
+        if let Err(error) = &authoritative {
+            crate::diagnostics::record_story_move(
+                "error",
+                "graphql-reorder-readback-failed",
+                serde_json::json!({"id": id, "message": error.message}),
+            );
+        }
+        authoritative
     }
 }
 

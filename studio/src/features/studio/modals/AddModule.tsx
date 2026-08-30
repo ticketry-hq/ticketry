@@ -118,7 +118,8 @@ export function AddModule({ runtime }: { runtime?: StudioRuntime } = {}) {
         onboarding.moduleCreated(resolvedModuleId);
       }
       popModal();
-    } catch {
+    } catch (cause) {
+      console.error("Failed to create module", cause);
       // Surface the failure without tearing down the pane.
       setError("Failed to create module.");
     } finally {

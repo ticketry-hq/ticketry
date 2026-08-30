@@ -27,6 +27,7 @@ import {
   type SettingsLedgerEntry,
 } from "../../settings/changeLedger";
 import { KeybindingSettings } from "./KeybindingSettings";
+import { InstantSettingsPanel } from "../../settings";
 
 const ModelConfigurationPanel = lazy(async () => ({
   default: (await import("../../workflows"))
@@ -36,7 +37,7 @@ const ModelConfigurationPanel = lazy(async () => ({
 const MODELS_LEDE =
   "Which providers are available to launch, and what runs when a configuration leaves it unset.";
 
-type SettingsSection = "models" | "keyboard-shortcuts";
+type SettingsSection = "models" | "instant" | "keyboard-shortcuts";
 
 type SettingsStatus = {
   tone: "success" | "attention" | "danger";
@@ -50,9 +51,9 @@ export function SettingsModal() {
   const popModal = useModalStore((state) => state.popModal);
   const requestedSection = useModalStore((state) => {
     const top = state.modalStack.at(-1);
-    return top?.type === "settings" &&
-      top.payload?.section === "keyboard-shortcuts"
-      ? "keyboard-shortcuts"
+    const section = top?.type === "settings" ? top.payload?.section : null;
+    return section === "keyboard-shortcuts" || section === "instant"
+      ? section
       : "models";
   });
   const [activeSection, setActiveSection] =
@@ -99,6 +100,11 @@ export function SettingsModal() {
                 active={activeSection === "models"}
                 label="Models"
                 onClick={() => setActiveSection("models")}
+              />
+              <RailItem
+                active={activeSection === "instant"}
+                label="Instant"
+                onClick={() => setActiveSection("instant")}
               />
               <RailItem
                 active={activeSection === "keyboard-shortcuts"}
@@ -149,6 +155,12 @@ export function SettingsModal() {
           {activeSection === "keyboard-shortcuts" ? (
             <div className="row-start-2 min-h-0 min-w-0 overflow-x-hidden overflow-y-auto px-5 py-4">
               <KeybindingSettings />
+            </div>
+          ) : null}
+
+          {activeSection === "instant" ? (
+            <div className="row-start-2 min-h-0 min-w-0 overflow-x-hidden overflow-y-auto px-5 py-4">
+              <InstantSettingsPanel />
             </div>
           ) : null}
 

@@ -74,6 +74,7 @@ async fn fixture() -> Fixture {
                 state_revision bigint NOT NULL, name varchar(512) NOT NULL,
                 sequence_id integer NOT NULL, is_archived bool NOT NULL,
                 rank varchar(64) NOT NULL, description text NOT NULL,
+                workspace_tab_order text NOT NULL DEFAULT '[]',
                 created_at datetime NOT NULL, updated_at datetime NOT NULL
             );
             CREATE TABLE worktracker_provider (
@@ -125,10 +126,10 @@ async fn fixture() -> Fixture {
                  CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
             INSERT INTO worktracker_issue VALUES
                 ('{MODULE}', '{PROJECT}', 'module', '{TYPE}', NULL, NULL, NULL, 0,
-                 'Terminal', 1, 0, 'M', '', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+                 'Terminal', 1, 0, 'M', '', '[]', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
                 ('{TASK}', '{PROJECT}', 'task', '{TYPE}', '{MODULE}', '{MODULE}', '{STATE}', 0,
                  'Resolve launch policy', 965, 0, 'N', '<p>First</p><ul><li>Second</li></ul>',
-                 CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+                 '[]', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
             INSERT INTO worktracker_provider VALUES
                 ('{CODEX}', 'codex', 1, 1),
                 ('{CLAUDE}', 'claude', 1, 1),

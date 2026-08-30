@@ -35,6 +35,10 @@ pub enum WorktreeDiscardErrorCode {
     OperationInvalid,
     /// The database refused a read or write.
     Storage,
+    /// Studio did not send the user's explicit cleanup confirmation.
+    CleanupConfirmationRequired,
+    /// Live workflow, provider, or Git facts no longer allow cleanup.
+    CleanupIneligible,
 }
 
 #[derive(Debug)]
@@ -72,6 +76,20 @@ impl WorktreeDiscardError {
         }
     }
 
+    pub(crate) fn cleanup_confirmation_required() -> Self {
+        Self::new(
+            WorktreeDiscardErrorCode::CleanupConfirmationRequired,
+            "Confirm cleanup before removing the local task worktree.",
+        )
+    }
+
+    pub(crate) fn cleanup_ineligible() -> Self {
+        Self::new(
+            WorktreeDiscardErrorCode::CleanupIneligible,
+            "This task worktree no longer satisfies every cleanup precondition.",
+        )
+    }
+
     pub fn code(&self) -> WorktreeDiscardErrorCode {
         self.code
     }
@@ -89,11 +107,25 @@ impl WorktreeDiscardError {
             WorktreeDiscardErrorCode::ExternalConflict => "worktree_external_conflict",
             WorktreeDiscardErrorCode::OperationInvalid => "worktree_operation_invalid",
             WorktreeDiscardErrorCode::Storage => "worktree_discard_storage_failed",
+            WorktreeDiscardErrorCode::CleanupConfirmationRequired => {
+                "worktree_cleanup_confirmation_required"
+            }
+            WorktreeDiscardErrorCode::CleanupIneligible => "worktree_cleanup_ineligible",
         }
     }
 
     pub fn detail(&self) -> Option<&str> {
         self.detail.as_deref()
+    }
+
+    pub fn retryable(&self) -> bool {
+        matches!(
+            self.code,
+            WorktreeDiscardErrorCode::GitUnavailable
+                | WorktreeDiscardErrorCode::GitFailed
+                | WorktreeDiscardErrorCode::OperationBusy
+                | WorktreeDiscardErrorCode::Storage
+        )
     }
 }
 

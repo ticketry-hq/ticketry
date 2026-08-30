@@ -1,0 +1,9 @@
+mutation ModuleCheckoutPush($moduleId: String!, $operationId: String!) {
+  module_checkout_push(module_id: $moduleId, operation_id: $operationId) {
+    operation_id
+    head_commit
+    dirty
+    unpushed_count
+    uncommitted_work_excluded
+  }
+}

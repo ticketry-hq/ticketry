@@ -1,0 +1,10 @@
+mutation WorktreeCreatePullRequest($taskId: String!, $operationId: String!) {
+  worktree_pull_request_create(task_id: $taskId, operation_id: $operationId) {
+    operation_id
+    url
+    branch
+    base_branch
+    pushed
+    uncommitted_work_excluded
+  }
+}

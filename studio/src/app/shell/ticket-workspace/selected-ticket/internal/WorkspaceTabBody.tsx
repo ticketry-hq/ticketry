@@ -19,6 +19,12 @@ import { formatChordSymbols } from "../../../../navigation/chordLabel";
 import { EDIT_VIEW_BODY_DISENGAGE_CHORD } from "../../../../navigation/three-zone/threeZoneNavigation";
 import { LazySelectedTicketTerminal } from "../terminals/selectedTicketTerminalLoader";
 import type { TaskWorkspaceTabIdentity } from "./useTaskWorkspaceTabNavigation";
+import { isScratchBucket } from "../../../../../features/agents/terminal";
+import { ModuleVersionControl, TaskWorktreeChanges } from "../../../../../features/agents/worktrees";
+import {
+  openModuleChangesWorkspace,
+  openTaskChangesWorkspace,
+} from "./openChangesWorkspace";
 
 const WorkspaceDocument = lazy(async () => ({
   default: (await import("../documents/WorkspaceDocument")).WorkspaceDocument,
@@ -28,6 +34,7 @@ export function WorkspaceTabBody({
   bodyRef,
   detailsSurfaceRef,
   bucket,
+  moduleId = null,
   owner,
   details,
   activeKind,
@@ -51,6 +58,7 @@ export function WorkspaceTabBody({
   bodyRef: RefObject<HTMLDivElement>;
   detailsSurfaceRef: RefObject<HTMLDivElement>;
   bucket: string;
+  moduleId?: string | null;
   owner: ForegroundOwner;
   details: ReactNode;
   activeKind: TabKind;
@@ -139,6 +147,29 @@ export function WorkspaceTabBody({
         }
       >
         {details}
+      </div>
+      <div
+        tabIndex={-1}
+        data-testid="workspace-changes-surface"
+        className={
+          activeKind === "changes"
+            ? "absolute inset-0"
+            : "hidden"
+        }
+      >
+        {isScratchBucket(bucket) && moduleId ? (
+          <ModuleVersionControl
+            moduleId={moduleId}
+            active={activeKind === "changes"}
+            onOpenModule={() => openModuleChangesWorkspace(moduleId)}
+            onOpenTask={openTaskChangesWorkspace}
+          />
+        ) : (
+          <TaskWorktreeChanges
+            taskId={bucket}
+            active={activeKind === "changes"}
+          />
+        )}
       </div>
       {/* One iframe per open document, kept mounted so switching docs
           or tabs never reloads them; visibility toggles per active doc. */}

@@ -100,7 +100,7 @@ describe("cutover readiness", () => {
     expect(screen.queryByText(/sidecar/i)).not.toBeInTheDocument();
   });
 
-  it("[overhaul-187] turns a locked startup database into an actionable launch message", () => {
+  it("[overhaul-205] turns a locked startup database into an actionable launch message", () => {
     render(
       <ServiceHealthGate runtime={runtime({
         state: "failed",

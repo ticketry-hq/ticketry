@@ -328,10 +328,8 @@ async fn compose_document_watch(
 /// as a conflict before a user can ask again. Every pass is bounded: whatever
 /// it does not reach stays due, and a second pass is harmless.
 ///
-/// Creation, discard, and integration are composed together because they are
-/// the three stages of one checkout's life over one repository, and they share
-/// the process-wide repository locks so none can observe another's
-/// half-finished tree.
+/// Creation and discard share the process-wide repository locks so neither can
+/// observe the other's half-finished tree.
 async fn compose_worktree_operations(
     worktracker_database: &sea_orm::DatabaseConnection,
     outbox_adopted: bool,
@@ -376,13 +374,11 @@ async fn compose_worktree_operations(
         eprintln!("Ticketry could not reconcile abandoned worktree discards: {error}");
         reconciled = false;
     }
-    let integrations_reconciled =
-        compose_worktree_integrations(worktracker_database, journal, events, locks).await;
     ComposedWorktreeOperations {
         operations: Some(crate::worktree::operations::WorktreeOperations::new(
             create, discard,
         )),
-        reconciled: reconciled && integrations_reconciled,
+        reconciled,
     }
 }
 
@@ -393,47 +389,6 @@ async fn compose_worktree_operations(
 struct ComposedWorktreeOperations {
     operations: Option<crate::worktree::operations::WorktreeOperations>,
     reconciled: bool,
-}
-
-/// Finish, and then continue, the landings completed Work Items asked for.
-///
-/// Integration has no schema surface: nobody asks for it, so nothing about it
-/// is published. What startup owes it is convergence — first the operations a
-/// previous process abandoned mid-sequence, then the committed completions that
-/// were never delivered at all, which is what a completion transitioned while
-/// Ticketry was closed looks like.
-async fn compose_worktree_integrations(
-    worktracker_database: &sea_orm::DatabaseConnection,
-    journal: crate::workspace::operations::WorkspaceOperationJournal,
-    events: Option<crate::runs_persistence::StatusEventRepository>,
-    locks: crate::worktree::status::RepositoryLocks,
-) -> bool {
-    // Before the Worktree index is adopted there is no checkout to land and no
-    // row to remove, so integration composes to nothing rather than querying a
-    // table this store does not have yet. Nothing to reconcile is a completed
-    // pass, not a failed one.
-    if !crate::worktree::persistence::worktrees_adopted(worktracker_database).await {
-        return true;
-    }
-    let mut reconciled = true;
-    let integrations = crate::worktree::integrate::WorktreeIntegrateService::new(
-        worktracker_database.clone(),
-        journal,
-        events,
-        locks,
-    );
-    if let Err(error) = integrations.reconciler().reconcile().await {
-        eprintln!("Ticketry could not reconcile abandoned worktree integrations: {error}");
-        reconciled = false;
-    }
-    if let Err(error) = integrations
-        .deliver_pending(crate::worktree::integrate::MAX_DELIVERY_BATCH)
-        .await
-    {
-        eprintln!("Ticketry could not deliver completed worktree integrations: {error}");
-        reconciled = false;
-    }
-    reconciled
 }
 
 /// Drain abandoned document saves over the adopted store.

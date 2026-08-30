@@ -38,6 +38,7 @@ import { useWorkspaceTabPresentation } from "./internal/useWorkspaceTabPresentat
 import { useActivatedProviders } from "../../../../features/workflows";
 import { useWorkspaceTabOrdering } from "../../../../features/workspace-tabs/useWorkspaceTabOrdering";
 import { useWorkspaceTabOrder } from "../../../../features/workspace-tabs/queries";
+import { useTaskWorktreeChangesTabLifecycle } from "./internal/useTaskWorktreeChangesTabLifecycle";
 
 export type {
   ScratchLaunchMode,
@@ -121,7 +122,6 @@ export function SelectedTicketContent({
   );
   const isEditView =
     owner === "studio" && !sidebarVisible;
-
   const engageWorkspaceTab = useCallback((tab: TaskWorkspaceTabIdentity): void => {
     setEditViewBodyEngaged(true);
     if (tab.kind === "terminal") {
@@ -199,9 +199,9 @@ export function SelectedTicketContent({
   ]);
 
   const sessionByRun = useTerminalStore((s) => s.sessionByRun);
-  const workspaceTabWorkItemId = bucket && !isScratchBucket(bucket)
-    ? bucket
-    : null;
+  const workspaceTabWorkItemId = bucket && !isScratchBucket(bucket) ? bucket : null;
+  const hasTaskChangesTab = useTaskWorktreeChangesTabLifecycle({ taskId: workspaceTabWorkItemId, owner });
+  const hasChangesTab = (scratch && moduleId !== null) || hasTaskChangesTab;
   const savedTabOrder = useWorkspaceTabOrder(workspaceTabWorkItemId);
 
   useEffect(() => {
@@ -247,6 +247,7 @@ export function SelectedTicketContent({
     resumableSessions,
     savedTabOrder: savedTabOrder.order,
     terminalOnly: Boolean(conversationRunId),
+    hasChangesTab,
   });
   const workspaceTabReorder = useWorkspaceTabOrdering({
     workItemId: workspaceTabWorkItemId,
@@ -256,6 +257,7 @@ export function SelectedTicketContent({
     terminalTabs: tabs,
     resumableSessions,
     visibleOrder: navigableTabs,
+    hasChangesTab,
   });
 
   useEditViewWorkspaceFocus({
@@ -384,6 +386,7 @@ export function SelectedTicketContent({
         bodyRef={bodyRef}
         detailsSurfaceRef={detailsSurfaceRef}
         bucket={bucket}
+        moduleId={moduleId}
         owner={owner}
         details={details}
         activeKind={effActive}

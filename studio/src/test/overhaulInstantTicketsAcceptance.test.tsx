@@ -150,7 +150,7 @@ describe("overhaul acceptance — Conversations", () => {
     seedModuleOpenFixture("module-1", []);
   });
 
-  it("[overhaul-184] replaces Scratch with Conversations and selects each chat's exact terminal", async () => {
+  it("[overhaul-202] replaces Scratch with Conversations and selects each chat's exact terminal", async () => {
     render(
       <StudioApolloProvider>
         <TasksPane />

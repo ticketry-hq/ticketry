@@ -204,6 +204,7 @@ fn build_schema(
     let builder = crate::module_links::register_graphql(builder);
     let builder = crate::worktree::persistence::register_graphql(builder);
     let builder = crate::worktree::status::register_graphql(builder);
+    let builder = crate::worktree::changes::register_graphql(builder);
     let builder = crate::workspace::worktree::register_graphql(builder);
     let builder = crate::work_management::graphql::register(builder);
     let builder = crate::settings_persistence::schema::register(builder);
@@ -284,11 +285,27 @@ fn build_schema(
     // Creation, when it is composed, publishes the status reader it already
     // shares its repository locks with, so both capabilities serialize on the
     // same lock rather than opening two independent sets.
-    if let Some(worktree_operations) = &worktree_operations {
+    let worktree_changes = if let Some(worktree_operations) = &worktree_operations {
+        let changes = worktree_operations
+            .changes_service()
+            .publishing(work_facts.clone());
         schema = schema.data(worktree_operations.status_service().clone());
+        schema = schema.data(changes.clone());
+        Some(changes)
     } else if let Some(work_items) = &worktracker_database {
-        schema = schema.data(crate::worktree::status::WorktreeStatusService::new(
-            work_items.clone(),
+        let status = crate::worktree::status::WorktreeStatusService::new(work_items.clone());
+        let changes = crate::worktree::changes::WorktreeChangesService::from_status(status.clone())
+            .publishing(work_facts.clone());
+        schema = schema.data(changes.clone());
+        schema = schema.data(status);
+        Some(changes)
+    } else {
+        None
+    };
+    if let (Some(changes), Some(terminals)) = (worktree_changes, terminal_services.as_ref()) {
+        schema = schema.data(crate::worktree::changes::MergePreparationService::new(
+            changes,
+            terminals.launch.clone(),
         ));
     }
     // Each write publishes itself, so a resolver reaches its own service and

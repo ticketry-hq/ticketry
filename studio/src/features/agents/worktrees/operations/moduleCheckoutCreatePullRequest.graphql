@@ -1,0 +1,10 @@
+mutation ModuleCheckoutCreatePullRequest($moduleId: String!, $operationId: String!) {
+  module_checkout_pull_request_create(module_id: $moduleId, operation_id: $operationId) {
+    operation_id
+    url
+    branch
+    base_branch
+    pushed
+    uncommitted_work_excluded
+  }
+}

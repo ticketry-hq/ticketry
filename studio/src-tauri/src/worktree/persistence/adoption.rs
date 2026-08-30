@@ -10,9 +10,10 @@ use sea_orm::{
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 
+use super::pull_request_url_migration;
 use super::schema::{
-    self, ADOPTED_TABLE, CURRENT_DJANGO_LEAF, DJANGO_MIGRATIONS, LEDGER_TABLE, LIFECYCLE_STATES,
-    WORKTREE_COLUMNS,
+    self, ADOPTED_TABLE, CURRENT_DJANGO_LEAF, DJANGO_MIGRATIONS, LEDGER_TABLE,
+    LEGACY_WORKTREE_COLUMNS, LIFECYCLE_STATES, WORKTREE_COLUMNS,
 };
 use super::{WorktreePersistenceError, WorktreePersistenceErrorCode};
 
@@ -65,9 +66,12 @@ pub async fn adopt(data_directory: &Path) -> Result<AdoptionEvidence, WorktreePe
     validate_semantics(&database).await?;
     let before = stable_digest(&database).await?;
     let rows = row_count(&database).await?;
+    let pull_request_url_migrated = pull_request_url_migration::installed(&database)
+        .await
+        .map_err(storage)?;
     database.close().await.map_err(storage)?;
 
-    if source == SourceClassification::RustOwned {
+    if source == SourceClassification::RustOwned && pull_request_url_migrated {
         return Ok(AdoptionEvidence {
             version: schema::VERSION,
             source,
@@ -90,10 +94,12 @@ pub async fn adopt(data_directory: &Path) -> Result<AdoptionEvidence, WorktreePe
     verify_snapshot(&snapshot_path, source, &before).await?;
 
     let writable = connect(&path, false).await?;
-    let SourceClassification::Django(leaf) = source else {
-        unreachable!("Rust-owned stores return before the ledger is installed")
-    };
-    schema::install(&writable, leaf, &before).await?;
+    if let SourceClassification::Django(leaf) = source {
+        schema::install(&writable, leaf, &before).await?;
+    }
+    pull_request_url_migration::install(&writable)
+        .await
+        .map_err(storage)?;
     writable.close().await.map_err(storage)?;
 
     // Restart verification: everything is re-proved on a freshly opened
@@ -177,7 +183,18 @@ async fn validate_manifest(
     source: SourceClassification,
 ) -> Result<(), WorktreePersistenceError> {
     let observed = schema::columns(database, ADOPTED_TABLE).await?;
-    let expected = WORKTREE_COLUMNS
+    let migrated = pull_request_url_migration::installed(database)
+        .await
+        .map_err(storage)?;
+    let expected_columns = if migrated {
+        pull_request_url_migration::verify(database)
+            .await
+            .map_err(storage)?;
+        WORKTREE_COLUMNS
+    } else {
+        LEGACY_WORKTREE_COLUMNS
+    };
+    let expected = expected_columns
         .iter()
         .map(|value| (*value).to_owned())
         .collect::<BTreeSet<_>>();
@@ -251,7 +268,7 @@ async fn validate_semantics(
 async fn stable_digest(
     database: &impl ConnectionTrait,
 ) -> Result<String, WorktreePersistenceError> {
-    let expression = WORKTREE_COLUMNS
+    let expression = LEGACY_WORKTREE_COLUMNS
         .iter()
         .map(|column| format!("\"{column}\""))
         .collect::<Vec<_>>()
@@ -329,6 +346,9 @@ async fn integrity(database: &impl ConnectionTrait) -> Result<(), WorktreePersis
 /// Whether the Worktree ownership ledger has been installed in this database.
 pub async fn worktrees_adopted(database: &impl ConnectionTrait) -> bool {
     table_exists(database, LEDGER_TABLE).await.unwrap_or(false)
+        && pull_request_url_migration::installed(database)
+            .await
+            .unwrap_or(false)
 }
 
 async fn table_exists(

@@ -20,8 +20,6 @@ pub enum WorkspaceOperationKind {
     WorktreeCreate,
     /// Removal of one task checkout, its administrative record, and branch.
     WorktreeDiscard,
-    /// Merge of one task branch back into its base ref.
-    WorktreeIntegrate,
 }
 
 /// The resource family a kind acts on. Reconciliation isolates an ambiguous
@@ -59,12 +57,6 @@ const REGISTRY: &[(WorkspaceOperationKind, &str, WorkspaceResourceKind, &[i32])]
     (
         WorkspaceOperationKind::WorktreeDiscard,
         "worktree_discard",
-        WorkspaceResourceKind::Worktree,
-        &[1],
-    ),
-    (
-        WorkspaceOperationKind::WorktreeIntegrate,
-        "worktree_integrate",
         WorkspaceResourceKind::Worktree,
         &[1],
     ),

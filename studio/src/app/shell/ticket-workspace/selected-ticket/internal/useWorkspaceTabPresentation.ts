@@ -25,6 +25,7 @@ export function useWorkspaceTabPresentation({
   resumableSessions,
   savedTabOrder,
   terminalOnly = false,
+  hasChangesTab,
 }: {
   bucket: string | null;
   projectId: string | null;
@@ -35,6 +36,7 @@ export function useWorkspaceTabPresentation({
   resumableSessions: readonly ResumableTerminalSession[];
   savedTabOrder: readonly TaskWorkspaceTabIdentity[];
   terminalOnly?: boolean;
+  hasChangesTab: boolean;
 }) {
   const workspaces = useTicketWorkspaceStore((state) => state.workspaces);
   const workspace = bucket
@@ -85,10 +87,17 @@ export function useWorkspaceTabPresentation({
     activeKind = "details";
   }
   if (activeKind === "doc" && !activeDocument) activeKind = "details";
+  if (activeKind === "changes" && !hasChangesTab) activeKind = "details";
 
   const persistentDefaultTabs: TaskWorkspaceTabIdentity[] = [
     ...(terminalOnly ? [] : [{ kind: "details" as const }]),
-    ...openDocuments.map((document) => ({ kind: "doc" as const, id: document.id })),
+    ...(terminalOnly || !hasChangesTab
+      ? []
+      : [{ kind: "changes" as const }]),
+    ...openDocuments.map((document) => ({
+      kind: "doc" as const,
+      id: document.id,
+    })),
     ...terminalTabs.map((tab) => ({
       kind: "terminal" as const,
       id: tab.meta.agentRunId ?? tab.id,
@@ -111,7 +120,9 @@ export function useWorkspaceTabPresentation({
     if (tab) navigableTabs.push({ kind: "terminal", id: tab.id });
   }
   const activeTab: TaskWorkspaceTabIdentity =
-    activeKind === "doc" && activeDocument
+    activeKind === "changes"
+      ? { kind: "changes" }
+      : activeKind === "doc" && activeDocument
       ? { kind: "doc", id: activeDocument.id }
       : activeKind === "terminal" && activeTerminalId
         ? { kind: "terminal", id: activeTerminalId }

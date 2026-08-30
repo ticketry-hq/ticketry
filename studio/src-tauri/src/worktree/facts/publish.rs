@@ -28,31 +28,24 @@ pub const WORKTREE_DELETED: &str = "worktree.deleted";
 pub enum WorktreeChange {
     /// A checkout was cut, or an already-matching one was adopted.
     Created,
-    /// An integration stopped in the checkout and left it to be resolved
-    /// there; the primary checkout is untouched.
-    Conflicted,
     /// A restart finished a settlement that had already changed Git.
     Reconciled,
     /// The checkout was thrown away without landing.
     Discarded,
-    /// The checkout landed and was removed.
-    Integrated,
 }
 
 impl WorktreeChange {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Created => "created",
-            Self::Conflicted => "conflicted",
             Self::Reconciled => "reconciled",
             Self::Discarded => "discarded",
-            Self::Integrated => "integrated",
         }
     }
 
     /// True when the checkout no longer exists after this change.
     pub fn removes(self) -> bool {
-        matches!(self, Self::Discarded | Self::Integrated)
+        matches!(self, Self::Discarded)
     }
 
     pub fn event_kind(self) -> &'static str {
@@ -131,26 +124,18 @@ mod tests {
 
     #[test]
     fn only_a_removal_is_published_as_a_deletion() {
-        for change in [
-            WorktreeChange::Created,
-            WorktreeChange::Conflicted,
-            WorktreeChange::Reconciled,
-        ] {
+        for change in [WorktreeChange::Created, WorktreeChange::Reconciled] {
             assert_eq!(change.event_kind(), WORKTREE_CHANGED);
             assert!(!change.removes());
         }
-        for change in [WorktreeChange::Discarded, WorktreeChange::Integrated] {
-            assert_eq!(change.event_kind(), WORKTREE_DELETED);
-            assert!(change.removes());
-        }
+        assert_eq!(WorktreeChange::Discarded.event_kind(), WORKTREE_DELETED);
+        assert!(WorktreeChange::Discarded.removes());
     }
 
     #[test]
     fn the_published_vocabulary_is_stable() {
         assert_eq!(WorktreeChange::Created.as_str(), "created");
-        assert_eq!(WorktreeChange::Conflicted.as_str(), "conflicted");
         assert_eq!(WorktreeChange::Reconciled.as_str(), "reconciled");
         assert_eq!(WorktreeChange::Discarded.as_str(), "discarded");
-        assert_eq!(WorktreeChange::Integrated.as_str(), "integrated");
     }
 }

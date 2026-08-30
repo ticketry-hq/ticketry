@@ -230,6 +230,27 @@ input BooleanFilterInput {
 	is_null: Boolean
 }
 
+type ChangedFile {
+	path: String!
+	previous_path: String
+	status: String!
+}
+
+type CurrentWorktreeView {
+	kind: String!
+	task_id: String
+	task_key: String
+	task_name: String
+	branch: String
+	available: Boolean!
+	clean: Boolean
+	dirty: Boolean
+	unpushed_count: Int
+	pull_request_state: String!
+	pull_request: PullRequestStatusView!
+	reason: String
+}
+
 input CursorInput {
 	cursor: String
 	limit: Int!
@@ -435,6 +456,15 @@ type LifecycleAccepted {
 	event_cursor: Int
 }
 
+type MergePreparationResult {
+	operation_id: String!
+	top_level_task_id: String!
+	agent_run_id: String!
+	agent: String!
+	branch: String!
+	pull_request_url: String!
+}
+
 type MigrationProbes {
 	id: Int!
 	value: String!
@@ -477,6 +507,22 @@ input MigrationProbesInsertInput {
 input MigrationProbesOrderInput {
 	id: OrderByEnum
 	value: OrderByEnum
+}
+
+type ModuleCheckoutChangesView {
+	available: Boolean!
+	reason: String
+	branch: String
+	default_branch: String
+	committed_count: Int!
+	pull_request_creation_eligible: Boolean!
+	baseline: String
+	baseline_kind: String
+	clean: Boolean
+	dirty: Boolean
+	unpushed_count: Int
+	truncated: Boolean!
+	files: [ChangedFile!]!
 }
 
 input ModuleLinkPathInput {
@@ -527,6 +573,13 @@ input ModuleLinksOrderInput {
 	updatedAt: OrderByEnum
 }
 
+type ModuleVersionControlView {
+	module_id: String!
+	checkout: ModuleCheckoutChangesView!
+	worktrees: [CurrentWorktreeView!]!
+	worktrees_truncated: Boolean!
+}
+
 type Mutation {
 	migrationProbesCreateOne(data: MigrationProbesInsertInput!): MigrationProbesBasic!
 	worktrackerIssuetypeCreateOne(data: WorktrackerIssuetypeInsertInput!): WorktrackerIssuetypeBasic!
@@ -541,8 +594,18 @@ type Mutation {
 	reorder_states(project_id: String!, ordered_ids: [String!]!): [WorktrackerState!]!
 	set_module_link(module_id: String!, link: ModuleLinkPathInput!): ModuleLinks!
 	clear_module_link(module_id: String!): Boolean!
+	worktree_commit(task_id: String!, operation_id: String!, message: String!): RepositoryCommandResult!
+	module_checkout_commit(module_id: String!, operation_id: String!, message: String!): RepositoryCommandResult!
+	worktree_cleanup(task_id: String!, operation_id: String!, confirmed: Boolean!): WorktreeDiscardResult!
 	worktree_create(task_id: String!, operation_id: String!): WorktreeStatusView!
 	worktree_discard(task_id: String!, operation_id: String!): WorktreeDiscardResult!
+	worktree_pull_request_merge_prepare(task_id: String!, operation_id: String!): MergePreparationResult!
+	worktree_push(task_id: String!, operation_id: String!): RepositoryCommandResult!
+	module_checkout_push(module_id: String!, operation_id: String!): RepositoryCommandResult!
+	worktree_pull_request_create(task_id: String!, operation_id: String!): PullRequestCreationResult!
+	module_checkout_pull_request_create(module_id: String!, operation_id: String!): PullRequestCreationResult!
+	worktree_pull_request_replace(task_id: String!, operation_id: String!): PullRequestCreationResult!
+	worktree_pull_request_follow_up(task_id: String!, operation_id: String!): PullRequestCreationResult!
 	create_project(name: String!, slug: String!, description: String): WorktrackerProject!
 	delete_project(id: String!): Boolean!
 	delete_issue_type(id: String!, reassign_to: String): Boolean!
@@ -620,6 +683,28 @@ type ProviderCatalog {
 	global_default: GlobalLaunchDefault
 }
 
+type PullRequestCreationResult {
+	operation_id: String!
+	url: String!
+	branch: String!
+	base_branch: String!
+	pushed: Boolean!
+	uncommitted_work_excluded: Boolean!
+}
+
+type PullRequestStatusView {
+	url: String
+	state: String!
+	target_branch: String
+	head_commit: String
+	integrated: Boolean!
+	post_merge_work: Boolean!
+	replacement_eligible: Boolean!
+	follow_up_eligible: Boolean!
+	merge_preparation_eligible: Boolean!
+	reason: String
+}
+
 type Query {
 	migrationProbes(filters: MigrationProbesFilterInput, having: MigrationProbesHavingInput, orderBy: MigrationProbesOrderInput, pagination: PaginationInput): MigrationProbesConnection!
 	worktrackerProject(filters: WorktrackerProjectFilterInput, having: WorktrackerProjectHavingInput, orderBy: WorktrackerProjectOrderInput, pagination: PaginationInput): WorktrackerProjectConnection!
@@ -639,6 +724,8 @@ type Query {
 	moduleLinks(filters: ModuleLinksFilterInput, having: ModuleLinksHavingInput, orderBy: ModuleLinksOrderInput, pagination: PaginationInput): ModuleLinksConnection!
 	worktrees(filters: WorktreesFilterInput, having: WorktreesHavingInput, orderBy: WorktreesOrderInput, pagination: PaginationInput): WorktreesConnection!
 	worktree_status(task_id: String!): WorktreeStatusView!
+	worktree_changes(task_id: String!): WorktreeChangesView!
+	module_version_control(module_id: String!): ModuleVersionControlView!
 	keybinding_setting: KeybindingSetting
 	instant_launch_setting: KeybindingSetting
 	provider_catalog: ProviderCatalog!
@@ -651,6 +738,14 @@ type Query {
 	resumable_terminal_sessions(task_id: String, project_id: String, module_id: String): [AgentRuns!]!
 	designDocuments(filters: DesignDocumentsFilterInput, having: DesignDocumentsHavingInput, orderBy: DesignDocumentsOrderInput, pagination: PaginationInput): DesignDocumentsConnection!
 	directory_completions(path: String!): [String!]!
+}
+
+type RepositoryCommandResult {
+	operation_id: String!
+	head_commit: String!
+	dirty: Boolean!
+	unpushed_count: Int!
+	uncommitted_work_excluded: Boolean!
 }
 
 type RunNowPayload {
@@ -756,6 +851,13 @@ input TextFilterInput {
 	is_null: Boolean
 	between: [String!]
 	not_between: [String!]
+}
+
+type WorkItemClosureFailureView {
+	code: String!
+	message: String!
+	from_state: String
+	to_state: String
 }
 
 type WorktrackerAgentmodel {
@@ -1468,6 +1570,31 @@ input WorktrackerStateOrderInput {
 	updatedAt: OrderByEnum
 }
 
+type WorktreeChangesView {
+	task_id: String!
+	top_level_task_id: String!
+	is_shared: Boolean!
+	base_commit: String!
+	committed_count: Int!
+	pull_request_url: String
+	pull_request: PullRequestStatusView!
+	pull_request_creation_eligible: Boolean!
+	work_item_done: Boolean!
+	closure_failure: WorkItemClosureFailureView
+	cleanup: WorktreeCleanupStatusView!
+	clean: Boolean!
+	dirty: Boolean!
+	unpushed_count: Int!
+	truncated: Boolean!
+	files: [ChangedFile!]!
+}
+
+type WorktreeCleanupStatusView {
+	eligible: Boolean!
+	blocker: String
+	reason: String
+}
+
 type WorktreeDiscardResult {
 	removed: Boolean!
 	task_id: String!
@@ -1512,6 +1639,7 @@ type Worktrees {
 	ephemeral: Boolean!
 	createdAt: String!
 	updatedAt: String!
+	pullRequestUrl: String
 	issue: WorktrackerIssue
 	project: WorktrackerProject
 }
@@ -1544,6 +1672,7 @@ input WorktreesFilterInput {
 	ephemeral: BooleanFilterInput
 	createdAt: StringFilterInput
 	updatedAt: StringFilterInput
+	pullRequestUrl: StringFilterInput
 	and: [WorktreesFilterInput!]
 	or: [WorktreesFilterInput!]
 	not: WorktreesFilterInput
@@ -1570,6 +1699,7 @@ input WorktreesOrderInput {
 	ephemeral: OrderByEnum
 	createdAt: OrderByEnum
 	updatedAt: OrderByEnum
+	pullRequestUrl: OrderByEnum
 }
 
 """

@@ -5,6 +5,7 @@
 //! schema against this manifest, so the manifest is enforcement rather than
 //! documentation.
 
+use super::pull_request_url_migration;
 use super::schema::{LEDGER_TABLE, WORKTREE_COLUMNS};
 
 /// Version of the checked Worktree ownership contract.
@@ -14,16 +15,28 @@ pub const VERSION: i32 = 1;
 pub const ADOPTED_TABLES: &[(&str, &[&str])] = &[("worktrees", WORKTREE_COLUMNS)];
 
 /// The focused table this slice authors outright.
-pub const AUTHORED_TABLES: &[(&str, &[&str])] = &[(
-    LEDGER_TABLE,
-    &[
-        "singleton",
-        "version",
-        "source_leaf",
-        "stable_digest",
-        "adopted_at",
-    ],
-)];
+pub const AUTHORED_TABLES: &[(&str, &[&str])] = &[
+    (
+        LEDGER_TABLE,
+        &[
+            "singleton",
+            "version",
+            "source_leaf",
+            "stable_digest",
+            "adopted_at",
+        ],
+    ),
+    (
+        pull_request_url_migration::LEDGER_TABLE,
+        &[
+            "singleton",
+            "version",
+            "migration_id",
+            "source_commit",
+            "applied_at",
+        ],
+    ),
+];
 
 /// Every Worktree column a public GraphQL input may never submit or patch.
 ///
@@ -49,6 +62,7 @@ pub const PROTECTED_COLUMNS: &[&str] = &[
     "ephemeral",
     "created_at",
     "updated_at",
+    "pull_request_url",
 ];
 
 /// Why the generated Worktree mutation bundle stays private in Seaography

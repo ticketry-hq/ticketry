@@ -1,5 +1,6 @@
 export type WorkspaceTabIdentity =
   | { kind: "details" }
+  | { kind: "changes" }
   | { kind: "doc"; id: string }
   | { kind: "terminal"; id: string };
 
@@ -10,8 +11,8 @@ export interface WorkspaceTabOrder {
 function parseIdentity(value: unknown): WorkspaceTabIdentity | null {
   if (!value || typeof value !== "object") return null;
   const candidate = value as { kind?: unknown; id?: unknown };
-  if (candidate.kind === "details") {
-    return candidate.id === undefined ? { kind: "details" } : null;
+  if (candidate.kind === "details" || candidate.kind === "changes") {
+    return candidate.id === undefined ? { kind: candidate.kind } : null;
   }
   if (
     (candidate.kind === "doc" || candidate.kind === "terminal") &&
@@ -31,8 +32,8 @@ export function workspaceTabOrderFromJson(value: unknown): WorkspaceTabOrder {
   for (const valueIdentity of value) {
     const identity = parseIdentity(valueIdentity);
     if (!identity) return { order: [] };
-    const key = identity.kind === "details"
-      ? "details"
+    const key = identity.kind === "details" || identity.kind === "changes"
+      ? identity.kind
       : `${identity.kind}:${identity.id}`;
     if (keys.has(key)) return { order: [] };
     keys.add(key);

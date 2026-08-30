@@ -22,6 +22,7 @@ mod adoption;
 pub mod column_policy;
 mod error;
 pub mod ownership_manifest;
+pub mod pull_request_url_migration;
 mod schema;
 
 pub use adoption::{adopt, preflight, worktrees_adopted, AdoptionEvidence, SourceClassification};

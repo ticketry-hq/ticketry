@@ -117,17 +117,21 @@ describe("WorktreeBlock (#589, shared CODIN-922)", () => {
     ).toBeTruthy();
     expect(screen.getByText("clean")).toBeTruthy();
     expect(screen.getByText("↑2")).toBeTruthy();
-    expect(screen.getByText(/lands automatically on Done/)).toBeTruthy();
+    expect(
+      screen.getByText(/completion leaves this worktree unchanged/),
+    ).toBeTruthy();
     // No integrate / land control exists.
     expect(screen.queryByRole("button", { name: /land/i })).toBeNull();
   });
 
-  it("surfaces a conflict line with the primary-untouched copy and no land control", async () => {
+  it("surfaces a conflict line without coupling it to Work Item completion", async () => {
     seed(conflict);
     renderBlock();
 
     expect(await screen.findByText("Conflict")).toBeTruthy();
-    expect(screen.getByText(/your primary checkout is untouched/)).toBeTruthy();
+    expect(
+      screen.getByText(/primary checkout and Work Item workflow stay independent/),
+    ).toBeTruthy();
     expect(screen.queryByRole("button", { name: /land/i })).toBeNull();
   });
 

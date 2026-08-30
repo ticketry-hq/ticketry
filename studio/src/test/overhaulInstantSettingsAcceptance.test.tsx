@@ -13,7 +13,7 @@ describe("overhaul acceptance — Instant settings", () => {
     });
   });
 
-  it("[overhaul-185] edits the Instant initial prompt and auto-close defaults", async () => {
+  it("[overhaul-203] edits the Instant initial prompt and auto-close defaults", async () => {
     const saves: unknown[] = [];
     installDesktopGraphQlRuntime(async (document, variables) => {
       const operation = documentOperationName(document);

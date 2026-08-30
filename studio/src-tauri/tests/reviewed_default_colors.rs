@@ -4,8 +4,8 @@ use muxed_studio_lib::work_management::commands::catalog::{self, CreateProject};
 use muxed_studio_lib::work_management::entities::{
     issue_type, issue_type_transition, launch_binding, project, state,
 };
-use muxed_studio_lib::work_management::project_onboarding_migration;
 use muxed_studio_lib::work_management::open_for_commands;
+use muxed_studio_lib::work_management::project_onboarding_migration;
 use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder};
 use tauri_graphql::{TransportApi, TransportApiImpl};
 

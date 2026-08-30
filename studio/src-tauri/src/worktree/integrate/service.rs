@@ -131,12 +131,8 @@ impl WorktreeIntegrateService {
                 },
             }));
         }
-        let plan = match plan::derive(
-            self.executor.work_items(),
-            self.executor.git(),
-            &completed,
-        )
-        .await?
+        let plan = match plan::derive(self.executor.work_items(), self.executor.git(), &completed)
+            .await?
         {
             // A child shares its parent's checkout without owning it, so
             // completing the child asks for nothing.

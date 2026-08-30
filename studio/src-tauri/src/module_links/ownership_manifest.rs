@@ -13,10 +13,8 @@ use super::schema::{LINK_COLUMNS, LINK_TABLE, SCHEMA_COLUMNS, SCHEMA_TABLE};
 pub const VERSION: i32 = 1;
 
 /// The tables this capability authors outright, at their checked column shape.
-pub const OWNED_TABLES: &[(&str, &[&str])] = &[
-    (LINK_TABLE, LINK_COLUMNS),
-    (SCHEMA_TABLE, SCHEMA_COLUMNS),
-];
+pub const OWNED_TABLES: &[(&str, &[&str])] =
+    &[(LINK_TABLE, LINK_COLUMNS), (SCHEMA_TABLE, SCHEMA_COLUMNS)];
 
 /// The legacy asset the importer reads and never rewrites, moves, or removes.
 ///

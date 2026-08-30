@@ -39,6 +39,21 @@ async function availablePort() {
   });
 }
 
+async function occupyPort(port) {
+  const server = net.createServer();
+  await new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen({ host: "127.0.0.1", port }, resolve);
+  });
+  return server;
+}
+
+async function closeServer(server) {
+  if (!server?.listening) return;
+  await new Promise((resolve, reject) =>
+    server.close((error) => error ? reject(error) : resolve()));
+}
+
 async function waitForPort(port, child, timeoutMs = 90_000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -246,7 +261,7 @@ async function createStoryThroughStudio(browser, workspaceDirectory) {
   await click(codex);
   await click(await browser.$("aria/Get started"));
 
-  await click(await browser.$("aria/Add module"));
+  await click(await browser.$("aria/+ Add Module"));
   await click(await browser.$("aria/Next"));
   await click(await browser.$("aria/Got it"));
   const moduleName = await browser.$('input[placeholder="Module name"]');
@@ -279,7 +294,7 @@ function tmuxInventory(root) {
     "ticketry-e2e",
     "list-sessions",
     "-F",
-    "#{session_name}|#{@pt-agent-run-id}|#{pane_dead}|#{pane_dead_status}",
+    "#{session_name}|#{@pt-agent-run-id}|#{pane_dead}|#{pane_dead_status}|#{pane_current_command}|#{pane_start_command}",
   ], {
     env: { ...process.env, TMUX_TMPDIR: path.join(root, "tmux") },
     encoding: "utf8",
@@ -381,6 +396,7 @@ async function main() {
     TMPDIR: runtimeTempDirectory,
     MUXED_OUTPUT_SWEEP_SECONDS: "1",
   };
+  let mcpBlocker = await occupyPort(mcpPort);
   let child = spawnTicketry(binary, {
     ...applicationEnvironment,
     TAURI_WEBDRIVER_PORT: String(port),
@@ -390,11 +406,65 @@ async function main() {
   let failed = false;
   try {
     browser = await connectToStudio(port, child);
+    const outageNotice = await browser.$("aria/Agent launches unavailable");
+    await outageNotice.waitForDisplayed({ timeout: 60_000 });
+    const outageMessage = await outageNotice.getText();
+    if (
+      !outageMessage.includes("Agent launches are blocked")
+      || !outageMessage.includes("Local shells remain available")
+    ) {
+      throw new Error(`MCP outage notice omitted its fail-closed boundary: ${outageMessage}`);
+    }
+    await click(await browser.$("aria/Understood"));
+
     const story = await createStoryThroughStudio(browser, workspaceDirectory);
+    await click(await browser.$("aria/Open terminal panel"));
+    const localShell = await browser.$("aria/Shell 1");
+    await localShell.waitForDisplayed({ timeout: 30_000 });
+    await click(await browser.$("aria/Close shell 1"));
+    await localShell.waitForDisplayed({ timeout: 20_000, reverse: true });
+    // Shell tabs disappear immediately while durable termination finishes in
+    // the background. Do not interrupt that explicit close with the restart
+    // this scenario performs next.
+    await waitForTmuxEmpty(root);
+    await click(await browser.$("aria/Minimize terminal panel"));
+
+    await click(story.launch);
+    const refusedLaunch = await browser.$(
+      '//*[@data-testid and starts-with(@data-testid,"toast-") and contains(.,"Agent run could not be started")]',
+    );
+    await refusedLaunch.waitForDisplayed({ timeout: 20_000 });
+
+    await browser.deleteSession();
+    browser = undefined;
+    await stopProcess(child);
+    await closeServer(mcpBlocker);
+    mcpBlocker = undefined;
+
+    port = await availablePort();
+    child = spawnTicketry(binary, {
+      ...applicationEnvironment,
+      TAURI_WEBDRIVER_PORT: String(port),
+      TICKETRY_DESKTOP_ACCEPTANCE_SWEEP_MILLIS: "250",
+    }, stdout, stderr);
+    browser = await connectToStudio(port, child);
+    await openExistingStory(browser, story.taskId);
+    const restoredPanel = await browser.$('[data-testid="terminal-panel"]');
+    if (await restoredPanel.isDisplayed().catch(() => false)) {
+      const restoredShell = await browser.$("aria/Shell 1");
+      await restoredShell.waitForDisplayed({ timeout: 20_000 });
+      await click(await browser.$("aria/Close shell 1"));
+      await restoredShell.waitForDisplayed({ timeout: 20_000, reverse: true });
+      await waitForTmuxEmpty(root);
+      await click(await browser.$("aria/Minimize terminal panel"));
+    }
+    story.launch = await browser.$("aria/Run agent");
     await waitForState(browser, "Ideas");
     writeFileSync(path.join(root, "provider-task"), `${story.taskId}\nCoding\n`);
     await click(story.launch);
-    const toast = await browser.$('[data-testid^="toast-"]');
+    const toast = await browser.$(
+      '//*[@data-testid and starts-with(@data-testid,"toast-") and contains(.,"Agent run")]',
+    );
     await toast.waitForDisplayed({ timeout: 20_000 });
     const launchResult = await toast.getText();
     if (!launchResult.includes("Agent run started.")) {
@@ -420,6 +490,9 @@ async function main() {
       `[data-task-id="${story.taskId}"] [data-testid="agent-state-badge"][data-state="active"]`,
     );
     await activeBadge.waitForDisplayed({ timeout: 30_000 });
+    const moduleTab = await browser.$('button[role="tab"][aria-label="Acceptance Module"]');
+    const moduleActivity = await moduleTab.$('[aria-label="Agent is actively working"]');
+    await moduleActivity.waitForDisplayed({ timeout: 30_000 });
     const terminalTab = await browser.$("aria/Ideas codex terminal");
     await terminalTab.waitForDisplayed({ timeout: 30_000 });
     await (await browser.$("aria/Agent is actively working")).waitForDisplayed({ timeout: 30_000 });
@@ -432,6 +505,11 @@ async function main() {
     writeFileSync(path.join(root, "provider-exit"), "");
     const completedRun = await browser.$("aria/Resume Ideas codex terminal");
     await completedRun.waitForDisplayed({ timeout: 30_000 });
+    await browser.waitUntil(async () =>
+      !(await moduleActivity.isDisplayed().catch(() => false)), {
+      timeout: 30_000,
+      timeoutMsg: "the module lifecycle badge did not clear after completion",
+    });
 
     await browser.refresh();
     await openExistingStory(browser, story.taskId);
@@ -497,6 +575,7 @@ async function main() {
   } finally {
     if (browser) await browser.deleteSession().catch(() => {});
     await stopProcess(child);
+    await closeServer(mcpBlocker).catch(() => {});
     spawnSync(tmux, ["-L", "ticketry-e2e", "kill-server"], {
       env: { ...process.env, TMUX_TMPDIR: tmuxDirectory },
       stdio: "ignore",

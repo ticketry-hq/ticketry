@@ -7,6 +7,7 @@ import {
 import { UpdateWorkTrackerWorkItemDocument } from "../src/features/work-items/generated/workItems.documents";
 import {
   acknowledgeOnboarding,
+  captureLegacyProductApiRequests,
   createModule,
   createProject,
   createWorkItem,
@@ -18,6 +19,16 @@ import {
   graphql,
   selectModuleForProfile,
 } from "./support";
+
+let legacyProductApiRequests: string[] = [];
+
+test.beforeEach(async ({ page }) => {
+  legacyProductApiRequests = captureLegacyProductApiRequests(page);
+});
+
+test.afterEach(async () => {
+  expect(legacyProductApiRequests).toEqual([]);
+});
 
 type Row = { id: string; name: string; [key: string]: unknown };
 

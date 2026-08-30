@@ -196,8 +196,7 @@ async fn initialize_with_worktracker_commands_and_install_inner(
     // idempotent rather than an adoption. A journal that cannot be installed
     // simply leaves creation uncomposed: the capability reports itself
     // unavailable instead of running Git without a recovery record.
-    let worktrees =
-        compose_worktree_operations(&worktracker_database, work_facts.is_some()).await;
+    let worktrees = compose_worktree_operations(&worktracker_database, work_facts.is_some()).await;
     // Document saves are Workspace Operations over the same journal. One
     // bounded pass finishes a rename a previous process staged and abandoned,
     // before any window can ask for that document again.
@@ -229,9 +228,10 @@ async fn initialize_with_worktracker_commands_and_install_inner(
             crate::launch::authority::LaunchAuthorityService::new(worktracker_database.clone()),
         )),
         viewers: viewer_ownership.clone(),
-        output_activity: crate::terminal::output_activity::TerminalOutputActivityService::production(
-            worktracker_database.clone(),
-        ),
+        output_activity:
+            crate::terminal::output_activity::TerminalOutputActivityService::production(
+                worktracker_database.clone(),
+            ),
     });
     let schema = crate::query_root::foundation_schema_with_terminal_services(
         foundation_database,

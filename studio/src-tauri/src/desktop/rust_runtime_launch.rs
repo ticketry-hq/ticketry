@@ -91,6 +91,7 @@ pub(crate) fn launch_rust_runtime(
         Arc::new(composed.terminal_runtime().clone()),
         Arc::new(crate::terminal::cleanup::TmuxCleanupRuntime::default()),
     );
+    let periodic_spool = spool.clone();
     let terminal_runtime = Arc::new(
         tauri::async_runtime::block_on(TerminalLifecycleRuntime::start(
             Arc::new(ProductionTerminalLifecycleWork::new(
@@ -106,6 +107,9 @@ pub(crate) fn launch_rust_runtime(
         ))
         .map_err(|error| format!("terminal lifecycle startup failed: {error}"))?,
     );
+    let (_, hook_spool_runtime) =
+        tauri::async_runtime::block_on(periodic_spool.start(provider_hook_sweep_interval()))
+            .map_err(|error| format!("provider hook ingestion startup failed: {error}"))?;
     let execution_service = crate::execution::reconciliation::ExecutionReconciliationService::new(
         database.clone(),
         crate::work_management::launch_policy::LaunchPolicyResolver::new(database.clone()),
@@ -140,6 +144,10 @@ pub(crate) fn launch_rust_runtime(
         .terminal_runtime
         .lock()
         .expect("terminal runtime lock poisoned") = Some(terminal_runtime);
+    *state
+        .hook_spool_runtime
+        .lock()
+        .expect("hook spool runtime lock poisoned") = Some(hook_spool_runtime);
     *state
         .execution_runtime
         .lock()
@@ -176,4 +184,16 @@ fn terminal_sweep_interval() -> Duration {
         .and_then(|value| value.parse::<u64>().ok())
         .unwrap_or(DEFAULT_MINUTES);
     Duration::from_secs(minutes.saturating_mul(60))
+}
+
+fn provider_hook_sweep_interval() -> Duration {
+    #[cfg(feature = "desktop-acceptance")]
+    if let Some(milliseconds) = std::env::var("TICKETRY_DESKTOP_ACCEPTANCE_HOOK_SWEEP_MILLIS")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+    {
+        return Duration::from_millis(milliseconds.max(25));
+    }
+
+    Duration::from_secs(1)
 }

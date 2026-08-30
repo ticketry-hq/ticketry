@@ -26,13 +26,13 @@ pub use adoption::{
     adopt, preflight, AdoptionEvidence, JsonSourceClassification, SourceClassification,
 };
 pub use app_settings::{AppSetting, AppSettingRepository, SettingKey, SettingScope};
+pub(crate) use atomic_json::write_json_atomically;
 pub use error::SettingsPersistenceError;
 pub use global_launch_default::{
     parse_global_launch_default, read_global_launch_default, GlobalLaunchDefault,
 };
-pub use legacy_profile_files::{ModuleLink, Profile, ProfileCatalog};
-pub(crate) use atomic_json::write_json_atomically;
 pub(crate) use legacy_profile_files::read_profile_file;
+pub use legacy_profile_files::{ModuleLink, Profile, ProfileCatalog};
 pub use provider_catalog::{
     ProviderCatalog, ProviderCatalogError, ProviderCatalogService, ProviderCatalogUpdate,
 };

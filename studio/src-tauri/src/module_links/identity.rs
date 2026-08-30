@@ -34,9 +34,12 @@ pub fn compact_module_id(module_id: &str) -> String {
 /// either spelling always derives one link identity.
 #[must_use]
 pub fn link_id_for_module(module_id: &str) -> String {
-    Uuid::new_v5(&MODULE_LINK_NAMESPACE, compact_module_id(module_id).as_bytes())
-        .simple()
-        .to_string()
+    Uuid::new_v5(
+        &MODULE_LINK_NAMESPACE,
+        compact_module_id(module_id).as_bytes(),
+    )
+    .simple()
+    .to_string()
 }
 
 #[cfg(test)]

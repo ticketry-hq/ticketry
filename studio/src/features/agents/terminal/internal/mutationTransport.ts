@@ -117,21 +117,22 @@ export interface DefaultInteractiveTaskLaunchInput {
 export async function createDefaultInteractiveTaskLaunch(
   input: DefaultInteractiveTaskLaunchInput,
 ): Promise<{ agent_run_id: string }> {
+  const variables = {
+    clientRequestId: crypto.randomUUID(),
+    projectId: input.projectId,
+    issueId: input.issueId,
+    moduleId: input.moduleId,
+    targetId: input.issueId,
+    kind: "task",
+    workingDirectoryIdentity: `task:${compactIdentity(input.issueId)}`,
+    columns: DEFAULT_COLUMNS,
+    rows: DEFAULT_ROWS,
+  } as const;
   const result = await studioRuntime().writeWorkTracker({
     graphQl: async (execute) => {
       try {
         const response = await retryTransport(() =>
-          execute(CreateTerminalSessionDocument, {
-            clientRequestId: crypto.randomUUID(),
-            projectId: input.projectId,
-            issueId: input.issueId,
-            moduleId: input.moduleId,
-            targetId: input.issueId,
-            kind: "task",
-            workingDirectoryIdentity: `task:${compactIdentity(input.issueId)}`,
-            columns: DEFAULT_COLUMNS,
-            rows: DEFAULT_ROWS,
-          })
+          execute(CreateTerminalSessionDocument, variables)
         );
         return { agent_run_id: response.terminal_session.agent_run_id };
       } catch (error) {
@@ -207,6 +208,5 @@ export async function terminateTerminalSession(
       }
     },
   });
-  await refreshTerminalHoldings();
   return result;
 }

@@ -11,8 +11,7 @@ use common::terminal_lifecycle_harness::{
 use muxed_studio_lib::entities::terminals::{launch_material, session};
 use muxed_studio_lib::terminal::launch::{
     CreateTerminalSession, TerminalLaunchCheckpoint, TerminalLaunchError, TerminalLaunchKind,
-    TerminalLaunchRuntime, TerminalLaunchService, TerminalRuntimeObservation,
-    VerifiedTerminalRuntime,
+    TerminalLaunchRuntime, TerminalRuntimeObservation, VerifiedTerminalRuntime,
 };
 use sea_orm::{ConnectionTrait, EntityTrait};
 
@@ -59,6 +58,17 @@ async fn resume_creates_new_history_and_retries_idempotently() {
         true,
     )
     .await;
+    database
+        .execute_unprepared(
+            "UPDATE agent_terminal_sessions \
+             SET runtime_namespace='tmux-source-installation', \
+                 task_id='00000000-0000-0000-0000-000000008647', \
+                 module_id='00000000-0000-0000-0000-000000008644', \
+                 project_id='00000000-0000-0000-0000-000000008641' \
+             WHERE agent_run_id='resume-source'",
+        )
+        .await
+        .unwrap();
     let original = session::Entity::find_by_id("resume-source")
         .one(&database)
         .await

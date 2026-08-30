@@ -293,7 +293,11 @@ async fn resolution_rejects_every_unusable_linked_module_folder() {
                     .unwrap();
             }
             "missing" => {
-                link(&database, &directory.path().join("missing").display().to_string()).await;
+                link(
+                    &database,
+                    &directory.path().join("missing").display().to_string(),
+                )
+                .await;
             }
             "file" => {
                 let path = directory.path().join("regular-file");

@@ -2,9 +2,7 @@
 
 mod claim;
 mod error;
-mod graphql;
 mod graphql_scope;
-mod operation_registry;
 mod service;
 mod types;
 
@@ -15,10 +13,6 @@ pub use types::{
     DeletedGraphRunResult, GraphRunAdvanceResult, GraphRunRequest, GraphRunResult, LaunchedChild,
     ResetGraphRunResult,
 };
-
-pub fn register_graphql(builder: seaography::Builder) -> seaography::Builder {
-    graphql::register(builder)
-}
 
 pub use graphql_scope::GraphRunCaller;
 pub(crate) use graphql_scope::GraphRunReadScope;

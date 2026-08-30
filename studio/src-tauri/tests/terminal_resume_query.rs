@@ -87,10 +87,65 @@ async fn custom_query_matches_generated_agent_run_fields() {
 }
 
 #[tokio::test]
+async fn terminated_provider_history_remains_resumable_after_profile_hydration() {
+    let harness = TerminalLifecycleHarness::start().await;
+    let database = harness.database().await;
+    insert_ended_task_run(
+        &database,
+        "hydrated-run",
+        "hydrated-provider-session",
+        "2026-08-19T14:30:00Z",
+        "codex",
+    )
+    .await;
+    database
+        .execute_unprepared(
+            "UPDATE agent_terminal_sessions \
+             SET runtime_namespace='tmux-source-installation', \
+                 task_id='00000000-0000-0000-0000-000000008647', \
+                 module_id='00000000-0000-0000-0000-000000008644', \
+                 project_id='00000000-0000-0000-0000-000000008641' \
+             WHERE agent_run_id='hydrated-run'",
+        )
+        .await
+        .unwrap();
+    let normalized_match = database
+        .query_one_raw(Statement::from_string(
+            DbBackend::Sqlite,
+            "SELECT COUNT(*) AS count FROM agent_terminal_sessions s \
+             WHERE replace(s.task_id, '-', '')='00000000000000000000000000008647' \
+               AND replace(s.project_id, '-', '') IN (SELECT id FROM worktracker_project) \
+               AND s.agent_run_id='hydrated-run'",
+        ))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(normalized_match.try_get::<i64>("", "count").unwrap(), 1);
+
+    let rows = ResumableConversationService::new(database)
+        .list(Some(TASK_ID.to_owned()), None, None)
+        .await
+        .unwrap();
+
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].id, "hydrated-run");
+}
+
+#[tokio::test]
 async fn scratch_query_uses_project_module_and_scratch_scope() {
     let harness = TerminalLifecycleHarness::start().await;
     let database = harness.database().await;
     insert_ended_scratch_run(&database, "scratch-plan", "scratch-provider", "plan").await;
+    database
+        .execute_unprepared(
+            "UPDATE agent_terminal_sessions \
+             SET task_id='00000000-0000-0000-0000-000000000000', \
+                 module_id='00000000-0000-0000-0000-000000008644', \
+                 project_id='00000000-0000-0000-0000-000000008641' \
+             WHERE agent_run_id='scratch-plan'",
+        )
+        .await
+        .unwrap();
     insert_ended_task_run(
         &database,
         "task-neighbour",

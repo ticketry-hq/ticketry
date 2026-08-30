@@ -6,8 +6,6 @@
 
 mod capture;
 mod error;
-mod graphql;
-mod operation_registry;
 mod service;
 mod sweep;
 
@@ -18,7 +16,3 @@ pub use sweep::{
     configured_sweep_interval, observe_live_sessions, LiveOutputSweepRuntime,
     DEFAULT_SWEEP_INTERVAL, OUTPUT_SWEEP_INTERVAL_ENV,
 };
-
-pub fn register_graphql(builder: seaography::Builder) -> seaography::Builder {
-    graphql::register(builder)
-}

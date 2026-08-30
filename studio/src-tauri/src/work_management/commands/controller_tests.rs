@@ -50,6 +50,7 @@ async fn fixture() -> (tempfile::TempDir, sea_orm::DatabaseConnection) {
             state_revision bigint NOT NULL, name varchar(512) NOT NULL,
             sequence_id integer NOT NULL, is_archived bool NOT NULL,
             rank varchar(64) NOT NULL, description text NOT NULL,
+            workspace_tab_order json NOT NULL DEFAULT '[]',
             created_at datetime NOT NULL, updated_at datetime NOT NULL,
             UNIQUE(project_id, sequence_id)
         );

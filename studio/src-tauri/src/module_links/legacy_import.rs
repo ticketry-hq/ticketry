@@ -226,8 +226,8 @@ fn settle(
 fn source_digest(source: &LegacySource) -> Result<String, ModuleLinkError> {
     use sha2::{Digest, Sha256};
 
-    let bytes = std::fs::read(&source.path)
-        .map_err(|error| ModuleLinkError::io(&source.path, error))?;
+    let bytes =
+        std::fs::read(&source.path).map_err(|error| ModuleLinkError::io(&source.path, error))?;
     Ok(Sha256::digest(&bytes)
         .iter()
         .map(|byte| format!("{byte:02x}"))

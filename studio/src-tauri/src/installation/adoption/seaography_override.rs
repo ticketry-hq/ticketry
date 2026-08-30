@@ -79,6 +79,12 @@ pub fn seams() -> Vec<Seam> {
             reason: "the boundary is published before the GraphQL endpoint exists, through the \
                      same append-only table the Runs capability owns",
         },
+        Seam {
+            file: "semantic_bridge.rs",
+            reads: "orphaned design-document metadata across historical Work Item schemas",
+            reason: "the repair runs before adoption accepts a canonical schema, and its \
+                     generation-independent anti-joins cannot use one compiled entity graph",
+        },
     ]
 }
 

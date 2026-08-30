@@ -236,9 +236,7 @@ impl ExecutionHarness {
         let launch_runtime = Arc::new(composed.terminal_runtime().clone());
         let mut launch = TerminalLaunchService::new(commands.clone(), launch_runtime.clone())
             .with_authority(Arc::new(
-                muxed_studio_lib::launch::authority::LaunchAuthorityService::new(
-                    commands.clone(),
-                ),
+                muxed_studio_lib::launch::authority::LaunchAuthorityService::new(commands.clone()),
             ));
         if let Some(boundary) = self.options.stop_once_at {
             launch = launch.stopping_once_at(boundary);

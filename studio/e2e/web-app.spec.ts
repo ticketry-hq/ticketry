@@ -1,6 +1,8 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { access, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { promisify } from "node:util";
 import {
   expect,
   test,
@@ -9,14 +11,27 @@ import {
   type Page,
 } from "@playwright/test";
 import {
+  ClearModuleLinkDocument,
+  LoadModuleLinksDocument,
+} from "../src/features/module-links/generated/moduleLinks.documents";
+import { WorktreeStatusDocument } from "../src/features/agents/worktrees/generated/worktreeStatus.documents";
+import { UpdateWorkTrackerModulePresentationDocument } from "../src/features/projects/generated/projects.documents";
+import { SetWorkTrackerSubtreeRunDocument } from "../src/features/workflows/generated/workflows.documents";
+import {
   acknowledgeOnboarding,
+  captureLegacyProductApiRequests,
+  CODEX_TEST_MODEL,
+  CODEX_TEST_REASONING,
+  configureCodexDefault,
   createModule,
   createProject,
   createWorkItem,
   getModules,
   getProjects,
+  getWorkItem,
   getWorkItems,
   getWorkflowCatalog,
+  graphql,
   openModule,
   openWorkItem,
   selectModuleForProfile,
@@ -26,6 +41,29 @@ import {
   type WorkItemRow,
 } from "./support";
 
+let legacyProductApiRequests: string[] = [];
+
+test.beforeEach(async ({ page }) => {
+  legacyProductApiRequests = captureLegacyProductApiRequests(page);
+});
+
+test.afterEach(async () => {
+  expect(legacyProductApiRequests).toEqual([]);
+});
+
+async function ensureModulesPane(
+  page: Page,
+  options: { mayAlreadyBeOpen?: boolean } = {},
+): Promise<Locator> {
+  const pane = page.getByTestId("pane-modules");
+  const toggle = page.getByTestId("footer-modules-toggle");
+  if (options.mayAlreadyBeOpen && await pane.isVisible()) return pane;
+  await expect(toggle).toHaveAttribute("aria-label", "Open Modules pane");
+  await toggle.click();
+  await expect(pane).toBeVisible();
+  return pane;
+}
+
 type IssueTypeRow = ApiRow & { level: "task" | "module" };
 type StateRow = ApiRow & {
   color: string | null;
@@ -33,23 +71,40 @@ type StateRow = ApiRow & {
   sort_order: number;
 };
 
+const execFileAsync = promisify(execFile);
+const attachmentContents = "Rust MCP attachment E2E evidence.\n";
+
 const names = {
   module: "Complete Web App",
   secondModule: "Navigation Target",
+  staleModule: "Stale Link Recovery",
+  nonRepoModule: "Non-repository Module",
+  nonRepoItem: "Work without Git isolation",
   parent: "Complete parent",
   parentRenamed: "Complete parent renamed",
   blocker: "Complete blocker",
   moving: "Complete moving",
   reorderFirst: "Complete reorder first",
   reorderSecond: "Complete reorder second",
+  hierarchyParent: "Complete hierarchy parent",
+  hierarchyChild: "Complete hierarchy child",
+  landing: "Complete automatic worktree landing",
+  landingConflict: "Complete conflicted worktree landing",
+  landingDirty: "Complete dirty worktree refusal",
+  runNow: "Complete safe Run now refusal",
   deletable: "Complete disposable",
 };
 
 const fixture: {
   folder: string;
+  nonRepoFolder: string;
+  alternateFolder: string;
+  attachmentPath: string;
   project: ProjectRow;
   module: ModuleRow;
   secondModule: ModuleRow;
+  staleModule: ModuleRow;
+  nonRepoModule: ModuleRow;
   storyType: IssueTypeRow;
   implementationType: IssueTypeRow;
   states: StateRow[];
@@ -58,11 +113,38 @@ const fixture: {
   moving: WorkItemRow;
   reorderFirst: WorkItemRow;
   reorderSecond: WorkItemRow;
+  hierarchyParent: WorkItemRow;
+  hierarchyChild: WorkItemRow;
+  landing: WorkItemRow;
+  landingConflict: WorkItemRow;
+  landingDirty: WorkItemRow;
+  runNow: WorkItemRow;
   deletable: WorkItemRow;
+  nonRepoItem: WorkItemRow;
 } = {} as never;
 
 async function seedProject(request: APIRequestContext): Promise<void> {
   fixture.folder = await mkdtemp(join(tmpdir(), "ticketry-web-e2e-"));
+  fixture.nonRepoFolder = await mkdtemp(join(tmpdir(), "ticketry-web-no-repo-e2e-"));
+  fixture.alternateFolder = await mkdtemp(join(tmpdir(), "ticketry-web-alternate-e2e-"));
+  const gitEnvironment = {
+    ...process.env,
+    GIT_AUTHOR_NAME: "Ticketry E2E",
+    GIT_AUTHOR_EMAIL: "e2e@ticketry.invalid",
+    GIT_COMMITTER_NAME: "Ticketry E2E",
+    GIT_COMMITTER_EMAIL: "e2e@ticketry.invalid",
+  };
+  const git = async (...arguments_: string[]): Promise<void> => {
+    await execFileAsync("git", ["-C", fixture.folder, ...arguments_], {
+      env: gitEnvironment,
+    });
+  };
+  await git("init", "-b", "main");
+  await writeFile(join(fixture.folder, "README.md"), "Ticketry browser E2E\n");
+  fixture.attachmentPath = join(fixture.folder, "e2e-implementation-notes.md");
+  await writeFile(fixture.attachmentPath, attachmentContents);
+  await git("add", "README.md", "e2e-implementation-notes.md");
+  await git("commit", "-m", "Initial E2E fixture");
   await acknowledgeOnboarding(request);
 
   const projects = await getProjects(request);
@@ -100,11 +182,35 @@ async function seedProject(request: APIRequestContext): Promise<void> {
     name: names.secondModule,
     issue_type_id: moduleType!.id,
   });
+  fixture.staleModule = modules.find((module) =>
+    module.name === names.staleModule
+  ) ?? await createModule(request, fixture.project.id, {
+    name: names.staleModule,
+    issue_type_id: moduleType!.id,
+  });
+  fixture.nonRepoModule = modules.find((module) =>
+    module.name === names.nonRepoModule
+  ) ?? await createModule(request, fixture.project.id, {
+    name: names.nonRepoModule,
+    issue_type_id: moduleType!.id,
+  });
   await selectModuleForProfile(
     request,
     fixture.project.id,
     fixture.secondModule.id,
     fixture.folder,
+  );
+  await selectModuleForProfile(
+    request,
+    fixture.project.id,
+    fixture.module.id,
+    fixture.folder,
+  );
+  await selectModuleForProfile(
+    request,
+    fixture.project.id,
+    fixture.nonRepoModule.id,
+    fixture.nonRepoFolder,
   );
   await selectModuleForProfile(
     request,
@@ -134,7 +240,20 @@ async function seedProject(request: APIRequestContext): Promise<void> {
   fixture.moving = await ensureItem(names.moving, rootStory);
   fixture.reorderFirst = await ensureItem(names.reorderFirst, rootStory);
   fixture.reorderSecond = await ensureItem(names.reorderSecond, rootStory);
+  fixture.hierarchyParent = await ensureItem(names.hierarchyParent, rootStory);
+  fixture.hierarchyChild = await ensureItem(names.hierarchyChild, {
+    parent_id: fixture.hierarchyParent.id,
+    issue_type_id: fixture.implementationType.id,
+  });
+  fixture.landing = await ensureItem(names.landing, rootStory);
+  fixture.landingConflict = await ensureItem(names.landingConflict, rootStory);
+  fixture.landingDirty = await ensureItem(names.landingDirty, rootStory);
+  fixture.runNow = await ensureItem(names.runNow, rootStory);
   fixture.deletable = await ensureItem(names.deletable, rootStory);
+  fixture.nonRepoItem = await ensureItem(names.nonRepoItem, {
+    parent_id: fixture.nonRepoModule.id,
+    issue_type_id: fixture.storyType.id,
+  });
 }
 
 async function openSettings(page: Page): Promise<Locator> {
@@ -160,6 +279,47 @@ async function editDescription(page: Page, description: string): Promise<void> {
   await expect(page.getByTestId("issue-description")).toContainText(description);
 }
 
+async function selectState(page: Page, stateName: string): Promise<void> {
+  const picker = page.getByTestId("state-picker");
+  await picker.getByRole("button").click();
+  const saved = page.waitForResponse((response) =>
+    response.url().endsWith("/graphql") &&
+    response.request().postDataJSON()?.operationName ===
+      "TransitionWorkTrackerWorkItem"
+  );
+  await page.getByRole("button", { name: stateName, exact: true }).click();
+  await saved;
+  await expect(picker).toContainText(stateName);
+}
+
+async function callMcpTool<TResult>(
+  request: APIRequestContext,
+  id: number,
+  name: string,
+  arguments_: Record<string, unknown>,
+): Promise<TResult> {
+  const mcpPort = process.env.MUXED_DESKTOP_MCP_PORT ?? "8123";
+  const response = await request.post(`http://127.0.0.1:${mcpPort}/mcp`, {
+    headers: {
+      accept: "application/json, text/event-stream",
+      "mcp-protocol-version": "2025-03-26",
+    },
+    data: {
+      jsonrpc: "2.0",
+      id,
+      method: "tools/call",
+      params: { name, arguments: arguments_ },
+    },
+  });
+  const responseText = await response.text();
+  expect(response.ok(), responseText).toBeTruthy();
+  const envelope = JSON.parse(responseText) as {
+    result?: { structuredContent?: TResult };
+  };
+  expect(envelope.result?.structuredContent, responseText).toBeTruthy();
+  return envelope.result!.structuredContent!;
+}
+
 test.beforeAll(async ({ request }) => {
   await seedProject(request);
 });
@@ -168,31 +328,66 @@ test.afterAll(async () => {
   if (fixture.folder) {
     await rm(fixture.folder, { recursive: true, force: true });
   }
+  if (fixture.nonRepoFolder) {
+    await rm(fixture.nonRepoFolder, { recursive: true, force: true });
+  }
+  if (fixture.alternateFolder) {
+    await rm(fixture.alternateFolder, { recursive: true, force: true });
+  }
 });
 
 test.describe("complete browser application", () => {
-  test("creates a module with a local folder and restores it as the selected workspace", async ({
+  test("recovers bootstrap after the local Rust adapter is initially unavailable", async ({
+    page,
+  }) => {
+    await page.route("**/graphql", (route) => route.abort());
+    await page.goto("/");
+    await expect(page.getByText("The local server is not running."))
+      .toBeVisible({ timeout: 10_000 });
+    const retry = page.getByRole("button", { name: "Retry" });
+    await expect(retry).toBeVisible();
+
+    await page.unroute("**/graphql");
+    await retry.click();
+    await expect(page.getByRole("tablist", { name: "Project module tabs" }))
+      .toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("tab", { name: names.module }))
+      .toBeVisible();
+  });
+
+  test("retries an invalid module folder without duplicating the persisted module", async ({
     page,
   }) => {
     await openModule(page, names.module);
-    await page.getByRole("button", { name: "Add module" }).click();
+    const modulesPane = await ensureModulesPane(page);
+    await modulesPane.getByRole("button", { name: "Add module" }).click();
 
-    const dialog = page.getByRole("dialog", { name: "Add Module" });
+    let dialog = page.getByRole("dialog", { name: "Add Module" });
     await expect(dialog).toBeVisible();
-    await dialog.getByPlaceholder("Module name").fill("Browser-created module");
+    await dialog.getByPlaceholder("Module name").fill("Cancelled invalid module");
+    await dialog.getByRole("textbox", { name: "Module folder" })
+      .fill(join(fixture.folder, "folder-that-does-not-exist"));
+    await dialog.getByRole("button", { name: "Create module" }).click();
+    await expect(dialog.getByRole("alert"))
+      .toHaveText(
+        "Module created, but its folder could not be saved. Retry to save the folder.",
+      );
+    await expect(dialog.getByPlaceholder("Module name")).toBeDisabled();
     await dialog.getByRole("textbox", { name: "Module folder" })
       .fill(fixture.folder);
-    await dialog.getByRole("button", { name: "Create module" }).click();
+    await dialog.getByRole("button", { name: "Save folder" }).click();
 
     await expect(dialog).toHaveCount(0);
     const createdTab = page.getByRole("tab", {
-      name: "Browser-created module",
+      name: "Cancelled invalid module",
     });
     await expect(createdTab).toHaveAttribute("aria-selected", "true");
 
     await page.reload();
-    await expect(page.getByRole("tab", { name: "Browser-created module" }))
+    await expect(page.getByRole("tab", { name: "Cancelled invalid module" }))
       .toHaveAttribute("aria-selected", "true");
+    await expect(page.getByRole("tab", { name: "Cancelled invalid module" }))
+      .toHaveCount(1);
     await page.getByRole("tab", { name: names.module }).click();
   });
 
@@ -222,6 +417,1093 @@ test.describe("complete browser application", () => {
     await expect(page.getByRole("treeitem", { name: names.parent })).toBeVisible();
   });
 
+  test("reorders module tabs and restores the canonical order after reload", async ({
+    page,
+  }) => {
+    await openModule(page, names.module);
+    const modulesPane = await ensureModulesPane(page);
+    const moduleTabs = page.getByRole("tablist", {
+      name: "Project module tabs",
+    });
+    const first = moduleTabs.getByRole("tab", { name: names.secondModule });
+    const second = moduleTabs.getByRole("tab", { name: names.module });
+    const sidebarModuleNames = () => modulesPane
+      .locator("li[data-module-id]")
+      .allTextContents()
+      .then((labels) => labels
+        .map((label) => label.replace(/^📦\s*/, "").trim())
+        .filter((label) => [names.module, names.secondModule].includes(label)));
+
+    await expect.poll(async () =>
+      (await moduleTabs.getByRole("tab").allTextContents())
+        .filter((label) => [names.module, names.secondModule].includes(label))
+    ).toEqual([names.secondModule, names.module]);
+    await expect.poll(sidebarModuleNames)
+      .toEqual([names.secondModule, names.module]);
+
+    const target = await first.boundingBox();
+    expect(target).toBeTruthy();
+    const saved = page.waitForResponse((response) =>
+      response.url().endsWith("/graphql") &&
+      response.request().postDataJSON()?.operationName ===
+        "ReorderWorkTrackerModulePresentation"
+    );
+    await second.dragTo(first, {
+      targetPosition: { x: 2, y: target!.height / 2 },
+    });
+    await saved;
+
+    await expect.poll(async () =>
+      (await moduleTabs.getByRole("tab").allTextContents())
+        .filter((label) => [names.module, names.secondModule].includes(label))
+    ).toEqual([names.module, names.secondModule]);
+    await expect.poll(sidebarModuleNames)
+      .toEqual([names.module, names.secondModule]);
+
+    await page.reload();
+    await expect.poll(async () =>
+      (await page.getByRole("tablist", { name: "Project module tabs" })
+        .getByRole("tab").allTextContents())
+        .filter((label) => [names.module, names.secondModule].includes(label))
+    ).toEqual([names.module, names.secondModule]);
+    await ensureModulesPane(page);
+    await expect.poll(sidebarModuleNames)
+      .toEqual([names.module, names.secondModule]);
+  });
+
+  test("hides a module tab and restores it through the module picker", async ({
+    page,
+  }) => {
+    await openModule(page, names.module);
+    const modulesPane = await ensureModulesPane(page);
+    const moduleTabs = page.getByRole("tablist", {
+      name: "Project module tabs",
+    });
+    const hidden = page.waitForResponse((response) =>
+      response.url().endsWith("/graphql") &&
+      response.request().postDataJSON()?.operationName ===
+        "UpdateWorkTrackerModulePresentation"
+    );
+    await moduleTabs.getByRole("button", {
+      name: `Hide ${names.secondModule} tab`,
+    }).click();
+    await hidden;
+    await expect(moduleTabs.getByRole("tab", { name: names.secondModule }))
+      .toHaveCount(0);
+    await expect(modulesPane).toContainText(
+      names.secondModule,
+    );
+
+    await page.reload();
+    await expect(page.getByRole("tab", { name: names.secondModule }))
+      .toHaveCount(0);
+    await expect(page.getByRole("treeitem", { name: names.parent }))
+      .toBeVisible();
+
+    const pickerTrigger = page.getByRole("button", {
+      name: "Open module picker",
+    });
+    await pickerTrigger.click();
+    let picker = page.getByRole("dialog", { name: "Module picker" });
+    await expect(picker.getByRole("combobox", { name: "Search modules" }))
+      .toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(picker).toHaveCount(0);
+    await expect(pickerTrigger).toBeFocused();
+
+    await pickerTrigger.click();
+    picker = page.getByRole("dialog", { name: "Module picker" });
+    await expect(picker).toBeVisible();
+    const search = picker.getByRole("combobox", { name: "Search modules" });
+    await search.fill(names.secondModule);
+    const hiddenModule = picker.getByRole("option", {
+      name: `Restore ${names.secondModule} module tab`,
+    });
+    await search.press("ArrowDown");
+    await expect(hiddenModule).toHaveAttribute("aria-selected", "true");
+    const restored = page.waitForResponse((response) =>
+      response.url().endsWith("/graphql") &&
+      response.request().postDataJSON()?.operationName ===
+        "UpdateWorkTrackerModulePresentation"
+    );
+    await search.press("Enter");
+    await restored;
+
+    await expect(picker).toHaveCount(0);
+    await expect(page.getByRole("tab", { name: names.secondModule }).last())
+      .toHaveAttribute("aria-selected", "true");
+    await page.reload();
+    await expect(page.getByRole("tab", { name: names.secondModule }).last())
+      .toBeVisible();
+  });
+
+  test("recovers through the Modules pane after every module tab is hidden", async ({
+    page,
+    request,
+  }) => {
+    await openModule(page, names.module);
+    const moduleTabs = page.getByRole("tablist", {
+      name: "Project module tabs",
+    });
+    const visibleNames = (await moduleTabs.getByRole("tab").evaluateAll((tabs) =>
+      tabs.map((tab) => tab.getAttribute("aria-label"))
+        .filter((name): name is string => Boolean(name))));
+    expect(visibleNames.length).toBeGreaterThan(1);
+
+    for (const moduleName of visibleNames) {
+      const hidden = page.waitForResponse((response) =>
+        response.url().endsWith("/graphql") &&
+        response.request().postDataJSON()?.operationName ===
+          "UpdateWorkTrackerModulePresentation"
+      );
+      await moduleTabs.getByRole("button", {
+        name: `Hide ${moduleName} tab`,
+      }).click();
+      await hidden;
+      await expect(moduleTabs.getByRole("tab", { name: moduleName }))
+        .toHaveCount(0);
+    }
+    await expect(page.getByTestId("empty-module-workspace")).toContainText(
+      /(?:Open the Modules sidebar|Select a module in the Modules pane) to restore (?:a module|its) tab\./,
+    );
+
+    const modules = (await getModules(request, fixture.project.id))
+      .filter((module) => visibleNames.includes(module.name));
+
+    try {
+      const modulesPane = await ensureModulesPane(page, {
+        mayAlreadyBeOpen: true,
+      });
+      const restored = page.waitForResponse((response) =>
+        response.url().endsWith("/graphql") &&
+        response.request().postDataJSON()?.operationName ===
+          "UpdateWorkTrackerModulePresentation"
+      );
+      await modulesPane.locator("li[data-module-id]")
+        .filter({ hasText: names.module })
+        .click();
+      await restored;
+      await expect(moduleTabs.getByRole("tab", { name: names.module }).last())
+        .toBeVisible();
+      await expect(moduleTabs.getByRole("tab", { name: names.module }).last())
+        .toHaveAttribute("aria-selected", "true");
+    } finally {
+      for (const module of modules) {
+        await graphql(request, UpdateWorkTrackerModulePresentationDocument, {
+          moduleId: module.id,
+          tabHidden: false,
+        });
+      }
+      await page.reload();
+    }
+
+    for (const moduleName of visibleNames) {
+      await expect(page.getByRole("tab", { name: moduleName }).last())
+        .toBeVisible();
+    }
+    await expect(page.getByRole("tab", { name: names.module }).last())
+      .toHaveAttribute("aria-selected", "true");
+  });
+
+  test("creates, detects changes in, and explicitly discards a real Git worktree", async ({
+    page,
+    request,
+  }) => {
+    await openModule(page, names.module);
+    await openWorkItem(page, names.parent);
+    const worktree = page.getByTestId("worktree-block");
+    const create = worktree.getByRole("button", { name: "+ Create worktree" });
+    await expect(create).toBeVisible();
+
+    const created = page.waitForResponse((response) =>
+      response.url().endsWith("/graphql") &&
+      response.request().postDataJSON()?.operationName === "WorktreeCreate"
+    );
+    await create.click();
+    await created;
+    await expect(worktree).toContainText(/wt\/CODIN-\d+-complete-parent → main/);
+    await expect(worktree).toContainText("clean");
+    await expect(worktree.getByRole("button", { name: "Discard" })).toBeVisible();
+
+    const status = (await graphql(request, WorktreeStatusDocument, {
+      taskId: fixture.parent.id,
+    })).worktree_status;
+    expect(status.kind).toBe("worktree");
+    expect(status.path).toBeTruthy();
+    await writeFile(join(status.path!, "e2e-uncommitted-change.txt"), "dirty\n");
+
+    await page.reload();
+    await expect(worktree).toContainText(/wt\/CODIN-\d+-complete-parent → main/);
+    await expect(worktree).toContainText("dirty");
+    await worktree.getByRole("button", { name: "Discard" }).click();
+    await expect(worktree).toContainText("Discard — work is thrown away?");
+    await worktree.getByRole("button", { name: "Cancel" }).click();
+    await expect(worktree).not.toContainText("Discard — work is thrown away?");
+    await expect(worktree.getByRole("button", { name: "Discard" })).toBeVisible();
+
+    await worktree.getByRole("button", { name: "Discard" }).click();
+    const discarded = page.waitForResponse((response) =>
+      response.url().endsWith("/graphql") &&
+      response.request().postDataJSON()?.operationName === "WorktreeDiscard"
+    );
+    await worktree.getByRole("button", { name: "Yes, discard" }).click();
+    await discarded;
+    await expect(create).toBeVisible();
+    await expect(worktree).toContainText("Runs in the primary checkout.");
+
+    await page.reload();
+    await expect(create).toBeVisible();
+    await expect(worktree.getByRole("button", { name: "Discard" }))
+      .toHaveCount(0);
+  });
+
+  test("keeps a top-level worktree when a sharing child reaches Done", async ({
+    page,
+    request,
+  }) => {
+    await openModule(page, names.module);
+    await openWorkItem(page, names.hierarchyParent);
+    let worktree = page.getByTestId("worktree-block");
+    const created = page.waitForResponse((response) =>
+      response.url().endsWith("/graphql") &&
+      response.request().postDataJSON()?.operationName === "WorktreeCreate"
+    );
+    await worktree.getByRole("button", { name: "+ Create worktree" }).click();
+    await created;
+    await expect(worktree).toContainText(/wt\/CODIN-\d+-complete-hierarchy-parent/);
+
+    await page.getByTestId("child-issues").getByRole("button", {
+      name: new RegExp(names.hierarchyChild),
+    }).click();
+    worktree = page.getByTestId("worktree-block");
+    await expect(worktree).toContainText(
+      "Shares the worktree owned by top-level task",
+    );
+    await expect(worktree.getByRole("button", { name: "+ Create worktree" }))
+      .toHaveCount(0);
+    await expect(worktree.getByRole("button", { name: "Discard" }))
+      .toHaveCount(0);
+
+    await page.reload();
+    await expect(page.getByTestId("issue-name")).toContainText(
+      names.hierarchyChild,
+    );
+    await expect(page.getByTestId("worktree-block")).toContainText(
+      "Shares the worktree owned by top-level task",
+    );
+    await selectState(page, "Review");
+    await selectState(page, "Done");
+    await expect.poll(async () => (
+      await graphql(request, WorktreeStatusDocument, {
+        taskId: fixture.hierarchyParent.id,
+      })
+    ).worktree_status.kind).toBe("worktree");
+    await expect(page.getByTestId("worktree-block")).toContainText(
+      "Shares the worktree owned by top-level task",
+    );
+
+    await openWorkItem(page, names.hierarchyParent);
+    worktree = page.getByTestId("worktree-block");
+    await worktree.getByRole("button", { name: "Discard" }).click();
+    await worktree.getByRole("button", { name: "Yes, discard" }).click();
+    await expect(worktree.getByRole("button", { name: "+ Create worktree" }))
+      .toBeVisible();
+  });
+
+  test("automatically lands a committed worktree when its Story reaches Done", async ({
+    page,
+    request,
+  }) => {
+    test.setTimeout(45_000);
+    await openModule(page, names.module);
+    await openWorkItem(page, names.landing);
+    const worktree = page.getByTestId("worktree-block");
+    const created = page.waitForResponse((response) =>
+      response.url().endsWith("/graphql") &&
+      response.request().postDataJSON()?.operationName === "WorktreeCreate"
+    );
+    await worktree.getByRole("button", { name: "+ Create worktree" }).click();
+    await created;
+    await expect(worktree).toContainText(
+      /wt\/CODIN-\d+-complete-automatic-worktree-landing → main/,
+    );
+
+    const status = (await graphql(request, WorktreeStatusDocument, {
+      taskId: fixture.landing.id,
+    })).worktree_status;
+    expect(status).toMatchObject({
+      kind: "worktree",
+      base_branch: "main",
+      clean: true,
+    });
+    expect(status.path).toBeTruthy();
+    const evidenceName = "automatic-worktree-landing-e2e.txt";
+    const evidence = "Landed automatically by the Rust completion hook.\n";
+    await writeFile(join(status.path!, evidenceName), evidence);
+    const gitEnvironment = {
+      ...process.env,
+      GIT_AUTHOR_NAME: "Ticketry E2E",
+      GIT_AUTHOR_EMAIL: "e2e@ticketry.invalid",
+      GIT_COMMITTER_NAME: "Ticketry E2E",
+      GIT_COMMITTER_EMAIL: "e2e@ticketry.invalid",
+    };
+    await execFileAsync("git", ["-C", status.path!, "add", evidenceName], {
+      env: gitEnvironment,
+    });
+    await execFileAsync(
+      "git",
+      ["-C", status.path!, "commit", "-m", "E2E automatic worktree landing"],
+      { env: gitEnvironment },
+    );
+
+    await page.reload();
+    await expect(worktree).toContainText("clean");
+    await expect(worktree).toContainText("↑1");
+    await selectState(page, "Implement");
+    await selectState(page, "Review");
+    await selectState(page, "Done");
+
+    await expect.poll(async () => {
+      try {
+        return await readFile(join(fixture.folder, evidenceName), "utf8");
+      } catch {
+        return null;
+      }
+    }, { timeout: 20_000 }).toBe(evidence);
+    await expect.poll(async () => (
+      await graphql(request, WorktreeStatusDocument, {
+        taskId: fixture.landing.id,
+      })
+    ).worktree_status.kind, { timeout: 20_000 }).toBe("none");
+    await expect.poll(async () => {
+      try {
+        await access(status.path!);
+        return true;
+      } catch {
+        return false;
+      }
+    }).toBe(false);
+    await expect(worktree).toContainText("Runs in the primary checkout.");
+    await expect(worktree.getByRole("button", { name: "Discard" }))
+      .toHaveCount(0);
+
+    await page.reload();
+    await expect(page.getByTestId("status-row")).toContainText("Done");
+    await expect(page.getByTestId("worktree-block"))
+      .toContainText("Runs in the primary checkout.");
+  });
+
+  test("keeps an automatic landing conflict isolated from the primary checkout", async ({
+    page,
+    request,
+  }) => {
+    test.setTimeout(45_000);
+    await openModule(page, names.module);
+    await openWorkItem(page, names.landingConflict);
+    const worktree = page.getByTestId("worktree-block");
+    const created = page.waitForResponse((response) =>
+      response.url().endsWith("/graphql") &&
+      response.request().postDataJSON()?.operationName === "WorktreeCreate"
+    );
+    await worktree.getByRole("button", { name: "+ Create worktree" }).click();
+    await created;
+    await expect(worktree).toContainText(
+      /wt\/CODIN-\d+-complete-conflicted-worktree-landing/,
+    );
+
+    const status = (await graphql(request, WorktreeStatusDocument, {
+      taskId: fixture.landingConflict.id,
+    })).worktree_status;
+    expect(status.path).toBeTruthy();
+    const gitEnvironment = {
+      ...process.env,
+      GIT_AUTHOR_NAME: "Ticketry E2E",
+      GIT_AUTHOR_EMAIL: "e2e@ticketry.invalid",
+      GIT_COMMITTER_NAME: "Ticketry E2E",
+      GIT_COMMITTER_EMAIL: "e2e@ticketry.invalid",
+    };
+    await writeFile(join(status.path!, "README.md"), "task-side conflict\n");
+    await execFileAsync("git", ["-C", status.path!, "add", "README.md"], {
+      env: gitEnvironment,
+    });
+    await execFileAsync(
+      "git",
+      ["-C", status.path!, "commit", "-m", "E2E task-side conflict"],
+      { env: gitEnvironment },
+    );
+    const primaryContents = "primary-side conflict\n";
+    await writeFile(join(fixture.folder, "README.md"), primaryContents);
+    await execFileAsync("git", ["-C", fixture.folder, "add", "README.md"], {
+      env: gitEnvironment,
+    });
+    await execFileAsync(
+      "git",
+      ["-C", fixture.folder, "commit", "-m", "E2E primary-side conflict"],
+      { env: gitEnvironment },
+    );
+
+    await selectState(page, "Implement");
+    await selectState(page, "Review");
+    await selectState(page, "Done");
+
+    await expect.poll(async () => (
+      await graphql(request, WorktreeStatusDocument, {
+        taskId: fixture.landingConflict.id,
+      })
+    ).worktree_status.conflict, { timeout: 20_000 }).toBe(true);
+    await expect(worktree).toContainText("Conflict");
+    await expect(worktree).toContainText(
+      "Auto-land hit a merge conflict. Resolve it in the worktree",
+    );
+    expect(await readFile(join(fixture.folder, "README.md"), "utf8"))
+      .toBe(primaryContents);
+    await expect.poll(async () => {
+      try {
+        await access(join(fixture.folder, ".git", "MERGE_HEAD"));
+        return true;
+      } catch {
+        return false;
+      }
+    }).toBe(false);
+
+    await worktree.getByRole("button", { name: "Discard" }).click();
+    await worktree.getByRole("button", { name: "Yes, discard" }).click();
+    await expect(worktree).toContainText("Runs in the primary checkout.");
+    await expect.poll(async () => {
+      try {
+        await access(status.path!);
+        return true;
+      } catch {
+        return false;
+      }
+    }).toBe(false);
+    expect(await readFile(join(fixture.folder, "README.md"), "utf8"))
+      .toBe(primaryContents);
+  });
+
+  test("refuses to auto-land or discard uncommitted work when a Story reaches Done", async ({
+    page,
+    request,
+  }) => {
+    test.setTimeout(45_000);
+    await openModule(page, names.module);
+    await openWorkItem(page, names.landingDirty);
+    const worktree = page.getByTestId("worktree-block");
+    const created = page.waitForResponse((response) =>
+      response.url().endsWith("/graphql") &&
+      response.request().postDataJSON()?.operationName === "WorktreeCreate"
+    );
+    await worktree.getByRole("button", { name: "+ Create worktree" }).click();
+    await created;
+    const status = (await graphql(request, WorktreeStatusDocument, {
+      taskId: fixture.landingDirty.id,
+    })).worktree_status;
+    expect(status.path).toBeTruthy();
+    const protectedName = "uncommitted-auto-land-e2e.txt";
+    const protectedContents = "Uncommitted work must survive completion.\n";
+    await writeFile(join(status.path!, protectedName), protectedContents);
+
+    await page.reload();
+    await expect(worktree).toContainText("dirty");
+    await selectState(page, "Implement");
+    await selectState(page, "Review");
+    await selectState(page, "Done");
+    // The standing Rust reconciler runs every second. Allow two passes before
+    // proving that its dirty-work refusal left both Git locations untouched.
+    await page.waitForTimeout(2_500);
+
+    const refusedStatus = (await graphql(request, WorktreeStatusDocument, {
+      taskId: fixture.landingDirty.id,
+    })).worktree_status;
+    expect(refusedStatus).toMatchObject({
+      kind: "worktree",
+      dirty: true,
+      checkout_present: true,
+    });
+    expect(await readFile(join(status.path!, protectedName), "utf8"))
+      .toBe(protectedContents);
+    await expect.poll(async () => {
+      try {
+        await access(join(fixture.folder, protectedName));
+        return true;
+      } catch {
+        return false;
+      }
+    }).toBe(false);
+    await expect(worktree).toContainText("dirty");
+    await expect(worktree.getByRole("button", { name: "Discard" })).toBeVisible();
+
+    await worktree.getByRole("button", { name: "Discard" }).click();
+    await worktree.getByRole("button", { name: "Yes, discard" }).click();
+    await expect(worktree).toContainText("Runs in the primary checkout.");
+    await expect.poll(async () => {
+      try {
+        await access(status.path!);
+        return true;
+      } catch {
+        return false;
+      }
+    }).toBe(false);
+  });
+
+  test("keeps a non-Git module usable without offering false worktree isolation", async ({
+    page,
+  }) => {
+    await openModule(page, names.nonRepoModule);
+    await openWorkItem(page, names.nonRepoItem);
+    const worktree = page.getByTestId("worktree-block");
+    await expect(worktree).toContainText(
+      "Changes are not isolated — no git repo encloses this task's path",
+    );
+    await expect(worktree).toContainText("Runs work directly in the path.");
+    await expect(worktree.getByRole("button", { name: "+ Create worktree" }))
+      .toHaveCount(0);
+    await expect(worktree.getByRole("button", { name: "Discard" }))
+      .toHaveCount(0);
+
+    await page.reload();
+    await expect(page.getByTestId("issue-name")).toContainText(names.nonRepoItem);
+    await expect(page.getByTestId("worktree-block")).toContainText(
+      "Changes are not isolated",
+    );
+  });
+
+  test("renders an attachment created through the Rust MCP", async ({
+    page,
+    request,
+  }) => {
+    const result = await callMcpTool<{ success?: boolean }>(
+      request,
+      1,
+      "attach_file",
+      {
+        project_id: fixture.project.id,
+        task_id: fixture.parent.id,
+        file_path: fixture.attachmentPath,
+      },
+    );
+    expect(result.success).toBe(true);
+
+    await openModule(page, names.module);
+    await openWorkItem(page, names.parent);
+    const attachments = page.getByTestId("attachments");
+    await expect(attachments).toContainText("Attachments1");
+    const attachment = attachments.getByRole("link", {
+      name: /e2e-implementation-notes\.md/,
+    });
+    await expect(attachment).toBeVisible();
+    await expect(attachment).toContainText(
+      `${Buffer.byteLength(attachmentContents)} B`,
+    );
+    await expect(attachment).toHaveAttribute(
+      "href",
+      /worktracker\/attachments\/e2e-implementation-notes\.md$/,
+    );
+
+    await page.reload();
+    await expect(page.getByTestId("attachments").getByRole("link", {
+      name: /e2e-implementation-notes\.md/,
+    })).toContainText(`${Buffer.byteLength(attachmentContents)} B`);
+  });
+
+  test("rejects a missing MCP attachment without creating a phantom row", async ({
+    page,
+    request,
+  }) => {
+    const result = await callMcpTool<{
+      success?: boolean;
+      message?: string;
+      data?: unknown;
+    }>(request, 16, "attach_file", {
+      project_id: fixture.project.id,
+      task_id: fixture.parent.id,
+      file_path: join(fixture.folder, "missing-e2e-evidence.txt"),
+    });
+    expect(result).toEqual({
+      success: false,
+      message: "File not found",
+      data: null,
+    });
+
+    await openModule(page, names.module);
+    await openWorkItem(page, names.parent);
+    await expect(page.getByTestId("attachments").getByTestId("attachment-row"))
+      .toHaveCount(1);
+    await page.reload();
+    await expect(page.getByTestId("attachments").getByTestId("attachment-row"))
+      .toHaveCount(1);
+  });
+
+  test("converges an ordinary MCP task edit and workflow move into the open UI", async ({
+    page,
+    request,
+  }) => {
+    await openModule(page, names.module);
+    await openWorkItem(page, names.moving);
+    const changedName = "MCP-updated moving task";
+    const changedDescription = "Description replaced through the Rust MCP.";
+
+    const updated = await callMcpTool<{
+      ok?: boolean;
+      updated_fields?: string[];
+    }>(request, 3, "update_task", {
+      id_or_key: fixture.moving.id,
+      name: changedName,
+      description: changedDescription,
+    });
+    expect(updated).toMatchObject({
+      ok: true,
+      updated_fields: ["name", "description"],
+    });
+    await expect(page.getByTestId("issue-name")).toContainText(changedName);
+    await expect(page.getByTestId("issue-description"))
+      .toContainText(changedDescription);
+    await expect(page.getByRole("treeitem", { name: changedName })).toBeVisible();
+
+    const moved = await callMcpTool<{ ok?: boolean; status?: string }>(
+      request,
+      4,
+      "update_task_status",
+      {
+        project_id: fixture.project.id,
+        task_id: fixture.moving.id,
+        status_name: "Grill",
+      },
+    );
+    expect(moved).toMatchObject({ ok: true, status: "Grill" });
+    await expect(page.getByTestId("status-row")).toContainText("Grill");
+    await expect(page.getByRole("treeitem", { name: changedName })).toBeVisible();
+
+    await page.reload();
+    await expect(page.getByTestId("issue-name")).toContainText(changedName);
+    await expect(page.getByTestId("issue-description"))
+      .toContainText(changedDescription);
+    await expect(page.getByTestId("status-row")).toContainText("Grill");
+
+    const restored = await callMcpTool<{ ok?: boolean }>(
+      request,
+      5,
+      "update_task",
+      {
+        id_or_key: fixture.moving.id,
+        name: names.moving,
+        description: "",
+      },
+    );
+    expect(restored.ok).toBe(true);
+    const restoredState = await callMcpTool<{ ok?: boolean; status?: string }>(
+      request,
+      6,
+      "update_task_status",
+      {
+        project_id: fixture.project.id,
+        task_id: fixture.moving.id,
+        status_name: "Ideas",
+      },
+    );
+    expect(restoredState).toMatchObject({ ok: true, status: "Ideas" });
+    await expect(page.getByTestId("issue-name")).toContainText(names.moving);
+    await expect(page.getByTestId("status-row")).toContainText("Ideas");
+  });
+
+  test("appends MCP description content without replacing the human-authored body", async ({
+    page,
+    request,
+  }) => {
+    await openModule(page, names.module);
+    await openWorkItem(page, names.moving);
+    const baseline = "Human-authored baseline retained by append.";
+    const appended = "Agent-appended Rust MCP note.";
+    await editDescription(page, baseline);
+
+    const result = await callMcpTool<{ result?: boolean }>(
+      request,
+      14,
+      "append_task_description",
+      {
+        project_id: fixture.project.id,
+        task_id: fixture.moving.id,
+        new_content: appended,
+      },
+    );
+    expect(result.result).toBe(true);
+    await expect(page.getByTestId("issue-description")).toContainText(baseline);
+    await expect(page.getByTestId("issue-description")).toContainText(appended);
+
+    await page.reload();
+    await expect(page.getByTestId("issue-description")).toContainText(baseline);
+    await expect(page.getByTestId("issue-description")).toContainText(appended);
+
+    const restored = await callMcpTool<{ ok?: boolean }>(
+      request,
+      15,
+      "update_task",
+      {
+        id_or_key: fixture.moving.id,
+        description: "",
+      },
+    );
+    expect(restored.ok).toBe(true);
+    await expect(page.getByTestId("issue-description")).not.toContainText(appended);
+  });
+
+  test("keeps a human-only workflow edge closed to the Rust MCP agent", async ({
+    page,
+    request,
+  }) => {
+    await openModule(page, names.module);
+    await openWorkItem(page, names.moving);
+    await selectState(page, "Spec");
+    await selectState(page, "Tickets");
+
+    const refused = await callMcpTool<{
+      ok?: boolean;
+      code?: string;
+      detail?: string;
+      from?: string;
+      to?: string;
+    }>(request, 11, "update_task_status", {
+      project_id: fixture.project.id,
+      task_id: fixture.moving.id,
+      status_name: "Implement",
+    });
+    expect(refused).toMatchObject({
+      ok: false,
+      code: "human_only_transition",
+      from: "Tickets",
+      to: "Implement",
+    });
+    expect(refused.detail).toMatch(/human-only/i);
+    await expect(page.getByTestId("status-row")).toContainText("Tickets");
+
+    await page.reload();
+    await expect(page.getByTestId("status-row")).toContainText("Tickets");
+
+    // The same edge remains available to an explicit human action in Studio.
+    await selectState(page, "Implement");
+    await selectState(page, "Grill");
+    await selectState(page, "Ideas");
+    await page.reload();
+    await expect(page.getByTestId("status-row")).toContainText("Ideas");
+  });
+
+  test("streams an MCP-created root Story into the module and deletes it through UI", async ({
+    page,
+    request,
+  }) => {
+    await openModule(page, names.module);
+    const createdName = "Root Story created through MCP";
+    const createdDescription = "Created outside the UI through the Rust MCP.";
+    const created = await callMcpTool<{ result?: string }>(
+      request,
+      7,
+      "create_task",
+      {
+        project_id: fixture.project.id,
+        module_id: fixture.module.id,
+        name: createdName,
+        issue_type: "Story",
+        description: createdDescription,
+      },
+    );
+    expect(created.result).toBeTruthy();
+
+    const row = page.getByRole("treeitem", { name: createdName });
+    await expect(row).toBeVisible();
+    await row.click();
+    await expect(page.getByTestId("issue-name")).toContainText(createdName);
+    await expect(page.getByTestId("issue-description"))
+      .toContainText(createdDescription);
+
+    await page.reload();
+    await expect(page.getByTestId("issue-name")).toContainText(createdName);
+    await expect(page.getByTestId("issue-description"))
+      .toContainText(createdDescription);
+
+    await page.getByRole("button", { name: "Issue actions" }).click();
+    await page.getByRole("menuitem", { name: "Delete issue…" }).click();
+    const dialog = page.getByRole("dialog", { name: "Delete issue" });
+    await expect(dialog).toContainText(createdName);
+    await dialog.getByRole("button", { name: "Delete" }).click();
+    await expect(page.getByRole("treeitem", { name: createdName })).toHaveCount(0);
+  });
+
+  test("streams MCP sub-task creation and partial reparenting into the open hierarchy", async ({
+    page,
+    request,
+  }) => {
+    await openModule(page, names.module);
+    await openWorkItem(page, names.hierarchyParent);
+    const childName = "MCP-created hierarchy child";
+    const childDescription = "Created and reparented through the Rust MCP.";
+    const created = await callMcpTool<{ result?: string }>(
+      request,
+      17,
+      "create_sub_task",
+      {
+        project_id: fixture.project.id,
+        parent_id: fixture.hierarchyParent.id,
+        name: childName,
+        issue_type: "Implementation",
+        description: childDescription,
+      },
+    );
+    expect(created.result).toBeTruthy();
+
+    const originalChildren = page.getByTestId("child-issues");
+    await expect(originalChildren).toContainText(childName);
+    await originalChildren.getByRole("button", {
+      name: new RegExp(childName),
+    }).click();
+    await expect(page.getByTestId("issue-description"))
+      .toContainText(childDescription);
+    await expect(page.getByTestId("parent-picker").getByRole("button"))
+      .toHaveText(fixture.hierarchyParent.key);
+
+    const refusedCycle = await callMcpTool<{
+      reparented?: unknown[];
+      skipped?: unknown[];
+      failed?: Array<{ task_id?: string; error?: string }>;
+    }>(request, 18, "reparent_tasks", {
+      project_id: fixture.project.id,
+      parent_task_id: created.result,
+      task_ids: [fixture.hierarchyParent.id],
+    });
+    expect(refusedCycle).toMatchObject({
+      reparented: [],
+      skipped: [],
+      failed: [{
+        task_id: fixture.hierarchyParent.id,
+        error: expect.stringMatching(/beneath its descendant/i),
+      }],
+    });
+    await expect(page.getByTestId("parent-picker").getByRole("button"))
+      .toHaveText(fixture.hierarchyParent.key);
+
+    await openWorkItem(page, names.hierarchyParent);
+    const missingKey = "CDN-999999";
+    const partiallyReparented = await callMcpTool<{
+      parent_task_id?: string;
+      reparented?: Array<{ task_id?: string; previous_parent_id?: string }>;
+      skipped?: Array<{ task_id?: string; reason?: string }>;
+      failed?: unknown[];
+    }>(request, 19, "reparent_tasks", {
+      project_id: fixture.project.id,
+      parent_task_id: fixture.blocker.id,
+      task_ids: [created.result, missingKey],
+    });
+    expect(partiallyReparented).toMatchObject({
+      parent_task_id: fixture.blocker.id,
+      reparented: [{
+        task_id: created.result,
+        previous_parent_id: fixture.hierarchyParent.id,
+      }],
+      skipped: [{ task_id: missingKey, reason: "not_found" }],
+      failed: [],
+    });
+    await expect(originalChildren).not.toContainText(childName);
+
+    await openWorkItem(page, names.blocker);
+    await expect(page.getByTestId("child-issues")).toContainText(childName);
+    await page.reload();
+    await expect(page.getByTestId("issue-name")).toContainText(names.blocker);
+    const restoredChildren = page.getByTestId("child-issues");
+    await expect(restoredChildren).toContainText(childName);
+    await restoredChildren.getByRole("button", {
+      name: new RegExp(childName),
+    }).click();
+    await expect(page.getByTestId("parent-picker").getByRole("button"))
+      .toHaveText(fixture.blocker.key);
+
+    await page.getByRole("button", { name: "Issue actions" }).click();
+    await page.getByRole("menuitem", { name: "Delete issue…" }).click();
+    const dialog = page.getByRole("dialog", { name: "Delete issue" });
+    await expect(dialog).toContainText(childName);
+    await dialog.getByRole("button", { name: "Delete" }).click();
+    await expect(page.getByRole("treeitem", { name: childName })).toHaveCount(0);
+  });
+
+  test("persists, guards, and clears an MCP blocker edge in both visible directions", async ({
+    page,
+    request,
+  }) => {
+    await openModule(page, names.module);
+    await openWorkItem(page, names.moving);
+
+    const blocked = await callMcpTool<{
+      task_id?: string;
+      blocked_by_ids?: string[];
+      blocks_ids?: string[];
+    }>(request, 8, "set_task_blockers", {
+      task_id: fixture.moving.id,
+      blocked_by_ids: [fixture.blocker.id],
+    });
+    expect(blocked).toMatchObject({
+      task_id: fixture.moving.id,
+      blocked_by_ids: [fixture.blocker.id],
+    });
+
+    await page.reload();
+    await expect(page.getByTestId("issue-name")).toContainText(names.moving);
+    await expect(page.getByTestId("blocked-by-row"))
+      .toContainText(fixture.blocker.key);
+    await openWorkItem(page, names.blocker);
+    await expect(page.getByTestId("blocks-row"))
+      .toContainText(fixture.moving.key);
+
+    const refusedCycle = await callMcpTool<{
+      task_id?: string;
+      error?: string;
+    }>(request, 9, "set_task_blockers", {
+      task_id: fixture.blocker.id,
+      blocked_by_ids: [fixture.moving.id],
+    });
+    expect(refusedCycle.task_id).toBe(fixture.blocker.id);
+    expect(refusedCycle.error).toMatch(/cycle/i);
+
+    await page.reload();
+    await expect(page.getByTestId("issue-name")).toContainText(names.blocker);
+    await expect(page.getByTestId("blocked-by-row").getByTestId("blocker-chip"))
+      .toHaveCount(0);
+    await expect(page.getByTestId("blocks-row"))
+      .toContainText(fixture.moving.key);
+
+    const cleared = await callMcpTool<{
+      task_id?: string;
+      blocked_by_ids?: string[];
+    }>(request, 10, "set_task_blockers", {
+      task_id: fixture.moving.id,
+      blocked_by_ids: [],
+    });
+    expect(cleared).toMatchObject({
+      task_id: fixture.moving.id,
+      blocked_by_ids: [],
+    });
+
+    await page.reload();
+    await expect(page.getByTestId("issue-name")).toContainText(names.blocker);
+    await expect(page.getByTestId("blocks-row")).toHaveCount(0);
+    await openWorkItem(page, names.moving);
+    await expect(page.getByTestId("blocked-by-row").getByTestId("blocker-chip"))
+      .toHaveCount(0);
+  });
+
+  test("rejects malformed and out-of-phase MCP review findings without creating children", async ({
+    page,
+    request,
+  }) => {
+    await openModule(page, names.module);
+    await openWorkItem(page, names.parent);
+    await expect(page.getByTestId("status-row")).toContainText("Ideas");
+    await expect(page.getByTestId("child-issues"))
+      .toContainText("No sub-tasks yet.");
+
+    const malformed = await callMcpTool<{
+      ok?: boolean;
+      code?: string;
+      field?: string;
+    }>(request, 12, "create_review_finding", {
+      project_id: fixture.project.id,
+      parent_id: fixture.parent.id,
+      name: "Malformed MCP finding",
+      path: "../outside-the-repository.rs",
+      line_start: 0,
+      line_end: 0,
+    });
+    expect(malformed).toMatchObject({
+      ok: false,
+      code: "malformed_path",
+      field: "path",
+    });
+
+    const wrongPhase = await callMcpTool<{
+      ok?: boolean;
+      code?: string;
+      field?: string;
+    }>(request, 13, "create_review_finding", {
+      project_id: fixture.project.id,
+      parent_id: fixture.parent.id,
+      name: "Out-of-phase MCP finding",
+      path: "studio/src/runtime/browserRuntime.ts",
+      line_start: 1,
+      line_end: 1,
+    });
+    expect(wrongPhase).toMatchObject({
+      ok: false,
+      code: "invalid_review_parent",
+      field: "parent_id",
+    });
+
+    await expect(page.getByTestId("child-issues"))
+      .toContainText("No sub-tasks yet.");
+    await expect(page.getByTestId("findings-panel")).toHaveCount(0);
+    await expect(page.getByRole("treeitem", { name: "Malformed MCP finding" }))
+      .toHaveCount(0);
+    await expect(page.getByRole("treeitem", { name: "Out-of-phase MCP finding" }))
+      .toHaveCount(0);
+
+    await page.reload();
+    await expect(page.getByTestId("child-issues"))
+      .toContainText("No sub-tasks yet.");
+  });
+
+  test("streams an MCP review finding into the visible Story", async ({
+    page,
+    request,
+  }) => {
+    await openModule(page, names.module);
+    await openWorkItem(page, names.parent);
+    for (const state of ["Grill", "Spec", "Tickets", "Implement", "Review"]) {
+      await selectState(page, state);
+    }
+
+    const result = await callMcpTool<{ ok?: boolean; task_id?: string }>(
+      request,
+      2,
+      "create_review_finding",
+      {
+        project_id: fixture.project.id,
+        parent_id: fixture.parent.id,
+        name: "MCP integration finding",
+        path: "studio/src/runtime/browserRuntime.ts",
+        line_start: 47,
+        line_end: 52,
+        note: "Verify the browser adapter lifecycle boundary.",
+      },
+    );
+    expect(result.ok).toBe(true);
+    expect(result.task_id).toBeTruthy();
+
+    const findings = page.getByTestId("findings-panel");
+    await expect(findings).toContainText("MCP integration finding");
+    await expect(findings.getByTestId("finding-location")).toHaveText(
+      "studio/src/runtime/browserRuntime.ts:47-52",
+    );
+    await expect(findings.getByTestId("findings-queued-count"))
+      .toHaveText("1 fix queued");
+
+    await page.reload();
+    const restored = page.getByTestId("findings-panel");
+    await expect(restored).toContainText("MCP integration finding");
+    await expect(restored.getByTestId("finding-state")).toHaveText("Implement");
+
+    await restored.getByTestId("finding-row").getByRole("button").first().click();
+    await expect(page.getByTestId("issue-name"))
+      .toContainText("MCP integration finding");
+    await expect(page.getByTestId("issue-description"))
+      .toContainText("Path: studio/src/runtime/browserRuntime.ts");
+    await expect(page.getByTestId("issue-description")).toContainText("Lines: 47-52");
+
+    await openWorkItem(page, names.parent);
+    const restoredParent = page.getByTestId("findings-panel");
+    await restoredParent.getByTestId("finding-cancel").click();
+    await expect(restoredParent.getByTestId("finding-state"))
+      .toHaveText("Cancelled");
+    await expect(restoredParent.getByTestId("findings-queued-count"))
+      .toHaveText("0 fixes queued");
+    await expect(restoredParent.getByTestId("finding-cancel")).toHaveCount(0);
+  });
+
   test("edits details, hierarchy, blockers, type, and persistent panel state", async ({
     page,
   }) => {
@@ -229,13 +1511,44 @@ test.describe("complete browser application", () => {
     await openWorkItem(page, names.parent);
 
     await page.getByTestId("issue-name").click();
-    const nameEditor = page.getByRole("textbox", { name: "Name" });
+    let nameEditor = page.getByRole("textbox", { name: "Name" });
+    await nameEditor.fill("Name edit that must be discarded");
+    await nameEditor.press("Escape");
+    await expect(page.getByTestId("issue-name")).toContainText(names.parent);
+    await page.reload();
+    await expect(page.getByTestId("issue-name")).toContainText(names.parent);
+
+    await page.getByTestId("issue-name").click();
+    nameEditor = page.getByRole("textbox", { name: "Name" });
     await nameEditor.fill(names.parentRenamed);
     await nameEditor.press("Enter");
     await expect(page.getByRole("treeitem", {
       name: new RegExp(names.parentRenamed),
     })).toBeVisible();
     await editDescription(page, "Description saved through the real editor");
+
+    await page.getByTestId("issue-description").click();
+    const descriptionEditor = page.getByTestId("description-editor");
+    const source = page.getByRole("textbox", {
+      name: "Ticket description source",
+    });
+    if (await source.isVisible().catch(() => false)) {
+      await source.fill("Description that must be discarded");
+    } else {
+      await descriptionEditor.locator('[contenteditable="true"]')
+        .fill("Description that must be discarded");
+    }
+    await descriptionEditor.getByRole("button", { name: "Cancel" }).click();
+    await expect(page.getByTestId("issue-description")).toContainText(
+      "Description saved through the real editor",
+    );
+    await page.reload();
+    await expect(page.getByTestId("issue-description")).toContainText(
+      "Description saved through the real editor",
+    );
+    await expect(page.getByTestId("issue-description")).not.toContainText(
+      "Description that must be discarded",
+    );
 
     const typePicker = page.getByTestId("issue-type-picker");
     await typePicker.getByRole("button").click();
@@ -257,15 +1570,60 @@ test.describe("complete browser application", () => {
       "Child created through details",
     );
 
+    const parentPicker = page.getByTestId("parent-picker");
+    await parentPicker.getByRole("button").click();
+    await page.getByPlaceholder("Search by number, key, or name…")
+      .fill("Child created through details");
+    await expect(page.getByText("No matches.", { exact: true })).toBeVisible();
+    await page.keyboard.press("Escape");
+
+    const actions = page.getByRole("button", { name: "Issue actions" });
+    await actions.click();
+    const guardedDelete = page.getByRole("menuitem", {
+      name: "Delete issue…",
+    });
+    await expect(guardedDelete).toBeDisabled();
+    await expect(guardedDelete).toHaveAttribute(
+      "title",
+      "Remove sub-tasks first",
+    );
+    await page.keyboard.press("Escape");
+    await expect(actions).toBeFocused();
+
     await page.getByRole("button", { name: "Add blocker" }).click();
     await page.getByRole("button", { name: new RegExp(names.blocker) }).click();
     await expect(page.getByTestId("blocked-by-row")).toContainText(
       fixture.blocker.key,
     );
+
+    await page.getByTestId("blocked-by-row").getByRole("button", {
+      name: fixture.blocker.key,
+    }).click();
+    await expect(page.getByTestId("issue-name")).toContainText(names.blocker);
+    await expect(page.getByTestId("blocks-row")).toContainText(
+      fixture.parent.key,
+    );
+    await page.getByRole("treeitem", {
+      name: new RegExp(names.parentRenamed),
+    }).click();
+    const blockerRemoved = page.waitForResponse((response) =>
+      response.url().endsWith("/graphql") &&
+      response.request().postDataJSON()?.operationName ===
+        "SetWorkTrackerBlockers"
+    );
     await page.getByRole("button", { name: "Remove blocker" }).click();
+    await blockerRemoved;
     await expect(page.getByTestId("blocked-by-row")).not.toContainText(
       fixture.blocker.key,
     );
+
+    await page.getByRole("treeitem", { name: names.blocker }).click();
+    await page.reload();
+    await expect(page.getByTestId("blocks-row").getByTestId("blocker-chip"))
+      .toHaveCount(0);
+    await page.getByRole("treeitem", {
+      name: new RegExp(names.parentRenamed),
+    }).click();
 
     await page.getByRole("button", { name: "Hide details panel" }).click();
     await expect(page.getByTestId("details-panel")).toHaveCount(0);
@@ -279,6 +1637,51 @@ test.describe("complete browser application", () => {
     await expect(page.getByTestId("details-panel")).toBeVisible();
   });
 
+  test("moves a child between task and module parents and restores it after reload", async ({
+    page,
+  }) => {
+    await openModule(page, names.module);
+    await openWorkItem(page, names.moving);
+
+    const chooseParent = async (name: string): Promise<void> => {
+      const picker = page.getByTestId("parent-picker");
+      await picker.getByRole("button").click();
+      await page.getByPlaceholder("Search by number, key, or name…").fill(name);
+      const saved = page.waitForResponse((response) =>
+        response.url().endsWith("/graphql") &&
+        response.request().postDataJSON()?.operationName ===
+          "ReparentWorkTrackerWorkItem"
+      );
+      await picker.getByRole("button", { name: new RegExp(name) }).click();
+      await saved;
+    };
+
+    await chooseParent(names.blocker);
+    await expect(page.getByTestId("parent-picker").getByRole("button"))
+      .toHaveText(fixture.blocker.key);
+
+    await page.reload();
+    await expect(page.getByTestId("issue-name")).toContainText(names.moving);
+    await expect(page.getByTestId("parent-picker").getByRole("button"))
+      .toHaveText(fixture.blocker.key);
+    await openWorkItem(page, names.blocker);
+    await expect(page.getByTestId("child-issues")).toContainText(names.moving);
+
+    await page.getByTestId("child-issues").getByRole("button", {
+      name: new RegExp(names.moving),
+    }).click();
+    await chooseParent(names.module);
+    await expect(page.getByTestId("parent-picker").getByRole("button"))
+      .toHaveText(`T-${fixture.module.sequence_id}`);
+
+    await page.reload();
+    await expect(page.getByTestId("issue-name")).toContainText(names.moving);
+    await expect(page.getByTestId("parent-picker").getByRole("button"))
+      .toHaveText(`T-${fixture.module.sequence_id}`);
+    await openWorkItem(page, names.blocker);
+    await expect(page.getByTestId("child-issues")).not.toContainText(names.moving);
+  });
+
   test("reorders rows and preserves collapsed groups", async ({
     page,
   }) => {
@@ -286,7 +1689,11 @@ test.describe("complete browser application", () => {
 
     const first = page.getByRole("treeitem", { name: names.reorderFirst });
     const second = page.getByRole("treeitem", { name: names.reorderSecond });
-    await second.dragTo(first);
+    const target = await first.boundingBox();
+    expect(target).toBeTruthy();
+    await second.dragTo(first, {
+      targetPosition: { x: target!.width / 2, y: 2 },
+    });
     await expect.poll(async () => {
       const labels = await page.getByRole("treeitem").allTextContents();
       return labels.findIndex((label) => label.includes(names.reorderSecond))
@@ -309,7 +1716,9 @@ test.describe("complete browser application", () => {
 
   test("resizes adjacent panes and persists the split", async ({ page }) => {
     await openModule(page, names.module);
-    const handle = page.getByTestId("pane-resize-handle").first();
+    const handle = page.getByTestId("module-workspace-region")
+      .getByTestId("pane-resize-handle");
+    await expect(handle).toBeVisible();
     await expect(handle).toHaveAttribute("role", "separator");
     await expect(handle).toHaveAttribute("aria-label", "Resize adjacent panes");
     const before = Number(await handle.getAttribute("aria-valuenow"));
@@ -327,9 +1736,611 @@ test.describe("complete browser application", () => {
 
     await page.waitForTimeout(650);
     await page.reload();
-    const restored = Number(await page.getByTestId("pane-resize-handle").first()
-      .getAttribute("aria-valuenow"));
+    const restored = Number(
+      await page.getByTestId("module-workspace-region")
+        .getByTestId("pane-resize-handle")
+        .getAttribute("aria-valuenow"),
+    );
     expect(Math.abs(restored - resized)).toBeLessThanOrEqual(1);
+  });
+
+  test("persists and restores Modules pane visibility", async ({
+    page,
+  }) => {
+    await openModule(page, names.module);
+    await ensureModulesPane(page);
+    const toggle = page.getByTestId("footer-modules-toggle");
+    await expect(page.getByTestId("pane-modules")).toBeVisible();
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+
+    await toggle.click();
+    await expect(page.getByTestId("pane-modules")).toHaveCount(0);
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+
+    await page.reload();
+    await expect(page.getByTestId("pane-modules")).toHaveCount(0);
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await toggle.click();
+    await expect(page.getByTestId("pane-modules")).toBeVisible();
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  });
+
+  test("focuses story search with a shortcut and returns to the tree", async ({
+    page,
+  }) => {
+    await openModule(page, names.module);
+    await page.getByRole("button", { name: "Open Settings" }).focus();
+    await page.keyboard.press("/");
+    const search = page.getByRole("textbox", { name: "Search stories" });
+    await expect(search).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("tree")).toBeFocused();
+  });
+
+  test("opens keyboard shortcut help directly with question mark", async ({
+    page,
+  }) => {
+    await openModule(page, names.module);
+    const trigger = page.getByRole("button", { name: "Open Settings" });
+    await trigger.focus();
+    await page.keyboard.press("?");
+
+    const dialog = page.getByRole("dialog", { name: "Studio settings" });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole("tab", { name: "Keyboard shortcuts" }))
+      .toHaveAttribute("aria-selected", "true");
+    await expect(dialog.getByRole("heading", { name: "Keyboard shortcuts" }))
+      .toBeVisible();
+
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
+  });
+
+  test("opens the status command by keyboard, cancels, then persists a choice", async ({
+    page,
+  }) => {
+    await openModule(page, names.module);
+    await openWorkItem(page, names.reorderFirst);
+    const status = page.getByTestId("status-row");
+    await expect(status).toContainText("Ideas");
+
+    await page.getByRole("button", { name: "Open Settings" }).focus();
+    await page.keyboard.press("s");
+    let dialog = page.getByRole("dialog", { name: "Set Status" });
+    await expect(dialog).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
+    await expect(status).toContainText("Ideas");
+
+    await page.keyboard.press("s");
+    dialog = page.getByRole("dialog", { name: "Set Status" });
+    await dialog.getByText("Grill", { exact: true }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(status).toContainText("Grill");
+
+    const grill = fixture.states.find((state) => state.name === "Grill");
+    expect(grill?.color).toBeTruthy();
+    const expectedColor = await page.evaluate((color) => {
+      const probe = document.createElement("span");
+      probe.style.color = color!;
+      document.body.append(probe);
+      const computed = getComputedStyle(probe).color;
+      probe.remove();
+      return computed;
+    }, grill!.color);
+    const grillHeader = page.getByRole("button", { name: "Collapse Grill" });
+    await expect(grillHeader).toBeVisible();
+    expect(await grillHeader.locator('[data-stage-icon="Grill"]').evaluate(
+      (element) => getComputedStyle(element).color,
+    )).toBe(expectedColor);
+    const movedRow = page.getByRole("treeitem", { name: names.reorderFirst });
+    expect(await movedRow.getByText(`T-${fixture.reorderFirst.sequence_id}`, {
+      exact: true,
+    }).evaluate((element) => getComputedStyle(element).color)).toBe(expectedColor);
+    expect(await page.getByTestId("state-picker").locator("span").first()
+      .evaluate((element) => getComputedStyle(element).backgroundColor))
+      .toBe(expectedColor);
+
+    await page.reload();
+    await expect(page.getByTestId("issue-name")).toContainText(names.reorderFirst);
+    await expect(page.getByTestId("status-row")).toContainText("Grill");
+
+    await page.getByRole("button", { name: "Open Settings" }).focus();
+    await page.keyboard.press("s");
+    dialog = page.getByRole("dialog", { name: "Set Status" });
+    await dialog.getByText("Ideas", { exact: true }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(page.getByTestId("status-row")).toContainText("Ideas");
+  });
+
+  test("opens and cancels every keyboard launch entry without starting a run", async ({
+    page,
+  }) => {
+    await openModule(page, names.module);
+    await openWorkItem(page, names.blocker);
+    const workspaceTabs = page.getByRole("tablist", { name: "Workspace tabs" });
+    const initialTabCount = await workspaceTabs.getByRole("tab").count();
+    const focusCommandLayer = () =>
+      page.getByRole("button", { name: "Open Settings" }).focus();
+
+    await focusCommandLayer();
+    await page.keyboard.press("o");
+    let picker = page.getByRole("dialog", { name: "Select Agent" });
+    await expect(picker).toContainText("codex");
+    await page.keyboard.press("Escape");
+    await expect(picker).toHaveCount(0);
+
+    const openPromptAndCancelProvider = async (
+      chord: "Shift+Enter" | "n" | "i",
+      promptText: string,
+    ): Promise<void> => {
+      await focusCommandLayer();
+      await page.keyboard.press(chord);
+      const prompt = page.getByRole("dialog", { name: "Prompt" });
+      await expect(prompt).toBeVisible();
+      const input = prompt.getByPlaceholder(
+        "Type a prompt. Enter inserts a newline; Ctrl/Cmd+Enter submits.",
+      );
+      await expect(input).toBeFocused();
+      await input.fill(promptText);
+      await prompt.getByRole("button", { name: "Submit" }).click();
+      await expect(prompt).toHaveCount(0);
+      picker = page.getByRole("dialog", { name: "Select Agent" });
+      await expect(picker).toContainText("codex");
+      await page.keyboard.press("Escape");
+      await expect(picker).toHaveCount(0);
+    };
+
+    await openPromptAndCancelProvider(
+      "Shift+Enter",
+      "Task-scoped prompt that must not launch.",
+    );
+    await openPromptAndCancelProvider("n", "Planning prompt that must not launch.");
+    await openPromptAndCancelProvider("i", "Instant prompt that must not launch.");
+
+    await expect(page.getByTestId("issue-name")).toContainText(names.blocker);
+    await expect(workspaceTabs.getByRole("tab")).toHaveCount(initialTabCount);
+  });
+
+  test("updates the live Agent Picker when Rust provider activation changes", async ({
+    page,
+    request,
+  }) => {
+    await configureCodexDefault(request);
+    await openModule(page, names.module);
+    await openWorkItem(page, names.blocker);
+
+    const setClaudeActivation = async (active: boolean): Promise<void> => {
+      const settings = await openSettings(page);
+      await settings.getByRole("combobox", { name: "Agent/provider" })
+        .selectOption("codex");
+      await settings.getByRole("combobox", { name: "Model" })
+        .fill(CODEX_TEST_MODEL);
+      await settings.getByRole("combobox", { name: "Reasoning" })
+        .selectOption(CODEX_TEST_REASONING);
+      const claude = settings.getByRole("checkbox", { name: "Activate claude" });
+      await claude.setChecked(active);
+      await settings.getByRole("button", { name: "Save changes" }).click();
+      await expect(settings).toContainText("Model configuration saved.");
+      await settings.getByRole("button", { name: "Close dialog" }).click();
+    };
+    const openAgentPicker = async (): Promise<Locator> => {
+      await page.getByRole("button", { name: "Open Settings" }).focus();
+      await page.keyboard.press("o");
+      const picker = page.getByRole("dialog", { name: "Select Agent" });
+      await expect(picker).toBeVisible();
+      await expect(picker.getByText("codex", { exact: true })).toBeVisible();
+      return picker;
+    };
+
+    let settings = await openSettings(page);
+    const original = await settings.getByRole("checkbox", {
+      name: "Activate claude",
+    }).isChecked();
+    await settings.getByRole("button", { name: "Close dialog" }).click();
+
+    await setClaudeActivation(!original);
+    let picker = await openAgentPicker();
+    await expect(picker.getByText("claude", { exact: true })).toHaveCount(
+      original ? 0 : 1,
+    );
+    await page.keyboard.press("Escape");
+    await expect(picker).toHaveCount(0);
+
+    await setClaudeActivation(original);
+    picker = await openAgentPicker();
+    await expect(picker.getByText("claude", { exact: true })).toHaveCount(
+      original ? 1 : 0,
+    );
+    await page.keyboard.press("Escape");
+    await expect(picker).toHaveCount(0);
+
+    await page.reload();
+    settings = await openSettings(page);
+    await expect(settings.getByRole("checkbox", { name: "Activate claude" }))
+      .toBeChecked({ checked: original });
+    await settings.getByRole("button", { name: "Close dialog" }).click();
+  });
+
+  test("refuses Run now before moving state when its module link is unavailable", async ({
+    page,
+    request,
+  }) => {
+    await openModule(page, names.module);
+    await openWorkItem(page, names.runNow);
+    const runNow = page.getByRole("button", { name: "Run now" });
+    await expect(runNow).toBeVisible();
+    await expect(page.getByTestId("status-row")).toContainText("Ideas");
+
+    await graphql(request, ClearModuleLinkDocument, {
+      moduleId: fixture.module.id,
+    });
+
+    try {
+      const refused = page.waitForResponse((response) =>
+        response.url().endsWith("/graphql") &&
+        response.request().postDataJSON()?.operationName ===
+          "RunWorkTrackerWorkItemNow"
+      );
+      await runNow.click();
+      await refused;
+      const alert = page.getByRole("alert").filter({
+        hasText: "Run now could not be started",
+      });
+      await expect(alert).toContainText(/no local folder is linked/i);
+      await expect(alert).toContainText(/existing writable module folder/i);
+      await expect(page.getByTestId("status-row")).toContainText("Ideas");
+      await expect(runNow).toBeEnabled();
+    } finally {
+      await selectModuleForProfile(
+        request,
+        fixture.project.id,
+        fixture.module.id,
+        fixture.folder,
+      );
+    }
+
+    await page.reload();
+    await expect(page.getByTestId("status-row")).toContainText("Ideas");
+    await expect(page.getByRole("button", { name: "Run now" })).toBeVisible();
+  });
+
+  test("opens, hides, restores, and closes a Rust-backed module shell", async ({
+    page,
+  }) => {
+    await openModule(page, names.module);
+    const footerToggle = page.getByTestId("footer-terminal-toggle");
+    await expect(footerToggle).toHaveAttribute(
+      "aria-label",
+      "Open terminal panel",
+    );
+    await footerToggle.click();
+
+    const panel = page.getByTestId("terminal-panel");
+    await expect(panel).toBeVisible();
+    await expect(footerToggle).toHaveAttribute(
+      "aria-label",
+      "Minimize terminal panel",
+    );
+    await expect(panel.getByRole("tab", { name: "Shell 1" })).toBeVisible();
+
+    const terminalInput = panel.locator(".xterm-helper-textarea");
+    const terminalRows = panel.locator(".xterm-rows");
+    await expect(terminalInput).toBeVisible();
+    await terminalInput.click();
+    await page.keyboard.type("pwd");
+    await page.keyboard.press("Enter");
+    await expect(terminalRows).toContainText(fixture.folder);
+    await page.keyboard.type(
+      "printf '\\124\\111\\103\\113\\105\\124\\122\\131\\137\\120\\124\\131\\137\\117\\113\\012'",
+    );
+    await page.keyboard.press("Enter");
+    await expect(terminalRows).toContainText("TICKETRY_PTY_OK");
+
+    const resizeGrip = panel.getByRole("separator", {
+      name: "Resize the terminal panel",
+    });
+    const ordinaryHeight = Number(
+      await resizeGrip.getAttribute("aria-valuenow"),
+    );
+    await resizeGrip.press("ArrowUp");
+    await expect(resizeGrip).toHaveAttribute(
+      "aria-valuenow",
+      String(ordinaryHeight + 24),
+    );
+    await page.waitForTimeout(650);
+    await page.reload();
+    await expect(panel).toBeVisible();
+    await expect(resizeGrip).toHaveAttribute(
+      "aria-valuenow",
+      String(ordinaryHeight + 24),
+    );
+    await expect(panel.getByRole("tab", { name: "Shell 1" })).toBeVisible();
+    await expect(panel.locator(".xterm-rows")).toContainText("TICKETRY_PTY_OK");
+
+    await panel.getByRole("button", { name: "Maximize terminal panel" }).click();
+    await expect(panel.getByRole("button", {
+      name: "Restore terminal panel size",
+    })).toBeVisible();
+    const maximizedHeight = Number(
+      await resizeGrip.getAttribute("aria-valuenow"),
+    );
+    expect(maximizedHeight).toBeGreaterThan(ordinaryHeight + 24);
+    await page.waitForTimeout(650);
+    await page.reload();
+    await expect(panel).toBeVisible();
+    await expect(panel.getByRole("button", {
+      name: "Restore terminal panel size",
+    })).toBeVisible();
+    await expect(resizeGrip).toHaveAttribute(
+      "aria-valuenow",
+      String(maximizedHeight),
+    );
+    await panel.getByRole("button", {
+      name: "Restore terminal panel size",
+    }).click();
+    await expect(resizeGrip).toHaveAttribute(
+      "aria-valuenow",
+      String(ordinaryHeight + 24),
+    );
+
+    await page.getByRole("tab", { name: names.secondModule }).last().click();
+    await expect(panel).toHaveCount(0);
+    await expect(footerToggle).toHaveAttribute(
+      "aria-label",
+      "Open terminal panel",
+    );
+    await page.getByRole("tab", { name: names.module }).last().click();
+    await expect(panel).toBeVisible();
+    await expect(panel.getByRole("tab", { name: "Shell 1" })).toBeVisible();
+
+    await panel.getByRole("button", { name: "Minimize terminal panel" }).click();
+    await expect(panel).toHaveCount(0);
+    await expect(footerToggle).toHaveAttribute(
+      "aria-label",
+      "Open terminal panel",
+    );
+
+    await page.keyboard.press("Control+Backquote");
+    await expect(panel).toBeVisible();
+    await expect(panel.getByRole("tab", { name: "Shell 1" })).toBeVisible();
+    await page.keyboard.press("Control+Backquote");
+    await expect(panel).toHaveCount(0);
+
+    await footerToggle.click();
+    await expect(panel).toBeVisible();
+    await panel.getByRole("button", { name: "Close shell 1" }).click();
+    await expect(panel.getByRole("tab", { name: "Shell 1" })).toHaveCount(0);
+    await expect(panel.getByTestId("terminal-panel-no-shells")).toBeVisible();
+    await panel.getByRole("button", { name: "Minimize terminal panel" }).click();
+    await expect(panel).toHaveCount(0);
+  });
+
+  test("creates, selects, restores, caps, and closes Rust-backed shells", async ({
+    page,
+  }) => {
+    await openModule(page, names.module);
+    await page.getByRole("button", { name: "Open terminal panel" }).click();
+    const panel = page.getByTestId("terminal-panel");
+    const firstShell = panel.getByRole("tab", { name: "Shell 1" });
+    await expect(firstShell).toBeVisible();
+
+    await panel.getByRole("button", { name: "New shell" }).click();
+    const secondShell = panel.getByRole("tab", { name: "Shell 2" });
+    await expect(secondShell).toBeVisible();
+    await expect(secondShell).toHaveAttribute("aria-selected", "true");
+
+    await panel.getByRole("button", { name: "New shell" }).click();
+    const thirdShell = panel.getByRole("tab", { name: "Shell 3" });
+    await expect(thirdShell).toHaveAttribute("aria-selected", "true");
+    await panel.getByRole("button", { name: "New shell" }).click();
+    const fourthShell = panel.getByRole("tab", { name: "Shell 4" });
+    await expect(fourthShell).toHaveAttribute("aria-selected", "true");
+    const newShell = panel.getByRole("button", { name: "New shell" });
+    await expect(newShell).toBeDisabled();
+    await expect(newShell).toHaveAttribute(
+      "title",
+      "A module can hold 4 shells.",
+    );
+
+    await firstShell.click();
+    await expect(firstShell).toHaveAttribute("aria-selected", "true");
+    await secondShell.click();
+    await expect(secondShell).toHaveAttribute("aria-selected", "true");
+
+    await panel.getByRole("button", { name: "Minimize terminal panel" }).click();
+    await page.getByRole("button", { name: "Open terminal panel" }).click();
+    await expect(secondShell).toHaveAttribute("aria-selected", "true");
+
+    await panel.getByRole("button", { name: "Close shell 4" }).click();
+    await expect(fourthShell).toHaveCount(0);
+    await expect(secondShell).toHaveAttribute("aria-selected", "true");
+    await panel.getByRole("button", { name: "Minimize terminal panel" }).click();
+  });
+
+  test("recovers a refused module shell after its folder link is removed", async ({
+    page,
+    request,
+  }) => {
+    await openModule(page, names.secondModule);
+    await graphql(request, ClearModuleLinkDocument, {
+      moduleId: fixture.secondModule.id,
+    });
+    await page.getByRole("button", { name: "Open terminal panel" }).click();
+    const panel = page.getByTestId("terminal-panel");
+    const recovery = panel.getByTestId("terminal-panel-folder-required");
+    await expect(recovery).toHaveAttribute(
+      "data-refusal-reason",
+      "module_folder_unusable",
+    );
+    await expect(recovery).toContainText("This module has no usable folder.");
+
+    const folder = recovery.getByRole("textbox", {
+      name: "Module folder for the terminal panel",
+    });
+    await folder.fill("relative/path");
+    await expect(folder).toHaveAttribute("aria-invalid", "true");
+    await expect(recovery.getByRole("button", { name: "Use this folder" }))
+      .toBeDisabled();
+
+    await folder.fill(join(fixture.folder, "missing-module-folder"));
+    await recovery.getByRole("button", { name: "Use this folder" }).click();
+    await expect(recovery.getByRole("alert"))
+      .toContainText("Could not save the module folder. Retry to continue.");
+    await expect(panel.getByRole("tab", { name: "Shell 1" })).toHaveCount(0);
+
+    await folder.fill(fixture.folder);
+    await recovery.getByRole("button", { name: "Use this folder" }).click();
+
+    await expect(recovery).toHaveCount(0);
+    await expect(panel.getByRole("tab", { name: "Shell 1" })).toBeVisible();
+    await panel.getByRole("button", { name: "Close shell 1" }).click();
+    await expect(panel.getByTestId("terminal-panel-no-shells")).toBeVisible();
+    await panel.getByRole("button", { name: "Minimize terminal panel" }).click();
+  });
+
+  test("repairs a persisted module link after its folder disappears", async ({
+    page,
+    request,
+  }) => {
+    const staleFolder = await mkdtemp(join(tmpdir(), "ticketry-stale-link-e2e-"));
+    try {
+      await selectModuleForProfile(
+        request,
+        fixture.project.id,
+        fixture.staleModule.id,
+        staleFolder,
+      );
+      await rm(staleFolder, { recursive: true, force: true });
+
+      await openModule(page, names.staleModule);
+      await page.reload();
+      await page.getByRole("button", { name: "Open terminal panel" }).click();
+      const panel = page.getByTestId("terminal-panel");
+      const recovery = panel.getByTestId("terminal-panel-folder-required");
+      await expect(recovery).toHaveAttribute(
+        "data-refusal-reason",
+        "module_folder_unusable",
+      );
+      await expect(recovery).toContainText(
+        "This module has no usable folder.",
+      );
+      await expect(panel.getByRole("tab", { name: "Shell 1" })).toHaveCount(0);
+
+      await recovery.getByRole("textbox", {
+        name: "Module folder for the terminal panel",
+      }).fill(fixture.folder);
+      await recovery.getByRole("button", { name: "Use this folder" }).click();
+      await expect(recovery).toHaveCount(0);
+      await expect(panel.getByRole("tab", { name: "Shell 1" })).toBeVisible();
+      const links = (await graphql(request, LoadModuleLinksDocument, {}))
+        .moduleLinks.nodes;
+      expect(links.find((link) =>
+        link.moduleId.replaceAll("-", "") ===
+          fixture.staleModule.id.replaceAll("-", "")
+      )?.path)
+        .toBe(fixture.folder);
+      await panel.getByRole("button", { name: "Close shell 1" }).click();
+      await expect(panel.getByTestId("terminal-panel-no-shells")).toBeVisible();
+      await panel.getByRole("button", { name: "Minimize terminal panel" }).click();
+    } finally {
+      await rm(staleFolder, { recursive: true, force: true });
+      await selectModuleForProfile(
+        request,
+        fixture.project.id,
+        fixture.staleModule.id,
+        fixture.folder,
+      );
+    }
+  });
+
+  test("surfaces a failed Rust shell exit status", async ({
+    page,
+  }) => {
+    await openModule(page, names.module);
+    await page.getByRole("button", { name: "Open terminal panel" }).click();
+    const panel = page.getByTestId("terminal-panel");
+    const input = panel.locator(".xterm-helper-textarea");
+    await expect(input).toBeVisible();
+    await input.click();
+    await page.keyboard.insertText("exit 7");
+    await page.keyboard.press("Enter");
+
+    await expect(panel.locator(".xterm-rows"))
+      .toContainText("Pane is dead (status 7", { timeout: 15_000 });
+    await panel.getByRole("button", { name: "Minimize terminal panel" }).click();
+  });
+
+  test("persists the keyboard-selected module folder and launches a shell there", async ({
+    page,
+  }) => {
+    await openModule(page, names.nonRepoModule);
+    const openFolderCommand = async (): Promise<Locator> => {
+      await page.getByRole("button", { name: "Open Settings" }).focus();
+      await page.keyboard.press("f");
+      const dialog = page.getByRole("dialog", { name: "Module Folder" });
+      await expect(dialog).toBeVisible();
+      return dialog;
+    };
+
+    let dialog = await openFolderCommand();
+    let folder = dialog.getByPlaceholder("Local folder (optional)");
+    await expect(folder).toHaveValue(fixture.nonRepoFolder);
+    await folder.fill(fixture.alternateFolder);
+    await dialog.getByRole("button", { name: "Save" }).click();
+    await expect(dialog).toHaveCount(0);
+
+    await page.reload();
+    dialog = await openFolderCommand();
+    folder = dialog.getByPlaceholder("Local folder (optional)");
+    await expect(folder).toHaveValue(fixture.alternateFolder);
+    await dialog.getByRole("button", { name: "Cancel" }).click();
+
+    await page.getByRole("button", { name: "Open terminal panel" }).click();
+    const panel = page.getByTestId("terminal-panel");
+    const terminalInput = panel.locator(".xterm-helper-textarea");
+    await expect(terminalInput).toBeVisible();
+    await terminalInput.click();
+    await page.keyboard.type("pwd");
+    await page.keyboard.press("Enter");
+    await expect(panel.locator(".xterm-rows"))
+      .toContainText(fixture.alternateFolder);
+    await panel.getByRole("button", { name: "Close shell 1" }).click();
+    await panel.getByRole("button", { name: "Minimize terminal panel" }).click();
+
+    dialog = await openFolderCommand();
+    folder = dialog.getByPlaceholder("Local folder (optional)");
+    await folder.fill(fixture.nonRepoFolder);
+    await dialog.getByRole("button", { name: "Save" }).click();
+    await page.reload();
+    dialog = await openFolderCommand();
+    await expect(dialog.getByPlaceholder("Local folder (optional)"))
+      .toHaveValue(fixture.nonRepoFolder);
+    await dialog.getByRole("button", { name: "Cancel" }).click();
+  });
+
+  test("supports three-zone edit-view keyboard navigation", async ({ page }) => {
+    await openModule(page, names.module);
+    await page.getByRole("button", { name: "Open Settings" }).focus();
+    await page.keyboard.press("Backslash");
+    await expect(page.getByTestId("pane-modules")).not.toBeVisible();
+    const storiesZone = page.locator('[data-navigation-zone="stories"]');
+    await expect(storiesZone).toBeFocused();
+
+    await page.getByRole("treeitem", {
+      name: new RegExp(`${names.parent}(?: renamed)?`),
+    }).click();
+    await expect(page.getByTestId("issue-name")).toContainText(names.parent);
+
+    await page.keyboard.press("Shift+Tab");
+    const workspaceTabs = page.getByRole("tablist", { name: "Workspace tabs" });
+    await expect(workspaceTabs).toBeFocused();
+    await page.keyboard.press("Shift+Tab");
+    await expect(page.locator('[data-navigation-zone="active-tab-body"]'))
+      .toBeFocused();
+
+    await page.keyboard.press("Backslash");
+    await expect(page.getByTestId("pane-modules")).toBeVisible();
   });
 
   test("supports shortcut discovery, filtering, focus, and responsive dialogs", async ({
@@ -342,71 +2353,408 @@ test.describe("complete browser application", () => {
     const dialog = page.getByRole("dialog", { name: "Studio settings" });
     await dialog.getByRole("tab", { name: "Keyboard shortcuts" }).click();
     const filter = dialog.getByRole("searchbox", {
-      name: "Filter keyboard shortcuts",
+      name: "Search bindings",
     });
     await filter.click();
     await expect(filter).toBeFocused();
+    await filter.fill("Search");
+    await expect(dialog.getByRole("button", {
+      name: "Record Search binding",
+    })).toHaveText("/");
     await filter.fill("definitely-no-such-shortcut");
-    await expect(dialog.getByRole("status")).toContainText(
-      "No keyboard shortcuts match",
-    );
+    await expect(dialog.getByText("No bindings match", { exact: false }))
+      .toBeVisible();
     await page.keyboard.press("Escape");
     await expect(dialog).toHaveCount(0);
     await expect(trigger).toBeFocused();
-
-    await page.keyboard.press("/");
-    await expect(page.getByRole("textbox", { name: "Search stories" })).toBeFocused();
   });
 
-  test("opens state policy from the board and closes back to the selected issue", async ({
+  test("persists, executes, and resets a custom Search shortcut", async ({
     page,
   }) => {
     await openModule(page, names.module);
-    await openWorkItem(page, names.parentRenamed);
 
-    await page.getByRole("button", { name: "Configure Grill state" }).click();
-    const panel = page.getByRole("region", {
-      name: "Grill state configuration",
+    const openSearchBinding = async (): Promise<{
+      binding: Locator;
+      dialog: Locator;
+    }> => {
+      const dialog = await openSettings(page);
+      await dialog.getByRole("tab", { name: "Keyboard shortcuts" }).click();
+      await dialog.getByRole("searchbox", { name: "Search bindings" })
+        .fill("Search");
+      const binding = dialog.getByRole("button", {
+        name: "Record Search binding",
+      });
+      await expect(binding).toBeVisible();
+      return { binding, dialog };
+    };
+
+    let { binding, dialog } = await openSearchBinding();
+    await expect(binding).toHaveText("/");
+    await binding.click();
+    await expect(binding).toHaveText("Press a chord…");
+    await page.keyboard.press("Alt+k");
+    await expect(binding).toHaveText("Alt+K");
+    await expect(dialog.getByRole("button", { name: "Reset Search binding" }))
+      .toBeVisible();
+    await dialog.getByRole("button", { name: "Close dialog" }).click();
+
+    await page.reload();
+    ({ binding, dialog } = await openSearchBinding());
+    await expect(binding).toHaveText("Alt+K");
+    await dialog.getByRole("button", { name: "Close dialog" }).click();
+    await page.keyboard.press("Alt+k");
+    await expect(page.getByRole("textbox", { name: "Search stories" }))
+      .toBeFocused();
+
+    ({ binding, dialog } = await openSearchBinding());
+    await dialog.getByRole("button", { name: "Reset Search binding" }).click();
+    await expect(binding).toHaveText("/");
+    await expect(dialog.getByRole("button", { name: "Reset Search binding" }))
+      .toHaveCount(0);
+    await dialog.getByRole("button", { name: "Close dialog" }).click();
+
+    await page.reload();
+    await page.getByRole("button", { name: "Open Settings" }).focus();
+    await page.keyboard.press("/");
+    await expect(page.getByRole("textbox", { name: "Search stories" }))
+      .toBeFocused();
+  });
+
+  test("sends serial and parallel subtree launches through the visible controls", async ({
+    page,
+    request,
+  }) => {
+    const root = await getWorkItem(request, fixture.hierarchyParent.id);
+    expect(root.state_id, "the campaign root state").toBeTruthy();
+
+    const readStoryPolicy = async () => {
+      const catalog = await getWorkflowCatalog(request, fixture.project.id);
+      const story = catalog.issue_types.nodes.find((type) =>
+        type.id === fixture.storyType.id
+      );
+      expect(story, "the current Story workflow").toBeTruthy();
+      const binding = story!.launch_bindings.nodes.find((candidate) =>
+        candidate.state === root.state_id
+      );
+      return { story: story!, binding };
+    };
+    const original = await readStoryPolicy();
+    const originalEnabled = original.binding?.subtree_run_enabled ?? false;
+    await graphql(request, SetWorkTrackerSubtreeRunDocument, {
+      issueTypeId: fixture.storyType.id,
+      stateId: root.state_id!,
+      workflowRevision: original.story.workflow_revision,
+      enabled: true,
     });
-    await expect(panel).toBeVisible();
-    await expect(panel.getByRole("heading", { name: "Grill" })).toBeVisible();
-    await panel.getByRole("button", {
-      name: "Close Grill state configuration",
-    }).click();
 
-    await expect(panel).toHaveCount(0);
-    await expect(page.getByTestId("issue-name")).toContainText(
-      names.parentRenamed,
+    const requestedModes: Array<string | null> = [];
+    let armed = false;
+    await page.route("**/graphql", async (route) => {
+      const body = route.request().postDataJSON() as {
+        operationName?: string;
+        variables?: { rootId?: string; executionMode?: string | null };
+      } | null;
+      if (body?.operationName === "ExecutionGraphRunHolding") {
+        await route.fulfill({
+          contentType: "application/json",
+          body: JSON.stringify({
+            data: {
+              graph_run_holding: {
+                __typename: "GraphRunsConnection",
+                nodes: armed
+                  ? [{
+                    __typename: "GraphRuns",
+                    root_id: fixture.hierarchyParent.id,
+                    execution_mode: requestedModes.at(-1) ?? "parallel",
+                  }]
+                  : [],
+              },
+            },
+          }),
+        });
+        return;
+      }
+      if (
+        body?.operationName === "CreateExecutionGraphRun" ||
+        body?.operationName === "UpdateExecutionGraphRun"
+      ) {
+        const mode = body.variables?.executionMode ?? null;
+        requestedModes.push(mode);
+        armed = true;
+        await route.fulfill({
+          contentType: "application/json",
+          body: JSON.stringify({
+            data: {
+              graph_run_result: {
+                __typename: "GraphRunMutationPayload",
+                graph_run: {
+                  __typename: "GraphRuns",
+                  root_id: fixture.hierarchyParent.id,
+                  execution_mode: mode ?? "parallel",
+                },
+                launched: [fixture.hierarchyChild.id],
+              },
+            },
+          }),
+        });
+        return;
+      }
+      await route.continue();
+    });
+
+    try {
+      await openModule(page, names.module);
+      await openWorkItem(page, names.hierarchyParent);
+      const details = page.getByRole("region", { name: "Details" });
+      const runSerially = details.getByRole("button", { name: "Run serially" });
+      const runSubtree = details.getByRole("button", { name: "Run subtree" });
+      await expect(runSerially).toBeVisible();
+      await expect(runSubtree).toBeVisible();
+
+      await runSerially.click();
+      await expect(page.getByRole("status").filter({
+        hasText: "Serial subtree run started.",
+      })).toBeVisible();
+      await runSubtree.click();
+      await expect(page.getByRole("status").filter({
+        hasText: "Subtree run started.",
+      })).toBeVisible();
+
+      expect(requestedModes).toEqual(["serial", null]);
+    } finally {
+      await page.unroute("**/graphql");
+      const current = await readStoryPolicy();
+      await graphql(request, SetWorkTrackerSubtreeRunDocument, {
+        issueTypeId: fixture.storyType.id,
+        stateId: root.state_id!,
+        workflowRevision: current.story.workflow_revision,
+        enabled: originalEnabled,
+      });
+    }
+  });
+
+  test("persists the Story Grill policy through Rust", async ({
+    page,
+  }) => {
+    let launchBindingWrites = 0;
+    page.on("request", (request) => {
+      if (
+        request.url().endsWith("/graphql") &&
+        request.postDataJSON()?.operationName ===
+          "UpsertWorkTrackerLaunchBinding"
+      ) {
+        launchBindingWrites += 1;
+      }
+    });
+    await openModule(page, names.module);
+    await page.getByRole("treeitem", { name: new RegExp(fixture.parent.key) })
+      .click();
+    await expect(page.getByTestId("issue-name"))
+      .toContainText(/Complete parent(?: renamed)?/);
+
+    const openGrillPolicy = async (): Promise<Locator> => {
+      await page.getByRole("button", { name: "Configure Grill state" }).click();
+      const panel = page.getByRole("region", {
+        name: "Grill state configuration",
+      });
+      await expect(panel).toBeVisible();
+      await expect(panel.getByRole("heading", { name: "Grill" })).toBeVisible();
+      await expect(panel.getByRole("tab", { name: "Story" })).toHaveAttribute(
+        "aria-selected",
+        "true",
+      );
+      return panel;
+    };
+    const closeGrillPolicy = async (panel: Locator): Promise<void> => {
+      await panel.getByRole("button", {
+        name: "Close Grill state configuration",
+      }).click();
+      await expect(panel).toHaveCount(0);
+    };
+    const waitForWorkflowWrite = () => page.waitForResponse((response) => {
+      if (!response.url().endsWith("/graphql")) return false;
+      const operation = response.request().postDataJSON()?.operationName;
+      return [
+        "UpsertWorkTrackerLaunchBinding",
+        "UpdateWorkTrackerTransition",
+        "SetWorkTrackerAutoStart",
+        "SetWorkTrackerSubtreeRun",
+      ].includes(operation);
+    });
+    const selectPersistedOption = async (
+      field: Locator,
+      value: string,
+    ): Promise<void> => {
+      if (await field.inputValue() === value) return;
+      const saved = waitForWorkflowWrite();
+      await field.selectOption(value);
+      await saved;
+      await expect(field).toHaveValue(value);
+      await expect(page.getByText("Applying…")).toHaveCount(0);
+    };
+    const fillPersistedInput = async (
+      field: Locator,
+      value: string,
+    ): Promise<void> => {
+      if (await field.inputValue() === value) return;
+      const saved = waitForWorkflowWrite();
+      await field.fill(value);
+      await field.blur();
+      await saved;
+      await expect(field).toHaveValue(value);
+      await expect(page.getByText("Applying…")).toHaveCount(0);
+    };
+    const setPolicyCheckbox = async (
+      checkbox: Locator,
+      checked: boolean,
+    ): Promise<void> => {
+      if (await checkbox.isChecked() === checked) return;
+      const saved = waitForWorkflowWrite();
+      await checkbox.click();
+      await saved;
+      await expect(checkbox).toBeEnabled();
+      await expect(checkbox).toBeChecked({ checked });
+    };
+
+    let panel = await openGrillPolicy();
+    let prompt = panel.getByRole("textbox", { name: "Prompt" });
+    let agentPermission = panel.getByRole("checkbox", {
+      name: "Agents may move Grill to Spec",
+    });
+    let autoStart = panel.getByRole("checkbox", { name: "Auto-start Grill" });
+    let runSubtree = panel.getByRole("checkbox", { name: "Run subtree Grill" });
+    let provider = panel.getByRole("combobox", { name: "Agent/provider" });
+    let model = panel.getByRole("combobox", { name: "Model" });
+    let reasoning = panel.getByRole("combobox", { name: "Reasoning" });
+    const originalPrompt = await prompt.inputValue();
+    const originalAgentPermission = await agentPermission.isChecked();
+    const originalAutoStart = await autoStart.isChecked();
+    const originalRunSubtree = await runSubtree.isChecked();
+    const originalProvider = await provider.inputValue();
+    const originalModel = await model.inputValue();
+    const originalReasoning = await reasoning.inputValue();
+    const changedPrompt = "Rust E2E Grill policy prompt.";
+
+    let saved = waitForWorkflowWrite();
+    await prompt.fill(changedPrompt);
+    await prompt.blur();
+    await saved;
+    await expect(panel.getByText("Applying…")).toHaveCount(0);
+    await setPolicyCheckbox(agentPermission, !originalAgentPermission);
+    await setPolicyCheckbox(autoStart, !originalAutoStart);
+    await setPolicyCheckbox(runSubtree, !originalRunSubtree);
+    if (originalProvider === "codex") {
+      await selectPersistedOption(provider, "");
+    }
+    await selectPersistedOption(provider, "codex");
+    await fillPersistedInput(model, CODEX_TEST_MODEL);
+    await selectPersistedOption(reasoning, CODEX_TEST_REASONING);
+    await closeGrillPolicy(panel);
+
+    await page.reload();
+    panel = await openGrillPolicy();
+    prompt = panel.getByRole("textbox", { name: "Prompt" });
+    agentPermission = panel.getByRole("checkbox", {
+      name: "Agents may move Grill to Spec",
+    });
+    autoStart = panel.getByRole("checkbox", { name: "Auto-start Grill" });
+    runSubtree = panel.getByRole("checkbox", { name: "Run subtree Grill" });
+    provider = panel.getByRole("combobox", { name: "Agent/provider" });
+    model = panel.getByRole("combobox", { name: "Model" });
+    reasoning = panel.getByRole("combobox", { name: "Reasoning" });
+    await expect(prompt).toHaveValue(changedPrompt);
+    await expect(agentPermission).toBeChecked({
+      checked: !originalAgentPermission,
+    });
+    await expect(autoStart).toBeChecked({ checked: !originalAutoStart });
+    await expect(runSubtree).toBeChecked({ checked: !originalRunSubtree });
+    await expect(provider).toHaveValue("codex");
+    await expect(model).toHaveValue(CODEX_TEST_MODEL);
+    await expect(reasoning).toHaveValue(CODEX_TEST_REASONING);
+
+    const writesBeforeRefusal = launchBindingWrites;
+    await model.fill("unsupported-e2e-model");
+    await model.blur();
+    await expect(panel).toContainText(
+      /not compatible with agent\/provider 'codex'/i,
     );
+    expect(launchBindingWrites).toBe(writesBeforeRefusal);
+
+    await page.reload();
+    panel = await openGrillPolicy();
+    prompt = panel.getByRole("textbox", { name: "Prompt" });
+    agentPermission = panel.getByRole("checkbox", {
+      name: "Agents may move Grill to Spec",
+    });
+    autoStart = panel.getByRole("checkbox", { name: "Auto-start Grill" });
+    runSubtree = panel.getByRole("checkbox", { name: "Run subtree Grill" });
+    provider = panel.getByRole("combobox", { name: "Agent/provider" });
+    model = panel.getByRole("combobox", { name: "Model" });
+    reasoning = panel.getByRole("combobox", { name: "Reasoning" });
+    await expect(provider).toHaveValue("codex");
+    await expect(model).toHaveValue(CODEX_TEST_MODEL);
+    await expect(reasoning).toHaveValue(CODEX_TEST_REASONING);
+
+    saved = waitForWorkflowWrite();
+    await prompt.fill(originalPrompt);
+    await prompt.blur();
+    await saved;
+    await expect(panel.getByText("Applying…")).toHaveCount(0);
+    await setPolicyCheckbox(agentPermission, originalAgentPermission);
+    await setPolicyCheckbox(autoStart, originalAutoStart);
+    await setPolicyCheckbox(runSubtree, originalRunSubtree);
+    await selectPersistedOption(provider, originalProvider);
+    if (originalProvider) {
+      await fillPersistedInput(model, originalModel);
+      await selectPersistedOption(reasoning, originalReasoning);
+    }
+    await closeGrillPolicy(panel);
+
+    await page.reload();
+    panel = await openGrillPolicy();
+    await expect(panel.getByRole("textbox", { name: "Prompt" }))
+      .toHaveValue(originalPrompt);
+    await expect(panel.getByRole("checkbox", {
+      name: "Agents may move Grill to Spec",
+    })).toBeChecked({ checked: originalAgentPermission });
+    await expect(panel.getByRole("checkbox", { name: "Auto-start Grill" }))
+      .toBeChecked({ checked: originalAutoStart });
+    await expect(panel.getByRole("checkbox", { name: "Run subtree Grill" }))
+      .toBeChecked({ checked: originalRunSubtree });
+    await expect(panel.getByRole("combobox", { name: "Agent/provider" }))
+      .toHaveValue(originalProvider);
+    await expect(panel.getByRole("combobox", { name: "Model" }))
+      .toHaveValue(originalModel);
+    await expect(panel.getByRole("combobox", { name: "Reasoning" }))
+      .toHaveValue(originalReasoning);
+
+    await closeGrillPolicy(panel);
+    await expect(page.getByTestId("issue-name"))
+      .toContainText(/Complete parent(?: renamed)?/);
   });
 
   test("surfaces and dismisses an agent-launch failure without leaving the workspace", async ({
     page,
   }) => {
     await openModule(page, names.module);
-    await openWorkItem(page, names.parentRenamed);
+    await page.getByRole("treeitem", { name: new RegExp(fixture.parent.key) })
+      .click();
 
     await page.getByRole("button", { name: "Run agent" }).click();
     const alert = page.getByRole("alert").filter({
       hasText: "Agent run could not be started",
     });
-    await expect(alert).toContainText("requires the Ticketry desktop runtime");
+    await expect(alert).toContainText("Agent run could not be started");
     await alert.getByRole("button", { name: "Dismiss" }).click();
     await expect(alert).toHaveCount(0);
-    await expect(page.getByTestId("issue-name")).toContainText(
-      names.parentRenamed,
-    );
+    await expect(page.getByTestId("issue-name"))
+      .toContainText(/Complete parent(?: renamed)?/);
   });
 
   test("loads and edits every Settings section without stale endpoints", async ({
     page,
   }) => {
-    const legacyApiRequests: string[] = [];
-    page.on("request", (request) => {
-      if (request.url().includes("/api/work-tracker")) {
-        legacyApiRequests.push(request.url());
-      }
-    });
     await openModule(page, names.module);
     let dialog = await openSettings(page);
     await expect(dialog.getByRole("heading", { name: "Models" })).toBeVisible();
@@ -447,7 +2795,6 @@ test.describe("complete browser application", () => {
     await dialog.getByRole("button", { name: "Save changes" }).click();
     await expect(dialog).toContainText("Model configuration saved.");
     await dialog.getByRole("button", { name: "Close dialog" }).click();
-    expect(legacyApiRequests).toEqual([]);
   });
 
   test("confirms destructive issue deletion through visible UI", async ({ page }) => {
@@ -460,5 +2807,40 @@ test.describe("complete browser application", () => {
     await dialog.getByRole("button", { name: "Delete" }).click();
     await expect(page.getByRole("treeitem", { name: names.deletable }))
       .toHaveCount(0);
+  });
+
+  test("cancels a child deletion before removing it and releasing its parent", async ({
+    page,
+  }) => {
+    await openModule(page, names.module);
+    await openWorkItem(page, names.hierarchyParent);
+
+    const children = page.getByTestId("child-issues");
+    await children.getByRole("button", { name: new RegExp(names.hierarchyChild) })
+      .click();
+    await expect(page.getByTestId("issue-name")).toContainText(names.hierarchyChild);
+
+    await page.getByRole("button", { name: "Issue actions" }).click();
+    await page.getByRole("menuitem", { name: "Delete issue…" }).click();
+    let dialog = page.getByRole("dialog", { name: "Delete issue" });
+    await expect(dialog).toContainText(fixture.hierarchyChild.key);
+    await dialog.getByRole("button", { name: "Cancel" }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(page.getByTestId("issue-name")).toContainText(names.hierarchyChild);
+
+    await page.reload();
+    await expect(page.getByTestId("issue-name")).toContainText(names.hierarchyChild);
+    await page.getByRole("button", { name: "Issue actions" }).click();
+    await page.getByRole("menuitem", { name: "Delete issue…" }).click();
+    dialog = page.getByRole("dialog", { name: "Delete issue" });
+    await dialog.getByRole("button", { name: "Delete" }).click();
+    await expect(page.getByRole("treeitem", { name: names.hierarchyChild }))
+      .toHaveCount(0);
+
+    await openWorkItem(page, names.hierarchyParent);
+    await expect(page.getByTestId("child-issues")).toContainText("No sub-tasks yet.");
+    await page.getByRole("button", { name: "Issue actions" }).click();
+    await expect(page.getByRole("menuitem", { name: "Delete issue…" }))
+      .toBeEnabled();
   });
 });

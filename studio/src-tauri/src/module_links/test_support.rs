@@ -36,6 +36,7 @@ pub(crate) async fn install(database: &DatabaseConnection) {
                 is_archived bool NOT NULL DEFAULT 0,
                 rank varchar(64) NOT NULL DEFAULT 'a',
                 description text NOT NULL DEFAULT '',
+                workspace_tab_order json NOT NULL DEFAULT '[]',
                 created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP
             );

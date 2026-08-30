@@ -54,8 +54,7 @@ pub(crate) async fn derive(
     requested_task_id: &str,
 ) -> Result<PlanResolution, WorktreeCreateError> {
     let owner = owner::resolve(work_items, requested_task_id).await?;
-    let repository = match repository::resolve(work_items, git, owner.module_id.as_deref()).await?
-    {
+    let repository = match repository::resolve(work_items, git, owner.module_id.as_deref()).await? {
         RepositoryResolution::Repository(repository) => repository,
         RepositoryResolution::NoRepository(reason) => {
             return Ok(PlanResolution::NoRepository(reason))

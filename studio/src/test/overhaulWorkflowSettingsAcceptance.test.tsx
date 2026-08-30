@@ -4,6 +4,8 @@ import { StateCatalog } from "../features/workflows/StateCatalog";
 import { useWorkflowEditorStore } from "../features/workflows/workflowEditorStore";
 import { setStatesSorted } from "../features/projects";
 import {
+  getWorkflowIssueTypesSnapshot,
+  getWorkflowStatesSnapshot,
   setWorkflowIssueTypes,
   setWorkflowStateCounts,
 } from "../features/workflows/queries";
@@ -136,5 +138,22 @@ describe("workflow settings acceptance", () => {
     );
     expect(urls.some((url) => url.includes("/states/review/impact"))).toBe(false);
     expect(urls.some((url) => url.endsWith("/workflow-settings"))).toBe(false);
+  });
+
+  it("retains the visible state catalog while workflow policy starts loading", async () => {
+    useWorkflowEditorStore.setState(useWorkflowEditorStore.getInitialState(), true);
+    setStatesSorted("project-1", states);
+    setWorkflowIssueTypes("project-1", [
+      { id: "story", name: "Story", level: "task", color: null, sort_order: 0 },
+    ]);
+
+    const loading = useWorkflowEditorStore.getState().load("project-1");
+
+    expect(getWorkflowStatesSnapshot("project-1").map((state) => state.name))
+      .toEqual(["Todo", "Build", "Review", "Done"]);
+    expect(getWorkflowIssueTypesSnapshot("project-1").map((type) => type.name))
+      .toEqual(["Story"]);
+
+    await loading;
   });
 });

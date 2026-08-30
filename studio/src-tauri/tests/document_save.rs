@@ -86,7 +86,6 @@ impl Fixture {
             )),
         )
     }
-
 }
 
 /// A state.db carrying the adopted Documents shape, the durable outbox, and one
@@ -119,7 +118,7 @@ async fn fixture() -> Fixture {
             state_id TEXT, state_revision INTEGER NOT NULL DEFAULT 0,
             name TEXT NOT NULL DEFAULT '', sequence_id INTEGER NOT NULL DEFAULT 0,
             is_archived BOOLEAN NOT NULL DEFAULT 0, rank TEXT NOT NULL DEFAULT 'a',
-            description TEXT NOT NULL DEFAULT '',
+            description TEXT NOT NULL DEFAULT '', workspace_tab_order TEXT NOT NULL DEFAULT '[]',
             created_at DATETIME NOT NULL DEFAULT '2026-01-01 00:00:00',
             updated_at DATETIME NOT NULL DEFAULT '2026-01-01 00:00:00'
         );

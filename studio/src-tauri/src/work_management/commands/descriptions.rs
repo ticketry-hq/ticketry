@@ -1,6 +1,6 @@
 use sea_orm::{
     sea_query::Expr, ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter,
-    Set, TransactionTrait,
+    QuerySelect, QueryTrait, Set, TransactionTrait,
 };
 
 use super::identifiers::database_uuid;
@@ -19,19 +19,26 @@ pub async fn append_description(
 ) -> Result<String, CommandError> {
     let id = database_uuid(&input.id, "id")?;
     let transaction = database.begin().await?;
-    let existing = issue::Entity::find_by_id(&id)
-        .filter(issue::Column::Type.eq("task"))
-        .one(&transaction)
-        .await?
-        .ok_or_else(|| CommandError::NotFound("Work item not found.".to_owned()))?;
+    // Reserve SQLite's writer before reading the description. If two appends
+    // read first, both deferred transactions can later contend while upgrading
+    // to writers and one receives SQLITE_BUSY instead of observing the other.
+    let project_id = issue::Entity::find_by_id(&id)
+        .select_only()
+        .column(issue::Column::ProjectId)
+        .into_query();
     project::Entity::update_many()
         .col_expr(
             project::Column::StateRevision,
             Expr::col(project::Column::StateRevision),
         )
-        .filter(project::Column::Id.eq(&existing.project_id))
+        .filter(project::Column::Id.in_subquery(project_id))
         .exec(&transaction)
         .await?;
+    let existing = issue::Entity::find_by_id(&id)
+        .filter(issue::Column::Type.eq("task"))
+        .one(&transaction)
+        .await?
+        .ok_or_else(|| CommandError::NotFound("Work item not found.".to_owned()))?;
     let description = if existing.description.is_empty() {
         input.new_content
     } else {

@@ -25,7 +25,9 @@ import {
 } from "../graphql-foundation/typedDocument";
 import { FoundationGraphQlError } from "../shared/apollo/errorLink";
 import { createBrowserRuntime, initializeStudioRuntime } from "../runtime";
-import { compactWorktrackerId } from "../shared/api/generatedWorktracker";
+import {
+  compactWorktrackerId,
+} from "../shared/api/generatedWorktracker";
 import { studioApolloClient } from "../shared/apollo/client";
 import {
   WorkTrackerModuleOpenDocument,
@@ -45,6 +47,7 @@ export interface HttpFixture {
     id: string,
     body: { before_id: string | null; after_id: string | null },
   ): Promise<void>;
+  reorderBodies(id: string): Array<{ before_id: string | null; after_id: string | null }>;
   graphRunCount(id: string): number;
   graphRunModes(id: string): Array<string | null>;
   runNowCount(id: string): number;
@@ -240,6 +243,12 @@ class BoundaryFixture implements StudioFixture {
     return new Promise((resolve) => this.reorderWaiters.push({ id, body, resolve }));
   }
 
+  reorderBodies(id: string): ReorderCall["body"][] {
+    return this.reorders
+      .filter((call) => call.id === id)
+      .map((call) => call.body);
+  }
+
   graphRunCount(id: string): number {
     return this.graphRuns.filter((candidate) => candidate.id === id).length;
   }
@@ -362,6 +371,7 @@ class BoundaryFixture implements StudioFixture {
       return {
         __typename: "WorktrackerIssue",
         ...item,
+        id: compactWorktrackerId(item.id),
         workspace_tab_order: [],
         state_id: item.state,
         issue_type_id: item.issue_type,
@@ -597,7 +607,39 @@ class BoundaryFixture implements StudioFixture {
         before_id: fixtureKey(this.items, input.beforeId) ?? null,
         after_id: fixtureKey(this.items, input.afterId) ?? null,
       };
-      const updated = { ...current, rank: rankBetween(body.before_id ? this.items.get(body.before_id)?.rank ?? null : null, body.after_id ? this.items.get(body.after_id)?.rank ?? null : null) };
+      const beforeRank = body.before_id ? this.items.get(body.before_id)?.rank ?? null : null;
+      const afterRank = body.after_id ? this.items.get(body.after_id)?.rank ?? null : null;
+      if (beforeRank !== null && beforeRank === afterRank) {
+        const siblings = [...this.items.values()]
+          .filter((item) =>
+            !item.is_archived &&
+            item.project_id === current.project_id &&
+            item.parent_id === current.parent_id &&
+            item.state === current.state
+          )
+          .sort((left, right) =>
+            left.rank.localeCompare(right.rank) ||
+            right.sequence_id - left.sequence_id ||
+            right.id.localeCompare(left.id)
+          )
+          .filter((item) => item.id !== current.id);
+        const insertion = body.before_id === null
+          ? 0
+          : siblings.findIndex((item) => item.id === body.before_id) + 1;
+        siblings.splice(insertion, 0, current);
+        let previousRank: string | null = null;
+        for (const sibling of siblings) {
+          const rank = rankBetween(previousRank, null);
+          this.items.set(sibling.id, { ...sibling, rank });
+          previousRank = rank;
+        }
+      }
+      const updated = {
+        ...(this.items.get(current.id) ?? current),
+        rank: beforeRank !== null && beforeRank === afterRank
+          ? this.items.get(current.id)!.rank
+          : rankBetween(beforeRank, afterRank),
+      };
       this.items.set(updated.id, updated);
       this.reorders.push({ id: updated.id, body });
       for (const waiter of this.reorderWaiters.splice(0)) {

@@ -8,7 +8,7 @@ use common::submitted_launch_authority::launch_service;
 use common::terminal_lifecycle_harness::{
     TerminalLifecycleHarness, MODULE_ID, PROJECT_ID, TASK_ID,
 };
-use muxed_studio_lib::entities::terminals::launch_material;
+use muxed_studio_lib::entities::{runs::agent_run, terminals::launch_material};
 use muxed_studio_lib::execution::graph::{ExecutionMode, GraphAccess};
 use muxed_studio_lib::execution::reconciliation::ExecutionReconciliationService;
 use muxed_studio_lib::graph_run_service::GraphRunCaller;
@@ -181,8 +181,9 @@ async fn graph_run_graphql_contract_returns_authoritative_models_and_child_ids()
     let builder = muxed_studio_lib::entities::work_management::register_entity_modules(
         Builder::new(context, database.clone()),
     );
-    let builder = muxed_studio_lib::entities::execution::register_entity_modules(builder);
-    let schema = muxed_studio_lib::graph_run_service::register_graphql(builder)
+    let mut builder = muxed_studio_lib::entities::execution::register_entity_modules(builder);
+    seaography::register_entity!(builder, agent_run, mutation: false);
+    let schema = muxed_studio_lib::execution::graph_run::register_graphql(builder)
         .schema_builder()
         .data(database.clone())
         .data(service)
@@ -365,10 +366,7 @@ async fn committed_claim_survives_a_stopped_response_and_reconciles_the_same_gen
     let runtime = Arc::new(Runtime::default());
     let before_commit = launch_service(database.clone(), runtime.clone())
         .stopping_once_at(TerminalLaunchBoundary::MaterialPrepared);
-    let before_commit_service =
-        service_with_terminal(
-        &database,
-        before_commit);
+    let before_commit_service = service_with_terminal(&database, before_commit);
     let request = GraphRunRequest {
         root_id: TASK_ID.to_owned(),
         access: GraphAccess::project(PROJECT_ID),
@@ -391,9 +389,7 @@ async fn committed_claim_survives_a_stopped_response_and_reconciles_the_same_gen
 
     let terminal = launch_service(database.clone(), runtime.clone())
         .stopping_once_at(TerminalLaunchBoundary::EffectPrepared);
-    let service = service_with_terminal(
-        &database,
-        terminal.clone());
+    let service = service_with_terminal(&database, terminal.clone());
 
     let stopped = service.create_or_press(request.clone()).await.unwrap_err();
     assert_eq!(stopped.code_str(), "terminal_launch_injected_stop");

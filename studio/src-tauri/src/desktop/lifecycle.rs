@@ -84,6 +84,14 @@ pub(crate) fn shutdown_rust_runtime(application: &tauri::AppHandle) {
     if let Some(runtime) = execution_runtime {
         tauri::async_runtime::block_on(runtime.shutdown());
     }
+    let hook_spool_runtime = state
+        .hook_spool_runtime
+        .lock()
+        .expect("hook spool runtime lock poisoned")
+        .take();
+    if let Some(runtime) = hook_spool_runtime {
+        let _ = tauri::async_runtime::block_on(runtime.shutdown());
+    }
     let terminal_runtime = state
         .terminal_runtime
         .lock()

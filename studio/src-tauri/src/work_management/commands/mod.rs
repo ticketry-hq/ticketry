@@ -6,7 +6,6 @@ mod error;
 mod fractional_rank;
 pub mod hierarchy;
 mod identifiers;
-pub mod module_presentation;
 pub mod reorder;
 mod review_findings;
 pub(crate) mod reviewed_defaults;
@@ -17,6 +16,7 @@ pub mod work_items;
 pub mod workflow;
 
 pub use error::CommandError;
+pub(crate) use identifiers::database_uuid;
 
 #[cfg(test)]
 mod controller_tests;

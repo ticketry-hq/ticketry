@@ -39,18 +39,16 @@ impl RestrictedModelMutation<app_settings::Entity, app_settings::ActiveModel>
         })?;
         let (scope, key) = keybindings::fixed_identity()
             .map_err(|error| settings_error(error, "Keyboard shortcuts could not be saved."))?;
-        let existing = app_settings::Entity::find_by_id((
-            scope.as_str().to_owned(),
-            key.as_str().to_owned(),
-        ))
-            .one(transaction)
-            .await
-            .map_err(|error| {
-                settings_error(
-                    SettingsPersistenceError::from(error),
-                    "Keyboard shortcuts could not be saved.",
-                )
-            })?;
+        let existing =
+            app_settings::Entity::find_by_id((scope.as_str().to_owned(), key.as_str().to_owned()))
+                .one(transaction)
+                .await
+                .map_err(|error| {
+                    settings_error(
+                        SettingsPersistenceError::from(error),
+                        "Keyboard shortcuts could not be saved.",
+                    )
+                })?;
         let updated_at = now();
         let write = match existing {
             Some(model) => {

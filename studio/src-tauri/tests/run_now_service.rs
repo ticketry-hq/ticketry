@@ -6,7 +6,7 @@ use std::sync::{
 
 use async_trait::async_trait;
 use muxed_studio_lib::{
-    run_now::{RunNowCaller, RunNowLauncher, RunNowRequest, RunNowRun, RunNowService},
+    execution::run_now::{RunNowCaller, RunNowLauncher, RunNowRequest, RunNowRun, RunNowService},
     work_management::{
         entities::{issue, launch_policy_decision, transition_occurrence},
         launch_policy::{LaunchPolicyDecision, LaunchPolicyResolver},
@@ -119,6 +119,7 @@ async fn fixture(failure: Option<&str>) -> Fixture {
                 state_revision bigint NOT NULL, name varchar(512) NOT NULL,
                 sequence_id integer NOT NULL, is_archived bool NOT NULL,
                 rank varchar(64) NOT NULL, description text NOT NULL,
+                workspace_tab_order text NOT NULL DEFAULT '[]',
                 created_at datetime NOT NULL, updated_at datetime NOT NULL,
                 UNIQUE(project_id, sequence_id)
             );
@@ -187,9 +188,9 @@ async fn fixture(failure: Option<&str>) -> Fixture {
                  CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
             INSERT INTO worktracker_issue VALUES
                 ('{MODULE}', '{PROJECT}', 'module', '{MODULE_TYPE}', NULL, NULL, NULL, 0,
-                 'Module', 1, 0, 'M', '', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+                 'Module', 1, 0, 'M', '', '[]', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
                 ('{TASK}', '{PROJECT}', 'task', '{STORY}', '{MODULE}', '{MODULE}', '{IDEAS}', 4,
-                 'Small idea', 9, 0, 'N', '', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+                 'Small idea', 9, 0, 'N', '', '[]', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
             INSERT INTO worktracker_issuetypetransition
                 (issue_type_id, from_state_id, to_state_id, agent_allowed)
                 VALUES ('{STORY}', '{IDEAS}', '{IMPLEMENT}', 1);

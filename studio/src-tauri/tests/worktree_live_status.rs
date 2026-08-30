@@ -315,10 +315,7 @@ async fn a_module_with_no_configured_folder_reports_no_repository() {
     let status = fixture.worktree(UNLINKED_TASK).await;
 
     assert_eq!(status["kind"], "no_repo");
-    assert_eq!(
-        status["reason"],
-        "no local folder is linked to this module"
-    );
+    assert_eq!(status["reason"], "no local folder is linked to this module");
     assert_eq!(status["path"], serde_json::Value::Null);
 }
 

@@ -37,10 +37,7 @@ pub(super) fn builder_context() -> BuilderContext {
         }
     });
 
-    add_uuid_columns::<entities::project::Entity>(
-        &mut context,
-        [entities::project::Column::Id],
-    );
+    add_uuid_columns::<entities::project::Entity>(&mut context, [entities::project::Column::Id]);
     add_uuid_columns::<entities::state::Entity>(
         &mut context,
         [
@@ -234,9 +231,7 @@ mod tests {
     #[test]
     fn registers_uuid_codec_for_public_worktracker_ids() {
         let context = builder_context();
-        let id = EntityColumnId::of::<entities::project::Entity>(
-            &entities::project::Column::Id,
-        );
+        let id = EntityColumnId::of::<entities::project::Entity>(&entities::project::Column::Id);
 
         assert!(context.types.column_options.contains_key(&id));
     }

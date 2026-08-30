@@ -24,6 +24,7 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use serde_json::Value;
+use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
@@ -106,6 +107,7 @@ pub struct HookSpool<S = LifecycleService> {
     root: PathBuf,
     sink: Arc<S>,
     batch_size: usize,
+    drain_lock: Arc<Mutex<()>>,
 }
 
 impl<S> Clone for HookSpool<S> {
@@ -114,6 +116,7 @@ impl<S> Clone for HookSpool<S> {
             root: self.root.clone(),
             sink: Arc::clone(&self.sink),
             batch_size: self.batch_size,
+            drain_lock: Arc::clone(&self.drain_lock),
         }
     }
 }
@@ -127,10 +130,12 @@ impl<S: HookLifecycleSink> HookSpool<S> {
             root,
             sink: Arc::new(sink),
             batch_size,
+            drain_lock: Arc::new(Mutex::new(())),
         })
     }
 
     pub async fn drain_once(&self) -> DrainReport {
+        let _guard = self.drain_lock.lock().await;
         let mut report = DrainReport::default();
         let paths = match self.scan() {
             Ok(paths) => paths,
@@ -301,7 +306,7 @@ impl<S: HookLifecycleSink> HookSpool<S> {
     }
 }
 
-pub struct HookSpoolRuntime<S: HookLifecycleSink> {
+pub struct HookSpoolRuntime<S: HookLifecycleSink = LifecycleService> {
     spool: HookSpool<S>,
     cancellation: CancellationToken,
     worker: JoinHandle<()>,

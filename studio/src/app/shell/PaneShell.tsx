@@ -47,7 +47,7 @@ export const PaneShell = forwardRef<HTMLDivElement, PaneShellProps>(
     // Bring DOM focus into the pane wrapper when focusedPane changes to us.
     useEffect(() => {
       if (focused && !isWorkspaceZoneHost && innerRef.current) {
-        if (document.activeElement !== innerRef.current) {
+        if (!innerRef.current.contains(document.activeElement)) {
           innerRef.current.focus({ preventScroll: true });
         }
       }

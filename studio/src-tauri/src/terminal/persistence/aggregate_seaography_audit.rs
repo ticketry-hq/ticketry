@@ -115,7 +115,7 @@ pub const CUSTOM_MUTATIONS: &[CustomField] = &[
         kind: CustomFieldKind::Mutation,
         returns: "TerminalOutputObservation",
         override_reason: "capture, compact-identity deduplication, conditional sequence advance, and the Run status projection cannot be expressed as a generated update",
-        evidence: "terminal::output_activity::operation_registry::CUSTOM_OPERATIONS",
+        evidence: "terminal::session::views::observe_output::operation_registry::CUSTOM_OPERATIONS",
     },
     CustomField {
         field: "create_viewer_lease",
@@ -147,7 +147,7 @@ pub const CUSTOM_OUTPUTS: &[CustomField] = &[CustomField {
     kind: CustomFieldKind::Output,
     returns: "computed: advanced, output_sequence, last_output_at",
     override_reason: "the mutation reports whether this capture advanced the durable sequence, which is a decision rather than stored columns",
-    evidence: "terminal::output_activity::graphql registers it beside its one mutation",
+    evidence: "terminal::session::views::observe_output registers it beside its one mutation",
 }];
 
 /// Ordinary model CRUD reached through anything other than SeaORM. The slice

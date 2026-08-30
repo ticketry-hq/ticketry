@@ -189,15 +189,19 @@ export function useWorkspaceTabActions({
         moduleId: moduleId ?? "",
         taskId: scratch ? null : bucket,
       });
-      openSession({
-        taskId: scratch ? null : bucket,
-        projectId,
-        moduleId: moduleId ?? undefined,
-        agent: resumableSession.agent,
-        agentRunId: resumed.agent_run_id,
-        isPlanning: resumableSession.scope === "plan",
-        isInstant: resumableSession.scope === "instant",
-      });
+      const restoredSessionId = useTerminalStore.getState()
+        .sessionByRun[resumed.agent_run_id];
+      const successorSessionId = restoredSessionId ??
+        openSession({
+          taskId: scratch ? null : bucket,
+          projectId,
+          moduleId: moduleId ?? undefined,
+          agent: resumableSession.agent,
+          agentRunId: resumed.agent_run_id,
+          isPlanning: resumableSession.scope === "plan",
+          isInstant: resumableSession.scope === "instant",
+        });
+      focusSession(successorSessionId);
       setActive(bucket, "terminal");
       if (owner === "studio") {
         rememberStudioWorkspaceTarget(bucket, {

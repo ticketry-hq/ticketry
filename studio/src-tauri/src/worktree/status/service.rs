@@ -95,8 +95,7 @@ impl WorktreeStatusService {
         &self,
         owner: &WorktreeOwner,
     ) -> Result<WorktreeStatusView, WorktreeStatusError> {
-        match repository::resolve(&self.work_items, &self.git, owner.module_id.as_deref()).await?
-        {
+        match repository::resolve(&self.work_items, &self.git, owner.module_id.as_deref()).await? {
             RepositoryResolution::Repository(_) => Ok(WorktreeStatusView::none(owner)),
             RepositoryResolution::NoRepository(reason) => {
                 Ok(WorktreeStatusView::no_repository(owner, reason))

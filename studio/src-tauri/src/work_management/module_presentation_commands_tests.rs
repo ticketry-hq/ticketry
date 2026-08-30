@@ -1,8 +1,6 @@
-use sea_orm::{
-    ActiveModelTrait, ActiveValue::Set, ConnectionTrait, Database, EntityTrait,
-};
+use sea_orm::{ActiveModelTrait, ActiveValue::Set, ConnectionTrait, Database, EntityTrait};
 
-use super::commands::{module_presentation, reorder, work_items};
+use super::commands::{reorder, work_items};
 use super::entities::{issue, module_presentation as presentation};
 use super::{open_for_commands, read_queries};
 
@@ -120,18 +118,34 @@ async fn presentations(database: &sea_orm::DatabaseConnection) -> Vec<presentati
     presentation::Entity::find().all(database).await.unwrap()
 }
 
+async fn update_visibility(
+    database: &sea_orm::DatabaseConnection,
+    module_id: &str,
+    tab_hidden: bool,
+) -> presentation::Model {
+    let schema = crate::query_root::generated_contract_schema(database.clone()).unwrap();
+    let response = schema
+        .execute(format!(
+            r#"mutation {{
+                update_module_presentation(
+                    module_id: "{module_id}",
+                    tab_hidden: {tab_hidden}
+                ) {{ moduleId rank tabHidden }}
+            }}"#
+        ))
+        .await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    presentation::Entity::find_by_id(module_id)
+        .one(database)
+        .await
+        .unwrap()
+        .unwrap()
+}
+
 #[tokio::test]
 async fn first_drag_seeds_active_modules_once_and_preserves_visibility() {
     let (_directory, database) = fixture().await;
-    module_presentation::update(
-        &database,
-        module_presentation::UpdateModulePresentation {
-            module_id: B.to_owned(),
-            tab_hidden: true,
-        },
-    )
-    .await
-    .unwrap();
+    update_visibility(&database, B, true).await;
 
     reorder::reorder_module_presentation(
         &database,
@@ -193,28 +207,66 @@ async fn later_drag_updates_one_rank_and_rejects_stale_neighbors() {
 #[tokio::test]
 async fn visibility_preserves_rank_and_an_empty_rank_does_not_enable_manual_order() {
     let (_directory, database) = fixture().await;
-    let hidden = module_presentation::update(
-        &database,
-        module_presentation::UpdateModulePresentation {
-            module_id: B.to_owned(),
-            tab_hidden: true,
-        },
-    )
-    .await
-    .unwrap();
+    let hidden = update_visibility(&database, B, true).await;
     assert_eq!((hidden.rank.as_str(), hidden.tab_hidden), ("", true));
     assert_eq!(active_order(&database).await, ["c", "b", "a"]);
 
-    let shown = module_presentation::update(
-        &database,
-        module_presentation::UpdateModulePresentation {
-            module_id: B.to_owned(),
-            tab_hidden: false,
-        },
-    )
-    .await
-    .unwrap();
-    assert_eq!((shown.rank.as_str(), shown.tab_hidden), ("", false));
+    let mut ranked: presentation::ActiveModel = hidden.into();
+    ranked.rank = Set("existing-rank".to_owned());
+    ranked.update(&database).await.unwrap();
+
+    let shown = update_visibility(&database, B, false).await;
+    assert_eq!(
+        (shown.rank.as_str(), shown.tab_hidden),
+        ("existing-rank", false)
+    );
+}
+
+#[tokio::test]
+async fn visibility_requires_a_valid_module_identity() {
+    let (_directory, database) = fixture().await;
+    let schema = crate::query_root::generated_contract_schema(database.clone()).unwrap();
+
+    let invalid = schema
+        .execute(
+            r#"mutation {
+                update_module_presentation(module_id: "not-a-uuid", tab_hidden: true) {
+                    moduleId
+                }
+            }"#,
+        )
+        .await;
+    let invalid = serde_json::to_value(invalid).unwrap();
+    assert_eq!(
+        invalid["errors"][0]["extensions"]["code"],
+        "field_validation"
+    );
+    assert_eq!(invalid["errors"][0]["extensions"]["field"], "module_id");
+
+    let mut task: issue::ActiveModel = issue::Entity::find_by_id(B)
+        .one(&database)
+        .await
+        .unwrap()
+        .unwrap()
+        .into();
+    task.r#type = Set("task".to_owned());
+    task.update(&database).await.unwrap();
+    let wrong_type = schema
+        .execute(format!(
+            r#"mutation {{
+                update_module_presentation(module_id: "{B}", tab_hidden: true) {{
+                    moduleId
+                }}
+            }}"#
+        ))
+        .await;
+    let wrong_type = serde_json::to_value(wrong_type).unwrap();
+    assert_eq!(wrong_type["errors"][0]["extensions"]["code"], "not_found");
+    assert!(presentation::Entity::find_by_id(B)
+        .one(&database)
+        .await
+        .unwrap()
+        .is_none());
 }
 
 #[tokio::test]

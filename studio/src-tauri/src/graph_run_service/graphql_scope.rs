@@ -90,6 +90,7 @@ mod tests {
             context,
             database.clone(),
         ));
+        let builder = crate::terminal::persistence::register_graphql(builder);
         let schema = crate::entities::execution::register_entity_modules(builder)
             .schema_builder()
             .data(database)

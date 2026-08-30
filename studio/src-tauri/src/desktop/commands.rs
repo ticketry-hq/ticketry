@@ -35,8 +35,7 @@ pub(crate) async fn desktop_launch_default_coding_agent(
     // re-run the launch-policy DDL and take an exclusive write lock on a
     // `state.db` several writers are already sharing.
     let database = launch.commands()?;
-    let resolver =
-        work_management::launch_policy::LaunchPolicyResolver::new(database.clone());
+    let resolver = work_management::launch_policy::LaunchPolicyResolver::new(database.clone());
     let decision = resolver
         .resolve(work_management::launch_policy::LaunchPolicyRequest {
             task_id: issue_id,
@@ -133,7 +132,9 @@ pub(crate) fn desktop_validate_module_folder(path: String) -> ModuleFolderValida
                 crate::launch::paths::ModuleFolderFailure::Relative
                 | crate::launch::paths::ModuleFolderFailure::Unset => "module_folder_not_absolute",
                 crate::launch::paths::ModuleFolderFailure::Missing
-                | crate::launch::paths::ModuleFolderFailure::Inaccessible => "module_folder_missing",
+                | crate::launch::paths::ModuleFolderFailure::Inaccessible => {
+                    "module_folder_missing"
+                }
                 crate::launch::paths::ModuleFolderFailure::NotDirectory => {
                     "module_folder_not_a_directory"
                 }

@@ -15,8 +15,10 @@
 //! pre-save hooks and delete has no delete lifecycle hook.
 //!
 //! The smallest public seam is the identity-bound, Project-scoped, model-shaped
-//! Graph Run create, update, and delete contract in `graph_run_service::graphql`.
-//! `graph_run_service::operation_registry` records those three CRUD overrides.
+//! Graph Run create, update, and delete contract in
+//! `execution::graph_run::views`. `execution::graph_run::operation_registry`
+//! records those three CRUD overrides and why Seaolim Action cannot preserve
+//! their payloads.
 //!
 //! Protected fields: Project, derived Module, policy snapshot, runtime
 //! identities, timestamps, and every launch-claim column stay out of mutation

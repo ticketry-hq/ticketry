@@ -25,9 +25,9 @@ use crate::documents::design_directory::{self, ModuleIdentity, TaskIdentity, SPE
 use crate::entities::documents::design_document;
 use crate::entities::work_management::issue;
 use crate::entities::worktrees::worktree;
+use crate::module_links::resolution;
 use crate::worktree::status::identity::{canonical_uuid, compact_uuid};
 use crate::worktree::status::owner::{self, WorktreeOwner};
-use crate::module_links::resolution;
 
 use super::error::{LaunchPathsError, LaunchPathsErrorCode};
 use super::request::{LaunchPathsRequest, LaunchScope, SUPPORTED_VERSION};

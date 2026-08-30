@@ -1,6 +1,8 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const frontendPort = 4173;
+const frontendPort = Number(process.env.TICKETRY_E2E_FRONTEND_PORT ?? 4173);
+const adapterPort = process.env.TICKETRY_E2E_ADAPTER_PORT;
+const mcpPort = process.env.TICKETRY_E2E_MCP_PORT;
 
 export default defineConfig({
   testDir: "./e2e",
@@ -32,6 +34,8 @@ export default defineConfig({
     cwd: "..",
     env: {
       MUXED_FRONTEND_PORT: String(frontendPort),
+      ...(adapterPort ? { TICKETRY_GRAPHQL_ADAPTER_PORT: adapterPort } : {}),
+      ...(mcpPort ? { MUXED_DESKTOP_MCP_PORT: mcpPort } : {}),
     },
     url: `http://127.0.0.1:${frontendPort}`,
     reuseExistingServer: false,

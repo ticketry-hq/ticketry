@@ -150,7 +150,8 @@ export async function reorderWorkItem(
   },
   options: WorkItemWriteOptions = {},
 ): Promise<WorkItem> {
-  const { data } = await studioApolloClient().mutate({
+  const client = studioApolloClient();
+  const { data } = await client.mutate({
     mutation: ReorderWorkTrackerWorkItemDocument,
     variables: {
       id: compactWorktrackerId(id),
@@ -161,11 +162,16 @@ export async function reorderWorkItem(
     optimisticResponse: options.optimistic
       ? { reorder_work_item: options.optimistic }
       : undefined,
-    // A task reorder changes its module's task collection. Module reorders are
-    // followed by the caller's authoritative ProjectOpen read instead.
-    refetchQueries: options.moduleId ? [WorkTrackerModuleOpenDocument] : [],
-    awaitRefetchQueries: true,
   });
+  // Rebalancing can change every sibling rank. Fetch this exact module instead
+  // of relying on Apollo to discover an active query from the document alone.
+  if (options.moduleId) {
+    await client.query({
+      query: WorkTrackerModuleOpenDocument,
+      variables: { moduleId: compactWorktrackerId(options.moduleId) },
+      fetchPolicy: "network-only",
+    });
+  }
   return workItemFromIssue(data!.reorder_work_item);
 }
 

@@ -22,11 +22,19 @@ hooks through the packaged hook runner, moves the Story through Implement,
 Review, and Done over Ticketry's MCP boundary, and exits with a fixed success
 code. It never invokes Codex, another paid provider, or a network model API.
 
-The UI observes the active run, terminal activity, every state move, and the
-completed run. The suite reloads the webview, restarts the Rust process over the
-same isolated data directory, and verifies that Done and the completed terminal
-remain visible. Success and failure both stop the app and private tmux server;
-success removes the temporary profile and database.
+The UI observes the active run, task and module lifecycle indicators, terminal
+activity, every state move, and the completed run. It also verifies that the
+module aggregate clears after completion. The suite reloads the webview,
+restarts the Rust process over the same isolated data directory, and verifies
+that Done and the completed terminal remain visible. Success and failure both
+stop the app and private tmux server; success removes the temporary profile and
+database.
+
+Before the successful run, the harness deliberately occupies Ticketry's MCP
+port. It verifies the native outage warning, proves a local module shell still
+starts, and proves the visible agent action fails closed. It then releases the
+port and restarts the same isolated profile before exercising recovery through
+the successful agent run.
 
 On failure the temporary directory is retained and its path is printed. Its
 `artifacts/` directory contains a screenshot, DOM and frontend diagnostics,

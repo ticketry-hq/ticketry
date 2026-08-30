@@ -10,6 +10,7 @@ import {
   schemaTypesTargetRelative,
   typedDocumentTargets,
 } from "./typed-document-generation.mjs";
+import { assertGraphqlProductContract } from "./graphql-product-contract.mjs";
 
 async function files(directory, prefix = "") {
   const found = [];
@@ -84,6 +85,10 @@ try {
       `${name} drift`,
     );
   }
+  await assertGraphqlProductContract({
+    schemaPath: join(generatedDirectory, "schema.graphql"),
+    sourceRoot: join(studioRoot, "src"),
+  });
   for (const target of await typedDocumentTargets(join(studioRoot, "src"))) {
     await assertSameFile(
       join(first, "typed-documents", target.targetRelative),

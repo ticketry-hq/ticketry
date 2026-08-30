@@ -165,7 +165,7 @@ fn build_schema(
         _ => None,
     };
     let run_now_service = match (worktracker_database.as_ref(), terminal_services.as_ref()) {
-        (Some(work_items), Some(terminals)) => Some(crate::run_now::RunNowService::new(
+        (Some(work_items), Some(terminals)) => Some(crate::execution::run_now::RunNowService::new(
             work_items.clone(),
             crate::work_management::launch_policy::LaunchPolicyResolver::new(work_items.clone()),
             terminals.launch.clone(),
@@ -194,7 +194,7 @@ fn build_schema(
         builder
     };
     let builder = if contract.product_generated_mutations {
-        crate::work_management::graphql::register_generated_mutations(builder)
+        crate::work_management::graphql::register_model_mutations(builder)
     } else {
         builder
     };
@@ -204,24 +204,24 @@ fn build_schema(
     let builder = crate::module_links::register_graphql(builder);
     let builder = crate::worktree::persistence::register_graphql(builder);
     let builder = crate::worktree::status::register_graphql(builder);
-    let builder = crate::worktree::create::register_graphql(builder);
-    let builder = crate::worktree::discard::register_graphql(builder);
+    let builder = crate::workspace::worktree::register_graphql(builder);
     let builder = crate::work_management::graphql::register(builder);
     let builder = crate::settings_persistence::schema::register(builder);
-    let builder = crate::runs_persistence::register_graphql(builder);
+    let builder = crate::runs::register_graphql(builder);
     let builder = crate::terminal::persistence::register_graphql(builder);
     let builder = crate::terminal::resume::register_graphql(builder);
     let builder = crate::terminal::launch::register_graphql(builder);
     let builder = crate::terminal::cleanup::register_graphql(builder);
-    let builder = crate::terminal::output_activity::register_graphql(builder);
-    let builder = crate::run_now::register_graphql(builder);
+    let builder = crate::terminal::session::register_graphql(builder);
+    let builder = crate::execution::run_now::register_graphql(builder);
     let builder = if contract.product_generated_mutations {
-        crate::graph_run_service::register_graphql(builder)
+        crate::execution::graph_run::register_graphql(builder)
     } else {
         builder
     };
     let builder = crate::terminal::viewer_lease::register_graphql(builder);
     let builder = crate::documents::persistence::register_graphql(builder);
+    let builder = crate::workspace::design_document::register_graphql(builder);
     let builder = crate::documents::register_graphql(builder);
     let mut schema = builder.schema_builder().data(entity_database);
     if contract.product_generated_mutations {

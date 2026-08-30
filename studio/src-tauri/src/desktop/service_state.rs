@@ -17,10 +17,12 @@ pub(crate) struct DesktopServiceState {
     pub(crate) mcp_runtime: Mutex<Option<work_management::mcp::McpRuntime>>,
     pub(crate) terminal_runtime:
         Mutex<Option<std::sync::Arc<crate::terminal::lifecycle::TerminalLifecycleRuntime>>>,
+    pub(crate) hook_spool_runtime: Mutex<Option<crate::hook_spool::HookSpoolRuntime>>,
     pub(crate) execution_runtime:
         Mutex<Option<crate::execution::reconciliation::ExecutionReconciliationRuntime>>,
     pub(crate) terminal_launch: Mutex<Option<crate::terminal::launch::TerminalLaunchService>>,
-    pub(crate) output_sweep: Mutex<Option<crate::terminal::output_activity::LiveOutputSweepRuntime>>,
+    pub(crate) output_sweep:
+        Mutex<Option<crate::terminal::output_activity::LiveOutputSweepRuntime>>,
     pub(crate) configuration: Mutex<Option<RuntimeStartupConfiguration>>,
     pub(crate) health: Mutex<ServiceHealth>,
     pub(crate) notices: Mutex<Vec<UserNotice>>,
@@ -34,6 +36,7 @@ impl DesktopServiceState {
         Self {
             mcp_runtime: Mutex::new(None),
             terminal_runtime: Mutex::new(None),
+            hook_spool_runtime: Mutex::new(None),
             execution_runtime: Mutex::new(None),
             terminal_launch: Mutex::new(None),
             output_sweep: Mutex::new(None),

@@ -1,6 +1,7 @@
 import type { IssueType, Module, Project, State, WorkItem } from "../shared/api/types";
 import type { ProjectOpenResult } from "../features/projects/queries/readTransport";
 import { WorkTrackerModuleOpenDocument } from "../features/work-items/generated/workItems.documents";
+import { compactWorktrackerId } from "../shared/api/generatedWorktracker";
 import { studioApolloClient } from "../shared/apollo/client";
 
 export function projectOpenFixture(
@@ -76,20 +77,20 @@ export function seedModuleOpenFixture(moduleId: string, items: FixtureWorkItem[]
         __typename: "WorktrackerIssueConnection",
         nodes: items.map((item) => ({
           __typename: "WorktrackerIssue",
-          id: item.id,
+          id: compactWorktrackerId(item.id),
           name: item.name,
-          project_id: item.project_id,
+          project_id: compactWorktrackerId(item.project_id),
           sequence_id: item.sequence_id,
-          state_id: item.state,
+          state_id: item.state ? compactWorktrackerId(item.state) : null,
           description: item.description,
           workspace_tab_order: [],
-          parent_id: item.parent_id,
-          module_id: moduleId,
+          parent_id: item.parent_id ? compactWorktrackerId(item.parent_id) : null,
+          module_id: compactWorktrackerId(moduleId),
           is_archived: item.is_archived,
           created_at: item.created_at,
           updated_at: item.updated_at,
           rank: item.rank,
-          issue_type_id: item.issue_type,
+          issue_type_id: compactWorktrackerId(item.issue_type),
           project: {
             __typename: "WorktrackerProject",
             id: item.project_id,

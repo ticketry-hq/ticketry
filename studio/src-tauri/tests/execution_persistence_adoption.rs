@@ -70,9 +70,7 @@ async fn every_supported_execution_leaf_adopts_twice_without_row_drift() {
             .unwrap_or_else(|error| panic!("{leaf} must reopen: {error}"));
         assert_eq!(first.tables, second.tables, "{leaf} changed after reopen");
         assert_eq!(
-            persistence::preflight(directory.path())
-                .await
-                .unwrap(),
+            persistence::preflight(directory.path()).await.unwrap(),
             SourceClassification::RustOwned,
         );
     }
@@ -86,12 +84,8 @@ async fn adoption_preserves_campaign_identity_history_and_policy() {
         .await
         .expect("adopt Runs before campaign claims");
 
-    let first = persistence::adopt(directory.path())
-        .await
-        .unwrap();
-    let second = persistence::adopt(directory.path())
-        .await
-        .unwrap();
+    let first = persistence::adopt(directory.path()).await.unwrap();
+    let second = persistence::adopt(directory.path()).await.unwrap();
     assert_eq!(first.tables, second.tables);
     assert_eq!(second.tables["graph_runs"].row_count, 2);
     assert_eq!(second.tables["launched_tasks"].row_count, 1);
@@ -179,9 +173,7 @@ async fn an_active_claim_is_adopted_when_its_runtime_names_the_child_in_either_f
         .expect("an active claim whose runtime names the same child is adoptable");
     assert_eq!(evidence.tables["launched_tasks"].row_count, 1);
     assert_eq!(
-        persistence::preflight(directory.path())
-            .await
-            .unwrap(),
+        persistence::preflight(directory.path()).await.unwrap(),
         SourceClassification::RustOwned,
     );
 }

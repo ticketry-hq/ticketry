@@ -7,5 +7,6 @@ pub mod output_activity;
 pub mod persistence;
 pub mod reconciliation;
 pub mod resume;
+pub mod session;
 pub mod viewer;
 pub mod viewer_lease;

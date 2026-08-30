@@ -201,4 +201,33 @@ describe("overhaul acceptance — terminal close synchronization", () => {
     expect(screen.queryByRole("button", { name: "Resume codex terminal" }))
       .not.toBeInTheDocument();
   });
+
+  it("keeps a successful close successful when the resumable refresh fails", async () => {
+    terminalReads.readTaskResumableTerminalSessions
+      .mockResolvedValueOnce([])
+      .mockRejectedValueOnce(new Error("holdings unavailable"));
+    terminalApi.terminateTerminal.mockResolvedValue({
+      agent_run_id: "run-old",
+      terminated: true,
+    });
+    mountLiveTerminal();
+    await waitFor(() => {
+      expect(terminalReads.readTaskResumableTerminalSessions).toHaveBeenCalledTimes(1);
+    });
+
+    fireEvent.click(screen.getByRole("button", {
+      name: "Close codex terminal",
+    }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole("tab", { name: "codex terminal" }))
+        .not.toBeInTheDocument();
+      expect(useClientStore.getState().toasts).toContainEqual(
+        expect.objectContaining({
+          kind: "error",
+          message: "Terminal closed, but resumable sessions could not be refreshed: holdings unavailable",
+        }),
+      );
+    });
+  });
 });

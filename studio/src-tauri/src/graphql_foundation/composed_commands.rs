@@ -88,7 +88,9 @@ impl ComposedCommandRuntime {
         &self.viewer_ownership
     }
 
-    pub fn terminal_runtime(&self) -> &crate::terminal::lifecycle::InteractiveTerminalLaunchRuntime {
+    pub fn terminal_runtime(
+        &self,
+    ) -> &crate::terminal::lifecycle::InteractiveTerminalLaunchRuntime {
         &self.terminal_runtime
     }
 

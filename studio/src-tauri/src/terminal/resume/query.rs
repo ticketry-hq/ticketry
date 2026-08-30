@@ -6,7 +6,7 @@ use sea_orm::{
 use crate::entities::{runs::agent_run, terminals::session, work_management::project};
 use crate::launch::planning::{provider_contract, Provider};
 
-use super::scope::ResumeScope;
+use super::scope::{compact_session_column, ResumeScope};
 
 pub const RESUMABLE_LIMIT: u64 = 10;
 pub const RESUMABLE_STATEMENT_LIMIT: usize = 1 + RESUMABLE_LIMIT as usize;
@@ -80,10 +80,9 @@ fn eligible_condition(scope: &ResumeScope) -> sea_orm::Condition {
         .filter(scope.session_condition())
         .filter(session::Column::TerminatedAt.is_not_null())
         .filter(
-            session::Column::RuntimeNamespace
-                .eq(crate::tmux_adapter::current_runtime_namespace().unwrap_or_default()),
+            compact_session_column(session::Column::ProjectId)
+                .in_subquery(authorized_project_ids()),
         )
-        .filter(session::Column::ProjectId.in_subquery(authorized_project_ids()))
         .into_query();
     let live_provider_sessions = agent_run::Entity::find()
         .select_only()

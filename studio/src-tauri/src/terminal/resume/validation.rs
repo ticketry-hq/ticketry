@@ -2,7 +2,9 @@ use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 
 use crate::entities::{runs::agent_run, terminals::session};
 use crate::launch::planning::{provider_contract, Provider};
-use crate::terminal::launch::{CreateTerminalSession, TerminalLaunchError, TerminalLaunchErrorCode};
+use crate::terminal::launch::{
+    CreateTerminalSession, TerminalLaunchError, TerminalLaunchErrorCode,
+};
 
 use super::scope::{compact, ResumeScope};
 
@@ -124,11 +126,7 @@ pub(crate) async fn validate_resume_request(
         ResumeScope::Task { .. } => compact(&source.issue_id) == compact(&request.issue_id),
         ResumeScope::Scratch { .. } => true,
     };
-    let namespace_matches = crate::tmux_adapter::current_runtime_namespace()
-        .ok()
-        .is_some_and(|namespace| source_session.runtime_namespace.as_deref() == Some(&namespace));
-    if !namespace_matches
-        || !scope.matches_create(request, &source_session)
+    if !scope.matches_create(request, &source_session)
         || !issue_matches
         || source.agent != request.provider
     {

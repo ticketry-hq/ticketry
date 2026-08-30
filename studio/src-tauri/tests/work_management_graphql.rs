@@ -26,7 +26,11 @@ async fn fixture() -> (tempfile::TempDir, sea_orm::DatabaseConnection) {
             issue_type_id char(32) NOT NULL, parent_id char(32), module_id char(32), state_id char(32),
             state_revision bigint NOT NULL, name varchar(512) NOT NULL, sequence_id integer NOT NULL,
             is_archived bool NOT NULL, rank varchar(64) NOT NULL, description text NOT NULL,
+            workspace_tab_order json NOT NULL DEFAULT '[]',
             created_at datetime NOT NULL, updated_at datetime NOT NULL
+        );
+        CREATE TABLE worktracker_modulepresentation (
+            module_id char(32) PRIMARY KEY, rank varchar(64) NOT NULL, tab_hidden bool NOT NULL
         );
         CREATE TABLE worktracker_issue_blocked_by (
             id integer PRIMARY KEY, from_issue_id char(32) NOT NULL, to_issue_id char(32) NOT NULL
@@ -72,12 +76,12 @@ async fn fixture() -> (tempfile::TempDir, sea_orm::DatabaseConnection) {
             ('10000000000000000000000000000000',
              'Memory Lane', 'MEM', '', 20, 0, 0, '2026-08-12 00:00:00', '2026-08-12 00:00:00', 0);
         INSERT INTO worktracker_issue VALUES
-            ('20000000000000000000000000000001','10000000000000000000000000000000','module','30000000000000000000000000000000',NULL,NULL,NULL,0,'Older',1,0,'z','', '2026-08-12 00:00:01','2026-08-12 00:00:01'),
-            ('20000000000000000000000000000002','10000000000000000000000000000000','module','30000000000000000000000000000000',NULL,NULL,NULL,0,'Newer',2,0,'A','', '2026-08-12 00:00:02','2026-08-12 00:00:02'),
-            ('20000000000000000000000000000003','10000000000000000000000000000000','module','30000000000000000000000000000000',NULL,NULL,NULL,0,'Archived',3,1,'B','', '2026-08-12 00:00:03','2026-08-12 00:00:03'),
-            ('40000000000000000000000000000001','10000000000000000000000000000000','task','30000000000000000000000000000001','20000000000000000000000000000002','20000000000000000000000000000002',NULL,4,'Root',10,0,'V','root', '2026-08-12 00:00:10','2026-08-12 00:00:10'),
-            ('40000000000000000000000000000002','10000000000000000000000000000000','task','30000000000000000000000000000001','40000000000000000000000000000001','20000000000000000000000000000002',NULL,5,'Active child',11,0,'A','', '2026-08-12 00:00:11','2026-08-12 00:00:11'),
-            ('40000000000000000000000000000003','10000000000000000000000000000000','task','30000000000000000000000000000001','40000000000000000000000000000001','20000000000000000000000000000002',NULL,6,'Archived child',12,1,'B','', '2026-08-12 00:00:12','2026-08-12 00:00:12');
+            ('20000000000000000000000000000001','10000000000000000000000000000000','module','30000000000000000000000000000000',NULL,NULL,NULL,0,'Older',1,0,'z','','[]','2026-08-12 00:00:01','2026-08-12 00:00:01'),
+            ('20000000000000000000000000000002','10000000000000000000000000000000','module','30000000000000000000000000000000',NULL,NULL,NULL,0,'Newer',2,0,'A','','[]','2026-08-12 00:00:02','2026-08-12 00:00:02'),
+            ('20000000000000000000000000000003','10000000000000000000000000000000','module','30000000000000000000000000000000',NULL,NULL,NULL,0,'Archived',3,1,'B','','[]','2026-08-12 00:00:03','2026-08-12 00:00:03'),
+            ('40000000000000000000000000000001','10000000000000000000000000000000','task','30000000000000000000000000000001','20000000000000000000000000000002','20000000000000000000000000000002',NULL,4,'Root',10,0,'V','root','[]','2026-08-12 00:00:10','2026-08-12 00:00:10'),
+            ('40000000000000000000000000000002','10000000000000000000000000000000','task','30000000000000000000000000000001','40000000000000000000000000000001','20000000000000000000000000000002',NULL,5,'Active child',11,0,'A','','[]','2026-08-12 00:00:11','2026-08-12 00:00:11'),
+            ('40000000000000000000000000000003','10000000000000000000000000000000','task','30000000000000000000000000000001','40000000000000000000000000000001','20000000000000000000000000000002',NULL,6,'Archived child',12,1,'B','','[]','2026-08-12 00:00:12','2026-08-12 00:00:12');
         INSERT INTO worktracker_issue_blocked_by VALUES
             (1, '40000000000000000000000000000001', '40000000000000000000000000000002');
         INSERT INTO worktracker_state VALUES
@@ -139,7 +143,7 @@ async fn generated_reads_expose_filters_relations_and_dataloaders() {
             .graphql_execute(request(
                 r#"query($project: String!) {
           modules: worktrackerIssue(filters: { projectId: { eq: $project }, type: { eq: "module" } }) {
-            nodes { name isArchived issueTypeId project { slug manualModuleOrder } }
+            nodes { name isArchived issueTypeId project { slug } }
           }
           workItems: worktrackerIssue(filters: { moduleId: { eq: "20000000000000000000000000000002" }, type: { eq: "task" } }) {
             nodes {
@@ -159,6 +163,7 @@ async fn generated_reads_expose_filters_relations_and_dataloaders() {
     )
     .expect("decode GraphQL read");
 
+    assert!(generated.get("errors").is_none(), "{generated:#}");
     assert_eq!(
         generated["data"]["modules"]["nodes"]
             .as_array()
@@ -296,8 +301,8 @@ async fn caller_documents_validate_and_execute_generated_reads() {
     for (document, operation, variables) in [
         (
             include_str!("../../src/features/projects/operations/projects.graphql"),
-            "WorkTrackerModules",
-            serde_json::json!({"projectId": "10000000000000000000000000000000"}),
+            "WorkTrackerProjects",
+            serde_json::json!({}),
         ),
         (
             include_str!("../../src/features/work-items/operations/workItems.graphql"),
@@ -305,8 +310,8 @@ async fn caller_documents_validate_and_execute_generated_reads() {
             serde_json::json!({"projectId": "10000000000000000000000000000000"}),
         ),
         (
-            include_str!("../../src/features/workflows/operations/workflows.graphql"),
-            "WorkTrackerWorkflowCatalog",
+            include_str!("../../src/features/projects/operations/projects.graphql"),
+            "WorkTrackerProjectStates",
             serde_json::json!({"projectId": "10000000000000000000000000000000"}),
         ),
     ] {

@@ -11,8 +11,9 @@ use crate::work_management::entities::{
 };
 use rand::seq::SliceRandom;
 use sea_orm::{
-    sea_query::Expr, ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait,
-    PaginatorTrait, QueryFilter, Set, TransactionTrait,
+    sea_query::Expr, ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseConnection,
+    DatabaseTransaction, EntityTrait, PaginatorTrait, QueryFilter, Set, TransactionTrait,
+    TryIntoModel,
 };
 
 const GROUPS: &[&str] = &["backlog", "unstarted", "started", "completed", "cancelled"];
@@ -223,6 +224,15 @@ pub async fn acknowledge_onboarding(
     database: &DatabaseConnection,
     project_id: &str,
 ) -> Result<String, CommandError> {
+    let active = prepare_acknowledge_onboarding(database, project_id).await?;
+    Ok(active.update(database).await?.id)
+}
+
+/// Prepare the one Project row changed by onboarding acknowledgement.
+pub(crate) async fn prepare_acknowledge_onboarding(
+    database: &impl ConnectionTrait,
+    project_id: &str,
+) -> Result<project::ActiveModel, CommandError> {
     let id = database_uuid(project_id, "project_id")?;
     let row = project::Entity::find_by_id(&id)
         .one(database)
@@ -231,14 +241,22 @@ pub async fn acknowledge_onboarding(
     let mut active: project::ActiveModel = row.into();
     active.onboarding_required = Set(false);
     active.updated_at = Set(super::timestamp::now());
-    active.update(database).await?;
-    Ok(id)
+    Ok(active)
 }
 
 pub async fn update_project(
     database: &DatabaseConnection,
     input: UpdateProject,
 ) -> Result<String, CommandError> {
+    let active = prepare_update_project(database, input).await?;
+    Ok(active.update(database).await?.id)
+}
+
+/// Prepare an identity-bound Project patch without persisting it.
+pub(crate) async fn prepare_update_project(
+    database: &impl ConnectionTrait,
+    input: UpdateProject,
+) -> Result<project::ActiveModel, CommandError> {
     let id = database_uuid(&input.id, "project_id")?;
     let row = project::Entity::find_by_id(&id)
         .one(database)
@@ -252,8 +270,7 @@ pub async fn update_project(
         active.description = Set(description);
     }
     active.updated_at = Set(super::timestamp::now());
-    active.update(database).await?;
-    Ok(id)
+    Ok(active)
 }
 
 pub async fn delete_project(
@@ -285,6 +302,23 @@ pub async fn create_state(
     input: CreateState,
     facts: Option<&WorkFactRecorder>,
 ) -> Result<String, CommandError> {
+    let transaction = database.begin().await?;
+    let active = prepare_state_create(&transaction, input, facts).await?;
+    let id = active.id.as_ref().to_owned();
+    active.insert(&transaction).await?;
+    transaction.commit().await?;
+    if let Some(facts) = facts {
+        facts.wake();
+    }
+    Ok(id)
+}
+
+/// Prepare one project-locked State insert inside the caller's transaction.
+pub(crate) async fn prepare_state_create(
+    transaction: &DatabaseTransaction,
+    input: CreateState,
+    facts: Option<&WorkFactRecorder>,
+) -> Result<state::ActiveModel, CommandError> {
     let project_id = database_uuid(&input.project_id, "project_id")?;
     let name = valid_text(&input.name, "name", 255)?;
     if !GROUPS.contains(&input.group.as_str()) {
@@ -293,7 +327,6 @@ pub async fn create_state(
             input.group
         )));
     }
-    let transaction = database.begin().await?;
     // Match Django's select_for_update boundary. The no-op UPDATE is the
     // portable SQLite writer reservation before color and order are observed.
     if project::Entity::update_many()
@@ -302,7 +335,7 @@ pub async fn create_state(
             Expr::col(project::Column::UpdatedAt),
         )
         .filter(project::Column::Id.eq(&project_id))
-        .exec(&transaction)
+        .exec(transaction)
         .await?
         .rows_affected
         == 0
@@ -311,7 +344,7 @@ pub async fn create_state(
     }
     let existing = state::Entity::find()
         .filter(state::Column::ProjectId.eq(&project_id))
-        .all(&transaction)
+        .all(transaction)
         .await?;
     let max_order = existing.iter().map(|row| row.sort_order).max();
     let color = match input.color.filter(|value| !value.trim().is_empty()) {
@@ -340,7 +373,7 @@ pub async fn create_state(
     let now = super::timestamp::now();
     let occurred_at = stamp(now);
     let sort_order = max_order.map_or(0, |value| value + 1);
-    state::ActiveModel {
+    let active = state::ActiveModel {
         id: Set(id.clone()),
         project_id: Set(project_id.clone()),
         name: Set(name.clone()),
@@ -350,12 +383,10 @@ pub async fn create_state(
         is_protected: Set(false),
         created_at: Set(now.clone()),
         updated_at: Set(now.clone()),
-    }
-    .insert(&transaction)
-    .await?;
+    };
     record_workflow_state(
         facts,
-        &transaction,
+        transaction,
         WorkflowStateFact {
             project_id: &project_id,
             state_id: &id,
@@ -368,19 +399,30 @@ pub async fn create_state(
         },
     )
     .await?;
-    transaction.commit().await?;
-    if let Some(facts) = facts {
-        facts.wake();
-    }
-    Ok(id)
+    Ok(active)
 }
 
 pub async fn update_issue_type(
     database: &DatabaseConnection,
     input: UpdateIssueType,
 ) -> Result<String, CommandError> {
-    let id = database_uuid(&input.id, "issue_type_id")?;
     let transaction = database.begin().await?;
+    let active = prepare_issue_type_update(&transaction, input).await?;
+    let id = active.id.as_ref().to_owned();
+    active.update(&transaction).await?;
+    transaction.commit().await?;
+    Ok(id)
+}
+
+/// Prepare one restricted Issue Type update inside the caller's transaction.
+///
+/// Seaolim uses this path to own the row save and commit. Native callers use
+/// the wrapper above and persist the returned model in the same transaction.
+pub(crate) async fn prepare_issue_type_update(
+    transaction: &sea_orm::DatabaseTransaction,
+    input: UpdateIssueType,
+) -> Result<issue_type::ActiveModel, CommandError> {
+    let id = database_uuid(&input.id, "issue_type_id")?;
     // The start-state member claims the workflow revision, which rewrites the
     // row the rest of this patch is derived from, so it is applied first.
     if let Some(start_state_id) = input.start_state_id.as_deref() {
@@ -394,7 +436,7 @@ pub async fn update_issue_type(
             .await?;
     }
     let row = issue_type::Entity::find_by_id(&id)
-        .one(&transaction)
+        .one(transaction)
         .await?
         .ok_or_else(|| CommandError::NotFound("Issue type not found.".to_owned()))?;
     if let Some(name) = input.name.as_deref() {
@@ -403,7 +445,7 @@ pub async fn update_issue_type(
             .filter(issue_type::Column::ProjectId.eq(&row.project_id))
             .filter(issue_type::Column::Name.eq(&name))
             .filter(issue_type::Column::Id.ne(&id))
-            .one(&transaction)
+            .one(transaction)
             .await?
             .is_some()
         {
@@ -423,9 +465,7 @@ pub async fn update_issue_type(
         active.sort_order = Set(sort_order);
     }
     active.updated_at = Set(super::timestamp::now());
-    active.update(&transaction).await?;
-    transaction.commit().await?;
-    Ok(id)
+    Ok(active)
 }
 
 pub async fn delete_issue_type(
@@ -477,9 +517,26 @@ pub async fn update_state(
     input: UpdateState,
     facts: Option<&WorkFactRecorder>,
 ) -> Result<String, CommandError> {
+    let transaction = database.begin().await?;
+    let active = prepare_state_update(&transaction, input, facts).await?;
+    let id = active.id.as_ref().to_owned();
+    active.update(&transaction).await?;
+    transaction.commit().await?;
+    if let Some(facts) = facts {
+        facts.wake();
+    }
+    Ok(id)
+}
+
+/// Prepare one identity-bound State patch inside the caller's transaction.
+pub(crate) async fn prepare_state_update(
+    transaction: &DatabaseTransaction,
+    input: UpdateState,
+    facts: Option<&WorkFactRecorder>,
+) -> Result<state::ActiveModel, CommandError> {
     let id = database_uuid(&input.id, "state_id")?;
     let row = state::Entity::find_by_id(&id)
-        .one(database)
+        .one(transaction)
         .await?
         .ok_or_else(|| CommandError::NotFound("State not found.".to_owned()))?;
     if let Some(group) = input.group.as_deref() {
@@ -506,30 +563,25 @@ pub async fn update_state(
     let now = super::timestamp::now();
     let occurred_at = stamp(now);
     active.updated_at = Set(now.clone());
-    // The fact is published from the row that committed, so a rename, recolour,
-    // regroup, or reorder reaches consumers as one authoritative version.
-    let transaction = database.begin().await?;
-    let updated = active.update(&transaction).await?;
+    // The fact and the proposed row share one transaction. A later save failure
+    // rolls both back, while the payload still carries the authoritative values.
+    let proposed = active.clone().try_into_model()?;
     record_workflow_state(
         facts,
-        &transaction,
+        transaction,
         WorkflowStateFact {
             project_id: &project_id,
-            state_id: &updated.id,
+            state_id: &proposed.id,
             change: WorkflowStateChange::Updated,
-            name: &updated.name,
-            group: &updated.group,
-            color: &updated.color,
-            sort_order: updated.sort_order,
+            name: &proposed.name,
+            group: &proposed.group,
+            color: &proposed.color,
+            sort_order: proposed.sort_order,
             occurred_at: &occurred_at,
         },
     )
     .await?;
-    transaction.commit().await?;
-    if let Some(facts) = facts {
-        facts.wake();
-    }
-    Ok(id)
+    Ok(active)
 }
 
 pub async fn reorder_issue_types(
@@ -537,14 +589,73 @@ pub async fn reorder_issue_types(
     project_id: &str,
     ordered_ids: Vec<String>,
 ) -> Result<(), CommandError> {
-    reorder_catalogue(
-        database,
-        project_id,
-        ordered_ids,
-        Catalogue::IssueTypes,
-        None,
-    )
-    .await
+    let transaction = database.begin().await?;
+    for (_, active) in prepare_issue_type_reorder(&transaction, project_id, ordered_ids).await? {
+        active.update(&transaction).await?;
+    }
+    transaction.commit().await?;
+    Ok(())
+}
+
+/// Prepare the complete project-owned Issue Type ordering.
+///
+/// The returned row pairs follow the caller's requested order. Seaolim keeps
+/// that order through persistence and in the GraphQL result list.
+pub(crate) async fn prepare_issue_type_reorder(
+    transaction: &sea_orm::DatabaseTransaction,
+    project_id: &str,
+    ordered_ids: Vec<String>,
+) -> Result<Vec<(issue_type::Model, issue_type::ActiveModel)>, CommandError> {
+    let project_id = database_uuid(project_id, "project_id")?;
+    let ids = ordered_ids
+        .iter()
+        .map(|id| database_uuid(id, "ordered_ids"))
+        .collect::<Result<Vec<_>, _>>()?;
+    if project::Entity::update_many()
+        .col_expr(
+            project::Column::UpdatedAt,
+            Expr::col(project::Column::UpdatedAt),
+        )
+        .filter(project::Column::Id.eq(&project_id))
+        .exec(transaction)
+        .await?
+        .rows_affected
+        == 0
+    {
+        return Err(CommandError::NotFound("Project not found.".to_owned()));
+    }
+    let existing = issue_type::Entity::find()
+        .filter(issue_type::Column::ProjectId.eq(&project_id))
+        .all(transaction)
+        .await?;
+    let existing_ids = existing
+        .iter()
+        .map(|row| row.id.as_str())
+        .collect::<HashSet<_>>();
+    if existing.len() != ids.len()
+        || ids.iter().collect::<HashSet<_>>().len() != ids.len()
+        || !ids.iter().all(|id| existing_ids.contains(id.as_str()))
+    {
+        return Err(CommandError::validation(
+            "ordered_ids must be exactly this project's rows.",
+        ));
+    }
+    let mut by_id = existing
+        .into_iter()
+        .map(|row| (row.id.clone(), row))
+        .collect::<HashMap<_, _>>();
+    Ok(ids
+        .into_iter()
+        .enumerate()
+        .map(|(sort_order, id)| {
+            let row = by_id
+                .remove(&id)
+                .expect("validated Issue Type reorder identity");
+            let mut active: issue_type::ActiveModel = row.clone().into();
+            active.sort_order = Set(sort_order as i32);
+            (row, active)
+        })
+        .collect())
 }
 
 pub async fn reorder_states(
@@ -553,110 +664,87 @@ pub async fn reorder_states(
     ordered_ids: Vec<String>,
     facts: Option<&WorkFactRecorder>,
 ) -> Result<(), CommandError> {
-    reorder_catalogue(database, project_id, ordered_ids, Catalogue::States, facts).await
-}
-
-#[derive(Clone, Copy)]
-enum Catalogue {
-    IssueTypes,
-    States,
-}
-
-async fn reorder_catalogue(
-    database: &DatabaseConnection,
-    project_id: &str,
-    ordered_ids: Vec<String>,
-    catalogue: Catalogue,
-    facts: Option<&WorkFactRecorder>,
-) -> Result<(), CommandError> {
-    let project_id = database_uuid(project_id, "project_id")?;
-    let ids = ordered_ids
-        .iter()
-        .map(|id| database_uuid(id, "ordered_ids"))
-        .collect::<Result<Vec<_>, _>>()?;
     let transaction = database.begin().await?;
-    if project::Entity::update_many()
-        .col_expr(
-            project::Column::UpdatedAt,
-            Expr::col(project::Column::UpdatedAt),
-        )
-        .filter(project::Column::Id.eq(&project_id))
-        .exec(&transaction)
-        .await?
-        .rows_affected
-        == 0
-    {
-        return Err(CommandError::NotFound("Project not found.".to_owned()));
-    }
-    let existing = match catalogue {
-        Catalogue::IssueTypes => issue_type::Entity::find()
-            .filter(issue_type::Column::ProjectId.eq(&project_id))
-            .all(&transaction)
-            .await?
-            .into_iter()
-            .map(|row| row.id)
-            .collect::<HashSet<_>>(),
-        Catalogue::States => state::Entity::find()
-            .filter(state::Column::ProjectId.eq(&project_id))
-            .all(&transaction)
-            .await?
-            .into_iter()
-            .map(|row| row.id)
-            .collect::<HashSet<_>>(),
-    };
-    if existing.len() != ids.len()
-        || ids.iter().collect::<HashSet<_>>().len() != ids.len()
-        || !ids.iter().all(|id| existing.contains(id))
-    {
-        return Err(CommandError::validation(
-            "ordered_ids must be exactly this project's rows.",
-        ));
-    }
-    for (sort_order, id) in ids.into_iter().enumerate() {
-        match catalogue {
-            Catalogue::IssueTypes => {
-                issue_type::Entity::update_many()
-                    .col_expr(
-                        issue_type::Column::SortOrder,
-                        Expr::value(sort_order as i32),
-                    )
-                    .filter(issue_type::Column::Id.eq(id))
-                    .exec(&transaction)
-                    .await?;
-            }
-            Catalogue::States => {
-                let updated = state::Entity::update_many()
-                    .col_expr(state::Column::SortOrder, Expr::value(sort_order as i32))
-                    .filter(state::Column::Id.eq(&id))
-                    .exec_with_returning(&transaction)
-                    .await?;
-                // One fact per moved state: order is a property of each row, so
-                // a consumer converges without being told to refetch a list.
-                for row in &updated {
-                    record_workflow_state(
-                        facts,
-                        &transaction,
-                        WorkflowStateFact {
-                            project_id: &project_id,
-                            state_id: &row.id,
-                            change: WorkflowStateChange::Reordered,
-                            name: &row.name,
-                            group: &row.group,
-                            color: &row.color,
-                            sort_order: row.sort_order,
-                            occurred_at: &stamp(row.updated_at),
-                        },
-                    )
-                    .await?;
-                }
-            }
-        }
+    for (_, active) in prepare_state_reorder(&transaction, project_id, ordered_ids, facts).await? {
+        active.update(&transaction).await?;
     }
     transaction.commit().await?;
     if let Some(facts) = facts {
         facts.wake();
     }
     Ok(())
+}
+
+/// Prepare the complete project-owned State ordering.
+pub(crate) async fn prepare_state_reorder(
+    transaction: &DatabaseTransaction,
+    project_id: &str,
+    ordered_ids: Vec<String>,
+    facts: Option<&WorkFactRecorder>,
+) -> Result<Vec<(state::Model, state::ActiveModel)>, CommandError> {
+    let project_id = database_uuid(project_id, "project_id")?;
+    let ids = ordered_ids
+        .iter()
+        .map(|id| database_uuid(id, "ordered_ids"))
+        .collect::<Result<Vec<_>, _>>()?;
+    if project::Entity::update_many()
+        .col_expr(
+            project::Column::UpdatedAt,
+            Expr::col(project::Column::UpdatedAt),
+        )
+        .filter(project::Column::Id.eq(&project_id))
+        .exec(transaction)
+        .await?
+        .rows_affected
+        == 0
+    {
+        return Err(CommandError::NotFound("Project not found.".to_owned()));
+    }
+    let existing = state::Entity::find()
+        .filter(state::Column::ProjectId.eq(&project_id))
+        .all(transaction)
+        .await?;
+    let stored_ids = existing
+        .iter()
+        .map(|row| row.id.clone())
+        .collect::<HashSet<_>>();
+    if stored_ids.len() != ids.len()
+        || ids.iter().collect::<HashSet<_>>().len() != ids.len()
+        || !ids.iter().all(|id| stored_ids.contains(id))
+    {
+        return Err(CommandError::validation(
+            "ordered_ids must be exactly this project's rows.",
+        ));
+    }
+    let mut by_id = existing
+        .into_iter()
+        .map(|row| (row.id.clone(), row))
+        .collect::<HashMap<_, _>>();
+    let mut writes = Vec::with_capacity(ids.len());
+    for (sort_order, id) in ids.into_iter().enumerate() {
+        let row = by_id.remove(&id).expect("validated State reorder identity");
+        let mut active: state::ActiveModel = row.clone().into();
+        active.sort_order = Set(sort_order as i32);
+        // One fact per moved state: order is a property of each row, so a
+        // consumer converges without being told to refetch a list.
+        record_workflow_state(
+            facts,
+            transaction,
+            WorkflowStateFact {
+                project_id: &project_id,
+                state_id: &row.id,
+                change: WorkflowStateChange::Reordered,
+                name: &row.name,
+                group: &row.group,
+                color: &row.color,
+                sort_order: sort_order as i32,
+                occurred_at: &stamp(row.updated_at),
+            },
+        )
+        .await?;
+        writes.push((row, active));
+    }
+    Ok(writes)
 }
 
 fn valid_text(value: &str, field: &'static str, max: usize) -> Result<String, CommandError> {

@@ -1,4 +1,4 @@
-import { fireEvent, screen, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { fixture, mountStudio, workItem } from "./seam";
 
@@ -46,12 +46,13 @@ describe("temporary selection render profile", () => {
       mountStudio({ http, selectedTaskId: ids[0] });
       const storiesRegion = await screen.findByRole("region", { name: "Stories" });
       const tree = within(storiesRegion).getByRole("tree");
-      const first = await within(tree).findByRole("treeitem", {
-        name: new RegExp(`Profile item 0$`),
+      const rowById = async (id: string) => await waitFor(() => {
+        const row = tree.querySelector<HTMLElement>(`[data-task-id="${id}"]`);
+        expect(row).not.toBeNull();
+        return row!;
       });
-      const last = await within(tree).findByRole("treeitem", {
-        name: new RegExp(`Profile item ${size - 1}$`),
-      });
+      const first = await rowById(ids[0]);
+      const last = await rowById(ids[size - 1]);
 
       fireEvent.click(last);
       expect(last).toHaveAttribute("aria-selected", "true");

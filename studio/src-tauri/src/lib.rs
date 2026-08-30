@@ -6,8 +6,8 @@
 pub mod data_directory;
 pub mod desktop;
 pub mod documents;
-pub mod execution;
 pub mod entities;
+pub mod execution;
 pub mod graph_run_service;
 pub mod graphql_foundation;
 pub mod hook_spool;
@@ -16,7 +16,7 @@ pub mod launch;
 pub mod module_links;
 pub mod native_terminal;
 pub mod query_root;
-pub mod run_now;
+pub mod runs;
 pub mod runs_persistence;
 pub mod settings_persistence;
 pub mod temporary_profile;

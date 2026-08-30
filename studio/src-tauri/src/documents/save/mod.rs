@@ -29,7 +29,6 @@
 mod document_locks;
 mod error;
 mod executor;
-mod graphql;
 mod identity;
 mod pending_bodies;
 mod probe;
@@ -41,8 +40,3 @@ mod target;
 pub use error::{DocumentSaveError, DocumentSaveErrorCode};
 pub use service::{DocumentSaveOutcome, DocumentSaveService};
 pub use staging::{staging_file_name, STAGING_PREFIX};
-
-/// Register the authored save mutation in the product schema.
-pub(crate) fn register_graphql(builder: seaography::Builder) -> seaography::Builder {
-    graphql::register(builder)
-}

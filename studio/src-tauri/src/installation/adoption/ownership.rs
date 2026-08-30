@@ -390,9 +390,7 @@ pub(super) async fn fingerprint(database: &DatabaseConnection) -> Result<String,
                 format!("the installation's schema could not be fingerprinted: {error}"),
             )
         })?;
-    Ok(classification::schema_facts::fingerprint(
-        &observed,
-    ))
+    Ok(classification::schema_facts::fingerprint(&observed))
 }
 
 fn write_evidence(data_directory: &Path, adoption: &Adoption) -> Result<(), AdoptionFailure> {

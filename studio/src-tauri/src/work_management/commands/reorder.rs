@@ -176,17 +176,98 @@ async fn reorder_task(
 ) -> Result<(), CommandError> {
     let before = task_neighbor(database, &current, before_id).await?;
     let after = task_neighbor(database, &current, after_id).await?;
-    let rank = fractional_rank::between(
+    let rank = match fractional_rank::between(
         before.as_ref().and_then(nonempty_issue_rank),
         after.as_ref().and_then(nonempty_issue_rank),
-    )
-    .map_err(|_| CommandError::validation("before/after are not ordered neighbors."))?;
+    ) {
+        Ok(rank) => rank,
+        Err(())
+            if before
+                .as_ref()
+                .zip(after.as_ref())
+                .is_some_and(|(before, after)| before.rank == after.rank) =>
+        {
+            return repair_duplicate_task_ranks(database, current, before_id, after_id, facts)
+                .await;
+        }
+        Err(()) => {
+            return Err(CommandError::validation(
+                "before/after are not ordered neighbors.",
+            ));
+        }
+    };
     if rank == current.rank {
         return Ok(());
     }
     let mut active: issue::ActiveModel = current.clone().into();
     active.rank = Set(rank);
     save_revision(database, current, active, facts).await
+}
+
+async fn repair_duplicate_task_ranks(
+    database: &DatabaseTransaction,
+    current: issue::Model,
+    before_id: Option<&str>,
+    after_id: Option<&str>,
+    facts: Option<&WorkFactRecorder>,
+) -> Result<(), CommandError> {
+    let mut query = issue::Entity::find()
+        .filter(issue::Column::ProjectId.eq(&current.project_id))
+        .filter(issue::Column::Type.eq("task"))
+        .filter(issue::Column::IsArchived.eq(false));
+    query = match &current.module_id {
+        Some(module_id) => query.filter(issue::Column::ModuleId.eq(module_id)),
+        None => query.filter(issue::Column::ModuleId.is_null()),
+    };
+    query = match &current.parent_id {
+        Some(parent_id) => query.filter(issue::Column::ParentId.eq(parent_id)),
+        None => query.filter(issue::Column::ParentId.is_null()),
+    };
+    query = match &current.state_id {
+        Some(state_id) => query.filter(issue::Column::StateId.eq(state_id)),
+        None => query.filter(issue::Column::StateId.is_null()),
+    };
+
+    let mut siblings = query.all(database).await?;
+    siblings.sort_by(|left, right| {
+        left.rank
+            .cmp(&right.rank)
+            .then_with(|| right.sequence_id.cmp(&left.sequence_id))
+            .then_with(|| right.id.cmp(&left.id))
+    });
+    siblings.retain(|row| row.id != current.id);
+
+    let insertion = match (before_id, after_id) {
+        (None, Some(after)) if siblings.first().is_some_and(|row| row.id == after) => 0,
+        (Some(before), None) if siblings.last().is_some_and(|row| row.id == before) => {
+            siblings.len()
+        }
+        (Some(before), Some(after)) => siblings
+            .windows(2)
+            .position(|rows| rows[0].id == before && rows[1].id == after)
+            .map(|index| index + 1)
+            .ok_or_else(|| CommandError::validation("before/after are not ordered neighbors."))?,
+        _ => {
+            return Err(CommandError::validation(
+                "before/after are not ordered neighbors.",
+            ));
+        }
+    };
+    siblings.insert(insertion, current.clone());
+
+    let ranks = fractional_rank::rebalance(siblings.len());
+    for (row, rank) in siblings.into_iter().zip(ranks) {
+        if row.id == current.id {
+            let mut active: issue::ActiveModel = row.clone().into();
+            active.rank = Set(rank);
+            save_revision(database, row, active, facts).await?;
+        } else if row.rank != rank {
+            let mut active: issue::ActiveModel = row.into();
+            active.rank = Set(rank);
+            active.update(database).await?;
+        }
+    }
+    Ok(())
 }
 
 async fn record_revision(

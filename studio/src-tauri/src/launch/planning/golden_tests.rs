@@ -63,6 +63,14 @@ fn provider_contracts_keep_flags_hooks_mcp_and_timeout_units() {
     for (provider, flag, unit, events) in cases {
         let plan = materialize(&durable(provider, LaunchKind::Task), &authority(provider)).unwrap();
         assert!(plan.argv.iter().any(|argument| argument == flag));
+        assert_eq!(
+            plan.environment.get("COLORTERM").map(String::as_str),
+            Some("truecolor")
+        );
+        assert_eq!(
+            plan.environment.get("FORCE_COLOR").map(String::as_str),
+            Some("1")
+        );
         let contract = provider_contract(provider);
         assert!(contract.supports_worktracker_mcp);
         assert_eq!(contract.hook_timeout_unit, unit);

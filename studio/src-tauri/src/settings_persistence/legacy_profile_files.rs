@@ -103,12 +103,7 @@ fn normalize_catalog(
 }
 
 fn retain_profile_fields(profile: &mut Map<String, Value>) {
-    profile.retain(|key, _| {
-        matches!(
-            key.as_str(),
-            "name" | "workspace_slug" | "module_links"
-        )
-    });
+    profile.retain(|key, _| matches!(key.as_str(), "name" | "workspace_slug" | "module_links"));
 }
 
 fn corrupt(path: &Path) -> SettingsPersistenceError {

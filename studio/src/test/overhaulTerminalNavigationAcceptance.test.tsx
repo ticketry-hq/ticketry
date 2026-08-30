@@ -299,11 +299,22 @@ describe("overhaul acceptance — terminals", () => {
       agent_run_id: "run-old",
       terminated: true,
     });
+    let restoredSuccessorId: string | null = null;
     terminalApi.resumeTerminal.mockImplementation(async () => {
       // The real Apollo mutation refreshes terminal holdings before it
-      // resolves; keep this API spy faithful to that contract.
+      // resolves. A status event may also restore the live successor during
+      // that window; resuming must focus that tab instead of opening a second
+      // viewer for the same run.
       terminalReads.readTaskResumableTerminalSessions.mockResolvedValue([]);
       await refreshTerminalHoldings();
+      restoredSuccessorId = useTerminalStore.getState().openSession({
+        taskId: "story-1",
+        projectId: "project-1",
+        moduleId: "module-1",
+        agent: "codex",
+        agentRunId: "run-new",
+        select: false,
+      });
       return {
         agent_run_id: "run-new",
         resumed_from: "run-old",
@@ -384,6 +395,11 @@ describe("overhaul acceptance — terminals", () => {
         expect.objectContaining({ agentRunId: "run-new" }),
       );
     });
+    const successorTabs = Object.values(useTerminalStore.getState().sessions)
+      .filter((session) => session.agentRunId === "run-new");
+    expect(successorTabs).toHaveLength(1);
+    expect(useClientStore.getState().activeByTask["story-1"])
+      .toBe(restoredSuccessorId);
     expect(useClientStore.getState().workspaces["story-1"]?.active).toBe(
       "terminal",
     );

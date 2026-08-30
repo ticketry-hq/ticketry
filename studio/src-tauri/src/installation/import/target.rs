@@ -487,9 +487,12 @@ async fn validate(directory: &Path, imported: &Inventory) -> Result<(), Adoption
                 "the staged target tables could not be listed: {error}"
             ))
         })?;
-    let unanswered = crate::installation::adoption::representative_reads::prove(&database, &present)
-        .await
-        .map_err(|error| target_error(format!("a staged representative read failed: {error}")))?;
+    let unanswered =
+        crate::installation::adoption::representative_reads::prove(&database, &present)
+            .await
+            .map_err(|error| {
+                target_error(format!("a staged representative read failed: {error}"))
+            })?;
     database
         .close()
         .await

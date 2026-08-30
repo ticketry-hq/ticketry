@@ -4,32 +4,28 @@ import {
   documentSource,
   type TypedDocumentNode,
 } from "../src/graphql-foundation/typedDocument";
-import { RefreshTaskDocumentRegistryDocument } from "../src/features/documents/generated/documentRegistry";
+import { RefreshTaskDocumentRegistryDocument } from "../src/features/documents/generated/documentRegistry.documents";
 import {
   AcknowledgeWorkTrackerOnboardingDocument,
   CreateWorkTrackerProjectDocument,
-} from "../src/features/projects/generated/mutations";
-import {
-  WorkTrackerModulesDocument,
+  WorkTrackerOnboardingDocument,
+  WorkTrackerProjectOpenDocument,
   WorkTrackerProjectsDocument,
-  WorkTrackerWorkspaceDocument,
-} from "../src/features/projects/generated/operations";
+} from "../src/features/projects/generated/projects.documents";
 import {
   CreateWorkTrackerWorkItemDocument,
   WorkTrackerWorkItemDocument,
   WorkTrackerWorkItemsDocument,
   type GeneratedWorkTrackerWorkItemFieldsFragment,
 } from "../src/features/work-items/generated/workItems.documents";
-import { WorkTrackerWorkflowCatalogDocument } from "../src/features/workflows/generated/operations";
 import {
   LoadProviderCatalogDocument,
   UpdateProviderCatalogDocument,
-  type ProviderCatalogPayload,
-} from "../src/features/settings/generated/providerCatalog";
+  type LoadProviderCatalogQuery,
+} from "../src/features/settings/generated/providerCatalog.documents";
 import {
-  LoadLocalSettingsDocument,
-  ReplaceLocalProfileDocument,
-} from "../src/features/settings/generated/profileSettings";
+  SetModuleLinkDocument,
+} from "../src/features/module-links/generated/moduleLinks.documents";
 
 export type ApiRow = { id: string; name: string; [key: string]: unknown };
 export type ProjectRow = ApiRow & { slug: string };
@@ -42,11 +38,24 @@ export type WorkItemRow = ApiRow & {
 
 export const CODEX_TEST_MODEL = "gpt-5.4";
 export const CODEX_TEST_REASONING = "medium";
+type ProviderCatalogPayload = LoadProviderCatalogQuery["provider_catalog"];
 
 type GraphqlEnvelope<TResult> = {
   data?: TResult;
   errors?: Array<{ message: string; extensions?: Record<string, unknown> }>;
 };
+
+/** Record any retired product REST request made by a visible browser journey. */
+export function captureLegacyProductApiRequests(page: Page): string[] {
+  const requests: string[] = [];
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    if (url.pathname.startsWith("/api/work-tracker")) {
+      requests.push(`${request.method()} ${url.pathname}`);
+    }
+  });
+  return requests;
+}
 
 export async function graphql<TResult, TVariables>(
   request: APIRequestContext,
@@ -93,10 +102,10 @@ export async function refreshTaskDocuments(
 }
 
 export async function getWorkspace(request: APIRequestContext) {
-  const data = await graphql(request, WorkTrackerWorkspaceDocument, {});
-  const workspace = data.workspace.nodes[0];
-  expect(workspace, "the provisioned workspace").toBeTruthy();
-  return workspace!;
+  const data = await graphql(request, WorkTrackerOnboardingDocument, {});
+  const project = data.projects.nodes[0];
+  expect(project, "the provisioned project").toBeTruthy();
+  return project!;
 }
 
 export async function getProjects(request: APIRequestContext): Promise<ProjectRow[]> {
@@ -116,14 +125,14 @@ export async function getWorkflowCatalog(
   request: APIRequestContext,
   projectId: string,
 ) {
-  return await graphql(request, WorkTrackerWorkflowCatalogDocument, { projectId });
+  return await graphql(request, WorkTrackerProjectOpenDocument, { projectId });
 }
 
 export async function getModules(
   request: APIRequestContext,
   projectId: string,
 ): Promise<ModuleRow[]> {
-  const data = await graphql(request, WorkTrackerModulesDocument, { projectId });
+  const data = await graphql(request, WorkTrackerProjectOpenDocument, { projectId });
   return [...data.modules.nodes];
 }
 
@@ -174,7 +183,10 @@ export async function ensureCodexTestModel(
 export async function acknowledgeOnboarding(
   request: APIRequestContext,
 ): Promise<void> {
-  await graphql(request, AcknowledgeWorkTrackerOnboardingDocument, {});
+  const project = await getWorkspace(request);
+  await graphql(request, AcknowledgeWorkTrackerOnboardingDocument, {
+    projectId: project.id,
+  });
 }
 
 /** Configure the deterministic model used by launch-surface assertions. */
@@ -192,7 +204,7 @@ export async function configureCodexDefault(
     defaultModel: CODEX_TEST_MODEL,
     defaultReasoning: CODEX_TEST_REASONING,
   })).update_provider_catalog;
-  expect(saved.global_default).toEqual({
+  expect(saved.global_default).toMatchObject({
     provider: "codex",
     model: CODEX_TEST_MODEL,
     reasoning: CODEX_TEST_REASONING,
@@ -225,28 +237,14 @@ export async function createModule(
 
 export async function selectModuleForProfile(
   request: APIRequestContext,
-  projectId: string,
+  _projectId: string,
   moduleId: string,
   moduleFolder?: string,
 ): Promise<void> {
-  const config = (await graphql(request, LoadLocalSettingsDocument, {})).local_settings;
-  const index = config.recent_profile_index ?? 0;
-  const profile = config.profiles[index];
-  expect(profile, "active local profile").toBeTruthy();
-  const moduleLinks = moduleFolder
-    ? [
-        ...profile!.module_links.filter((link) => link.module_id !== moduleId),
-        { module_id: moduleId, path: moduleFolder },
-      ]
-    : profile!.module_links;
-  await graphql(request, ReplaceLocalProfileDocument, {
-    index,
-    profile: {
-      ...profile!,
-      recent_project_id: projectId,
-      recent_module_ids: { ...profile!.recent_module_ids, [projectId]: moduleId },
-      module_links: moduleLinks,
-    },
+  if (!moduleFolder) return;
+  await graphql(request, SetModuleLinkDocument, {
+    moduleId,
+    path: moduleFolder,
   });
 }
 

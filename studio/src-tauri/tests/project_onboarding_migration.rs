@@ -328,7 +328,11 @@ async fn duplicate_slugs_are_suffixed_deterministically_and_no_project_is_lost()
     // Slugs were unique per workspace, so a collision can only arrive from
     // projects that lived under different workspaces.
     let database = workspace_shaped(
-        &[("w1", "one", true), ("w2", "two", false), ("w3", "three", false)],
+        &[
+            ("w1", "one", true),
+            ("w2", "two", false),
+            ("w3", "three", false),
+        ],
         &[
             ("p1", "CDN", "2026-01-01 00:00:00", "w1"),
             ("p2", "CDN", "2026-02-01 00:00:00", "w2"),
@@ -366,7 +370,12 @@ async fn a_repeated_startup_is_a_no_op_over_a_durable_migration_identity() {
         &[("w1", "meml", true), ("w2", "other", false)],
         &[
             (INSTALLATION, "CDN", "2026-01-01 00:00:00", "w1"),
-            ("00000000000000000000000000000002", "CDN", "2026-02-01 00:00:00", "w2"),
+            (
+                "00000000000000000000000000000002",
+                "CDN",
+                "2026-02-01 00:00:00",
+                "w2",
+            ),
         ],
     )
     .await;
@@ -384,7 +393,10 @@ async fn a_repeated_startup_is_a_no_op_over_a_durable_migration_identity() {
         .await
         .expect("read the migration ledger")
         .expect("ledger row");
-    assert_eq!(ledger.try_get::<i32>("", "version").expect("version"), VERSION);
+    assert_eq!(
+        ledger.try_get::<i32>("", "version").expect("version"),
+        VERSION
+    );
     assert_eq!(
         ledger
             .try_get::<String>("", "migration_id")

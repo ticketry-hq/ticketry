@@ -29,8 +29,12 @@ async fn fresh_database_without_terminal_history_installs_rust_schema_idempotent
             .unwrap(),
         terminal::persistence::SourceClassification::Django("0000_no_terminal_history"),
     );
-    let first = terminal::persistence::adopt(directory.path()).await.unwrap();
-    let second = terminal::persistence::adopt(directory.path()).await.unwrap();
+    let first = terminal::persistence::adopt(directory.path())
+        .await
+        .unwrap();
+    let second = terminal::persistence::adopt(directory.path())
+        .await
+        .unwrap();
 
     assert_eq!(first.tables["agent_terminal_sessions"].row_count, 0);
     assert_eq!(first.tables["terminal_launch_requests"].row_count, 0);
@@ -59,15 +63,21 @@ async fn adoption_preserves_history_expires_leases_and_is_idempotent() {
     runs_persistence::preflight(directory.path()).await.unwrap();
     runs_persistence::adopt(directory.path()).await.unwrap();
 
-    let first = terminal::persistence::adopt(directory.path()).await.unwrap();
+    let first = terminal::persistence::adopt(directory.path())
+        .await
+        .unwrap();
     assert_eq!(first.stale_viewer_leases_expired, 2);
     assert_eq!(first.tables["agent_terminal_sessions"].row_count, 2);
     assert_eq!(first.tables["terminal_launch_requests"].row_count, 1);
     assert_eq!(first.tables["terminal_launch_material"].row_count, 0);
     assert_eq!(first.tables["terminal_cleanup_effects"].row_count, 0);
 
-    let second = terminal::persistence::adopt(directory.path()).await.unwrap();
-    let third = terminal::persistence::adopt(directory.path()).await.unwrap();
+    let second = terminal::persistence::adopt(directory.path())
+        .await
+        .unwrap();
+    let third = terminal::persistence::adopt(directory.path())
+        .await
+        .unwrap();
     assert_eq!(second.tables, third.tables);
     assert!(second.snapshot_path.is_none() && third.snapshot_path.is_none());
 
@@ -142,8 +152,12 @@ async fn live_index_rename_lineage_adopts_without_inventing_legacy_launch_reques
             .unwrap(),
         terminal::persistence::SourceClassification::Django("0008_rename_terminal_task_index"),
     );
-    let first = terminal::persistence::adopt(directory.path()).await.unwrap();
-    let second = terminal::persistence::adopt(directory.path()).await.unwrap();
+    let first = terminal::persistence::adopt(directory.path())
+        .await
+        .unwrap();
+    let second = terminal::persistence::adopt(directory.path())
+        .await
+        .unwrap();
     assert_eq!(first.tables["agent_terminal_sessions"].row_count, 2);
     assert_eq!(first.tables["terminal_launch_requests"].row_count, 0);
     assert_eq!(first.tables, second.tables);

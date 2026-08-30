@@ -43,6 +43,7 @@ async fn schema() -> GraphQlEndpoint {
                 issue_type_id TEXT NOT NULL, parent_id TEXT, module_id TEXT, state_id TEXT,
                 state_revision INTEGER NOT NULL, name TEXT NOT NULL, sequence_id INTEGER NOT NULL,
                 is_archived INTEGER NOT NULL, rank TEXT NOT NULL, description TEXT NOT NULL,
+                workspace_tab_order JSON NOT NULL DEFAULT '[]',
                 created_at TEXT NOT NULL, updated_at TEXT NOT NULL
             );
             CREATE TABLE agent_runs (
@@ -64,9 +65,11 @@ async fn schema() -> GraphQlEndpoint {
             INSERT INTO worktracker_issue VALUES
               ('11111111111111111111111111111111', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'task',
                'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', NULL, NULL, NULL, 1, 'First', 1, 0, 'A', '',
+               '[]',
                '2026-08-26T00:00:00Z', '2026-08-26T00:00:00Z'),
               ('22222222222222222222222222222222', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'task',
                'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', NULL, NULL, NULL, 1, 'Second', 2, 0, 'B', '',
+               '[]',
                '2026-08-26T00:00:00Z', '2026-08-26T00:00:00Z');
             INSERT INTO agent_runs (id, issue_id, agent, status, started_at, scope) VALUES
               ('run-first-local', '11111111111111111111111111111111', 'codex', 'running',

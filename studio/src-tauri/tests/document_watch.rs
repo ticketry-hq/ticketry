@@ -102,14 +102,12 @@ impl Fixture {
     }
 
     fn documents(&self) -> DocumentsService {
-        DocumentsService::new(self.database.clone()).publishing(Some(
-            DocumentFactRecorder::new(
-                RunsServices::new(self.database.clone())
-                    .outbox()
-                    .events()
-                    .clone(),
-            ),
-        ))
+        DocumentsService::new(self.database.clone()).publishing(Some(DocumentFactRecorder::new(
+            RunsServices::new(self.database.clone())
+                .outbox()
+                .events()
+                .clone(),
+        )))
     }
 
     /// Link the module to a real local folder, which is where an authorized

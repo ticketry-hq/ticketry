@@ -13,6 +13,7 @@ import { useAgentStatusStore } from "../features/agents/status/testStore";
 import { useTerminalStore, type SessionMeta } from "../features/agents/terminal";
 import { GeneratedWorkTrackerWorkItemFieldsFragmentDoc } from "../features/work-items/generated/workItems.documents";
 import { studioApolloClient } from "../shared/apollo/client";
+import { compactWorktrackerId } from "../shared/api/generatedWorktracker";
 import { StudioApolloProvider } from "../shared/apollo/StudioApolloProvider";
 import { useClientStore } from "../state/clientStore";
 import {
@@ -23,7 +24,7 @@ import { seedModuleOpenFixture } from "./projectOpenFixture";
 import { workItem } from "./seam";
 import type { WorkspaceTabIdentity } from "../features/workspace-tabs/types";
 
-const WORK_ITEM_ID = "story-917";
+const WORK_ITEM_ID = "8f6aee39-ade4-41ff-9d4c-26f8a504f8de";
 
 const documentRegistry = vi.hoisted(() => ({
   listTaskDocuments: vi.fn(),
@@ -88,7 +89,10 @@ function deferred<T>() {
 function currentIssue(order: readonly WorkspaceTabIdentity[]) {
   const row = studioApolloClient().readFragment({
     fragment: GeneratedWorkTrackerWorkItemFieldsFragmentDoc,
-    from: { __typename: "WorktrackerIssue", id: WORK_ITEM_ID },
+    from: {
+      __typename: "WorktrackerIssue",
+      id: compactWorktrackerId(WORK_ITEM_ID),
+    },
     optimistic: false,
   });
   if (!row) throw new Error("Workspace fixture row is missing.");
@@ -113,7 +117,7 @@ function seedSavedOrder(order: readonly WorkspaceTabIdentity[]): void {
   studioApolloClient().cache.modify({
     id: studioApolloClient().cache.identify({
       __typename: "WorktrackerIssue",
-      id: WORK_ITEM_ID,
+      id: compactWorktrackerId(WORK_ITEM_ID),
     }),
     fields: { workspaceTabOrder: () => order },
   });

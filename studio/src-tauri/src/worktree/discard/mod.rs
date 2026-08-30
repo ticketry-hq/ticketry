@@ -31,7 +31,6 @@
 mod error;
 mod executor;
 mod git_effects;
-mod graphql;
 mod identity;
 mod plan;
 mod probe;
@@ -42,8 +41,3 @@ mod view;
 pub use error::{WorktreeDiscardError, WorktreeDiscardErrorCode};
 pub use service::WorktreeDiscardService;
 pub use view::WorktreeDiscardResult;
-
-/// Register the authored discard mutation in the product schema.
-pub(crate) fn register_graphql(builder: seaography::Builder) -> seaography::Builder {
-    graphql::register(builder)
-}

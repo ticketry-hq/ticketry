@@ -79,7 +79,8 @@ export function routeTaskWorkspaceTabAction(
     return true;
   }
 
-  if (useClientStore.getState().focusedPane !== "details-or-terminal") return false;
+  const ui = useClientStore.getState();
+  if (ui.sidebarVisible && ui.focusedPane !== "details-or-terminal") return false;
   const owner = [...mountedWorkspaces].find(
     (entry) => !entry.modal && entry.navigable,
   );

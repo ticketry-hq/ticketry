@@ -37,8 +37,7 @@ pub const SCHEMA_TABLE: &str = "ticketry_module_links_schema";
 pub const AUTHORED_TABLES: &[&str] = &[LINK_TABLE, SCHEMA_TABLE];
 
 /// The link columns, at their checked shape.
-pub(crate) const LINK_COLUMNS: &[&str] =
-    &["id", "module_id", "path", "created_at", "updated_at"];
+pub(crate) const LINK_COLUMNS: &[&str] = &["id", "module_id", "path", "created_at", "updated_at"];
 
 /// The schema-ledger columns, at their checked shape.
 pub(crate) const SCHEMA_COLUMNS: &[&str] = &["singleton", "version", "installed_at"];

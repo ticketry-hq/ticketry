@@ -4,7 +4,9 @@
 //! Django backend. The test is inert when that explicit disposable source is
 //! absent, so ordinary builds never contact a developer's database.
 
-use muxed_studio_lib::installation::adoption::{self, AdoptionPath, AdoptionPlan, Phase, Readiness};
+use muxed_studio_lib::installation::adoption::{
+    self, AdoptionPath, AdoptionPlan, Phase, Readiness,
+};
 use sea_orm::{ConnectionTrait, Database, DbBackend, Statement};
 
 #[tokio::test]

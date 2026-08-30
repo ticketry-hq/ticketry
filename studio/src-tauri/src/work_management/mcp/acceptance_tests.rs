@@ -71,6 +71,7 @@ async fn prepare_command_database(directory: &tempfile::TempDir) {
                 state_revision bigint NOT NULL, name varchar(512) NOT NULL,
                 sequence_id integer NOT NULL, is_archived bool NOT NULL,
                 rank varchar(64) NOT NULL, description text NOT NULL,
+                workspace_tab_order json NOT NULL DEFAULT '[]',
                 created_at datetime NOT NULL, updated_at datetime NOT NULL,
                 UNIQUE(project_id, sequence_id),
                 FOREIGN KEY(parent_id) REFERENCES worktracker_issue(id) ON DELETE SET NULL
@@ -162,11 +163,11 @@ async fn prepare_command_database(directory: &tempfile::TempDir) {
             INSERT INTO worktracker_issue VALUES
                 ('20000000000000000000000000000001', '10000000000000000000000000000000',
                  'module', '30000000000000000000000000000003', NULL, NULL, NULL, 0,
-                 'Module', 0, 0, 'M', '', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+                 'Module', 0, 0, 'M', '', '[]', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
                 ('30000000000000000000000000000000', '10000000000000000000000000000000',
                  'task', '30000000000000000000000000000002', NULL,
                  '20000000000000000000000000000001', '40000000000000000000000000000001', 0,
-                 'Authenticated caller', 900, 0, 'Z', '',
+                 'Authenticated caller', 900, 0, 'Z', '', '[]',
                  CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
             INSERT INTO agent_runs
                 (id, issue_id, agent, status, started_at, scope)
@@ -191,6 +192,9 @@ async fn prepare_command_database(directory: &tempfile::TempDir) {
         )
         .await
         .expect("create MCP command fixture");
+    crate::work_management::module_presentation_migration::install(&database)
+        .await
+        .expect("install final module-presentation shape");
     database.close().await.expect("close MCP command fixture");
 }
 
@@ -288,7 +292,7 @@ async fn mcp_mutations_cover_crud_hierarchy_workflow_and_blockers_through_rust_c
         PROJECT
     );
 
-    let first = call(
+    let first_output = call(
         &url,
         1,
         "create_task",
@@ -296,9 +300,10 @@ async fn mcp_mutations_cover_crud_hierarchy_workflow_and_blockers_through_rust_c
             "project_id": PROJECT, "module_id": MODULE, "name": "First", "issue_type": "Story"
         }),
     )
-    .await["result"]
+    .await;
+    let first = first_output["result"]
         .as_str()
-        .unwrap()
+        .unwrap_or_else(|| panic!("create_task failed: {first_output:#}"))
         .to_owned();
     let second = call(
         &url,

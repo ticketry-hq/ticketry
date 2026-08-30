@@ -68,6 +68,7 @@ async fn prepare_projects(directory: &tempfile::TempDir) {
                 state_revision bigint NOT NULL, name varchar(512) NOT NULL,
                 sequence_id integer NOT NULL, is_archived bool NOT NULL,
                 rank varchar(64) NOT NULL, description text NOT NULL,
+                workspace_tab_order json NOT NULL DEFAULT '[]',
                 created_at datetime NOT NULL, updated_at datetime NOT NULL
             );
             CREATE TABLE agent_runs (
@@ -87,7 +88,7 @@ async fn prepare_projects(directory: &tempfile::TempDir) {
                 ('30000000000000000000000000000000',
                  '10000000000000000000000000000000', 'task',
                  '40000000000000000000000000000000', NULL, NULL, NULL, 0,
-                 'Authorized caller', 1, 0, 'A', '', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+                 'Authorized caller', 1, 0, 'A', '', '[]', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
             INSERT INTO agent_runs
                 (id, issue_id, status, started_at, scope)
                 VALUES ('run-valid', '30000000000000000000000000000000',
@@ -96,6 +97,9 @@ async fn prepare_projects(directory: &tempfile::TempDir) {
         )
         .await
         .expect("create MCP project fixture");
+    crate::work_management::module_presentation_migration::install(&database)
+        .await
+        .expect("install final module-presentation shape");
     database.close().await.expect("close MCP fixture writer");
 }
 
@@ -341,8 +345,8 @@ async fn listener_returns_structured_unavailable_until_runtime_reconciliation_fi
     .await
     .unwrap();
     assert_eq!(
-        response["result"]["structuredContent"]["code"],
-        "service_unavailable"
+        response["result"]["structuredContent"]["code"], "service_unavailable",
+        "{response:#}"
     );
     assert_eq!(
         response["result"]["structuredContent"]["phase"],
@@ -437,8 +441,8 @@ async fn global_mcp_allows_task_tools_while_run_credentials_remain_scoped() {
     .await
     .unwrap();
     assert_eq!(
-        foreign["result"]["structuredContent"]["code"],
-        "foreign_scope"
+        foreign["result"]["structuredContent"]["code"], "foreign_scope",
+        "{foreign:#}"
     );
 
     first

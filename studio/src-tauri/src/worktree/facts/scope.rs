@@ -80,6 +80,7 @@ mod tests {
                     name TEXT NOT NULL, sequence_id INTEGER NOT NULL,
                     is_archived BOOLEAN NOT NULL DEFAULT 0, rank TEXT NOT NULL DEFAULT 'm',
                     description TEXT NOT NULL DEFAULT '',
+                    workspace_tab_order JSON NOT NULL DEFAULT '[]',
                     created_at TEXT NOT NULL DEFAULT '2026-01-01 00:00:00',
                     updated_at TEXT NOT NULL DEFAULT '2026-01-01 00:00:00'
                 );

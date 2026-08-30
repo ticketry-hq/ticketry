@@ -144,6 +144,62 @@ async fn adoption_preserves_rows_files_and_reopens_idempotently() {
 }
 
 #[tokio::test]
+async fn reopens_after_the_ledger_backed_entry_skill_migration() {
+    let directory = fixture().await;
+    adopt(directory.path()).await.expect("adopt settings");
+    let path = directory.path().join("state.db");
+    let database = Database::connect(format!("sqlite:{}?mode=rw", path.display()))
+        .await
+        .expect("open adopted settings");
+    database
+        .execute_unprepared(
+            "ALTER TABLE worktracker_launchbinding ADD COLUMN entry_skill varchar(128) NULL;
+             CREATE TABLE ticketry_launch_binding_entry_skill_migration (
+               singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+               version INTEGER NOT NULL,
+               migration_id TEXT NOT NULL,
+               source_commit TEXT NOT NULL,
+               applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+             );
+             INSERT INTO ticketry_launch_binding_entry_skill_migration
+               (singleton, version, migration_id, source_commit)
+             VALUES (1, 1, '0047_launch_binding_entry_skill', 'test');",
+        )
+        .await
+        .expect("install entry-skill final shape");
+    database.close().await.expect("close migrated settings");
+
+    let reopened = adopt(directory.path())
+        .await
+        .expect("reopen ledger-backed entry-skill shape");
+    assert_eq!(reopened.source, SourceClassification::RustOwned);
+    assert!(reopened.database_snapshot.is_none());
+}
+
+#[tokio::test]
+async fn refuses_an_unledgered_entry_skill_column() {
+    let directory = fixture().await;
+    let path = directory.path().join("state.db");
+    let database = Database::connect(format!("sqlite:{}?mode=rw", path.display()))
+        .await
+        .expect("open settings fixture");
+    database
+        .execute_unprepared(
+            "ALTER TABLE worktracker_launchbinding ADD COLUMN entry_skill varchar(128) NULL",
+        )
+        .await
+        .expect("inject unowned entry-skill column");
+    database.close().await.expect("close settings fixture");
+
+    let error = adopt(directory.path())
+        .await
+        .expect_err("unledgered schema drift must still fail closed");
+    assert!(error
+        .to_string()
+        .contains("unknown transferred schema for worktracker_launchbinding"));
+}
+
+#[tokio::test]
 async fn unknown_generation_fails_before_any_mutation() {
     let directory = fixture().await;
     let path = directory.path().join("state.db");
@@ -330,7 +386,10 @@ fn a_malformed_legacy_profile_file_is_refused_and_left_intact() {
     let error = muxed_studio_lib::module_links::legacy_source::read(&source)
         .expect_err("a malformed profile file cannot be adopted");
 
-    assert_eq!(error.code().as_str(), "module_link_legacy_source_unreadable");
+    assert_eq!(
+        error.code().as_str(),
+        "module_link_legacy_source_unreadable"
+    );
     assert_eq!(fs::read(&path).unwrap(), b"{broken");
 }
 

@@ -275,7 +275,7 @@ async fn classify(
 async fn validate_manifest(
     database: &impl ConnectionTrait,
 ) -> Result<(), SettingsPersistenceError> {
-    for (table, columns) in OWNED_TABLES {
+    for (table, columns) in effective_owned_tables(database).await? {
         let rows = database
             .query_all_raw(Statement::from_string(
                 DbBackend::Sqlite,
@@ -382,7 +382,7 @@ async fn settings_digest(
     database: &impl ConnectionTrait,
 ) -> Result<String, SettingsPersistenceError> {
     let mut hasher = Sha256::new();
-    for (table, columns) in OWNED_TABLES {
+    for (table, columns) in effective_owned_tables(database).await? {
         hasher.update(table.as_bytes());
         let projection = columns
             .iter()
@@ -407,6 +407,29 @@ async fn settings_digest(
         }
     }
     Ok(hex_digest(hasher.finalize().as_slice()))
+}
+
+/// The settings handoff precedes the final Work Management migration chain on
+/// first launch. On every later launch, that chain's ledger is the durable
+/// proof that LaunchBinding.entry_skill is part of the owned schema.
+async fn effective_owned_tables(
+    database: &impl ConnectionTrait,
+) -> Result<Vec<(&'static str, Vec<&'static str>)>, SettingsPersistenceError> {
+    let entry_skill_installed = table_exists(
+        database,
+        crate::work_management::launch_binding_entry_skill_migration::LEDGER_TABLE,
+    )
+    .await?;
+    Ok(OWNED_TABLES
+        .iter()
+        .map(|(table, columns)| {
+            let mut columns = columns.to_vec();
+            if *table == "worktracker_launchbinding" && entry_skill_installed {
+                columns.push("entry_skill");
+            }
+            (*table, columns)
+        })
+        .collect())
 }
 
 async fn row_counts(
@@ -572,7 +595,7 @@ fn reject_symlink(path: &Path) -> Result<(), SettingsPersistenceError> {
 }
 
 async fn table_exists(
-    database: &DatabaseConnection,
+    database: &impl ConnectionTrait,
     table: &str,
 ) -> Result<bool, SettingsPersistenceError> {
     let row = database

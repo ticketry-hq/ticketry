@@ -40,6 +40,7 @@ async fn generated_crud_schema(context: &'static BuilderContext) -> Schema {
 
     // The Work Management read graph only satisfies the Worktree relations;
     // the audited bundle is the Worktree one.
+    let builder = muxed_studio_lib::terminal::persistence::register_graphql(builder);
     let mut builder = work_management::register_entity_modules(builder);
     seaography::register_entity!(builder, worktree);
 

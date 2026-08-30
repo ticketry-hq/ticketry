@@ -94,6 +94,7 @@ const moduleData = {
       is_archived: false,
       issue_type: "module",
       rank: "0",
+      presentation: null,
       project: {
         __typename: "WorktrackerProject" as const,
         id: "project-1",

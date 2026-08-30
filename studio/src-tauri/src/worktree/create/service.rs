@@ -48,12 +48,7 @@ impl WorktreeCreateService {
         locks: RepositoryLocks,
     ) -> Self {
         Self {
-            executor: CreateExecutor::new(
-                work_items.clone(),
-                journal,
-                events,
-                locks.clone(),
-            ),
+            executor: CreateExecutor::new(work_items.clone(), journal, events, locks.clone()),
             status: WorktreeStatusService::with_locks(work_items, locks),
         }
     }
@@ -83,18 +78,13 @@ impl WorktreeCreateService {
         task_id: &str,
         operation_id: &str,
     ) -> Result<WorktreeStatusView, WorktreeCreateError> {
-        let plan = match plan::derive(
-            self.executor.work_items(),
-            self.executor.git(),
-            task_id,
-        )
-        .await?
-        {
-            PlanResolution::Plan(plan) => plan,
-            // Nothing could enclose this Work Item. That is the same ordinary
-            // answer a status read gives, not a failed creation.
-            PlanResolution::NoRepository(_) => return Ok(self.status.status(task_id).await?),
-        };
+        let plan =
+            match plan::derive(self.executor.work_items(), self.executor.git(), task_id).await? {
+                PlanResolution::Plan(plan) => plan,
+                // Nothing could enclose this Work Item. That is the same ordinary
+                // answer a status read gives, not a failed creation.
+                PlanResolution::NoRepository(_) => return Ok(self.status.status(task_id).await?),
+            };
 
         // A Work Item owns at most one checkout, so an existing one is the
         // answer regardless of which operation asked for it.

@@ -29,7 +29,6 @@
 mod error;
 mod executor;
 mod git_effects;
-mod graphql;
 // The resource key and the path-free repository digest are the worktree
 // journal's shared identity vocabulary, so `crate::worktree::discard` names the
 // same subject rather than inventing a second spelling of it.
@@ -49,11 +48,6 @@ use crate::entities::worktrees::worktree;
 
 pub use error::{WorktreeCreateError, WorktreeCreateErrorCode};
 pub use service::WorktreeCreateService;
-
-/// Register the authored create mutation in the product schema.
-pub(crate) fn register_graphql(builder: seaography::Builder) -> seaography::Builder {
-    graphql::register(builder)
-}
 
 /// The index row for a plan's owning Work Item, if one exists. One Work Item
 /// owns at most one checkout, so this is the whole membership question.

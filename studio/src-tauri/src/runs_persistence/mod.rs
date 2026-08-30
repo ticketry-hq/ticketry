@@ -13,7 +13,6 @@
 
 mod adoption;
 mod attempt_commands;
-mod attempt_graphql;
 mod attempt_queries;
 use crate::entities::runs as entities;
 mod error;
@@ -29,7 +28,6 @@ mod launch_probe;
 mod launch_reconciliation;
 mod launch_scan;
 mod lifecycle;
-mod lifecycle_graphql;
 mod lifecycle_types;
 pub mod ownership_manifest;
 mod queries;
@@ -98,10 +96,16 @@ pub use status_frames::{
 };
 pub use status_stream::{StatusStreamRequest, MAX_REPLAY_BYTES, MAX_REPLAY_EVENTS};
 
-pub(crate) fn register_graphql(builder: seaography::Builder) -> seaography::Builder {
-    status_subscription::register(lifecycle_graphql::register(attempt_graphql::register(
-        builder,
-    )))
+pub(crate) fn register_status_graphql(builder: seaography::Builder) -> seaography::Builder {
+    status_subscription::register(builder)
+}
+
+pub(crate) fn readiness_open(ctx: &seaography::async_graphql::Context<'_>) -> bool {
+    readiness_gate::open(ctx)
+}
+
+pub(crate) fn readiness_unavailable() -> seaography::async_graphql::Error {
+    readiness_gate::unavailable()
 }
 
 /// Open the project status stream directly. Tests and supported in-process

@@ -220,6 +220,38 @@ fn migrated_graphql_registrars_use_nested_view_owned_bindings() {
 }
 
 #[test]
+fn superseded_seaolim_migration_files_stay_removed() {
+    let source_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    for relative in [
+        "documents/save/graphql.rs",
+        "graph_run_service/graphql.rs",
+        "graph_run_service/operation_registry.rs",
+        "run_now/graphql.rs",
+        "run_now/launcher.rs",
+        "run_now/mod.rs",
+        "run_now/operation_registry.rs",
+        "run_now/service.rs",
+        "run_now/types.rs",
+        "runs_persistence/attempt_graphql.rs",
+        "runs_persistence/lifecycle_graphql.rs",
+        "terminal/output_activity/graphql.rs",
+        "terminal/output_activity/operation_registry.rs",
+        "work_management/commands/module_presentation.rs",
+        "work_management/graphql/catalog.rs",
+        "work_management/graphql/module_presentations.rs",
+        "work_management/graphql/work_items.rs",
+        "work_management/graphql/workflow_configuration.rs",
+        "worktree/create/graphql.rs",
+        "worktree/discard/graphql.rs",
+    ] {
+        assert!(
+            !source_root.join(relative).exists(),
+            "superseded Seaolim migration file returned: {relative}"
+        );
+    }
+}
+
+#[test]
 fn contract_detects_location_and_serializer_table_bypasses() {
     let outside_view = audit_source(
         Path::new("src/work_management/graphql.rs"),

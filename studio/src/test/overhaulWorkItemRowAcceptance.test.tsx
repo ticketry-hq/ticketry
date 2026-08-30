@@ -1,5 +1,6 @@
-import { fireEvent, screen, within } from "@testing-library/react";
+import { act, fireEvent, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
+import { useClientStore } from "../state/clientStore";
 import { fixture, mountStudio, workItem } from "./seam";
 
 describe("overhaul acceptance — work-item rows", () => {
@@ -152,5 +153,29 @@ describe("overhaul acceptance — work-item rows", () => {
     fireEvent.change(search, { target: { value: "Implementation child" } });
     expect(await within(stories).findByText("Implementation child")).toBeVisible();
     expect(within(stories).getByText("T-34")).toBeVisible();
+  });
+
+  it("keeps focus on search when the Stories pane becomes active", async () => {
+    const http = fixture();
+    http.tree("module-1", {
+      rootIds: [],
+      children: {},
+      order: [],
+    });
+    mountStudio({ http });
+
+    const stories = await screen.findByRole("region", { name: "Stories" });
+    const search = within(stories).getByRole("textbox", {
+      name: "Search stories",
+    });
+    act(() => useClientStore.setState({
+      sidebarVisible: true,
+      focusedPane: "modules",
+    }));
+
+    act(() => search.focus());
+
+    expect(search).toHaveFocus();
+    expect(useClientStore.getState().focusedPane).toBe("tasks");
   });
 });

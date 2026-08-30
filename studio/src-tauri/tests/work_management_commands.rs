@@ -1039,6 +1039,66 @@ async fn task_reorder_matches_django_boundaries_and_rolls_back_invalid_neighbors
 }
 
 #[tokio::test]
+async fn task_reorder_repairs_duplicate_sibling_ranks() {
+    let (_directory, database) = fixture().await;
+    let a = work_items::create(&database, create_input("A"), None)
+        .await
+        .unwrap();
+    let b = work_items::create(&database, create_input("B"), None)
+        .await
+        .unwrap();
+    let c = work_items::create(&database, create_input("C"), None)
+        .await
+        .unwrap();
+
+    for id in [&a, &b, &c] {
+        let row = issue::Entity::find_by_id(id)
+            .one(&database)
+            .await
+            .unwrap()
+            .unwrap();
+        let mut active: issue::ActiveModel = row.into();
+        active.rank = Set("V".to_owned());
+        active.update(&database).await.unwrap();
+    }
+
+    reorder::reorder_work_item(
+        &database,
+        reorder::ReorderWorkItem {
+            id: c.clone(),
+            before_id: Some(b.clone()),
+            after_id: Some(a.clone()),
+            initial_order_ids: None,
+        },
+        None,
+    )
+    .await
+    .unwrap();
+
+    let ordered = issue::Entity::find()
+        .filter(issue::Column::Id.is_in([a.clone(), b.clone(), c.clone()]))
+        .order_by_asc(issue::Column::Rank)
+        .all(&database)
+        .await
+        .unwrap();
+    assert_eq!(
+        ordered
+            .iter()
+            .map(|row| row.id.as_str())
+            .collect::<Vec<_>>(),
+        [b.as_str(), c.as_str(), a.as_str()]
+    );
+    assert_eq!(
+        ordered
+            .iter()
+            .map(|row| &row.rank)
+            .collect::<HashSet<_>>()
+            .len(),
+        3
+    );
+}
+
+#[tokio::test]
 async fn first_module_drag_is_atomic_and_manual_order_survives_reopen() {
     let (directory, database) = fixture().await;
     let ids = [
@@ -1233,6 +1293,98 @@ async fn archive_cascades_delete_rejects_children_and_attachment_materializes_fi
         .unwrap()
         .is_none());
     work_items::delete(&database, &parent, None).await.unwrap();
+}
+
+#[tokio::test]
+async fn graphql_project_updates_preserve_results_errors_and_atomicity() {
+    let (directory, database) = fixture().await;
+    database
+        .execute_unprepared(&format!(
+            "UPDATE worktracker_project SET onboarding_required=1 WHERE id='{PROJECT}'"
+        ))
+        .await
+        .unwrap();
+    let api = TransportApiImpl::new();
+    initialize_with_worktracker_commands_and_install(
+        &directory.path().join("rust-core.sqlite3"),
+        &directory.path().join("state.db"),
+        &directory.path().join("media"),
+        &api,
+    )
+    .await
+    .unwrap();
+
+    let execute = |query: String| {
+        api.clone()
+            .graphql_execute(serde_json::json!({"query": query}).to_string())
+    };
+    let acknowledged: serde_json::Value = serde_json::from_str(
+        &execute(format!(
+            "mutation {{ acknowledge_onboarding(project_id: \"{PROJECT}\") {{ id slug onboarding_required: onboardingRequired }} }}"
+        ))
+        .await,
+    )
+    .unwrap();
+    assert!(acknowledged.get("errors").is_none(), "{acknowledged}");
+    assert_eq!(
+        acknowledged["data"]["acknowledge_onboarding"],
+        serde_json::json!({
+            "id": "10000000-0000-0000-0000-000000000000",
+            "slug": "MEM",
+            "onboarding_required": false,
+        })
+    );
+
+    let updated: serde_json::Value = serde_json::from_str(
+        &execute(format!(
+            "mutation {{ update_project(id: \"{PROJECT}\", name: \"  Renamed  \", description: \"Kept\") {{ id name slug description }} }}"
+        ))
+        .await,
+    )
+    .unwrap();
+    assert!(updated.get("errors").is_none(), "{updated}");
+    assert_eq!(
+        updated["data"]["update_project"],
+        serde_json::json!({
+            "id": "10000000-0000-0000-0000-000000000000",
+            "name": "Renamed",
+            "slug": "MEM",
+            "description": "Kept",
+        })
+    );
+
+    let rejected: serde_json::Value = serde_json::from_str(
+        &execute(format!(
+            "mutation {{ update_project(id: \"{PROJECT}\", name: \"   \", description: \"Must not commit\") {{ id }} }}"
+        ))
+        .await,
+    )
+    .unwrap();
+    assert_eq!(
+        rejected["errors"][0]["extensions"],
+        serde_json::json!({"code": "field_validation", "field": "name"})
+    );
+    let stored = project::Entity::find_by_id(PROJECT)
+        .one(&database)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        (stored.name.as_str(), stored.description.as_str()),
+        ("Renamed", "Kept")
+    );
+    assert!(!stored.onboarding_required);
+
+    let missing: serde_json::Value = serde_json::from_str(
+        &execute(
+            "mutation { update_project(id: \"ffffffff-ffff-ffff-ffff-ffffffffffff\", name: \"Missing\") { id } }"
+                .to_owned(),
+        )
+        .await,
+    )
+    .unwrap();
+    assert_eq!(missing["errors"][0]["message"], "Project not found.");
+    assert_eq!(missing["errors"][0]["extensions"]["code"], "not_found");
 }
 
 #[tokio::test]

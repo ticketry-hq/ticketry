@@ -8,7 +8,7 @@ use common::submitted_launch_authority::launch_service;
 use common::terminal_lifecycle_harness::{TerminalLifecycleHarness, MODULE_ID, TASK_ID};
 use muxed_studio_lib::entities::terminals::launch_material;
 use muxed_studio_lib::execution::reconciliation::ExecutionReconciliationService;
-use muxed_studio_lib::run_now::{RunNowCaller, RunNowRequest, RunNowService};
+use muxed_studio_lib::execution::run_now::{RunNowCaller, RunNowRequest, RunNowService};
 use muxed_studio_lib::terminal::launch::{
     TerminalLaunchBoundary, TerminalLaunchCheckpoint, TerminalLaunchError, TerminalLaunchRuntime,
     TerminalRuntimeObservation, VerifiedTerminalRuntime,

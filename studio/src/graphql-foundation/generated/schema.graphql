@@ -521,21 +521,22 @@ input ModuleLinksOrderInput {
 type Mutation {
 	migrationProbesCreateOne(data: MigrationProbesInsertInput!): MigrationProbesBasic!
 	worktrackerIssuetypeCreateOne(data: WorktrackerIssuetypeInsertInput!): WorktrackerIssuetypeBasic!
+	update_issue_type(id: String!, name: String, color: String, sort_order: Int, start_state_id: String, workflow_revision: Int): WorktrackerIssuetype!
+	reorder_issue_types(project_id: String!, ordered_ids: [String!]!): [WorktrackerIssuetype!]!
+	update_module_presentation(module_id: String!, tab_hidden: Boolean!): WorktrackerModulepresentation!
+	acknowledge_onboarding(project_id: String!): WorktrackerProject!
+	update_project(id: String!, name: String, description: String): WorktrackerProject!
+	create_state(project_id: String!, name: String!, group: String!, color: String): WorktrackerState!
+	update_state(id: String!, name: String, group: String, color: String, sort_order: Int): WorktrackerState!
+	delete_state(state_id: String!): Boolean!
+	reorder_states(project_id: String!, ordered_ids: [String!]!): [WorktrackerState!]!
 	set_module_link(module_id: String!, link: ModuleLinkPathInput!): ModuleLinks!
 	clear_module_link(module_id: String!): Boolean!
 	worktree_create(task_id: String!, operation_id: String!): WorktreeStatusView!
 	worktree_discard(task_id: String!, operation_id: String!): WorktreeDiscardResult!
-	acknowledge_onboarding(project_id: String!): WorktrackerProject!
 	create_project(name: String!, slug: String!, description: String): WorktrackerProject!
-	update_project(id: String!, name: String, description: String): WorktrackerProject!
 	delete_project(id: String!): Boolean!
-	create_state(project_id: String!, name: String!, group: String!, color: String): WorktrackerState!
-	update_state(id: String!, name: String, group: String, color: String, sort_order: Int): WorktrackerState!
-	reorder_states(project_id: String!, ordered_ids: [String!]!): [WorktrackerState!]!
-	update_issue_type(id: String!, name: String, color: String, sort_order: Int, start_state_id: String, workflow_revision: Int): WorktrackerIssuetype!
 	delete_issue_type(id: String!, reassign_to: String): Boolean!
-	reorder_issue_types(project_id: String!, ordered_ids: [String!]!): [WorktrackerIssuetype!]!
-	update_module_presentation(module_id: String!, tab_hidden: Boolean!): WorktrackerModulepresentation!
 	reorder_module_presentation(module_id: String!, before_id: String, after_id: String, initial_order_ids: [String!]): WorktrackerModulepresentation!
 	create_work_item(project_id: String!, name: String!, issue_type_id: String!, description: String, state_id: String, parent_id: String): WorktrackerIssue!
 	update_work_item(id: String!, name: String, description: String, issue_type_id: String, state_id: String, parent_id: String, blocked_by_ids: [String!], is_archived: Boolean, workspace_tab_order: Json): WorktrackerIssue!
@@ -546,7 +547,6 @@ type Mutation {
 	delete_issue_type_transition(issue_type_id: String!, from_state_id: String!, to_state_id: String!, workflow_revision: Int!): Boolean!
 	remove_state_from_issue_type_workflow(issue_type_id: String!, state_id: String!, workflow_revision: Int!): Boolean!
 	upsert_issue_type_launch_binding(issue_type_id: String!, state_id: String!, workflow_revision: Int!, prompt: String, required_skills: [String!], model_id: String, reasoning_id: String, auto_start: Boolean, subtree_run_enabled: Boolean): WorktrackerLaunchbinding!
-	delete_state(state_id: String!): Boolean!
 	update_keybinding_setting(value: Json!): KeybindingSetting!
 	update_provider_catalog(activated_providers: [String!]!, default_provider: String, default_model: String, default_reasoning: String): ProviderCatalog!
 	retry_automation_attempt(attempt_id: String!): AutomationAttemptProjection!

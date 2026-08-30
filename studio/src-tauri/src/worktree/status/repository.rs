@@ -126,7 +126,11 @@ mod tests {
         test_support::link(
             &database,
             MODULE,
-            &directory.path().join("missing-checkout").display().to_string(),
+            &directory
+                .path()
+                .join("missing-checkout")
+                .display()
+                .to_string(),
         )
         .await;
 

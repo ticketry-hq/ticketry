@@ -18,11 +18,11 @@ pub mod directory_completion;
 pub mod document_scan;
 mod error;
 mod identity;
+pub mod persistence;
 mod registry_plan;
 mod registry_settlement;
 mod schema;
 mod service;
-pub mod persistence;
 pub mod watch;
 
 pub(crate) mod authorized_roots;
@@ -39,9 +39,10 @@ pub use service::DocumentsService;
 pub(crate) use authorized_roots::canonical_root;
 pub(crate) use registry_settlement::RegistrationIdentity;
 
-/// Register the authored Documents operations on the composed schema. The
+/// Register the authored Documents query on the composed schema. The
 /// generated `designDocuments` read contract is registered separately by
-/// [`crate::documents::persistence`].
+/// [`crate::documents::persistence`], and authored mutation views belong to
+/// [`crate::workspace::design_document`].
 pub(crate) fn register_graphql(builder: seaography::Builder) -> seaography::Builder {
-    save::register_graphql(schema::register(builder))
+    schema::register(builder)
 }

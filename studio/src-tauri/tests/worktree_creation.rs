@@ -411,6 +411,8 @@ async fn fixture() -> Fixture {
                 ('{SECOND_TASK}', '{PROJECT}', 'task', '{TASK_TYPE}', '{SECOND_MODULE}',
                  '{SECOND_MODULE}', '{BACKLOG}', 1, 'Second story', 884, 0, 'zc', '',
                  CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+            ALTER TABLE worktracker_issue
+                ADD COLUMN workspace_tab_order text NOT NULL DEFAULT '[]';
             "#
         ))
         .await

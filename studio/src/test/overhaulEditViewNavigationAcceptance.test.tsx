@@ -363,6 +363,19 @@ describe("overhaul acceptance — Edit view navigation zones", () => {
     expect(useClientStore.getState().editViewZone).toBe("stories");
   });
 
+  it("cycles workspace tabs with Cmd+Arrow in edit view", async () => {
+    await renderEditViewWorkspace(EXPANDED_ROWS);
+    const details = screen.getByRole("tab", { name: "Details" });
+    const terminal = screen.getByRole("tab", { name: "codex terminal" });
+    expect(terminal).toHaveAttribute("aria-selected", "true");
+
+    press("ArrowLeft", { metaKey: true });
+    expect(details).toHaveAttribute("aria-selected", "true");
+
+    press("ArrowRight", { metaKey: true });
+    expect(terminal).toHaveAttribute("aria-selected", "true");
+  });
+
   it("leaves an engaged terminal owning its keys until Cmd+Escape", async () => {
     await renderEditViewWorkspace(EXPANDED_ROWS);
 

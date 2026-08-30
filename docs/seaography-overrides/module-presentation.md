@@ -10,7 +10,7 @@
 - Update safety: private. Rank and visibility need concrete module identity and separate field allowlists.
 - Delete safety: private. Deleting a presentation row changes the project back to automatic ordering without the required project lock or intent.
 - Smallest custom seam: `update_module_presentation(module_id, tab_hidden)` is the restricted model-shaped update. `reorder_module_presentation(module_id, before_id, after_id, initial_order_ids)` is the recorded reorder operation.
-- SeaORM transaction/domain module used: the visibility command updates or creates one SeaORM ActiveModel in a transaction. The reorder command locks Project, seeds or updates ModulePresentation ActiveModels, and records the WorkItem revision in the same transaction.
+- SeaORM transaction/domain module used: the restricted visibility view prepares one SeaORM ActiveModel insert or update, and Seaolim owns its transaction and persistence. The reorder command locks Project, seeds or updates ModulePresentation ActiveModels, and records the WorkItem revision in the same transaction.
 - Protected fields excluded: `module_id`, `rank`, and `tab_hidden` are absent from public generated mutation inputs because all generated writes remain private.
 - Identity/scope binding: both writes bind one non-null module identity. Reorder verifies the module, project, active baseline, and concrete neighbor identities inside the transaction.
 - Drift/regression test: the SDL test requires generated ModulePresentation reads, rejects generated writes, and checks the restricted visibility and reorder allowlists. Command tests cover first drag, later drag, stale neighbors, insertion, archived exclusion, and rank/visibility preservation.

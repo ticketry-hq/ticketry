@@ -20,6 +20,7 @@ import { subscribeNativeTerminalChords } from "./nativeTerminalChords";
 import type { TreeRow } from "../shell/ticket-workspace/tasks/TasksPane";
 import { studioKeymapRegistry } from "./keymapRegistry";
 import { useRestoreAndSelectModule } from "../../features/module-tabs";
+import { routeTaskWorkspaceTabAction } from "../shell/ticket-workspace/selected-ticket/appNavigation";
 
 const EMPTY_TASK_ROWS: TreeRow[] = [];
 
@@ -52,6 +53,13 @@ export function useGlobalKeymap(taskRows: TreeRow[] = EMPTY_TASK_ROWS): void {
       // focus position, including an agent terminal in typing mode (#667).
       if (routeTerminalPanelToggle(event, actionId)) return;
       if (routeModulePositionNavigation(event, actionId)) return;
+      if (
+        actionId === "workspace-tab-next" ||
+        actionId === "workspace-tab-previous"
+      ) {
+        routeTaskWorkspaceTabAction(event, actionId);
+        return;
+      }
       if (!sidebarVisible && routeThreeZoneBodyEngagement(event)) return;
       if (sidebarVisible) {
         routeFullSidebarViewCaptureNavigation(

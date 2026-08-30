@@ -102,12 +102,7 @@ impl IntegrateExecutor {
         &self,
         intent: &IntegrateIntent,
     ) -> Result<Result<IntegrationPlan, WorkspaceOperationOutcome>, WorktreeIntegrateError> {
-        let resolved = plan::derive(
-            &self.work_items,
-            &self.git,
-            &intent.top_level_row_id,
-        )
-        .await?;
+        let resolved = plan::derive(&self.work_items, &self.git, &intent.top_level_row_id).await?;
         Ok(match resolved {
             PlanResolution::Plan(plan) if intent.matches(&plan) => Ok(*plan),
             PlanResolution::Plan(plan) => Err(conflicted(

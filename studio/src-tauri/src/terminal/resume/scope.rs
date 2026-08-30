@@ -1,4 +1,4 @@
-use sea_orm::{ColumnTrait, Condition};
+use sea_orm::{sea_query::Expr, ColumnTrait, Condition, ExprTrait};
 
 use crate::entities::terminals::session;
 use crate::terminal::launch::{CreateTerminalSession, TerminalLaunchKind};
@@ -54,15 +54,18 @@ impl ResumeScope {
     pub(crate) fn session_condition(&self) -> Condition {
         match self {
             Self::Task { task_id } => Condition::all()
-                .add(session::Column::TaskId.eq(task_id.clone()))
+                .add(compact_session_column(session::Column::TaskId).eq(task_id.clone()))
                 .add(session::Column::Scope.eq("task")),
             Self::Scratch {
                 project_id,
                 module_id,
             } => Condition::all()
-                .add(session::Column::ProjectId.eq(project_id.clone()))
-                .add(session::Column::ModuleId.eq(module_id.clone()))
-                .add(session::Column::TaskId.eq(compact(crate::documents::SCRATCH_TASK_ID)))
+                .add(compact_session_column(session::Column::ProjectId).eq(project_id.clone()))
+                .add(compact_session_column(session::Column::ModuleId).eq(module_id.clone()))
+                .add(
+                    compact_session_column(session::Column::TaskId)
+                        .eq(compact(crate::documents::SCRATCH_TASK_ID)),
+                )
                 .add(session::Column::Scope.is_in(["plan", "instant"])),
         }
     }
@@ -99,6 +102,10 @@ impl ResumeScope {
             }
         }
     }
+}
+
+pub(crate) fn compact_session_column(column: session::Column) -> Expr {
+    Expr::cust_with_expr("replace(?, '-', '')", Expr::col(column))
 }
 
 pub(crate) fn compact(value: &str) -> String {

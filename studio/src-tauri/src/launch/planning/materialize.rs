@@ -108,10 +108,14 @@ pub fn materialize(
         }),
     };
 
+    let environment = BTreeMap::from([
+        ("COLORTERM".to_owned(), "truecolor".to_owned()),
+        ("FORCE_COLOR".to_owned(), "1".to_owned()),
+    ]);
     Ok(MaterializedLaunch {
         argv,
         working_directory: authority.working_directory.clone(),
-        environment: BTreeMap::new(),
+        environment,
         settings: runtime_settings,
     })
 }

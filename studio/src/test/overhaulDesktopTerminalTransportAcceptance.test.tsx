@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { initializeStudioRuntime, type StudioRuntime } from "../runtime";
 import {
+  createDefaultInteractiveTaskLaunch,
   createTerminalSession,
   resumeTerminalSession,
   terminateTerminalSession,
@@ -75,6 +76,47 @@ describe("desktop terminal transport acceptance", () => {
     ]);
 
     expect(terminalClientTransport).toBe(tauriTerminalClient);
+  });
+
+  it("[overhaul-153a] keeps one task-launch identity across a transport retry", async () => {
+    const calls: Array<Record<string, unknown>> = [];
+    const execute = vi.fn(async (
+      _document: { operationName: string },
+      variables: Record<string, unknown>,
+    ) => {
+      calls.push(variables);
+      if (calls.length === 1) throw new Error("TauRPC response interrupted");
+      return { terminal_session: { agent_run_id: "run-created" } };
+    });
+    initializeStudioRuntime(
+      desktopRuntime((routes) => routes.graphQl(execute as never)),
+    );
+    vi.spyOn(studioApolloClient(), "refetchQueries").mockResolvedValue([]);
+
+    await createDefaultInteractiveTaskLaunch({
+      projectId: "project-1",
+      moduleId: "module-1",
+      issueId: "task-1",
+    });
+
+    expect(calls).toHaveLength(2);
+    expect(calls[0].clientRequestId).toBe(calls[1].clientRequestId);
+  });
+
+  it("[overhaul-153b] does not report a committed terminal mutation as failed when refresh fails", async () => {
+    const execute = vi.fn(async () => ({
+      terminal_session: { agent_run_id: "run-created" },
+    }));
+    initializeStudioRuntime(
+      desktopRuntime((routes) => routes.graphQl(execute as never)),
+    );
+    vi.spyOn(studioApolloClient(), "refetchQueries")
+      .mockRejectedValue(new Error("resumable holdings unavailable"));
+
+    await expect(terminateTerminalSession("run-created")).resolves.toEqual({
+      agent_run_id: "run-created",
+      terminated: true,
+    });
   });
 
   it("[overhaul-154] uses one Rust GraphQL control plane for agent terminals, module shells, and viewer ownership", async () => {

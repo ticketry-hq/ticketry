@@ -73,8 +73,7 @@ pub(crate) async fn derive(
     let Some(row) = row_for(work_items, &top_level_row_id).await? else {
         return Ok(PlanResolution::NoWorktree);
     };
-    let repository = match repository::resolve(work_items, git, owner.module_id.as_deref()).await?
-    {
+    let repository = match repository::resolve(work_items, git, owner.module_id.as_deref()).await? {
         RepositoryResolution::Repository(repository) => repository,
         RepositoryResolution::NoRepository(reason) => {
             return Ok(PlanResolution::NoRepository(reason))

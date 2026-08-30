@@ -25,7 +25,13 @@ export async function closeTerminalTab(
       return;
     }
     if (!isScratchBucket(bucket)) {
-      await refreshTerminalHoldings();
+      try {
+        await refreshTerminalHoldings();
+      } catch (error) {
+        toast.error(
+          `Terminal closed, but resumable sessions could not be refreshed: ${apiErrorMessage(error)}`,
+        );
+      }
     }
   } else {
     term.closeTab(sessionId);

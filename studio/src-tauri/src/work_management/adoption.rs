@@ -280,7 +280,7 @@ async fn validate_manifest(
     database: &DatabaseConnection,
     generation: SchemaGeneration,
 ) -> Result<(), AdoptionError> {
-    for (table, expected) in owned_tables(generation) {
+    for (table, expected) in effective_owned_tables(database, generation).await? {
         let query = format!("PRAGMA table_info('{table}')");
         let rows = database
             .query_all_raw(Statement::from_string(DbBackend::Sqlite, query))
@@ -335,7 +335,7 @@ async fn stable_digest(
     generation: SchemaGeneration,
 ) -> Result<String, AdoptionError> {
     let mut hasher = Sha256::new();
-    for (table, columns) in owned_tables(generation) {
+    for (table, columns) in effective_owned_tables(database, generation).await? {
         hasher.update(table.as_bytes());
         let quoted = columns
             .iter()
@@ -362,6 +362,30 @@ async fn stable_digest(
         }
     }
     Ok(hex_digest(hasher.finalize().as_slice()))
+}
+
+/// First-launch ownership transfer precedes the final migration chain. Once
+/// that chain has committed, its ledger makes LaunchBinding.entry_skill part
+/// of the exact Work Management shape accepted on every later launch.
+async fn effective_owned_tables(
+    database: &DatabaseConnection,
+    generation: SchemaGeneration,
+) -> Result<Vec<(&'static str, Vec<&'static str>)>, AdoptionError> {
+    let entry_skill_installed = table_exists(
+        database,
+        super::launch_binding_entry_skill_migration::LEDGER_TABLE,
+    )
+    .await?;
+    Ok(owned_tables(generation)
+        .into_iter()
+        .map(|(table, columns)| {
+            let mut columns = columns.to_vec();
+            if table == "worktracker_launchbinding" && entry_skill_installed {
+                columns.push("entry_skill");
+            }
+            (table, columns)
+        })
+        .collect())
 }
 
 async fn checkpoint(database: &DatabaseConnection) -> Result<(), AdoptionError> {

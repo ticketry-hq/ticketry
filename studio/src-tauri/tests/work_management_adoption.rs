@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use muxed_studio_lib::work_management::adoption::{adopt, SourceClassification};
+use muxed_studio_lib::work_management::launch_binding_entry_skill_migration;
 use sea_orm::{ConnectionTrait, Database, DbBackend, Statement};
 
 fn repository_root() -> PathBuf {
@@ -63,6 +64,29 @@ async fn adopts_current_django_data_with_verified_recovery_evidence_and_reopens(
         .expect("reopen adopted fixture");
     assert_eq!(second.source, SourceClassification::RustOwned);
     assert_eq!(second.stable_digest, first.stable_digest);
+}
+
+#[tokio::test]
+async fn reopens_after_the_ledger_backed_entry_skill_migration() {
+    let directory = tempfile::tempdir().expect("create fixture directory");
+    let path = directory.path().join("state.db");
+    django_fixture(&path);
+    normalize_fixture_counters(&path).await;
+    adopt(directory.path()).await.expect("adopt fixture");
+
+    let database = Database::connect(format!("sqlite:{}?mode=rw", path.display()))
+        .await
+        .expect("open adopted WorkTracker");
+    launch_binding_entry_skill_migration::install(&database)
+        .await
+        .expect("install entry-skill final shape");
+    database.close().await.expect("close migrated WorkTracker");
+
+    let reopened = adopt(directory.path())
+        .await
+        .expect("reopen ledger-backed entry-skill shape");
+    assert_eq!(reopened.source, SourceClassification::RustOwned);
+    assert!(reopened.snapshot_path.is_none());
 }
 
 #[tokio::test]

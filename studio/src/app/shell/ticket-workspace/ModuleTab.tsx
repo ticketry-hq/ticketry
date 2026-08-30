@@ -106,9 +106,14 @@ export function ModuleTab({
         aria-label={"Hide " + module.name + " tab"}
         title="Hide tab"
         onClick={() => onHide(module.id)}
-        className="absolute top-0 right-0 flex h-full w-7 items-center justify-center text-sm text-text-muted opacity-0 hover:bg-pane-bg hover:text-text-primary focus:opacity-100 focus-visible:outline focus-visible:outline-1 focus-visible:outline-focus-accent group-hover:opacity-100"
+        className="group/close absolute top-0 right-0 flex h-full w-7 items-center justify-center text-sm text-text-muted opacity-0 focus:opacity-100 focus-visible:outline focus-visible:outline-1 focus-visible:outline-focus-accent group-hover:opacity-100"
       >
-        <span aria-hidden="true">×</span>
+        <span
+          aria-hidden="true"
+          className="flex size-4 items-center justify-center leading-none group-hover/close:bg-pane-bg group-hover/close:text-text-primary"
+        >
+          ×
+        </span>
       </button>
     </div>
   );

@@ -130,7 +130,7 @@ impl Fixture {
                     '70000000000000000000000000000001', '{PARENT_TASK}', 'meml', '{PROJECT}',
                     '{MODULE}', 881, '{repository}', '{path}', 'wt/CODIN-881-parent-story',
                     'main', '{base}', '{status}', 0,
-                    '2026-08-01T00:00:00+00:00', '2026-08-01T00:00:00+00:00'
+                    '2026-08-01T00:00:00+00:00', '2026-08-01T00:00:00+00:00', NULL
                 );"#,
                 repository = self.repository_root.display(),
                 path = path.display(),
@@ -195,7 +195,7 @@ async fn fixture() -> Fixture {
                 branch VARCHAR NOT NULL, base_branch VARCHAR NOT NULL,
                 base_commit VARCHAR NOT NULL, status VARCHAR NOT NULL,
                 ephemeral BOOLEAN NOT NULL, created_at VARCHAR NOT NULL,
-                updated_at VARCHAR NOT NULL
+                updated_at VARCHAR NOT NULL, pull_request_url VARCHAR
             );
             CREATE TABLE design_documents (
                 id VARCHAR NOT NULL PRIMARY KEY, module_id VARCHAR NOT NULL,

@@ -405,7 +405,7 @@ async fn fixture() -> Fixture {
                 branch VARCHAR NOT NULL, base_branch VARCHAR NOT NULL,
                 base_commit VARCHAR NOT NULL, status VARCHAR NOT NULL,
                 ephemeral BOOLEAN NOT NULL, created_at VARCHAR NOT NULL,
-                updated_at VARCHAR NOT NULL
+                updated_at VARCHAR NOT NULL, pull_request_url VARCHAR
             );
             CREATE TABLE runs_status_events (
                 cursor INTEGER PRIMARY KEY AUTOINCREMENT, event_id TEXT NOT NULL UNIQUE,

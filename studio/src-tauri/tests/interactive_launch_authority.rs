@@ -108,7 +108,8 @@ async fn fixture() -> Fixture {
                 repo_root text NOT NULL, path text NOT NULL, branch text NOT NULL,
                 base_branch text NOT NULL, base_commit text NOT NULL,
                 status text NOT NULL, ephemeral bool NOT NULL,
-                created_at text NOT NULL, updated_at text NOT NULL
+                created_at text NOT NULL, updated_at text NOT NULL,
+                pull_request_url text
             );
             CREATE TABLE design_documents (
                 id text PRIMARY KEY, module_id text NOT NULL, task_id text NOT NULL,

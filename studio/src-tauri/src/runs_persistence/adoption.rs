@@ -57,6 +57,7 @@ impl DjangoGeneration {
 #[serde(rename_all = "kebab-case", tag = "owner", content = "generation")]
 pub enum SourceClassification {
     Django(DjangoGeneration),
+    RustOwnedV1,
     RustOwned,
 }
 
@@ -123,10 +124,13 @@ pub async fn adopt(data_directory: &Path) -> Result<AdoptionEvidence, RunsPersis
         .execute_unprepared("PRAGMA foreign_keys=OFF")
         .await
         .map_err(storage)?;
-    let SourceClassification::Django(generation) = source else {
-        unreachable!()
-    };
-    schema::install(&writable, Some(generation.leaf()), &before).await?;
+    match source {
+        SourceClassification::Django(generation) => {
+            schema::install(&writable, Some(generation.leaf()), &before).await?
+        }
+        SourceClassification::RustOwnedV1 => schema::upgrade_v1(&writable, &before).await?,
+        SourceClassification::RustOwned => unreachable!(),
+    }
     writable
         .execute_unprepared("PRAGMA foreign_keys=ON")
         .await
@@ -171,12 +175,13 @@ async fn classify(
             .map_err(storage)?
             .ok_or_else(|| incompatible("Runs ownership ledger is incomplete"))?;
         let version = row.try_get::<i32>("", "version").map_err(storage)?;
-        if version != schema::VERSION {
-            return Err(incompatible(format!(
+        return match version {
+            1 => Ok(SourceClassification::RustOwnedV1),
+            schema::VERSION => Ok(SourceClassification::RustOwned),
+            _ => Err(incompatible(format!(
                 "unknown Rust Runs schema version {version}"
-            )));
-        }
-        return Ok(SourceClassification::RustOwned);
+            ))),
+        };
     }
     if !table_exists(database, "django_migrations").await? {
         return Err(incompatible(
@@ -230,31 +235,37 @@ async fn validate_manifest(
         .iter()
         .map(|value| (*value).to_owned())
         .collect::<BTreeSet<_>>();
-    if matches!(source, SourceClassification::Django(generation) if generation.number() < 17) {
-        expected_agent.remove("launch_unattended");
-    }
-    if matches!(source, SourceClassification::Django(generation) if generation.number() < 16) {
-        expected_agent.remove("launch_reasoning");
-    }
-    if matches!(
-        source,
-        SourceClassification::Django(DjangoGeneration::Current | DjangoGeneration::Merged)
-    ) {
-        expected_agent.insert("model".to_owned());
-        expected_agent.insert("reasoning".to_owned());
-    }
-    if matches!(source, SourceClassification::Django(generation) if generation.number() < 14) {
-        expected_agent.remove("launch_state");
-        expected_agent.remove("launch_model");
-    }
-    if matches!(
-        source,
-        SourceClassification::Django(DjangoGeneration::LegacyTerminalAuthority)
-    ) {
-        // already part of the final owned shape
-    } else if matches!(source, SourceClassification::Django(generation) if generation.number() < 16)
-    {
-        expected_agent.remove("initial_prompt");
+    match source {
+        SourceClassification::RustOwned => {}
+        SourceClassification::RustOwnedV1 => {
+            expected_agent.remove("initial_prompt");
+            expected_agent.remove("launch_reasoning");
+            expected_agent.remove("launch_unattended");
+            expected_agent.insert("model".to_owned());
+            expected_agent.insert("reasoning".to_owned());
+        }
+        SourceClassification::Django(generation) => {
+            if generation.number() < 17 {
+                expected_agent.remove("launch_unattended");
+            }
+            if generation.number() < 16 {
+                expected_agent.remove("launch_reasoning");
+            }
+            if matches!(
+                generation,
+                DjangoGeneration::Current | DjangoGeneration::Merged
+            ) {
+                expected_agent.insert("model".to_owned());
+                expected_agent.insert("reasoning".to_owned());
+            }
+            if generation.number() < 14 {
+                expected_agent.remove("launch_state");
+                expected_agent.remove("launch_model");
+            }
+            if generation != DjangoGeneration::LegacyTerminalAuthority && generation.number() < 16 {
+                expected_agent.remove("initial_prompt");
+            }
+        }
     }
     if matches!(source, SourceClassification::Django(generation) if generation != DjangoGeneration::Current)
         && agent.contains("run_kind")
@@ -271,10 +282,18 @@ async fn validate_manifest(
         .map(|value| (*value).to_owned())
         .collect::<BTreeSet<_>>();
     let generation = digest_generation(database, source).await?;
-    if source == SourceClassification::RustOwned || generation.number() >= 9 {
+    if matches!(
+        source,
+        SourceClassification::RustOwned | SourceClassification::RustOwnedV1
+    ) || generation.number() >= 9
+    {
         expected_attempt.extend(["error_details".to_owned(), "retryable".to_owned()]);
     }
-    if source == SourceClassification::RustOwned || generation.number() >= 11 {
+    if matches!(
+        source,
+        SourceClassification::RustOwned | SourceClassification::RustOwnedV1
+    ) || generation.number() >= 11
+    {
         expected_attempt.insert("dismissed_at".to_owned());
     }
     let attempt = schema::columns(database, "automation_attempts").await?;
@@ -283,7 +302,10 @@ async fn validate_manifest(
             "unknown schema for automation_attempts: observed {attempt:?}"
         )));
     }
-    if source == SourceClassification::RustOwned {
+    if matches!(
+        source,
+        SourceClassification::RustOwned | SourceClassification::RustOwnedV1
+    ) {
         for table in &schema::AUTHORED_TABLES[2..] {
             if !table_exists(database, table).await? {
                 return Err(incompatible(format!("Rust Runs schema is missing {table}")));

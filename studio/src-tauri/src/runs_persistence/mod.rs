@@ -12,6 +12,8 @@
 //! cleaning up. Callers may open only explicitly supplied databases.
 
 mod adoption;
+#[cfg(test)]
+mod adoption_tests;
 mod attempt_commands;
 mod attempt_queries;
 use crate::entities::runs as entities;

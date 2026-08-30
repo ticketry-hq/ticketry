@@ -4,7 +4,7 @@ use sea_orm::{ConnectionTrait, DbBackend, Statement, TransactionTrait};
 
 use super::{RunsPersistenceError, RunsPersistenceErrorCode};
 
-pub const VERSION: i32 = 1;
+pub const VERSION: i32 = 2;
 pub const CURRENT_DJANGO_LEAF: &str = "0013_agentrun_launch_configuration_snapshot";
 pub const LEGACY_TERMINAL_DJANGO_LEAF: &str = "0015_agentrun_initial_prompt";
 pub const MERGED_DJANGO_LEAF: &str = "0015_merge_20260819_1521";
@@ -80,6 +80,44 @@ pub(crate) async fn install(
                 stable_digest.into(),
             ],
         ))
+        .await
+        .map_err(storage)?;
+    transaction.commit().await.map_err(storage)?;
+    Ok(())
+}
+
+pub(crate) async fn upgrade_v1(
+    database: &sea_orm::DatabaseConnection,
+    stable_digest: &str,
+) -> Result<(), RunsPersistenceError> {
+    let transaction = database.begin().await.map_err(storage)?;
+    rebuild_premerge_agent_runs(&transaction).await?;
+    transaction
+        .execute_unprepared(
+            "ALTER TABLE ticketry_runs_adoption RENAME TO ticketry_runs_adoption__v1;\n\
+             CREATE TABLE ticketry_runs_adoption (\n\
+                 singleton integer PRIMARY KEY CHECK (singleton = 1),\n\
+                 version integer NOT NULL CHECK (version = 2),\n\
+                 source_leaf varchar(255) NOT NULL,\n\
+                 stable_digest char(64) NOT NULL,\n\
+                 adopted_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP\n\
+             );",
+        )
+        .await
+        .map_err(storage)?;
+    transaction
+        .execute_raw(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
+            "INSERT INTO ticketry_runs_adoption \
+             (singleton, version, source_leaf, stable_digest, adopted_at) \
+             SELECT singleton, 2, source_leaf, ?, adopted_at \
+             FROM ticketry_runs_adoption__v1",
+            [stable_digest.into()],
+        ))
+        .await
+        .map_err(storage)?;
+    transaction
+        .execute_unprepared("DROP TABLE ticketry_runs_adoption__v1")
         .await
         .map_err(storage)?;
     transaction.commit().await.map_err(storage)?;
@@ -240,7 +278,7 @@ pub(crate) const DJANGO_MIGRATIONS: [&str; 13] = [
 const FOCUSED_SCHEMA: &str = r#"
 CREATE TABLE ticketry_runs_adoption (
     singleton integer PRIMARY KEY CHECK (singleton = 1),
-    version integer NOT NULL CHECK (version = 1),
+    version integer NOT NULL CHECK (version = 2),
     source_leaf varchar(255) NOT NULL,
     stable_digest char(64) NOT NULL,
     adopted_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP

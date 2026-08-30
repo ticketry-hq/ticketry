@@ -70,6 +70,7 @@ pub(crate) async fn insert_row(
         ephemeral: Set(false),
         created_at: Set(stamp.clone()),
         updated_at: Set(stamp),
+        pull_request_url: Set(None),
     }
     .insert(transaction)
     .await

@@ -16,6 +16,7 @@ use serde_json::{json, Value};
 use crate::workspace::operations::{WorkspaceOperationIntent, WorkspaceOperationKind};
 use crate::worktree::create::identity::resource_key;
 
+use super::cleanup::CleanupExpectation;
 use super::plan::DiscardPlan;
 
 /// The intent schema version this build writes and decodes.
@@ -31,6 +32,25 @@ pub(crate) fn intent(operation_id: &str, plan: &DiscardPlan) -> WorkspaceOperati
         // isolated together when one of them cannot be decided.
         resource_key: resource_key(&plan.top_level_row_id),
         payload: payload(plan),
+    }
+}
+
+pub(crate) fn cleanup_intent(
+    operation_id: &str,
+    plan: &DiscardPlan,
+    expectation: &CleanupExpectation,
+) -> WorkspaceOperationIntent {
+    let mut payload = payload(plan);
+    payload["cleanup"] = json!({
+        "pullRequestUrl": expectation.pull_request_url,
+        "headCommit": expectation.head_commit,
+    });
+    WorkspaceOperationIntent {
+        operation_id: operation_id.to_owned(),
+        kind: WorkspaceOperationKind::WorktreeDiscard,
+        intent_version: INTENT_VERSION,
+        resource_key: resource_key(&plan.top_level_row_id),
+        payload,
     }
 }
 
@@ -52,6 +72,7 @@ pub(crate) struct DiscardIntent {
     pub(crate) branch: String,
     pub(crate) checkout_name: String,
     pub(crate) repository_digest: String,
+    pub(crate) cleanup: Option<CleanupExpectation>,
 }
 
 impl DiscardIntent {
@@ -59,12 +80,20 @@ impl DiscardIntent {
     /// shape this build does not understand, which is a reason to defer rather
     /// than to guess — and a guess here would remove something.
     pub(crate) fn decode(payload: &Value) -> Option<Self> {
+        let cleanup = match payload.get("cleanup") {
+            Some(cleanup) => Some(CleanupExpectation {
+                pull_request_url: field(cleanup, "pullRequestUrl")?,
+                head_commit: field(cleanup, "headCommit")?,
+            }),
+            None => None,
+        };
         Some(Self {
             worktree_id: field(payload, "worktreeId")?,
             top_level_row_id: field(payload, "taskId")?,
             branch: field(payload, "branch")?,
             checkout_name: field(payload, "checkoutName")?,
             repository_digest: field(payload, "repositoryDigest")?,
+            cleanup,
         })
     }
 

@@ -45,9 +45,9 @@ function worktreeQueryData(status: WorktreeStatus): WorktreeStatusQuery {
  *   - conflict  → a display-only resolve-in-worktree line (primary untouched),
  *   - no_repo   → a "changes not isolated" note with no controls.
  *
- * There is no "Land it" control: integration fires automatically when the
- * task is marked Done (a backend close hook). Query owns status reads; Create
- * and Discard each write their own authoritative response through the key.
+ * Work Item completion does not mutate this checkout. Query owns status reads;
+ * Create and Discard each write their own authoritative response through the
+ * key.
  *
  * Discard stays explicitly confirmed: the first click asks, and only the
  * second one sends. The request itself carries no path, branch, or repository
@@ -174,15 +174,14 @@ export function WorktreeBlock({
       </div>
     );
   } else if (status.conflict) {
-    // kind=worktree, in conflict after an auto-land attempt.
+    // kind=worktree, with unresolved Git conflicts.
     body = (
       <div className="space-y-1">
         <div className="text-lifecycle-danger">Conflict</div>
         <div className="text-text-muted">
-          Auto-land hit a merge conflict. Resolve it{" "}
-          <span className="text-text-primary">in the worktree</span> and commit
-          — your primary checkout is untouched. Re-marking the task Done
-          retries.
+          Resolve and commit the conflict{" "}
+          <span className="text-text-primary">in the worktree</span>. Your
+          primary checkout and Work Item workflow stay independent.
         </div>
         <div className={monoCls}>{status.path}</div>
         {renderDiscard()}
@@ -203,7 +202,9 @@ export function WorktreeBlock({
           </span>
           <span className="text-text-muted">↑{status.ahead ?? 0}</span>
           <span className="text-text-muted">↓{status.behind ?? 0}</span>
-          <span className="text-text-muted">· lands automatically on Done</span>
+          <span className="text-text-muted">
+            · completion leaves this worktree unchanged
+          </span>
         </div>
         {renderDiscard()}
       </div>

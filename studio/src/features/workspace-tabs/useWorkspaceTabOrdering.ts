@@ -18,6 +18,7 @@ export function useWorkspaceTabOrdering({
   terminalTabs,
   resumableSessions,
   visibleOrder,
+  hasChangesTab,
 }: {
   workItemId: string | null;
   savedOrder: WorkspaceTabOrderQuery;
@@ -26,6 +27,7 @@ export function useWorkspaceTabOrdering({
   terminalTabs: readonly SessionTab[];
   resumableSessions: readonly ResumableTerminalSession[];
   visibleOrder: readonly WorkspaceTabIdentity[];
+  hasChangesTab: boolean;
 }) {
   const toPersistentIdentity = useCallback(
     (identity: WorkspaceTabIdentity): WorkspaceTabIdentity => {
@@ -41,6 +43,7 @@ export function useWorkspaceTabOrdering({
   const knownIdentities = useMemo(() => {
     const identities: WorkspaceTabIdentity[] = [
       { kind: "details" },
+      ...(hasChangesTab ? [{ kind: "changes" as const }] : []),
       ...savedOrder.order,
       ...documents.map((document) => ({
         kind: "doc" as const,
@@ -58,7 +61,7 @@ export function useWorkspaceTabOrdering({
     return [...new Map(
       identities.map((identity) => [workspaceTabIdentityKey(identity), identity]),
     ).values()];
-  }, [documents, resumableSessions, savedOrder.order, terminalTabs]);
+  }, [documents, hasChangesTab, resumableSessions, savedOrder.order, terminalTabs]);
 
   const reorderDrag = useWorkspaceTabReorderDrag({
     workItemId,
@@ -73,6 +76,7 @@ export function useWorkspaceTabOrdering({
     orderReady: savedOrder.isReady,
     visibleIdentities: [
       { kind: "details" },
+      ...(hasChangesTab ? [{ kind: "changes" as const }] : []),
       ...openDocuments.map((document) => ({
         kind: "doc" as const,
         id: document.id,

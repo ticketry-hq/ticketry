@@ -7,6 +7,7 @@ use muxed_studio_lib::{
         launch_binding_entry_skill_migration, module_presentation_migration, open_for_commands,
         project_onboarding_migration, workflow_color_migration, workspace_tab_order_migration,
     },
+    worktree::persistence::pull_request_url_migration,
 };
 use sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, Statement};
 
@@ -268,6 +269,10 @@ pub async fn assert_final(database: &DatabaseConnection) {
         (
             provider_catalog_migrations::CODEX_SPARK_LEDGER,
             provider_catalog_migrations::CODEX_SPARK_MIGRATION_ID,
+        ),
+        (
+            pull_request_url_migration::LEDGER_TABLE,
+            pull_request_url_migration::MIGRATION_ID,
         ),
     ] {
         let row = database

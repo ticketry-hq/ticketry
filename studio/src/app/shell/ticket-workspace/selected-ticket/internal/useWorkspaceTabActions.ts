@@ -100,6 +100,11 @@ export function useWorkspaceTabActions({
       if (owner === "studio") {
         rememberStudioWorkspaceTarget(bucket, { kind: "details" });
       }
+    } else if (tab.kind === "changes") {
+      setActive(bucket, "changes");
+      if (owner === "studio") {
+        rememberStudioWorkspaceTarget(bucket, { kind: "changes" });
+      }
     } else if (tab.kind === "doc") {
       setActiveDoc(bucket, tab.id);
       const relPath = documents.find(

@@ -96,6 +96,7 @@ async fn shipping_schema_serves_the_generated_worktree_read_contract() {
     for fragment in [
         "worktrees(filters: WorktreesFilterInput",
         "type Worktrees {",
+        "pullRequestUrl: String",
         "type WorktreesConnection {",
         "type WorktreesEdge {",
         "input WorktreesFilterInput {",
@@ -107,6 +108,23 @@ async fn shipping_schema_serves_the_generated_worktree_read_contract() {
     ] {
         assert!(sdl.contains(fragment), "missing generated read {fragment}");
     }
+}
+
+#[tokio::test]
+async fn shipping_schema_exposes_only_explicit_pull_request_actions() {
+    let sdl = generated_schema_sdl().await.expect("build shipping schema");
+
+    for field in [
+        "worktree_pull_request_create(",
+        "module_checkout_pull_request_create(",
+        "worktree_pull_request_replace(",
+        "worktree_pull_request_follow_up(",
+        "worktree_cleanup(",
+        "worktree_pull_request_merge_prepare(",
+    ] {
+        assert!(sdl.contains(field), "missing pull-request action {field}");
+    }
+    assert!(!sdl.contains("worktreesUpdate("));
 }
 
 #[tokio::test]

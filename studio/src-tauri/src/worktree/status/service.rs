@@ -49,6 +49,14 @@ impl WorktreeStatusService {
         &self.locks
     }
 
+    pub(crate) fn work_items(&self) -> &DatabaseConnection {
+        &self.work_items
+    }
+
+    pub(crate) fn git(&self) -> &GitPort {
+        &self.git
+    }
+
     pub async fn status(&self, task_id: &str) -> Result<WorktreeStatusView, WorktreeStatusError> {
         let owner = owner::resolve(&self.work_items, task_id).await?;
         match self.row_for(&owner).await? {

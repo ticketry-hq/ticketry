@@ -13,6 +13,7 @@ import {
 } from "../../../../../features/agents/terminal";
 import type { TaskWorkspaceTabIdentity } from "./useTaskWorkspaceTabNavigation";
 import type { DesignDoc } from "../../../../../features/agents/types";
+import type { TabKind } from "../../../../../features/agents/types";
 import {
   readStudioWorkspaceTarget,
   rememberStudioWorkspaceTarget,
@@ -29,7 +30,7 @@ export function useStudioWorkspaceRestoration({
 }: {
   bucket: string | null;
   owner: ForegroundOwner;
-  setActive: (bucket: string, active: "details" | "terminal") => void;
+  setActive: (bucket: string, active: TabKind) => void;
   requestedSurfaceRef: MutableRefObject<TaskWorkspaceTabIdentity | null>;
   requestedTerminalRef: MutableRefObject<string | null>;
   rememberPendingTerminalRef: MutableRefObject<boolean>;
@@ -53,7 +54,10 @@ export function useStudioWorkspaceRestoration({
     // Keep Details visible while durable targets hydrate.
     restoreRequestRef.current = { bucket, generation, target };
     setActive(bucket, "details");
-    if (target.kind === "details") restoreRequestRef.current = null;
+    if (target.kind === "details" || target.kind === "changes") {
+      restoreRequestRef.current = null;
+      setActive(bucket, target.kind);
+    }
   }, [
     bucket,
     owner,

@@ -73,12 +73,9 @@ retired `/api/work-tracker` surface.
   convergence after Rust-backed provider activation changes;
 - real Git worktree creation, filesystem dirty-state detection, reload
   persistence, nested-task checkout sharing, cancel-safe confirmation,
-  confirmed discard, and automatic committed-work landing on `Done` through
-  the Rust reconciliation hook—including base-checkout content, index/UI
-  convergence, checkout cleanup, child-completion non-landing, and
-  merge-conflict isolation from the primary checkout—plus dirty-work refusal
-  without data loss and the explicit direct-path fallback for modules outside
-  Git;
+  confirmed discard, and independent Work Item completion that retains clean,
+  dirty, committed, and diverged worktrees without changing the base checkout,
+  plus the explicit direct-path fallback for modules outside Git;
 - local-file attachment creation through the Rust MCP, missing-file refusal
   without phantom rows, and rendering through the shared GraphQL-backed
   work-item details, including reload persistence;

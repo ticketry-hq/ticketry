@@ -26,11 +26,6 @@ pub struct WorktrackerMcpService {
     graph_runs: Option<crate::graph_run_service::GraphRunService>,
     terminal_cleanup: TerminalCleanupService,
     terminal_launch: Option<crate::terminal::launch::TerminalLaunchService>,
-    /// Automatic worktree integration, when the journal it needs is installed.
-    /// It is not an MCP tool and has no request path: this listener simply
-    /// happens to be where committed transitions are produced, so it is also
-    /// where the completions they publish are delivered.
-    integrations: Option<crate::worktree::integrate::WorktreeIntegrateService>,
     readiness_data_directory: PathBuf,
     tools: Arc<Vec<Tool>>,
 }
@@ -44,7 +39,6 @@ impl WorktrackerMcpService {
         graph_runs: Option<crate::graph_run_service::GraphRunService>,
         terminal_cleanup: TerminalCleanupService,
         terminal_launch: Option<crate::terminal::launch::TerminalLaunchService>,
-        integrations: Option<crate::worktree::integrate::WorktreeIntegrateService>,
         readiness_data_directory: PathBuf,
     ) -> Self {
         Self {
@@ -55,27 +49,8 @@ impl WorktrackerMcpService {
             graph_runs,
             terminal_cleanup,
             terminal_launch,
-            integrations,
             readiness_data_directory,
             tools: Arc::new(registry::tools()),
-        }
-    }
-
-    /// Land the checkouts whose Work Items have been completed.
-    ///
-    /// Delivery is bounded and idempotent, so running it beside the launch
-    /// policy pass costs one indexed query when there is nothing to do. A
-    /// completion committed while the listener was down is picked up by the
-    /// first pass after it returns.
-    pub async fn reconcile_worktree_integrations(&self) {
-        let Some(integrations) = &self.integrations else {
-            return;
-        };
-        if let Err(error) = integrations
-            .deliver_pending(crate::worktree::integrate::MAX_DELIVERY_BATCH)
-            .await
-        {
-            eprintln!("Ticketry could not deliver completed worktree integrations: {error}");
         }
     }
 

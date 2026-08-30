@@ -19,6 +19,7 @@ use crate::entities::{documents::design_document, runs::agent_run};
 #[serde(rename_all = "lowercase")]
 pub enum WorkspaceTabKind {
     Details,
+    Changes,
     Doc,
     Terminal,
 }
@@ -48,12 +49,16 @@ pub fn parse(value: serde_json::Value) -> Result<Vec<WorkspaceTabIdentity>, Comm
             .and_then(serde_json::Value::as_str)
             .ok_or_else(|| malformed("Each tab requires a string kind."))?;
         let identity = match kind {
-            "details" => {
+            "details" | "changes" => {
                 if object.contains_key("id") {
-                    return Err(malformed("Details must not include an id."));
+                    return Err(malformed(format!("{kind} must not include an id.")));
                 }
                 WorkspaceTabIdentity {
-                    kind: WorkspaceTabKind::Details,
+                    kind: if kind == "details" {
+                        WorkspaceTabKind::Details
+                    } else {
+                        WorkspaceTabKind::Changes
+                    },
                     id: None,
                 }
             }
@@ -73,7 +78,11 @@ pub fn parse(value: serde_json::Value) -> Result<Vec<WorkspaceTabIdentity>, Comm
                     id: Some(id.to_owned()),
                 }
             }
-            _ => return Err(malformed("A tab kind must be details, doc, or terminal.")),
+            _ => {
+                return Err(malformed(
+                    "A tab kind must be details, changes, doc, or terminal.",
+                ))
+            }
         };
         if !seen.insert(identity.clone()) {
             return Err(malformed("Workspace tab identities must be unique."));
@@ -152,7 +161,7 @@ async fn validate_ownership(
     let mut retained = Vec::with_capacity(order.len());
     for identity in order {
         let owner = match (&identity.kind, identity.id.as_deref()) {
-            (WorkspaceTabKind::Details, _) => {
+            (WorkspaceTabKind::Details | WorkspaceTabKind::Changes, _) => {
                 retained.push(identity);
                 continue;
             }
@@ -257,6 +266,17 @@ mod tests {
                     id: Some("doc-1".to_owned())
                 }
             ]
+        );
+    }
+
+    #[test]
+    fn parses_the_idless_changes_identity() {
+        assert_eq!(
+            parse(json!([{"kind": "changes"}])).unwrap(),
+            vec![WorkspaceTabIdentity {
+                kind: WorkspaceTabKind::Changes,
+                id: None,
+            }]
         );
     }
 

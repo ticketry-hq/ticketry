@@ -32,6 +32,7 @@ pub(crate) struct DiscardPlan {
     /// The base the checkout would have integrated into. A discard never
     /// touches it; it is published so a consumer can name what was abandoned.
     pub(crate) base_ref: String,
+    pub(crate) pull_request_url: Option<String>,
     pub(crate) ephemeral: bool,
 }
 
@@ -49,6 +50,7 @@ impl DiscardPlan {
             checkout,
             branch: row.branch.clone(),
             base_ref: row.base_branch.clone(),
+            pull_request_url: row.pull_request_url.clone(),
             ephemeral: row.ephemeral,
         }
     }

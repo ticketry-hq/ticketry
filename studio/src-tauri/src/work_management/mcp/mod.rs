@@ -12,7 +12,6 @@ mod scope;
 mod service;
 mod terminal_launch_ingress;
 mod workflow_tools;
-mod worktree_integrations;
 
 use std::{io, net::SocketAddr, path::PathBuf};
 
@@ -47,7 +46,6 @@ pub struct McpRuntime {
     address: SocketAddr,
     cancellation: CancellationToken,
     task: JoinHandle<()>,
-    reconciler: JoinHandle<()>,
     authority: RunAuthority,
 }
 
@@ -106,7 +104,6 @@ impl McpRuntime {
             database.clone(),
             ingress_credential.clone(),
         );
-        let integrations = worktree_integrations::compose(&database).await;
         let launch_policy =
             crate::work_management::launch_policy::LaunchPolicyResolver::new(database.clone());
         let graph_runs = terminal_launch.clone().map(|terminal_launch| {
@@ -124,14 +121,12 @@ impl McpRuntime {
             graph_runs,
             crate::terminal::cleanup::TerminalCleanupService::new(database, cleanup_runtime),
             terminal_launch.clone(),
-            integrations,
             configuration
                 .database_path
                 .parent()
                 .unwrap_or_else(|| std::path::Path::new("."))
                 .to_path_buf(),
         );
-        let reconciliation_state = service_state.clone();
         let service: StreamableHttpService<WorktrackerMcpService, LocalSessionManager> =
             StreamableHttpService::new(
                 move || Ok(service_state.clone()),
@@ -189,16 +184,6 @@ impl McpRuntime {
                     )),
             );
         }
-        let reconciliation_shutdown = cancellation.clone();
-        let reconciler = tokio::spawn(async move {
-            loop {
-                reconciliation_state.reconcile_worktree_integrations().await;
-                tokio::select! {
-                    _ = reconciliation_shutdown.cancelled() => break,
-                    _ = tokio::time::sleep(std::time::Duration::from_secs(1)) => {}
-                }
-            }
-        });
         let shutdown = cancellation.clone();
         let task = tokio::spawn(async move {
             if let Err(error) = axum::serve(listener, router)
@@ -212,7 +197,6 @@ impl McpRuntime {
             address,
             cancellation,
             task,
-            reconciler,
             authority,
         };
         verify_registry()?;
@@ -247,7 +231,6 @@ impl McpRuntime {
     pub async fn shutdown(mut self) {
         self.cancellation.cancel();
         let _ = (&mut self.task).await;
-        let _ = (&mut self.reconciler).await;
     }
 }
 
@@ -284,7 +267,6 @@ impl Drop for McpRuntime {
     fn drop(&mut self) {
         self.cancellation.cancel();
         self.task.abort();
-        self.reconciler.abort();
     }
 }
 

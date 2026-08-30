@@ -125,6 +125,14 @@ async fn adopts_existing_rows_in_place_and_reopens_deterministically() {
         .await,
         "0001_initial"
     );
+    assert_eq!(
+        scalar(
+            &database,
+            "SELECT CASE WHEN pull_request_url IS NULL THEN 'null' ELSE pull_request_url END AS value FROM worktrees WHERE ticket_seq=881",
+        )
+        .await,
+        "null"
+    );
 }
 
 #[tokio::test]

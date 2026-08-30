@@ -3,6 +3,7 @@
 export { WorktreeBlock } from "./WorktreeBlock";
 export { TaskWorktreeChanges } from "./changes/TaskWorktreeChanges";
 export { ModuleVersionControl } from "./changes/ModuleVersionControl";
+export { WorktreeChangesDocument } from "./generated/worktreeChanges.documents";
 export {
   useHasTaskWorktree,
   useTaskWorktreeAvailability,

@@ -1,7 +1,9 @@
 import { useEffect } from "react";
 
-import { useTaskWorktreeAvailability } from "../../../../../features/agents/worktrees";
-import { WorktreeChangesDocument } from "../../../../../features/agents/worktrees/generated/worktreeChanges.documents";
+import {
+  useTaskWorktreeAvailability,
+  WorktreeChangesDocument,
+} from "../../../../../features/agents/worktrees";
 import type { ForegroundOwner } from "../../../../../features/agents/terminal";
 import { studioApolloClient } from "../../../../../shared/apollo/client";
 import { useClientStore } from "../../../../../state/clientStore";

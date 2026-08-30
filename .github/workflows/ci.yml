@@ -30,6 +30,11 @@ jobs:
       - name: Install JavaScript packages
         run: npm ci
 
+      - name: Install desktop test prerequisites
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+        run: command -v tmux || brew install tmux
+
       - name: Studio typecheck, tests, and build
         run: |
           npm run typecheck
@@ -47,9 +52,7 @@ jobs:
 
       - name: Frontend-to-agent desktop acceptance
         timeout-minutes: 30
-        run: |
-          command -v tmux || brew install tmux
-          npm run test:e2e:desktop --workspace @worktracker/studio
+        run: npm run test:e2e:desktop --workspace @worktracker/studio
 
       - name: Release contract tests
         run: |

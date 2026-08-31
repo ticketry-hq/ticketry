@@ -32,8 +32,13 @@ export class GhosttyVtTerminal {
   private readonly reader: FrameReader;
   private readonly terminal: number;
   private readonly state: number;
-  private readonly rowIterator: number;
-  private readonly cells: number;
+  /**
+   * Slots, not handles: `ghostty_render_state_get(ROW_ITERATOR)` and
+   * `ghostty_render_state_row_get(CELLS)` take the address of a handle and may
+   * rebind it, so the handle is re-read from its slot after every such call.
+   */
+  private readonly rowIteratorSlot: number;
+  private readonly cellsSlot: number;
   private readonly scratch: number;
   private disposed = false;
 
@@ -48,10 +53,10 @@ export class GhosttyVtTerminal {
     this.state = takeOpaque(runtime, "ghostty_render_state_new", (out) =>
       exports.ghostty_render_state_new(0, out),
     );
-    this.rowIterator = takeOpaque(runtime, "ghostty_render_state_row_iterator_new", (out) =>
+    this.rowIteratorSlot = openSlot(runtime, "ghostty_render_state_row_iterator_new", (out) =>
       exports.ghostty_render_state_row_iterator_new(0, out),
     );
-    this.cells = takeOpaque(runtime, "ghostty_render_state_row_cells_new", (out) =>
+    this.cellsSlot = openSlot(runtime, "ghostty_render_state_row_cells_new", (out) =>
       exports.ghostty_render_state_row_cells_new(0, out),
     );
     this.scratch = exports.ghostty_wasm_alloc_u8_array(SCRATCH_BYTES);
@@ -115,15 +120,23 @@ export class GhosttyVtTerminal {
     if (dirty !== "none") {
       this.runtime.check(
         "ghostty_render_state_get(ROW_ITERATOR)",
-        exports.ghostty_render_state_get(this.state, abi.renderData.rowIterator, this.rowIterator),
+        exports.ghostty_render_state_get(
+          this.state,
+          abi.renderData.rowIterator,
+          this.rowIteratorSlot,
+        ),
       );
-      while (exports.ghostty_render_state_row_iterator_next_dirty(this.rowIterator, reader.slot)) {
+      const iterator = this.handleAt(this.rowIteratorSlot);
+      while (exports.ghostty_render_state_row_iterator_next_dirty(iterator, reader.slot)) {
         const y = this.runtime.view().getUint16(reader.slot, true);
         this.runtime.check(
           "ghostty_render_state_row_get(CELLS)",
-          exports.ghostty_render_state_row_get(this.rowIterator, abi.rowData.cells, this.cells),
+          exports.ghostty_render_state_row_get(iterator, abi.rowData.cells, this.cellsSlot),
         );
-        dirtyRows.push({ y, cells: reader.readRowCells(this.cells, cols, colors) });
+        dirtyRows.push({
+          y,
+          cells: reader.readRowCells(this.handleAt(this.cellsSlot), cols, colors),
+        });
       }
     }
 
@@ -136,6 +149,24 @@ export class GhosttyVtTerminal {
       cursor,
       dirtyRows,
     };
+  }
+
+  /**
+   * Force the next frame to report every row dirty. Needed after a canvas
+   * resize, which clears the backing store that partial repaint relies on.
+   */
+  markDirty(): void {
+    this.assertLive();
+    const view = this.runtime.view();
+    view.setUint32(this.reader.slot, this.abi.dirty.full, true);
+    this.runtime.check(
+      "ghostty_render_state_set(DIRTY)",
+      this.runtime.exports.ghostty_render_state_set(
+        this.state,
+        this.abi.renderOption.dirty,
+        this.reader.slot,
+      ),
+    );
   }
 
   /** Mark the frame consumed so the next `frame()` reports only new damage. */
@@ -152,16 +183,33 @@ export class GhosttyVtTerminal {
     this.disposed = true;
     const { exports } = this.runtime;
     this.reader.dispose();
-    exports.ghostty_render_state_row_cells_free(this.cells);
-    exports.ghostty_render_state_row_iterator_free(this.rowIterator);
+    exports.ghostty_render_state_row_cells_free(this.handleAt(this.cellsSlot));
+    exports.ghostty_render_state_row_iterator_free(this.handleAt(this.rowIteratorSlot));
     exports.ghostty_render_state_free(this.state);
     exports.ghostty_terminal_free(this.terminal);
+    exports.ghostty_wasm_free_opaque(this.cellsSlot);
+    exports.ghostty_wasm_free_opaque(this.rowIteratorSlot);
     exports.ghostty_wasm_free_u8_array(this.scratch, SCRATCH_BYTES);
+  }
+
+  private handleAt(slot: number): number {
+    return this.runtime.view().getUint32(slot, true);
   }
 
   private assertLive(): void {
     if (this.disposed) throw new Error("ghostty-vt terminal used after dispose");
   }
+}
+
+/** Construct into a retained opaque slot; the slot outlives the call. */
+function openSlot(
+  runtime: GhosttyVtRuntime,
+  call: string,
+  construct: (out: number) => number,
+): number {
+  const slot = runtime.exports.ghostty_wasm_alloc_opaque();
+  runtime.check(call, construct(slot));
+  return slot;
 }
 
 /** Call a `..._new(allocator, out)` constructor and read back the handle. */

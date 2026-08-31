@@ -108,6 +108,22 @@ describe.skipIf(!prepared)("libghostty-vt artifact contract", () => {
     }
   });
 
+  it("can be forced back to a full repaint after a canvas resize", () => {
+    const terminal = new GhosttyVtTerminal(runtime, { cols: 20, rows: 4 });
+    try {
+      terminal.write(encoder.encode("painted"));
+      terminal.frame();
+      terminal.clean();
+      expect(terminal.frame().dirty).toBe("none");
+      terminal.markDirty();
+      const frame = terminal.frame();
+      expect(frame.dirty).not.toBe("none");
+      expect(frame.dirtyRows.length).toBeGreaterThan(0);
+    } finally {
+      terminal.dispose();
+    }
+  });
+
   it("reflows on resize", () => {
     const terminal = new GhosttyVtTerminal(runtime, { cols: 20, rows: 4 });
     try {

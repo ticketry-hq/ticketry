@@ -77,7 +77,6 @@ export function openGhosttyWasmSurface(
   let frameHandle: number | null = null;
   let firstPaintPending = true;
   let geometry = { cols: 80, rows: 24 };
-  const pending: Uint8Array[] = [];
 
   function fail(reason: GhosttyWasmFailureReason, detail: string): void {
     if (disposed) return;
@@ -119,15 +118,15 @@ export function openGhosttyWasmSurface(
   function refit(): void {
     if (disposed || !renderer || !core) return;
     const next = fit();
-    if (next.cols === geometry.cols && next.rows === geometry.rows) {
-      // The backing store was still cleared by resizeTo; force a repaint.
-      scheduleFrame();
-      return;
+    if (next.cols !== geometry.cols || next.rows !== geometry.rows) {
+      geometry = next;
+      const metrics = renderer.metrics;
+      core.resize(next.cols, next.rows, metrics.width, metrics.height);
+      client?.resize(next.cols, next.rows);
     }
-    geometry = next;
-    const metrics = renderer.metrics;
-    core.resize(next.cols, next.rows, metrics.width, metrics.height);
-    client?.resize(next.cols, next.rows);
+    // `resizeTo` cleared the backing store that partial repaint relies on, so
+    // the next frame has to redraw everything whether the grid changed or not.
+    core.markDirty();
     scheduleFrame();
   }
 
@@ -175,14 +174,10 @@ export function openGhosttyWasmSurface(
     if (disposed) return;
     if (event.type === "output") {
       recordBytes(RENDERER, agentRunId, event.bytes.length);
-      if (core) {
-        core.write(event.bytes);
-        scheduleFrame();
-      } else {
-        // Bytes that arrive before the runtime finishes loading are replayed
-        // in order once the terminal exists, so no output is lost.
-        pending.push(event.bytes);
-      }
+      // The viewer is only attached once the terminal exists, so no output
+      // can arrive ahead of it.
+      core?.write(event.bytes);
+      scheduleFrame();
       return;
     }
     if (event.type === "resumed") {
@@ -204,7 +199,6 @@ export function openGhosttyWasmSurface(
       const metrics = renderer.metrics;
       core.resize(geometry.cols, geometry.rows, metrics.width, metrics.height);
       encoder = new GhosttyKeyEncoder(runtime);
-      for (const bytes of pending.splice(0)) core.write(bytes);
       client = options.transport.attach(
         { agentRunId, cols: geometry.cols, rows: geometry.rows },
         handleTransportEvent,

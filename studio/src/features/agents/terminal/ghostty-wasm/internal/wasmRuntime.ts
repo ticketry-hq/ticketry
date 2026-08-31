@@ -108,6 +108,7 @@ export interface GhosttyVtExports {
   ghostty_render_state_update(state: number, terminal: number): number;
   ghostty_render_state_clean(state: number): number;
   ghostty_render_state_get(state: number, data: number, out: number): number;
+  ghostty_render_state_set(state: number, option: number, value: number): number;
   ghostty_render_state_row_iterator_new(allocator: number, out: number): number;
   ghostty_render_state_row_iterator_free(iterator: number): void;
   ghostty_render_state_row_iterator_next(iterator: number): number;

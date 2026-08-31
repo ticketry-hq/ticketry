@@ -1,5 +1,5 @@
 import { isTauri } from "@tauri-apps/api/core";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
 import "xterm/css/xterm.css";
 
 import {
@@ -25,8 +25,13 @@ import {
 } from "./internal/nativeViewerFailure";
 import { nativeViewerSessionIsLive } from "./internal/nativeViewerSessionLiveness";
 import { ensureTerminalRunCreated } from "./internal/terminalRunCreation";
-import { GhosttyWasmTerminal } from "./ghostty-wasm/GhosttyWasmTerminal";
 import { currentTerminalRendererOverride } from "./ghostty-wasm/rendererSelection";
+
+// CODING-1304 — loaded on demand so the experiment's renderer never reaches a
+// packaged bundle, where its development-only gate can never open.
+const GhosttyWasmTerminal = lazy(async () => ({
+  default: (await import("./ghostty-wasm/GhosttyWasmTerminal")).GhosttyWasmTerminal,
+}));
 
 const OWNER_LABEL: Record<ForegroundOwner, string> = {
   studio: "the fallback workspace",
@@ -135,13 +140,17 @@ export function Terminal({
     !experimentFailureReason
   ) {
     return (
-      <GhosttyWasmTerminal
-        sessionId={sessionId}
-        agentRunId={session.agentRunId}
-        active={active}
-        focusSignal={focusSignal}
-        onUnavailable={markExperimentUnavailable}
-      />
+      <Suspense
+        fallback={<div className="h-full w-full bg-pane-panel" data-testid="terminal-renderer-pending" />}
+      >
+        <GhosttyWasmTerminal
+          sessionId={sessionId}
+          agentRunId={session.agentRunId}
+          active={active}
+          focusSignal={focusSignal}
+          onUnavailable={markExperimentUnavailable}
+        />
+      </Suspense>
     );
   }
 

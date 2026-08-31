@@ -22,6 +22,9 @@ export interface GhosttyVtAbi {
     cursor: number;
     rowIterator: number;
   };
+  renderOption: {
+    dirty: number;
+  };
   rowData: {
     cells: number;
     selection: number;
@@ -70,6 +73,9 @@ export function resolveGhosttyVtAbi(runtime: GhosttyVtRuntime): GhosttyVtAbi {
       colors: value("GhosttyRenderStateData", "COLORS"),
       cursor: value("GhosttyRenderStateData", "CURSOR"),
       rowIterator: value("GhosttyRenderStateData", "ROW_ITERATOR"),
+    },
+    renderOption: {
+      dirty: value("GhosttyRenderStateOption", "DIRTY"),
     },
     rowData: {
       cells: value("GhosttyRenderStateRowData", "CELLS"),

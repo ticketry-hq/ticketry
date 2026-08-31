@@ -66,7 +66,7 @@ impl LaunchPathsService {
 
     /// Prove, before a launch commits to it, that the module's linked folder
     /// is one this machine can actually run in.
-    pub(crate) async fn preflight_module_folder(
+    pub async fn preflight_module_folder(
         &self,
         module_id: &str,
     ) -> Result<PathBuf, resolution::ModuleFolderRefusal> {

@@ -54,8 +54,8 @@ impl From<ticketry_runs::persistence::RunsPersistenceError> for TerminalReconcil
     }
 }
 
-impl From<crate::launch::terminal_session::TerminalLaunchError> for TerminalReconciliationError {
-    fn from(error: crate::launch::terminal_session::TerminalLaunchError) -> Self {
+impl From<ticketry_launch::terminal_session::TerminalLaunchError> for TerminalReconciliationError {
+    fn from(error: ticketry_launch::terminal_session::TerminalLaunchError) -> Self {
         Self::new(TerminalReconciliationErrorCode::Launch, error.to_string())
     }
 }

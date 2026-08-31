@@ -12,11 +12,11 @@ use axum::{
     Router,
 };
 use futures_util::StreamExt;
-use muxed_studio_lib::launch::paths::LaunchPathsService;
 use muxed_studio_lib::mcp::{McpRuntime, RunAuthority};
 use muxed_studio_lib::terminal::lifecycle::TerminalRuntimeAuthority;
 use serde::Deserialize;
 use tauri_graphql::{TransportApi, TransportApiImpl};
+use ticketry_launch::paths::LaunchPathsService;
 
 #[path = "ticketry_graphql_adapter/mcp.rs"]
 mod mcp;

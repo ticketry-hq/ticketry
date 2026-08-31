@@ -10,10 +10,8 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use muxed_studio_lib::launch::paths::{
-    LaunchPathsErrorCode, LaunchPathsRequest, LaunchPathsService,
-};
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection};
+use ticketry_launch::paths::{LaunchPathsErrorCode, LaunchPathsRequest, LaunchPathsService};
 
 const WORKSPACE: &str = "90000000000000000000000000000000";
 const PROJECT: &str = "10000000000000000000000000000000";

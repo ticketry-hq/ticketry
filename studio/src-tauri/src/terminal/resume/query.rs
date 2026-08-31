@@ -3,8 +3,8 @@ use sea_orm::{
     QueryFilter, QueryOrder, QuerySelect, QueryTrait,
 };
 
-use crate::launch::planning::{provider_contract, Provider};
 use ticketry_entities::{runs::agent_run, terminals::session, work_management::project};
+use ticketry_launch::planning::{provider_contract, Provider};
 
 use super::scope::{compact_session_column, ResumeScope};
 

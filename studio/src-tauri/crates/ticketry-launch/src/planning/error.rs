@@ -20,7 +20,7 @@ pub struct LaunchPlanningError {
 }
 
 impl LaunchPlanningError {
-    pub(crate) fn new(code: LaunchPlanningErrorCode, message: impl Into<String>) -> Self {
+    pub fn new(code: LaunchPlanningErrorCode, message: impl Into<String>) -> Self {
         Self {
             code,
             message: message.into(),

@@ -1,6 +1,6 @@
 use crate::execution::graph::GraphFactsError;
-use crate::launch::authority::LaunchAuthorityError;
-use crate::launch::terminal_session::TerminalLaunchError;
+use ticketry_launch::authority::LaunchAuthorityError;
+use ticketry_launch::terminal_session::TerminalLaunchError;
 use ticketry_work_management::work_management::launch_policy::LaunchPolicyError;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

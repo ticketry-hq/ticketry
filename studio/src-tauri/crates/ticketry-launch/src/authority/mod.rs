@@ -26,4 +26,4 @@ mod task_prompt;
 pub use error::{LaunchAuthorityError, LaunchAuthorityErrorCode};
 pub use material::ResolvedLaunchMaterial;
 pub use service::{InteractiveLaunchAuthority, LaunchAuthorityService};
-pub(crate) use task_prompt::{compose_task_prompt, TaskPromptSource};
+pub use task_prompt::{compose_task_prompt, TaskPromptSource};

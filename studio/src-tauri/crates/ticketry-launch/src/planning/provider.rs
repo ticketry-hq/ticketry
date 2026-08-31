@@ -129,7 +129,7 @@ fn contract(
     }
 }
 
-pub(crate) fn validate_options(
+pub fn validate_options(
     provider: Provider,
     options: &ProviderOptions,
 ) -> Result<(), LaunchPlanningError> {

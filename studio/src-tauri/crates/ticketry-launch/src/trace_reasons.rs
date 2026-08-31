@@ -3,8 +3,8 @@
 //! A refusal reason is a stable machine-readable name, never a message: the
 //! messages carry Work Item and folder detail that a trace must not.
 
-use crate::launch::authority::LaunchAuthorityErrorCode;
-use crate::launch::planning::LaunchPlanningErrorCode;
+use crate::authority::LaunchAuthorityErrorCode;
+use crate::planning::LaunchPlanningErrorCode;
 
 /// The reason name for a launch-planning refusal.
 pub fn planning_reason(code: LaunchPlanningErrorCode) -> &'static str {

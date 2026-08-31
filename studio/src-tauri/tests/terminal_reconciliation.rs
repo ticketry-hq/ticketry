@@ -10,7 +10,6 @@ use common::terminal_lifecycle_harness::{
 use common::terminal_reconciliation_runtime::{
     service, ScriptedRuntime, StopCleanupPreparation, StopOnce,
 };
-use muxed_studio_lib::launch::terminal_session::{CreateTerminalSession, TerminalLaunchKind};
 use muxed_studio_lib::terminal::cleanup::{
     CleanupCause, CleanupRuntimeObservation, TerminalCleanupService,
 };
@@ -28,6 +27,7 @@ use ticketry_entities::{
     runs::{agent_run, launch_effect, status_event},
     terminals::{cleanup_effect, session},
 };
+use ticketry_launch::terminal_session::{CreateTerminalSession, TerminalLaunchKind};
 
 #[tokio::test]
 async fn recorded_session_authority_table_converges_and_second_pass_is_stable() {

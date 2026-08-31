@@ -9,7 +9,6 @@ pub mod execution;
 pub mod graph_run_service;
 pub mod graphql_foundation;
 pub mod installation;
-pub mod launch;
 pub mod mcp;
 pub mod native_terminal;
 pub mod query_root;

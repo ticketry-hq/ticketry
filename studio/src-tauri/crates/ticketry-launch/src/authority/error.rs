@@ -20,14 +20,14 @@ pub struct LaunchAuthorityError {
 }
 
 impl LaunchAuthorityError {
-    pub(crate) fn new(code: LaunchAuthorityErrorCode, message: impl Into<String>) -> Self {
+    pub fn new(code: LaunchAuthorityErrorCode, message: impl Into<String>) -> Self {
         Self {
             code,
             message: message.into(),
         }
     }
 
-    pub(crate) fn unresolvable(message: impl Into<String>) -> Self {
+    pub fn unresolvable(message: impl Into<String>) -> Self {
         Self::new(LaunchAuthorityErrorCode::Unresolvable, message)
     }
 }

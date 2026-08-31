@@ -1,12 +1,12 @@
 use async_trait::async_trait;
 use sea_orm::{DatabaseConnection, EntityTrait};
 
-use crate::launch::paths::LaunchPathsService;
-use crate::launch::planning::{
+use crate::paths::LaunchPathsService;
+use crate::planning::{
     build_document_chat_prompt, build_instant_prompt, build_planning_prompt, provider_contract,
     DocumentChatPrompt, InstantPrompt, PlanningPrompt, Provider,
 };
-use crate::launch::terminal_session::{CreateTerminalSession, TerminalLaunchKind};
+use crate::terminal_session::{CreateTerminalSession, TerminalLaunchKind};
 use ticketry_entities::runs::agent_run;
 use ticketry_work_management::work_management::launch_policy::{
     CallerScope, LaunchPolicyRequest, LaunchPolicyResolver,

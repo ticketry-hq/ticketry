@@ -236,7 +236,7 @@ impl ExecutionHarness {
         let launch_runtime = Arc::new(composed.terminal_runtime().clone());
         let mut launch = TerminalLaunchService::new(commands.clone(), launch_runtime.clone())
             .with_authority(Arc::new(
-                muxed_studio_lib::launch::authority::LaunchAuthorityService::new(commands.clone()),
+                ticketry_launch::authority::LaunchAuthorityService::new(commands.clone()),
             ));
         if let Some(boundary) = self.options.stop_once_at {
             launch = launch.stopping_once_at(boundary);
@@ -263,7 +263,7 @@ impl ExecutionHarness {
             .terminal_runtime()
             .configure(TerminalRuntimeAuthority {
                 database: commands.clone(),
-                paths: muxed_studio_lib::launch::paths::LaunchPathsService::new(commands.clone()),
+                paths: ticketry_launch::paths::LaunchPathsService::new(commands.clone()),
                 hook_runner: provider_directory(&data_directory).join("ticketry-hook-runner"),
                 hook_spool_directory: spool_directory.clone(),
                 mcp_url: format!("http://{}/mcp", mcp.address()),

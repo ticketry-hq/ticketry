@@ -2,16 +2,16 @@ use std::sync::Arc;
 
 use sea_orm::{DatabaseConnection, EntityTrait};
 
-use crate::launch::authority::InteractiveLaunchAuthority;
 use ticketry_diagnostics::launch_trace as trace;
 use ticketry_entities::{terminals::session, work_management::issue};
+use ticketry_launch::authority::InteractiveLaunchAuthority;
 use ticketry_runs::persistence::LaunchPreparationParticipant;
 use ticketry_runs::persistence::RunsServices;
 
 use super::checkpoint::LaunchCheckpoints;
 use super::material::PreparedMaterial;
 use super::{TerminalLaunchBoundary, TerminalLaunchCheckpoint, TerminalLaunchRuntime};
-use crate::launch::terminal_session::{
+use ticketry_launch::terminal_session::{
     CreateTerminalSession, TerminalLaunchError, TerminalLaunchErrorCode,
 };
 
@@ -99,7 +99,7 @@ impl TerminalLaunchService {
             issue_id: module.id.clone(),
             module_id: module.id.clone(),
             target_id: module.id.clone(),
-            kind: crate::launch::terminal_session::TerminalLaunchKind::Shell,
+            kind: ticketry_launch::terminal_session::TerminalLaunchKind::Shell,
             provider: None,
             model: None,
             reasoning: None,
@@ -250,8 +250,8 @@ impl TerminalLaunchService {
     ) -> Result<Option<String>, TerminalLaunchError> {
         if !matches!(
             request.kind,
-            crate::launch::terminal_session::TerminalLaunchKind::Task
-                | crate::launch::terminal_session::TerminalLaunchKind::Automation
+            ticketry_launch::terminal_session::TerminalLaunchKind::Task
+                | ticketry_launch::terminal_session::TerminalLaunchKind::Automation
         ) {
             return Ok(None);
         }
@@ -280,9 +280,9 @@ impl TerminalLaunchService {
         request: &CreateTerminalSession,
     ) -> Result<(), TerminalLaunchError> {
         match request.kind {
-            crate::launch::terminal_session::TerminalLaunchKind::Planning
-            | crate::launch::terminal_session::TerminalLaunchKind::Instant
-            | crate::launch::terminal_session::TerminalLaunchKind::Shell => {
+            ticketry_launch::terminal_session::TerminalLaunchKind::Planning
+            | ticketry_launch::terminal_session::TerminalLaunchKind::Instant
+            | ticketry_launch::terminal_session::TerminalLaunchKind::Shell => {
                 let submitted = issue::Entity::find_by_id(compact(&request.issue_id))
                     .one(&self.database)
                     .await
@@ -324,9 +324,9 @@ impl TerminalLaunchService {
                     ));
                 }
             }
-            crate::launch::terminal_session::TerminalLaunchKind::Task
-            | crate::launch::terminal_session::TerminalLaunchKind::DocumentChat
-            | crate::launch::terminal_session::TerminalLaunchKind::Automation => {
+            ticketry_launch::terminal_session::TerminalLaunchKind::Task
+            | ticketry_launch::terminal_session::TerminalLaunchKind::DocumentChat
+            | ticketry_launch::terminal_session::TerminalLaunchKind::Automation => {
                 let owner = ticketry_workspace_runtime::worktree::status::owner::resolve(
                     &self.database,
                     &request.issue_id,
@@ -349,16 +349,16 @@ impl TerminalLaunchService {
             }
         }
         let expected_target = match request.kind {
-            crate::launch::terminal_session::TerminalLaunchKind::Task
-            | crate::launch::terminal_session::TerminalLaunchKind::Automation => {
+            ticketry_launch::terminal_session::TerminalLaunchKind::Task
+            | ticketry_launch::terminal_session::TerminalLaunchKind::Automation => {
                 compact(&request.issue_id)
             }
-            crate::launch::terminal_session::TerminalLaunchKind::Planning
-            | crate::launch::terminal_session::TerminalLaunchKind::Instant
-            | crate::launch::terminal_session::TerminalLaunchKind::Shell => {
+            ticketry_launch::terminal_session::TerminalLaunchKind::Planning
+            | ticketry_launch::terminal_session::TerminalLaunchKind::Instant
+            | ticketry_launch::terminal_session::TerminalLaunchKind::Shell => {
                 compact(&request.module_id)
             }
-            crate::launch::terminal_session::TerminalLaunchKind::DocumentChat => {
+            ticketry_launch::terminal_session::TerminalLaunchKind::DocumentChat => {
                 compact(&request.target_id)
             }
         };
@@ -369,16 +369,16 @@ impl TerminalLaunchService {
             ));
         }
         let expected_workspace = match request.kind {
-            crate::launch::terminal_session::TerminalLaunchKind::Task
-            | crate::launch::terminal_session::TerminalLaunchKind::Automation => {
+            ticketry_launch::terminal_session::TerminalLaunchKind::Task
+            | ticketry_launch::terminal_session::TerminalLaunchKind::Automation => {
                 format!("task:{}", compact(&request.issue_id))
             }
-            crate::launch::terminal_session::TerminalLaunchKind::Planning
-            | crate::launch::terminal_session::TerminalLaunchKind::Instant
-            | crate::launch::terminal_session::TerminalLaunchKind::Shell => {
+            ticketry_launch::terminal_session::TerminalLaunchKind::Planning
+            | ticketry_launch::terminal_session::TerminalLaunchKind::Instant
+            | ticketry_launch::terminal_session::TerminalLaunchKind::Shell => {
                 format!("module:{}", compact(&request.module_id))
             }
-            crate::launch::terminal_session::TerminalLaunchKind::DocumentChat => {
+            ticketry_launch::terminal_session::TerminalLaunchKind::DocumentChat => {
                 format!("document:{}", compact(&request.target_id))
             }
         };

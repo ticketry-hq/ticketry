@@ -28,7 +28,7 @@ pub struct TerminalLaunchError {
 }
 
 impl TerminalLaunchError {
-    pub(crate) fn new(code: TerminalLaunchErrorCode, message: impl Into<String>) -> Self {
+    pub fn new(code: TerminalLaunchErrorCode, message: impl Into<String>) -> Self {
         Self {
             code,
             message: message.into(),

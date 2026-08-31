@@ -110,6 +110,7 @@ ticketry-data-directory.workspace = true
 ticketry-diagnostics.workspace = true
 ticketry-documents.workspace = true
 ticketry-entities.workspace = true
+ticketry-launch.workspace = true
 ticketry-runs.workspace = true
 ticketry-settings.workspace = true
 ticketry-tool-discovery.workspace = true
@@ -139,6 +140,7 @@ members = [
     "crates/ticketry-diagnostics",
     "crates/ticketry-documents",
     "crates/ticketry-workspace-runtime",
+    "crates/ticketry-launch",
 ]
 resolver = "2"
 
@@ -166,6 +168,7 @@ ticketry-data-directory = { path = "crates/ticketry-data-directory" }
 ticketry-diagnostics = { path = "crates/ticketry-diagnostics" }
 ticketry-documents = { path = "crates/ticketry-documents" }
 ticketry-entities = { path = "crates/ticketry-entities" }
+ticketry-launch = { path = "crates/ticketry-launch" }
 ticketry-runs = { path = "crates/ticketry-runs" }
 ticketry-settings = { path = "crates/ticketry-settings" }
 ticketry-tool-discovery = { path = "crates/ticketry-tool-discovery" }

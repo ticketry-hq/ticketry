@@ -37,12 +37,12 @@ pub(crate) fn launch_rust_runtime(
         Arc::new(composed.terminal_runtime().clone()),
     )
     .with_authority(Arc::new(
-        crate::launch::authority::LaunchAuthorityService::new(database.clone()),
+        ticketry_launch::authority::LaunchAuthorityService::new(database.clone()),
     ));
     launch_runtime.configure_terminal_authority(
         crate::terminal::lifecycle::TerminalRuntimeAuthority {
             database: database.clone(),
-            paths: crate::launch::paths::LaunchPathsService::new(database.clone()),
+            paths: ticketry_launch::paths::LaunchPathsService::new(database.clone()),
             hook_runner,
             hook_spool_directory: spool_directory.clone(),
             mcp_url: String::new(),

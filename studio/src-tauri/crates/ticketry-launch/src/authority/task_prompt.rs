@@ -3,11 +3,11 @@
 
 use sea_orm::DatabaseConnection;
 
-use crate::launch::planning::{build_task_prompt, TaskPromptInput};
+use crate::planning::{build_task_prompt, TaskPromptInput};
 
 use super::{error::LaunchAuthorityError, facts};
 
-pub(crate) struct TaskPromptSource<'a> {
+pub struct TaskPromptSource<'a> {
     pub task_id: &'a str,
     pub module_id: &'a str,
     pub local_module_folder: &'a str,
@@ -17,7 +17,7 @@ pub(crate) struct TaskPromptSource<'a> {
     pub design_directory: Option<&'a str>,
 }
 
-pub(crate) async fn compose_task_prompt(
+pub async fn compose_task_prompt(
     database: &DatabaseConnection,
     source: TaskPromptSource<'_>,
 ) -> Result<String, LaunchAuthorityError> {

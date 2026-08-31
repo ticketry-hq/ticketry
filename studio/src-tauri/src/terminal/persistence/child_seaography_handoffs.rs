@@ -83,8 +83,8 @@ pub const CHILD_HANDOFFS: &[ChildHandoff] = &[
         verdict: "aligned: pure planning, no GraphQL surface",
         evidence: "spec/rusting--cf2de16d/T867--centralize-approved-provider-launch-plan/AUDIT.md",
         files_checked: &[
-            "studio/src-tauri/src/launch/planning",
-            "studio/src-tauri/src/launch/paths",
+            "studio/src-tauri/crates/ticketry-launch/src/planning",
+            "studio/src-tauri/crates/ticketry-launch/src/paths",
         ],
     },
     ChildHandoff {
@@ -267,8 +267,8 @@ pub const CHILD_HANDOFFS: &[ChildHandoff] = &[
         verdict: "owed at its own Review: touches the restricted create seam",
         evidence: "handoff due with the launch-policy fix",
         files_checked: &[
-            "studio/src-tauri/src/launch/terminal_session/request.rs",
-            "studio/src-tauri/src/launch/planning",
+            "studio/src-tauri/crates/ticketry-launch/src/terminal_session/request.rs",
+            "studio/src-tauri/crates/ticketry-launch/src/planning",
         ],
     },
     ChildHandoff {

@@ -10,7 +10,7 @@ use super::{
     DurableLaunchMaterial, LaunchKind, LaunchPlanningError, LaunchPlanningErrorCode,
     MaterializedLaunch, Provider, RuntimeSettings,
 };
-use crate::launch::trace_reasons;
+use crate::trace_reasons;
 
 /// Values supplied only by trusted desktop services immediately before tmux
 /// creation. This value is intentionally not serializable or deserializable.
@@ -27,7 +27,7 @@ pub struct ExecutionAuthority {
 
 impl ExecutionAuthority {
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn new(
+    pub fn new(
         executable: PathBuf,
         working_directory: PathBuf,
         hook_runner: PathBuf,

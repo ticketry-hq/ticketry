@@ -2,11 +2,11 @@
 //! policy: the provider catalog, the launch binding, the document registry,
 //! and the canonical prompt shapes decide what a run is allowed to start with.
 
-use muxed_studio_lib::launch::{
+use sea_orm::{ConnectionTrait, Database, DatabaseConnection};
+use ticketry_launch::{
     authority::{InteractiveLaunchAuthority, LaunchAuthorityService},
     terminal_session::{CreateTerminalSession, TerminalLaunchKind},
 };
-use sea_orm::{ConnectionTrait, Database, DatabaseConnection};
 use ticketry_work_management::work_management::open_for_commands;
 
 const WORKSPACE: &str = "10000000000000000000000000000000";

@@ -8,15 +8,15 @@ use common::submitted_launch_authority::launch_service;
 use common::terminal_lifecycle_harness::{
     TerminalLifecycleHarness, MODULE_ID, PROJECT_ID, TASK_ID,
 };
-use muxed_studio_lib::launch::terminal_session::{
-    CreateTerminalSession, TerminalLaunchError, TerminalLaunchKind,
-};
 use muxed_studio_lib::terminal::launch::{
     TerminalLaunchCheckpoint, TerminalLaunchRuntime, TerminalRuntimeObservation,
     VerifiedTerminalRuntime,
 };
 use sea_orm::{ConnectionTrait, EntityTrait};
 use ticketry_entities::terminals::{launch_material, session};
+use ticketry_launch::terminal_session::{
+    CreateTerminalSession, TerminalLaunchError, TerminalLaunchKind,
+};
 
 struct ResumeRuntime {
     created: Mutex<BTreeSet<String>>,

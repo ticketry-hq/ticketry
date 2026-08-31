@@ -5,13 +5,13 @@
 //! skills, and document identity — is discarded here and rebuilt from
 //! authority, so nothing caller-shaped reaches durable launch material.
 
-use crate::launch::authority::{LaunchAuthorityError, LaunchAuthorityErrorCode};
 use ticketry_diagnostics::launch_trace as trace;
+use ticketry_launch::authority::{LaunchAuthorityError, LaunchAuthorityErrorCode};
 
-use crate::launch::trace_reasons;
+use ticketry_launch::trace_reasons;
 
 use super::TerminalLaunchService;
-use crate::launch::terminal_session::{
+use ticketry_launch::terminal_session::{
     CreateTerminalSession, TerminalLaunchError, TerminalLaunchErrorCode, TerminalLaunchKind,
 };
 

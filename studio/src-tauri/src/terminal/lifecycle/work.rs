@@ -7,7 +7,6 @@ use std::{
 use async_trait::async_trait;
 use sea_orm::{DatabaseConnection, EntityTrait};
 
-use crate::launch::terminal_session::{TerminalLaunchError, TerminalLaunchErrorCode};
 use crate::terminal::launch::{
     TerminalLaunchCheckpoint, TerminalLaunchRuntime, TerminalRuntimeObservation,
     VerifiedTerminalRuntime,
@@ -21,6 +20,7 @@ use crate::tmux_adapter::{
 };
 use crate::viewer_ownership::ViewerOwnershipService;
 use ticketry_diagnostics::launch_trace as trace;
+use ticketry_launch::terminal_session::{TerminalLaunchError, TerminalLaunchErrorCode};
 use ticketry_runs::hook_spool::{DrainReport, HookSpool};
 use ticketry_runs::persistence::LifecycleService;
 
@@ -169,7 +169,7 @@ impl TerminalLaunchRuntime for RecoveryTerminalLaunchRuntime {
 #[derive(Clone)]
 pub struct TerminalRuntimeAuthority {
     pub database: DatabaseConnection,
-    pub paths: crate::launch::paths::LaunchPathsService,
+    pub paths: ticketry_launch::paths::LaunchPathsService,
     pub hook_runner: PathBuf,
     pub hook_spool_directory: PathBuf,
     pub mcp_url: String,
@@ -239,7 +239,7 @@ impl Default for InteractiveTerminalLaunchRuntime {
 impl TerminalLaunchRuntime for InteractiveTerminalLaunchRuntime {
     async fn preflight(
         &self,
-        request: &crate::launch::terminal_session::CreateTerminalSession,
+        request: &ticketry_launch::terminal_session::CreateTerminalSession,
     ) -> Result<(), TerminalLaunchError> {
         let authority = self
             .authority
@@ -325,28 +325,28 @@ impl TerminalLaunchRuntime for InteractiveTerminalLaunchRuntime {
                 crate::terminal::launch::login_shell::approved_login_shell(working_directory)?;
             return create_tmux_runtime(material, checkpoint, command).await;
         }
-        let provider = crate::launch::planning::Provider::try_from(
+        let provider = ticketry_launch::planning::Provider::try_from(
             material.provider.as_deref().unwrap_or_default(),
         )
         .map_err(planning_error)?;
         let scope = match material.scope.as_str() {
-            "task" => crate::launch::paths::LaunchScope::Task,
-            "plan" => crate::launch::paths::LaunchScope::Plan,
-            "instant" => crate::launch::paths::LaunchScope::Instant,
-            "docchat" => crate::launch::paths::LaunchScope::Docchat,
+            "task" => ticketry_launch::paths::LaunchScope::Task,
+            "plan" => ticketry_launch::paths::LaunchScope::Plan,
+            "instant" => ticketry_launch::paths::LaunchScope::Instant,
+            "docchat" => ticketry_launch::paths::LaunchScope::Docchat,
             _ => return Err(invalid_launch("The terminal launch scope is unsupported.")),
         };
         let paths = authority
             .paths
-            .resolve(crate::launch::paths::LaunchPathsRequest {
+            .resolve(ticketry_launch::paths::LaunchPathsRequest {
                 version: 1,
                 scope,
                 agent_run_id: material.agent_run_id.clone(),
                 project_id: material.project_id.clone(),
                 module_id: Some(material.module_id.clone()),
-                task_id: matches!(scope, crate::launch::paths::LaunchScope::Task)
+                task_id: matches!(scope, ticketry_launch::paths::LaunchScope::Task)
                     .then(|| material.issue_id.clone()),
-                document_id: matches!(scope, crate::launch::paths::LaunchScope::Docchat)
+                document_id: matches!(scope, ticketry_launch::paths::LaunchScope::Docchat)
                     .then(|| material.task_id.clone()),
             })
             .await
@@ -383,43 +383,43 @@ impl TerminalLaunchRuntime for InteractiveTerminalLaunchRuntime {
             let provider_session_id = source.provider_session_id.ok_or_else(|| {
                 invalid_launch("The resume source has no provider conversation identity.")
             })?;
-            Some(crate::launch::planning::LaunchKind::Resume {
+            Some(ticketry_launch::planning::LaunchKind::Resume {
                 provider_session_id,
             })
         } else {
             None
         };
         let kind = resume.unwrap_or(match material.scope.as_str() {
-            "task" => crate::launch::planning::LaunchKind::Task,
-            "plan" => crate::launch::planning::LaunchKind::Planning,
-            "instant" => crate::launch::planning::LaunchKind::Instant,
-            "docchat" => crate::launch::planning::LaunchKind::DocumentChat,
-            _ => crate::launch::planning::LaunchKind::Automation,
+            "task" => ticketry_launch::planning::LaunchKind::Task,
+            "plan" => ticketry_launch::planning::LaunchKind::Planning,
+            "instant" => ticketry_launch::planning::LaunchKind::Instant,
+            "docchat" => ticketry_launch::planning::LaunchKind::DocumentChat,
+            _ => ticketry_launch::planning::LaunchKind::Automation,
         });
         let workspace = match material.scope.as_str() {
-            "plan" | "instant" => crate::launch::planning::WorkspaceIdentity::Scratch {
+            "plan" | "instant" => ticketry_launch::planning::WorkspaceIdentity::Scratch {
                 project_id: material.project_id.clone(),
                 module_id: material.module_id.clone(),
                 agent_run_id: material.agent_run_id.clone(),
             },
-            "docchat" => crate::launch::planning::WorkspaceIdentity::Document {
+            "docchat" => ticketry_launch::planning::WorkspaceIdentity::Document {
                 project_id: material.project_id.clone(),
                 module_id: material.module_id.clone(),
                 document_id: material.design_directory_identity.clone().ok_or_else(|| {
                     invalid_launch("The document launch identity is unavailable.")
                 })?,
             },
-            _ => crate::launch::planning::WorkspaceIdentity::Task {
+            _ => ticketry_launch::planning::WorkspaceIdentity::Task {
                 project_id: material.project_id.clone(),
                 module_id: material.module_id.clone(),
                 task_id: material.task_id.clone(),
             },
         };
-        let durable = crate::launch::planning::DurableLaunchMaterial::new(
+        let durable = ticketry_launch::planning::DurableLaunchMaterial::new(
             material.agent_run_id.clone(),
             kind,
             provider,
-            crate::launch::planning::ProviderOptions {
+            ticketry_launch::planning::ProviderOptions {
                 model: material.model.clone(),
                 reasoning: material.reasoning.clone(),
             },
@@ -433,7 +433,7 @@ impl TerminalLaunchRuntime for InteractiveTerminalLaunchRuntime {
         let tool = provider_tool(provider);
         let executable = crate::tmux_adapter::approved_tool_path(tool)
             .map_err(|_| invalid_launch("The approved provider executable is unavailable."))?;
-        let execution = crate::launch::planning::ExecutionAuthority::new(
+        let execution = ticketry_launch::planning::ExecutionAuthority::new(
             executable,
             working_directory,
             authority.hook_runner.clone(),
@@ -443,7 +443,7 @@ impl TerminalLaunchRuntime for InteractiveTerminalLaunchRuntime {
             available_skills(),
         );
         let mut launch =
-            crate::launch::planning::materialize(&durable, &execution).map_err(planning_error)?;
+            ticketry_launch::planning::materialize(&durable, &execution).map_err(planning_error)?;
         if let Some(settings) = launch.settings.take() {
             let path = authority
                 .hook_spool_directory
@@ -471,10 +471,10 @@ impl TerminalLaunchRuntime for InteractiveTerminalLaunchRuntime {
 }
 
 fn require_provider_control(
-    kind: crate::launch::terminal_session::TerminalLaunchKind,
+    kind: ticketry_launch::terminal_session::TerminalLaunchKind,
     mcp_url: &str,
 ) -> Result<(), TerminalLaunchError> {
-    if kind != crate::launch::terminal_session::TerminalLaunchKind::Shell && mcp_url.is_empty() {
+    if kind != ticketry_launch::terminal_session::TerminalLaunchKind::Shell && mcp_url.is_empty() {
         return Err(TerminalLaunchError::new(
             TerminalLaunchErrorCode::RuntimeUnavailable,
             "WorkTracker MCP is unavailable. Provider launch is blocked.",
@@ -486,7 +486,7 @@ fn require_provider_control(
 #[cfg(test)]
 mod provider_control_tests {
     use super::require_provider_control;
-    use crate::launch::terminal_session::{TerminalLaunchErrorCode, TerminalLaunchKind};
+    use ticketry_launch::terminal_session::{TerminalLaunchErrorCode, TerminalLaunchKind};
 
     #[test]
     fn missing_listener_blocks_provider_launch_with_an_empty_url() {
@@ -605,7 +605,7 @@ fn invalid_launch(message: &'static str) -> TerminalLaunchError {
     TerminalLaunchError::new(TerminalLaunchErrorCode::InvalidRequest, message)
 }
 
-fn planning_error(error: crate::launch::planning::LaunchPlanningError) -> TerminalLaunchError {
+fn planning_error(error: ticketry_launch::planning::LaunchPlanningError) -> TerminalLaunchError {
     TerminalLaunchError::new(TerminalLaunchErrorCode::InvalidRequest, error.to_string())
 }
 
@@ -626,13 +626,17 @@ fn write_private(path: &Path, contents: &[u8]) -> Result<(), TerminalLaunchError
 }
 
 fn provider_tool(
-    provider: crate::launch::planning::Provider,
+    provider: ticketry_launch::planning::Provider,
 ) -> ticketry_tool_discovery::SupportedTool {
     match provider {
-        crate::launch::planning::Provider::Claude => ticketry_tool_discovery::SupportedTool::Claude,
-        crate::launch::planning::Provider::Codex => ticketry_tool_discovery::SupportedTool::Codex,
-        crate::launch::planning::Provider::Gemini => ticketry_tool_discovery::SupportedTool::Gemini,
-        crate::launch::planning::Provider::Agy => ticketry_tool_discovery::SupportedTool::Agy,
+        ticketry_launch::planning::Provider::Claude => {
+            ticketry_tool_discovery::SupportedTool::Claude
+        }
+        ticketry_launch::planning::Provider::Codex => ticketry_tool_discovery::SupportedTool::Codex,
+        ticketry_launch::planning::Provider::Gemini => {
+            ticketry_tool_discovery::SupportedTool::Gemini
+        }
+        ticketry_launch::planning::Provider::Agy => ticketry_tool_discovery::SupportedTool::Agy,
     }
 }
 

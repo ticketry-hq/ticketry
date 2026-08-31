@@ -11,7 +11,7 @@ use ticketry_runs::persistence::{
 };
 
 use super::service::{compact, storage};
-use crate::launch::terminal_session::{
+use ticketry_launch::terminal_session::{
     CreateTerminalSession, TerminalLaunchError, TerminalLaunchErrorCode,
 };
 
@@ -61,14 +61,14 @@ impl PreparedMaterial {
                 initial_prompt: self.request.prompt.clone(),
                 unattended: matches!(
                     self.request.kind,
-                    crate::launch::terminal_session::TerminalLaunchKind::Automation
+                    ticketry_launch::terminal_session::TerminalLaunchKind::Automation
                 ),
                 resumed_from: self.request.resume_from_agent_run_id.clone(),
                 launch_state: self.launch_state.clone(),
                 launch_model: matches!(
                     self.request.kind,
-                    crate::launch::terminal_session::TerminalLaunchKind::Task
-                        | crate::launch::terminal_session::TerminalLaunchKind::Automation
+                    ticketry_launch::terminal_session::TerminalLaunchKind::Task
+                        | ticketry_launch::terminal_session::TerminalLaunchKind::Automation
                 )
                 .then(|| self.request.model.clone())
                 .flatten(),

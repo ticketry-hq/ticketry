@@ -12,7 +12,6 @@ use muxed_studio_lib::execution::graph::{ExecutionMode, GraphAccess};
 use muxed_studio_lib::execution::reconciliation::ExecutionReconciliationService;
 use muxed_studio_lib::graph_run_service::GraphRunCaller;
 use muxed_studio_lib::graph_run_service::{GraphRunRequest, GraphRunService};
-use muxed_studio_lib::launch::terminal_session::TerminalLaunchError;
 use muxed_studio_lib::terminal::launch::{
     TerminalLaunchBoundary, TerminalLaunchCheckpoint, TerminalLaunchRuntime, TerminalLaunchService,
     TerminalRuntimeObservation, VerifiedTerminalRuntime,
@@ -20,6 +19,7 @@ use muxed_studio_lib::terminal::launch::{
 use sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, Statement};
 use seaography::{Builder, BuilderContext};
 use ticketry_entities::{runs::agent_run, terminals::launch_material};
+use ticketry_launch::terminal_session::TerminalLaunchError;
 use ticketry_work_management::work_management::launch_policy::LaunchPolicyResolver;
 
 const CHILD_A: &str = "00000000000000000000000000008951";

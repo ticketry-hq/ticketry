@@ -13,7 +13,7 @@ pub enum TerminalLaunchKind {
 }
 
 impl TerminalLaunchKind {
-    pub(crate) fn parse(value: &str) -> Result<Self, TerminalLaunchError> {
+    pub fn parse(value: &str) -> Result<Self, TerminalLaunchError> {
         match value {
             "task" => Ok(Self::Task),
             "planning" => Ok(Self::Planning),
@@ -25,7 +25,7 @@ impl TerminalLaunchKind {
         }
     }
 
-    pub(crate) fn scope(self) -> &'static str {
+    pub fn scope(self) -> &'static str {
         match self {
             Self::Task | Self::Automation => "task",
             Self::Planning => "plan",
@@ -35,7 +35,7 @@ impl TerminalLaunchKind {
         }
     }
 
-    pub(crate) fn target_kind(self) -> &'static str {
+    pub fn target_kind(self) -> &'static str {
         match self {
             Self::Task => "task",
             Self::Planning => "planning",
@@ -74,7 +74,7 @@ impl CreateTerminalSession {
     /// Validate the caller-owned request shape before launch authority reads
     /// any policy. Interactive requests may omit provider and other launch
     /// material because authority supplies those fields in the next stage.
-    pub(crate) fn validate_identity_and_geometry(&self) -> Result<(), TerminalLaunchError> {
+    pub fn validate_identity_and_geometry(&self) -> Result<(), TerminalLaunchError> {
         for value in [
             &self.client_request_id,
             &self.project_id,
@@ -94,7 +94,7 @@ impl CreateTerminalSession {
     }
 
     /// Validate the fully resolved launch before it can be persisted.
-    pub(crate) fn validate(&self) -> Result<(), TerminalLaunchError> {
+    pub fn validate(&self) -> Result<(), TerminalLaunchError> {
         self.validate_identity_and_geometry()?;
         if (self.kind == TerminalLaunchKind::DocumentChat) != self.document_relative_path.is_some()
         {
@@ -125,15 +125,15 @@ impl CreateTerminalSession {
         Ok(())
     }
 
-    pub(crate) fn agent_run_id(&self) -> String {
+    pub fn agent_run_id(&self) -> String {
         derived("terminal-agent-run", &self.client_request_id)
     }
 
-    pub(crate) fn effect_id(&self) -> String {
+    pub fn effect_id(&self) -> String {
         derived("terminal-launch-effect", &self.client_request_id)
     }
 
-    pub(crate) fn terminal_task_id(&self) -> String {
+    pub fn terminal_task_id(&self) -> String {
         match self.kind {
             TerminalLaunchKind::Planning | TerminalLaunchKind::Instant => {
                 ticketry_documents::SCRATCH_TASK_ID.to_owned()

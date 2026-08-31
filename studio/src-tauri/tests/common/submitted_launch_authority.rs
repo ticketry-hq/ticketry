@@ -1,7 +1,7 @@
 //! A launch authority that resolves to exactly what the caller submitted.
 //!
 //! Production composes the real
-//! [`muxed_studio_lib::launch::authority::LaunchAuthorityService`], which is
+//! [`ticketry_launch::authority::LaunchAuthorityService`], which is
 //! proved in `interactive_launch_authority`. Tests that exercise preparation,
 //! effect journalling, runtime settlement, and recovery care about the launch
 //! machinery rather than about policy, so they install this instead and keep
@@ -12,12 +12,12 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use muxed_studio_lib::launch::authority::{
-    InteractiveLaunchAuthority, LaunchAuthorityError, ResolvedLaunchMaterial,
-};
-use muxed_studio_lib::launch::terminal_session::CreateTerminalSession;
 use muxed_studio_lib::terminal::launch::{TerminalLaunchRuntime, TerminalLaunchService};
 use sea_orm::DatabaseConnection;
+use ticketry_launch::authority::{
+    InteractiveLaunchAuthority, LaunchAuthorityError, ResolvedLaunchMaterial,
+};
+use ticketry_launch::terminal_session::CreateTerminalSession;
 
 pub struct SubmittedLaunchAuthority;
 

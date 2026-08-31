@@ -226,7 +226,7 @@ async fn initialize_with_worktracker_commands_and_install_inner(
             std::sync::Arc::new(terminal_runtime.clone()),
         )
         .with_authority(std::sync::Arc::new(
-            crate::launch::authority::LaunchAuthorityService::new(worktracker_database.clone()),
+            ticketry_launch::authority::LaunchAuthorityService::new(worktracker_database.clone()),
         )),
         viewers: viewer_ownership.clone(),
         output_activity:

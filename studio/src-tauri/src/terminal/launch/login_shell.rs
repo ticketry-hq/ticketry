@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 use crate::tmux_adapter::{ApprovedArgv, TmuxAdapterError};
 
-use crate::launch::terminal_session::{TerminalLaunchError, TerminalLaunchErrorCode};
+use ticketry_launch::terminal_session::{TerminalLaunchError, TerminalLaunchErrorCode};
 
 pub(crate) fn approved_login_shell(
     working_directory: PathBuf,

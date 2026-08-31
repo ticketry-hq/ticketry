@@ -9,7 +9,7 @@ use ticketry_entities::graphql_scalars::StringList;
 use ticketry_entities::terminals::session;
 
 use super::TerminalLaunchService;
-use crate::launch::terminal_session::{
+use ticketry_launch::terminal_session::{
     CreateTerminalSession, TerminalLaunchError, TerminalLaunchKind,
 };
 

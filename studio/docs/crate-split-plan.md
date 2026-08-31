@@ -148,6 +148,21 @@ studio/src-tauri/
     └── tauri-graphql/              # unchanged (already a crate)
 ```
 
+### 2.3 Open blocker before step 2.5
+
+`work_management::launch_policy::resolver` calls `launch::trace`, and
+`launch::trace` reads `launch::authority`, `launch::planning`, and
+`work_management::launch_policy::CallerScope`. That is
+`work-management -> launch -> work-management`: a cycle Cargo forbids, so the
+hub cannot be extracted while it stands. The guard test in §5.1 reports it.
+
+The launch-trace module is an in-flight feature written by another worker in
+this tree, so the shape of the fix is its author's call. The usual one is to
+split the emitter: stage names and the ambient attempt context sit below
+work-management with no upward reads, while the `LaunchAuthorityErrorCode`,
+`LaunchPlanningErrorCode`, and `CallerScope` adapters stay in the slices that
+own those types and convert on the way in.
+
 ### 2.2 Corrections made during Phase 2
 
 - **The Runs slice is `ticketry-runs`, not `ticketry-runs-persistence`.**

@@ -38,7 +38,11 @@ npm run ghostty-vt:prepare --workspace @worktracker/studio
 ```
 
 This builds `public/ghostty-vt/ghostty-vt.wasm` from a pinned Ghostty revision
-with a pinned Zig toolchain, and copies Ghostty's licence next to it. The pin is
+with a pinned Zig toolchain, and copies Ghostty's licence next to it. The
+default `ReleaseFast` artifact is ~4.5 MB; set `GHOSTTY_VT_OPTIMIZE=ReleaseSmall`
+to build the small one for the cold-start comparison. The mode is recorded in
+`public/ghostty-vt/OPTIMIZE` so a rebuild switches artifacts rather than
+reusing the wrong one. The pin is
 **separate from** the native libghostty pin in `prepare-libghostty.sh`: the
 released tag Ticketry links natively predates the VT C ABI (terminal, screen,
 render, snapshot, selection) this renderer needs. The artifact is not committed.

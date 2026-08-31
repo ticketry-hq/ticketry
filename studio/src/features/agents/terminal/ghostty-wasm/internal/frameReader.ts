@@ -10,6 +10,9 @@ import type { GhosttyVtAbi } from "./abi";
 import type { FrameCell, FrameColors, FrameCursor, FrameCursorStyle } from "./frameTypes";
 import type { GhosttyVtRuntime } from "./wasmRuntime";
 
+/** A cluster wider than this is truncated rather than grown per cell. */
+const MAX_GRAPHEME_CODEPOINTS = 32;
+
 export class FrameReader {
   private readonly runtime: GhosttyVtRuntime;
   private readonly abi: GhosttyVtAbi;
@@ -24,10 +27,9 @@ export class FrameReader {
       runtime.sizeOf("GhosttyRenderStateCursor"),
       runtime.sizeOf("GhosttyStyle"),
       runtime.sizeOf("GhosttyRenderStateRowSelection"),
-      runtime.sizeOf("GhosttyString"),
-      64,
+      MAX_GRAPHEME_CODEPOINTS * 4,
     );
-    this.ptr = runtime.exports.ghostty_wasm_alloc_u8_array(this.len);
+    this.ptr = runtime.exports.ghostty_wasm_alloc(this.len);
   }
 
   /** The scratch pointer, for callers that pass it as a plain out-parameter. */
@@ -36,7 +38,7 @@ export class FrameReader {
   }
 
   dispose(): void {
-    this.runtime.exports.ghostty_wasm_free_u8_array(this.ptr, this.len);
+    this.runtime.exports.ghostty_wasm_free(this.ptr, this.len);
   }
 
   readU32(state: number, key: number): number {
@@ -78,8 +80,8 @@ export class FrameReader {
       this.abi.renderData.cursor,
       this.ptr,
     );
-    if (result === this.abi.noValue) return null;
-    this.runtime.check("ghostty_render_state_get(CURSOR)", result);
+    // A terminal with no drawable cursor reports its absence, not an error.
+    if (result !== this.abi.success) return null;
     const view = this.runtime.view();
     const visible = view.getUint8(this.ptr + fields.visible.offset) !== 0;
     const hasViewport = view.getUint8(this.ptr + fields.viewport_has_value.offset) !== 0;
@@ -98,7 +100,6 @@ export class FrameReader {
     const { exports } = this.runtime;
     const { cellData } = this.abi;
     const styleFields = this.runtime.fields("GhosttyStyle");
-    const stringFields = this.runtime.fields("GhosttyString");
     const out: FrameCell[] = [];
 
     while (exports.ghostty_render_state_row_cells_next(cells) && out.length < cols) {
@@ -122,14 +123,7 @@ export class FrameReader {
         continue;
       }
 
-      this.zero();
-      exports.ghostty_render_state_row_cells_get(cells, cellData.graphemesUtf8, this.ptr);
-      const view = this.runtime.view();
-      const textPtr = view.getUint32(this.ptr + stringFields.ptr.offset, true);
-      const textLen = view.getUint32(this.ptr + stringFields.len.offset, true);
-      const text = textLen
-        ? new TextDecoder().decode(this.runtime.bytes().subarray(textPtr, textPtr + textLen))
-        : "";
+      const text = this.readGrapheme(cells, graphemeLen);
       const fg = this.readCellRgb(cells, cellData.fgColor, colors.foreground);
 
       this.prepareSized("GhosttyStyle");
@@ -149,6 +143,32 @@ export class FrameReader {
     return out;
   }
 
+  /**
+   * Read a cell's grapheme cluster as codepoints.
+   *
+   * `GRAPHEMES_BUF` writes into the caller's buffer, so the slot doubles as the
+   * codepoint array. (`GRAPHEMES_UTF8` is an in/out that wants its own
+   * pre-sized string buffer and returns OUT_OF_SPACE otherwise; codepoints are
+   * the simpler contract for a Canvas that draws a cluster at a time.)
+   */
+  private readGrapheme(cells: number, graphemeLen: number): string {
+    const wanted = Math.min(graphemeLen, MAX_GRAPHEME_CODEPOINTS);
+    if (wanted === 0) return "";
+    this.zero();
+    const result = this.runtime.exports.ghostty_render_state_row_cells_get(
+      cells,
+      this.abi.cellData.graphemesBuf,
+      this.ptr,
+    );
+    if (result !== this.abi.success) return "";
+    const view = this.runtime.view();
+    const codepoints: number[] = [];
+    for (let index = 0; index < wanted; index += 1) {
+      codepoints.push(view.getUint32(this.ptr + index * 4, true));
+    }
+    return String.fromCodePoint(...codepoints);
+  }
+
   private cursorStyle(raw: number): FrameCursorStyle {
     const { cursorStyle } = this.abi;
     if (raw === cursorStyle.bar) return "bar";
@@ -157,17 +177,23 @@ export class FrameReader {
     return "block";
   }
 
+  /**
+   * Per-cell colour is only present when the cell carries one. Ghostty reports
+   * its absence with a non-success result (INVALID_VALUE for an unstyled cell,
+   * not NO_VALUE), so any failure means "inherit the frame default" rather than
+   * "read zeros" — which would paint every unstyled cell black.
+   */
   private readCellRgb(cells: number, key: number, fallback: string): string {
     this.zero();
     const result = this.runtime.exports.ghostty_render_state_row_cells_get(cells, key, this.ptr);
-    if (result === this.abi.noValue) return fallback;
+    if (result !== this.abi.success) return fallback;
     return this.readRgb(this.ptr);
   }
 
   private readCellBool(cells: number, key: number): boolean {
     this.zero();
     const result = this.runtime.exports.ghostty_render_state_row_cells_get(cells, key, this.ptr);
-    if (result === this.abi.noValue) return false;
+    if (result !== this.abi.success) return false;
     return this.runtime.view().getUint8(this.ptr) !== 0;
   }
 

@@ -59,7 +59,7 @@ export class GhosttyVtTerminal {
     this.cellsSlot = openSlot(runtime, "ghostty_render_state_row_cells_new", (out) =>
       exports.ghostty_render_state_row_cells_new(0, out),
     );
-    this.scratch = exports.ghostty_wasm_alloc_u8_array(SCRATCH_BYTES);
+    this.scratch = exports.ghostty_wasm_alloc(SCRATCH_BYTES);
     this.reader = new FrameReader(runtime, this.abi);
   }
 
@@ -189,7 +189,7 @@ export class GhosttyVtTerminal {
     exports.ghostty_terminal_free(this.terminal);
     exports.ghostty_wasm_free_opaque(this.cellsSlot);
     exports.ghostty_wasm_free_opaque(this.rowIteratorSlot);
-    exports.ghostty_wasm_free_u8_array(this.scratch, SCRATCH_BYTES);
+    exports.ghostty_wasm_free(this.scratch, SCRATCH_BYTES);
   }
 
   private handleAt(slot: number): number {
@@ -227,3 +227,4 @@ function takeOpaque(
     exports.ghostty_wasm_free_opaque(out);
   }
 }
+

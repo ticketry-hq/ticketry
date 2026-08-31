@@ -31,7 +31,7 @@ export interface GhosttyVtAbi {
   };
   cellData: {
     graphemesLen: number;
-    graphemesUtf8: number;
+    graphemesBuf: number;
     style: number;
     bgColor: number;
     fgColor: number;
@@ -53,6 +53,8 @@ export interface GhosttyVtAbi {
     release: number;
     repeat: number;
   };
+  /** Result codes the readers branch on. */
+  success: number;
   noValue: number;
 }
 
@@ -83,7 +85,7 @@ export function resolveGhosttyVtAbi(runtime: GhosttyVtRuntime): GhosttyVtAbi {
     },
     cellData: {
       graphemesLen: value("GhosttyRenderStateRowCellsData", "GRAPHEMES_LEN"),
-      graphemesUtf8: value("GhosttyRenderStateRowCellsData", "GRAPHEMES_UTF8"),
+      graphemesBuf: value("GhosttyRenderStateRowCellsData", "GRAPHEMES_BUF"),
       style: value("GhosttyRenderStateRowCellsData", "STYLE"),
       bgColor: value("GhosttyRenderStateRowCellsData", "BG_COLOR"),
       fgColor: value("GhosttyRenderStateRowCellsData", "FG_COLOR"),
@@ -105,6 +107,7 @@ export function resolveGhosttyVtAbi(runtime: GhosttyVtRuntime): GhosttyVtAbi {
       release: value("GhosttyKeyAction", "RELEASE"),
       repeat: value("GhosttyKeyAction", "REPEAT"),
     },
+    success: runtime.enumValue("GhosttyResult", "SUCCESS"),
     noValue: runtime.enumValue("GhosttyResult", "NO_VALUE"),
   };
 }

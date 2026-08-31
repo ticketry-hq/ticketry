@@ -11,6 +11,8 @@ import type { GhosttyVtRuntime } from "./wasmRuntime";
 import { resolveGhosttyVtAbi, type GhosttyVtAbi } from "./abi";
 
 const ENCODE_BUFFER_BYTES = 128;
+/** wasm32 `size_t`; the manifest's `abi.usize_size` confirms it at load time. */
+const USIZE_BYTES = 4;
 const UTF8_BUFFER_BYTES = 32;
 
 export interface EncodableKeyEvent {
@@ -46,9 +48,9 @@ export class GhosttyKeyEncoder {
     this.event = allocate(runtime, "ghostty_key_event_new", (out) =>
       exports.ghostty_key_event_new(0, out),
     );
-    this.outBuf = exports.ghostty_wasm_alloc_u8_array(ENCODE_BUFFER_BYTES);
-    this.outLen = exports.ghostty_wasm_alloc_usize();
-    this.utf8Buf = exports.ghostty_wasm_alloc_u8_array(UTF8_BUFFER_BYTES);
+    this.outBuf = exports.ghostty_wasm_alloc(ENCODE_BUFFER_BYTES);
+    this.outLen = exports.ghostty_wasm_alloc(USIZE_BYTES);
+    this.utf8Buf = exports.ghostty_wasm_alloc(UTF8_BUFFER_BYTES);
   }
 
   /**
@@ -110,9 +112,9 @@ export class GhosttyKeyEncoder {
     const { exports } = this.runtime;
     exports.ghostty_key_event_free(this.event);
     exports.ghostty_key_encoder_free(this.encoder);
-    exports.ghostty_wasm_free_u8_array(this.outBuf, ENCODE_BUFFER_BYTES);
-    exports.ghostty_wasm_free_u8_array(this.utf8Buf, UTF8_BUFFER_BYTES);
-    exports.ghostty_wasm_free_usize(this.outLen);
+    exports.ghostty_wasm_free(this.outBuf, ENCODE_BUFFER_BYTES);
+    exports.ghostty_wasm_free(this.utf8Buf, UTF8_BUFFER_BYTES);
+    exports.ghostty_wasm_free(this.outLen, USIZE_BYTES);
   }
 }
 

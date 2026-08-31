@@ -11,6 +11,10 @@ set -eu
 
 GHOSTTY_VT_REVISION="e8aa098674a42e2b4ed1b8c42f4224564ad9fc1e"
 ZIG_VERSION="0.16.0"
+# ReleaseFast by default. Set GHOSTTY_VT_OPTIMIZE=ReleaseSmall to build the
+# small artifact for the cold-start half of the comparison matrix; the two
+# differ by several megabytes, which the WebView pays for on every load.
+OPTIMIZE="${GHOSTTY_VT_OPTIMIZE:-ReleaseFast}"
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 STUDIO_DIR=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
@@ -32,6 +36,8 @@ esac
 
 if [ -f "$OUT_DIR/REVISION" ] &&
     [ "$(tr -d '\r\n' < "$OUT_DIR/REVISION")" = "$GHOSTTY_VT_REVISION" ] &&
+    [ -f "$OUT_DIR/OPTIMIZE" ] &&
+    [ "$(tr -d '\r\n' < "$OUT_DIR/OPTIMIZE")" = "$OPTIMIZE" ] &&
     [ -f "$OUT_DIR/ghostty-vt.wasm" ] &&
     [ -f "$OUT_DIR/LICENSE" ]; then
   echo "Prepared ghostty-vt wasm ($GHOSTTY_VT_REVISION) is current"
@@ -65,7 +71,7 @@ rm -rf "$BUILD_PREFIX"
   "$ZIG_DIR/zig" build \
     -Demit-lib-vt \
     -Dtarget=wasm32-freestanding \
-    -Doptimize=ReleaseFast \
+    "-Doptimize=$OPTIMIZE" \
     --prefix "$BUILD_PREFIX"
 )
 
@@ -73,6 +79,7 @@ mkdir -p "$OUT_DIR"
 cp "$BUILD_PREFIX/bin/ghostty-vt.wasm" "$OUT_DIR/ghostty-vt.wasm"
 cp "$SOURCE_DIR/LICENSE" "$OUT_DIR/LICENSE"
 printf '%s\n' "$GHOSTTY_VT_REVISION" > "$OUT_DIR/REVISION"
+printf '%s\n' "$OPTIMIZE" > "$OUT_DIR/OPTIMIZE"
 cat > "$OUT_DIR/NOTICE" <<NOTICE
 ghostty-vt.wasm is built from Ghostty (https://github.com/ghostty-org/ghostty)
 at revision $GHOSTTY_VT_REVISION and is distributed under the MIT license
@@ -81,4 +88,4 @@ reproduced in LICENSE next to this file.
 Rebuild with: npm run ghostty-vt:prepare --workspace @worktracker/studio
 NOTICE
 
-echo "Prepared ghostty-vt wasm ($GHOSTTY_VT_REVISION) in $OUT_DIR"
+echo "Prepared ghostty-vt wasm ($GHOSTTY_VT_REVISION, $OPTIMIZE) in $OUT_DIR"

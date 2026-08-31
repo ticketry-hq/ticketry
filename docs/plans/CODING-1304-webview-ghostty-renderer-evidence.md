@@ -44,6 +44,29 @@ headers, so re-pinning surfaces a removed member as a load-time error.
 `internal/ghosttyVtContract.test.ts` exercises that binding against the real
 artifact and skips when it has not been prepared.
 
+Three ABI facts the contract test established, each of which had been guessed
+wrong from the headers alone:
+
+- The typed wasm allocation helpers (`ghostty_wasm_alloc_u8_array` and
+  friends) are gone; the current artifact exports generic
+  `ghostty_wasm_alloc(len)` / `ghostty_wasm_free(ptr, len)` plus the opaque
+  slot helpers.
+- `GRAPHEMES_UTF8` is an in/out that wants a caller-sized string buffer and
+  returns `OUT_OF_SPACE` otherwise. `GRAPHEMES_BUF` writes codepoints into the
+  caller's buffer and is the simpler contract for a per-cluster Canvas draw.
+- A cell with no explicit colour reports `INVALID_VALUE`, not `NO_VALUE`. Any
+  non-success result must mean "inherit the frame default"; branching on
+  `NO_VALUE` alone paints every unstyled cell black.
+
+### Artifact size
+
+The `ReleaseFast` artifact is **4.5 MB**. For reference, the reviewed T3
+artifact was 616 KB — a `ReleaseSmall` build. The WebView pays that difference
+on every cold load, so the cold-start row of the matrix must be measured for
+both. Set `GHOSTTY_VT_OPTIMIZE=ReleaseSmall` before the prepare script to build
+the small one; the recorded mode is kept in `public/ghostty-vt/OPTIMIZE` so a
+capture cannot silently mix them.
+
 ## Measurement method
 
 All three renderers record through the same seam

@@ -1,7 +1,7 @@
 use sea_orm::{sea_query::Expr, ColumnTrait, Condition, ExprTrait};
 
-use crate::entities::terminals::session;
 use crate::launch::terminal_session::{CreateTerminalSession, TerminalLaunchKind};
+use ticketry_entities::terminals::session;
 
 use super::validation::ResumeValidationError;
 

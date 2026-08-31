@@ -703,11 +703,11 @@ fn a_persistable_path_is_absolute_and_carries_no_surrounding_whitespace() {
 
 /// The Module Link contract, built the way the product schema builds it.
 async fn contract_sdl() -> String {
-    use muxed_studio_lib::entities::runs::agent_run;
     use seaography::{
         async_graphql::dynamic::{Object, Schema},
         Builder, BuilderContext,
     };
+    use ticketry_entities::runs::agent_run;
 
     let database = Database::connect("sqlite::memory:")
         .await
@@ -716,7 +716,7 @@ async fn contract_sdl() -> String {
     let mut builder = Builder::new(context, database);
     builder.mutation = Object::new("Mutation");
     builder.schema = Schema::build("Query", Some("Mutation"), None);
-    let mut builder = muxed_studio_lib::entities::work_management::register_entity_modules(builder);
+    let mut builder = ticketry_entities::work_management::register_entity_modules(builder);
     // The Work Item graph names Agent Runs, so the read graph only closes once
     // that entity is registered alongside it.
     seaography::register_entity!(builder, agent_run, mutation: false);
@@ -731,17 +731,17 @@ async fn executable_contract(
     database: DatabaseConnection,
     writable: bool,
 ) -> seaography::async_graphql::dynamic::Schema {
-    use muxed_studio_lib::entities::runs::agent_run;
     use seaography::{
         async_graphql::dynamic::{Object, Schema},
         Builder, BuilderContext,
     };
+    use ticketry_entities::runs::agent_run;
 
     let context = Box::leak(Box::new(BuilderContext::default()));
     let mut builder = Builder::new(context, database.clone());
     builder.mutation = Object::new("Mutation");
     builder.schema = Schema::build("Query", Some("Mutation"), None);
-    let mut builder = muxed_studio_lib::entities::work_management::register_entity_modules(builder);
+    let mut builder = ticketry_entities::work_management::register_entity_modules(builder);
     seaography::register_entity!(builder, agent_run, mutation: false);
     let builder = muxed_studio_lib::module_links::register_graphql(builder);
     let mut schema = builder.schema_builder().data(database.clone());

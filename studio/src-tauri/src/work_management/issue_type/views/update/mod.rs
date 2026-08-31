@@ -17,10 +17,8 @@ use seaolim::{
     RestrictedModelMutation, RestrictedMutationField, ViewSerializers,
 };
 
-use crate::{
-    entities::work_management::issue_type,
-    work_management::{commands::catalog, graphql},
-};
+use crate::work_management::{commands::catalog, graphql};
+use ticketry_entities::work_management::issue_type;
 
 struct UpdateIssueType;
 

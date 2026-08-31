@@ -8,8 +8,10 @@ use std::collections::HashMap;
 
 use super::identifiers::new_database_uuid;
 use super::{reviewed_defaults, CommandError};
-use crate::entities::work_management::{issue_type, issue_type_transition, launch_binding, state};
 use sea_orm::{ActiveModelTrait, ConnectionTrait, Set};
+use ticketry_entities::work_management::{
+    issue_type, issue_type_transition, launch_binding, state,
+};
 
 pub(crate) async fn seed(
     database: &impl ConnectionTrait,

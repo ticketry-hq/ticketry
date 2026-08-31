@@ -5,7 +5,7 @@ use sea_orm::{
 };
 
 use super::{LaunchPolicyDecision, LaunchPolicyError};
-use crate::entities::work_management::{launch_policy_decision, transition_occurrence};
+use ticketry_entities::work_management::{launch_policy_decision, transition_occurrence};
 
 pub(super) async fn ensure_schema(database: &impl ConnectionTrait) -> Result<(), sea_orm::DbErr> {
     let backend = database.get_database_backend();

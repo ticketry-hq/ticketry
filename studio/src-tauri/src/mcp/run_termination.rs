@@ -1,10 +1,10 @@
 use sea_orm::EntityTrait;
 use serde_json::{json, Value};
 
-use crate::entities::terminals::session;
 use crate::terminal::cleanup::{
     AuthenticatedAgentRun, TerminalCleanupError, TerminalCleanupErrorCode, TerminalCleanupService,
 };
+use ticketry_entities::terminals::session;
 
 use super::RunPrincipal;
 

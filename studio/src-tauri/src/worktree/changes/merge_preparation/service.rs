@@ -2,11 +2,11 @@ use std::sync::Arc;
 
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 
-use crate::entities::worktrees::worktree;
 use crate::work_management::launch_policy::{
     CallerScope, LaunchPolicyRequest, LaunchPolicyResolver,
 };
 use crate::worktree::status;
+use ticketry_entities::worktrees::worktree;
 
 use super::super::{
     command, command_git, repository, PullRequestStatusView, WorktreeChangesService,
@@ -25,7 +25,10 @@ pub struct MergePreparationService {
 
 impl MergePreparationService {
     /// The caller composes the launcher, so worktree never names a runtime.
-    pub fn new(changes: WorktreeChangesService, launcher: Arc<dyn MergePreparationLauncher>) -> Self {
+    pub fn new(
+        changes: WorktreeChangesService,
+        launcher: Arc<dyn MergePreparationLauncher>,
+    ) -> Self {
         let database = changes.status().work_items().clone();
         Self {
             changes,

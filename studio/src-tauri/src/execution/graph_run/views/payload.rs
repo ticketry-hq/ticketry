@@ -1,10 +1,8 @@
 use seaography::{Builder, CustomOutputType};
 
-use crate::{
-    entities::execution::graph_run,
-    graph_run_service::{DeletedGraphRunResult, GraphRunResult},
-    graphql_scalars::StringList,
-};
+use crate::graph_run_service::{DeletedGraphRunResult, GraphRunResult};
+use ticketry_entities::execution::graph_run;
+use ticketry_entities::graphql_scalars::StringList;
 
 #[derive(Clone, Debug, PartialEq, Eq, CustomOutputType)]
 pub(super) struct GraphRunMutationPayload {

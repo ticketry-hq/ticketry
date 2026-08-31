@@ -4,18 +4,21 @@ use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
-use muxed_studio_lib::entities::terminals::{launch_material, session};
+use muxed_studio_lib::launch::terminal_session::TerminalLaunchError;
 use muxed_studio_lib::terminal::cleanup::{
     CleanupCheckpoint, CleanupCheckpoints, CleanupKillResult, CleanupRuntimeObservation,
     RuntimeInventory, TerminalCleanupError, TerminalCleanupRuntime,
 };
-use muxed_studio_lib::terminal::launch::{TerminalLaunchBoundary, TerminalLaunchCheckpoint, TerminalLaunchRuntime, TerminalRuntimeObservation, VerifiedTerminalRuntime};
-use muxed_studio_lib::launch::terminal_session::{TerminalLaunchError};
+use muxed_studio_lib::terminal::launch::{
+    TerminalLaunchBoundary, TerminalLaunchCheckpoint, TerminalLaunchRuntime,
+    TerminalRuntimeObservation, VerifiedTerminalRuntime,
+};
 use muxed_studio_lib::terminal::reconciliation::{
     ReconciliationCheckpoint, ReconciliationCheckpoints, TerminalReconciliationError,
     TerminalReconciliationService,
 };
 use muxed_studio_lib::tmux_adapter::InventoryEntry;
+use ticketry_entities::terminals::{launch_material, session};
 
 #[derive(Default)]
 pub struct ScriptedRuntime {

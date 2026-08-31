@@ -10,7 +10,7 @@ use super::{
     ProviderCatalog, ProviderCatalogError, ProviderCatalogService, ProviderCatalogUpdate,
     SettingsPersistenceError,
 };
-use crate::graphql_scalars::StringList;
+use ticketry_entities::graphql_scalars::StringList;
 
 pub struct SettingsQueries;
 

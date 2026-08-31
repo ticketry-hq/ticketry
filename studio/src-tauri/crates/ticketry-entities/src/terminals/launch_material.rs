@@ -27,9 +27,9 @@ pub struct Model {
     pub initial_rows: i32,
     pub created_at: String,
     #[sea_orm(belongs_to, from = "effect_id", to = "effect_id")]
-    pub launch_effect: BelongsTo<crate::entities::runs::launch_effect::Entity>,
+    pub launch_effect: BelongsTo<crate::runs::launch_effect::Entity>,
     #[sea_orm(belongs_to, from = "agent_run_id", to = "id")]
-    pub agent_run: BelongsTo<crate::entities::runs::agent_run::Entity>,
+    pub agent_run: BelongsTo<crate::runs::agent_run::Entity>,
 }
 
 impl ActiveModelBehavior for ActiveModel {}

@@ -1,5 +1,5 @@
-use crate::entities::execution::graph_run;
 use crate::execution::graph::{ExecutionMode, GraphAccess};
+use ticketry_entities::execution::graph_run;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GraphRunRequest {

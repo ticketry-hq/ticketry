@@ -11,7 +11,7 @@
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 
 use crate::documents::{DocumentsError, RegistrationIdentity, SCRATCH_TASK_ID};
-use crate::entities::runs::agent_run;
+use ticketry_entities::runs::agent_run;
 
 /// The statuses that end a run. Everything else is still live: a status this
 /// build does not recognize keeps its watcher rather than silently losing live
@@ -78,7 +78,7 @@ async fn registration_identity(
     database: &DatabaseConnection,
     run: &agent_run::Model,
 ) -> Result<Option<RegistrationIdentity>, DocumentsError> {
-    use crate::entities::work_management::issue;
+    use ticketry_entities::work_management::issue;
 
     let Some(owner) = issue::Entity::find_by_id(run.issue_id.clone())
         .one(database)

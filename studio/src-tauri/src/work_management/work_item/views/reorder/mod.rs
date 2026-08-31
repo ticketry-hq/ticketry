@@ -2,11 +2,11 @@
 
 #![allow(non_snake_case)]
 
-use crate::graphql_scalars::StringList;
 use seaography::{
     async_graphql::{Context, Result},
     CustomFields,
 };
+use ticketry_entities::graphql_scalars::StringList;
 
 use crate::work_management::{
     commands::reorder,
@@ -23,7 +23,7 @@ impl ReorderWorkItemMutation {
         before_id: Option<String>,
         after_id: Option<String>,
         initial_order_ids: Option<StringList>,
-    ) -> Result<crate::entities::work_management::issue::Model> {
+    ) -> Result<ticketry_entities::work_management::issue::Model> {
         let database = command_database(ctx)?;
         ticketry_diagnostics::record_story_move(
             "info",

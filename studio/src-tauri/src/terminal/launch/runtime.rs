@@ -1,8 +1,8 @@
 use async_trait::async_trait;
 
-use crate::entities::terminals::launch_material;
+use ticketry_entities::terminals::launch_material;
 
-use super::{TerminalLaunchCheckpoint};
+use super::TerminalLaunchCheckpoint;
 use crate::launch::terminal_session::{CreateTerminalSession, TerminalLaunchError};
 
 #[derive(Clone, Debug, Eq, PartialEq)]

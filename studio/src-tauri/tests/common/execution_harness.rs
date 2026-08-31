@@ -29,6 +29,7 @@ use muxed_studio_lib::execution::reconciliation::{
 use muxed_studio_lib::graphql_foundation::{
     adopt_worktracker_and_install, ComposedCommandRuntime, InstallationOwnership,
 };
+use muxed_studio_lib::mcp::{McpConfiguration, McpRuntime};
 use muxed_studio_lib::runs_persistence::{publish_readiness, Slice3Readiness};
 use muxed_studio_lib::terminal::launch::{TerminalLaunchBoundary, TerminalLaunchService};
 use muxed_studio_lib::terminal::lifecycle::{
@@ -36,7 +37,6 @@ use muxed_studio_lib::terminal::lifecycle::{
     TerminalRuntimeAuthority,
 };
 use muxed_studio_lib::work_management::launch_policy::LaunchPolicyResolver;
-use muxed_studio_lib::mcp::{McpConfiguration, McpRuntime};
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection};
 use serde_json::{json, Value};
 use tauri_graphql::{TransportApi, TransportApiImpl};
@@ -244,8 +244,7 @@ impl ExecutionHarness {
 
         let mcp = McpRuntime::start_with_terminal_launch(
             McpConfiguration {
-                address: muxed_studio_lib::mcp::loopback(0)
-                    .expect("loopback address"),
+                address: muxed_studio_lib::mcp::loopback(0).expect("loopback address"),
                 database_path: data_directory.join("state.db"),
                 media_root: data_directory.join("media"),
                 ingress_credential: AUTHORIZATION_CREDENTIAL.to_owned(),

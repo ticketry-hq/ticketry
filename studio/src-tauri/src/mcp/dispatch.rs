@@ -597,8 +597,8 @@ mod graph_run_contract_tests {
     use chrono::NaiveDateTime;
 
     use super::*;
-    use crate::entities::execution::graph_run;
     use crate::graph_run_service::{GraphRunResult, LaunchedChild};
+    use ticketry_entities::execution::graph_run;
 
     #[test]
     fn execution_request_keeps_parallel_default_provider_override_and_reset_meaning() {

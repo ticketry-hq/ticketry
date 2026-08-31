@@ -6,13 +6,13 @@ use super::status_facts::{
     record_workflow_state, stamp, WorkFactRecorder, WorkflowStateChange, WorkflowStateFact,
 };
 use super::CommandError;
-use crate::entities::work_management::{issue, issue_type, project, state};
 use rand::seq::SliceRandom;
 use sea_orm::{
     sea_query::Expr, ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseConnection,
     DatabaseTransaction, EntityTrait, PaginatorTrait, QueryFilter, Set, TransactionTrait,
     TryIntoModel,
 };
+use ticketry_entities::work_management::{issue, issue_type, project, state};
 
 const GROUPS: &[&str] = &["backlog", "unstarted", "started", "completed", "cancelled"];
 const PALETTE: &[&str] = &[
@@ -373,8 +373,8 @@ pub async fn delete_issue_type(
         .one(&transaction)
         .await?
         .ok_or_else(|| CommandError::NotFound("Issue type not found.".to_owned()))?;
-    let in_use = crate::entities::work_management::issue::Entity::find()
-        .filter(crate::entities::work_management::issue::Column::IssueTypeId.eq(&id))
+    let in_use = ticketry_entities::work_management::issue::Entity::find()
+        .filter(ticketry_entities::work_management::issue::Column::IssueTypeId.eq(&id))
         .count(&transaction)
         .await?;
     if in_use != 0 && reassign_to.is_none() {

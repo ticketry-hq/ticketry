@@ -2,15 +2,17 @@ use std::sync::Arc;
 
 use sea_orm::{DatabaseConnection, EntityTrait};
 
-use crate::entities::{terminals::session, work_management::issue};
 use crate::launch::authority::InteractiveLaunchAuthority;
 use crate::runs_persistence::LaunchPreparationParticipant;
 use crate::runs_persistence::RunsServices;
+use ticketry_entities::{terminals::session, work_management::issue};
 
 use super::checkpoint::LaunchCheckpoints;
 use super::material::PreparedMaterial;
 use super::{TerminalLaunchBoundary, TerminalLaunchCheckpoint, TerminalLaunchRuntime};
-use crate::launch::terminal_session::{CreateTerminalSession, TerminalLaunchError, TerminalLaunchErrorCode};
+use crate::launch::terminal_session::{
+    CreateTerminalSession, TerminalLaunchError, TerminalLaunchErrorCode,
+};
 
 pub(crate) struct AcceptedTerminalLaunch {
     material: PreparedMaterial,
@@ -221,7 +223,8 @@ impl TerminalLaunchService {
     ) -> Result<Option<String>, TerminalLaunchError> {
         if !matches!(
             request.kind,
-            crate::launch::terminal_session::TerminalLaunchKind::Task | crate::launch::terminal_session::TerminalLaunchKind::Automation
+            crate::launch::terminal_session::TerminalLaunchKind::Task
+                | crate::launch::terminal_session::TerminalLaunchKind::Automation
         ) {
             return Ok(None);
         }
@@ -238,7 +241,7 @@ impl TerminalLaunchService {
         let Some(state_id) = row.state_id else {
             return Ok(None);
         };
-        crate::entities::work_management::state::Entity::find_by_id(state_id)
+        ticketry_entities::work_management::state::Entity::find_by_id(state_id)
             .one(&self.database)
             .await
             .map_err(storage)
@@ -314,13 +317,18 @@ impl TerminalLaunchService {
             }
         }
         let expected_target = match request.kind {
-            crate::launch::terminal_session::TerminalLaunchKind::Task | crate::launch::terminal_session::TerminalLaunchKind::Automation => {
+            crate::launch::terminal_session::TerminalLaunchKind::Task
+            | crate::launch::terminal_session::TerminalLaunchKind::Automation => {
                 compact(&request.issue_id)
             }
             crate::launch::terminal_session::TerminalLaunchKind::Planning
             | crate::launch::terminal_session::TerminalLaunchKind::Instant
-            | crate::launch::terminal_session::TerminalLaunchKind::Shell => compact(&request.module_id),
-            crate::launch::terminal_session::TerminalLaunchKind::DocumentChat => compact(&request.target_id),
+            | crate::launch::terminal_session::TerminalLaunchKind::Shell => {
+                compact(&request.module_id)
+            }
+            crate::launch::terminal_session::TerminalLaunchKind::DocumentChat => {
+                compact(&request.target_id)
+            }
         };
         if compact(&request.target_id) != expected_target {
             return Err(TerminalLaunchError::new(
@@ -329,7 +337,8 @@ impl TerminalLaunchService {
             ));
         }
         let expected_workspace = match request.kind {
-            crate::launch::terminal_session::TerminalLaunchKind::Task | crate::launch::terminal_session::TerminalLaunchKind::Automation => {
+            crate::launch::terminal_session::TerminalLaunchKind::Task
+            | crate::launch::terminal_session::TerminalLaunchKind::Automation => {
                 format!("task:{}", compact(&request.issue_id))
             }
             crate::launch::terminal_session::TerminalLaunchKind::Planning

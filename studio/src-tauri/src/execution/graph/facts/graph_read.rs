@@ -2,8 +2,8 @@ use std::collections::{HashMap, HashSet};
 
 use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, QueryOrder};
 
-use crate::entities::work_management::{issue, issue_blocker};
 use crate::execution::graph::{DependencyGraph, DependencyGraphNode, GraphAccess, GraphFactsError};
+use ticketry_entities::work_management::{issue, issue_blocker};
 
 use super::{
     root_scope::scoped_root,

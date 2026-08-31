@@ -233,8 +233,8 @@ fn failed(detail: String) -> AdoptionFailure {
 #[cfg(test)]
 mod tests {
     use super::{manifest, RECORDED_SCHEMA};
-    use crate::entities::work_management::{issue_type, state};
     use sea_orm::{DatabaseConnection, EntityTrait};
+    use ticketry_entities::work_management::{issue_type, state};
 
     #[test]
     fn the_recorded_schema_names_the_generation_it_reproduces() {

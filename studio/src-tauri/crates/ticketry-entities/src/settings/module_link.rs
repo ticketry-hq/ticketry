@@ -19,7 +19,7 @@ pub struct Model {
     pub created_at: DateTime,
     pub updated_at: DateTime,
     #[sea_orm(belongs_to, from = "module_id", to = "id")]
-    pub module: BelongsTo<crate::entities::work_management::issue::Entity>,
+    pub module: BelongsTo<crate::work_management::issue::Entity>,
 }
 
 impl ActiveModelBehavior for ActiveModel {}

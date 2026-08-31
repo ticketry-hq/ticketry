@@ -2,7 +2,7 @@ use sea_orm::{
     ActiveValue::NotSet, ColumnTrait, DatabaseTransaction, DbErr, EntityTrait, QueryFilter, Set,
 };
 
-use crate::entities::work_management::{
+use ticketry_entities::work_management::{
     agent_model, agent_model_reasoning_level, provider, reasoning_level,
 };
 

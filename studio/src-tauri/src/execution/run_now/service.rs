@@ -11,13 +11,13 @@ use crate::work_management::commands::{
     },
     CommandError,
 };
-use crate::entities::work_management::{
-    issue, issue_type, issue_type_transition, state, transition_occurrence,
-};
 use crate::work_management::launch_policy::{
     self, CallerScope, LaunchPolicyError, LaunchPolicyRequest, LaunchPolicyResolver,
 };
 use crate::work_management::read_queries;
+use ticketry_entities::work_management::{
+    issue, issue_type, issue_type_transition, state, transition_occurrence,
+};
 
 use super::launcher::{RunNowLauncher, TerminalRunNowLauncher};
 use super::{RunNowCaller, RunNowRefusal, RunNowRequest, RunNowState, RunNowSuccess};

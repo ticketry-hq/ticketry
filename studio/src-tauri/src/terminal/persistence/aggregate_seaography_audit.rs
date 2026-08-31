@@ -203,7 +203,7 @@ pub const RAW_SQL_EVIDENCE_ONLY: &[RawSqlEvidence] = &[
 /// Every Rust module the aggregate audit read, relative to `studio/src-tauri`.
 /// The integration test scans these for CRUD outside SeaORM.
 pub const AUDITED_MODULES: &[&str] = &[
-    "src/entities/terminals",
+    "crates/ticketry-entities/src/terminals",
     "src/terminal/persistence",
     "src/terminal/launch",
     "src/terminal/cleanup",
@@ -293,7 +293,11 @@ mod tests {
     fn the_audit_covers_every_child_of_the_story() {
         assert_eq!(CHILD_HANDOFFS.len(), 26);
         for module in AUDITED_MODULES {
-            assert!(module.starts_with("src/"));
+            // Paths are relative to this package, and slices move between
+            // `src/` and `crates/` as the workspace split proceeds, so the
+            // check is that each one still names something real.
+            let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(module);
+            assert!(path.exists(), "{module} no longer exists");
         }
     }
 }

@@ -10,15 +10,11 @@ use common::terminal_lifecycle_harness::{
 use common::terminal_reconciliation_runtime::{
     service, ScriptedRuntime, StopCleanupPreparation, StopOnce,
 };
-use muxed_studio_lib::entities::{
-    runs::{agent_run, launch_effect, status_event},
-    terminals::{cleanup_effect, session},
-};
+use muxed_studio_lib::launch::terminal_session::{CreateTerminalSession, TerminalLaunchKind};
 use muxed_studio_lib::terminal::cleanup::{
     CleanupCause, CleanupRuntimeObservation, TerminalCleanupService,
 };
-use muxed_studio_lib::terminal::launch::{TerminalLaunchBoundary};
-use muxed_studio_lib::launch::terminal_session::{CreateTerminalSession, TerminalLaunchKind};
+use muxed_studio_lib::terminal::launch::TerminalLaunchBoundary;
 use muxed_studio_lib::terminal::reconciliation::{
     ReconciliationCheckpoint, RecordedSessionDecision, UnrecordedRuntimeDecision,
     MAX_RECORDED_SESSION_BATCH,
@@ -27,6 +23,10 @@ use muxed_studio_lib::tmux_adapter::{InventoryConflictKind, InventoryEntry, Owne
 use sea_orm::{
     sea_query::Expr, ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, PaginatorTrait,
     QueryFilter,
+};
+use ticketry_entities::{
+    runs::{agent_run, launch_effect, status_event},
+    terminals::{cleanup_effect, session},
 };
 
 #[tokio::test]

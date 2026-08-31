@@ -2,7 +2,7 @@
 //!
 //! `app_settings` is adopted from Django in place. `module_links` is authored
 //! by Rust: it replaces the module folders that used to live inside
-//! `profiles.json`, and [`crate::module_links`] owns its schema and writes.
+//! `profiles.json`, and the `module_links` slice owns its schema and writes.
 
 pub mod app_settings;
 pub mod module_link;

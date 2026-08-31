@@ -3,7 +3,7 @@ use serde::Deserialize;
 
 use super::super::CommandError;
 use crate::settings_persistence::read_global_launch_default;
-use crate::entities::work_management::{agent_model, agent_model_reasoning_level, provider};
+use ticketry_entities::work_management::{agent_model, agent_model_reasoning_level, provider};
 
 const REQUIRED_SKILL_LOCK: &str = include_str!("../../../../resources/launch/skills.lock.json");
 

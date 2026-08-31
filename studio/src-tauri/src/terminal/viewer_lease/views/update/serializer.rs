@@ -2,7 +2,8 @@ use sea_orm::DatabaseTransaction;
 use seaography::async_graphql::{dynamic::ResolverContext, Result};
 use seaolim::{PreparedModelWrite, RestrictedModelMutation};
 
-use crate::{entities::terminals::viewer_lease, viewer_ownership::UpdateViewerLease};
+use crate::viewer_ownership::UpdateViewerLease;
+use ticketry_entities::terminals::viewer_lease;
 
 use super::super::support;
 

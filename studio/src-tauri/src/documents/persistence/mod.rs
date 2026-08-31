@@ -25,5 +25,5 @@ pub use schema::{AUTHORED_TABLES, CURRENT_DJANGO_LEAF, LEDGER_TABLE, VERSION};
 
 /// Register the generated Design Document read contract on the composed schema.
 pub(crate) fn register_graphql(builder: seaography::Builder) -> seaography::Builder {
-    crate::entities::documents::register_entity_modules(builder)
+    ticketry_entities::documents::register_entity_modules(builder)
 }

@@ -1,7 +1,7 @@
 use sea_orm::{IdenStatic, Iterable};
 use seaography::BuilderContext;
 
-use crate::entities::terminals::{session, viewer_lease};
+use ticketry_entities::terminals::{session, viewer_lease};
 
 pub fn apply(context: &mut BuilderContext) {
     for name in protected_names::<session::Entity>(context) {

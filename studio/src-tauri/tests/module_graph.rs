@@ -11,8 +11,8 @@
 mod module_graph_support;
 
 use module_graph_support::{
-    modules_declaring_tauri_commands, slice_of, ALLOWED_BACK_EDGES,
-    ALLOWED_COMMAND_MODULES_OUTSIDE_DESKTOP, ModuleGraph,
+    modules_declaring_tauri_commands, slice_of, ModuleGraph, ALLOWED_BACK_EDGES,
+    ALLOWED_COMMAND_MODULES_OUTSIDE_DESKTOP,
 };
 
 #[test]

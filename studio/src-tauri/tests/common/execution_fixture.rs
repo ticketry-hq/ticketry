@@ -6,13 +6,13 @@
 //! start. It does not describe or recreate a historical Django installation.
 #![allow(dead_code)]
 
-use muxed_studio_lib::entities::work_management::{
-    agent_model, issue, issue_blocker, issue_type, issue_type_transition, launch_binding, project,
-    provider, state,
-};
 use sea_orm::{
     ActiveModelTrait, ActiveValue::NotSet, ColumnTrait, DatabaseConnection, EntityTrait,
     QueryFilter, Set, TransactionTrait,
+};
+use ticketry_entities::work_management::{
+    agent_model, issue, issue_blocker, issue_type, issue_type_transition, launch_binding, project,
+    provider, state,
 };
 
 pub const CAMPAIGN_PROJECT: &str = "00000000000000000000000000090301";

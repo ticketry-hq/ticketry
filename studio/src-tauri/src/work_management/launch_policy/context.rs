@@ -2,7 +2,7 @@ use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 
 use super::rows::{canonical_uuid, compact_uuid, TaskRow};
 use super::{LaunchPolicyError, ModuleLinkInput};
-use crate::entities::work_management::issue;
+use ticketry_entities::work_management::issue;
 
 /// Where a launch will run, resolved from the Work Item graph alone.
 ///

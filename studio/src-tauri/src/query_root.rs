@@ -187,9 +187,9 @@ fn build_schema(
     } else {
         builder
     };
-    let builder = crate::entities::work_management::register_entity_modules(builder);
+    let builder = ticketry_entities::work_management::register_entity_modules(builder);
     let builder = if contract.product_generated_mutations {
-        crate::entities::execution::register_entity_modules(builder)
+        ticketry_entities::execution::register_entity_modules(builder)
     } else {
         builder
     };

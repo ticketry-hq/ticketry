@@ -6,7 +6,7 @@ use sea_orm::{
 use super::fractional_rank;
 use super::identifiers::{database_uuid, new_database_uuid};
 use super::{work_items, CommandError};
-use crate::entities::work_management::{issue, issue_type, project, state};
+use ticketry_entities::work_management::{issue, issue_type, project, state};
 
 #[derive(Debug, Clone)]
 pub struct CreateReviewFinding {

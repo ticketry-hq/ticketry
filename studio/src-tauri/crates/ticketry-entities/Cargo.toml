@@ -1,0 +1,13 @@
+[package]
+name = "ticketry-entities"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+chrono.workspace = true
+sea-orm.workspace = true
+seaography.workspace = true
+serde.workspace = true
+tokio.workspace = true
+uuid.workspace = true

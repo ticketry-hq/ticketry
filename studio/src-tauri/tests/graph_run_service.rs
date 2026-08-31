@@ -8,16 +8,19 @@ use common::submitted_launch_authority::launch_service;
 use common::terminal_lifecycle_harness::{
     TerminalLifecycleHarness, MODULE_ID, PROJECT_ID, TASK_ID,
 };
-use muxed_studio_lib::entities::{runs::agent_run, terminals::launch_material};
 use muxed_studio_lib::execution::graph::{ExecutionMode, GraphAccess};
 use muxed_studio_lib::execution::reconciliation::ExecutionReconciliationService;
 use muxed_studio_lib::graph_run_service::GraphRunCaller;
 use muxed_studio_lib::graph_run_service::{GraphRunRequest, GraphRunService};
-use muxed_studio_lib::terminal::launch::{TerminalLaunchBoundary, TerminalLaunchCheckpoint, TerminalLaunchRuntime, TerminalLaunchService, TerminalRuntimeObservation, VerifiedTerminalRuntime};
-use muxed_studio_lib::launch::terminal_session::{TerminalLaunchError};
+use muxed_studio_lib::launch::terminal_session::TerminalLaunchError;
+use muxed_studio_lib::terminal::launch::{
+    TerminalLaunchBoundary, TerminalLaunchCheckpoint, TerminalLaunchRuntime, TerminalLaunchService,
+    TerminalRuntimeObservation, VerifiedTerminalRuntime,
+};
 use muxed_studio_lib::work_management::launch_policy::LaunchPolicyResolver;
 use sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, Statement};
 use seaography::{Builder, BuilderContext};
+use ticketry_entities::{runs::agent_run, terminals::launch_material};
 
 const CHILD_A: &str = "00000000000000000000000000008951";
 const CHILD_B: &str = "00000000000000000000000000008952";
@@ -176,10 +179,11 @@ async fn graph_run_graphql_contract_returns_authoritative_models_and_child_ids()
     seed(&database, harness.data_directory()).await;
     let service = service(&database);
     let context = Box::leak(Box::new(BuilderContext::default()));
-    let builder = muxed_studio_lib::entities::work_management::register_entity_modules(
-        Builder::new(context, database.clone()),
-    );
-    let mut builder = muxed_studio_lib::entities::execution::register_entity_modules(builder);
+    let builder = ticketry_entities::work_management::register_entity_modules(Builder::new(
+        context,
+        database.clone(),
+    ));
+    let mut builder = ticketry_entities::execution::register_entity_modules(builder);
     seaography::register_entity!(builder, agent_run, mutation: false);
     let schema = muxed_studio_lib::execution::graph_run::register_graphql(builder)
         .schema_builder()

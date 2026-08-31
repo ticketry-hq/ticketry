@@ -11,10 +11,10 @@ use super::super::status_facts::{
     record_work_item, stamp, WorkFactRecorder, WorkItemChange, WorkItemFact, WorkItemIdentity,
 };
 use super::super::CommandError;
-use crate::entities::work_management::{
+use crate::work_management::transition_occurrences::{self, NewTransitionOccurrence};
+use ticketry_entities::work_management::{
     issue, issue_type, issue_type_transition, launch_binding, project, state,
 };
-use crate::work_management::transition_occurrences::{self, NewTransitionOccurrence};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TransitionOrigin {

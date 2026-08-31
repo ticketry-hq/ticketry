@@ -114,7 +114,7 @@ pub struct WorkItemIdentity {
 }
 
 impl WorkItemIdentity {
-    pub fn of(row: &crate::entities::work_management::issue::Model) -> Self {
+    pub fn of(row: &ticketry_entities::work_management::issue::Model) -> Self {
         Self {
             project_id: row.project_id.clone(),
             work_item_id: row.id.clone(),

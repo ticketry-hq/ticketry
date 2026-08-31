@@ -6,12 +6,12 @@ use sea_orm::{
 };
 use serde_json::json;
 
-use crate::entities::{runs::agent_run, terminals::session};
 use crate::runs_persistence::{NewStatusEvent, RunsServices, TerminalFact, TerminalOutcome};
 use crate::terminal::cleanup::{
     CleanupCause, CleanupRuntimeObservation, TerminalCleanupRuntime, TerminalCleanupService,
 };
 use crate::terminal::launch::{TerminalLaunchRuntime, TerminalLaunchService};
+use ticketry_entities::{runs::agent_run, terminals::session};
 
 use super::batch::{recorded_session_batch, RecordedSessionCursors};
 use super::{

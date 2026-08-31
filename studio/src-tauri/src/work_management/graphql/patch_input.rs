@@ -10,7 +10,7 @@ use seaography::{
 };
 
 use super::commands::workflow;
-use crate::graphql_scalars::StringList;
+use ticketry_entities::graphql_scalars::StringList;
 
 pub struct GraphqlPatchString(pub workflow::PatchValue<String>);
 pub struct GraphqlPatchBool(pub workflow::PatchValue<bool>);
@@ -66,9 +66,7 @@ impl CustomInputType for GraphqlPatchStringList {
         Ok(Self(match value {
             None => workflow::PatchValue::Unset,
             Some(value) if value.is_null() => workflow::PatchValue::Null,
-            Some(value) => {
-                workflow::PatchValue::Value(StringList::parse_value(ctx, Some(value))?)
-            }
+            Some(value) => workflow::PatchValue::Value(StringList::parse_value(ctx, Some(value))?),
         }))
     }
 }

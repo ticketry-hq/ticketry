@@ -1,13 +1,13 @@
-use crate::graphql_scalars::StringList;
 use std::collections::HashMap;
+use ticketry_entities::graphql_scalars::StringList;
 
 use sea_orm::{DatabaseConnection, DbErr, EntityTrait, QueryOrder};
 
 use super::uuid;
-use crate::entities::work_management::{
+use crate::work_management::read_types as output;
+use ticketry_entities::work_management::{
     agent_model, agent_model_reasoning_level, provider, reasoning_level,
 };
-use crate::work_management::read_types as output;
 
 pub async fn providers(database: &DatabaseConnection) -> Result<Vec<output::Provider>, DbErr> {
     Ok(provider::Entity::find()

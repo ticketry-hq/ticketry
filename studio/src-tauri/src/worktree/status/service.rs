@@ -7,7 +7,7 @@
 
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 
-use crate::entities::worktrees::worktree;
+use ticketry_entities::worktrees::worktree;
 
 use super::error::WorktreeStatusError;
 use super::git::GitPort;

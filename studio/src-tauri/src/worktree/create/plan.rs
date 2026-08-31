@@ -15,10 +15,10 @@ use std::path::PathBuf;
 
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 
-use crate::entities::work_management::{issue, project};
 use crate::worktree::status::owner::{self, WorktreeOwner};
 use crate::worktree::status::repository::{self, RepositoryResolution};
 use crate::worktree::status::GitPort;
+use ticketry_entities::work_management::{issue, project};
 
 use super::error::WorktreeCreateError;
 use super::naming;

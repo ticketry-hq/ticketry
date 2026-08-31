@@ -34,7 +34,7 @@ The recovery decisions are:
 Current recovery state:
 
 - The Rust source has been mechanically reorganized to the Seaography-style
-  `src/entities/`, `src/query_root.rs`, and
+  `crates/ticketry-entities/src/`, `src/query_root.rs`, and
   `src/query_root/{queries,mutations,types}` boundaries. Generation and drift
   scripts point at the new foundation-entity location.
 - A clean SQLite database created by the current Django migration chain was
@@ -46,7 +46,7 @@ Current recovery state:
   relationship names are database-derived rather than semantic; and generated
   metadata includes keys/actions omitted by some handwritten mappings.
 - `app_settings` was a byte-for-byte match and has been replaced by the
-  generated entity at `src/entities/settings/app_settings.rs`.
+  generated entity at `crates/ticketry-entities/src/settings/app_settings.rs`.
 - The remaining WorkTracker cohort is still the compatibility mapping pending
   deterministic generation normalization. Rust-owned tables such as transition
   occurrences and launch-policy decisions/rejections are absent from the

@@ -1,11 +1,9 @@
-use muxed_studio_lib::{
-    entities::work_management::{issue, module_presentation},
-    query_root,
-};
+use muxed_studio_lib::query_root;
 use sea_orm::{
     ActiveModelTrait, ActiveValue::Set, ConnectOptions, ConnectionTrait, Database,
     DatabaseConnection, EntityTrait,
 };
+use ticketry_entities::work_management::{issue, module_presentation};
 
 const PROJECT: &str = "10000000000000000000000000000000";
 const MODULE_TYPE: &str = "20000000000000000000000000000000";

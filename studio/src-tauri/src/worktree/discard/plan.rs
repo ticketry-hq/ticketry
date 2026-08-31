@@ -11,7 +11,7 @@
 
 use std::path::PathBuf;
 
-use crate::entities::worktrees::worktree;
+use ticketry_entities::worktrees::worktree;
 
 /// The exact subject of one discard.
 #[derive(Clone, Debug, Eq, PartialEq)]

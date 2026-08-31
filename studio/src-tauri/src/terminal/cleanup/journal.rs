@@ -7,8 +7,8 @@ use sea_orm::{
 };
 use serde_json::{json, Value};
 
-use crate::entities::terminals::{cleanup_effect, session};
 use crate::runs_persistence::{TerminalFact, TerminalOutcome};
+use ticketry_entities::terminals::{cleanup_effect, session};
 
 use super::service::{not_found, observation_name, TerminalCleanupService};
 use super::{

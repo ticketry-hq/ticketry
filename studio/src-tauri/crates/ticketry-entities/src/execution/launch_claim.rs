@@ -18,11 +18,11 @@ pub struct Model {
     pub launched_at: DateTime,
     pub root_id: String,
     #[sea_orm(belongs_to, from = "task_id", to = "id")]
-    pub task: BelongsTo<crate::entities::work_management::issue::Entity>,
+    pub task: BelongsTo<crate::work_management::issue::Entity>,
     #[sea_orm(belongs_to, from = "root_id", to = "root_id")]
     pub graph_run: BelongsTo<super::graph_run::Entity>,
     #[sea_orm(belongs_to, from = "agent_run_id", to = "id")]
-    pub agent_run: BelongsTo<crate::entities::runs::agent_run::Entity>,
+    pub agent_run: BelongsTo<crate::runs::agent_run::Entity>,
 }
 
 impl ActiveModelBehavior for ActiveModel {}

@@ -1,8 +1,10 @@
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 
-use crate::entities::{runs::agent_run, terminals::session};
 use crate::launch::planning::{provider_contract, Provider};
-use crate::launch::terminal_session::{CreateTerminalSession, TerminalLaunchError, TerminalLaunchErrorCode};
+use crate::launch::terminal_session::{
+    CreateTerminalSession, TerminalLaunchError, TerminalLaunchErrorCode,
+};
+use ticketry_entities::{runs::agent_run, terminals::session};
 
 use super::scope::{compact, ResumeScope};
 

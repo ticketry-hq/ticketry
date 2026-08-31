@@ -14,9 +14,9 @@
 
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 
-use crate::entities::work_management::issue;
 use crate::worktree::status::identity::{canonical_uuid, compact_uuid};
 use crate::worktree::status::owner;
+use ticketry_entities::work_management::issue;
 
 /// The authoritative addressing of one worktree fact.
 #[derive(Clone, Debug, Eq, PartialEq)]

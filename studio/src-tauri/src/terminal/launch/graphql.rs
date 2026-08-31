@@ -5,11 +5,13 @@ use seaography::{
     CustomFields,
 };
 
-use crate::entities::terminals::session;
-use crate::graphql_scalars::StringList;
+use ticketry_entities::graphql_scalars::StringList;
+use ticketry_entities::terminals::session;
 
-use super::{TerminalLaunchService};
-use crate::launch::terminal_session::{CreateTerminalSession, TerminalLaunchError, TerminalLaunchKind};
+use super::TerminalLaunchService;
+use crate::launch::terminal_session::{
+    CreateTerminalSession, TerminalLaunchError, TerminalLaunchKind,
+};
 
 pub struct TerminalSessionMutations;
 

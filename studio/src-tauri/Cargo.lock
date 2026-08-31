@@ -6808,6 +6808,7 @@ dependencies = [
  "tempfile",
  "ticketry-data-directory",
  "ticketry-diagnostics",
+ "ticketry-entities",
  "tokio",
  "tokio-util",
  "uuid",
@@ -6833,6 +6834,18 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
+ "uuid",
+]
+
+[[package]]
+name = "ticketry-entities"
+version = "0.0.0"
+dependencies = [
+ "chrono",
+ "sea-orm",
+ "seaography",
+ "serde",
+ "tokio",
  "uuid",
 ]
 

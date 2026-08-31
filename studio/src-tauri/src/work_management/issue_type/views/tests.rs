@@ -1,6 +1,6 @@
 use sea_orm::{ConnectOptions, ConnectionTrait, Database, DatabaseConnection, EntityTrait};
 
-use crate::entities::work_management::{issue_type, issue_type_transition, launch_binding};
+use ticketry_entities::work_management::{issue_type, issue_type_transition, launch_binding};
 
 const PROJECT: &str = "10000000000000000000000000000000";
 const FOREIGN_PROJECT: &str = "10000000000000000000000000000009";

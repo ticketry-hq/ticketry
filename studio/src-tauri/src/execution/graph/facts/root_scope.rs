@@ -1,9 +1,9 @@
 use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, QueryOrder};
 
-use crate::entities::work_management::issue;
 use crate::execution::graph::{
     types::compact_id, GraphAccess, GraphFactsError, GraphFactsErrorCode,
 };
+use ticketry_entities::work_management::issue;
 
 pub(super) async fn scoped_root(
     database: &impl ConnectionTrait,

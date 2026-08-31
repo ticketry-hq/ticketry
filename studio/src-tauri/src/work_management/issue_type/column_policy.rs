@@ -3,7 +3,7 @@ use std::sync::Arc;
 use sea_orm::{EntityName, IdenStatic};
 use seaography::{async_graphql::dynamic::TypeRef, BuilderContext, EntityColumnId};
 
-use crate::entities::work_management::issue_type;
+use ticketry_entities::work_management::issue_type;
 
 const INSERT_SERVER_COLUMNS: &[issue_type::Column] = &[
     issue_type::Column::Id,

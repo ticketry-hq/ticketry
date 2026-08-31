@@ -14,13 +14,11 @@ use seaolim::{
 };
 
 use super::support::{optional_string, work_facts, WakeWorkFacts};
-use crate::{
-    entities::work_management::state,
-    work_management::{
-        commands::catalog,
-        graphql::{command_error, require_command_database},
-    },
+use crate::work_management::{
+    commands::catalog,
+    graphql::{command_error, require_command_database},
 };
+use ticketry_entities::work_management::state;
 
 struct CreateState;
 

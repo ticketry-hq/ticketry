@@ -3,7 +3,7 @@ use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 use super::rows::BindingRow;
 use super::LaunchPolicyError;
 use crate::settings_persistence::{read_global_launch_default, GlobalLaunchDefault};
-use crate::entities::work_management::{
+use ticketry_entities::work_management::{
     agent_model, agent_model_reasoning_level, provider, reasoning_level,
 };
 

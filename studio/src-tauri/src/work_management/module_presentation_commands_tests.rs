@@ -1,8 +1,8 @@
 use sea_orm::{ActiveModelTrait, ActiveValue::Set, ConnectionTrait, Database, EntityTrait};
 
 use super::commands::{reorder, work_items};
-use crate::entities::work_management::{issue, module_presentation as presentation};
 use super::{open_for_commands, read_queries};
+use ticketry_entities::work_management::{issue, module_presentation as presentation};
 
 const PROJECT: &str = "10000000000000000000000000000000";
 const MODULE_TYPE: &str = "20000000000000000000000000000000";

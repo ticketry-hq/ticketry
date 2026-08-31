@@ -3,12 +3,9 @@ use std::{
     time::Duration,
 };
 
-use muxed_studio_lib::{
-    entities::terminals::{session, viewer_lease},
-    viewer_ownership::{
-        CreateViewerLease, DeleteViewerLease, PreparedViewerMechanics, UpdateViewerLease,
-        ViewerDetachReason, ViewerOwnershipError, ViewerOwnershipErrorCode, ViewerOwnershipService,
-    },
+use muxed_studio_lib::viewer_ownership::{
+    CreateViewerLease, DeleteViewerLease, PreparedViewerMechanics, UpdateViewerLease,
+    ViewerDetachReason, ViewerOwnershipError, ViewerOwnershipErrorCode, ViewerOwnershipService,
 };
 use sea_orm::{
     ActiveModelTrait, ActiveValue::Set, ConnectionTrait, Database, DatabaseConnection, EntityTrait,
@@ -20,6 +17,7 @@ use seaography::{
     },
     Builder, BuilderContext,
 };
+use ticketry_entities::terminals::{session, viewer_lease};
 
 const RUN_ID: &str = "run-viewer-ownership";
 const OTHER_RUN_ID: &str = "run-viewer-ownership-2";
@@ -324,7 +322,7 @@ async fn graphql_restricted_views_preserve_ownership_and_nullable_release() {
     let mut builder = Builder::new(context, database.clone());
     builder.mutation = Object::new("Mutation");
     builder.schema = Schema::build("Query", Some("Mutation"), None);
-    let builder = muxed_studio_lib::entities::work_management::register_entity_modules(builder);
+    let builder = ticketry_entities::work_management::register_entity_modules(builder);
     let builder = muxed_studio_lib::terminal::persistence::register_graphql(builder);
     let builder = muxed_studio_lib::terminal::viewer_lease::register_graphql(builder);
     let schema = builder

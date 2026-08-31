@@ -13,10 +13,10 @@ use sea_orm::{
     QueryFilter, QueryOrder, Statement,
 };
 
-use crate::entities::terminals::{cleanup_effect, session};
 use crate::terminal::cleanup::{
     CleanupCause, TerminalCleanupError, TerminalCleanupErrorCode, TerminalCleanupService,
 };
+use ticketry_entities::terminals::{cleanup_effect, session};
 
 /// One cleanup effect the journal did not settle as applied. Its runtime may
 /// survive the profile, so its history has to outlive the teardown.

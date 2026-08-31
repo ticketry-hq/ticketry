@@ -6,7 +6,6 @@ use std::sync::{
 
 use async_trait::async_trait;
 use muxed_studio_lib::{
-    entities::work_management::{issue, launch_policy_decision, transition_occurrence},
     execution::run_now::{RunNowCaller, RunNowLauncher, RunNowRequest, RunNowRun, RunNowService},
     work_management::{
         launch_policy::{LaunchPolicyDecision, LaunchPolicyResolver},
@@ -14,6 +13,7 @@ use muxed_studio_lib::{
     },
 };
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection, EntityTrait, PaginatorTrait};
+use ticketry_entities::work_management::{issue, launch_policy_decision, transition_occurrence};
 
 const PROJECT: &str = "20000000000000000000000000000000";
 const STORY: &str = "30000000000000000000000000000000";

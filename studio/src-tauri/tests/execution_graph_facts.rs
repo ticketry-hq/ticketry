@@ -1,16 +1,14 @@
-use muxed_studio_lib::{
-    entities::{
-        execution::{graph_run, launch_claim},
-        runs::agent_run,
-        terminals::session as terminal_session,
-        work_management::{issue, issue_blocker, state},
-    },
-    execution::graph::{
-        dependency_graph, relevant_armed_roots, scheduling_facts, GraphAccess, GraphFactsErrorCode,
-    },
+use muxed_studio_lib::execution::graph::{
+    dependency_graph, relevant_armed_roots, scheduling_facts, GraphAccess, GraphFactsErrorCode,
 };
 use sea_orm::{
     ActiveModelTrait, ConnectionTrait, Database, DatabaseConnection, EntityTrait, NotSet, Set,
+};
+use ticketry_entities::{
+    execution::{graph_run, launch_claim},
+    runs::agent_run,
+    terminals::session as terminal_session,
+    work_management::{issue, issue_blocker, state},
 };
 
 const PROJECT: &str = "project-a";

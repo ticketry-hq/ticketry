@@ -12,7 +12,7 @@ use super::status_facts::{
     record_work_item, stamp, WorkFactRecorder, WorkItemChange, WorkItemIdentity,
 };
 use super::CommandError;
-use crate::entities::work_management::{issue, module_presentation, project};
+use ticketry_entities::work_management::{issue, module_presentation, project};
 
 #[derive(Debug, Clone)]
 pub struct ReorderWorkItem {

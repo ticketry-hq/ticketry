@@ -8,10 +8,15 @@ use common::submitted_launch_authority::launch_service;
 use common::terminal_lifecycle_harness::{
     TerminalLifecycleHarness, MODULE_ID, PROJECT_ID, TASK_ID,
 };
-use muxed_studio_lib::entities::terminals::{launch_material, session};
-use muxed_studio_lib::terminal::launch::{TerminalLaunchCheckpoint, TerminalLaunchRuntime, TerminalRuntimeObservation, VerifiedTerminalRuntime};
-use muxed_studio_lib::launch::terminal_session::{CreateTerminalSession, TerminalLaunchError, TerminalLaunchKind};
+use muxed_studio_lib::launch::terminal_session::{
+    CreateTerminalSession, TerminalLaunchError, TerminalLaunchKind,
+};
+use muxed_studio_lib::terminal::launch::{
+    TerminalLaunchCheckpoint, TerminalLaunchRuntime, TerminalRuntimeObservation,
+    VerifiedTerminalRuntime,
+};
 use sea_orm::{ConnectionTrait, EntityTrait};
+use ticketry_entities::terminals::{launch_material, session};
 
 struct ResumeRuntime {
     created: Mutex<BTreeSet<String>>,
@@ -72,12 +77,11 @@ async fn resume_creates_new_history_and_retries_idempotently() {
         .await
         .unwrap()
         .unwrap();
-    let original_run =
-        muxed_studio_lib::entities::runs::agent_run::Entity::find_by_id("resume-source")
-            .one(&database)
-            .await
-            .unwrap()
-            .unwrap();
+    let original_run = ticketry_entities::runs::agent_run::Entity::find_by_id("resume-source")
+        .one(&database)
+        .await
+        .unwrap()
+        .unwrap();
     let service = launch_service(
         database.clone(),
         Arc::new(ResumeRuntime {
@@ -99,18 +103,17 @@ async fn resume_creates_new_history_and_retries_idempotently() {
         Some(original)
     );
     assert_eq!(
-        muxed_studio_lib::entities::runs::agent_run::Entity::find_by_id("resume-source")
+        ticketry_entities::runs::agent_run::Entity::find_by_id("resume-source")
             .one(&database)
             .await
             .unwrap(),
         Some(original_run)
     );
-    let successor =
-        muxed_studio_lib::entities::runs::agent_run::Entity::find_by_id(&created.agent_run_id)
-            .one(&database)
-            .await
-            .unwrap()
-            .unwrap();
+    let successor = ticketry_entities::runs::agent_run::Entity::find_by_id(&created.agent_run_id)
+        .one(&database)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(successor.resumed_from.as_deref(), Some("resume-source"));
     assert!(created.terminated_at.is_none());
 }

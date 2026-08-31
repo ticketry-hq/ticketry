@@ -11,7 +11,6 @@ use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 use common::terminal_lifecycle_harness::{TerminalLifecycleHarness, DOCUMENT_RUN_ID, TASK_RUN_ID};
-use muxed_studio_lib::entities::terminals::{cleanup_effect, session};
 use muxed_studio_lib::temporary_profile::{
     journal_profile_teardown, journal_terminal_cleanup, ProfileTeardownOutcome,
 };
@@ -19,6 +18,7 @@ use muxed_studio_lib::terminal::cleanup::{
     CleanupKillResult, CleanupRuntimeObservation, TerminalCleanupRuntime, TerminalCleanupService,
 };
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QueryOrder};
+use ticketry_entities::terminals::{cleanup_effect, session};
 
 /// Answers every inspection the same way, so a whole-profile teardown meets a
 /// single, deliberate runtime condition.
@@ -54,7 +54,7 @@ impl TerminalCleanupRuntime for FixedRuntime {
 
 async fn effects(
     database: &sea_orm::DatabaseConnection,
-) -> Vec<muxed_studio_lib::entities::terminals::cleanup_effect::Model> {
+) -> Vec<ticketry_entities::terminals::cleanup_effect::Model> {
     cleanup_effect::Entity::find()
         .order_by_asc(cleanup_effect::Column::AgentRunId)
         .all(database)

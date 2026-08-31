@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 
 use sea_orm::{ActiveValue::NotSet, DatabaseConnection, DbErr, EntityTrait, Set, TransactionTrait};
 
-use crate::entities::work_management::{
+use ticketry_entities::work_management::{
     agent_model, agent_model_reasoning_level, provider, reasoning_level,
 };
 

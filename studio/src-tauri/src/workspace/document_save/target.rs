@@ -14,7 +14,7 @@ use std::path::PathBuf;
 use sea_orm::{DatabaseConnection, EntityTrait};
 
 use crate::documents::asset_access::{self, MARKDOWN_MEDIA_TYPE};
-use crate::entities::documents::design_document;
+use ticketry_entities::documents::design_document;
 
 use super::error::DocumentSaveError;
 use super::identity::root_digest;

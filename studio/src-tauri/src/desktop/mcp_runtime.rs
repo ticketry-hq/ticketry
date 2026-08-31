@@ -65,8 +65,7 @@ pub(crate) async fn start_in_process_mcp(
     };
     match terminal_launch {
         Some(service) => {
-            crate::mcp::McpRuntime::start_with_terminal_launch(configuration, service)
-                .await
+            crate::mcp::McpRuntime::start_with_terminal_launch(configuration, service).await
         }
         None => crate::mcp::McpRuntime::start(configuration).await,
     }

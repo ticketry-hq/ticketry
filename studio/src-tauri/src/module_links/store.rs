@@ -18,7 +18,7 @@ use sea_orm::{
 use super::identity::{compact_module_id, link_id_for_module};
 use super::local_path::LocalModulePath;
 use super::{entities::module_link, ModuleLinkError};
-use crate::entities::work_management::issue;
+use ticketry_entities::work_management::issue;
 
 /// The Work Item type a link may name.
 pub(crate) const MODULE_TYPE: &str = "module";

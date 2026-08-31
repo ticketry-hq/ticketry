@@ -3,8 +3,8 @@
 //! architecture guard tests; see `studio/docs/crate-split-plan.md`.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::sync::{Mutex, OnceLock};
 use std::path::{Path, PathBuf};
+use std::sync::{Mutex, OnceLock};
 
 use syn::visit::Visit;
 use syn::{Attribute, ImplItem, Item, Meta, UseTree};
@@ -14,8 +14,6 @@ use syn::{Attribute, ImplItem, Item, Meta, UseTree};
 /// must appear here; a missing one fails [`crate::module_graph`]'s coverage
 /// assertion so new modules get a home deliberately.
 pub const SLICES: &[(&str, &str)] = &[
-    ("entities", "entities"),
-    ("graphql_scalars", "entities"),
     ("tool_discovery", "tool-discovery"),
     ("settings_persistence", "settings"),
     ("runs_persistence", "runs-persistence"),
@@ -63,7 +61,7 @@ impl ModuleGraph {
         for module in top_level_modules(&source_root) {
             let mut reached = BTreeSet::new();
             for file in module_files(&source_root, &module) {
-                reached.extend(references_in(&file));
+                reached.extend(references_in(&file, true));
             }
             reached.remove(&module);
             edges.insert(module, reached);
@@ -76,7 +74,7 @@ impl ModuleGraph {
             files.retain(|file| !is_test_file(file));
             let mut reached = BTreeSet::new();
             for file in &files {
-                reached.extend(references_in(file));
+                reached.extend(references_in(file, false));
             }
             reached.remove(&slice);
             edges.insert(slice, reached);
@@ -85,11 +83,9 @@ impl ModuleGraph {
     }
 
     pub fn edges(&self) -> impl Iterator<Item = (&str, &str)> {
-        self.edges.iter().flat_map(|(from, targets)| {
-            targets
-                .iter()
-                .map(move |to| (from.as_str(), to.as_str()))
-        })
+        self.edges
+            .iter()
+            .flat_map(|(from, targets)| targets.iter().map(move |to| (from.as_str(), to.as_str())))
     }
 
     pub fn stale_allowlist_entries(&self, allowed: &[(&str, &str)]) -> Vec<String> {
@@ -194,12 +190,15 @@ pub fn stale_slice_entries() -> Vec<&'static str> {
         .collect()
 }
 
-fn references_in(file: &Path) -> BTreeSet<String> {
+fn references_in(file: &Path, crate_paths_name_slices: bool) -> BTreeSet<String> {
     let text = std::fs::read_to_string(file)
         .unwrap_or_else(|error| panic!("read {}: {error}", file.display()));
-    let parsed = syn::parse_file(&text)
-        .unwrap_or_else(|error| panic!("parse {}: {error}", file.display()));
-    let mut collector = CrateReferences::default();
+    let parsed =
+        syn::parse_file(&text).unwrap_or_else(|error| panic!("parse {}: {error}", file.display()));
+    let mut collector = CrateReferences {
+        crate_paths_name_slices,
+        ..CrateReferences::default()
+    };
     collector.visit_file(&parsed);
     collector.reached
 }
@@ -217,8 +216,7 @@ pub fn modules_declaring_tauri_commands() -> Vec<String> {
         .into_iter()
         .filter(|module| {
             module_files(&source_root, module).into_iter().any(|file| {
-                std::fs::read_to_string(&file)
-                    .is_ok_and(|text| text.contains("#[tauri::command]"))
+                std::fs::read_to_string(&file).is_ok_and(|text| text.contains("#[tauri::command]"))
             })
         })
         .collect()
@@ -288,6 +286,12 @@ fn is_test_file(path: &Path) -> bool {
 #[derive(Default)]
 struct CrateReferences {
     reached: BTreeSet<String>,
+    /// Whether `crate::` names a slice.
+    ///
+    /// It does inside `src/`, where one crate holds every unextracted slice.
+    /// Inside an already-extracted crate `crate::` is that crate's own
+    /// interior, and only `ticketry_<slice>::` crosses a slice boundary.
+    crate_paths_name_slices: bool,
 }
 
 impl<'ast> Visit<'ast> for CrateReferences {
@@ -309,14 +313,21 @@ impl<'ast> Visit<'ast> for CrateReferences {
         if is_test_only(&item.attrs) || item.leading_colon.is_some() {
             return;
         }
-        collect_use_tree(&item.tree, false, &mut self.reached);
+        collect_use_tree(
+            &item.tree,
+            false,
+            self.crate_paths_name_slices,
+            &mut self.reached,
+        );
     }
 
     fn visit_path(&mut self, path: &'ast syn::Path) {
         if path.leading_colon.is_none() && !path.segments.is_empty() {
             let first = path.segments[0].ident.to_string();
             if first == "crate" && path.segments.len() >= 2 {
-                self.reached.insert(path.segments[1].ident.to_string());
+                if self.crate_paths_name_slices {
+                    self.reached.insert(path.segments[1].ident.to_string());
+                }
             } else if let Some(slice) = extracted_crate_slice(&first) {
                 self.reached.insert(slice);
             }
@@ -334,13 +345,20 @@ fn extracted_crate_slice(ident: &str) -> Option<String> {
         .then_some(slice)
 }
 
-fn collect_use_tree(tree: &UseTree, after_crate: bool, reached: &mut BTreeSet<String>) {
+fn collect_use_tree(
+    tree: &UseTree,
+    after_crate: bool,
+    crate_paths_name_slices: bool,
+    reached: &mut BTreeSet<String>,
+) {
     match tree {
         UseTree::Path(path) => {
             if after_crate {
                 reached.insert(path.ident.to_string());
             } else if path.ident == "crate" {
-                collect_use_tree(&path.tree, true, reached);
+                if crate_paths_name_slices {
+                    collect_use_tree(&path.tree, true, crate_paths_name_slices, reached);
+                }
             } else if let Some(slice) = extracted_crate_slice(&path.ident.to_string()) {
                 reached.insert(slice);
             }
@@ -353,7 +371,7 @@ fn collect_use_tree(tree: &UseTree, after_crate: bool, reached: &mut BTreeSet<St
         }
         UseTree::Group(group) => {
             for item in &group.items {
-                collect_use_tree(item, after_crate, reached);
+                collect_use_tree(item, after_crate, crate_paths_name_slices, reached);
             }
         }
         _ => {}
@@ -407,9 +425,7 @@ fn impl_item_attributes(item: &ImplItem) -> &[Attribute] {
 }
 
 /// Tarjan's algorithm, iterative-free recursive form over a small graph.
-fn strongly_connected_components<'a>(
-    graph: &BTreeMap<&'a str, Vec<&'a str>>,
-) -> Vec<Vec<&'a str>> {
+fn strongly_connected_components<'a>(graph: &BTreeMap<&'a str, Vec<&'a str>>) -> Vec<Vec<&'a str>> {
     struct State<'a> {
         index: usize,
         indices: BTreeMap<&'a str, usize>,

@@ -9,14 +9,12 @@ use tokio::sync::Notify;
 use tokio::time::{timeout, Duration};
 
 use super::{prepare_command_database, wait_for_terminal_record, MissingTerminalRuntime};
-use crate::entities::terminals::session;
+use crate::mcp::tests::post;
+use crate::mcp::{allowed_provider_operations, loopback, McpConfiguration, McpRuntime};
 use crate::terminal::cleanup::{
     CleanupKillResult, CleanupRuntimeObservation, TerminalCleanupRuntime,
 };
-use crate::mcp::tests::post;
-use crate::mcp::{
-    allowed_provider_operations, loopback, McpConfiguration, McpRuntime,
-};
+use ticketry_entities::terminals::session;
 
 struct BlockingTerminalRuntime {
     kill_started: Notify,

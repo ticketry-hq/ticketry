@@ -21,7 +21,7 @@ pub fn register_entity_modules(mut builder: seaography::Builder) -> seaography::
 
 #[cfg(test)]
 mod tests {
-    use crate::entities::runs::agent_run;
+    use crate::runs::agent_run;
     use sea_orm::{EntityName, Iden, Iterable};
     use seaography::{Builder, BuilderContext};
 
@@ -29,9 +29,8 @@ mod tests {
     async fn generated_contract_keeps_every_execution_write_private() {
         let database = sea_orm::Database::connect("sqlite::memory:").await.unwrap();
         let context = Box::leak(Box::new(BuilderContext::default()));
-        let builder = crate::entities::work_management::register_entity_modules(Builder::new(
-            context, database,
-        ));
+        let builder =
+            crate::work_management::register_entity_modules(Builder::new(context, database));
         let mut builder = builder;
         seaography::register_entity!(builder, agent_run, mutation: false);
         let schema = super::register_entity_modules(builder)

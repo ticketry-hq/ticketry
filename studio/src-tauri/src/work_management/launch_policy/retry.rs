@@ -16,8 +16,8 @@ use super::{
     record, rejections, CallerScope, LaunchPolicyDecision, LaunchPolicyError, LaunchPolicyRequest,
     LaunchPolicyResolver,
 };
-use crate::entities::runs::automation_attempt;
-use crate::entities::work_management::{launch_policy_decision, launch_policy_rejection};
+use ticketry_entities::runs::automation_attempt;
+use ticketry_entities::work_management::{launch_policy_decision, launch_policy_rejection};
 
 pub async fn prepare_pending_retries(
     database: &DatabaseConnection,

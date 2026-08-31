@@ -27,8 +27,8 @@ async fn main() {
     if arguments.next().is_some() || !data_directory.is_absolute() {
         fail("verify_slice4_copy requires one absolute private data-directory path");
     }
-    let established = ticketry_data_directory::established_data_directory()
-        .unwrap_or_else(|error| {
+    let established =
+        ticketry_data_directory::established_data_directory().unwrap_or_else(|error| {
             fail(&format!(
                 "could not resolve the established data directory: {error}"
             ))

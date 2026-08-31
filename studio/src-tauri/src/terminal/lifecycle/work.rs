@@ -8,9 +8,12 @@ use async_trait::async_trait;
 use sea_orm::{DatabaseConnection, EntityTrait};
 
 use crate::hook_spool::{DrainReport, HookSpool};
-use crate::runs_persistence::LifecycleService;
-use crate::terminal::launch::{TerminalLaunchCheckpoint, TerminalLaunchRuntime, TerminalRuntimeObservation, VerifiedTerminalRuntime};
 use crate::launch::terminal_session::{TerminalLaunchError, TerminalLaunchErrorCode};
+use crate::runs_persistence::LifecycleService;
+use crate::terminal::launch::{
+    TerminalLaunchCheckpoint, TerminalLaunchRuntime, TerminalRuntimeObservation,
+    VerifiedTerminalRuntime,
+};
 use crate::terminal::reconciliation::{
     RecordedSessionDecision, TerminalReconciliationReport, TerminalReconciliationService,
 };
@@ -152,7 +155,7 @@ impl TerminalLaunchRuntime for RecoveryTerminalLaunchRuntime {
 
     async fn materialize_and_create(
         &self,
-        _material: &crate::entities::terminals::launch_material::Model,
+        _material: &ticketry_entities::terminals::launch_material::Model,
         _checkpoint: &dyn TerminalLaunchCheckpoint,
     ) -> Result<(), TerminalLaunchError> {
         Err(TerminalLaunchError::new(
@@ -265,7 +268,7 @@ impl TerminalLaunchRuntime for InteractiveTerminalLaunchRuntime {
 
     async fn materialize_and_create(
         &self,
-        material: &crate::entities::terminals::launch_material::Model,
+        material: &ticketry_entities::terminals::launch_material::Model,
         checkpoint: &dyn TerminalLaunchCheckpoint,
     ) -> Result<(), TerminalLaunchError> {
         let authority = self
@@ -345,7 +348,7 @@ impl TerminalLaunchRuntime for InteractiveTerminalLaunchRuntime {
                 TerminalLaunchError::new(TerminalLaunchErrorCode::UnusableFolder, refusal.message())
             })?;
         let resume = if let Some(source_id) = material.resume_from_agent_run_id.as_deref() {
-            let source = crate::entities::runs::agent_run::Entity::find_by_id(source_id)
+            let source = ticketry_entities::runs::agent_run::Entity::find_by_id(source_id)
                 .one(&authority.database)
                 .await
                 .map_err(|_| invalid_launch("The resume source is unavailable."))?
@@ -484,7 +487,7 @@ mod provider_control_tests {
 }
 
 async fn create_tmux_runtime(
-    material: &crate::entities::terminals::launch_material::Model,
+    material: &ticketry_entities::terminals::launch_material::Model,
     checkpoint: &dyn TerminalLaunchCheckpoint,
     command: ApprovedArgv,
 ) -> Result<(), TerminalLaunchError> {

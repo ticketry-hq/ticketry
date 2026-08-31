@@ -11,8 +11,8 @@ use std::path::Path;
 
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, ExprTrait, QueryFilter};
 
-use crate::entities::runs::agent_run;
-use crate::entities::work_management::issue;
+use ticketry_entities::runs::agent_run;
+use ticketry_entities::work_management::issue;
 
 use super::design_directory::{self, ModuleIdentity, TaskIdentity};
 use super::error::DocumentsError;

@@ -7,7 +7,7 @@ pub mod worktree;
 /// audited create-one, create-batch, update, and delete operations cannot
 /// derive checkout identity, hold the per-repository lock, prove Git evidence,
 /// or settle a durable Workspace Operation. See
-/// `crate::worktree::persistence::ownership_manifest` for the recorded reason.
+/// the worktree slice’s `persistence::ownership_manifest` for the recorded reason.
 pub fn register_entity_modules(mut builder: seaography::Builder) -> seaography::Builder {
     seaography::register_entity!(builder, worktree, mutation: false);
     builder

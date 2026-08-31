@@ -1,7 +1,7 @@
 use seaography::Builder;
 
 use super::migration_probe;
-use crate::entities::foundation::migration_probes;
+use ticketry_entities::foundation::migration_probes;
 
 /// Register entities owned by the isolated GraphQL foundation database.
 ///

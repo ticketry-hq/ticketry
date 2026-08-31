@@ -68,7 +68,7 @@ pub(super) async fn execute_launch_decision(
     database: &DatabaseConnection,
     service: Option<&crate::terminal::launch::TerminalLaunchService>,
     decision: &crate::work_management::launch_policy::LaunchPolicyDecision,
-) -> Result<crate::entities::terminals::session::Model, ()> {
+) -> Result<ticketry_entities::terminals::session::Model, ()> {
     let Some(service) = service else {
         return Err(());
     };

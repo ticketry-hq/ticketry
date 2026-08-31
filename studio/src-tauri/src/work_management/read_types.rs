@@ -1,6 +1,5 @@
-use crate::graphql_scalars::StringList;
 use serde::Serialize;
-
+use ticketry_entities::graphql_scalars::StringList;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct Project {

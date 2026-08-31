@@ -7,9 +7,9 @@ use seaography::{
 };
 use uuid::Uuid;
 
-use crate::entities::terminals::session as terminal_session;
-use crate::entities::work_management as entities;
-use crate::entities::worktrees::worktree;
+use ticketry_entities::terminals::session as terminal_session;
+use ticketry_entities::work_management as entities;
+use ticketry_entities::worktrees::worktree;
 
 pub(super) fn builder_context() -> BuilderContext {
     let mut context = BuilderContext::default();
@@ -131,12 +131,12 @@ pub(super) fn builder_context() -> BuilderContext {
             terminal_session::Column::TaskId,
         ],
     );
-    add_uuid_columns::<crate::entities::execution::graph_run::Entity>(
+    add_uuid_columns::<ticketry_entities::execution::graph_run::Entity>(
         &mut context,
         [
-            crate::entities::execution::graph_run::Column::RootId,
-            crate::entities::execution::graph_run::Column::ModuleId,
-            crate::entities::execution::graph_run::Column::ProjectId,
+            ticketry_entities::execution::graph_run::Column::RootId,
+            ticketry_entities::execution::graph_run::Column::ModuleId,
+            ticketry_entities::execution::graph_run::Column::ProjectId,
         ],
     );
     add_app_setting_value_column(&mut context);
@@ -160,7 +160,7 @@ pub(super) fn builder_context() -> BuilderContext {
 }
 
 fn add_app_setting_value_column(context: &mut BuilderContext) {
-    use crate::entities::settings::app_settings;
+    use ticketry_entities::settings::app_settings;
 
     let mut options = ColumnOptions::default();
     options.output_type = Some(seaography::async_graphql::dynamic::TypeRef::named_nn(

@@ -4,10 +4,6 @@ use sea_orm::{
     TransactionTrait,
 };
 
-use crate::entities::{
-    execution::{graph_run, launch_claim},
-    work_management::issue,
-};
 use crate::execution::graph::{
     automatic_candidates, manual_candidates, scheduling_facts, ExecutionMode, GraphAccess,
 };
@@ -21,6 +17,10 @@ use serde::{Deserialize, Serialize};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
+};
+use ticketry_entities::{
+    execution::{graph_run, launch_claim},
+    work_management::issue,
 };
 
 static PRODUCTION_MUTATIONS_OPEN: AtomicBool = AtomicBool::new(false);

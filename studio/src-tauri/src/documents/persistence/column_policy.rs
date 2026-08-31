@@ -20,7 +20,7 @@
 use sea_orm::{EntityName, IdenStatic, Iterable};
 use seaography::BuilderContext;
 
-use crate::entities::documents::design_document;
+use ticketry_entities::documents::design_document;
 
 use super::ownership_manifest::PROTECTED_COLUMNS;
 
@@ -76,7 +76,7 @@ mod tests {
         let context = BuilderContext::default();
         assert_eq!(
             (context.entity_object.type_name)(design_document::Entity.table_name()),
-            crate::entities::documents::DESIGN_DOCUMENT_OBJECT
+            ticketry_entities::documents::DESIGN_DOCUMENT_OBJECT
         );
     }
 }

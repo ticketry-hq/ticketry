@@ -6,7 +6,7 @@ use seaography::{
     CustomFields,
 };
 
-use crate::entities::runs::agent_run;
+use ticketry_entities::runs::agent_run;
 
 use super::ResumableConversationService;
 

@@ -4,7 +4,7 @@ use sea_orm::{ConnectionTrait, EntityTrait, QueryOrder};
 
 use super::global_launch_default::read_global_launch_default;
 use super::provider_catalog::{ProviderCatalog, ProviderCatalogError, CONFIGURABLE_PROVIDER_SLUGS};
-use crate::entities::work_management::{agent_model, provider, reasoning_level};
+use ticketry_entities::work_management::{agent_model, provider, reasoning_level};
 
 pub(super) async fn load_from(
     database: &impl ConnectionTrait,

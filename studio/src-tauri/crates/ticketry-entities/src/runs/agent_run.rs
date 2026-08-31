@@ -30,7 +30,7 @@ pub struct Model {
     pub launch_reasoning: Option<String>,
     pub launch_unattended: bool,
     #[sea_orm(belongs_to, from = "issue_id", to = "id")]
-    pub issue: BelongsTo<crate::entities::work_management::issue::Entity>,
+    pub issue: BelongsTo<crate::work_management::issue::Entity>,
 }
 
 impl ActiveModelBehavior for ActiveModel {}

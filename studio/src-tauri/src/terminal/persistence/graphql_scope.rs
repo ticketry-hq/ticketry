@@ -3,7 +3,7 @@ use seaography::{
     async_graphql::dynamic::ResolverContext, GuardAction, LifecycleHooksInterface, OperationType,
 };
 
-use crate::entities::{
+use ticketry_entities::{
     runs::agent_run,
     terminals::{session, viewer_lease},
     work_management::{issue, project},

@@ -1,4 +1,4 @@
-use crate::entities::worktrees::worktree;
+use ticketry_entities::worktrees::worktree;
 
 use super::super::PullRequestStatusView;
 

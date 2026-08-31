@@ -9,7 +9,7 @@ mod adoption;
 mod app_setting;
 mod app_settings;
 mod atomic_json;
-pub(crate) use crate::entities::settings as entities;
+pub(crate) use ticketry_entities::settings as entities;
 mod error;
 mod global_launch_default;
 pub mod instant_launch;

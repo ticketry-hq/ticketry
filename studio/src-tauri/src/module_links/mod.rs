@@ -44,7 +44,7 @@ mod module_link;
 #[cfg(test)]
 pub(crate) mod test_support;
 
-pub(crate) use crate::entities::settings as entities;
+pub(crate) use ticketry_entities::settings as entities;
 
 mod error;
 

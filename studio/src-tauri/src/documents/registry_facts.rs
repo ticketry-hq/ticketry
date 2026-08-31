@@ -21,9 +21,9 @@
 use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter};
 use serde_json::json;
 
-use crate::entities::documents::design_document;
-use crate::entities::work_management::issue;
 use crate::runs_persistence::{NewStatusEvent, StatusEventRepository};
+use ticketry_entities::documents::design_document;
+use ticketry_entities::work_management::issue;
 
 use super::error::DocumentsError;
 use super::identity::{canonical_uuid, compact_uuid, identity_spellings};

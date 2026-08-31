@@ -57,12 +57,8 @@ pub(crate) async fn desktop_launch_default_coding_agent(
         .expect("terminal launch lock poisoned")
         .clone()
         .ok_or_else(|| "terminal launch is unavailable".to_owned())?;
-    let session = crate::execution::launch_delivery::execute(
-        database,
-        &terminal_launch,
-        &decision,
-    )
-    .await?;
+    let session =
+        crate::execution::launch_delivery::execute(database, &terminal_launch, &decision).await?;
     Ok(serde_json::json!({ "agent_run_id": session.agent_run_id }))
 }
 
@@ -141,7 +137,9 @@ pub(crate) fn desktop_validate_module_folder(path: String) -> ModuleFolderValida
         Err(error) => {
             let reason = match error {
                 crate::module_links::folder_preflight::ModuleFolderFailure::Relative
-                | crate::module_links::folder_preflight::ModuleFolderFailure::Unset => "module_folder_not_absolute",
+                | crate::module_links::folder_preflight::ModuleFolderFailure::Unset => {
+                    "module_folder_not_absolute"
+                }
                 crate::module_links::folder_preflight::ModuleFolderFailure::Missing
                 | crate::module_links::folder_preflight::ModuleFolderFailure::Inaccessible => {
                     "module_folder_missing"

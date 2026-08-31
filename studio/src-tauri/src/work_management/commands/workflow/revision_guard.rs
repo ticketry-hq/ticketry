@@ -11,7 +11,9 @@ use sea_orm::{
 };
 
 use super::super::CommandError;
-use crate::entities::work_management::{issue_type, issue_type_transition, launch_binding, state};
+use ticketry_entities::work_management::{
+    issue_type, issue_type_transition, launch_binding, state,
+};
 
 /// A revision-guarded reference to one state of one issue type's workflow.
 #[derive(Debug, Clone)]

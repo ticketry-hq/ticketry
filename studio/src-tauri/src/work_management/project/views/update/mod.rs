@@ -14,13 +14,11 @@ use seaolim::{
 };
 
 use super::support::optional_string;
-use crate::{
-    entities::work_management::project,
-    work_management::{
-        commands::catalog,
-        graphql::{command_error, require_command_database},
-    },
+use crate::work_management::{
+    commands::catalog,
+    graphql::{command_error, require_command_database},
 };
+use ticketry_entities::work_management::project;
 
 struct UpdateProject;
 

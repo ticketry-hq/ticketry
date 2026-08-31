@@ -1,10 +1,10 @@
 use async_trait::async_trait;
 
-use crate::entities::terminals::session;
 use crate::tmux_adapter::{
     InventoryEntry, KillOutcome, PersistedSessionName, RuntimeIdentity, RuntimeObservation,
     TmuxAdapter,
 };
+use ticketry_entities::terminals::session;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CleanupRuntimeObservation {

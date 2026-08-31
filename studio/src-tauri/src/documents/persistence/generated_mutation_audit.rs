@@ -8,7 +8,7 @@
 //! for: what each generated operation would do, the exact rc.9 gap that makes
 //! it unsafe, and the test that fails if the decision is reversed by accident.
 //!
-//! Registration lives in [`crate::entities::documents`] as
+//! Registration lives in [`ticketry_entities::documents`] as
 //! `mutation: false`. The regression tests are
 //! `tests/documents_generated_mutation_audit.rs` (what the bundle would expose)
 //! and `tests/documents_graphql.rs` (what the production schema actually

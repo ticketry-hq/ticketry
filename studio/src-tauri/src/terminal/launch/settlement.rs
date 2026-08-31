@@ -2,8 +2,8 @@ use async_trait::async_trait;
 use chrono::Utc;
 use sea_orm::{ActiveModelTrait, ActiveValue::Set, DatabaseTransaction, EntityTrait};
 
-use crate::entities::terminals::{launch_material, session};
 use crate::runs_persistence::{LaunchSettlementParticipant, LifecycleFact, RunsPersistenceError};
+use ticketry_entities::terminals::{launch_material, session};
 
 use super::material::material_conflict;
 use super::{TerminalLaunchBoundary, TerminalLaunchCheckpoint, VerifiedTerminalRuntime};

@@ -1,6 +1,6 @@
 use sea_orm::{ColumnTrait, DatabaseTransaction, DbErr, EntityTrait, QueryFilter, Set};
 
-use crate::entities::work_management::{agent_model, agent_model_reasoning_level, provider};
+use ticketry_entities::work_management::{agent_model, agent_model_reasoning_level, provider};
 
 pub const MODEL_NAME: &str = "gpt-5.3-codex-spark";
 

@@ -11,10 +11,8 @@ use seaolim::{
     RestrictedModelMutation, RestrictedMutationField, ViewSerializers,
 };
 
-use crate::{
-    entities::work_management::{issue, module_presentation},
-    work_management::{commands, graphql},
-};
+use crate::work_management::{commands, graphql};
+use ticketry_entities::work_management::{issue, module_presentation};
 
 struct UpdateModulePresentation;
 

@@ -14,7 +14,7 @@ mod serializer;
 use seaography::Builder;
 use seaolim::{register_generated_mutations, GeneratedMutations, ViewSerializers};
 
-use crate::entities::work_management::issue_type;
+use ticketry_entities::work_management::issue_type;
 
 use serializer::IssueTypeCreateSerializer;
 

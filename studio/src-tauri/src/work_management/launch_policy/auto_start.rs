@@ -7,7 +7,7 @@ use super::{
     LaunchPolicyResolver,
 };
 use crate::runs_persistence::{RunsServices, TransitionOccurrence};
-use crate::entities::work_management::{
+use ticketry_entities::work_management::{
     launch_policy_decision, launch_policy_rejection, transition_occurrence,
 };
 

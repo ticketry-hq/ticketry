@@ -7,16 +7,16 @@ use async_trait::async_trait;
 use common::terminal_lifecycle_harness::{
     TerminalLifecycleHarness, PROJECT_ID, TASK_ID, TASK_RUN_ID,
 };
-use muxed_studio_lib::entities::{
-    runs::agent_run,
-    terminals::{cleanup_effect, session},
-};
 use muxed_studio_lib::terminal::cleanup::{
     AuthenticatedAgentRun, CleanupCause, CleanupCheckpoint, CleanupCheckpoints, CleanupKillResult,
     CleanupRuntimeObservation, TerminalCleanupError, TerminalCleanupRuntime,
     TerminalCleanupService, TerminationPatch,
 };
 use sea_orm::{sea_query::Expr, ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter};
+use ticketry_entities::{
+    runs::agent_run,
+    terminals::{cleanup_effect, session},
+};
 
 struct ScriptedRuntime {
     observations: Mutex<VecDeque<CleanupRuntimeObservation>>,
@@ -343,13 +343,10 @@ async fn every_cleanup_crash_boundary_replays_without_reviving_or_duplicating_th
             .unwrap()
             .unwrap();
         assert_eq!(settled_effect.state, "applied", "checkpoint {checkpoint:?}");
-        let terminal_events = muxed_studio_lib::entities::runs::status_event::Entity::find()
+        let terminal_events = ticketry_entities::runs::status_event::Entity::find()
+            .filter(ticketry_entities::runs::status_event::Column::AgentRunId.eq(TASK_RUN_ID))
             .filter(
-                muxed_studio_lib::entities::runs::status_event::Column::AgentRunId.eq(TASK_RUN_ID),
-            )
-            .filter(
-                muxed_studio_lib::entities::runs::status_event::Column::EventKind
-                    .eq("agent_run.terminal"),
+                ticketry_entities::runs::status_event::Column::EventKind.eq("agent_run.terminal"),
             )
             .count(&database)
             .await

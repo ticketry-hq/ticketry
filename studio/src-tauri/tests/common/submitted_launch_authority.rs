@@ -15,8 +15,8 @@ use async_trait::async_trait;
 use muxed_studio_lib::launch::authority::{
     InteractiveLaunchAuthority, LaunchAuthorityError, ResolvedLaunchMaterial,
 };
+use muxed_studio_lib::launch::terminal_session::CreateTerminalSession;
 use muxed_studio_lib::terminal::launch::{TerminalLaunchRuntime, TerminalLaunchService};
-use muxed_studio_lib::launch::terminal_session::{CreateTerminalSession};
 use sea_orm::DatabaseConnection;
 
 pub struct SubmittedLaunchAuthority;

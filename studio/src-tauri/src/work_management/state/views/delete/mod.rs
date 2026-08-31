@@ -11,13 +11,11 @@ use seaolim::{
 };
 
 use super::support::{work_facts, WakeWorkFacts};
-use crate::{
-    entities::work_management::state,
-    work_management::{
-        commands::state_configuration,
-        graphql::{command_error, require_command_database},
-    },
+use crate::work_management::{
+    commands::state_configuration,
+    graphql::{command_error, require_command_database},
 };
+use ticketry_entities::work_management::state;
 
 struct DeleteState;
 

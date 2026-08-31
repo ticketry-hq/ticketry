@@ -5,14 +5,14 @@ use sea_orm::{
 use serde_json::json;
 use sha2::{Digest, Sha256};
 
-use crate::entities::{
-    runs::{agent_run, launch_effect},
-    terminals::{cleanup_effect, launch_material, session},
-    work_management::issue,
-};
 use crate::terminal::cleanup::{CleanupCause, CleanupEffectIdentity, RuntimeInventory};
 use crate::tmux_adapter::{
     InventoryConflictKind, InventoryEntry, OwnedSession, PersistedSessionName,
+};
+use ticketry_entities::{
+    runs::{agent_run, launch_effect},
+    terminals::{cleanup_effect, launch_material, session},
+    work_management::issue,
 };
 
 use super::service::TerminalReconciliationService;

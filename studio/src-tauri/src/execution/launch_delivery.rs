@@ -6,10 +6,10 @@
 
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 
-use crate::entities::runs::automation_attempt;
 use crate::launch::authority::{compose_task_prompt, TaskPromptSource};
 use crate::launch::terminal_session::{CreateTerminalSession, TerminalLaunchKind};
 use crate::terminal::launch::TerminalLaunchService;
+use ticketry_entities::runs::automation_attempt;
 
 use crate::work_management::launch_policy::{mark_delivered, CallerScope, LaunchPolicyDecision};
 
@@ -19,7 +19,7 @@ pub async fn execute(
     database: &DatabaseConnection,
     service: &TerminalLaunchService,
     decision: &LaunchPolicyDecision,
-) -> Result<crate::entities::terminals::session::Model, String> {
+) -> Result<ticketry_entities::terminals::session::Model, String> {
     let kind = if matches!(
         decision.caller_scope,
         CallerScope::Interactive | CallerScope::RunNow

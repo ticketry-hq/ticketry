@@ -2,7 +2,7 @@ use chrono::{Duration, Utc};
 use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter};
 use std::collections::HashMap;
 
-use crate::entities::terminals::session;
+use ticketry_entities::terminals::session;
 
 use super::entities::agent_run;
 use super::work_item_scope::{self, HoldingScope};

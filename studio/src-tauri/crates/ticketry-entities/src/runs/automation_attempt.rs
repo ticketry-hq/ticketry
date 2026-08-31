@@ -23,7 +23,7 @@ pub struct Model {
     pub created_at: String,
     pub updated_at: String,
     #[sea_orm(belongs_to, from = "issue_id", to = "id")]
-    pub issue: BelongsTo<crate::entities::work_management::issue::Entity>,
+    pub issue: BelongsTo<crate::work_management::issue::Entity>,
     #[sea_orm(
         self_ref,
         relation_enum = "RetryOf",

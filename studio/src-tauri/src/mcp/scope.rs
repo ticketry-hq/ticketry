@@ -1,7 +1,7 @@
 use sea_orm::{DatabaseConnection, EntityTrait};
 
-use crate::entities::work_management::issue;
 use crate::work_management::{commands::CommandError, read_queries, read_types::WorkItem};
+use ticketry_entities::work_management::issue;
 
 use super::{projection, RunPrincipal};
 

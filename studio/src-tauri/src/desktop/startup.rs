@@ -4,7 +4,6 @@
 
 use tauri::Manager;
 
-use ticketry_data_directory::established_data_directory;
 use crate::desktop::data_directory::DesktopDataDirectoryOwnership;
 use crate::desktop::environment::automated_startup_exit_requested;
 use crate::desktop::launch_runtime::DesktopLaunchRuntime;
@@ -15,6 +14,7 @@ use crate::desktop::rust_runtime_launch::launch_rust_runtime;
 use crate::desktop::service_health::{ServiceHealth, ServiceHealthState};
 use crate::desktop::service_state::DesktopServiceState;
 use crate::{graphql_foundation, settings_persistence};
+use ticketry_data_directory::established_data_directory;
 
 pub(crate) fn initialize_services(
     application: &mut tauri::App,

@@ -13,8 +13,8 @@ use axum::{
 };
 use futures_util::StreamExt;
 use muxed_studio_lib::launch::paths::LaunchPathsService;
-use muxed_studio_lib::terminal::lifecycle::TerminalRuntimeAuthority;
 use muxed_studio_lib::mcp::{McpRuntime, RunAuthority};
+use muxed_studio_lib::terminal::lifecycle::TerminalRuntimeAuthority;
 use serde::Deserialize;
 use tauri_graphql::{TransportApi, TransportApiImpl};
 
@@ -76,15 +76,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         &data_directory,
         std::env::var_os("MUXED_DEVELOPMENT_LOG_PATH").map(PathBuf::from),
     );
-    let _data_directory_guard = ticketry_data_directory::DataDirectoryGuard::acquire(
-        &data_directory,
-    )
-    .map_err(|error| {
-        format!(
-            "could not own browser development data directory {}: {error}",
-            data_directory.display()
-        )
-    })?;
+    let _data_directory_guard =
+        ticketry_data_directory::DataDirectoryGuard::acquire(&data_directory).map_err(|error| {
+            format!(
+                "could not own browser development data directory {}: {error}",
+                data_directory.display()
+            )
+        })?;
     let api = TransportApiImpl::new();
     let adopted = muxed_studio_lib::graphql_foundation::adopt_worktracker_and_install(
         &data_directory.join("rust-core.sqlite3"),

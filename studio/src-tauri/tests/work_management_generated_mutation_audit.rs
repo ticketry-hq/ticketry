@@ -3,15 +3,15 @@
 
 use std::sync::LazyLock;
 
-use muxed_studio_lib::entities::work_management::{
-    agent_model, agent_model_reasoning_level, attachment, issue, issue_blocker, issue_type,
-    issue_type_transition, launch_binding, module_presentation, project, provider, reasoning_level,
-    state,
-};
 use sea_orm::Database;
 use seaography::{
     async_graphql::dynamic::{Object, Schema},
     Builder, BuilderContext,
+};
+use ticketry_entities::work_management::{
+    agent_model, agent_model_reasoning_level, attachment, issue, issue_blocker, issue_type,
+    issue_type_transition, launch_binding, module_presentation, project, provider, reasoning_level,
+    state,
 };
 
 static AUDIT_CONTEXT: LazyLock<BuilderContext> = LazyLock::new(BuilderContext::default);

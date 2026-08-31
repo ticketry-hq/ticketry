@@ -12,7 +12,7 @@ use super::super::CommandError;
 use super::revision_guard::{
     claim_workflow_revision, prune_unreachable, require_project_state, RevisionedState,
 };
-use crate::entities::work_management::issue_type_transition;
+use ticketry_entities::work_management::issue_type_transition;
 
 pub async fn remove_state(
     database: &DatabaseConnection,

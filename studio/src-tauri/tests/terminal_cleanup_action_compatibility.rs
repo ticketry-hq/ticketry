@@ -5,10 +5,6 @@ use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 use common::terminal_lifecycle_harness::{TerminalLifecycleHarness, TASK_RUN_ID};
-use muxed_studio_lib::entities::{
-    runs::{agent_run, status_event},
-    terminals::{cleanup_effect, session},
-};
 use muxed_studio_lib::terminal::cleanup::{
     CleanupCause, CleanupCheckpoint, CleanupCheckpoints, CleanupKillResult,
     CleanupRuntimeObservation, TerminalCleanupError, TerminalCleanupRuntime,
@@ -16,6 +12,10 @@ use muxed_studio_lib::terminal::cleanup::{
 };
 use sea_orm::{
     sea_query::Expr, ColumnTrait, DatabaseConnection, EntityTrait, PaginatorTrait, QueryFilter,
+};
+use ticketry_entities::{
+    runs::{agent_run, status_event},
+    terminals::{cleanup_effect, session},
 };
 
 struct ScriptedRuntime {

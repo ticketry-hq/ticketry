@@ -51,7 +51,7 @@ impl WorktreeStatusView {
 
     pub(super) fn worktree(
         owner: &WorktreeOwner,
-        row: &crate::entities::worktrees::worktree::Model,
+        row: &ticketry_entities::worktrees::worktree::Model,
         facts: LiveFacts,
     ) -> Self {
         Self {

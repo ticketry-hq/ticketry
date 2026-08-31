@@ -7,9 +7,9 @@ use super::commands::{status_facts::WorkFactRecorder, CommandDatabase, CommandEr
 pub(crate) async fn authoritative_work_item(
     database: &sea_orm::DatabaseConnection,
     id: &str,
-) -> Result<crate::entities::work_management::issue::Model> {
+) -> Result<ticketry_entities::work_management::issue::Model> {
     use sea_orm::EntityTrait;
-    crate::entities::work_management::issue::Entity::find_by_id(compact_uuid(id))
+    ticketry_entities::work_management::issue::Entity::find_by_id(compact_uuid(id))
         .one(database)
         .await
         .map_err(read_error)?
@@ -19,9 +19,9 @@ pub(crate) async fn authoritative_work_item(
 pub(crate) async fn authoritative_project(
     database: &sea_orm::DatabaseConnection,
     id: &str,
-) -> Result<crate::entities::work_management::project::Model> {
+) -> Result<ticketry_entities::work_management::project::Model> {
     use sea_orm::EntityTrait;
-    crate::entities::work_management::project::Entity::find_by_id(id)
+    ticketry_entities::work_management::project::Entity::find_by_id(id)
         .one(database)
         .await
         .map_err(read_error)?
@@ -31,9 +31,9 @@ pub(crate) async fn authoritative_project(
 pub(crate) async fn authoritative_transition(
     database: &sea_orm::DatabaseConnection,
     id: i64,
-) -> Result<crate::entities::work_management::issue_type_transition::Model> {
+) -> Result<ticketry_entities::work_management::issue_type_transition::Model> {
     use sea_orm::EntityTrait;
-    crate::entities::work_management::issue_type_transition::Entity::find_by_id(id)
+    ticketry_entities::work_management::issue_type_transition::Entity::find_by_id(id)
         .one(database)
         .await
         .map_err(read_error)?
@@ -43,9 +43,9 @@ pub(crate) async fn authoritative_transition(
 pub(crate) async fn authoritative_launch_binding(
     database: &sea_orm::DatabaseConnection,
     id: i64,
-) -> Result<crate::entities::work_management::launch_binding::Model> {
+) -> Result<ticketry_entities::work_management::launch_binding::Model> {
     use sea_orm::EntityTrait;
-    crate::entities::work_management::launch_binding::Entity::find_by_id(id)
+    ticketry_entities::work_management::launch_binding::Entity::find_by_id(id)
         .one(database)
         .await
         .map_err(read_error)?

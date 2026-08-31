@@ -30,7 +30,7 @@
 //! prompts, credentials, environment values, commands, or caller-selected
 //! absolute paths.
 
-use crate::entities::workspace_runtime as entities;
+use ticketry_entities::workspace_runtime as entities;
 
 mod checkpoint;
 mod claim;

@@ -2,8 +2,8 @@
 
 use sea_orm::EntityTrait;
 
-use crate::entities::work_management::{issue, state};
 use crate::worktree::changes::{GithubPort, PullRequestStatusView};
+use ticketry_entities::work_management::{issue, state};
 
 use super::{error::WorktreeDiscardError, plan::DiscardPlan};
 

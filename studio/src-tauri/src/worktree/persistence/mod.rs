@@ -31,5 +31,5 @@ pub use schema::{ADOPTED_TABLE, CURRENT_DJANGO_LEAF, LEDGER_TABLE, VERSION};
 
 /// Register the generated Worktree read graph in the product schema.
 pub(crate) fn register_graphql(builder: seaography::Builder) -> seaography::Builder {
-    crate::entities::worktrees::register_entity_modules(builder)
+    ticketry_entities::worktrees::register_entity_modules(builder)
 }

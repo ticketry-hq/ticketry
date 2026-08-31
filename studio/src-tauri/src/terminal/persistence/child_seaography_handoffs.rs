@@ -59,7 +59,7 @@ pub const CHILD_HANDOFFS: &[ChildHandoff] = &[
         verdict: "aligned",
         evidence: "spec/rusting--cf2de16d/T865--adopt-terminal-persistence-and-generate/AUDIT.md",
         files_checked: &[
-            "studio/src-tauri/src/entities/terminals",
+            "studio/src-tauri/crates/ticketry-entities/src/terminals",
             "studio/src-tauri/src/terminal/persistence",
         ],
     },

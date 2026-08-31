@@ -6,15 +6,18 @@ use std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use common::submitted_launch_authority::launch_service;
 use common::terminal_lifecycle_harness::{TerminalLifecycleHarness, MODULE_ID, TASK_ID};
-use muxed_studio_lib::entities::terminals::launch_material;
 use muxed_studio_lib::execution::reconciliation::ExecutionReconciliationService;
 use muxed_studio_lib::execution::run_now::{RunNowCaller, RunNowRequest, RunNowService};
-use muxed_studio_lib::terminal::launch::{TerminalLaunchBoundary, TerminalLaunchCheckpoint, TerminalLaunchRuntime, TerminalRuntimeObservation, VerifiedTerminalRuntime};
-use muxed_studio_lib::launch::terminal_session::{TerminalLaunchError};
+use muxed_studio_lib::launch::terminal_session::TerminalLaunchError;
+use muxed_studio_lib::terminal::launch::{
+    TerminalLaunchBoundary, TerminalLaunchCheckpoint, TerminalLaunchRuntime,
+    TerminalRuntimeObservation, VerifiedTerminalRuntime,
+};
 use muxed_studio_lib::work_management::launch_policy::{
     self, CallerScope, LaunchPolicyRequest, LaunchPolicyResolver,
 };
 use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter};
+use ticketry_entities::terminals::launch_material;
 
 const IMPLEMENT: &str = "00000000000000000000000000008959";
 const MODEL: &str = "00000000000000000000000000008958";

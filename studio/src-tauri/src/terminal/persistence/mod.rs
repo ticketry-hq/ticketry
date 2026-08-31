@@ -24,7 +24,7 @@ pub use schema::{CURRENT_DJANGO_LEAF, LEDGER_TABLE, VERSION};
 /// its mandatory project/runtime filters. CODING-865 does not publish an
 /// unscoped terminal query merely to prove the generated model compiles.
 pub fn register_graphql(builder: seaography::Builder) -> seaography::Builder {
-    use crate::entities::{
+    use ticketry_entities::{
         runs::agent_run,
         terminals::{session, viewer_lease},
     };

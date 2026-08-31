@@ -4,14 +4,16 @@ use sea_orm::{
 };
 use serde_json::json;
 
-use crate::entities::terminals::launch_material;
 use crate::runs_persistence::{
     LaunchIntent, LaunchPreparationParticipant, PrepareLaunchRequest, RunSnapshot,
     RunsPersistenceError, RunsPersistenceErrorCode,
 };
+use ticketry_entities::terminals::launch_material;
 
 use super::service::{compact, storage};
-use crate::launch::terminal_session::{CreateTerminalSession, TerminalLaunchError, TerminalLaunchErrorCode};
+use crate::launch::terminal_session::{
+    CreateTerminalSession, TerminalLaunchError, TerminalLaunchErrorCode,
+};
 
 const MATERIAL_VERSION: i32 = 1;
 
@@ -57,12 +59,16 @@ impl PreparedMaterial {
                 model: self.request.model.clone(),
                 reasoning: self.request.reasoning.clone(),
                 initial_prompt: self.request.prompt.clone(),
-                unattended: matches!(self.request.kind, crate::launch::terminal_session::TerminalLaunchKind::Automation),
+                unattended: matches!(
+                    self.request.kind,
+                    crate::launch::terminal_session::TerminalLaunchKind::Automation
+                ),
                 resumed_from: self.request.resume_from_agent_run_id.clone(),
                 launch_state: self.launch_state.clone(),
                 launch_model: matches!(
                     self.request.kind,
-                    crate::launch::terminal_session::TerminalLaunchKind::Task | crate::launch::terminal_session::TerminalLaunchKind::Automation
+                    crate::launch::terminal_session::TerminalLaunchKind::Task
+                        | crate::launch::terminal_session::TerminalLaunchKind::Automation
                 )
                 .then(|| self.request.model.clone())
                 .flatten(),

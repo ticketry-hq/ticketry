@@ -10,7 +10,7 @@
 use sea_orm::{EntityName, IdenStatic, Iterable};
 use seaography::BuilderContext;
 
-use crate::entities::worktrees::worktree;
+use ticketry_entities::worktrees::worktree;
 
 use super::ownership_manifest::PROTECTED_COLUMNS;
 

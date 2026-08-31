@@ -38,7 +38,7 @@ impl UpdateWorkItemMutation {
         blocked_by_ids: GraphqlPatchStringList,
         is_archived: GraphqlPatchBool,
         workspace_tab_order: GraphqlPatchJson,
-    ) -> Result<crate::entities::work_management::issue::Model> {
+    ) -> Result<ticketry_entities::work_management::issue::Model> {
         let database = command_database(ctx)?;
         let input = UpdateInput {
             id,

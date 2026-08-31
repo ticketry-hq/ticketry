@@ -6,8 +6,6 @@
 //! shipping schema keeps that bundle private while serving the generated read
 //! contract, and that protected columns cannot appear in any generated input.
 
-use muxed_studio_lib::entities::work_management;
-use muxed_studio_lib::entities::worktrees::worktree;
 use muxed_studio_lib::graphql_foundation::generated_schema_sdl;
 use muxed_studio_lib::worktree::persistence::column_policy;
 use muxed_studio_lib::worktree::persistence::ownership_manifest::{
@@ -19,6 +17,8 @@ use seaography::{
     Builder, BuilderContext,
 };
 use std::sync::LazyLock;
+use ticketry_entities::work_management;
+use ticketry_entities::worktrees::worktree;
 
 /// The unprotected context: what Seaography installs with no Ticketry policy.
 static AUDIT_CONTEXT: LazyLock<BuilderContext> = LazyLock::new(BuilderContext::default);

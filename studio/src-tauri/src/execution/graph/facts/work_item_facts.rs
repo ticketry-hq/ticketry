@@ -2,8 +2,8 @@ use std::collections::{HashMap, HashSet};
 
 use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter};
 
-use crate::entities::work_management::{issue, state};
 use crate::execution::graph::{GraphFactsError, WorkItemFact};
+use ticketry_entities::work_management::{issue, state};
 
 pub(super) async fn states_by_id(
     database: &impl ConnectionTrait,

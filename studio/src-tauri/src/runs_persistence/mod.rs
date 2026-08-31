@@ -14,7 +14,7 @@
 mod adoption;
 mod attempt_commands;
 mod attempt_queries;
-use crate::entities::runs as entities;
+use ticketry_entities::runs as entities;
 mod error;
 mod intent;
 mod launch_claim;

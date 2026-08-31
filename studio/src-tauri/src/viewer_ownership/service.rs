@@ -12,7 +12,7 @@ use sea_orm::{
 use tokio::sync::Mutex as AsyncMutex;
 use uuid::Uuid;
 
-use crate::entities::{
+use ticketry_entities::{
     runs::agent_run,
     terminals::{session, viewer_lease},
     work_management::project,

@@ -12,7 +12,7 @@ use sea_orm::{
 use super::super::identifiers::database_uuid;
 use super::super::CommandError;
 use super::revision_guard::{claim_workflow_revision, prune_unreachable, require_project_state};
-use crate::entities::work_management::issue_type_transition;
+use ticketry_entities::work_management::issue_type_transition;
 
 #[derive(Debug, Clone)]
 pub struct NewTransition {

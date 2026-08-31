@@ -8,9 +8,7 @@ use sea_orm::DatabaseConnection;
 
 use crate::terminal::launch::TerminalLaunchService;
 use crate::work_management::launch_policy::{self, LaunchPolicyDecision};
-use crate::worktree::changes::{
-    LaunchedAgent, MergePreparationError, MergePreparationLauncher,
-};
+use crate::worktree::changes::{LaunchedAgent, MergePreparationError, MergePreparationLauncher};
 
 pub struct TerminalMergePreparationLauncher {
     database: DatabaseConnection,
@@ -33,10 +31,9 @@ impl MergePreparationLauncher for TerminalMergePreparationLauncher {
         decision: &LaunchPolicyDecision,
     ) -> Result<LaunchedAgent, MergePreparationError> {
         let decision = launch_policy::record(&self.database, decision).await?;
-        let session =
-            super::launch_delivery::execute(&self.database, &self.terminals, &decision)
-                .await
-                .map_err(MergePreparationError::launch_failed)?;
+        let session = super::launch_delivery::execute(&self.database, &self.terminals, &decision)
+            .await
+            .map_err(MergePreparationError::launch_failed)?;
         Ok(LaunchedAgent {
             agent: session.agent.unwrap_or(decision.provider),
             agent_run_id: session.agent_run_id,

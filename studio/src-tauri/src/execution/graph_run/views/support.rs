@@ -2,10 +2,10 @@ use sea_orm::{DatabaseConnection, EntityTrait};
 use seaography::async_graphql::{Context, Error, ErrorExtensions, Result};
 
 use crate::{
-    entities::work_management::issue,
     execution::graph::{ExecutionMode, GraphAccess},
     graph_run_service::{GraphRunCaller, GraphRunRequest, GraphRunService, GraphRunServiceError},
 };
+use ticketry_entities::work_management::issue;
 
 pub(super) async fn request(
     ctx: &Context<'_>,

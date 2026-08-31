@@ -3,7 +3,7 @@ use seaography::{
     async_graphql::dynamic::ResolverContext, GuardAction, LifecycleHooksInterface, OperationType,
 };
 
-use crate::entities::{
+use ticketry_entities::{
     execution::graph_run,
     work_management::{issue, project},
 };
@@ -86,12 +86,12 @@ mod tests {
         let mut context = BuilderContext::default();
         context.hooks = LifecycleHooks::new(super::GraphRunReadScope);
         let context = Box::leak(Box::new(context));
-        let builder = crate::entities::work_management::register_entity_modules(Builder::new(
+        let builder = ticketry_entities::work_management::register_entity_modules(Builder::new(
             context,
             database.clone(),
         ));
         let builder = crate::terminal::persistence::register_graphql(builder);
-        let schema = crate::entities::execution::register_entity_modules(builder)
+        let schema = ticketry_entities::execution::register_entity_modules(builder)
             .schema_builder()
             .data(database)
             .finish()

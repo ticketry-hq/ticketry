@@ -1,7 +1,7 @@
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 
 use super::LaunchPolicyError;
-use crate::entities::work_management::{issue, issue_type, launch_binding, project, state};
+use ticketry_entities::work_management::{issue, issue_type, launch_binding, project, state};
 
 pub(super) struct PolicyReader<'a> {
     database: &'a DatabaseConnection,

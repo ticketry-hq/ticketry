@@ -26,13 +26,13 @@ use async_trait::async_trait;
 use sea_orm::{DatabaseConnection, EntityTrait};
 use serde_json::json;
 
-use crate::entities::worktrees::worktree;
 use crate::runs_persistence::StatusEventRepository;
 use crate::workspace::operations::{
     ClaimedOperation, WorkspaceOperationExecutor, WorkspaceOperationJournal,
     WorkspaceOperationOutcome,
 };
 use crate::worktree::status::{GitPort, RepositoryLocks};
+use ticketry_entities::worktrees::worktree;
 
 use super::cleanup::{self, CleanupExpectation};
 use super::error::WorktreeDiscardError;

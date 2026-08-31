@@ -1,13 +1,11 @@
 use seaography::async_graphql::{dynamic::ResolverContext, Error, Result};
 use seaolim::{ErrorExtension, ModelWrite, PreparedModelWrite, WritePermit};
 
-use crate::{
-    entities::terminals::viewer_lease,
-    viewer_ownership::{
-        PreparedViewerLeaseWrite, ViewerLeaseModelWrite, ViewerLeaseWritePermit,
-        ViewerOwnershipError, ViewerOwnershipService,
-    },
+use crate::viewer_ownership::{
+    PreparedViewerLeaseWrite, ViewerLeaseModelWrite, ViewerLeaseWritePermit, ViewerOwnershipError,
+    ViewerOwnershipService,
 };
+use ticketry_entities::terminals::viewer_lease;
 
 pub(super) fn service<'a>(ctx: &'a ResolverContext<'_>) -> Result<&'a ViewerOwnershipService> {
     ctx.data::<ViewerOwnershipService>().map_err(|_| {

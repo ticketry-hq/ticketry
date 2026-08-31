@@ -10,12 +10,12 @@
 use std::sync::LazyLock;
 
 use muxed_studio_lib::documents::persistence::generated_mutation_audit::FINDINGS;
-use muxed_studio_lib::entities::documents::design_document;
 use sea_orm::Database;
 use seaography::{
     async_graphql::dynamic::{Object, Schema},
     Builder, BuilderContext,
 };
+use ticketry_entities::documents::design_document;
 
 static AUDIT_CONTEXT: LazyLock<BuilderContext> = LazyLock::new(BuilderContext::default);
 

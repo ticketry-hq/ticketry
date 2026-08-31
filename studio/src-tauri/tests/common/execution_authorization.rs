@@ -9,10 +9,10 @@
 
 use std::sync::Mutex;
 
-use muxed_studio_lib::entities::runs::agent_run;
-use muxed_studio_lib::entities::work_management::issue;
 use muxed_studio_lib::mcp::RunAuthority;
 use sea_orm::{ActiveModelTrait, DatabaseConnection, EntityTrait, IntoActiveModel, Set};
+use ticketry_entities::runs::agent_run;
+use ticketry_entities::work_management::issue;
 
 use super::execution_fixture as fixture;
 

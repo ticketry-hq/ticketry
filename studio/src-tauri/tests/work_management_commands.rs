@@ -4,10 +4,6 @@ use muxed_studio_lib::graphql_foundation::initialize_with_worktracker_commands_a
 use muxed_studio_lib::work_management::commands::{
     attachments, blockers, catalog, hierarchy, reorder, state_configuration, work_items, workflow,
 };
-use muxed_studio_lib::entities::work_management::{
-    attachment, issue, issue_type, issue_type_transition, launch_binding, module_presentation,
-    project, state,
-};
 use muxed_studio_lib::work_management::{
     module_presentation_migration, open_for_commands, workspace_tab_order,
     workspace_tab_order_migration,
@@ -17,6 +13,10 @@ use sea_orm::{
     QueryFilter, QueryOrder, Set,
 };
 use tauri_graphql::{TransportApi, TransportApiImpl};
+use ticketry_entities::work_management::{
+    attachment, issue, issue_type, issue_type_transition, launch_binding, module_presentation,
+    project, state,
+};
 
 const PROJECT: &str = "10000000000000000000000000000000";
 const TASK_TYPE: &str = "30000000000000000000000000000001";

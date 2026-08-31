@@ -5,9 +5,9 @@ use sea_orm::{
 use seaography::CustomOutputType;
 use serde::Serialize;
 
-use crate::entities::work_management::issue;
-use crate::entities::worktrees::worktree;
 use crate::worktree::status;
+use ticketry_entities::work_management::issue;
+use ticketry_entities::worktrees::worktree;
 
 use super::{
     command_git, module_baseline, repository, PullRequestStatusView, WorktreeChangesError,

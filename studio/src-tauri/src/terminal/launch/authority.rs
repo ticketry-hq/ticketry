@@ -7,8 +7,10 @@
 
 use crate::launch::authority::{LaunchAuthorityError, LaunchAuthorityErrorCode};
 
-use super::{TerminalLaunchService};
-use crate::launch::terminal_session::{CreateTerminalSession, TerminalLaunchError, TerminalLaunchErrorCode, TerminalLaunchKind};
+use super::TerminalLaunchService;
+use crate::launch::terminal_session::{
+    CreateTerminalSession, TerminalLaunchError, TerminalLaunchErrorCode, TerminalLaunchKind,
+};
 
 impl TerminalLaunchService {
     /// Replace every caller-controlled launch field with the resolved one.

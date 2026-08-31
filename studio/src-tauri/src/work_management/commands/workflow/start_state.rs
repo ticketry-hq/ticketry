@@ -10,7 +10,7 @@ use sea_orm::{ActiveModelTrait, DatabaseTransaction, Set};
 use super::super::identifiers::database_uuid;
 use super::super::CommandError;
 use super::revision_guard::{claim_workflow_revision, prune_unreachable, require_project_state};
-use crate::entities::work_management::issue_type;
+use ticketry_entities::work_management::issue_type;
 
 /// Move the workflow's start state, then prune what it no longer reaches.
 pub async fn apply_start_state(

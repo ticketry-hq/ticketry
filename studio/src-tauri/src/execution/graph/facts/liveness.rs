@@ -2,8 +2,8 @@ use std::collections::HashSet;
 
 use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter};
 
-use crate::entities::{runs::agent_run, terminals::session as terminal_session};
 use crate::execution::graph::{types::compact_id, GraphFactsError};
+use ticketry_entities::{runs::agent_run, terminals::session as terminal_session};
 
 pub(crate) async fn live_work_item_ids(
     database: &impl ConnectionTrait,

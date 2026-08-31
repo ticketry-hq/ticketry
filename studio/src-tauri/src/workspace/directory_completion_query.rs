@@ -11,7 +11,7 @@ use seaography::{
     CustomFields,
 };
 
-use crate::graphql_scalars::StringList;
+use ticketry_entities::graphql_scalars::StringList;
 
 use crate::documents::directory_completion::complete_directories;
 

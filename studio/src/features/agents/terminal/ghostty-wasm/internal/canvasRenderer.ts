@@ -75,17 +75,30 @@ export class TerminalCanvasRenderer {
     };
   }
 
-  paint(frame: Frame): void {
+  /**
+   * Draw a frame, optionally shifted down by a sub-row `offsetPx` — the
+   * remainder of a pixel-smooth scroll that Ghostty's whole-row viewport cannot
+   * express. At `offsetPx === 0` this draws exactly what it always did.
+   */
+  paint(frame: Frame, offsetPx = 0): void {
     if (frame.dirty === "none") return;
     this.lastBackground = frame.background;
     this.applyFont();
-    for (const row of frame.dirtyRows) this.paintRow(row, frame);
-    if (frame.cursor) this.paintCursor(frame);
+    const offset = Number.isFinite(offsetPx) ? Math.max(0, offsetPx) : 0;
+    if (offset > 0) {
+      // The shift exposes a strip at the top that no row covers: the row that
+      // belongs there is above the viewport, so the frame background is the
+      // only honest fill for it.
+      this.context.fillStyle = frame.background;
+      this.context.fillRect(0, 0, this.cssWidth(), offset);
+    }
+    for (const row of frame.dirtyRows) this.paintRow(row, frame, offset);
+    if (frame.cursor) this.paintCursor(frame, offset);
   }
 
-  private paintRow(row: FrameRow, frame: Frame): void {
+  private paintRow(row: FrameRow, frame: Frame, offsetPx: number): void {
     const { width, height, baseline } = this.cell;
-    const y = row.y * height;
+    const y = row.y * height + offsetPx;
     const context = this.context;
 
     context.fillStyle = frame.background;
@@ -122,7 +135,7 @@ export class TerminalCanvasRenderer {
     }
   }
 
-  private paintCursor(frame: Frame): void {
+  private paintCursor(frame: Frame, offsetPx: number): void {
     const cursor = frame.cursor;
     if (!cursor) return;
     // Only paint the cursor when its row was repainted this frame; otherwise
@@ -130,7 +143,7 @@ export class TerminalCanvasRenderer {
     if (!frame.dirtyRows.some((row) => row.y === cursor.y)) return;
     const { width, height } = this.cell;
     const x = cursor.x * width;
-    const y = cursor.y * height;
+    const y = cursor.y * height + offsetPx;
     const context = this.context;
     context.fillStyle = frame.foreground;
     if (cursor.style === "bar") {

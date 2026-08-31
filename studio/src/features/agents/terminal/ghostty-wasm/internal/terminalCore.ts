@@ -8,6 +8,11 @@
 import { resolveGhosttyVtAbi, type GhosttyVtAbi } from "./abi";
 import { FrameReader } from "./frameReader";
 import type { Frame, FrameRow } from "./frameTypes";
+import {
+  GhosttyTerminalViewport,
+  type GhosttyActiveScreen,
+  type GhosttyScrollbar,
+} from "./terminalViewport";
 import type { GhosttyVtRuntime } from "./wasmRuntime";
 
 export type {
@@ -17,6 +22,7 @@ export type {
   FrameCursorStyle,
   FrameRow,
 } from "./frameTypes";
+export type { GhosttyActiveScreen, GhosttyScrollbar } from "./terminalViewport";
 
 const SCRATCH_BYTES = 64 * 1024;
 
@@ -40,6 +46,7 @@ export class GhosttyVtTerminal {
   private readonly rowIteratorSlot: number;
   private readonly cellsSlot: number;
   private readonly scratch: number;
+  private readonly viewport: GhosttyTerminalViewport;
   private disposed = false;
 
   constructor(runtime: GhosttyVtRuntime, options: GhosttyVtTerminalOptions) {
@@ -61,6 +68,7 @@ export class GhosttyVtTerminal {
     );
     this.scratch = exports.ghostty_wasm_alloc(SCRATCH_BYTES);
     this.reader = new FrameReader(runtime, this.abi);
+    this.viewport = new GhosttyTerminalViewport(runtime, this.terminal);
   }
 
   /** The native handle, for callers that must configure the terminal directly. */
@@ -152,8 +160,43 @@ export class GhosttyVtTerminal {
   }
 
   /**
+   * Move this terminal's own viewport by whole rows: negative goes back into
+   * scrollback, positive forward toward the live bottom. The render state
+   * snapshots the viewport, so the next `frame()` reports scrolled-back content.
+   */
+  scrollViewportDelta(rows: number): void {
+    this.assertLive();
+    this.viewport.scrollViewportDelta(rows);
+  }
+
+  /** Pin the viewport back to the live bottom. */
+  scrollViewportToBottom(): void {
+    this.assertLive();
+    this.viewport.scrollViewportToBottom();
+  }
+
+  /** Which screen the running program has on show. */
+  activeScreen(): GhosttyActiveScreen {
+    this.assertLive();
+    return this.viewport.activeScreen();
+  }
+
+  /** Where the viewport sits in this terminal's history, in rows. */
+  scrollbar(): GhosttyScrollbar {
+    this.assertLive();
+    return this.viewport.scrollbar();
+  }
+
+  /** Whether the viewport is still pinned to the live bottom. */
+  viewportActive(): boolean {
+    this.assertLive();
+    return this.viewport.viewportActive();
+  }
+
+  /**
    * Force the next frame to report every row dirty. Needed after a canvas
-   * resize, which clears the backing store that partial repaint relies on.
+   * resize, which clears the backing store that partial repaint relies on, and
+   * after a viewport move, which shifts content the row damage does not cover.
    */
   markDirty(): void {
     this.assertLive();
@@ -182,6 +225,7 @@ export class GhosttyVtTerminal {
     if (this.disposed) return;
     this.disposed = true;
     const { exports } = this.runtime;
+    this.viewport.dispose();
     this.reader.dispose();
     exports.ghostty_render_state_row_cells_free(this.handleAt(this.cellsSlot));
     exports.ghostty_render_state_row_iterator_free(this.handleAt(this.rowIteratorSlot));

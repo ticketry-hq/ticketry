@@ -133,6 +133,51 @@ describe("terminal canvas renderer", () => {
     expect(calls.filter((call) => call.op === "fillRect")).toHaveLength(1);
   });
 
+  it("paints identically for an omitted and a zero scroll offset", () => {
+    const plain = recordingCanvas();
+    const zero = recordingCanvas();
+    const drawn = frame({
+      dirtyRows: [{ y: 1, cells: [cell({ text: "x" }), cell({ bg: "#ff0000" })] }],
+      cursor: { visible: true, blinking: false, x: 1, y: 1, style: "block" },
+    });
+    new TerminalCanvasRenderer(plain.canvas).paint(drawn);
+    new TerminalCanvasRenderer(zero.canvas).paint(drawn, 0);
+    expect(zero.calls).toEqual(plain.calls);
+  });
+
+  it("shifts the grid down by a fractional scroll offset", () => {
+    const { canvas, calls } = recordingCanvas();
+    const renderer = new TerminalCanvasRenderer(canvas);
+    renderer.resizeTo(100, 100);
+    calls.length = 0;
+    const offsetPx = 7;
+    renderer.paint(
+      frame({ dirtyRows: [{ y: 1, cells: [cell({ text: "x" })] }] }),
+      offsetPx,
+    );
+    const fills = calls.filter((call) => call.op === "fillRect");
+    // The strip the shift exposes is filled with the frame background first.
+    expect(fills[0].args.slice(0, 4)).toEqual([0, 0, 100, offsetPx]);
+    // Then the row lands one cell down plus the remainder.
+    expect(fills[1].args[1]).toBe(renderer.metrics.height + offsetPx);
+    const text = calls.find((call) => call.op === "fillText");
+    expect(Number(text?.args[2])).toBe(
+      renderer.metrics.height + offsetPx + renderer.metrics.baseline,
+    );
+  });
+
+  it("ignores a negative or non-finite scroll offset", () => {
+    const { canvas, calls } = recordingCanvas();
+    const renderer = new TerminalCanvasRenderer(canvas);
+    renderer.resizeTo(100, 100);
+    calls.length = 0;
+    renderer.paint(frame({ dirtyRows: [{ y: 0, cells: [cell()] }] }), -12);
+    renderer.paint(frame({ dirtyRows: [{ y: 0, cells: [cell()] }] }), Number.NaN);
+    expect(calls.filter((call) => call.op === "fillRect").map((call) => call.args[1])).toEqual([
+      0, 0,
+    ]);
+  });
+
   it("paints a bar cursor on a repainted row", () => {
     const { canvas, calls } = recordingCanvas();
     const renderer = new TerminalCanvasRenderer(canvas);

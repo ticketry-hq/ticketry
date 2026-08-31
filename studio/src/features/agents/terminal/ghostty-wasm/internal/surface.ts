@@ -14,7 +14,6 @@ import type {
 } from "../../internal/terminalClient";
 import { TerminalCanvasRenderer } from "./canvasRenderer";
 import { GhosttyKeyEncoder } from "./keyEncoder";
-import { ghosttyMods } from "./keyCodes";
 import { GhosttyMouseEncoder } from "./mouseEncoder";
 import {
   measurePaint,
@@ -25,6 +24,7 @@ import {
 } from "./rendererMeasurement";
 import { GhosttyVtTerminal } from "./terminalCore";
 import { GhosttyWasmLoadError, loadGhosttyVtRuntime } from "./wasmRuntime";
+import { GhosttyWheelPolicy } from "./wheelPolicy";
 
 export type GhosttyWasmFailureReason =
   | "wasm_artifact_unavailable"
@@ -50,10 +50,6 @@ export interface GhosttyWasmSurface {
   refit(): void;
   detach(): void;
 }
-
-/** `WheelEvent.deltaMode` for line-wise wheels. */
-const WHEEL_DELTA_LINE = 1;
-const MAX_WHEEL_NOTCHES = 10;
 
 const RENDERER = "ghostty-wasm" as const;
 
@@ -81,6 +77,7 @@ export function openGhosttyWasmSurface(
   let mouse: GhosttyMouseEncoder | null = null;
   let renderer: TerminalCanvasRenderer | null = null;
   let memory: WebAssembly.Memory | null = null;
+  let wheelPolicy: GhosttyWheelPolicy | null = null;
   let frameHandle: number | null = null;
   let firstPaintPending = true;
   let geometry = { cols: 80, rows: 24 };
@@ -102,9 +99,13 @@ export function openGhosttyWasmSurface(
   function paint(): void {
     if (disposed || !core || !renderer) return;
     try {
+      wheelPolicy?.reconcile();
       const frame = core.frame();
       if (frame.dirty === "none") return;
-      measurePaint(RENDERER, agentRunId, () => renderer?.paint(frame));
+      // The sub-row part of a scroll-back position is a paint-time shift: the
+      // terminal's viewport only moves in whole rows.
+      const offsetPx = wheelPolicy?.offsetPx ?? 0;
+      measurePaint(RENDERER, agentRunId, () => renderer?.paint(frame, offsetPx));
       core.clean();
       if (memory) recordWasmMemory(agentRunId, memory.buffer.byteLength);
       if (firstPaintPending) {
@@ -132,6 +133,10 @@ export function openGhosttyWasmSurface(
       client?.resize(next.cols, next.rows);
     }
     publishViewport();
+    // A resize reflows the scrollback, so a scroll position measured in rows of
+    // the old wrap no longer points anywhere in particular: go back to the live
+    // bottom rather than guess which row the reader was looking at.
+    snapToBottom();
     // `resizeTo` cleared the backing store that partial repaint relies on, so
     // the next frame has to redraw everything whether the grid changed or not.
     core.markDirty();
@@ -156,6 +161,7 @@ export function openGhosttyWasmSurface(
     }
     if (!bytes) return;
     event.preventDefault();
+    snapToBottom();
     client.input(bytes);
   }
 
@@ -164,13 +170,27 @@ export function openGhosttyWasmSurface(
     const text = event.clipboardData?.getData("text/plain");
     if (!text) return;
     event.preventDefault();
+    snapToBottom();
     client.input(new TextEncoder().encode(text));
   }
 
   function onCompositionEnd(event: CompositionEvent): void {
     if (!client || !event.data) return;
+    snapToBottom();
     client.input(new TextEncoder().encode(event.data));
     input.value = "";
+  }
+
+  /**
+   * Sending input while scrolled back means the reader wants to be where the
+   * output is, which is what every other terminal does with a keystroke.
+   */
+  function snapToBottom(): void {
+    try {
+      wheelPolicy?.snapToBottom();
+    } catch (error) {
+      fail("renderer_failed", error instanceof Error ? error.message : String(error));
+    }
   }
 
   function publishViewport(): void {
@@ -184,57 +204,15 @@ export function openGhosttyWasmSurface(
     });
   }
 
-  /** One wheel notch per cell of travel, so a gesture moves what it covers. */
-  function wheelNotches(event: WheelEvent): number {
-    const cellHeight = renderer?.metrics.height ?? 1;
-    const lines =
-      event.deltaMode === WHEEL_DELTA_LINE
-        ? Math.abs(event.deltaY)
-        : Math.abs(event.deltaY) / cellHeight;
-    return Math.min(MAX_WHEEL_NOTCHES, Math.max(1, Math.round(lines)));
-  }
-
-  /**
-   * A program that asked for mouse reports gets one, so it scrolls its own
-   * viewport the way it would under any other terminal. Only when nothing is
-   * tracking the mouse — a bare shell prompt — does the gesture fall back to
-   * the durable viewer's tmux history, which is what the native and xterm
-   * renderers always do. tmux's own `mouse` option stays off either way, so a
-   * renderer switch leaves no trace on the session.
-   */
+  /** `wheelPolicy` decides what a gesture means; see `wheelPolicy.ts`. */
   function onWheel(event: WheelEvent): void {
-    if (!client || event.deltaY === 0) return;
+    if (!wheelPolicy || event.deltaY === 0) return;
     event.preventDefault();
-    const direction = event.deltaY < 0 ? "up" : "down";
-    const notches = wheelNotches(event);
-    if (core && mouse && sendMouseReports(event, direction, notches)) return;
-    client.scroll(direction, notches);
-  }
-
-  function sendMouseReports(
-    event: WheelEvent,
-    direction: "up" | "down",
-    notches: number,
-  ): boolean {
-    if (!core || !mouse || !client) return false;
-    const terminal = core.handle;
-    let sent = false;
     try {
-      if (!mouse.tracking(terminal)) return false;
-      const box = canvas.getBoundingClientRect();
-      const x = event.clientX - box.left;
-      const y = event.clientY - box.top;
-      for (let notch = 0; notch < notches; notch += 1) {
-        const bytes = mouse.encodeWheel(terminal, { direction, x, y, mods: ghosttyMods(event) });
-        if (!bytes) break;
-        client.input(bytes);
-        sent = true;
-      }
+      wheelPolicy.wheel(event);
     } catch (error) {
       fail("renderer_failed", error instanceof Error ? error.message : String(error));
-      return false;
     }
-    return sent;
   }
 
   host.addEventListener("wheel", onWheel, { passive: false });
@@ -278,6 +256,16 @@ export function openGhosttyWasmSurface(
         { agentRunId, cols: geometry.cols, rows: geometry.rows },
         handleTransportEvent,
       );
+      wheelPolicy = new GhosttyWheelPolicy({
+        core,
+        mouse,
+        canvas,
+        cellHeight: () => renderer?.metrics.height ?? 1,
+        viewportRows: () => geometry.rows,
+        sendInput: (bytes) => client?.input(bytes),
+        scrollViewer: (direction, lines) => client?.scroll(direction, lines),
+        scheduleFrame,
+      });
       scheduleFrame();
     })
     .catch((error) => {
@@ -302,6 +290,7 @@ export function openGhosttyWasmSurface(
     } catch {
       /* The viewer may already be gone; teardown continues regardless. */
     }
+    wheelPolicy = null;
     encoder?.dispose();
     mouse?.dispose();
     core?.dispose();

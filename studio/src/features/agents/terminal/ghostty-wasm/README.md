@@ -60,9 +60,13 @@ failure cases the experiment has to cover.
 | `internal/wasmRuntime.ts` | Singleton wasm module, memory views, ABI manifest. |
 | `internal/abi.ts` | The enum members this experiment names. |
 | `internal/terminalCore.ts` | One Ghostty terminal plus its render state; produces frames. |
+| `internal/terminalViewport.ts` | Move and read the terminal's own viewport and scrollbar. |
 | `internal/canvasRenderer.ts` | Canvas 2D painter for dirty rows. |
 | `internal/keyCodes.ts` | `KeyboardEvent.code` to `GhosttyKey` name. |
 | `internal/keyEncoder.ts` | Ghostty's own key encoder, re-read from the terminal per keystroke. |
+| `internal/mouseEncoder.ts` | Ghostty's own mouse encoder, for programs that track the mouse. |
+| `internal/wheelPolicy.ts` | What a wheel gesture means: mouse report, local scroll, or tmux. |
+| `internal/viewportScroll.ts` | Pixel-to-row scroll arithmetic; no DOM, no terminal. |
 | `internal/surface.ts` | Transport, core, renderer and input joined together. |
 | `internal/rendererMeasurement.ts` | The counters the comparison matrix is built from. |
 
@@ -108,15 +112,44 @@ artifact.
 
 ## Scrolling
 
-A wheel gesture is encoded by `ghostty_mouse_encoder_*` and sent as ordinary
-input whenever the running program has mouse reporting on, so the program
-scrolls its own viewport exactly as it would under any other terminal. Only
-when nothing is tracking the mouse — a bare shell prompt, or a program like
-codex that draws inline — does the gesture fall back to the durable viewer's
-`tmux copy-mode` scroll, which is what the native and xterm renderers always
-do.
+Scrolling is the renderer's own, because the wasm terminal already holds the
+scrollback the transport's bytes built. `internal/wheelPolicy.ts` answers a
+wheel gesture one of three ways, in precedence order:
 
-tmux's own `mouse` option stays off in both cases, so a renderer switch leaves
+1. **A program tracking the mouse** gets a report encoded by
+   `ghostty_mouse_encoder_*` and sent as ordinary input, so it scrolls its own
+   viewport exactly as it would under any other terminal. The local scroll
+   position snaps to the bottom with it: the program redraws into the live
+   viewport, so a position held back would hide everything it draws.
+2. **On the primary screen** the gesture is answered entirely locally.
+   `internal/viewportScroll.ts` accumulates it in pixels; whole rows move
+   Ghostty's viewport through `ghostty_terminal_scroll_viewport` with tag
+   `DELTA`, and the sub-row remainder becomes a vertical shift the painter
+   applies to the whole grid. So a gesture shorter than one row still moves the
+   picture, there is no subprocess in the path, and tmux is not involved at all.
+   A negative delta moves the viewport back into history — proven against the
+   pinned artifact in `internal/ghosttyVtContract.test.ts` rather than assumed.
+
+   The position of record is Ghostty's scrollbar, not the accumulated pixels.
+   Every gesture re-anchors to `SCROLLBAR.total - SCROLLBAR.len -
+   SCROLLBAR.offset` before folding itself in, and arriving at the bottom is
+   issued as tag `BOTTOM` rather than as a delta that ought to land there.
+   Without both, output arriving while the reader is scrolled back moves the
+   live bottom away from the viewport, and a purely relative row count drifts
+   one row per line until nothing can reach the live output again.
+3. **On the alternate screen**, which keeps no scrollback of its own, the
+   gesture falls back to the durable viewer's `tmux copy-mode` scroll, which is
+   what the native and xterm renderers always do.
+
+Any input — a keystroke, a paste — snaps the viewport back to the live bottom
+first, and so does a resize, whose reflow makes a row-measured position
+meaningless. That snap asks the terminal whether the viewport is live rather
+than trusting the accumulated position, so it cannot be skipped while the
+viewport sits off the bottom. At the bottom the remainder is exactly zero, so a
+terminal nobody has scrolled paints exactly as it did before pixel-smooth
+scrolling existed.
+
+tmux's own `mouse` option stays off in every case, so a renderer switch leaves
 no trace on the session. Verified against a live session: with a program
 holding DECSET 1000/1006, four wheel notches arrived as
 `ESC[<64;38;7M` and tmux reported `pane_in_mode=0`.

@@ -13,7 +13,9 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { GhosttyKeyEncoder } from "./keyEncoder";
 import { GhosttyMouseEncoder } from "./mouseEncoder";
 import { GhosttyVtTerminal } from "./terminalCore";
+import { ViewportScrollAccumulator, WHEEL_DELTA_PIXEL } from "./viewportScroll";
 import { buildRuntime, type GhosttyVtExports, type GhosttyVtRuntime } from "./wasmRuntime";
+import { GhosttyWheelPolicy } from "./wheelPolicy";
 
 const ARTIFACT = resolve(process.cwd(), "public/ghostty-vt/ghostty-vt.wasm");
 const prepared = existsSync(ARTIFACT);
@@ -28,6 +30,75 @@ function rowText(terminal: GhosttyVtTerminal): Map<number, string> {
     rows.set(row.y, row.cells.map((cell) => cell.text || " ").join("").trimEnd());
   }
   return rows;
+}
+
+/** Every row the viewport currently shows, top first. */
+function viewportText(terminal: GhosttyVtTerminal): string[] {
+  terminal.markDirty();
+  const frame = terminal.frame();
+  const rows = rowText(terminal);
+  return Array.from({ length: frame.rows }, (_unused, y) => rows.get(y) ?? "");
+}
+
+/** A terminal holding more numbered lines than its viewport can show. */
+function scrolledTerminal(runtime: GhosttyVtRuntime, rows: number): GhosttyVtTerminal {
+  const terminal = new GhosttyVtTerminal(runtime, { cols: 20, rows });
+  writeLines(terminal, 1, 12);
+  return terminal;
+}
+
+/** Numbered lines, in the same `lineNN` form `scrolledTerminal` writes. */
+function writeLines(terminal: GhosttyVtTerminal, from: number, to: number): void {
+  for (let line = from; line <= to; line += 1) {
+    terminal.write(encoder.encode(`line${String(line).padStart(2, "0")}\r\n`));
+  }
+}
+
+/** One cell of wheel travel, in the pixels a gesture is measured in. */
+const CELL_HEIGHT = 20;
+const VIEWPORT_ROWS = 4;
+
+/**
+ * The real wheel policy over a real terminal. Only the DOM and transport seams
+ * are stubbed, so what this drives is the whole local-scroll decision.
+ */
+function localWheelPolicy(terminal: GhosttyVtTerminal): GhosttyWheelPolicy {
+  return new GhosttyWheelPolicy({
+    core: terminal,
+    // Nothing is tracking, which is what puts a gesture on the local branch.
+    mouse: { tracking: () => false, encodeWheel: () => null } as unknown as GhosttyMouseEncoder,
+    canvas: {
+      getBoundingClientRect: () => ({ left: 0, top: 0 }) as DOMRect,
+    } as HTMLCanvasElement,
+    cellHeight: () => CELL_HEIGHT,
+    viewportRows: () => VIEWPORT_ROWS,
+    sendInput: () => {},
+    scrollViewer: () => {},
+    scheduleFrame: () => {},
+  });
+}
+
+/**
+ * A pixel-mode wheel gesture worth `cells` whole cells of `deltaY`. The sign is
+ * `deltaY`'s own: negative scrolls up, back into history.
+ */
+function wheelCells(cells: number): WheelEvent {
+  return {
+    deltaY: cells * CELL_HEIGHT,
+    deltaMode: WHEEL_DELTA_PIXEL,
+    clientX: 0,
+    clientY: 0,
+    shiftKey: false,
+    ctrlKey: false,
+    altKey: false,
+    metaKey: false,
+  } as WheelEvent;
+}
+
+/** Whether Ghostty's scrollbar puts the viewport at the end of the history. */
+function atLiveBottom(terminal: GhosttyVtTerminal): boolean {
+  const bar = terminal.scrollbar();
+  return bar.offset === bar.total - bar.len;
 }
 
 describe.skipIf(!prepared)("libghostty-vt artifact contract", () => {
@@ -236,6 +307,188 @@ describe.skipIf(!prepared)("libghostty-vt artifact contract", () => {
       expect(down && decoder.decode(down)).toBe("\u001b[<65;3;3M");
     } finally {
       mouse.dispose();
+      terminal.dispose();
+    }
+  });
+
+  it("scrolls the viewport back into scrollback for a negative delta", () => {
+    // This is the assertion the whole scroll policy rests on: which sign of
+    // `GHOSTTY_SCROLL_VIEWPORT_DELTA` shows older content. `viewportScroll.ts`
+    // documents the answer; this proves it against the pinned artifact.
+    const terminal = scrolledTerminal(runtime, 4);
+    try {
+      const bottom = viewportText(terminal);
+      expect(bottom[0]).toBe("line10");
+      expect(bottom[2]).toBe("line12");
+
+      terminal.scrollViewportDelta(-1);
+      expect(viewportText(terminal)).toEqual(["line09", "line10", "line11", "line12"]);
+
+      terminal.scrollViewportDelta(1);
+      expect(viewportText(terminal)).toEqual(bottom);
+    } finally {
+      terminal.dispose();
+    }
+  });
+
+  it("clamps a viewport delta at both ends of the history", () => {
+    const terminal = scrolledTerminal(runtime, 4);
+    try {
+      terminal.scrollViewportDelta(-1000);
+      expect(viewportText(terminal)).toEqual(["line01", "line02", "line03", "line04"]);
+      terminal.scrollViewportDelta(-1000);
+      expect(viewportText(terminal)[0]).toBe("line01");
+      terminal.scrollViewportDelta(1000);
+      expect(viewportText(terminal)[0]).toBe("line10");
+      terminal.scrollViewportDelta(1000);
+      expect(viewportText(terminal)[0]).toBe("line10");
+    } finally {
+      terminal.dispose();
+    }
+  });
+
+  it("moves the scrollbar offset by exactly the rows it was scrolled", () => {
+    const terminal = scrolledTerminal(runtime, 4);
+    try {
+      const bottom = terminal.scrollbar();
+      expect(bottom.len).toBe(4);
+      expect(bottom.total).toBeGreaterThan(bottom.len);
+      // At the bottom the viewport sits at the end of the history, which is
+      // what makes `total - len` the rows of scroll-back available.
+      expect(bottom.offset).toBe(bottom.total - bottom.len);
+
+      terminal.scrollViewportDelta(-3);
+      expect(terminal.scrollbar().offset).toBe(bottom.offset - 3);
+
+      terminal.scrollViewportToBottom();
+      expect(terminal.scrollbar()).toEqual(bottom);
+    } finally {
+      terminal.dispose();
+    }
+  });
+
+  it("reports the viewport live only while it is pinned to the bottom", () => {
+    const terminal = scrolledTerminal(runtime, 4);
+    try {
+      expect(terminal.viewportActive()).toBe(true);
+      terminal.scrollViewportDelta(-1);
+      expect(terminal.viewportActive()).toBe(false);
+      terminal.scrollViewportToBottom();
+      expect(terminal.viewportActive()).toBe(true);
+    } finally {
+      terminal.dispose();
+    }
+  });
+
+  it("reports which screen a program has on show", () => {
+    const terminal = new GhosttyVtTerminal(runtime, { cols: 20, rows: 4 });
+    try {
+      expect(terminal.activeScreen()).toBe("primary");
+      // DECSET 1049 is how every full-screen program takes the alternate
+      // screen, which has no scrollback for the renderer to scroll.
+      terminal.write(encoder.encode("\u001b[?1049h"));
+      expect(terminal.activeScreen()).toBe("alternate");
+      terminal.write(encoder.encode("\u001b[?1049l"));
+      expect(terminal.activeScreen()).toBe("primary");
+    } finally {
+      terminal.dispose();
+    }
+  });
+
+  it("scrolls the artifact the way the accumulator says a wheel gesture should", () => {
+    const terminal = scrolledTerminal(runtime, 4);
+    const position = new ViewportScrollAccumulator();
+    try {
+      const bar = terminal.scrollbar();
+      const gesture = {
+        deltaMode: WHEEL_DELTA_PIXEL,
+        cellHeight: 20,
+        scrollbackRows: bar.total - bar.len,
+        viewportRows: 4,
+      };
+      // A wheel up of one and a half cells: one row of viewport move and half a
+      // cell of paint offset.
+      const up = position.wheel({ ...gesture, deltaY: -30 });
+      expect(up).toEqual({ rows: -1, offsetPx: 10 });
+      terminal.scrollViewportDelta(up.rows);
+      expect(viewportText(terminal)[0]).toBe("line09");
+
+      // Wheeling back down by the same distance returns to the live bottom with
+      // an exactly zero offset, so steady-state painting is unshifted.
+      const down = position.wheel({ ...gesture, deltaY: 30 });
+      expect(down).toEqual({ rows: 1, offsetPx: 0 });
+      terminal.scrollViewportDelta(down.rows);
+      expect(position.atBottom).toBe(true);
+      expect(terminal.viewportActive()).toBe(true);
+      expect(viewportText(terminal)[0]).toBe("line10");
+    } finally {
+      terminal.dispose();
+    }
+  });
+
+  it("wheels back to the live bottom after output arrived while scrolled back", () => {
+    // The defect this pins: the reader scrolls back, output arrives, and every
+    // route back to the live bottom is shut because the renderer's own row
+    // count no longer describes where Ghostty's viewport is.
+    const terminal = scrolledTerminal(runtime, VIEWPORT_ROWS);
+    const policy = localWheelPolicy(terminal);
+    try {
+      policy.wheel(wheelCells(-3));
+      expect(viewportText(terminal)[0]).toBe("line07");
+      expect(terminal.viewportActive()).toBe(false);
+
+      // Five more lines. Ghostty holds the viewport where the reader put it, so
+      // the live bottom moves five rows away from it on its own.
+      writeLines(terminal, 13, 17);
+      const grown = terminal.scrollbar();
+      expect(grown.offset).toBe(grown.total - grown.len - 8);
+
+      // Wheeling down by the three rows the reader scrolled up covers three of
+      // the eight. It must not be mistaken for arriving at the bottom.
+      policy.wheel(wheelCells(3));
+      const partway = terminal.scrollbar();
+      expect(partway.offset).toBe(partway.total - partway.len - 5);
+      expect(terminal.viewportActive()).toBe(false);
+
+      // The remaining five reach it, and the terminal itself confirms it.
+      policy.wheel(wheelCells(5));
+      const bottom = terminal.scrollbar();
+      expect(bottom.offset).toBe(bottom.total - bottom.len);
+      expect(terminal.viewportActive()).toBe(true);
+      expect(policy.offsetPx).toBe(0);
+      expect(viewportText(terminal)).toEqual(["line15", "line16", "line17", ""]);
+
+      // And output that arrives now is visible, which is the whole point.
+      writeLines(terminal, 18, 18);
+      expect(viewportText(terminal)).toEqual(["line16", "line17", "line18", ""]);
+      expect(atLiveBottom(terminal)).toBe(true);
+    } finally {
+      terminal.dispose();
+    }
+  });
+
+  it("snaps to the live bottom after output arrived while scrolled back", () => {
+    // A keystroke is the reader's other way back, and it has to work from the
+    // same desynchronised state — `snapToBottom` used to return early there.
+    const terminal = scrolledTerminal(runtime, VIEWPORT_ROWS);
+    const policy = localWheelPolicy(terminal);
+    try {
+      policy.wheel(wheelCells(-3));
+      writeLines(terminal, 13, 17);
+      // The gesture that used to be believed to land on the bottom.
+      policy.wheel(wheelCells(3));
+      expect(terminal.viewportActive()).toBe(false);
+
+      policy.snapToBottom();
+      const bar = terminal.scrollbar();
+      expect(bar.offset).toBe(bar.total - bar.len);
+      expect(terminal.viewportActive()).toBe(true);
+      expect(policy.offsetPx).toBe(0);
+      expect(viewportText(terminal)).toEqual(["line15", "line16", "line17", ""]);
+
+      writeLines(terminal, 18, 18);
+      expect(viewportText(terminal)[2]).toBe("line18");
+    } finally {
       terminal.dispose();
     }
   });

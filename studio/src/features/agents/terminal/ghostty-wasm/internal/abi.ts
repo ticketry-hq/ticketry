@@ -13,6 +13,9 @@ export interface GhosttyVtAbi {
     rows: number;
     title: number;
     mouseTracking: number;
+    activeScreen: number;
+    scrollbar: number;
+    viewportActive: number;
   };
   renderData: {
     dirty: number;
@@ -67,6 +70,9 @@ export function resolveGhosttyVtAbi(runtime: GhosttyVtRuntime): GhosttyVtAbi {
       rows: value("GhosttyTerminalData", "ROWS"),
       title: value("GhosttyTerminalData", "TITLE"),
       mouseTracking: value("GhosttyTerminalData", "MOUSE_TRACKING"),
+      activeScreen: value("GhosttyTerminalData", "ACTIVE_SCREEN"),
+      scrollbar: value("GhosttyTerminalData", "SCROLLBAR"),
+      viewportActive: value("GhosttyTerminalData", "VIEWPORT_ACTIVE"),
     },
     renderData: {
       dirty: value("GhosttyRenderStateData", "DIRTY"),

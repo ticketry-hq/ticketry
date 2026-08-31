@@ -84,6 +84,27 @@ describe.skipIf(!prepared)("libghostty-vt artifact contract", () => {
     }
   });
 
+  it("swaps foreground and background for inverse cells", () => {
+    const terminal = new GhosttyVtTerminal(runtime, { cols: 20, rows: 2 });
+    try {
+      // Ghostty reports `inverse` as an attribute without resolving it, so a
+      // cell styled with an explicit foreground must come back painted as a
+      // background. Getting this wrong makes inverse text invisible.
+      terminal.write(encoder.encode("\x1b[7mA\x1b[0m\x1b[7;38;2;255;0;0mB\x1b[0m"));
+      const frame = terminal.frame();
+      const row = frame.dirtyRows.find((candidate) => candidate.y === 0);
+      expect(row?.cells[0]).toMatchObject({
+        text: "A",
+        fg: frame.background,
+        bg: frame.foreground,
+      });
+      expect(row?.cells[1]).toMatchObject({ text: "B", bg: "#ff0000" });
+      expect(row?.cells[1]?.fg).toBe(frame.background);
+    } finally {
+      terminal.dispose();
+    }
+  });
+
   it("reports the cursor position the renderer paints", () => {
     const terminal = new GhosttyVtTerminal(runtime, { cols: 20, rows: 4 });
     try {

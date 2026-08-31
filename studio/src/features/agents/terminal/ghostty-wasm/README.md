@@ -86,6 +86,21 @@ skips when the artifact has not been prepared.
 - **Font handling is the browser's.** Nerd Font and Powerline coverage depends
   on what the WebView has, not on Ghostty's font stack.
 
+## Seeing it without a live run
+
+`studio/ghostty-wasm-demo.html` mounts the real surface against a scripted byte
+stream instead of a tmux viewer. Everything below the transport is production
+code, so it exercises the wasm runtime, the frame reader, the Canvas painter and
+the key encoder:
+
+```bash
+npm run dev --workspace @worktracker/studio
+# then open http://127.0.0.1:5174/ghostty-wasm-demo.html
+```
+
+Typing into it round-trips through Ghostty's key encoder and echoes back, and
+the footer shows the live measurement counters.
+
 ## Reporting
 
 Measurements are read from a live Studio window:

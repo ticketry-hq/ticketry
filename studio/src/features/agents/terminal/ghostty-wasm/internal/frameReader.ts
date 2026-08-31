@@ -99,48 +99,69 @@ export class FrameReader {
   readRowCells(cells: number, cols: number, colors: FrameColors): FrameCell[] {
     const { exports } = this.runtime;
     const { cellData } = this.abi;
-    const styleFields = this.runtime.fields("GhosttyStyle");
     const out: FrameCell[] = [];
 
     while (exports.ghostty_render_state_row_cells_next(cells) && out.length < cols) {
       this.zero();
       exports.ghostty_render_state_row_cells_get(cells, cellData.graphemesLen, this.ptr);
       const graphemeLen = this.runtime.view().getUint32(this.ptr, true);
-      const bg = this.readCellRgb(cells, cellData.bgColor, colors.background);
+
+      const style = this.readStyle(cells);
       const selected = this.readCellBool(cells, cellData.selected);
+      let fg = this.readCellRgb(cells, cellData.fgColor, colors.foreground);
+      let bg = this.readCellRgb(cells, cellData.bgColor, colors.background);
+      // Ghostty reports `inverse` as an attribute and leaves the swap to the
+      // renderer: a cell styled `[7;31m` comes back with red *foreground* and
+      // no background, and must paint as red-on-default. Resolving colours
+      // without this leaves inverse text invisible.
+      if (style.inverse) [fg, bg] = [bg, fg];
 
-      if (graphemeLen === 0) {
-        out.push({
-          text: "",
-          fg: colors.foreground,
-          bg,
-          bold: false,
-          italic: false,
-          underline: false,
-          strikethrough: false,
-          selected,
-        });
-        continue;
-      }
-
-      const text = this.readGrapheme(cells, graphemeLen);
-      const fg = this.readCellRgb(cells, cellData.fgColor, colors.foreground);
-
-      this.prepareSized("GhosttyStyle");
-      exports.ghostty_render_state_row_cells_get(cells, cellData.style, this.ptr);
-      const styleView = this.runtime.view();
       out.push({
-        text,
+        text: graphemeLen === 0 ? "" : this.readGrapheme(cells, graphemeLen),
         fg,
         bg,
-        bold: styleView.getUint8(this.ptr + styleFields.bold.offset) !== 0,
-        italic: styleView.getUint8(this.ptr + styleFields.italic.offset) !== 0,
-        underline: styleView.getInt32(this.ptr + styleFields.underline.offset, true) !== 0,
-        strikethrough: styleView.getUint8(this.ptr + styleFields.strikethrough.offset) !== 0,
+        bold: style.bold,
+        italic: style.italic,
+        underline: style.underline,
+        strikethrough: style.strikethrough,
         selected,
       });
     }
     return out;
+  }
+
+  /** Read a cell's text attributes in one pass over the shared slot. */
+  private readStyle(cells: number): {
+    bold: boolean;
+    italic: boolean;
+    underline: boolean;
+    strikethrough: boolean;
+    inverse: boolean;
+  } {
+    const fields = this.runtime.fields("GhosttyStyle");
+    this.prepareSized("GhosttyStyle");
+    const result = this.runtime.exports.ghostty_render_state_row_cells_get(
+      cells,
+      this.abi.cellData.style,
+      this.ptr,
+    );
+    if (result !== this.abi.success) {
+      return {
+        bold: false,
+        italic: false,
+        underline: false,
+        strikethrough: false,
+        inverse: false,
+      };
+    }
+    const view = this.runtime.view();
+    return {
+      bold: view.getUint8(this.ptr + fields.bold.offset) !== 0,
+      italic: view.getUint8(this.ptr + fields.italic.offset) !== 0,
+      underline: view.getInt32(this.ptr + fields.underline.offset, true) !== 0,
+      strikethrough: view.getUint8(this.ptr + fields.strikethrough.offset) !== 0,
+      inverse: view.getUint8(this.ptr + fields.inverse.offset) !== 0,
+    };
   }
 
   /**

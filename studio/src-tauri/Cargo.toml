@@ -17,6 +17,10 @@ tauri-build = { version = "=2.6.3", features = [] }
 
 [features]
 default = []
+# The developer command line lives in `crates/ticketry-dev-tools` now, so this
+# feature gates nothing. It stays declared, and empty, so the generation and
+# verification scripts that still pass `--features development-tools` to this
+# package keep working instead of failing on an unknown feature.
 development-tools = []
 # Both are the desktop shell's features; the root package forwards them so
 # `studio/e2e` and the libghostty build keep the same command line, and so
@@ -28,56 +32,6 @@ native-libghostty = ["ticketry-desktop/native-libghostty"]
 [[bin]]
 name = "ticketry"
 path = "src/main.rs"
-
-[[bin]]
-name = "export_foundation_bindings"
-path = "src/bin/export_foundation_bindings.rs"
-required-features = ["development-tools"]
-
-[[bin]]
-name = "export_foundation_schema"
-path = "src/bin/export_foundation_schema.rs"
-required-features = ["development-tools"]
-
-[[bin]]
-name = "prepare_execution_generation_db"
-path = "src/bin/prepare_execution_generation_db.rs"
-required-features = ["development-tools"]
-
-[[bin]]
-name = "prepare_foundation_generation_db"
-path = "src/bin/prepare_foundation_generation_db.rs"
-required-features = ["development-tools"]
-
-[[bin]]
-name = "prepare_terminal_generation_db"
-path = "src/bin/prepare_terminal_generation_db.rs"
-required-features = ["development-tools"]
-
-[[bin]]
-name = "ticketry_graphql_adapter"
-path = "src/bin/ticketry_graphql_adapter.rs"
-required-features = ["development-tools"]
-
-[[bin]]
-name = "report_launch_trace"
-path = "src/bin/report_launch_trace.rs"
-required-features = ["development-tools"]
-
-[[bin]]
-name = "verify_slice4_copy"
-path = "src/bin/verify_slice4_copy.rs"
-required-features = ["development-tools"]
-
-[[bin]]
-name = "verify_slice5_copy"
-path = "src/bin/verify_slice5_copy.rs"
-required-features = ["development-tools"]
-
-[[bin]]
-name = "verify_slice6_copy"
-path = "src/bin/verify_slice6_copy.rs"
-required-features = ["development-tools"]
 
 [dependencies]
 async-graphql.workspace = true
@@ -155,6 +109,7 @@ members = [
     "crates/ticketry-mcp",
     "crates/ticketry-graphql-schema",
     "crates/ticketry-desktop",
+    "crates/ticketry-dev-tools",
 ]
 resolver = "2"
 
@@ -188,6 +143,7 @@ tempfile = "=3.23.0"
 ticketry-agent-execution = { path = "crates/ticketry-agent-execution" }
 ticketry-data-directory = { path = "crates/ticketry-data-directory" }
 ticketry-desktop = { path = "crates/ticketry-desktop" }
+ticketry-dev-tools = { path = "crates/ticketry-dev-tools" }
 ticketry-diagnostics = { path = "crates/ticketry-diagnostics" }
 ticketry-documents = { path = "crates/ticketry-documents" }
 ticketry-entities = { path = "crates/ticketry-entities" }

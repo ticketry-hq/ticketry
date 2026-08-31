@@ -1,0 +1,76 @@
+[package]
+name = "ticketry-dev-tools"
+version = "0.0.0"
+edition = "2021"
+publish = false
+autobins = false
+
+[lib]
+name = "ticketry_dev_tools"
+path = "src/lib.rs"
+
+[[bin]]
+name = "export_foundation_bindings"
+path = "src/bin/export_foundation_bindings.rs"
+
+[[bin]]
+name = "export_foundation_schema"
+path = "src/bin/export_foundation_schema.rs"
+
+[[bin]]
+name = "prepare_execution_generation_db"
+path = "src/bin/prepare_execution_generation_db.rs"
+
+[[bin]]
+name = "prepare_foundation_generation_db"
+path = "src/bin/prepare_foundation_generation_db.rs"
+
+[[bin]]
+name = "prepare_terminal_generation_db"
+path = "src/bin/prepare_terminal_generation_db.rs"
+
+[[bin]]
+name = "report_launch_trace"
+path = "src/bin/report_launch_trace.rs"
+
+[[bin]]
+name = "ticketry_graphql_adapter"
+path = "src/bin/ticketry_graphql_adapter.rs"
+
+[[bin]]
+name = "verify_slice4_copy"
+path = "src/bin/verify_slice4_copy.rs"
+
+[[bin]]
+name = "verify_slice5_copy"
+path = "src/bin/verify_slice5_copy.rs"
+
+[[bin]]
+name = "verify_slice6_copy"
+path = "src/bin/verify_slice6_copy.rs"
+
+[dependencies]
+axum.workspace = true
+futures-util.workspace = true
+http.workspace = true
+sea-orm.workspace = true
+sea-orm-migration.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tauri-graphql.workspace = true
+ticketry-agent-execution.workspace = true
+ticketry-data-directory.workspace = true
+ticketry-diagnostics.workspace = true
+ticketry-documents.workspace = true
+ticketry-graphql-schema.workspace = true
+ticketry-launch.workspace = true
+ticketry-mcp.workspace = true
+ticketry-runs.workspace = true
+ticketry-settings.workspace = true
+ticketry-terminal.workspace = true
+ticketry-workspace-runtime.workspace = true
+tokio.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

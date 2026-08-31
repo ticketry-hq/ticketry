@@ -323,7 +323,7 @@ export async function main() {
   process.once("SIGTERM", () => stop("SIGTERM"));
   if (!defaults.reuseGraphqlAdapter) {
     start("rust-graphql", "cargo", ["run", "--locked", "--manifest-path",
-      "studio/src-tauri/Cargo.toml", "--features", "development-tools", "--bin", "ticketry_graphql_adapter"], environment, logs);
+      "studio/src-tauri/Cargo.toml", "-p", "ticketry-dev-tools", "--bin", "ticketry_graphql_adapter"], environment, logs);
   }
   await waitUntilGraphqlReady(adapterPort, 180_000, () => stopping);
   const [frontend, ...frontendArgs] = buildWebFrontendCommand(frontendPort);

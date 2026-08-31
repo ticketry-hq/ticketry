@@ -34,7 +34,7 @@ export async function generateFoundationArtifacts(outputRoot) {
 
   run(
     "cargo",
-    ["run", "--locked", "--quiet", "--features", "development-tools", "--bin", "prepare_foundation_generation_db", "--", databasePath],
+    ["run", "--locked", "--quiet", "-p", "ticketry-dev-tools", "--bin", "prepare_foundation_generation_db", "--", databasePath],
     tauriRoot,
   );
   run(
@@ -56,7 +56,7 @@ export async function generateFoundationArtifacts(outputRoot) {
   const rawTerminalEntities = join(outputRoot, "raw-terminal-entities");
   run(
     "cargo",
-    ["run", "--locked", "--quiet", "--features", "development-tools", "--bin", "prepare_terminal_generation_db", "--", terminalDatabasePath],
+    ["run", "--locked", "--quiet", "-p", "ticketry-dev-tools", "--bin", "prepare_terminal_generation_db", "--", terminalDatabasePath],
     tauriRoot,
   );
   run(
@@ -78,7 +78,7 @@ export async function generateFoundationArtifacts(outputRoot) {
   const rawExecutionEntities = join(outputRoot, "raw-execution-entities");
   run(
     "cargo",
-    ["run", "--locked", "--quiet", "--features", "development-tools", "--bin", "prepare_execution_generation_db", "--", executionDatabasePath],
+    ["run", "--locked", "--quiet", "-p", "ticketry-dev-tools", "--bin", "prepare_execution_generation_db", "--", executionDatabasePath],
     tauriRoot,
   );
   run(
@@ -100,12 +100,12 @@ export async function generateFoundationArtifacts(outputRoot) {
   const bindingsPath = join(outputRoot, "taurpc.ts");
   run(
     "cargo",
-    ["run", "--locked", "--quiet", "--features", "development-tools", "--bin", "export_foundation_schema", "--", schemaPath],
+    ["run", "--locked", "--quiet", "-p", "ticketry-dev-tools", "--bin", "export_foundation_schema", "--", schemaPath],
     tauriRoot,
   );
   run(
     "cargo",
-    ["run", "--locked", "--quiet", "--features", "development-tools", "--bin", "export_foundation_bindings", "--", bindingsPath],
+    ["run", "--locked", "--quiet", "-p", "ticketry-dev-tools", "--bin", "export_foundation_bindings", "--", bindingsPath],
     tauriRoot,
   );
   await generateStudioTypedDocuments({

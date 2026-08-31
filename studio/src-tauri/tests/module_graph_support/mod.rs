@@ -22,7 +22,11 @@ pub const SLICES: &[(&str, &str)] = &[];
 pub const ALLOWED_BACK_EDGES: &[(&str, &str)] = &[];
 
 /// Files and directories that are not part of the module graph.
-const IGNORED_ROOTS: &[&str] = &["bin", "lib.rs", "main.rs"];
+///
+/// `src/` now holds only the thin binary and its crate root; the developer
+/// binaries that used to sit in `src/bin/` are `ticketry-dev-tools`, and the
+/// crate scan below graphs them as their own slice.
+const IGNORED_ROOTS: &[&str] = &["lib.rs", "main.rs"];
 
 pub struct ModuleGraph {
     edges: BTreeMap<String, BTreeSet<String>>,

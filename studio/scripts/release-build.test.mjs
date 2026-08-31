@@ -55,13 +55,22 @@ test("the release is one Rust desktop artifact with native libghostty", () => {
   assert.doesNotThrow(() => validateManifest(manifest));
 });
 
-test("non-product Cargo binaries require the development-tools feature", async () => {
+test("the shipping Cargo package builds one binary and no developer tools", async () => {
   const cargoToml = await readFile(path.join(studioRoot, "src-tauri", "Cargo.toml"), "utf8");
   assert.match(cargoToml, /autobins = false/);
-  assert.match(
-    cargoToml,
-    /name = "verify_slice6_copy"[\s\S]*?required-features = \["development-tools"\]/,
+  // The developer command line is its own package now, so the release package
+  // cannot build it by accident: `ticketry` is the only [[bin]] it declares.
+  assert.deepEqual(cargoToml.match(/^\[\[bin\]\]\nname = "[^"]+"$/gm), [
+    '[[bin]]\nname = "ticketry"',
+  ]);
+  assert.equal(cargoToml.includes("verify_slice6_copy"), false);
+
+  const devToolsToml = await readFile(
+    path.join(studioRoot, "src-tauri", "crates", "ticketry-dev-tools", "Cargo.toml"),
+    "utf8",
   );
+  assert.match(devToolsToml, /name = "verify_slice6_copy"/);
+  assert.match(devToolsToml, /publish = false/);
 });
 
 test("manifest validation requires Rust runtime and release policy declarations", () => {

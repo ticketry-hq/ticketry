@@ -72,10 +72,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map(PathBuf::from)
         .ok_or("MUXED_DATA_DIR is required")?;
     std::fs::create_dir_all(&data_directory)?;
-    muxed_studio_lib::configure_file_logging(
-        &data_directory,
-        std::env::var_os("MUXED_DEVELOPMENT_LOG_PATH").map(PathBuf::from),
-    );
+    // The desktop shell's `configure_file_logging` wrapper is not reachable
+    // from here, so the adapter opens the same process log directly.
+    let log_path = std::env::var_os("MUXED_DEVELOPMENT_LOG_PATH").map(PathBuf::from);
+    ticketry_diagnostics::configure_process_file_log(log_path.is_some(), &data_directory, log_path);
     let _data_directory_guard =
         ticketry_data_directory::DataDirectoryGuard::acquire(&data_directory).map_err(|error| {
             format!(

@@ -2,5 +2,6 @@
 
 pub mod adoption;
 pub mod classification;
+pub mod final_schema_migrations;
 pub mod import;
 pub mod preflight;

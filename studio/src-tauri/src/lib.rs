@@ -12,6 +12,7 @@ pub mod entities;
 pub mod execution;
 pub mod graph_run_service;
 pub mod graphql_foundation;
+pub mod graphql_scalars;
 pub mod hook_spool;
 pub mod installation;
 pub mod launch;

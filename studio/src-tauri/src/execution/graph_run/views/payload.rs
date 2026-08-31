@@ -3,7 +3,7 @@ use seaography::{Builder, CustomOutputType};
 use crate::{
     entities::execution::graph_run,
     graph_run_service::{DeletedGraphRunResult, GraphRunResult},
-    work_management::read_types::StringList,
+    graphql_scalars::StringList,
 };
 
 #[derive(Clone, Debug, PartialEq, Eq, CustomOutputType)]

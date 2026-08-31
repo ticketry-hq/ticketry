@@ -1,3 +1,4 @@
+use crate::graphql_scalars::StringList;
 use std::collections::{HashMap, HashSet};
 
 use sea_orm::{
@@ -295,8 +296,8 @@ async fn project_work_items(
                 updated_at: timestamp(row.updated_at),
                 rank: row.rank,
                 issue_type: uuid(&row.issue_type_id),
-                blocked_by_ids: output::StringList(blocked_by_ids),
-                blocks_ids: output::StringList(blocks_ids),
+                blocked_by_ids: StringList(blocked_by_ids),
+                blocks_ids: StringList(blocks_ids),
             }
         })
         .collect())

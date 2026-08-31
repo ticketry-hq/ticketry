@@ -12,7 +12,9 @@ use serde::Serialize;
 use sha2::{Digest, Sha256};
 
 use super::atomic_json::{write_json, RealAtomicFileOperations};
-use super::ownership_manifest::{OWNED_ASSETS, OWNED_TABLES, PROVIDER_ADAPTER_SLUGS, VERSION};
+use super::ownership_manifest::{
+    LAUNCH_BINDING_ENTRY_SKILL_LEDGER, OWNED_ASSETS, OWNED_TABLES, PROVIDER_ADAPTER_SLUGS, VERSION,
+};
 use super::SettingsPersistenceError;
 
 const SNAPSHOT_GENERATIONS: usize = 3;
@@ -415,11 +417,7 @@ async fn settings_digest(
 async fn effective_owned_tables(
     database: &impl ConnectionTrait,
 ) -> Result<Vec<(&'static str, Vec<&'static str>)>, SettingsPersistenceError> {
-    let entry_skill_installed = table_exists(
-        database,
-        crate::work_management::launch_binding_entry_skill_migration::LEDGER_TABLE,
-    )
-    .await?;
+    let entry_skill_installed = table_exists(database, LAUNCH_BINDING_ENTRY_SKILL_LEDGER).await?;
     Ok(OWNED_TABLES
         .iter()
         .map(|(table, columns)| {

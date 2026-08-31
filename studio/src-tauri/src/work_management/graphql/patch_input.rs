@@ -10,11 +10,11 @@ use seaography::{
 };
 
 use super::commands::workflow;
-use super::read_types as output;
+use crate::graphql_scalars::StringList;
 
 pub struct GraphqlPatchString(pub workflow::PatchValue<String>);
 pub struct GraphqlPatchBool(pub workflow::PatchValue<bool>);
-pub struct GraphqlPatchStringList(pub workflow::PatchValue<output::StringList>);
+pub struct GraphqlPatchStringList(pub workflow::PatchValue<StringList>);
 pub struct GraphqlPatchJson(pub workflow::PatchValue<serde_json::Value>);
 
 impl CustomInputType for GraphqlPatchString {
@@ -53,7 +53,7 @@ impl CustomInputType for GraphqlPatchBool {
 
 impl CustomInputType for GraphqlPatchStringList {
     fn gql_input_type_ref(ctx: &'static BuilderContext) -> TypeRef {
-        match output::StringList::gql_input_type_ref(ctx) {
+        match StringList::gql_input_type_ref(ctx) {
             TypeRef::NonNull(inner) => *inner,
             other => other,
         }
@@ -67,7 +67,7 @@ impl CustomInputType for GraphqlPatchStringList {
             None => workflow::PatchValue::Unset,
             Some(value) if value.is_null() => workflow::PatchValue::Null,
             Some(value) => {
-                workflow::PatchValue::Value(output::StringList::parse_value(ctx, Some(value))?)
+                workflow::PatchValue::Value(StringList::parse_value(ctx, Some(value))?)
             }
         }))
     }

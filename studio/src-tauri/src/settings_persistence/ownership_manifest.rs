@@ -8,6 +8,15 @@ pub const VERSION: i32 = 1;
 /// Exact columns are part of the cutover contract: startup refuses an unknown
 /// shape instead of letting a newer Django migration write through a schema
 /// the Rust runtime has not classified.
+/// The ledger the Work Management entry-skill migration writes.
+///
+/// Settings' handoff runs before that migration chain, so adoption probes for
+/// this table by name rather than depending on the slice that creates it.
+/// `work_management::launch_binding_entry_skill_migration` owns the name; a
+/// test there fails if the two ever drift.
+pub const LAUNCH_BINDING_ENTRY_SKILL_LEDGER: &str =
+    "ticketry_launch_binding_entry_skill_migration";
+
 pub const OWNED_TABLES: &[(&str, &[&str])] = &[
     ("app_settings", &["scope", "key", "value", "updated_at"]),
     (

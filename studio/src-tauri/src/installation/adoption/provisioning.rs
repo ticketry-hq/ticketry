@@ -107,7 +107,7 @@ async fn install(database: &DatabaseConnection) -> Result<(), AdoptionFailure> {
                 "the provider catalog could not be created: {error}"
             ))
         })?;
-    crate::work_management::final_schema_migrations::install(database)
+    crate::installation::final_schema_migrations::install(database)
         .await
         .map_err(|error| {
             failed(format!(

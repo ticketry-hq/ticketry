@@ -1,10 +1,10 @@
 use muxed_studio_lib::{
     graphql_foundation::{adopt_worktracker_and_install, InstallationOwnership},
+    installation::final_schema_migrations,
     settings_persistence::provider_catalog_migrations,
     work_management::{
-        final_schema_migrations, launch_binding_entry_skill_migration,
-        module_presentation_migration, open_for_commands, project_onboarding_migration,
-        workflow_color_migration, workspace_tab_order_migration,
+        launch_binding_entry_skill_migration, module_presentation_migration, open_for_commands,
+        project_onboarding_migration, workflow_color_migration, workspace_tab_order_migration,
     },
 };
 use sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, Statement};

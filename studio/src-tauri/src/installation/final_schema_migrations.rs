@@ -1,12 +1,15 @@
 //! The 0044 through 0052 parity chain, in source order.
+//!
+//! The chain spans work management, settings, and worktree schemas, so it is
+//! installation's to compose rather than any one of theirs to own.
 
 use sea_orm::{DatabaseConnection, DbErr};
 
-use super::{
+use crate::settings_persistence::provider_catalog_migrations;
+use crate::work_management::{
     launch_binding_entry_skill_migration, module_presentation_migration,
     project_onboarding_migration, workflow_color_migration, workspace_tab_order_migration,
 };
-use crate::settings_persistence::provider_catalog_migrations;
 
 pub const ORDERED_MIGRATION_IDS: &[&str] = &[
     provider_catalog_migrations::CODEX_5_6_MIGRATION_ID,

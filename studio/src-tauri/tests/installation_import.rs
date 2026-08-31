@@ -77,7 +77,7 @@ async fn imports_a_current_postgres_snapshot_and_switches_once() {
     ))
     .await
     .expect("open imported target for final-schema migrations");
-    muxed_studio_lib::work_management::final_schema_migrations::install(&imported_database)
+    muxed_studio_lib::installation::final_schema_migrations::install(&imported_database)
         .await
         .expect("run the ordinary final-schema chain over the PostgreSQL import");
     let spark = imported_database

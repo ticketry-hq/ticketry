@@ -10,7 +10,7 @@ use super::{
     ProviderCatalog, ProviderCatalogError, ProviderCatalogService, ProviderCatalogUpdate,
     SettingsPersistenceError,
 };
-use crate::work_management::read_types::StringList;
+use crate::graphql_scalars::StringList;
 
 pub struct SettingsQueries;
 

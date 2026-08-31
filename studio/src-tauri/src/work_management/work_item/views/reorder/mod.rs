@@ -2,6 +2,7 @@
 
 #![allow(non_snake_case)]
 
+use crate::graphql_scalars::StringList;
 use seaography::{
     async_graphql::{Context, Result},
     CustomFields,
@@ -22,7 +23,7 @@ impl ReorderWorkItemMutation {
         id: String,
         before_id: Option<String>,
         after_id: Option<String>,
-        initial_order_ids: Option<output::StringList>,
+        initial_order_ids: Option<StringList>,
     ) -> Result<crate::entities::work_management::issue::Model> {
         let database = command_database(ctx)?;
         crate::diagnostics::record_story_move(

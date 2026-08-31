@@ -161,7 +161,7 @@ async fn initialize_with_worktracker_commands_and_install_inner(
                 error.to_string(),
             )
         })?;
-    crate::work_management::final_schema_migrations::install(&worktracker_database)
+    crate::installation::final_schema_migrations::install(&worktracker_database)
         .await
         .map_err(|error| {
             FoundationInitializationError::new(

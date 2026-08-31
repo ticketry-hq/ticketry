@@ -14,16 +14,17 @@ use syn::{Attribute, ImplItem, Item, Meta, UseTree};
 /// assertion so new modules get a home deliberately.
 pub const SLICES: &[(&str, &str)] = &[
     ("entities", "entities"),
+    ("graphql_scalars", "entities"),
     ("diagnostics", "diagnostics"),
     ("data_directory", "data-directory"),
     ("tool_discovery", "tool-discovery"),
     ("settings_persistence", "settings"),
-    ("work_management", "work-management"),
-    ("module_links", "work-management"),
     ("runs_persistence", "runs-persistence"),
     ("run_authority", "runs-persistence"),
     ("runs", "runs-persistence"),
     ("hook_spool", "runs-persistence"),
+    ("work_management", "work-management"),
+    ("module_links", "work-management"),
     ("execution", "agent-execution"),
     ("graph_run_service", "agent-execution"),
     ("documents", "documents"),
@@ -51,9 +52,6 @@ pub const SLICES: &[(&str, &str)] = &[
 pub const ALLOWED_BACK_EDGES: &[(&str, &str)] = &[
     // §3.4 code motion out of `work_management` and the remaining pairs
     ("documents", "workspace"),
-    ("settings_persistence", "work_management"),
-    ("work_management", "runs_persistence"),
-    ("work_management", "worktree"),
 ];
 
 /// Files and directories that are not part of the module graph.

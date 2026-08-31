@@ -12,7 +12,7 @@ use seaography::{
     CustomFields,
 };
 
-use crate::work_management::read_types::StringList;
+use crate::graphql_scalars::StringList;
 
 use super::directory_completion::complete_directories;
 

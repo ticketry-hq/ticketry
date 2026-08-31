@@ -10,10 +10,10 @@ use seaography::{
 };
 
 use crate::entities::work_management::module_presentation;
+use crate::graphql_scalars::StringList;
 use crate::work_management::{
     commands::{reorder, CommandError},
     graphql::{command_database, command_error, work_facts},
-    read_types::StringList,
 };
 
 struct ReorderModulePresentationView;

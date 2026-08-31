@@ -1,3 +1,4 @@
+use crate::graphql_scalars::StringList;
 use std::collections::HashMap;
 
 use sea_orm::{ColumnTrait, DatabaseConnection, DbErr, EntityTrait, QueryFilter, QueryOrder};
@@ -155,7 +156,7 @@ pub async fn launch_bindings(
             issue_type: uuid(&row.issue_type_id),
             state: uuid(&row.state_id),
             prompt: row.prompt,
-            required_skills: output::StringList(
+            required_skills: StringList(
                 row.required_skills
                     .as_array()
                     .into_iter()

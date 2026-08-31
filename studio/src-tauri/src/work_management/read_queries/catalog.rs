@@ -1,3 +1,4 @@
+use crate::graphql_scalars::StringList;
 use std::collections::HashMap;
 
 use sea_orm::{DatabaseConnection, DbErr, EntityTrait, QueryOrder};
@@ -61,7 +62,7 @@ pub async fn agent_models(database: &DatabaseConnection) -> Result<Vec<output::A
             id: uuid(&row.id),
             provider: uuid(&row.provider_id),
             name: row.name,
-            permitted_reasoning_levels: output::StringList(
+            permitted_reasoning_levels: StringList(
                 relations
                     .iter()
                     .filter(|relation| relation.agent_model_id == row.id)

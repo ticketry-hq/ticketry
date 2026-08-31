@@ -22,11 +22,3 @@ pub fn run_with_file_logging(requested: bool) {
 pub fn file_logging_requested(arguments: &[std::ffi::OsString]) -> bool {
     ticketry_diagnostics::file_logging_requested(arguments)
 }
-
-pub fn configure_file_logging(
-    data_directory: &std::path::Path,
-    log_path: Option<std::path::PathBuf>,
-) -> bool {
-    ticketry_diagnostics::configure_process_file_log(log_path.is_some(), data_directory, log_path)
-        .is_enabled()
-}

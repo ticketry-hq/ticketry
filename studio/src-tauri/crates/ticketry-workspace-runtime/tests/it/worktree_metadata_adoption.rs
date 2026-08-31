@@ -15,7 +15,7 @@ use ticketry_workspace_runtime::worktree::persistence::{
 
 fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
+        .join("../../../..")
         .canonicalize()
         .unwrap()
 }

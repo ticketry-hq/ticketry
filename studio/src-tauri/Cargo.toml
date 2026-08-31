@@ -34,60 +34,51 @@ name = "ticketry"
 path = "src/main.rs"
 
 [dependencies]
+# The root package is the shell's entry point and nothing else: `src/lib.rs`
+# builds the Tauri context and hands it to the desktop crate, and `src/main.rs`
+# activates a temporary SQLite profile before it. Every other slice reaches the
+# binary through `ticketry-desktop`.
+# `tauri::generate_context!` expands to `serde_json` paths, so the macro's
+# crate needs it even though no line of this package names it.
+serde_json.workspace = true
+tauri.workspace = true
+ticketry-desktop.workspace = true
+ticketry-diagnostics.workspace = true
+ticketry-terminal.workspace = true
+
+[dev-dependencies]
+# `tests/` holds the cross-slice contract binaries — the ones that assert over
+# the assembled schema and across slice boundaries, above any single crate.
+# They are the only reason the root package depends on the slices at all.
 async-graphql.workspace = true
 async-trait.workspace = true
-axum.workspace = true
-base64.workspace = true
-blake2.workspace = true
 chrono.workspace = true
 futures-util.workspace = true
 http.workspace = true
-libc.workspace = true
-portable-pty.workspace = true
-process-wrap = { version = "9.1", default-features = false, features = [
-    "std",
-    "process-group",
-] }
-rand.workspace = true
+log = "=0.4.33"
 reqwest.workspace = true
-rmcp.workspace = true
 sea-orm.workspace = true
-sea-orm-migration.workspace = true
 seaography.workspace = true
 seaolim.workspace = true
-serde.workspace = true
-serde_json.workspace = true
 sha2.workspace = true
-tauri.workspace = true
+syn = { version = "=2.0.119", features = ["full", "visit"] }
 tauri-graphql.workspace = true
-taurpc.workspace = true
+tempfile.workspace = true
 ticketry-agent-execution.workspace = true
 ticketry-data-directory.workspace = true
-ticketry-desktop.workspace = true
-ticketry-diagnostics.workspace = true
 ticketry-documents.workspace = true
 ticketry-entities.workspace = true
 ticketry-graphql-schema.workspace = true
 ticketry-installation.workspace = true
 ticketry-launch.workspace = true
-ticketry-mcp.workspace = true
-ticketry-runs.workspace = true
-ticketry-settings.workspace = true
-ticketry-terminal.workspace = true
-ticketry-tool-discovery.workspace = true
-ticketry-work-management.workspace = true
-ticketry-workspace-runtime.workspace = true
-tokio.workspace = true
-tokio-util.workspace = true
-uuid.workspace = true
-
-[dev-dependencies]
 ticketry-mcp = { workspace = true, features = ["test-support"] }
 ticketry-runs = { workspace = true, features = ["test-support"] }
+ticketry-settings.workspace = true
+ticketry-tool-discovery.workspace = true
 ticketry-work-management = { workspace = true, features = ["test-support"] }
-log = "=0.4.33"
-syn = { version = "=2.0.119", features = ["full", "visit"] }
-tempfile.workspace = true
+ticketry-workspace-runtime.workspace = true
+tokio.workspace = true
+uuid.workspace = true
 
 [workspace]
 members = [

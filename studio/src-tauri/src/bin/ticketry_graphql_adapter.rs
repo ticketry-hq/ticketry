@@ -12,10 +12,10 @@ use axum::{
     Router,
 };
 use futures_util::StreamExt;
-use muxed_studio_lib::mcp::{McpRuntime, RunAuthority};
 use serde::Deserialize;
 use tauri_graphql::{TransportApi, TransportApiImpl};
 use ticketry_launch::paths::LaunchPathsService;
+use ticketry_mcp::{McpRuntime, RunAuthority};
 use ticketry_terminal::terminal::lifecycle::TerminalRuntimeAuthority;
 
 #[path = "ticketry_graphql_adapter/mcp.rs"]
@@ -113,7 +113,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             hook_spool_directory,
             mcp_url: String::new(),
             run_authority: RunAuthority::new(database.clone()),
-            granted_operations: muxed_studio_lib::mcp::allowed_provider_operations(),
+            granted_operations: ticketry_mcp::allowed_provider_operations(),
         });
 
     let mcp_runtime = Arc::new(mcp::start(&data_directory).await?);

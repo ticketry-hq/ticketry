@@ -56,17 +56,17 @@ pub(crate) async fn start_in_process_mcp(
     ingress_credential: &str,
     mcp_port: u16,
     terminal_launch: Option<ticketry_terminal::terminal::launch::TerminalLaunchService>,
-) -> Result<crate::mcp::McpRuntime, String> {
-    let configuration = crate::mcp::McpConfiguration {
-        address: crate::mcp::loopback(mcp_port).map_err(|error| error.to_string())?,
+) -> Result<ticketry_mcp::McpRuntime, String> {
+    let configuration = ticketry_mcp::McpConfiguration {
+        address: ticketry_mcp::loopback(mcp_port).map_err(|error| error.to_string())?,
         database_path: data_directory.join("state.db"),
         media_root: data_directory.join("media"),
         ingress_credential: ingress_credential.to_owned(),
     };
     match terminal_launch {
         Some(service) => {
-            crate::mcp::McpRuntime::start_with_terminal_launch(configuration, service).await
+            ticketry_mcp::McpRuntime::start_with_terminal_launch(configuration, service).await
         }
-        None => crate::mcp::McpRuntime::start(configuration).await,
+        None => ticketry_mcp::McpRuntime::start(configuration).await,
     }
 }

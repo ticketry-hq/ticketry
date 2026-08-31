@@ -26,13 +26,13 @@ use std::time::Duration;
 use muxed_studio_lib::graphql_foundation::{
     adopt_worktracker_and_install, ComposedCommandRuntime, InstallationOwnership,
 };
-use muxed_studio_lib::mcp::{McpConfiguration, McpRuntime};
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection};
 use serde_json::{json, Value};
 use tauri_graphql::{TransportApi, TransportApiImpl};
 use ticketry_agent_execution::execution::reconciliation::{
     ExecutionReconciliationConfig, ExecutionReconciliationRuntime, ExecutionReconciliationService,
 };
+use ticketry_mcp::{McpConfiguration, McpRuntime};
 use ticketry_runs::persistence::{publish_readiness, Slice3Readiness};
 use ticketry_terminal::terminal::launch::{TerminalLaunchBoundary, TerminalLaunchService};
 use ticketry_terminal::terminal::lifecycle::{
@@ -244,7 +244,7 @@ impl ExecutionHarness {
 
         let mcp = McpRuntime::start_with_terminal_launch(
             McpConfiguration {
-                address: muxed_studio_lib::mcp::loopback(0).expect("loopback address"),
+                address: ticketry_mcp::loopback(0).expect("loopback address"),
                 database_path: data_directory.join("state.db"),
                 media_root: data_directory.join("media"),
                 ingress_credential: AUTHORIZATION_CREDENTIAL.to_owned(),
@@ -268,7 +268,7 @@ impl ExecutionHarness {
                 hook_spool_directory: spool_directory.clone(),
                 mcp_url: format!("http://{}/mcp", mcp.address()),
                 run_authority: mcp.authority(),
-                granted_operations: muxed_studio_lib::mcp::allowed_provider_operations(),
+                granted_operations: ticketry_mcp::allowed_provider_operations(),
             });
 
         let spool = ticketry_runs::hook_spool::HookSpool::new(

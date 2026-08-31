@@ -47,7 +47,7 @@ pub(crate) fn launch_rust_runtime(
             hook_spool_directory: spool_directory.clone(),
             mcp_url: String::new(),
             run_authority: ticketry_runs::authority::RunAuthority::new(database.clone()),
-            granted_operations: crate::mcp::allowed_provider_operations(),
+            granted_operations: ticketry_mcp::allowed_provider_operations(),
         },
     )?;
 

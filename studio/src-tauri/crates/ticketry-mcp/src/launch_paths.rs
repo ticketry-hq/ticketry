@@ -75,7 +75,8 @@ fn authorized(state: &LaunchPathsIngressState, headers: &HeaderMap) -> bool {
 mod tests {
     use serde_json::{json, Value};
 
-    use super::super::tests::{start, start_authorizer};
+    use super::super::test_support::start_authorizer;
+    use super::super::tests::start;
 
     /// What Django posts: identities and a scope, nothing else.
     fn request() -> serde_json::Value {

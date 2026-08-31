@@ -1,4 +1,17 @@
-//! In-process WorkTracker MCP transport owned by the desktop runtime.
+//! The in-process MCP tool listener: how a coding agent talks to Ticketry.
+//!
+//! An agent running inside a terminal reaches the product through one
+//! loopback MCP endpoint this crate serves. [`McpRuntime`] binds it, and every
+//! call arrives carrying a run credential that [`RunAuthority`] — minted where
+//! the run itself lives — resolves into a [`RunPrincipal`]: which run is
+//! calling, for which work item, and how far its scope reaches.
+//!
+//! What the listener exposes is composition, not model code. The registry
+//! names the tools, dispatch turns one call into work-management commands,
+//! graph runs, terminal launches or run termination, and projection renders
+//! the answer back as the agent's own vocabulary. Nothing here owns a table;
+//! it sits above the slices it dispatches into, which is why the schema is
+//! assembled out of this crate rather than underneath it.
 
 mod dependency_tools;
 mod dispatch;
@@ -72,7 +85,10 @@ impl McpRuntime {
         .await
     }
 
-    #[cfg(test)]
+    /// Starts the listener against a caller-supplied terminal cleanup runtime.
+    /// The root package's `mcp_acceptance` integration binary needs this seam,
+    /// so it ships behind `test-support` as well as this crate's own tests.
+    #[cfg(any(test, feature = "test-support"))]
     pub async fn start_for_test(
         configuration: McpConfiguration,
         cleanup_runtime: std::sync::Arc<
@@ -226,7 +242,10 @@ impl McpRuntime {
         self.authority.clone()
     }
 
-    #[cfg(test)]
+    /// Mints a run credential without a live authorizer. Needed by the root
+    /// package's `mcp_acceptance` integration binary as well as this crate's
+    /// own tests, so it ships behind `test-support`.
+    #[cfg(any(test, feature = "test-support"))]
     pub async fn grant_for_test(
         &self,
         agent_run_id: &str,
@@ -287,7 +306,9 @@ pub fn loopback(port: u16) -> Result<SocketAddr, io::Error> {
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))
 }
 
-#[cfg(test)]
-mod acceptance_tests;
+/// Fixture MCP authorizer shared with the root package's `mcp_acceptance`
+/// integration binary; see the module's own documentation.
+#[cfg(any(test, feature = "test-support"))]
+pub mod test_support;
 #[cfg(test)]
 mod tests;

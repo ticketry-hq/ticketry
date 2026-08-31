@@ -1,3 +1,7 @@
+//! Drives the in-process MCP listener against the assembled WorkTracker
+//! GraphQL schema. It lives in the root package rather than in `ticketry-mcp`
+//! because the schema is composed out of that crate, not underneath it.
+
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -6,12 +10,13 @@ use serde_json::{json, Value};
 use tauri_graphql::{TransportApi, TransportApiImpl};
 use tokio::time::{timeout, Duration};
 
+#[path = "mcp_acceptance/termination.rs"]
 mod termination;
 
-use super::tests::{post, start_authorizer, PROJECT};
-use super::{loopback, McpConfiguration, McpRuntime};
-use crate::graphql_foundation::initialize_with_worktracker_commands_and_install;
+use muxed_studio_lib::graphql_foundation::initialize_with_worktracker_commands_and_install;
 use ticketry_entities::terminals::session;
+use ticketry_mcp::test_support::{post, start_authorizer, PROJECT};
+use ticketry_mcp::{loopback, McpConfiguration, McpRuntime};
 use ticketry_terminal::terminal::cleanup::{
     CleanupKillResult, CleanupRuntimeObservation, TerminalCleanupRuntime,
 };
@@ -280,7 +285,7 @@ async fn mcp_mutations_cover_crud_hierarchy_workflow_and_blockers_through_rust_c
         .grant_for_test(
             "run-valid",
             "valid",
-            super::allowed_provider_operations(),
+            ticketry_mcp::allowed_provider_operations(),
             false,
         )
         .await

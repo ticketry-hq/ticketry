@@ -6812,6 +6812,7 @@ dependencies = [
  "ticketry-entities",
  "ticketry-installation",
  "ticketry-launch",
+ "ticketry-mcp",
  "ticketry-runs",
  "ticketry-settings",
  "ticketry-terminal",
@@ -6944,6 +6945,32 @@ dependencies = [
  "ticketry-settings",
  "ticketry-work-management",
  "ticketry-workspace-runtime",
+ "uuid",
+]
+
+[[package]]
+name = "ticketry-mcp"
+version = "0.0.0"
+dependencies = [
+ "axum",
+ "chrono",
+ "http",
+ "reqwest",
+ "rmcp",
+ "sea-orm",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "ticketry-agent-execution",
+ "ticketry-diagnostics",
+ "ticketry-entities",
+ "ticketry-launch",
+ "ticketry-runs",
+ "ticketry-settings",
+ "ticketry-terminal",
+ "ticketry-work-management",
+ "tokio",
+ "tokio-util",
  "uuid",
 ]
 

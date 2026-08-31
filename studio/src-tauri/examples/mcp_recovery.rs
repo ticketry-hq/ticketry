@@ -1,5 +1,5 @@
-use muxed_studio_lib::mcp::{McpConfiguration, McpRuntime};
 use std::net::{Ipv4Addr, SocketAddr};
+use ticketry_mcp::{McpConfiguration, McpRuntime};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

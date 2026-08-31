@@ -78,12 +78,12 @@ required-features = ["development-tools"]
 [dependencies]
 async-graphql.workspace = true
 async-trait.workspace = true
-axum = { version = "=0.8.9", features = ["ws"] }
+axum.workspace = true
 base64.workspace = true
 blake2.workspace = true
 chrono.workspace = true
 futures-util.workspace = true
-http = "=1.4.2"
+http.workspace = true
 libc.workspace = true
 portable-pty.workspace = true
 process-wrap = { version = "9.1", default-features = false, features = [
@@ -92,7 +92,7 @@ process-wrap = { version = "9.1", default-features = false, features = [
 ] }
 rand.workspace = true
 reqwest.workspace = true
-rmcp = { version = "=3.0.0", features = ["transport-streamable-http-server"] }
+rmcp.workspace = true
 sea-orm.workspace = true
 sea-orm-migration = { version = "=2.0.1", features = ["runtime-tokio-rustls", "sqlx-sqlite"] }
 seaography.workspace = true
@@ -113,6 +113,7 @@ ticketry-documents.workspace = true
 ticketry-entities.workspace = true
 ticketry-installation.workspace = true
 ticketry-launch.workspace = true
+ticketry-mcp.workspace = true
 ticketry-runs.workspace = true
 ticketry-settings.workspace = true
 ticketry-terminal.workspace = true
@@ -124,6 +125,7 @@ tokio-util.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
+ticketry-mcp = { workspace = true, features = ["test-support"] }
 ticketry-runs = { workspace = true, features = ["test-support"] }
 ticketry-work-management = { workspace = true, features = ["test-support"] }
 log = "=0.4.33"
@@ -147,21 +149,25 @@ members = [
     "crates/ticketry-terminal",
     "crates/ticketry-agent-execution",
     "crates/ticketry-installation",
+    "crates/ticketry-mcp",
 ]
 resolver = "2"
 
 [workspace.dependencies]
 async-graphql = { version = "=7.0.19", features = ["dynamic-schema"] }
 async-trait = "=0.1.92"
+axum = { version = "=0.8.9", features = ["ws"] }
 base64 = "0.22"
 blake2 = "0.10"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 futures-util = "=0.3.32"
+http = "=1.4.2"
 libc = "0.2"
 notify = "=8.2.0"
 portable-pty = "0.9"
 rand = "0.8"
 reqwest = { version = "=0.13.4", default-features = false, features = ["json", "rustls"] }
+rmcp = { version = "=3.0.0", features = ["transport-streamable-http-server"] }
 sea-orm = { version = "=2.0.1", features = ["runtime-tokio-rustls", "seaography", "sqlx-postgres", "sqlx-sqlite"] }
 seaography = { version = "=2.0.0-rc.9", default-features = false, features = ["field-camel-case", "macros", "with-chrono", "with-json"] }
 seaolim = { git = "https://github.com/charleeagni/seaolim", rev = "29f24172be1ab423e9b8b14b11ba1fa73452f1cd" }
@@ -179,6 +185,7 @@ ticketry-documents = { path = "crates/ticketry-documents" }
 ticketry-entities = { path = "crates/ticketry-entities" }
 ticketry-installation = { path = "crates/ticketry-installation" }
 ticketry-launch = { path = "crates/ticketry-launch" }
+ticketry-mcp = { path = "crates/ticketry-mcp" }
 ticketry-runs = { path = "crates/ticketry-runs" }
 ticketry-settings = { path = "crates/ticketry-settings" }
 ticketry-terminal = { path = "crates/ticketry-terminal" }

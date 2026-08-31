@@ -109,8 +109,8 @@ pub const CHILD_HANDOFFS: &[ChildHandoff] = &[
         evidence: "spec/rusting--cf2de16d/T869--route-terminal-viewers-through-the-rust/AUDIT.md",
         files_checked: &[
             "studio/src-tauri/crates/ticketry-terminal/src/terminal/viewer",
-            "studio/src-tauri/src/native_terminal",
-            "studio/src-tauri/src/native_terminal.rs",
+            "studio/src-tauri/crates/ticketry-desktop/src/native_terminal",
+            "studio/src-tauri/crates/ticketry-desktop/src/native_terminal.rs",
         ],
     },
     ChildHandoff {

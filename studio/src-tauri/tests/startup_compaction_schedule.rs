@@ -189,17 +189,15 @@ fn the_shipped_interval_is_measured_in_hours() {
 #[test]
 fn the_desktop_handoff_drives_compaction_after_reconciliation() {
     let source = std::fs::read_to_string(
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("src/desktop/runs_handoff.rs"),
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("crates/ticketry-desktop/src/desktop/runs_handoff.rs"),
     )
     .unwrap();
     assert!(
         source.contains("CompactionSchedule"),
         "the Runs handoff must install the compaction schedule"
     );
-    for gate in [
-        "pub(crate) async fn reopen_gate",
-        "pub(crate) async fn open_gate",
-    ] {
+    for gate in ["pub async fn reopen_gate", "pub async fn open_gate"] {
         let body = source
             .split_once(gate)
             .expect("both gates are still declared")

@@ -221,8 +221,8 @@ pub const AUDITED_MODULES: &[&str] = &[
     "crates/ticketry-launch/src/planning",
     "crates/ticketry-launch/src/paths",
     "crates/ticketry-runs/src/hook_spool",
-    "src/native_terminal.rs",
-    "src/native_terminal",
+    "crates/ticketry-desktop/src/native_terminal.rs",
+    "crates/ticketry-desktop/src/native_terminal",
 ];
 
 #[cfg(test)]

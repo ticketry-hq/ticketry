@@ -13,11 +13,7 @@ use syn::{Attribute, ImplItem, Item, Meta, UseTree};
 /// layout in `studio/docs/crate-split-plan.md` §2. Every module under `src/`
 /// must appear here; a missing one fails [`crate::module_graph`]'s coverage
 /// assertion so new modules get a home deliberately.
-pub const SLICES: &[(&str, &str)] = &[
-    ("desktop", "desktop"),
-    ("native_terminal", "desktop"),
-    ("app_updates", "desktop"),
-];
+pub const SLICES: &[(&str, &str)] = &[];
 
 /// Module references that contradict the target slice DAG.
 ///
@@ -187,17 +183,32 @@ fn references_in(file: &Path, crate_paths_name_slices: bool) -> BTreeSet<String>
 /// home. This list may only shrink; see the crate-split plan §3.3.
 pub const ALLOWED_COMMAND_MODULES_OUTSIDE_DESKTOP: &[&str] = &[];
 
-/// Top-level modules that declare at least one `#[tauri::command]`.
+/// Graph nodes that declare at least one `#[tauri::command]`: top-level
+/// modules still under `src/`, plus every already-extracted crate, named by
+/// its slice. Scanning the crates keeps the guard meaningful now that the
+/// shell itself has been extracted and `src/` holds only the thin binary.
 pub fn modules_declaring_tauri_commands() -> Vec<String> {
     let source_root = source_root();
-    top_level_modules(&source_root)
+    let mut declaring: Vec<String> = top_level_modules(&source_root)
         .into_iter()
         .filter(|module| {
             module_files(&source_root, module).into_iter().any(|file| {
                 std::fs::read_to_string(&file).is_ok_and(|text| text.contains("#[tauri::command]"))
             })
         })
-        .collect()
+        .collect();
+    for (slice, directory) in extracted_crates() {
+        let mut files = Vec::new();
+        collect_rust_files(&directory.join("src"), &mut files);
+        files.retain(|file| !is_test_file(file));
+        if files.iter().any(|file| {
+            std::fs::read_to_string(file).is_ok_and(|text| text.contains("#[tauri::command]"))
+        }) {
+            declaring.push(slice);
+        }
+    }
+    declaring.sort();
+    declaring
 }
 
 fn source_root() -> PathBuf {

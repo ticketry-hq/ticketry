@@ -3,16 +3,16 @@
 //! tmux server.
 
 use crate::common::isolated_tmux::{IsolatedTmux, TmuxEnvironmentOverride, RUN_ID, TMUX_ENV_LOCK};
-use muxed_studio_lib::native_terminal::scroll::{
-    ScrollGestureSink, MAX_NATIVE_SCROLL_LINES, SCROLL_DIRECTION_DOWN, SCROLL_DIRECTION_UP,
-};
-use muxed_studio_lib::native_terminal::worker::{
-    run_native_worker, NativeViewerCommand, NativeWorkerExit,
-};
 use std::io::Read;
 use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
+use ticketry_desktop::native_terminal::scroll::{
+    ScrollGestureSink, MAX_NATIVE_SCROLL_LINES, SCROLL_DIRECTION_DOWN, SCROLL_DIRECTION_UP,
+};
+use ticketry_desktop::native_terminal::worker::{
+    run_native_worker, NativeViewerCommand, NativeWorkerExit,
+};
 use ticketry_terminal::terminal::viewer::attachment::{
     TerminalAttachment, TerminalCommandAttachment,
 };

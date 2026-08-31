@@ -14,6 +14,8 @@ import type {
 } from "../../internal/terminalClient";
 import { TerminalCanvasRenderer } from "./canvasRenderer";
 import { GhosttyKeyEncoder } from "./keyEncoder";
+import { ghosttyMods } from "./keyCodes";
+import { GhosttyMouseEncoder } from "./mouseEncoder";
 import {
   measurePaint,
   recordAttachStart,
@@ -49,6 +51,10 @@ export interface GhosttyWasmSurface {
   detach(): void;
 }
 
+/** `WheelEvent.deltaMode` for line-wise wheels. */
+const WHEEL_DELTA_LINE = 1;
+const MAX_WHEEL_NOTCHES = 10;
+
 const RENDERER = "ghostty-wasm" as const;
 
 export function openGhosttyWasmSurface(
@@ -72,6 +78,7 @@ export function openGhosttyWasmSurface(
   let client: TerminalClient | null = null;
   let core: GhosttyVtTerminal | null = null;
   let encoder: GhosttyKeyEncoder | null = null;
+  let mouse: GhosttyMouseEncoder | null = null;
   let renderer: TerminalCanvasRenderer | null = null;
   let memory: WebAssembly.Memory | null = null;
   let frameHandle: number | null = null;
@@ -124,6 +131,7 @@ export function openGhosttyWasmSurface(
       core.resize(next.cols, next.rows, metrics.width, metrics.height);
       client?.resize(next.cols, next.rows);
     }
+    publishViewport();
     // `resizeTo` cleared the backing store that partial repaint relies on, so
     // the next frame has to redraw everything whether the grid changed or not.
     core.markDirty();
@@ -165,15 +173,68 @@ export function openGhosttyWasmSurface(
     input.value = "";
   }
 
+  function publishViewport(): void {
+    if (!mouse || !renderer) return;
+    const metrics = renderer.metrics;
+    mouse.setViewport({
+      screenWidth: Math.round(geometry.cols * metrics.width),
+      screenHeight: Math.round(geometry.rows * metrics.height),
+      cellWidth: Math.max(1, Math.round(metrics.width)),
+      cellHeight: Math.max(1, Math.round(metrics.height)),
+    });
+  }
+
+  /** One wheel notch per cell of travel, so a gesture moves what it covers. */
+  function wheelNotches(event: WheelEvent): number {
+    const cellHeight = renderer?.metrics.height ?? 1;
+    const lines =
+      event.deltaMode === WHEEL_DELTA_LINE
+        ? Math.abs(event.deltaY)
+        : Math.abs(event.deltaY) / cellHeight;
+    return Math.min(MAX_WHEEL_NOTCHES, Math.max(1, Math.round(lines)));
+  }
+
   /**
-   * Scrolling is forwarded to the durable viewer rather than handled against
-   * this renderer's local scrollback, so all three renderers move the same
-   * tmux history and a renderer switch cannot change where the user is.
+   * A program that asked for mouse reports gets one, so it scrolls its own
+   * viewport the way it would under any other terminal. Only when nothing is
+   * tracking the mouse — a bare shell prompt — does the gesture fall back to
+   * the durable viewer's tmux history, which is what the native and xterm
+   * renderers always do. tmux's own `mouse` option stays off either way, so a
+   * renderer switch leaves no trace on the session.
    */
   function onWheel(event: WheelEvent): void {
     if (!client || event.deltaY === 0) return;
     event.preventDefault();
-    client.scroll(event.deltaY < 0 ? "up" : "down", Math.max(1, Math.round(Math.abs(event.deltaY) / 20)));
+    const direction = event.deltaY < 0 ? "up" : "down";
+    const notches = wheelNotches(event);
+    if (core && mouse && sendMouseReports(event, direction, notches)) return;
+    client.scroll(direction, notches);
+  }
+
+  function sendMouseReports(
+    event: WheelEvent,
+    direction: "up" | "down",
+    notches: number,
+  ): boolean {
+    if (!core || !mouse || !client) return false;
+    const terminal = core.handle;
+    let sent = false;
+    try {
+      if (!mouse.tracking(terminal)) return false;
+      const box = canvas.getBoundingClientRect();
+      const x = event.clientX - box.left;
+      const y = event.clientY - box.top;
+      for (let notch = 0; notch < notches; notch += 1) {
+        const bytes = mouse.encodeWheel(terminal, { direction, x, y, mods: ghosttyMods(event) });
+        if (!bytes) break;
+        client.input(bytes);
+        sent = true;
+      }
+    } catch (error) {
+      fail("renderer_failed", error instanceof Error ? error.message : String(error));
+      return false;
+    }
+    return sent;
   }
 
   host.addEventListener("wheel", onWheel, { passive: false });
@@ -211,6 +272,8 @@ export function openGhosttyWasmSurface(
       const metrics = renderer.metrics;
       core.resize(geometry.cols, geometry.rows, metrics.width, metrics.height);
       encoder = new GhosttyKeyEncoder(runtime);
+      mouse = new GhosttyMouseEncoder(runtime);
+      publishViewport();
       client = options.transport.attach(
         { agentRunId, cols: geometry.cols, rows: geometry.rows },
         handleTransportEvent,
@@ -240,6 +303,7 @@ export function openGhosttyWasmSurface(
       /* The viewer may already be gone; teardown continues regardless. */
     }
     encoder?.dispose();
+    mouse?.dispose();
     core?.dispose();
     canvas.remove();
     input.remove();

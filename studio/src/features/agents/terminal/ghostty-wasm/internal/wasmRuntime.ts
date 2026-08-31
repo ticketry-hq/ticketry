@@ -127,6 +127,26 @@ export interface GhosttyVtExports {
     outBufSize: number,
     outLen: number,
   ): number;
+  ghostty_mouse_encoder_new(allocator: number, out: number): number;
+  ghostty_mouse_encoder_free(encoder: number): void;
+  ghostty_mouse_encoder_setopt(encoder: number, option: number, value: number): void;
+  ghostty_mouse_encoder_setopt_from_terminal(encoder: number, terminal: number): void;
+  ghostty_mouse_encoder_encode(
+    encoder: number,
+    event: number,
+    outBuf: number,
+    outBufSize: number,
+    outLen: number,
+  ): number;
+
+  ghostty_mouse_event_new(allocator: number, out: number): number;
+  ghostty_mouse_event_free(event: number): void;
+  ghostty_mouse_event_set_action(event: number, action: number): void;
+  ghostty_mouse_event_set_button(event: number, button: number): void;
+  ghostty_mouse_event_set_mods(event: number, mods: number): void;
+  /** `GhosttyMousePosition` is passed indirectly on wasm32. */
+  ghostty_mouse_event_set_position(event: number, position: number): void;
+
   ghostty_key_event_new(allocator: number, out: number): number;
   ghostty_key_event_free(event: number): void;
   ghostty_key_event_set_action(event: number, action: number): void;

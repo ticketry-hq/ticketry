@@ -11,6 +11,7 @@ import { resolve } from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
 
 import { GhosttyKeyEncoder } from "./keyEncoder";
+import { GhosttyMouseEncoder } from "./mouseEncoder";
 import { GhosttyVtTerminal } from "./terminalCore";
 import { buildRuntime, type GhosttyVtExports, type GhosttyVtRuntime } from "./wasmRuntime";
 
@@ -185,6 +186,70 @@ describe.skipIf(!prepared)("libghostty-vt artifact contract", () => {
       expect(encode({ code: "ShiftLeft", key: "Shift", shiftKey: true })).toBeNull();
     } finally {
       keys.dispose();
+      terminal.dispose();
+    }
+  });
+
+  it("reports no mouse tracking until a program turns it on", () => {
+    const terminal = new GhosttyVtTerminal(runtime, { cols: 20, rows: 6 });
+    const mouse = new GhosttyMouseEncoder(runtime);
+    try {
+      expect(mouse.tracking(terminal.handle)).toBe(false);
+      // DECSET 1000 is the normal tracking mode every full-screen program
+      // enables; 1006 asks for the SGR report format.
+      terminal.write(encoder.encode("\u001b[?1000h\u001b[?1006h"));
+      expect(mouse.tracking(terminal.handle)).toBe(true);
+      terminal.write(encoder.encode("\u001b[?1000l"));
+      expect(mouse.tracking(terminal.handle)).toBe(false);
+    } finally {
+      mouse.dispose();
+      terminal.dispose();
+    }
+  });
+
+  it("encodes a wheel notch as the SGR report the program expects", () => {
+    const terminal = new GhosttyVtTerminal(runtime, { cols: 20, rows: 6 });
+    const mouse = new GhosttyMouseEncoder(runtime);
+    try {
+      terminal.write(encoder.encode("\u001b[?1000h\u001b[?1006h"));
+      mouse.setViewport({
+        screenWidth: 200,
+        screenHeight: 120,
+        cellWidth: 10,
+        cellHeight: 20,
+      });
+      const up = mouse.encodeWheel(terminal.handle, {
+        direction: "up",
+        x: 25,
+        y: 45,
+        mods: 0,
+      });
+      // Button 64 is wheel-up in SGR; the cell is 1-based, so pixel 25/45
+      // with a 10x20 cell is column 3, row 3.
+      expect(up && decoder.decode(up)).toBe("\u001b[<64;3;3M");
+      const down = mouse.encodeWheel(terminal.handle, {
+        direction: "down",
+        x: 25,
+        y: 45,
+        mods: 0,
+      });
+      expect(down && decoder.decode(down)).toBe("\u001b[<65;3;3M");
+    } finally {
+      mouse.dispose();
+      terminal.dispose();
+    }
+  });
+
+  it("encodes nothing when no program is tracking the mouse", () => {
+    const terminal = new GhosttyVtTerminal(runtime, { cols: 20, rows: 6 });
+    const mouse = new GhosttyMouseEncoder(runtime);
+    try {
+      mouse.setViewport({ screenWidth: 200, screenHeight: 120, cellWidth: 10, cellHeight: 20 });
+      expect(
+        mouse.encodeWheel(terminal.handle, { direction: "up", x: 25, y: 45, mods: 0 }),
+      ).toBeNull();
+    } finally {
+      mouse.dispose();
       terminal.dispose();
     }
   });

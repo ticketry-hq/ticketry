@@ -81,8 +81,9 @@ skips when the artifact has not been prepared.
   been wired or verified against WKWebView's JavaScriptCore. Until it is, those
   queries go unanswered and a program that waits on one will stall. Resolving
   or ruling this out is a prerequisite for any promotion decision.
-- **Mouse reporting, OSC 8 hyperlinks, selection and Kitty graphics** are
-  present in the C ABI but not wired to the canvas yet.
+- **OSC 8 hyperlinks, selection and Kitty graphics** are present in the C ABI
+  but not wired to the canvas yet. Mouse *wheel* reporting is wired; mouse
+  buttons and motion are not.
 - **Font handling is the browser's.** Nerd Font and Powerline coverage depends
   on what the WebView has, not on Ghostty's font stack.
 
@@ -104,6 +105,21 @@ Below the transport there is nothing simulated: the wasm runtime, frame reader,
 Canvas painter and key encoder are the shipped modules, and the ABI contract
 test in `internal/ghosttyVtContract.test.ts` exercises them against the real
 artifact.
+
+## Scrolling
+
+A wheel gesture is encoded by `ghostty_mouse_encoder_*` and sent as ordinary
+input whenever the running program has mouse reporting on, so the program
+scrolls its own viewport exactly as it would under any other terminal. Only
+when nothing is tracking the mouse — a bare shell prompt, or a program like
+codex that draws inline — does the gesture fall back to the durable viewer's
+`tmux copy-mode` scroll, which is what the native and xterm renderers always
+do.
+
+tmux's own `mouse` option stays off in both cases, so a renderer switch leaves
+no trace on the session. Verified against a live session: with a program
+holding DECSET 1000/1006, four wheel notches arrived as
+`ESC[<64;38;7M` and tmux reported `pane_in_mode=0`.
 
 ## Reporting
 

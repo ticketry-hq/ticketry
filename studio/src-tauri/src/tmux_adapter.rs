@@ -380,23 +380,94 @@ pub(crate) enum ScrollDirection {
 }
 
 pub(crate) fn approved_tool_path(tool: SupportedTool) -> Result<PathBuf, TmuxAdapterError> {
-    let item = preflight_report()
+    let started = std::time::Instant::now();
+    let report = preflight_report();
+    let discovery = launch_trace_discovery_facts(tool, started.elapsed().as_millis());
+    let item = report
         .tools
         .into_iter()
         .find(|item| item.tool == tool)
-        .ok_or_else(|| TmuxAdapterError::Unavailable("tool discovery returned no result".into()))?;
+        .ok_or_else(|| TmuxAdapterError::Unavailable("tool discovery returned no result".into()));
+    let item = match item {
+        Ok(item) => item,
+        Err(error) => {
+            discovery.record(Some("no_discovery_result"), None, None);
+            return Err(error);
+        }
+    };
     if item.health != ToolHealth::Ready {
+        discovery.record(
+            Some("executable_not_ready"),
+            item.path.as_deref(),
+            item.version.as_deref(),
+        );
         return Err(TmuxAdapterError::Unavailable(
             item.guidance
                 .unwrap_or_else(|| "approved executable was not found".into()),
         ));
     }
-    item.path
+    match item
+        .path
+        .clone()
         .map(PathBuf::from)
         .filter(|path| path.is_absolute())
-        .ok_or_else(|| {
-            TmuxAdapterError::Unavailable("approved executable has no absolute path".into())
-        })
+    {
+        Some(path) => {
+            discovery.record(None, item.path.as_deref(), item.version.as_deref());
+            Ok(path)
+        }
+        None => {
+            discovery.record(
+                Some("executable_path_not_absolute"),
+                item.path.as_deref(),
+                item.version.as_deref(),
+            );
+            Err(TmuxAdapterError::Unavailable(
+                "approved executable has no absolute path".into(),
+            ))
+        }
+    }
+}
+
+/// What discovery consulted, so a stale operator approval or a slow version
+/// probe is visible as recorded fact rather than as an absent record.
+struct DiscoveryFacts {
+    tool_name: &'static str,
+    roots_walked: usize,
+    operator_approved_path: Option<String>,
+    duration_ms: u128,
+}
+
+fn launch_trace_discovery_facts(tool: SupportedTool, duration_ms: u128) -> DiscoveryFacts {
+    let consulted = ticketry_tool_discovery::consulted_discovery(tool);
+    DiscoveryFacts {
+        tool_name: tool.executable_name(),
+        roots_walked: consulted.trusted_root_count,
+        operator_approved_path: consulted
+            .operator_approved_path
+            .map(|path| path.to_string_lossy().into_owned()),
+        duration_ms,
+    }
+}
+
+impl DiscoveryFacts {
+    fn record(self, refusal: Option<&'static str>, path: Option<&str>, version: Option<&str>) {
+        ticketry_diagnostics::launch_trace::stage(
+            ticketry_diagnostics::launch_trace::stages::EXECUTABLE_RESOLVED,
+            refusal,
+        )
+        .with("executableName", self.tool_name)
+        .with("rootsWalked", self.roots_walked)
+        .with(
+            "operatorApprovalConsulted",
+            self.operator_approved_path.is_some(),
+        )
+        .with_optional("operatorApprovedPath", self.operator_approved_path.clone())
+        .with("discoveryDurationMs", self.duration_ms as u64)
+        .with_optional("candidatePath", path.map(str::to_owned))
+        .with_optional("candidateVersion", version.map(str::to_owned))
+        .record();
+    }
 }
 
 fn shell_quote(value: &str) -> String {

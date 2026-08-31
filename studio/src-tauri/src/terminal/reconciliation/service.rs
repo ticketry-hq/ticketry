@@ -11,7 +11,9 @@ use crate::terminal::cleanup::{
 };
 use crate::terminal::launch::{TerminalLaunchRuntime, TerminalLaunchService};
 use ticketry_entities::{runs::agent_run, terminals::session};
-use ticketry_runs::persistence::{NewStatusEvent, RunsServices, TerminalFact, TerminalOutcome};
+use ticketry_runs::persistence::{
+    EndOfLifeOrigin, NewStatusEvent, RunsServices, TerminalFact, TerminalOutcome,
+};
 
 use super::batch::{recorded_session_batch, RecordedSessionCursors};
 use super::{
@@ -80,6 +82,7 @@ impl TerminalReconciliationService {
             });
         }
         let inventory = self.reconcile_inventory().await?;
+        record_sweep(&sessions);
         Ok(TerminalReconciliationReport {
             launches,
             cleanups,
@@ -190,6 +193,9 @@ impl TerminalReconciliationService {
                     occurred_at: occurred_at.clone(),
                     exit_code,
                 },
+                // Reconciliation is the liveness sweep: it ends runs whose
+                // runtime is gone, and nobody asked it to.
+                EndOfLifeOrigin::RuntimeLivenessSweep,
                 move || {
                     checkpoint(
                         &run_checkpoint,
@@ -320,4 +326,67 @@ fn checkpoint(
             error.to_string(),
         )
     })
+}
+
+/// One record for the sweep itself, so a batch of runs ending at one instant
+/// is legible as one event rather than as many independent deaths.
+///
+/// The sweep is recorded whenever it ended anything. A sweep that ended
+/// nothing is not an event worth a record.
+fn record_sweep(sessions: &[ReconciledSession]) {
+    let ended = sessions
+        .iter()
+        .filter(|session| {
+            matches!(
+                session.decision,
+                RecordedSessionDecision::Exited | RecordedSessionDecision::Lost
+            )
+        })
+        .count();
+    if ended == 0 {
+        return;
+    }
+    ticketry_runs::persistence::record_sweep_ended("runtime_liveness_reconciliation", ended);
+}
+
+#[cfg(test)]
+mod sweep_tests {
+    use super::*;
+
+    fn session(decision: RecordedSessionDecision) -> ReconciledSession {
+        ReconciledSession {
+            agent_run_id: "run".to_owned(),
+            decision,
+        }
+    }
+
+    #[test]
+    fn only_the_runs_the_sweep_ended_are_counted_as_ended_by_it() {
+        let sessions = [
+            session(RecordedSessionDecision::Exited),
+            session(RecordedSessionDecision::Lost),
+            session(RecordedSessionDecision::Running),
+            session(RecordedSessionDecision::Recovered),
+            session(RecordedSessionDecision::Unavailable),
+            session(RecordedSessionDecision::Conflict),
+            session(RecordedSessionDecision::Unchanged),
+        ];
+
+        let ended = sessions
+            .iter()
+            .filter(|session| {
+                matches!(
+                    session.decision,
+                    RecordedSessionDecision::Exited | RecordedSessionDecision::Lost
+                )
+            })
+            .count();
+
+        assert_eq!(ended, 2, "a sweep ends only the runs it found dead");
+    }
+
+    #[test]
+    fn a_sweep_that_ended_nothing_records_nothing() {
+        record_sweep(&[session(RecordedSessionDecision::Running)]);
+    }
 }

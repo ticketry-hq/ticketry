@@ -10,13 +10,13 @@ use crate::execution::graph::{
     automatic_candidates, manual_candidates, scheduling_facts, ChildSchedulingFacts, ExecutionMode,
     GraphAccess,
 };
-use crate::runs_persistence::{
-    LaunchIntent, LaunchPreparationParticipant, RunsPersistenceError, RunsPersistenceErrorCode,
-};
 use ticketry_entities::{
     execution::{graph_run, launch_claim},
     runs::{agent_run, launch_effect},
     terminals::session,
+};
+use ticketry_runs::persistence::{
+    LaunchIntent, LaunchPreparationParticipant, RunsPersistenceError, RunsPersistenceErrorCode,
 };
 
 pub(super) struct CampaignClaim<'a> {

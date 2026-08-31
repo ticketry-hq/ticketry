@@ -3,12 +3,14 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use super::provider::{provider_contract, validate_options};
-use crate::launch::trace;
+use ticketry_diagnostics::launch_trace as trace;
+
 use super::types::LAUNCH_MATERIAL_VERSION;
 use super::{
     DurableLaunchMaterial, LaunchKind, LaunchPlanningError, LaunchPlanningErrorCode,
     MaterializedLaunch, Provider, RuntimeSettings,
 };
+use crate::launch::trace_reasons;
 
 /// Values supplied only by trusted desktop services immediately before tmux
 /// creation. This value is intentionally not serializable or deserializable.
@@ -68,7 +70,7 @@ pub fn materialize(
         } else {
             trace::stages::ARGV_MATERIALISED
         };
-        trace::refused(stage, trace::planning_reason(error.code)).record();
+        trace::refused(stage, trace_reasons::planning_reason(error.code)).record();
     } else if let Ok(launch) = &outcome {
         trace::admitted(trace::stages::ARGV_MATERIALISED)
             .with("argumentCount", launch.argv.len())

@@ -96,6 +96,7 @@ impl TerminalCleanupService {
         request_id: &str,
     ) -> Result<session::Model, TerminalCleanupError> {
         self.authenticated_terminal(principal).await?;
+        record_agent_self_termination(&principal.agent_run_id);
         self.cleanup(&principal.agent_run_id, CleanupCause::Explicit, request_id)
             .await
     }
@@ -111,6 +112,7 @@ impl TerminalCleanupService {
         if terminal.terminated_at.is_some() && !terminal.runtime_cleanup_pending {
             return Ok(terminal);
         }
+        record_agent_self_termination(&principal.agent_run_id);
         let identity = CleanupEffectIdentity::predetermined(
             &principal.agent_run_id,
             CleanupCause::Explicit,
@@ -334,4 +336,18 @@ fn kill_name(value: CleanupKillResult) -> &'static str {
         CleanupKillResult::AlreadyMissing => "already_missing",
         _ => "unconfirmed",
     }
+}
+
+/// The agent asked to end its own run.
+///
+/// The cleanup that follows cannot tell an agent's request from a person's, so
+/// the surface that can records it here, when it is asked.
+fn record_agent_self_termination(agent_run_id: &str) {
+    ticketry_runs::persistence::record_run_ended(
+        agent_run_id,
+        None,
+        ticketry_runs::persistence::EndOfLifeOrigin::AgentSelfTermination,
+        "termination_requested",
+        None,
+    );
 }

@@ -3,7 +3,7 @@ use std::sync::Arc;
 use sea_orm::{DatabaseConnection, EntityTrait};
 
 use crate::launch::authority::InteractiveLaunchAuthority;
-use crate::launch::trace;
+use ticketry_diagnostics::launch_trace as trace;
 use ticketry_entities::{terminals::session, work_management::issue};
 use ticketry_runs::persistence::LaunchPreparationParticipant;
 use ticketry_runs::persistence::RunsServices;

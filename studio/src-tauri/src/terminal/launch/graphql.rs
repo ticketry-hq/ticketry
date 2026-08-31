@@ -70,19 +70,19 @@ impl TerminalSessionMutations {
                     "Shell creation accepts only request identity, module identity, and geometry.",
                 ));
             }
-            return crate::launch::trace::requested_by(
-                crate::launch::trace::LaunchSurface::LaunchPicker,
+            return ticketry_diagnostics::launch_trace::requested_by(
+                ticketry_diagnostics::launch_trace::LaunchSurface::LaunchPicker,
                 service.create_module_shell(client_request_id, module_id, columns, rows),
             )
             .await
             .map_err(graphql_error);
         }
         let surface = if resume_from_agent_run_id.is_some() {
-            crate::launch::trace::LaunchSurface::Resume
+            ticketry_diagnostics::launch_trace::LaunchSurface::Resume
         } else {
-            crate::launch::trace::LaunchSurface::LaunchPicker
+            ticketry_diagnostics::launch_trace::LaunchSurface::LaunchPicker
         };
-        crate::launch::trace::requested_by(
+        ticketry_diagnostics::launch_trace::requested_by(
             surface,
             service.create(CreateTerminalSession {
                 client_request_id,

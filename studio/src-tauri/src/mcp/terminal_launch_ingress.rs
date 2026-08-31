@@ -74,8 +74,8 @@ pub(super) async fn launch(
             )
         }
     };
-    match crate::launch::trace::requested_by(
-        crate::launch::trace::LaunchSurface::McpLaunchIngress,
+    match ticketry_diagnostics::launch_trace::requested_by(
+        ticketry_diagnostics::launch_trace::LaunchSurface::McpLaunchIngress,
         state.service.create(CreateTerminalSession {
             client_request_id: body.client_request_id,
             project_id: body.project_id,

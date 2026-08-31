@@ -30,15 +30,15 @@ impl LaunchPolicyResolver {
         let task_id = request.task_id.clone();
         let outcome = self.resolve_inner(request).await;
         if let Err(error) = &outcome {
-            crate::launch::trace::requested_by(scope.into(), async {
-                if let Some(attempt) = crate::launch::trace::current() {
+            ticketry_diagnostics::launch_trace::requested_by(scope.into(), async {
+                if let Some(attempt) = ticketry_diagnostics::launch_trace::current() {
                     attempt.note(|facts| {
                         facts.work_item_id = Some(task_id);
                         facts.scope = Some(scope.as_str().to_owned());
                     });
                 }
-                crate::launch::trace::refused(
-                    crate::launch::trace::stages::POLICY_EVALUATED,
+                ticketry_diagnostics::launch_trace::refused(
+                    ticketry_diagnostics::launch_trace::stages::POLICY_EVALUATED,
                     error.code(),
                 )
                 .record();

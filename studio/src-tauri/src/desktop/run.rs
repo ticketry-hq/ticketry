@@ -6,14 +6,12 @@ use tauri::Manager;
 
 use crate::desktop::commands;
 use crate::desktop::crash_reports::CrashReportsRuntime;
-use crate::desktop::data_directory::{
-    data_directory_ownership_for_startup, release_data_directory_ownership,
-};
+use crate::desktop::data_directory::data_directory_ownership_for_startup;
 use crate::desktop::document_protocol;
 use crate::desktop::environment::{automated_startup_exit_requested, development_log_path};
 use crate::desktop::launch_runtime::DesktopLaunchRuntime;
 use crate::desktop::lifecycle::{
-    detach_transient_viewers, lifecycle_action, shutdown_rust_runtime, DesktopLifecycleAction,
+    detach_transient_viewers, lifecycle_action, tear_down_before_exit, DesktopLifecycleAction,
     DesktopLifecycleEvent, MAIN_WINDOW_LABEL,
 };
 use crate::desktop::service_state::DesktopServiceState;
@@ -67,6 +65,8 @@ pub fn run(file_logging_requested: bool) {
                 commands::desktop_preflight_report,
                 commands::desktop_approve_executable_path,
                 app_updates::desktop_update_check,
+                app_updates::install::desktop_update_download_and_install,
+                app_updates::install::desktop_update_restart,
                 crate::desktop::crash_reports::desktop_latest_crash_collection_outcome,
                 crate::desktop::crash_reports::desktop_reveal_crash_report_folder,
                 commands::terminal_viewer::viewer_attach,
@@ -100,9 +100,14 @@ pub fn run(file_logging_requested: bool) {
             }
             if webview.label() == MAIN_WINDOW_LABEL
                 && payload.event() == tauri::webview::PageLoadEvent::Finished
-                && automated_startup_exit_requested()
             {
-                webview.app_handle().exit(0);
+                if automated_startup_exit_requested() {
+                    webview.app_handle().exit(0);
+                } else {
+                    // Release acceptance drives the real update path from here;
+                    // an ordinary launch configures no run and returns at once.
+                    app_updates::acceptance::run_if_requested(webview.app_handle());
+                }
             }
         })
         .build(tauri::generate_context!())
@@ -131,17 +136,7 @@ pub fn run(file_logging_requested: bool) {
                 Some(DesktopLifecycleEvent::MainWindowCloseRequested)
             }
             tauri::RunEvent::Exit => {
-                shutdown_rust_runtime(application);
-                detach_transient_viewers(application);
-                let ownership = application
-                    .state::<crate::desktop::data_directory::DesktopDataDirectoryOwnership>(
-                );
-                if let Err(error) =
-                    ticketry_diagnostics::clean_session_marker(&ownership.data_directory)
-                {
-                    eprintln!("Ticketry could not remove its Session Marker: {error}");
-                }
-                release_data_directory_ownership(application);
+                tear_down_before_exit(application);
                 Some(DesktopLifecycleEvent::ApplicationShutdown)
             }
             _ => None,

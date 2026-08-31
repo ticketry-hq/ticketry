@@ -4,7 +4,9 @@
 use std::sync::atomic::Ordering;
 use tauri::Manager;
 
-use crate::desktop::data_directory::DesktopDataDirectoryOwnership;
+use crate::desktop::data_directory::{
+    release_data_directory_ownership, DesktopDataDirectoryOwnership,
+};
 use crate::desktop::service_state::DesktopServiceState;
 use crate::native_terminal;
 use crate::terminal::viewer::webview_commands;
@@ -46,6 +48,22 @@ pub(crate) fn detach_transient_viewers(application: &tauri::AppHandle) {
     application
         .state::<native_terminal::NativeTerminalState>()
         .detach_all();
+}
+
+/// The teardown every exit path performs, whether the user closed the window
+/// or an installed update is about to relaunch the process.
+///
+/// Restarting into an update runs this first so the new process finds a
+/// released data-directory lock, a clean Session Marker, and no stranded
+/// sidecar or terminal processes from the version it replaced.
+pub(crate) fn tear_down_before_exit(application: &tauri::AppHandle) {
+    shutdown_rust_runtime(application);
+    detach_transient_viewers(application);
+    let ownership = application.state::<DesktopDataDirectoryOwnership>();
+    if let Err(error) = ticketry_diagnostics::clean_session_marker(&ownership.data_directory) {
+        eprintln!("Ticketry could not remove its Session Marker: {error}");
+    }
+    release_data_directory_ownership(application);
 }
 
 pub(crate) fn shutdown_rust_runtime(application: &tauri::AppHandle) {

@@ -109,10 +109,16 @@ pub fn report_for_launch_attempt(
 
 /// The commit stage carries both identities; that pairing joins the two halves.
 fn join_identities(records: &[LaunchTraceRecord]) -> HashMap<String, String> {
-    let mut attempt_of_run = HashMap::new();
+    let mut attempt_of_run: HashMap<String, String> = HashMap::new();
     for record in records {
         if let (Some(attempt), Some(run)) = (&record.launch_attempt_id, &record.agent_run_id) {
-            attempt_of_run.insert(run.clone(), attempt.clone());
+            // The first attempt to claim a run keeps it. An Agent Run belongs
+            // to one launch, so a second claim is corruption in the records
+            // rather than a correction, and must not move the first launch's
+            // stages onto another report.
+            attempt_of_run
+                .entry(run.clone())
+                .or_insert_with(|| attempt.clone());
         }
     }
     attempt_of_run
@@ -199,23 +205,50 @@ fn verdict_for(stages: &[ReportedStage]) -> TraceVerdict {
     }
 }
 
+/// Reads how a run ended.
+///
+/// The earliest attributed record wins: the first thing that ended the run is
+/// what ended it, and the records that follow describe the shutdown it caused.
+/// An unattributed record never displaces an attributed one, and process detail
+/// is taken from whichever record observed it.
 fn end_of_life_for(records: &[&LaunchTraceRecord]) -> Option<ReportedEnd> {
-    let record = records
+    let ends: Vec<&LaunchTraceRecord> = records
         .iter()
         .copied()
         .filter(|record| record.event == RUN_ENDED_STAGE || record.event == SWEEP_STAGE)
-        .max_by_key(|record| record.timestamp)?;
+        .collect();
+    let attributed = |record: &&LaunchTraceRecord| {
+        record
+            .end_of_life_origin
+            .as_deref()
+            .is_some_and(|origin| origin != UNATTRIBUTED)
+    };
+    let chosen = ends
+        .iter()
+        .copied()
+        .filter(attributed)
+        .min_by_key(|record| record.timestamp)
+        .or_else(|| ends.iter().copied().max_by_key(|record| record.timestamp))?;
     Some(ReportedEnd {
-        origin: record
+        origin: chosen
             .end_of_life_origin
             .clone()
-            .unwrap_or_else(|| "unattributed".to_owned()),
-        timestamp: record.timestamp,
-        exit_code: record.exit_code,
-        terminating_signal: record.terminating_signal.clone(),
-        swept_run_count: record.swept_run_count,
+            .unwrap_or_else(|| UNATTRIBUTED.to_owned()),
+        timestamp: chosen.timestamp,
+        exit_code: chosen
+            .exit_code
+            .or_else(|| ends.iter().find_map(|record| record.exit_code)),
+        terminating_signal: chosen.terminating_signal.clone().or_else(|| {
+            ends.iter()
+                .find_map(|record| record.terminating_signal.clone())
+        }),
+        swept_run_count: chosen
+            .swept_run_count
+            .or_else(|| ends.iter().find_map(|record| record.swept_run_count)),
     })
 }
+
+const UNATTRIBUTED: &str = "unattributed";
 
 fn first_present(
     records: &[&LaunchTraceRecord],

@@ -3,6 +3,7 @@ mod catalog;
 mod compatibility;
 mod context;
 mod decisions;
+mod launch_surface;
 mod rejections;
 mod resolver;
 mod retry;

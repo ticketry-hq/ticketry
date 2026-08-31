@@ -282,21 +282,32 @@ impl GraphRunService {
                 },
             )
             .await?;
-            let accepted = self
-                .terminal_launch
-                .prepare_with_participant(
-                    terminal_request(&decision, &identity, &child_id, &module_id, prompt),
-                    &claim,
-                )
-                .await?;
-            launched.push(LaunchedChild {
-                task_id: child_id,
-                agent_run_id: accepted.agent_run_id.clone(),
-                provider: decision.provider.clone(),
-            });
-            // Runtime settlement is status-driven. Once preparation commits,
-            // a terminal error must not erase this request's accepted child.
-            let _ = self.terminal_launch.execute_accepted(accepted).await;
+            // One child is one launch attempt, and the whole attempt — its
+            // preparation and its runtime — is traced under that identity.
+            let accepted = ticketry_diagnostics::launch_trace::requested_by(
+                ticketry_diagnostics::launch_trace::LaunchSurface::DependencyGraph,
+                async {
+                    let accepted = self
+                        .terminal_launch
+                        .prepare_with_participant(
+                            terminal_request(&decision, &identity, &child_id, &module_id, prompt),
+                            &claim,
+                        )
+                        .await?;
+                    // Runtime settlement is status-driven. Once preparation
+                    // commits, a terminal error must not erase this request's
+                    // accepted child.
+                    let launched = LaunchedChild {
+                        task_id: child_id.clone(),
+                        agent_run_id: accepted.agent_run_id.clone(),
+                        provider: decision.provider.clone(),
+                    };
+                    let _ = self.terminal_launch.execute_accepted(accepted).await;
+                    Ok::<LaunchedChild, GraphRunServiceError>(launched)
+                },
+            )
+            .await?;
+            launched.push(accepted);
         }
 
         let graph_run = graph_run::Entity::find_by_id(&root_id)
@@ -389,25 +400,33 @@ impl GraphRunService {
                 },
             )
             .await?;
-            let accepted = self
-                .terminal_launch
-                .prepare_with_participant(
-                    stored_terminal_request(
-                        &policy,
-                        &identity,
-                        &child_id,
-                        &graph.project_id,
-                        prompt,
-                    ),
-                    &claim,
-                )
-                .await?;
-            launched.push(LaunchedChild {
-                task_id: child_id,
-                agent_run_id: accepted.agent_run_id.clone(),
-                provider: policy.agent.clone(),
-            });
-            let _ = self.terminal_launch.execute_accepted(accepted).await;
+            let launched_child = ticketry_diagnostics::launch_trace::requested_by(
+                ticketry_diagnostics::launch_trace::LaunchSurface::DependencyGraph,
+                async {
+                    let accepted = self
+                        .terminal_launch
+                        .prepare_with_participant(
+                            stored_terminal_request(
+                                &policy,
+                                &identity,
+                                &child_id,
+                                &graph.project_id,
+                                prompt,
+                            ),
+                            &claim,
+                        )
+                        .await?;
+                    let launched = LaunchedChild {
+                        task_id: child_id.clone(),
+                        agent_run_id: accepted.agent_run_id.clone(),
+                        provider: policy.agent.clone(),
+                    };
+                    let _ = self.terminal_launch.execute_accepted(accepted).await;
+                    Ok::<LaunchedChild, GraphRunServiceError>(launched)
+                },
+            )
+            .await?;
+            launched.push(launched_child);
         }
         Ok(GraphRunAdvanceResult {
             root_id,

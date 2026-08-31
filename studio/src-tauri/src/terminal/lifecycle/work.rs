@@ -20,6 +20,7 @@ use crate::tmux_adapter::{
     RuntimeObservation, TerminalGeometry, TmuxAdapter,
 };
 use crate::viewer_ownership::ViewerOwnershipService;
+use ticketry_diagnostics::launch_trace as trace;
 use ticketry_runs::hook_spool::{DrainReport, HookSpool};
 use ticketry_runs::persistence::LifecycleService;
 
@@ -296,16 +297,30 @@ impl TerminalLaunchRuntime for InteractiveTerminalLaunchRuntime {
                     "Stored shell launch material contains agent metadata.",
                 ));
             }
-            let working_directory = authority
+            let working_directory = match authority
                 .paths
                 .preflight_module_folder(&material.module_id)
                 .await
-                .map_err(|refusal| {
-                    TerminalLaunchError::new(
+            {
+                Ok(directory) => {
+                    trace::admitted(trace::stages::DIRECTORY_PREFLIGHTED)
+                        .with("launchForm", "shell")
+                        .record();
+                    directory
+                }
+                Err(refusal) => {
+                    trace::refused(
+                        trace::stages::DIRECTORY_PREFLIGHTED,
+                        "module_folder_unusable",
+                    )
+                    .with("launchForm", "shell")
+                    .record();
+                    return Err(TerminalLaunchError::new(
                         TerminalLaunchErrorCode::UnusableFolder,
                         refusal.message(),
-                    )
-                })?;
+                    ));
+                }
+            };
             let command =
                 crate::terminal::launch::login_shell::approved_login_shell(working_directory)?;
             return create_tmux_runtime(material, checkpoint, command).await;
@@ -340,13 +355,25 @@ impl TerminalLaunchRuntime for InteractiveTerminalLaunchRuntime {
             .working_directory
             .map(PathBuf::from)
             .ok_or_else(|| invalid_launch("No local folder is configured for this launch."))?;
-        authority
+        if let Err(refusal) = authority
             .paths
             .preflight_module_folder(&material.module_id)
             .await
-            .map_err(|refusal| {
-                TerminalLaunchError::new(TerminalLaunchErrorCode::UnusableFolder, refusal.message())
-            })?;
+        {
+            trace::refused(
+                trace::stages::DIRECTORY_PREFLIGHTED,
+                "module_folder_unusable",
+            )
+            .with("launchForm", "agent")
+            .record();
+            return Err(TerminalLaunchError::new(
+                TerminalLaunchErrorCode::UnusableFolder,
+                refusal.message(),
+            ));
+        }
+        trace::admitted(trace::stages::DIRECTORY_PREFLIGHTED)
+            .with("launchForm", "agent")
+            .record();
         let resume = if let Some(source_id) = material.resume_from_agent_run_id.as_deref() {
             let source = ticketry_entities::runs::agent_run::Entity::find_by_id(source_id)
                 .one(&authority.database)
@@ -437,7 +464,9 @@ impl TerminalLaunchRuntime for InteractiveTerminalLaunchRuntime {
             launch.environment,
         )
         .map_err(|_| invalid_launch("The provider command is unavailable."))?;
-        create_tmux_runtime(material, checkpoint, command).await
+        let spawned = create_tmux_runtime(material, checkpoint, command).await;
+        record_prompt_delivery(material.prompt.as_deref(), &spawned);
+        spawned
     }
 }
 
@@ -491,6 +520,20 @@ async fn create_tmux_runtime(
     checkpoint: &dyn TerminalLaunchCheckpoint,
     command: ApprovedArgv,
 ) -> Result<(), TerminalLaunchError> {
+    let outcome = spawn_tmux_runtime(material, checkpoint, command).await;
+    if let Err(error) = &outcome {
+        trace::refused(trace::stages::RUNTIME_SPAWNED, error.code_str()).record();
+    }
+    outcome
+}
+
+/// A runtime that never came up must be separable from a provider that never
+/// started, so the spawn is recorded as its own stage.
+async fn spawn_tmux_runtime(
+    material: &ticketry_entities::terminals::launch_material::Model,
+    checkpoint: &dyn TerminalLaunchCheckpoint,
+    command: ApprovedArgv,
+) -> Result<(), TerminalLaunchError> {
     let adapter = TmuxAdapter::discover().map_err(|_| {
         TerminalLaunchError::new(
             TerminalLaunchErrorCode::RuntimeUnavailable,
@@ -519,12 +562,43 @@ async fn create_tmux_runtime(
                 format!("The terminal runtime could not be created: {error}"),
             )
         })? {
-        CreateOutcome::Created | CreateOutcome::Existing(RuntimeObservation::Running) => {}
+        CreateOutcome::Created => {
+            trace::admitted(trace::stages::RUNTIME_SPAWNED)
+                .with("runtimeOutcome", "created")
+                .record();
+        }
+        CreateOutcome::Existing(RuntimeObservation::Running) => {
+            trace::admitted(trace::stages::RUNTIME_SPAWNED)
+                .with("runtimeOutcome", "existing_running")
+                .record();
+        }
         _ => return Err(invalid_launch("The terminal runtime identity conflicts.")),
     }
     checkpoint
         .checkpoint(crate::terminal::launch::TerminalLaunchBoundary::TmuxCreated)
         .await
+}
+
+/// Records whether the constructed prompt reached the agent.
+///
+/// A prompt travels as the last argument of the provider command, so it is
+/// delivered exactly when the runtime carrying that command comes up. A run
+/// whose terminal opened but whose agent never received a prompt is the case
+/// this stage exists to name.
+fn record_prompt_delivery(prompt: Option<&str>, spawned: &Result<(), TerminalLaunchError>) {
+    let carried = prompt.is_some_and(|prompt| !prompt.trim().is_empty());
+    match spawned {
+        Ok(()) => trace::admitted(trace::stages::PROMPT_DELIVERED)
+            .with("promptCarrier", "argv")
+            .with("promptCarried", carried)
+            .with("promptCharacters", prompt.map_or(0, str::len))
+            .record(),
+        Err(error) => trace::refused(trace::stages::PROMPT_DELIVERED, "runtime_never_spawned")
+            .with("promptCarrier", "argv")
+            .with("promptCarried", carried)
+            .with("runtimeRefusal", error.code_str())
+            .record(),
+    }
 }
 
 fn invalid_launch(message: &'static str) -> TerminalLaunchError {

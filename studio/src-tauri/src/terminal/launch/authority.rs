@@ -6,7 +6,9 @@
 //! authority, so nothing caller-shaped reaches durable launch material.
 
 use crate::launch::authority::{LaunchAuthorityError, LaunchAuthorityErrorCode};
-use crate::launch::trace;
+use ticketry_diagnostics::launch_trace as trace;
+
+use crate::launch::trace_reasons;
 
 use super::TerminalLaunchService;
 use crate::launch::terminal_session::{
@@ -32,12 +34,9 @@ impl TerminalLaunchService {
             return Ok(request);
         }
         let Some(authority) = self.authority.as_ref() else {
-            trace::refused(
-                trace::stages::AUTHORITY_RESOLVED,
-                "authority_not_composed",
-            )
-            .with("authorityRequired", true)
-            .record();
+            trace::refused(trace::stages::AUTHORITY_RESOLVED, "authority_not_composed")
+                .with("authorityRequired", true)
+                .record();
             return Err(TerminalLaunchError::new(
                 TerminalLaunchErrorCode::RuntimeUnavailable,
                 "The interactive launch authority is not composed.",
@@ -48,7 +47,7 @@ impl TerminalLaunchService {
             Err(error) => {
                 trace::refused(
                     trace::stages::AUTHORITY_RESOLVED,
-                    trace::authority_reason(error.code),
+                    trace_reasons::authority_reason(error.code),
                 )
                 .with("authorityRequired", true)
                 .record();

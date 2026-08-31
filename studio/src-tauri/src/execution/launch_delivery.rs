@@ -20,7 +20,7 @@ pub async fn execute(
     service: &TerminalLaunchService,
     decision: &LaunchPolicyDecision,
 ) -> Result<ticketry_entities::terminals::session::Model, String> {
-    crate::launch::trace::requested_by(
+    ticketry_diagnostics::launch_trace::requested_by(
         decision.caller_scope.into(),
         execute_traced(database, service, decision),
     )
@@ -32,16 +32,18 @@ async fn execute_traced(
     service: &TerminalLaunchService,
     decision: &LaunchPolicyDecision,
 ) -> Result<ticketry_entities::terminals::session::Model, String> {
-    if let Some(attempt) = crate::launch::trace::current() {
+    if let Some(attempt) = ticketry_diagnostics::launch_trace::current() {
         attempt.note(|facts| {
             facts.work_item_id = Some(decision.task_id.clone());
             facts.provider = Some(decision.provider.clone());
             facts.scope = Some(decision.caller_scope.as_str().to_owned());
         });
     }
-    crate::launch::trace::admitted(crate::launch::trace::stages::POLICY_EVALUATED)
-        .with("decisionId", decision.decision_id.clone())
-        .record();
+    ticketry_diagnostics::launch_trace::admitted(
+        ticketry_diagnostics::launch_trace::stages::POLICY_EVALUATED,
+    )
+    .with("decisionId", decision.decision_id.clone())
+    .record();
     let kind = if matches!(
         decision.caller_scope,
         CallerScope::Interactive | CallerScope::RunNow

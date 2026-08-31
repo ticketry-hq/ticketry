@@ -8,7 +8,7 @@ use sea_orm::{
 use serde_json::{json, Value};
 
 use ticketry_entities::terminals::{cleanup_effect, session};
-use ticketry_runs::persistence::{TerminalFact, TerminalOutcome};
+use ticketry_runs::persistence::{EndOfLifeOrigin, TerminalFact, TerminalOutcome};
 
 use super::service::{not_found, observation_name, TerminalCleanupService};
 use super::{
@@ -179,6 +179,7 @@ impl TerminalCleanupService {
                     occurred_at: settled_at.clone(),
                     exit_code: None,
                 },
+                end_of_life_origin(&claim.cause),
                 move || cleanup_checkpoint(&run_checkpoints, CleanupCheckpoint::RunFact),
                 move || cleanup_checkpoint(&status_checkpoints, CleanupCheckpoint::StatusAppend),
             )
@@ -316,4 +317,56 @@ fn cleanup_checkpoint(
             "Terminal cleanup stopped at an injected checkpoint.",
         )
     })
+}
+
+/// What ended a run, read from the cleanup cause that is already persisted.
+///
+/// An explicit stop is a person's action here; the MCP surface records its own
+/// self-termination when it asks, and the earliest attribution is the one that
+/// ended the run.
+fn end_of_life_origin(cause: &str) -> EndOfLifeOrigin {
+    match cause {
+        "hosted_exit" => EndOfLifeOrigin::ProviderProcessExit,
+        "launch_compensation" => EndOfLifeOrigin::WorkflowDecision,
+        "owned_orphan" | "temporary_profile" => EndOfLifeOrigin::RuntimeLivenessSweep,
+        "explicit" => EndOfLifeOrigin::PersonStopAction,
+        _ => EndOfLifeOrigin::Unattributed,
+    }
+}
+
+#[cfg(test)]
+mod end_of_life_tests {
+    use super::*;
+
+    #[test]
+    fn each_cleanup_cause_names_what_ended_the_run() {
+        assert_eq!(
+            end_of_life_origin("hosted_exit"),
+            EndOfLifeOrigin::ProviderProcessExit
+        );
+        assert_eq!(
+            end_of_life_origin("explicit"),
+            EndOfLifeOrigin::PersonStopAction
+        );
+        assert_eq!(
+            end_of_life_origin("owned_orphan"),
+            EndOfLifeOrigin::RuntimeLivenessSweep
+        );
+        assert_eq!(
+            end_of_life_origin("temporary_profile"),
+            EndOfLifeOrigin::RuntimeLivenessSweep
+        );
+        assert_eq!(
+            end_of_life_origin("launch_compensation"),
+            EndOfLifeOrigin::WorkflowDecision
+        );
+    }
+
+    #[test]
+    fn an_unknown_cause_is_unattributed_rather_than_guessed() {
+        assert_eq!(
+            end_of_life_origin("something-new"),
+            EndOfLifeOrigin::Unattributed
+        );
+    }
 }

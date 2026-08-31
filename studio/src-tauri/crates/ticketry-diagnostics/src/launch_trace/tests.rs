@@ -4,7 +4,7 @@ use serde_json::json;
 
 use super::record::{LaunchTraceRecord, StageOutcome};
 use super::report::{correlate, report_for_agent_run, report_for_launch_attempt, TraceVerdict};
-use super::stages::{PRE_COMMIT_STAGES, RUN_ENDED_STAGE, SWEEP_STAGE};
+use super::stages::{attempt_keyed_stages, path_stages, RUN_ENDED_STAGE, SWEEP_STAGE};
 
 const ATTEMPT: &str = "attempt-1";
 const RUN: &str = "run-1";
@@ -39,21 +39,22 @@ fn commit(millisecond: u32) -> LaunchTraceRecord {
     )
 }
 
+/// One launch that travelled the whole path, ten milliseconds per stage.
 fn complete_trace() -> Vec<LaunchTraceRecord> {
-    let mut records: Vec<LaunchTraceRecord> = PRE_COMMIT_STAGES
-        .iter()
+    path_stages()
         .enumerate()
-        .map(|(index, stage)| attempt_stage(stage, index as u32 * 10))
-        .collect();
-    records.push(commit(100));
-    records.push(run_stage("wake-up-published", 110));
-    records.push(run_stage("wake-up-received", 120));
-    records.push(run_stage("durable-event-reread", 130));
-    records.push(run_stage("graphql-frame-delivered", 140));
-    records.push(run_stage("graphql-frame-received", 150));
-    records.push(run_stage("apollo-run-applied", 160));
-    records.push(run_stage("workspace-render-committed", 200));
-    records
+        .map(|(index, stage)| {
+            let at = index as u32 * 10;
+            match stage {
+                "launch-attempt-committed" => commit(at),
+                "launch-transaction-committed" => run_stage(stage, at),
+                stage if attempt_keyed_stages().any(|keyed| keyed == stage) => {
+                    attempt_stage(stage, at)
+                }
+                stage => run_stage(stage, at),
+            }
+        })
+        .collect()
 }
 
 #[test]
@@ -65,7 +66,10 @@ fn a_launch_that_reaches_the_workspace_reports_as_completed() {
         report.last_stage_reached.as_deref(),
         Some("workspace-render-committed")
     );
-    assert_eq!(report.total_elapsed_ms, Some(200));
+    assert_eq!(
+        report.total_elapsed_ms,
+        Some((path_stages().count() as i64 - 1) * 10)
+    );
     assert_eq!(report.launch_attempt_id.as_deref(), Some(ATTEMPT));
     assert_eq!(report.provider.as_deref(), Some("claude"));
 }
@@ -77,13 +81,14 @@ fn the_report_carries_the_elapsed_time_between_consecutive_stages() {
     assert_eq!(report.stages[0].elapsed_from_previous_ms, None);
     assert_eq!(report.stages[1].elapsed_from_previous_ms, Some(10));
     let render = report.stages.last().expect("the workspace render");
-    assert_eq!(render.elapsed_from_previous_ms, Some(40));
+    assert_eq!(render.elapsed_from_previous_ms, Some(10));
 }
 
 #[test]
-fn every_pre_commit_stage_can_refuse_and_is_named_as_the_refusal() {
-    for (index, stage) in PRE_COMMIT_STAGES.iter().enumerate() {
-        let mut records: Vec<LaunchTraceRecord> = PRE_COMMIT_STAGES[..index]
+fn every_attempt_keyed_stage_can_refuse_and_is_named_as_the_refusal() {
+    let keyed: Vec<&str> = attempt_keyed_stages().collect();
+    for (index, stage) in keyed.iter().enumerate() {
+        let mut records: Vec<LaunchTraceRecord> = keyed[..index]
             .iter()
             .enumerate()
             .map(|(earlier, stage)| attempt_stage(stage, earlier as u32 * 10))
@@ -115,6 +120,7 @@ fn a_trace_that_stops_without_refusing_reports_as_incomplete() {
         attempt_stage("launch-policy-evaluated", 5),
         attempt_stage("launch-executable-resolved", 3_000),
     ];
+    // The executable stage is where a hanging version probe would stall.
 
     let report = report_for_launch_attempt(&records, ATTEMPT);
 
@@ -312,4 +318,75 @@ fn a_stage_records_whether_it_admitted_or_refused() {
 
     assert_eq!(report.stages[0].outcome, StageOutcome::Admitted);
     assert_eq!(report.stages[0].refusal_reason, None);
+}
+
+#[test]
+fn the_agents_own_termination_is_not_displaced_by_the_shutdown_it_caused() {
+    let mut records = complete_trace();
+    records.push(record(
+        RUN_ENDED_STAGE,
+        300,
+        json!({"agentRunId": RUN, "endOfLifeOrigin": "agent_self_termination"}),
+    ));
+    records.push(record(
+        RUN_ENDED_STAGE,
+        400,
+        json!({"agentRunId": RUN, "endOfLifeOrigin": "person_stop_action"}),
+    ));
+
+    let end = report_for_agent_run(&records, RUN)
+        .end_of_life
+        .expect("an end-of-life record");
+
+    assert_eq!(
+        end.origin, "agent_self_termination",
+        "the first thing that ended the run is what ended it"
+    );
+}
+
+#[test]
+fn an_unattributed_record_never_displaces_an_attributed_one() {
+    let mut records = complete_trace();
+    records.push(record(
+        RUN_ENDED_STAGE,
+        300,
+        json!({"agentRunId": RUN, "endOfLifeOrigin": "provider_process_exit", "exitCode": 127}),
+    ));
+    records.push(record(
+        RUN_ENDED_STAGE,
+        400,
+        json!({"agentRunId": RUN, "endOfLifeOrigin": "unattributed"}),
+    ));
+
+    let end = report_for_agent_run(&records, RUN)
+        .end_of_life
+        .expect("an end-of-life record");
+
+    assert_eq!(end.origin, "provider_process_exit");
+    assert_eq!(end.exit_code, Some(127));
+}
+
+#[test]
+fn an_agent_run_claimed_twice_stays_with_the_launch_that_claimed_it_first() {
+    let records = vec![
+        record(
+            "launch-attempt-committed",
+            0,
+            json!({"launchAttemptId": "first", "agentRunId": RUN}),
+        ),
+        record(
+            "launch-attempt-committed",
+            10,
+            json!({"launchAttemptId": "second", "agentRunId": RUN}),
+        ),
+    ];
+
+    let first = report_for_launch_attempt(&records, "first");
+
+    assert_eq!(first.agent_run_id.as_deref(), Some(RUN));
+    assert_eq!(
+        first.stages.len(),
+        2,
+        "both claims are reported, under the launch that claimed the run first"
+    );
 }

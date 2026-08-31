@@ -59,9 +59,9 @@ fn publish_development_readiness(
         data_directory,
         &ticketry_runs::persistence::Slice3Readiness::complete(),
     )?;
-    muxed_studio_lib::workspace::handoff::publish_readiness(
+    ticketry_workspace_runtime::workspace::handoff::publish_readiness(
         data_directory,
-        &muxed_studio_lib::workspace::handoff::Slice4Readiness::complete(),
+        &ticketry_workspace_runtime::workspace::handoff::Slice4Readiness::complete(),
     )?;
     Ok(())
 }
@@ -275,7 +275,9 @@ mod tests {
             directory.path()
         ));
         assert!(
-            muxed_studio_lib::workspace::handoff::published_readiness_is_complete(directory.path())
+            ticketry_workspace_runtime::workspace::handoff::published_readiness_is_complete(
+                directory.path()
+            )
         );
     }
 

@@ -12,19 +12,19 @@
 //! digest, and no duplicate fact.
 
 use muxed_studio_lib::graphql_foundation::initialize_with_worktracker_commands_and_install;
-use muxed_studio_lib::workspace::document_save::{
-    staging_file_name, DocumentSaveService, STAGING_PREFIX,
-};
-use muxed_studio_lib::workspace::operations::{
-    schema as journal_schema, WorkspaceOperationIntent, WorkspaceOperationJournal,
-    WorkspaceOperationKind,
-};
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use tauri_graphql::{TransportApi, TransportApiImpl};
 use ticketry_documents::DocumentFactRecorder;
 use ticketry_runs::persistence::RunsServices;
+use ticketry_workspace_runtime::workspace::document_save::{
+    staging_file_name, DocumentSaveService, STAGING_PREFIX,
+};
+use ticketry_workspace_runtime::workspace::operations::{
+    schema as journal_schema, WorkspaceOperationIntent, WorkspaceOperationJournal,
+    WorkspaceOperationKind,
+};
 
 const PROJECT: &str = "11111111111111111111111111111111";
 const MODULE: &str = "44444444444444444444444444444444";

@@ -13,14 +13,14 @@ use std::sync::{
 };
 
 use async_trait::async_trait;
-use muxed_studio_lib::workspace::operations::{
+use sea_orm::{ConnectionTrait, Database, DatabaseConnection, DbBackend, Statement};
+use serde_json::{json, Value};
+use ticketry_workspace_runtime::workspace::operations::{
     schema, ClaimedOperation, ExternalObservation, OperationSubject, ReconciliationDecision,
     WorkspaceOperationError, WorkspaceOperationErrorCode, WorkspaceOperationExecutor,
     WorkspaceOperationIntent, WorkspaceOperationJournal, WorkspaceOperationKind,
     WorkspaceOperationOutcome, WorkspaceStateProbe, REDACTED,
 };
-use sea_orm::{ConnectionTrait, Database, DatabaseConnection, DbBackend, Statement};
-use serde_json::{json, Value};
 
 const RESOURCE: &str = "spec/rusting--cf2de16d/T756/SPEC.md";
 

@@ -214,9 +214,9 @@ impl ExecutionHarness {
         .expect("open the local settings gate");
         publish_readiness(&data_directory, &Slice3Readiness::complete())
             .expect("open the Runs GraphQL gate");
-        muxed_studio_lib::workspace::handoff::publish_readiness(
+        ticketry_workspace_runtime::workspace::handoff::publish_readiness(
             &data_directory,
-            &muxed_studio_lib::workspace::handoff::Slice4Readiness::complete(),
+            &ticketry_workspace_runtime::workspace::handoff::Slice4Readiness::complete(),
         )
         .expect("open the workspace gate");
         let composed = adopted.runtime;

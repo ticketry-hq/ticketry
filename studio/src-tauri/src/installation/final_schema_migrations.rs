@@ -19,7 +19,7 @@ pub const ORDERED_MIGRATION_IDS: &[&str] = &[
     workspace_tab_order_migration::MIGRATION_ID,
     module_presentation_migration::MIGRATION_ID,
     provider_catalog_migrations::CODEX_SPARK_MIGRATION_ID,
-    crate::worktree::persistence::pull_request_url_migration::MIGRATION_ID,
+    ticketry_workspace_runtime::worktree::persistence::pull_request_url_migration::MIGRATION_ID,
 ];
 
 pub async fn install(database: &DatabaseConnection) -> Result<(), DbErr> {
@@ -44,7 +44,7 @@ pub async fn install(database: &DatabaseConnection) -> Result<(), DbErr> {
     provider_catalog_migrations::install_codex_spark(database)
         .await
         .map_err(|error| step_error("0051", error))?;
-    crate::worktree::persistence::pull_request_url_migration::install(database)
+    ticketry_workspace_runtime::worktree::persistence::pull_request_url_migration::install(database)
         .await
         .map_err(|error| step_error("0052", error))
 }

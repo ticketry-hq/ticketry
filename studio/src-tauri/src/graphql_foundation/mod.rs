@@ -325,7 +325,10 @@ async fn compose_worktree_operations(
     worktracker_database: &sea_orm::DatabaseConnection,
     outbox_adopted: bool,
 ) -> ComposedWorktreeOperations {
-    if let Err(error) = crate::workspace::operations::schema::install(worktracker_database).await {
+    if let Err(error) =
+        ticketry_workspace_runtime::workspace::operations::schema::install(worktracker_database)
+            .await
+    {
         eprintln!("Ticketry could not install the Workspace Operation journal: {error}");
         return ComposedWorktreeOperations {
             operations: None,
@@ -339,10 +342,11 @@ async fn compose_worktree_operations(
             .events()
             .clone()
     });
-    let journal =
-        crate::workspace::operations::WorkspaceOperationJournal::new(worktracker_database.clone());
-    let locks = crate::worktree::status::RepositoryLocks::shared();
-    let create = crate::worktree::create::WorktreeCreateService::new(
+    let journal = ticketry_workspace_runtime::workspace::operations::WorkspaceOperationJournal::new(
+        worktracker_database.clone(),
+    );
+    let locks = ticketry_workspace_runtime::worktree::status::RepositoryLocks::shared();
+    let create = ticketry_workspace_runtime::worktree::create::WorktreeCreateService::new(
         worktracker_database.clone(),
         journal.clone(),
         events.clone(),
@@ -352,7 +356,7 @@ async fn compose_worktree_operations(
         eprintln!("Ticketry could not reconcile abandoned worktree operations: {error}");
         reconciled = false;
     }
-    let discard = crate::worktree::discard::WorktreeDiscardService::new(
+    let discard = ticketry_workspace_runtime::worktree::discard::WorktreeDiscardService::new(
         worktracker_database.clone(),
         journal.clone(),
         events.clone(),
@@ -366,9 +370,11 @@ async fn compose_worktree_operations(
         reconciled = false;
     }
     ComposedWorktreeOperations {
-        operations: Some(crate::worktree::operations::WorktreeOperations::new(
-            create, discard,
-        )),
+        operations: Some(
+            ticketry_workspace_runtime::worktree::operations::WorktreeOperations::new(
+                create, discard,
+            ),
+        ),
         reconciled,
     }
 }
@@ -378,7 +384,7 @@ async fn compose_worktree_operations(
 /// needs both: a composed capability whose backlog was never drained is not one
 /// a window may be pointed at yet.
 struct ComposedWorktreeOperations {
-    operations: Option<crate::worktree::operations::WorktreeOperations>,
+    operations: Option<ticketry_workspace_runtime::worktree::operations::WorktreeOperations>,
     reconciled: bool,
 }
 
@@ -394,7 +400,10 @@ async fn compose_document_saves(
     worktracker_database: &sea_orm::DatabaseConnection,
     outbox_adopted: bool,
 ) -> bool {
-    if let Err(error) = crate::workspace::operations::schema::install(worktracker_database).await {
+    if let Err(error) =
+        ticketry_workspace_runtime::workspace::operations::schema::install(worktracker_database)
+            .await
+    {
         eprintln!("Ticketry could not install the Workspace Operation journal: {error}");
         return false;
     }
@@ -406,9 +415,11 @@ async fn compose_document_saves(
                 .clone(),
         )
     });
-    let service = crate::workspace::document_save::DocumentSaveService::new(
+    let service = ticketry_workspace_runtime::workspace::document_save::DocumentSaveService::new(
         worktracker_database.clone(),
-        crate::workspace::operations::WorkspaceOperationJournal::new(worktracker_database.clone()),
+        ticketry_workspace_runtime::workspace::operations::WorkspaceOperationJournal::new(
+            worktracker_database.clone(),
+        ),
         facts,
     );
     if let Err(error) = service.reconciler().reconcile().await {
@@ -544,7 +555,7 @@ pub async fn adopt_worktracker_and_install(
     // before any workspace command is composed. An unknown or malformed
     // Documents, Worktree, or journal schema refuses the handoff and leaves the
     // pre-cutover snapshots restorable.
-    crate::workspace::handoff::adopt(data_directory)
+    ticketry_workspace_runtime::workspace::handoff::adopt(data_directory)
         .await
         .map_err(workspace_adoption_error)?;
     // Every capability has handed over, so the durable status-event ledger the
@@ -580,7 +591,7 @@ fn installation_adoption_error(
 }
 
 fn workspace_adoption_error(
-    error: crate::workspace::handoff::WorkspaceHandoffError,
+    error: ticketry_workspace_runtime::workspace::handoff::WorkspaceHandoffError,
 ) -> FoundationInitializationError {
     FoundationInitializationError::new(
         FoundationInitializationErrorCode::WorktrackerDatabaseOpen,

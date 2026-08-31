@@ -7,10 +7,6 @@
 //! contract, and that protected columns cannot appear in any generated input.
 
 use muxed_studio_lib::graphql_foundation::generated_schema_sdl;
-use muxed_studio_lib::worktree::persistence::column_policy;
-use muxed_studio_lib::worktree::persistence::ownership_manifest::{
-    GENERATED_MUTATION_GAPS, PROTECTED_COLUMNS,
-};
 use sea_orm::Database;
 use seaography::{
     async_graphql::dynamic::{Object, Schema},
@@ -19,6 +15,10 @@ use seaography::{
 use std::sync::LazyLock;
 use ticketry_entities::work_management;
 use ticketry_entities::worktrees::worktree;
+use ticketry_workspace_runtime::worktree::persistence::column_policy;
+use ticketry_workspace_runtime::worktree::persistence::ownership_manifest::{
+    GENERATED_MUTATION_GAPS, PROTECTED_COLUMNS,
+};
 
 /// The unprotected context: what Seaography installs with no Ticketry policy.
 static AUDIT_CONTEXT: LazyLock<BuilderContext> = LazyLock::new(BuilderContext::default);

@@ -114,6 +114,7 @@ ticketry-runs.workspace = true
 ticketry-settings.workspace = true
 ticketry-tool-discovery.workspace = true
 ticketry-work-management.workspace = true
+ticketry-workspace-runtime.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
 uuid.workspace = true
@@ -137,6 +138,7 @@ members = [
     "crates/ticketry-tool-discovery",
     "crates/ticketry-diagnostics",
     "crates/ticketry-documents",
+    "crates/ticketry-workspace-runtime",
 ]
 resolver = "2"
 
@@ -168,6 +170,7 @@ ticketry-runs = { path = "crates/ticketry-runs" }
 ticketry-settings = { path = "crates/ticketry-settings" }
 ticketry-tool-discovery = { path = "crates/ticketry-tool-discovery" }
 ticketry-work-management = { path = "crates/ticketry-work-management" }
+ticketry-workspace-runtime = { path = "crates/ticketry-workspace-runtime" }
 tokio = { version = "=1.53.1", features = ["macros", "net", "rt-multi-thread", "sync", "time"] }
 tokio-util = "=0.7.18"
 uuid = { version = "1.24", features = ["v4", "v5"] }

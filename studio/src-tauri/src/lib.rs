@@ -17,8 +17,6 @@ pub mod temporary_profile;
 pub mod terminal;
 pub mod tmux_adapter;
 pub mod viewer_ownership;
-pub mod workspace;
-pub mod worktree;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {

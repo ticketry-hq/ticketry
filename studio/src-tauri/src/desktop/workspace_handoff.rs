@@ -1,7 +1,7 @@
 //! The one-way Slice 4 Documents and Worktrees handoff.
 //!
 //! Adoption already happened: the write lease moved inside
-//! [`crate::workspace::handoff::adopt`], before the schema was composed and while
+//! [`ticketry_workspace_runtime::workspace::handoff::adopt`], before the schema was composed and while
 //! the sidecar was still stopped. What remains is proving that the runtime built
 //! on top of it can actually serve — and saying so once, in one record, so no
 //! surface has to guess.
@@ -21,7 +21,9 @@ use tauri_graphql::TransportApi;
 
 use crate::desktop::document_protocol;
 use crate::graphql_foundation::ComposedCommandRuntime;
-use crate::workspace::handoff::{self, manifest, Slice4Readiness, WorkspaceHandoffError};
+use ticketry_workspace_runtime::workspace::handoff::{
+    self, manifest, Slice4Readiness, WorkspaceHandoffError,
+};
 
 /// Publish the closed gate. Called at startup, at every backend launch, and at
 /// shutdown, so a stale `ready: true` record can never outlive its runtime.
@@ -58,13 +60,15 @@ async fn evaluate<R: tauri::Runtime>(
 
     readiness.documents_ownership =
         ticketry_documents::persistence::documents_adopted(database).await;
-    readiness.worktree_ownership = crate::worktree::persistence::worktrees_adopted(database).await;
+    readiness.worktree_ownership =
+        ticketry_workspace_runtime::worktree::persistence::worktrees_adopted(database).await;
     // The journal has never had a Django writer, so its ownership is simply
     // whether the installed shape is the one this build authored. Without it no
     // filesystem or Git effect has a recovery record at all.
-    readiness.operation_journal_ownership = crate::workspace::operations::schema::verify(database)
-        .await
-        .is_ok();
+    readiness.operation_journal_ownership =
+        ticketry_workspace_runtime::workspace::operations::schema::verify(database)
+            .await
+            .is_ok();
     readiness.ownership_validated = manifest::validate_schema(database).await.is_ok();
     readiness.status_outbox = documents.publishes_durable_facts();
     readiness.operation_reconciliation = runtime.workspace_reconciled();

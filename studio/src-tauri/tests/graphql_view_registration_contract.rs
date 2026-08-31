@@ -253,6 +253,8 @@ fn superseded_seaolim_migration_files_stay_removed() {
         "crates/ticketry-work-management/src/work_management/graphql/module_presentations.rs",
         "crates/ticketry-work-management/src/work_management/graphql/work_items.rs",
         "crates/ticketry-work-management/src/work_management/graphql/workflow_configuration.rs",
+        "crates/ticketry-workspace-runtime/src/worktree/create/graphql.rs",
+        "crates/ticketry-workspace-runtime/src/worktree/discard/graphql.rs",
         "src/documents/save/graphql.rs",
         "src/graph_run_service/graphql.rs",
         "src/graph_run_service/operation_registry.rs",

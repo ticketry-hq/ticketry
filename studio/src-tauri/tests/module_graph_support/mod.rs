@@ -16,8 +16,6 @@ use syn::{Attribute, ImplItem, Item, Meta, UseTree};
 pub const SLICES: &[(&str, &str)] = &[
     ("execution", "agent-execution"),
     ("graph_run_service", "agent-execution"),
-    ("worktree", "workspace-runtime"),
-    ("workspace", "workspace-runtime"),
     ("launch", "launch"),
     ("terminal", "terminal"),
     ("tmux_adapter", "terminal"),

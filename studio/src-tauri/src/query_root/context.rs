@@ -142,7 +142,7 @@ pub(super) fn builder_context() -> BuilderContext {
     add_app_setting_value_column(&mut context);
     // Derived, Git-owned, and server-owned Worktree columns are never part of
     // a generated input, whatever the entity's mutation registration is.
-    crate::worktree::persistence::column_policy::apply(&mut context);
+    ticketry_workspace_runtime::worktree::persistence::column_policy::apply(&mut context);
     // Design Document roots and provenance leave the contract on the entity
     // itself; every remaining adopted column is skipped in generated inputs.
     ticketry_documents::persistence::column_policy::apply(&mut context);

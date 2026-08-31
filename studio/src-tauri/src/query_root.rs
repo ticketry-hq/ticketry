@@ -41,7 +41,9 @@ pub fn foundation_schema(
     work_facts: Option<
         ticketry_work_management::work_management::commands::status_facts::WorkFactRecorder,
     >,
-    worktree_operations: Option<crate::worktree::operations::WorktreeOperations>,
+    worktree_operations: Option<
+        ticketry_workspace_runtime::worktree::operations::WorktreeOperations,
+    >,
     documents: Option<ticketry_documents::DocumentsService>,
 ) -> Result<Schema, FoundationInitializationError> {
     foundation_schema_with_terminal_services(
@@ -72,7 +74,9 @@ pub(crate) fn foundation_schema_with_terminal_services(
     work_facts: Option<
         ticketry_work_management::work_management::commands::status_facts::WorkFactRecorder,
     >,
-    worktree_operations: Option<crate::worktree::operations::WorktreeOperations>,
+    worktree_operations: Option<
+        ticketry_workspace_runtime::worktree::operations::WorktreeOperations,
+    >,
     documents: Option<ticketry_documents::DocumentsService>,
     terminal_services: Option<TerminalServices>,
 ) -> Result<Schema, FoundationInitializationError> {
@@ -161,7 +165,9 @@ fn build_schema(
     work_facts: Option<
         ticketry_work_management::work_management::commands::status_facts::WorkFactRecorder,
     >,
-    worktree_operations: Option<crate::worktree::operations::WorktreeOperations>,
+    worktree_operations: Option<
+        ticketry_workspace_runtime::worktree::operations::WorktreeOperations,
+    >,
     documents: Option<ticketry_documents::DocumentsService>,
     terminal_services: Option<TerminalServices>,
     contract: EntityContract,
@@ -227,10 +233,10 @@ fn build_schema(
     // generated read graph and its one restricted write register alongside the
     // WorkTracker entities they name.
     let builder = ticketry_work_management::module_links::register_graphql(builder);
-    let builder = crate::worktree::persistence::register_graphql(builder);
-    let builder = crate::worktree::status::register_graphql(builder);
-    let builder = crate::worktree::changes::register_graphql(builder);
-    let builder = crate::workspace::worktree::register_graphql(builder);
+    let builder = ticketry_workspace_runtime::worktree::persistence::register_graphql(builder);
+    let builder = ticketry_workspace_runtime::worktree::status::register_graphql(builder);
+    let builder = ticketry_workspace_runtime::worktree::changes::register_graphql(builder);
+    let builder = ticketry_workspace_runtime::workspace::worktree::register_graphql(builder);
     let builder = ticketry_work_management::work_management::graphql::register(builder);
     let builder = ticketry_settings::schema::register(builder);
     let builder = ticketry_runs::graphql::register_graphql(builder);
@@ -248,8 +254,9 @@ fn build_schema(
     };
     let builder = crate::terminal::viewer_lease::register_graphql(builder);
     let builder = ticketry_documents::persistence::register_graphql(builder);
-    let builder = crate::workspace::design_document::register_graphql(builder);
-    let builder = crate::workspace::directory_completion_query::register(builder);
+    let builder = ticketry_workspace_runtime::workspace::design_document::register_graphql(builder);
+    let builder =
+        ticketry_workspace_runtime::workspace::directory_completion_query::register(builder);
     let mut schema = builder.schema_builder().data(entity_database);
     if contract.product_generated_mutations {
         schema = schema.data(crate::graph_run_service::GraphRunCaller);
@@ -299,11 +306,15 @@ fn build_schema(
     // connection has everything the capability needs; without one the mutation
     // reports itself unavailable rather than writing a file.
     if let Some(work_items) = &worktracker_database {
-        schema = schema.data(crate::workspace::document_save::DocumentSaveService::new(
-            work_items.clone(),
-            crate::workspace::operations::WorkspaceOperationJournal::new(work_items.clone()),
-            document_facts,
-        ));
+        schema = schema.data(
+            ticketry_workspace_runtime::workspace::document_save::DocumentSaveService::new(
+                work_items.clone(),
+                ticketry_workspace_runtime::workspace::operations::WorkspaceOperationJournal::new(
+                    work_items.clone(),
+                ),
+                document_facts,
+            ),
+        );
     }
     // Live worktree status needs both halves of its trusted input: the Work
     // Item graph that says who owns a checkout, and the selected profile that
@@ -320,8 +331,13 @@ fn build_schema(
         schema = schema.data(changes.clone());
         Some(changes)
     } else if let Some(work_items) = &worktracker_database {
-        let status = crate::worktree::status::WorktreeStatusService::new(work_items.clone());
-        let changes = crate::worktree::changes::WorktreeChangesService::from_status(status.clone())
+        let status = ticketry_workspace_runtime::worktree::status::WorktreeStatusService::new(
+            work_items.clone(),
+        );
+        let changes =
+            ticketry_workspace_runtime::worktree::changes::WorktreeChangesService::from_status(
+                status.clone(),
+            )
             .publishing(work_facts.clone());
         schema = schema.data(changes.clone());
         schema = schema.data(status);
@@ -334,7 +350,7 @@ fn build_schema(
         terminal_services.as_ref(),
         worktracker_database.as_ref(),
     ) {
-        schema = schema.data(crate::worktree::changes::MergePreparationService::new(
+        schema = schema.data(ticketry_workspace_runtime::worktree::changes::MergePreparationService::new(
             changes,
             std::sync::Arc::new(
                 crate::execution::merge_preparation_launcher::TerminalMergePreparationLauncher::new(
@@ -411,9 +427,11 @@ fn build_schema(
         // Documents and Worktrees consult a third gate for the same reason: the
         // Slice 4 handoff completes after both earlier ones, and it must not
         // open merely because settings or Runs ownership did.
-        schema = schema.data(crate::workspace::handoff::WorkspaceReadinessGate::watching(
-            &data_directory,
-        ));
+        schema = schema.data(
+            ticketry_workspace_runtime::workspace::handoff::WorkspaceReadinessGate::watching(
+                &data_directory,
+            ),
+        );
         schema = schema.extension(
             crate::graphql_foundation::readiness_gate::Slice2CommandGate::new(data_directory),
         );

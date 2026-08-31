@@ -46,10 +46,10 @@ async fn main() {
         fail("the private data-directory copy has no state.db");
     }
 
-    let first = muxed_studio_lib::workspace::handoff::adopt(&supplied)
+    let first = ticketry_workspace_runtime::workspace::handoff::adopt(&supplied)
         .await
         .unwrap_or_else(|error| fail(&format!("first Slice 4 adoption failed: {error}")));
-    let second = muxed_studio_lib::workspace::handoff::adopt(&supplied)
+    let second = ticketry_workspace_runtime::workspace::handoff::adopt(&supplied)
         .await
         .unwrap_or_else(|error| fail(&format!("restart Slice 4 adoption failed: {error}")));
     if first != second {

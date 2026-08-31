@@ -10,11 +10,11 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use muxed_studio_lib::workspace::handoff::{
+use sea_orm::{ConnectionTrait, Database, DbBackend, Statement};
+use ticketry_workspace_runtime::workspace::handoff::{
     self, manifest, publish_readiness, published_readiness_is_complete, Slice4Readiness,
     WorkspaceReadinessGate,
 };
-use sea_orm::{ConnectionTrait, Database, DbBackend, Statement};
 
 fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))

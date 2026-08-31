@@ -7,11 +7,11 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use muxed_studio_lib::worktree::persistence::{
+use sea_orm::{ConnectionTrait, Database, DbBackend, Statement};
+use ticketry_workspace_runtime::worktree::persistence::{
     adopt, preflight, worktrees_adopted, SourceClassification, WorktreePersistenceErrorCode,
     LEDGER_TABLE,
 };
-use sea_orm::{ConnectionTrait, Database, DbBackend, Statement};
 
 fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))

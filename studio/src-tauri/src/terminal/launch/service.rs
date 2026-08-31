@@ -296,21 +296,24 @@ impl TerminalLaunchService {
                 let module_id = if !submitted.is_archived && submitted.r#type == "module" {
                     submitted.id.clone()
                 } else {
-                    crate::worktree::status::owner::resolve(&self.database, &request.issue_id)
-                        .await
-                        .map_err(|_| {
-                            TerminalLaunchError::new(
-                                TerminalLaunchErrorCode::InvalidRequest,
-                                "The terminal launch scope has no module owner.",
-                            )
-                        })?
-                        .module_id
-                        .ok_or_else(|| {
-                            TerminalLaunchError::new(
-                                TerminalLaunchErrorCode::InvalidRequest,
-                                "The terminal launch scope has no module owner.",
-                            )
-                        })?
+                    ticketry_workspace_runtime::worktree::status::owner::resolve(
+                        &self.database,
+                        &request.issue_id,
+                    )
+                    .await
+                    .map_err(|_| {
+                        TerminalLaunchError::new(
+                            TerminalLaunchErrorCode::InvalidRequest,
+                            "The terminal launch scope has no module owner.",
+                        )
+                    })?
+                    .module_id
+                    .ok_or_else(|| {
+                        TerminalLaunchError::new(
+                            TerminalLaunchErrorCode::InvalidRequest,
+                            "The terminal launch scope has no module owner.",
+                        )
+                    })?
                 };
                 if compact(&module_id) != compact(&request.module_id)
                     || compact(&submitted.project_id) != compact(&request.project_id)
@@ -324,15 +327,17 @@ impl TerminalLaunchService {
             crate::launch::terminal_session::TerminalLaunchKind::Task
             | crate::launch::terminal_session::TerminalLaunchKind::DocumentChat
             | crate::launch::terminal_session::TerminalLaunchKind::Automation => {
-                let owner =
-                    crate::worktree::status::owner::resolve(&self.database, &request.issue_id)
-                        .await
-                        .map_err(|_| {
-                            TerminalLaunchError::new(
-                                TerminalLaunchErrorCode::InvalidRequest,
-                                "The terminal launch Work Item is unavailable.",
-                            )
-                        })?;
+                let owner = ticketry_workspace_runtime::worktree::status::owner::resolve(
+                    &self.database,
+                    &request.issue_id,
+                )
+                .await
+                .map_err(|_| {
+                    TerminalLaunchError::new(
+                        TerminalLaunchErrorCode::InvalidRequest,
+                        "The terminal launch Work Item is unavailable.",
+                    )
+                })?;
                 if owner.module_id.as_deref().map(compact).as_deref()
                     != Some(compact(&request.module_id).as_str())
                 {

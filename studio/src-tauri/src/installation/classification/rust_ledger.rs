@@ -76,8 +76,8 @@ pub fn owned_ledgers() -> Vec<(&'static str, i32)> {
             ticketry_documents::persistence::VERSION,
         ),
         (
-            crate::worktree::persistence::LEDGER_TABLE,
-            crate::worktree::persistence::VERSION,
+            ticketry_workspace_runtime::worktree::persistence::LEDGER_TABLE,
+            ticketry_workspace_runtime::worktree::persistence::VERSION,
         ),
     ]
 }

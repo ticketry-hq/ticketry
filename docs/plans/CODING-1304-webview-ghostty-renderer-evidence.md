@@ -46,10 +46,29 @@ artifact and skips when it has not been prepared.
 
 ## Measurement method
 
-Every renderer records the same counters through the same seam
+All three renderers record through the same seam
 (`internal/rendererMeasurement.ts`): cold attach, warm attach, painted frames,
-paint duration percentiles, bytes parsed, and wasm linear memory. Read them out
-of a live Studio window:
+paint duration percentiles, bytes parsed, and wasm linear memory.
+
+What each renderer can report differs, and the difference is itself a result:
+
+| Counter | native | xterm | `ghostty-wasm` |
+| --- | --- | --- | --- |
+| Cold and warm attach | yes | yes | yes |
+| Bytes parsed | no | yes | yes |
+| Paint duration | no | parse-and-enqueue only | yes |
+| Wasm memory | n/a | n/a | yes |
+
+Native reports attach latency only because its bytes never leave Rust and
+libghostty — that is the renderer's central advantage, and an empty column
+here means "no JavaScript work to measure", not "not measured". xterm renders
+its buffer asynchronously, so its paint figure is the cost of parsing and
+enqueuing, not of a frame. Only `ghostty-wasm` times an actual paint. Read the
+columns accordingly; do not compare paint numbers across renderers as if they
+measured the same thing. CPU, memory and frame pacing for the native renderer
+must come from Instruments or Activity Monitor, not from this harness.
+
+Read the counters out of a live Studio window:
 
 ```js
 JSON.stringify({

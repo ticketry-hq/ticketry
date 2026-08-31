@@ -1,6 +1,5 @@
 //! Optional process diagnostics shared by the native shell and domain services.
 
-mod file_log;
 mod crash_report;
 mod file_log;
 mod launch_discovery;

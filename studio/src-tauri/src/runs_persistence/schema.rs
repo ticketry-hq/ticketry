@@ -428,12 +428,12 @@ mod tests {
             .await
             .unwrap();
 
-        upgrade_v1(&database).await.unwrap();
+        upgrade_v1(&database, "upgraded-digest").await.unwrap();
 
         let ledger = database
             .query_one_raw(Statement::from_string(
                 DbBackend::Sqlite,
-                "SELECT version, adopted_at FROM ticketry_runs_adoption WHERE singleton=1"
+                "SELECT version, adopted_at, stable_digest FROM ticketry_runs_adoption WHERE singleton=1"
                     .to_owned(),
             ))
             .await
@@ -443,6 +443,10 @@ mod tests {
         assert_eq!(
             ledger.try_get::<String>("", "adopted_at").unwrap(),
             "2026-08-01"
+        );
+        assert_eq!(
+            ledger.try_get::<String>("", "stable_digest").unwrap(),
+            "upgraded-digest"
         );
         let run = database
             .query_one_raw(Statement::from_string(

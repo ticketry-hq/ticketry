@@ -15,6 +15,7 @@
 //!
 //! * [`schema`] installs the authored tables and refuses an unknown shape.
 //! * [`local_path`] decides which folder values a row may ever hold.
+//! * [`folder_preflight`] decides whether the folder on disk is usable.
 //! * [`identity`] decides what a link is called, deterministically.
 //! * [`store`] owns the model rules shared by host and GraphQL writes.
 //! * [`resolution`] answers the one runtime question: where is this Module?
@@ -27,6 +28,7 @@
 //! a database, resolves the established data directory, or holds a default, so
 //! an import can only ever reach the installation it was handed.
 
+pub mod folder_preflight;
 pub mod identity;
 pub mod legacy_import;
 pub mod legacy_source;

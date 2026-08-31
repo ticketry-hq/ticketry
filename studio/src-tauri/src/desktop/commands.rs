@@ -133,20 +133,20 @@ pub(crate) struct ModuleFolderValidation {
 /// command to the webview.
 #[tauri::command]
 pub(crate) fn desktop_validate_module_folder(path: String) -> ModuleFolderValidation {
-    match crate::launch::paths::validate_module_folder(Some(&path)) {
+    match crate::module_links::folder_preflight::validate_configured(Some(&path)) {
         Ok(_) => ModuleFolderValidation {
             valid: true,
             reason: None,
         },
         Err(error) => {
             let reason = match error {
-                crate::launch::paths::ModuleFolderFailure::Relative
-                | crate::launch::paths::ModuleFolderFailure::Unset => "module_folder_not_absolute",
-                crate::launch::paths::ModuleFolderFailure::Missing
-                | crate::launch::paths::ModuleFolderFailure::Inaccessible => {
+                crate::module_links::folder_preflight::ModuleFolderFailure::Relative
+                | crate::module_links::folder_preflight::ModuleFolderFailure::Unset => "module_folder_not_absolute",
+                crate::module_links::folder_preflight::ModuleFolderFailure::Missing
+                | crate::module_links::folder_preflight::ModuleFolderFailure::Inaccessible => {
                     "module_folder_missing"
                 }
-                crate::launch::paths::ModuleFolderFailure::NotDirectory => {
+                crate::module_links::folder_preflight::ModuleFolderFailure::NotDirectory => {
                     "module_folder_not_a_directory"
                 }
             };

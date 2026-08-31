@@ -1,7 +1,13 @@
+//! Whether the folder a Module Link names is usable on this host.
+//!
+//! Shape validation the store runs before writing a link, the desktop
+//! folder picker runs before offering one, and resolution runs before a
+//! launch is allowed to start in it.
+
 use std::path::{Path, PathBuf};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum ModuleFolderFailure {
+pub enum ModuleFolderFailure {
     Unset,
     Relative,
     Missing,
@@ -10,7 +16,7 @@ pub(crate) enum ModuleFolderFailure {
 }
 
 impl ModuleFolderFailure {
-    pub(crate) fn message(self) -> &'static str {
+    pub fn message(self) -> &'static str {
         match self {
             Self::Unset => "No local folder is configured for this module.",
             Self::Relative => "The configured module folder must be an absolute path.",
@@ -21,7 +27,7 @@ impl ModuleFolderFailure {
     }
 }
 
-pub(crate) fn validate_configured(path: Option<&str>) -> Result<PathBuf, ModuleFolderFailure> {
+pub fn validate_configured(path: Option<&str>) -> Result<PathBuf, ModuleFolderFailure> {
     let value = path
         .map(str::trim)
         .filter(|value| !value.is_empty())
@@ -31,7 +37,7 @@ pub(crate) fn validate_configured(path: Option<&str>) -> Result<PathBuf, ModuleF
     Ok(path)
 }
 
-pub(crate) fn validate(path: &Path) -> Result<(), ModuleFolderFailure> {
+pub fn validate(path: &Path) -> Result<(), ModuleFolderFailure> {
     if !path.is_absolute() {
         return Err(ModuleFolderFailure::Relative);
     }

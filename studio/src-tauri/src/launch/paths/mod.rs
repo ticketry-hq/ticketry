@@ -30,15 +30,11 @@
 //! directories without ever minting a worktree.
 
 mod error;
-mod folder_preflight;
 mod request;
 mod service;
 mod view;
 
 pub use error::{LaunchPathsError, LaunchPathsErrorCode};
-pub(crate) use folder_preflight::{
-    validate_configured as validate_module_folder, ModuleFolderFailure,
-};
 pub use request::{LaunchPathsRequest, LaunchScope};
 pub use service::LaunchPathsService;
 pub use view::{LaunchPathsView, WorktreeUse};

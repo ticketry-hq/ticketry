@@ -45,7 +45,7 @@ impl RestrictedModelMutation<module_link::Entity, module_link::ActiveModel> for 
         let link = ctx.args.try_get("link")?.object()?;
         let path = link.try_get("path")?.string()?;
 
-        crate::launch::paths::validate_module_folder(Some(path.trim()))
+        crate::module_links::folder_preflight::validate_configured(Some(path.trim()))
             .map_err(|failure| folder_refusal(resolution::ModuleFolderRefusal::from(failure)))?;
         let write = match ModuleLinkStore::prepare_set(transaction, module_id, path)
             .await

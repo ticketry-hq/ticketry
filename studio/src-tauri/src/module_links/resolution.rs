@@ -25,7 +25,7 @@ use sea_orm::DatabaseConnection;
 
 use super::store::find;
 use super::ModuleLinkError;
-use crate::launch::paths::{validate_module_folder, ModuleFolderFailure};
+use crate::module_links::folder_preflight::{validate_configured as validate_module_folder, ModuleFolderFailure};
 
 /// The stable code a caller receives when no link resolves.
 pub const NOT_LINKED: &str = "module_link_not_found";

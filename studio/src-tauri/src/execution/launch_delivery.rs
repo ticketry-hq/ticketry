@@ -1,3 +1,9 @@
+//! Delivering one durable launch policy decision to the terminal owner.
+//!
+//! Work management decides *whether* a run may start and records the
+//! decision; carrying that decision to the Terminal Launch Service is
+//! agent execution's job, above terminal rather than below it.
+
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 
 use crate::entities::runs::automation_attempt;
@@ -5,11 +11,11 @@ use crate::launch::authority::{compose_task_prompt, TaskPromptSource};
 use crate::launch::terminal_session::{CreateTerminalSession, TerminalLaunchKind};
 use crate::terminal::launch::TerminalLaunchService;
 
-use super::{mark_delivered, CallerScope, LaunchPolicyDecision};
+use crate::work_management::launch_policy::{mark_delivered, CallerScope, LaunchPolicyDecision};
 
 /// Prepare one durable policy decision through the Rust Terminal owner, then
 /// mark it delivered before attempting the recoverable external effect.
-pub(crate) async fn execute(
+pub async fn execute(
     database: &DatabaseConnection,
     service: &TerminalLaunchService,
     decision: &LaunchPolicyDecision,

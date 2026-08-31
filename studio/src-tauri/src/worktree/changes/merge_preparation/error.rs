@@ -39,7 +39,7 @@ impl MergePreparationError {
         )
     }
 
-    pub(super) fn launch_failed(code: String) -> Self {
+    pub fn launch_failed(code: String) -> Self {
         Self::new(
             "merge_preparation_launch_failed",
             format!("The merge-preparation agent could not start: {code}."),

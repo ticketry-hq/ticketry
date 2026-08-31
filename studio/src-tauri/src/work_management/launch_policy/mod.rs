@@ -3,7 +3,6 @@ mod catalog;
 mod compatibility;
 mod context;
 mod decisions;
-mod delivery;
 mod rejections;
 mod resolver;
 mod retry;
@@ -17,7 +16,6 @@ mod rejection_tests;
 pub use auto_start::prepare_pending_auto_starts;
 pub use compatibility::submit_interactive;
 pub use decisions::{load_by_identity, mark_delivered, pending, record};
-pub(crate) use delivery::execute as execute_pending_decision;
 pub use rejections::{
     for_work_item as rejections_for_work_item, is_recoverable, LaunchPolicyRejection,
     RECOVERABLE_CODES,

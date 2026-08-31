@@ -57,7 +57,7 @@ pub(crate) async fn desktop_launch_default_coding_agent(
         .expect("terminal launch lock poisoned")
         .clone()
         .ok_or_else(|| "terminal launch is unavailable".to_owned())?;
-    let session = work_management::launch_policy::execute_pending_decision(
+    let session = crate::execution::launch_delivery::execute(
         database,
         &terminal_launch,
         &decision,

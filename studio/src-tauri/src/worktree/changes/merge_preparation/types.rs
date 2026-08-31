@@ -12,7 +12,7 @@ pub struct MergePreparationResult {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(super) struct LaunchedAgent {
+pub struct LaunchedAgent {
     pub agent_run_id: String,
     pub agent: String,
 }

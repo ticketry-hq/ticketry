@@ -26,7 +26,8 @@ mod view;
 pub use command_result::RepositoryCommandResult;
 pub use error::WorktreeChangesError;
 pub use merge_preparation::{
-    MergePreparationError, MergePreparationResult, MergePreparationService,
+    LaunchedAgent, MergePreparationError, MergePreparationLauncher, MergePreparationResult,
+    MergePreparationService,
 };
 pub use pull_request_state::PullRequestStatusView;
 pub use service::WorktreeChangesService;

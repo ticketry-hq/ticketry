@@ -3,7 +3,6 @@ use std::sync::Arc;
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 
 use crate::entities::worktrees::worktree;
-use crate::terminal::launch::TerminalLaunchService;
 use crate::work_management::launch_policy::{
     CallerScope, LaunchPolicyRequest, LaunchPolicyResolver,
 };
@@ -13,7 +12,7 @@ use super::super::{
     command, command_git, repository, PullRequestStatusView, WorktreeChangesService,
 };
 use super::error::MergePreparationError;
-use super::launcher::{MergePreparationLauncher, TerminalMergePreparationLauncher};
+use super::launcher::MergePreparationLauncher;
 use super::prompt;
 use super::types::MergePreparationResult;
 
@@ -25,12 +24,13 @@ pub struct MergePreparationService {
 }
 
 impl MergePreparationService {
-    pub fn new(changes: WorktreeChangesService, terminals: TerminalLaunchService) -> Self {
+    /// The caller composes the launcher, so worktree never names a runtime.
+    pub fn new(changes: WorktreeChangesService, launcher: Arc<dyn MergePreparationLauncher>) -> Self {
         let database = changes.status().work_items().clone();
         Self {
             changes,
-            policy: LaunchPolicyResolver::new(database.clone()),
-            launcher: Arc::new(TerminalMergePreparationLauncher::new(database, terminals)),
+            policy: LaunchPolicyResolver::new(database),
+            launcher,
         }
     }
 

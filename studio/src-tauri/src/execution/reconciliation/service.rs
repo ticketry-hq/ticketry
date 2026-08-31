@@ -59,7 +59,7 @@ impl ExecutionReconciliationService {
             Ok(decisions) => {
                 report.automation_decisions = decisions.len();
                 for decision in decisions {
-                    if let Err(error) = launch_policy::execute_pending_decision(
+                    if let Err(error) = crate::execution::launch_delivery::execute(
                         &self.database,
                         &self.terminal_launch,
                         &decision,

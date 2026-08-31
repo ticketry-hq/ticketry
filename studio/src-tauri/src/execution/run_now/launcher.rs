@@ -29,7 +29,7 @@ impl TerminalRunNowLauncher {
 impl RunNowLauncher for TerminalRunNowLauncher {
     async fn launch(&self, decision: &LaunchPolicyDecision) -> Result<RunNowRun, String> {
         let session =
-            launch_policy::execute_pending_decision(&self.database, &self.terminals, decision)
+            crate::execution::launch_delivery::execute(&self.database, &self.terminals, decision)
                 .await?;
         Ok(RunNowRun {
             target_id: decision.task_id.clone(),

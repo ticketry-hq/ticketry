@@ -72,7 +72,7 @@ pub(super) async fn execute_launch_decision(
     let Some(service) = service else {
         return Err(());
     };
-    crate::work_management::launch_policy::execute_pending_decision(database, service, decision)
+    crate::execution::launch_delivery::execute(database, service, decision)
         .await
         .map_err(|error| {
             eprintln!(

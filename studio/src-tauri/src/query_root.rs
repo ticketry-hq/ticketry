@@ -302,10 +302,19 @@ fn build_schema(
     } else {
         None
     };
-    if let (Some(changes), Some(terminals)) = (worktree_changes, terminal_services.as_ref()) {
+    if let (Some(changes), Some(terminals), Some(work_items)) = (
+        worktree_changes,
+        terminal_services.as_ref(),
+        worktracker_database.as_ref(),
+    ) {
         schema = schema.data(crate::worktree::changes::MergePreparationService::new(
             changes,
-            terminals.launch.clone(),
+            std::sync::Arc::new(
+                crate::execution::merge_preparation_launcher::TerminalMergePreparationLauncher::new(
+                    work_items.clone(),
+                    terminals.launch.clone(),
+                ),
+            ),
         ));
     }
     // Each write publishes itself, so a resolver reaches its own service and

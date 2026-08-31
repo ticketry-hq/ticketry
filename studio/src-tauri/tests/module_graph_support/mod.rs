@@ -56,7 +56,6 @@ pub const ALLOWED_BACK_EDGES: &[(&str, &str)] = &[
     ("work_management", "runs_persistence"),
     ("work_management", "terminal"),
     ("work_management", "worktree"),
-    ("worktree", "terminal"),
 ];
 
 /// Files and directories that are not part of the module graph.

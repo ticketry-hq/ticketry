@@ -143,3 +143,13 @@ ticketry-diagnostics = { path = "crates/ticketry-diagnostics" }
 ticketry-entities = { path = "crates/ticketry-entities" }
 tokio = { version = "=1.53.1", features = ["macros", "net", "rt-multi-thread", "sync", "time"] }
 uuid = { version = "1.24", features = ["v4", "v5"] }
+
+# Development builds keep only the line tables. Full DWARF for a workspace this
+# size costs tens of gigabytes and dominates link time; line tables still name
+# the file and line in every panic and backtrace, which is what the test suite
+# and the desktop crash reports actually read.
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false

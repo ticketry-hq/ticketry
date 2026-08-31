@@ -7,7 +7,7 @@ use crate::launch::planning::{
     build_document_chat_prompt, build_instant_prompt, build_planning_prompt, provider_contract,
     DocumentChatPrompt, InstantPrompt, PlanningPrompt, Provider,
 };
-use crate::terminal::launch::{CreateTerminalSession, TerminalLaunchKind};
+use crate::launch::terminal_session::{CreateTerminalSession, TerminalLaunchKind};
 use crate::work_management::launch_policy::{
     CallerScope, LaunchPolicyRequest, LaunchPolicyResolver,
 };

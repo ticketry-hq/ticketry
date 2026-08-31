@@ -9,10 +9,8 @@ use sea_orm::{DatabaseConnection, EntityTrait};
 
 use crate::hook_spool::{DrainReport, HookSpool};
 use crate::runs_persistence::LifecycleService;
-use crate::terminal::launch::{
-    TerminalLaunchCheckpoint, TerminalLaunchError, TerminalLaunchErrorCode, TerminalLaunchRuntime,
-    TerminalRuntimeObservation, VerifiedTerminalRuntime,
-};
+use crate::terminal::launch::{TerminalLaunchCheckpoint, TerminalLaunchRuntime, TerminalRuntimeObservation, VerifiedTerminalRuntime};
+use crate::launch::terminal_session::{TerminalLaunchError, TerminalLaunchErrorCode};
 use crate::terminal::reconciliation::{
     RecordedSessionDecision, TerminalReconciliationReport, TerminalReconciliationService,
 };
@@ -234,7 +232,7 @@ impl Default for InteractiveTerminalLaunchRuntime {
 impl TerminalLaunchRuntime for InteractiveTerminalLaunchRuntime {
     async fn preflight(
         &self,
-        request: &crate::terminal::launch::CreateTerminalSession,
+        request: &crate::launch::terminal_session::CreateTerminalSession,
     ) -> Result<(), TerminalLaunchError> {
         let authority = self
             .authority
@@ -438,10 +436,10 @@ impl TerminalLaunchRuntime for InteractiveTerminalLaunchRuntime {
 }
 
 fn require_provider_control(
-    kind: crate::terminal::launch::TerminalLaunchKind,
+    kind: crate::launch::terminal_session::TerminalLaunchKind,
     mcp_url: &str,
 ) -> Result<(), TerminalLaunchError> {
-    if kind != crate::terminal::launch::TerminalLaunchKind::Shell && mcp_url.is_empty() {
+    if kind != crate::launch::terminal_session::TerminalLaunchKind::Shell && mcp_url.is_empty() {
         return Err(TerminalLaunchError::new(
             TerminalLaunchErrorCode::RuntimeUnavailable,
             "WorkTracker MCP is unavailable. Provider launch is blocked.",
@@ -453,7 +451,7 @@ fn require_provider_control(
 #[cfg(test)]
 mod provider_control_tests {
     use super::require_provider_control;
-    use crate::terminal::launch::{TerminalLaunchErrorCode, TerminalLaunchKind};
+    use crate::launch::terminal_session::{TerminalLaunchErrorCode, TerminalLaunchKind};
 
     #[test]
     fn missing_listener_blocks_provider_launch_with_an_empty_url() {

@@ -54,8 +54,8 @@ impl From<crate::runs_persistence::RunsPersistenceError> for TerminalReconciliat
     }
 }
 
-impl From<crate::terminal::launch::TerminalLaunchError> for TerminalReconciliationError {
-    fn from(error: crate::terminal::launch::TerminalLaunchError) -> Self {
+impl From<crate::launch::terminal_session::TerminalLaunchError> for TerminalReconciliationError {
+    fn from(error: crate::launch::terminal_session::TerminalLaunchError) -> Self {
         Self::new(TerminalReconciliationErrorCode::Launch, error.to_string())
     }
 }

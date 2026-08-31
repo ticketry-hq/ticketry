@@ -1,6 +1,6 @@
 use crate::execution::graph::GraphFactsError;
 use crate::launch::authority::LaunchAuthorityError;
-use crate::terminal::launch::TerminalLaunchError;
+use crate::launch::terminal_session::TerminalLaunchError;
 use crate::work_management::launch_policy::LaunchPolicyError;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

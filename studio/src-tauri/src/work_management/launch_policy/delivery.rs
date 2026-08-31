@@ -2,7 +2,8 @@ use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 
 use crate::entities::runs::automation_attempt;
 use crate::launch::authority::{compose_task_prompt, TaskPromptSource};
-use crate::terminal::launch::{CreateTerminalSession, TerminalLaunchKind, TerminalLaunchService};
+use crate::launch::terminal_session::{CreateTerminalSession, TerminalLaunchKind};
+use crate::terminal::launch::TerminalLaunchService;
 
 use super::{mark_delivered, CallerScope, LaunchPolicyDecision};
 

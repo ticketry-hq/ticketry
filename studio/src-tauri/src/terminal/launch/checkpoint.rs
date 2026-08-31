@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 
-use super::{TerminalLaunchError, TerminalLaunchErrorCode};
+use crate::launch::terminal_session::{TerminalLaunchError, TerminalLaunchErrorCode};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TerminalLaunchBoundary {

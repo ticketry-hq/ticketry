@@ -267,7 +267,7 @@ pub const CHILD_HANDOFFS: &[ChildHandoff] = &[
         verdict: "owed at its own Review: touches the restricted create seam",
         evidence: "handoff due with the launch-policy fix",
         files_checked: &[
-            "studio/src-tauri/src/terminal/launch/request.rs",
+            "studio/src-tauri/src/launch/terminal_session/request.rs",
             "studio/src-tauri/src/launch/planning",
         ],
     },

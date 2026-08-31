@@ -8,7 +8,8 @@ use axum::{
 use serde::Deserialize;
 use serde_json::{json, Value};
 
-use crate::terminal::launch::{CreateTerminalSession, TerminalLaunchKind, TerminalLaunchService};
+use crate::launch::terminal_session::{CreateTerminalSession, TerminalLaunchKind};
+use crate::terminal::launch::TerminalLaunchService;
 
 #[derive(Clone)]
 pub(super) struct TerminalLaunchIngressState {

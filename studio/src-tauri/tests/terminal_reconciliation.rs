@@ -17,9 +17,8 @@ use muxed_studio_lib::entities::{
 use muxed_studio_lib::terminal::cleanup::{
     CleanupCause, CleanupRuntimeObservation, TerminalCleanupService,
 };
-use muxed_studio_lib::terminal::launch::{
-    CreateTerminalSession, TerminalLaunchBoundary, TerminalLaunchKind,
-};
+use muxed_studio_lib::terminal::launch::{TerminalLaunchBoundary};
+use muxed_studio_lib::launch::terminal_session::{CreateTerminalSession, TerminalLaunchKind};
 use muxed_studio_lib::terminal::reconciliation::{
     ReconciliationCheckpoint, RecordedSessionDecision, UnrecordedRuntimeDecision,
     MAX_RECORDED_SESSION_BATCH,

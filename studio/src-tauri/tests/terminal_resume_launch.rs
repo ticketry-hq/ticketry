@@ -9,10 +9,8 @@ use common::terminal_lifecycle_harness::{
     TerminalLifecycleHarness, MODULE_ID, PROJECT_ID, TASK_ID,
 };
 use muxed_studio_lib::entities::terminals::{launch_material, session};
-use muxed_studio_lib::terminal::launch::{
-    CreateTerminalSession, TerminalLaunchCheckpoint, TerminalLaunchError, TerminalLaunchKind,
-    TerminalLaunchRuntime, TerminalRuntimeObservation, VerifiedTerminalRuntime,
-};
+use muxed_studio_lib::terminal::launch::{TerminalLaunchCheckpoint, TerminalLaunchRuntime, TerminalRuntimeObservation, VerifiedTerminalRuntime};
+use muxed_studio_lib::launch::terminal_session::{CreateTerminalSession, TerminalLaunchError, TerminalLaunchKind};
 use sea_orm::{ConnectionTrait, EntityTrait};
 
 struct ResumeRuntime {

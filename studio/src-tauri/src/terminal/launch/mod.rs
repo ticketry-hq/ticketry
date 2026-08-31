@@ -9,20 +9,16 @@
 pub mod action_compatibility;
 mod authority;
 mod checkpoint;
-mod error;
 mod execution;
 mod graphql;
 pub(crate) mod login_shell;
 mod material;
-mod request;
 mod runtime;
 mod service;
 mod settlement;
 
 pub use checkpoint::{TerminalLaunchBoundary, TerminalLaunchCheckpoint};
-pub use error::{TerminalLaunchError, TerminalLaunchErrorCode};
 pub use execution::TerminalLaunchRecoveryReport;
-pub use request::{CreateTerminalSession, TerminalLaunchKind};
 pub use runtime::{TerminalLaunchRuntime, TerminalRuntimeObservation, VerifiedTerminalRuntime};
 pub use service::TerminalLaunchService;
 

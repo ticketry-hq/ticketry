@@ -47,8 +47,6 @@ pub const SLICES: &[(&str, &str)] = &[
 /// crate-split plan, and a stale entry fails the guard so the list cannot
 /// drift. Adding an entry means a new cycle was introduced.
 pub const ALLOWED_BACK_EDGES: &[(&str, &str)] = &[
-    // §3.2 move the launch DTOs out of `terminal`
-    ("launch", "terminal"),
     // §3.3 move misplaced Tauri command handlers into `desktop`
     ("terminal", "desktop"),
     // §3.4 code motion out of `work_management` and the remaining pairs

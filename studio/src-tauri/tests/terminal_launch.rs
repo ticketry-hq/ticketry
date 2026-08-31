@@ -12,11 +12,8 @@ use muxed_studio_lib::entities::terminals::launch_material;
 use muxed_studio_lib::launch::authority::{
     InteractiveLaunchAuthority, LaunchAuthorityError, ResolvedLaunchMaterial,
 };
-use muxed_studio_lib::terminal::launch::{
-    CreateTerminalSession, TerminalLaunchBoundary, TerminalLaunchCheckpoint, TerminalLaunchError,
-    TerminalLaunchKind, TerminalLaunchRuntime, TerminalLaunchService, TerminalRuntimeObservation,
-    VerifiedTerminalRuntime,
-};
+use muxed_studio_lib::terminal::launch::{TerminalLaunchBoundary, TerminalLaunchCheckpoint, TerminalLaunchRuntime, TerminalLaunchService, TerminalRuntimeObservation, VerifiedTerminalRuntime};
+use muxed_studio_lib::launch::terminal_session::{CreateTerminalSession, TerminalLaunchError, TerminalLaunchKind};
 use sea_orm::{ConnectionTrait, DbBackend, Statement};
 
 struct RecordingRuntime {

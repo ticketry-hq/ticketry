@@ -9,10 +9,8 @@ use common::terminal_lifecycle_harness::{TerminalLifecycleHarness, MODULE_ID, TA
 use muxed_studio_lib::entities::terminals::launch_material;
 use muxed_studio_lib::execution::reconciliation::ExecutionReconciliationService;
 use muxed_studio_lib::execution::run_now::{RunNowCaller, RunNowRequest, RunNowService};
-use muxed_studio_lib::terminal::launch::{
-    TerminalLaunchBoundary, TerminalLaunchCheckpoint, TerminalLaunchError, TerminalLaunchRuntime,
-    TerminalRuntimeObservation, VerifiedTerminalRuntime,
-};
+use muxed_studio_lib::terminal::launch::{TerminalLaunchBoundary, TerminalLaunchCheckpoint, TerminalLaunchRuntime, TerminalRuntimeObservation, VerifiedTerminalRuntime};
+use muxed_studio_lib::launch::terminal_session::{TerminalLaunchError};
 use muxed_studio_lib::work_management::launch_policy::{
     self, CallerScope, LaunchPolicyRequest, LaunchPolicyResolver,
 };

@@ -1,4 +1,4 @@
-use crate::terminal::launch::CreateTerminalSession;
+use crate::launch::terminal_session::CreateTerminalSession;
 
 /// Everything a launch persists that a caller may not choose.
 ///

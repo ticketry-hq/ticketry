@@ -9,10 +9,8 @@ use crate::runs_persistence::RunsServices;
 
 use super::checkpoint::LaunchCheckpoints;
 use super::material::PreparedMaterial;
-use super::{
-    CreateTerminalSession, TerminalLaunchBoundary, TerminalLaunchCheckpoint, TerminalLaunchError,
-    TerminalLaunchErrorCode, TerminalLaunchRuntime,
-};
+use super::{TerminalLaunchBoundary, TerminalLaunchCheckpoint, TerminalLaunchRuntime};
+use crate::launch::terminal_session::{CreateTerminalSession, TerminalLaunchError, TerminalLaunchErrorCode};
 
 pub(crate) struct AcceptedTerminalLaunch {
     material: PreparedMaterial,
@@ -98,7 +96,7 @@ impl TerminalLaunchService {
             issue_id: module.id.clone(),
             module_id: module.id.clone(),
             target_id: module.id.clone(),
-            kind: super::TerminalLaunchKind::Shell,
+            kind: crate::launch::terminal_session::TerminalLaunchKind::Shell,
             provider: None,
             model: None,
             reasoning: None,
@@ -223,7 +221,7 @@ impl TerminalLaunchService {
     ) -> Result<Option<String>, TerminalLaunchError> {
         if !matches!(
             request.kind,
-            super::TerminalLaunchKind::Task | super::TerminalLaunchKind::Automation
+            crate::launch::terminal_session::TerminalLaunchKind::Task | crate::launch::terminal_session::TerminalLaunchKind::Automation
         ) {
             return Ok(None);
         }
@@ -252,9 +250,9 @@ impl TerminalLaunchService {
         request: &CreateTerminalSession,
     ) -> Result<(), TerminalLaunchError> {
         match request.kind {
-            super::TerminalLaunchKind::Planning
-            | super::TerminalLaunchKind::Instant
-            | super::TerminalLaunchKind::Shell => {
+            crate::launch::terminal_session::TerminalLaunchKind::Planning
+            | crate::launch::terminal_session::TerminalLaunchKind::Instant
+            | crate::launch::terminal_session::TerminalLaunchKind::Shell => {
                 let submitted = issue::Entity::find_by_id(compact(&request.issue_id))
                     .one(&self.database)
                     .await
@@ -293,9 +291,9 @@ impl TerminalLaunchService {
                     ));
                 }
             }
-            super::TerminalLaunchKind::Task
-            | super::TerminalLaunchKind::DocumentChat
-            | super::TerminalLaunchKind::Automation => {
+            crate::launch::terminal_session::TerminalLaunchKind::Task
+            | crate::launch::terminal_session::TerminalLaunchKind::DocumentChat
+            | crate::launch::terminal_session::TerminalLaunchKind::Automation => {
                 let owner =
                     crate::worktree::status::owner::resolve(&self.database, &request.issue_id)
                         .await
@@ -316,13 +314,13 @@ impl TerminalLaunchService {
             }
         }
         let expected_target = match request.kind {
-            super::TerminalLaunchKind::Task | super::TerminalLaunchKind::Automation => {
+            crate::launch::terminal_session::TerminalLaunchKind::Task | crate::launch::terminal_session::TerminalLaunchKind::Automation => {
                 compact(&request.issue_id)
             }
-            super::TerminalLaunchKind::Planning
-            | super::TerminalLaunchKind::Instant
-            | super::TerminalLaunchKind::Shell => compact(&request.module_id),
-            super::TerminalLaunchKind::DocumentChat => compact(&request.target_id),
+            crate::launch::terminal_session::TerminalLaunchKind::Planning
+            | crate::launch::terminal_session::TerminalLaunchKind::Instant
+            | crate::launch::terminal_session::TerminalLaunchKind::Shell => compact(&request.module_id),
+            crate::launch::terminal_session::TerminalLaunchKind::DocumentChat => compact(&request.target_id),
         };
         if compact(&request.target_id) != expected_target {
             return Err(TerminalLaunchError::new(
@@ -331,15 +329,15 @@ impl TerminalLaunchService {
             ));
         }
         let expected_workspace = match request.kind {
-            super::TerminalLaunchKind::Task | super::TerminalLaunchKind::Automation => {
+            crate::launch::terminal_session::TerminalLaunchKind::Task | crate::launch::terminal_session::TerminalLaunchKind::Automation => {
                 format!("task:{}", compact(&request.issue_id))
             }
-            super::TerminalLaunchKind::Planning
-            | super::TerminalLaunchKind::Instant
-            | super::TerminalLaunchKind::Shell => {
+            crate::launch::terminal_session::TerminalLaunchKind::Planning
+            | crate::launch::terminal_session::TerminalLaunchKind::Instant
+            | crate::launch::terminal_session::TerminalLaunchKind::Shell => {
                 format!("module:{}", compact(&request.module_id))
             }
-            super::TerminalLaunchKind::DocumentChat => {
+            crate::launch::terminal_session::TerminalLaunchKind::DocumentChat => {
                 format!("document:{}", compact(&request.target_id))
             }
         };

@@ -2,7 +2,8 @@ use async_trait::async_trait;
 
 use crate::entities::terminals::launch_material;
 
-use super::{CreateTerminalSession, TerminalLaunchCheckpoint, TerminalLaunchError};
+use super::{TerminalLaunchCheckpoint};
+use crate::launch::terminal_session::{CreateTerminalSession, TerminalLaunchError};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct VerifiedTerminalRuntime {

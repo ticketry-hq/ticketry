@@ -2,9 +2,7 @@ use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 
 use crate::entities::{runs::agent_run, terminals::session};
 use crate::launch::planning::{provider_contract, Provider};
-use crate::terminal::launch::{
-    CreateTerminalSession, TerminalLaunchError, TerminalLaunchErrorCode,
-};
+use crate::launch::terminal_session::{CreateTerminalSession, TerminalLaunchError, TerminalLaunchErrorCode};
 
 use super::scope::{compact, ResumeScope};
 

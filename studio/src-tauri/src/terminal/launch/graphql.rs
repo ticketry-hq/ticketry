@@ -8,9 +8,8 @@ use seaography::{
 use crate::entities::terminals::session;
 use crate::work_management::read_types::StringList;
 
-use super::{
-    CreateTerminalSession, TerminalLaunchError, TerminalLaunchKind, TerminalLaunchService,
-};
+use super::{TerminalLaunchService};
+use crate::launch::terminal_session::{CreateTerminalSession, TerminalLaunchError, TerminalLaunchKind};
 
 pub struct TerminalSessionMutations;
 

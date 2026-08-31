@@ -12,7 +12,8 @@ use crate::execution::graph::{
     automatic_candidates, manual_candidates, scheduling_facts, ExecutionMode, GraphAccess,
 };
 use crate::launch::authority::{compose_task_prompt, TaskPromptSource};
-use crate::terminal::launch::{CreateTerminalSession, TerminalLaunchKind, TerminalLaunchService};
+use crate::launch::terminal_session::{CreateTerminalSession, TerminalLaunchKind};
+use crate::terminal::launch::TerminalLaunchService;
 use crate::work_management::launch_policy::{
     CallerScope, LaunchPolicyDecision, LaunchPolicyRequest, LaunchPolicyResolver,
 };

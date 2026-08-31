@@ -5,10 +5,8 @@ use crate::entities::terminals::{launch_material, session};
 use crate::runs_persistence::{ClaimedLaunch, LaunchOutcome};
 
 use super::settlement::SessionSettlement;
-use super::{
-    TerminalLaunchBoundary, TerminalLaunchCheckpoint, TerminalLaunchError, TerminalLaunchErrorCode,
-    TerminalLaunchService, TerminalRuntimeObservation, VerifiedTerminalRuntime,
-};
+use super::{TerminalLaunchBoundary, TerminalLaunchCheckpoint, TerminalLaunchService, TerminalRuntimeObservation, VerifiedTerminalRuntime};
+use crate::launch::terminal_session::{TerminalLaunchError, TerminalLaunchErrorCode};
 
 const LEASE_SECONDS: i64 = 120;
 const RECOVERY_BATCH: u64 = 200;

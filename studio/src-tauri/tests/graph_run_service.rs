@@ -13,10 +13,8 @@ use muxed_studio_lib::execution::graph::{ExecutionMode, GraphAccess};
 use muxed_studio_lib::execution::reconciliation::ExecutionReconciliationService;
 use muxed_studio_lib::graph_run_service::GraphRunCaller;
 use muxed_studio_lib::graph_run_service::{GraphRunRequest, GraphRunService};
-use muxed_studio_lib::terminal::launch::{
-    TerminalLaunchBoundary, TerminalLaunchCheckpoint, TerminalLaunchError, TerminalLaunchRuntime,
-    TerminalLaunchService, TerminalRuntimeObservation, VerifiedTerminalRuntime,
-};
+use muxed_studio_lib::terminal::launch::{TerminalLaunchBoundary, TerminalLaunchCheckpoint, TerminalLaunchRuntime, TerminalLaunchService, TerminalRuntimeObservation, VerifiedTerminalRuntime};
+use muxed_studio_lib::launch::terminal_session::{TerminalLaunchError};
 use muxed_studio_lib::work_management::launch_policy::LaunchPolicyResolver;
 use sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, Statement};
 use seaography::{Builder, BuilderContext};

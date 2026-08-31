@@ -7,7 +7,7 @@ use crate::entities::work_management::provider;
 use crate::launch::paths::{LaunchPathsRequest, LaunchPathsService, LaunchPathsView, LaunchScope};
 use crate::launch::planning::Provider;
 use crate::settings_persistence::read_global_launch_default;
-use crate::terminal::launch::{CreateTerminalSession, TerminalLaunchKind};
+use crate::launch::terminal_session::{CreateTerminalSession, TerminalLaunchKind};
 use crate::worktree::status::repository::module_folder;
 
 use super::error::{LaunchAuthorityError, LaunchAuthorityErrorCode};

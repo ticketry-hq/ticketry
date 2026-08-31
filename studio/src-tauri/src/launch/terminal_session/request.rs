@@ -1,6 +1,6 @@
 use sha2::{Digest, Sha256};
 
-use super::{TerminalLaunchError, TerminalLaunchErrorCode};
+use super::error::{TerminalLaunchError, TerminalLaunchErrorCode};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TerminalLaunchKind {

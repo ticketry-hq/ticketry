@@ -9,10 +9,8 @@ use muxed_studio_lib::terminal::cleanup::{
     CleanupCheckpoint, CleanupCheckpoints, CleanupKillResult, CleanupRuntimeObservation,
     RuntimeInventory, TerminalCleanupError, TerminalCleanupRuntime,
 };
-use muxed_studio_lib::terminal::launch::{
-    TerminalLaunchBoundary, TerminalLaunchCheckpoint, TerminalLaunchError, TerminalLaunchRuntime,
-    TerminalRuntimeObservation, VerifiedTerminalRuntime,
-};
+use muxed_studio_lib::terminal::launch::{TerminalLaunchBoundary, TerminalLaunchCheckpoint, TerminalLaunchRuntime, TerminalRuntimeObservation, VerifiedTerminalRuntime};
+use muxed_studio_lib::launch::terminal_session::{TerminalLaunchError};
 use muxed_studio_lib::terminal::reconciliation::{
     ReconciliationCheckpoint, ReconciliationCheckpoints, TerminalReconciliationError,
     TerminalReconciliationService,

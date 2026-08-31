@@ -3,8 +3,10 @@
 //! and the canonical prompt shapes decide what a run is allowed to start with.
 
 use muxed_studio_lib::{
-    launch::authority::{InteractiveLaunchAuthority, LaunchAuthorityService},
-    terminal::launch::{CreateTerminalSession, TerminalLaunchKind},
+    launch::{
+        authority::{InteractiveLaunchAuthority, LaunchAuthorityService},
+        terminal_session::{CreateTerminalSession, TerminalLaunchKind},
+    },
     work_management::open_for_commands,
 };
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection};

@@ -100,7 +100,7 @@ async fn schema() -> GraphQlEndpoint {
         .unwrap();
 
     let foundation = Database::connect("sqlite::memory:").await.unwrap();
-    let schema = muxed_studio_lib::query_root::foundation_schema(
+    let schema = ticketry_graphql_schema::query_root::foundation_schema(
         foundation,
         Some(database),
         None,

@@ -627,7 +627,7 @@ async fn event_and_snapshot_publish_the_same_run_projection() {
 async fn graphql_report_accepts_only_the_terminal_session_identity() {
     let foundation = Database::connect("sqlite::memory:").await.unwrap();
     let worktracker = Database::connect("sqlite::memory:").await.unwrap();
-    let schema = muxed_studio_lib::query_root::foundation_schema(
+    let schema = ticketry_graphql_schema::query_root::foundation_schema(
         foundation,
         Some(worktracker),
         None,

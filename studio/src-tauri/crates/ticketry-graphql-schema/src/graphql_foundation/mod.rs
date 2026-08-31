@@ -1,12 +1,12 @@
 mod composed_commands;
 mod composition;
 mod database;
-pub(crate) mod entity_registration;
+pub mod entity_registration;
 pub use ticketry_entities::foundation as entities;
-pub(crate) mod error;
+pub mod error;
 mod migration_probe;
 pub mod migrations;
-pub(crate) mod readiness_gate;
+pub mod readiness_gate;
 
 use std::path::Path;
 

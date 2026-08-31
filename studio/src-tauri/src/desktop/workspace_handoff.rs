@@ -20,7 +20,7 @@ use std::path::Path;
 use tauri_graphql::TransportApi;
 
 use crate::desktop::document_protocol;
-use crate::graphql_foundation::ComposedCommandRuntime;
+use ticketry_graphql_schema::graphql_foundation::ComposedCommandRuntime;
 use ticketry_workspace_runtime::workspace::handoff::{
     self, manifest, Slice4Readiness, WorkspaceHandoffError,
 };

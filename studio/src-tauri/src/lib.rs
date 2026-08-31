@@ -5,9 +5,7 @@
 
 pub(crate) mod app_updates;
 pub mod desktop;
-pub mod graphql_foundation;
 pub mod native_terminal;
-pub mod query_root;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {

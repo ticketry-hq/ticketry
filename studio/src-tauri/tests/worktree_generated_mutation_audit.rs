@@ -6,7 +6,6 @@
 //! shipping schema keeps that bundle private while serving the generated read
 //! contract, and that protected columns cannot appear in any generated input.
 
-use muxed_studio_lib::graphql_foundation::generated_schema_sdl;
 use sea_orm::Database;
 use seaography::{
     async_graphql::dynamic::{Object, Schema},
@@ -15,6 +14,7 @@ use seaography::{
 use std::sync::LazyLock;
 use ticketry_entities::work_management;
 use ticketry_entities::worktrees::worktree;
+use ticketry_graphql_schema::graphql_foundation::generated_schema_sdl;
 use ticketry_workspace_runtime::worktree::persistence::column_policy;
 use ticketry_workspace_runtime::worktree::persistence::ownership_manifest::{
     GENERATED_MUTATION_GAPS, PROTECTED_COLUMNS,

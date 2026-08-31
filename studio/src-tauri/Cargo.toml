@@ -94,14 +94,14 @@ rand.workspace = true
 reqwest.workspace = true
 rmcp.workspace = true
 sea-orm.workspace = true
-sea-orm-migration = { version = "=2.0.1", features = ["runtime-tokio-rustls", "sqlx-sqlite"] }
+sea-orm-migration.workspace = true
 seaography.workspace = true
 seaolim.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
 tauri.workspace = true
-tauri-graphql = { path = "crates/tauri-graphql" }
+tauri-graphql.workspace = true
 tauri-plugin-dialog = "2.6"
 tauri-plugin-updater = "2"
 tauri-plugin-wdio-webdriver = { version = "=1.3.0", optional = true }
@@ -111,6 +111,7 @@ ticketry-data-directory.workspace = true
 ticketry-diagnostics.workspace = true
 ticketry-documents.workspace = true
 ticketry-entities.workspace = true
+ticketry-graphql-schema.workspace = true
 ticketry-installation.workspace = true
 ticketry-launch.workspace = true
 ticketry-mcp.workspace = true
@@ -150,6 +151,7 @@ members = [
     "crates/ticketry-agent-execution",
     "crates/ticketry-installation",
     "crates/ticketry-mcp",
+    "crates/ticketry-graphql-schema",
 ]
 resolver = "2"
 
@@ -169,6 +171,7 @@ rand = "0.8"
 reqwest = { version = "=0.13.4", default-features = false, features = ["json", "rustls"] }
 rmcp = { version = "=3.0.0", features = ["transport-streamable-http-server"] }
 sea-orm = { version = "=2.0.1", features = ["runtime-tokio-rustls", "seaography", "sqlx-postgres", "sqlx-sqlite"] }
+sea-orm-migration = { version = "=2.0.1", features = ["runtime-tokio-rustls", "sqlx-sqlite"] }
 seaography = { version = "=2.0.0-rc.9", default-features = false, features = ["field-camel-case", "macros", "with-chrono", "with-json"] }
 seaolim = { git = "https://github.com/charleeagni/seaolim", rev = "29f24172be1ab423e9b8b14b11ba1fa73452f1cd" }
 serde = { version = "=1.0.229", features = ["derive"] }
@@ -176,6 +179,7 @@ serde_json = "=1.0.151"
 sha2 = "0.10"
 specta = { version = "=2.0.0-rc.25", features = ["derive"] }
 tauri = "=2.11.5"
+tauri-graphql = { path = "crates/tauri-graphql" }
 taurpc = "=0.8.2"
 tempfile = "=3.23.0"
 ticketry-agent-execution = { path = "crates/ticketry-agent-execution" }
@@ -183,6 +187,7 @@ ticketry-data-directory = { path = "crates/ticketry-data-directory" }
 ticketry-diagnostics = { path = "crates/ticketry-diagnostics" }
 ticketry-documents = { path = "crates/ticketry-documents" }
 ticketry-entities = { path = "crates/ticketry-entities" }
+ticketry-graphql-schema = { path = "crates/ticketry-graphql-schema" }
 ticketry-installation = { path = "crates/ticketry-installation" }
 ticketry-launch = { path = "crates/ticketry-launch" }
 ticketry-mcp = { path = "crates/ticketry-mcp" }

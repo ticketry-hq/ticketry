@@ -21,7 +21,7 @@ pub struct FoundationInitializationError {
 }
 
 impl FoundationInitializationError {
-    pub(crate) fn new(code: FoundationInitializationErrorCode, message: impl Into<String>) -> Self {
+    pub fn new(code: FoundationInitializationErrorCode, message: impl Into<String>) -> Self {
         Self {
             code,
             message: message.into(),

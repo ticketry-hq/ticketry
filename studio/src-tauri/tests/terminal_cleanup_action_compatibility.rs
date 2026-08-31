@@ -75,7 +75,7 @@ async fn action_candidate_preserves_tri_state_input_sdl_and_entity_result() {
     )
     .unwrap();
 
-    let actual = muxed_studio_lib::graphql_foundation::generated_schema_sdl()
+    let actual = ticketry_graphql_schema::graphql_foundation::generated_schema_sdl()
         .await
         .expect("build shipping schema");
     let checked_in = include_str!("../../src/graphql-foundation/generated/schema.graphql");

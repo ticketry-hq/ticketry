@@ -1,6 +1,5 @@
 use std::collections::{HashMap, HashSet};
 
-use muxed_studio_lib::graphql_foundation::initialize_with_worktracker_commands_and_install;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, ConnectionTrait, Database, EntityTrait, PaginatorTrait,
     QueryFilter, QueryOrder, Set,
@@ -10,6 +9,7 @@ use ticketry_entities::work_management::{
     attachment, issue, issue_type, issue_type_transition, launch_binding, module_presentation,
     project, state,
 };
+use ticketry_graphql_schema::graphql_foundation::initialize_with_worktracker_commands_and_install;
 use ticketry_work_management::work_management::commands::{
     attachments, blockers, catalog, hierarchy, reorder, state_configuration, work_items, workflow,
 };

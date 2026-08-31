@@ -1,6 +1,6 @@
-use muxed_studio_lib::graphql_foundation::initialize_with_keybinding_settings_and_install;
 use sea_orm::{ConnectionTrait, Database};
 use tauri_graphql::{TransportApi, TransportApiImpl};
+use ticketry_graphql_schema::graphql_foundation::initialize_with_keybinding_settings_and_install;
 
 fn request(query: &str, variables: serde_json::Value) -> String {
     serde_json::json!({ "query": query, "variables": variables }).to_string()
@@ -88,7 +88,7 @@ async fn instant_settings_round_trip_through_one_fixed_identity_model_write() {
 
 #[tokio::test]
 async fn instant_setting_contract_allowlists_only_prompt_and_auto_close() {
-    let sdl = muxed_studio_lib::graphql_foundation::generated_schema_sdl()
+    let sdl = ticketry_graphql_schema::graphql_foundation::generated_schema_sdl()
         .await
         .unwrap();
 

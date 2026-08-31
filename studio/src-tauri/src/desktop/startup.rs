@@ -13,7 +13,6 @@ use crate::desktop::runtime_configuration::{
 use crate::desktop::rust_runtime_launch::launch_rust_runtime;
 use crate::desktop::service_health::{ServiceHealth, ServiceHealthState};
 use crate::desktop::service_state::DesktopServiceState;
-use crate::graphql_foundation;
 use ticketry_data_directory::established_data_directory;
 
 pub(crate) fn initialize_services(
@@ -67,12 +66,14 @@ pub(crate) fn initialize_services(
     // one call now handles every supported input, including an empty one.
     if startup_error.is_none() {
         let foundation_database = ownership.data_directory.join("rust-core.sqlite3");
-        match tauri::async_runtime::block_on(graphql_foundation::adopt_worktracker_and_install(
-            &foundation_database,
-            &ownership.data_directory,
-            graphql_api,
-            graphql_foundation::InstallationOwnership::Owned,
-        )) {
+        match tauri::async_runtime::block_on(
+            ticketry_graphql_schema::graphql_foundation::adopt_worktracker_and_install(
+                &foundation_database,
+                &ownership.data_directory,
+                graphql_api,
+                ticketry_graphql_schema::graphql_foundation::InstallationOwnership::Owned,
+            ),
+        ) {
             Ok(adopted) => application
                 .state::<DesktopLaunchRuntime>()
                 .record(adopted.runtime),

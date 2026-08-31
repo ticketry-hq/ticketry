@@ -3,7 +3,6 @@ use sea_orm::{
     QueryFilter, QueryOrder,
 };
 
-use muxed_studio_lib::query_root;
 use ticketry_entities::{runs::status_event, work_management::state};
 use ticketry_runs::persistence::RunsServices;
 use ticketry_work_management::work_management::commands::{
@@ -94,7 +93,7 @@ fn schema(database: DatabaseConnection) -> seaography::async_graphql::dynamic::S
             .events()
             .clone(),
     );
-    query_root::foundation_schema(
+    ticketry_graphql_schema::query_root::foundation_schema(
         database.clone(),
         Some(database.clone()),
         Some(CommandDatabase(database)),
@@ -110,7 +109,7 @@ fn schema(database: DatabaseConnection) -> seaography::async_graphql::dynamic::S
 
 #[tokio::test]
 async fn keeps_all_four_state_contracts_unchanged() {
-    let sdl = muxed_studio_lib::graphql_foundation::generated_schema_sdl()
+    let sdl = ticketry_graphql_schema::graphql_foundation::generated_schema_sdl()
         .await
         .expect("build generated contract");
     for field in [

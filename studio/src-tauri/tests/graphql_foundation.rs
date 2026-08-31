@@ -1,8 +1,8 @@
-use muxed_studio_lib::graphql_foundation::{
-    initialize, initialize_and_install, FoundationInitializationErrorCode,
-};
 use sea_orm::Database;
 use tauri_graphql::{TransportApi, TransportApiImpl};
+use ticketry_graphql_schema::graphql_foundation::{
+    initialize, initialize_and_install, FoundationInitializationErrorCode,
+};
 
 fn request(query: &str, variables: serde_json::Value) -> String {
     serde_json::json!({
@@ -17,7 +17,7 @@ async fn migration_probes_are_only_composed_into_the_isolated_foundation_schema(
     let foundation_database = Database::connect("sqlite::memory:")
         .await
         .expect("open foundation schema database");
-    let probe_schema = muxed_studio_lib::query_root::foundation_schema(
+    let probe_schema = ticketry_graphql_schema::query_root::foundation_schema(
         foundation_database,
         None,
         None,
@@ -37,7 +37,7 @@ async fn migration_probes_are_only_composed_into_the_isolated_foundation_schema(
     let worktracker_database = Database::connect("sqlite::memory:")
         .await
         .expect("open product state database");
-    let product_schema = muxed_studio_lib::query_root::foundation_schema(
+    let product_schema = ticketry_graphql_schema::query_root::foundation_schema(
         foundation_database,
         Some(worktracker_database),
         None,

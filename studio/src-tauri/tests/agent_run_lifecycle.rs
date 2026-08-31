@@ -477,7 +477,7 @@ async fn same_timestamp_lifecycle_facts_resolve_in_arrival_order() {
 
 #[tokio::test]
 async fn generated_graphql_contract_has_scoped_holdings_and_no_legacy_run_termination() {
-    let sdl = muxed_studio_lib::graphql_foundation::generated_schema_sdl()
+    let sdl = ticketry_graphql_schema::graphql_foundation::generated_schema_sdl()
         .await
         .unwrap();
     assert!(sdl

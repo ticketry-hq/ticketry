@@ -14,8 +14,6 @@ use syn::{Attribute, ImplItem, Item, Meta, UseTree};
 /// must appear here; a missing one fails [`crate::module_graph`]'s coverage
 /// assertion so new modules get a home deliberately.
 pub const SLICES: &[(&str, &str)] = &[
-    ("graphql_foundation", "graphql-schema"),
-    ("query_root", "graphql-schema"),
     ("desktop", "desktop"),
     ("native_terminal", "desktop"),
     ("app_updates", "desktop"),

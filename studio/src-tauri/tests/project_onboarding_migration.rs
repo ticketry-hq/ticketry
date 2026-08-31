@@ -3,9 +3,9 @@
 //! Source commit `3a5f434a90696f40a4911e401a84db009cdfa4e7`, migrations
 //! `0045_project_onboarding_required` and `0046_remove_workspace`.
 
-use muxed_studio_lib::graphql_foundation::initialize_with_worktracker_commands_and_install;
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection, DbBackend, Statement};
 use tauri_graphql::TransportApiImpl;
+use ticketry_graphql_schema::graphql_foundation::initialize_with_worktracker_commands_and_install;
 use ticketry_installation::adoption::provisioning;
 use ticketry_work_management::work_management::project_onboarding_migration::{
     install, LEDGER_TABLE, MIGRATION_ID, SOURCE_COMMIT, VERSION,

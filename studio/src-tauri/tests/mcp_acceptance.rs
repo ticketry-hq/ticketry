@@ -13,8 +13,8 @@ use tokio::time::{timeout, Duration};
 #[path = "mcp_acceptance/termination.rs"]
 mod termination;
 
-use muxed_studio_lib::graphql_foundation::initialize_with_worktracker_commands_and_install;
 use ticketry_entities::terminals::session;
+use ticketry_graphql_schema::graphql_foundation::initialize_with_worktracker_commands_and_install;
 use ticketry_mcp::test_support::{post, start_authorizer, PROJECT};
 use ticketry_mcp::{loopback, McpConfiguration, McpRuntime};
 use ticketry_terminal::terminal::cleanup::{

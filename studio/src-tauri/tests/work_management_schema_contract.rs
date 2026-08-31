@@ -22,7 +22,7 @@ mod work_item_aggregate {
 
     #[tokio::test]
     async fn aggregate_views_preserve_the_create_and_delete_contracts() {
-        let sdl = muxed_studio_lib::graphql_foundation::generated_schema_sdl()
+        let sdl = ticketry_graphql_schema::graphql_foundation::generated_schema_sdl()
             .await
             .expect("build generated contract");
 
@@ -35,7 +35,8 @@ mod work_item_aggregate {
     #[tokio::test]
     async fn aggregate_views_preserve_authored_write_authorization() {
         let database = Database::connect("sqlite::memory:").await.unwrap();
-        let schema = muxed_studio_lib::query_root::generated_contract_schema(database).unwrap();
+        let schema =
+            ticketry_graphql_schema::query_root::generated_contract_schema(database).unwrap();
 
         for mutation in [
             r#"mutation {
@@ -68,7 +69,7 @@ mod project_views {
 
     #[tokio::test]
     async fn project_views_keep_the_existing_contracts() {
-        let sdl = muxed_studio_lib::graphql_foundation::generated_schema_sdl()
+        let sdl = ticketry_graphql_schema::graphql_foundation::generated_schema_sdl()
             .await
             .expect("build generated contract");
 
@@ -87,7 +88,8 @@ mod project_views {
     #[tokio::test]
     async fn project_views_preserve_authored_write_authorization() {
         let database = Database::connect("sqlite::memory:").await.unwrap();
-        let schema = muxed_studio_lib::query_root::generated_contract_schema(database).unwrap();
+        let schema =
+            ticketry_graphql_schema::query_root::generated_contract_schema(database).unwrap();
 
         for mutation in [
             r#"mutation { acknowledge_onboarding(project_id: "10000000-0000-0000-0000-000000000000") { id } }"#,
@@ -114,7 +116,7 @@ mod work_item_reorder {
 
     #[tokio::test]
     async fn preserves_the_reorder_contract_and_authorization() {
-        let sdl = muxed_studio_lib::graphql_foundation::generated_schema_sdl()
+        let sdl = ticketry_graphql_schema::graphql_foundation::generated_schema_sdl()
             .await
             .expect("build generated contract");
         assert!(sdl.contains(
@@ -122,7 +124,8 @@ mod work_item_reorder {
         ));
 
         let database = Database::connect("sqlite::memory:").await.unwrap();
-        let schema = muxed_studio_lib::query_root::generated_contract_schema(database).unwrap();
+        let schema =
+            ticketry_graphql_schema::query_root::generated_contract_schema(database).unwrap();
         let response = schema
             .execute(
                 r#"mutation {
@@ -150,7 +153,7 @@ mod issue_type_create {
     use ticketry_entities::work_management::issue_type;
 
     async fn generated_sdl() -> String {
-        muxed_studio_lib::graphql_foundation::generated_schema_sdl()
+        ticketry_graphql_schema::graphql_foundation::generated_schema_sdl()
             .await
             .expect("build generated contract")
     }
@@ -244,7 +247,8 @@ mod issue_type_create {
             .unwrap();
 
         let schema =
-            muxed_studio_lib::query_root::generated_contract_schema(database.clone()).unwrap();
+            ticketry_graphql_schema::query_root::generated_contract_schema(database.clone())
+                .unwrap();
 
         let omitted = schema
             .execute(
@@ -320,7 +324,7 @@ mod work_item_update {
 
     #[tokio::test]
     async fn preserves_the_public_update_contract_and_authorization() {
-        let sdl = muxed_studio_lib::graphql_foundation::generated_schema_sdl()
+        let sdl = ticketry_graphql_schema::graphql_foundation::generated_schema_sdl()
             .await
             .expect("build generated contract");
         assert!(sdl.contains(
@@ -328,7 +332,8 @@ mod work_item_update {
         ));
 
         let database = Database::connect("sqlite::memory:").await.unwrap();
-        let schema = muxed_studio_lib::query_root::generated_contract_schema(database).unwrap();
+        let schema =
+            ticketry_graphql_schema::query_root::generated_contract_schema(database).unwrap();
         let response = schema
             .execute(
                 r#"mutation {
@@ -353,7 +358,7 @@ mod work_item_update {
 mod module_presentation_migration {
     #[tokio::test]
     async fn generated_contract_has_reads_and_relations_but_no_public_writes_or_project_flag() {
-        let sdl = muxed_studio_lib::graphql_foundation::generated_schema_sdl()
+        let sdl = ticketry_graphql_schema::graphql_foundation::generated_schema_sdl()
             .await
             .expect("build generated schema");
         let presentation = sdl

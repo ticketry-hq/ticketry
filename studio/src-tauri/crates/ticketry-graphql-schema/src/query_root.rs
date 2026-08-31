@@ -61,7 +61,7 @@ pub fn foundation_schema(
     )
 }
 
-pub(crate) fn foundation_schema_with_terminal_services(
+pub fn foundation_schema_with_terminal_services(
     database: DatabaseConnection,
     worktracker_database: Option<DatabaseConnection>,
     worktracker_commands: Option<
@@ -128,7 +128,7 @@ pub fn generated_contract_schema(
     )
 }
 
-pub(crate) fn keybinding_settings_schema(
+pub fn keybinding_settings_schema(
     database: DatabaseConnection,
     settings_database: DatabaseConnection,
     settings_repository: ticketry_settings::AppSettingRepository,

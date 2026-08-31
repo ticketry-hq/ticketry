@@ -16,7 +16,7 @@ use ticketry_entities::foundation::migration_probes;
 ///
 /// `graphql_foundation.rs` proves the unused writes stay absent and executes
 /// create-one through the shipping transport.
-pub(crate) fn register_entity_modules(mut builder: Builder) -> Builder {
+pub fn register_entity_modules(mut builder: Builder) -> Builder {
     seaography::register_entity!(builder, migration_probes, mutation: false);
     migration_probe::register_views(builder)
 }

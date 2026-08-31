@@ -1,4 +1,3 @@
-use muxed_studio_lib::query_root;
 use sea_orm::{
     ActiveModelTrait, ActiveValue::Set, ConnectOptions, ConnectionTrait, Database,
     DatabaseConnection, EntityTrait,
@@ -44,7 +43,7 @@ async fn fixture() -> DatabaseConnection {
 }
 
 fn schema(database: DatabaseConnection) -> seaography::async_graphql::dynamic::Schema {
-    query_root::foundation_schema(
+    ticketry_graphql_schema::query_root::foundation_schema(
         database.clone(),
         Some(database),
         None,

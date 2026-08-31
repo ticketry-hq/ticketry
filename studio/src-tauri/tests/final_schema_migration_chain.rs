@@ -1,6 +1,8 @@
-use muxed_studio_lib::graphql_foundation::{adopt_worktracker_and_install, InstallationOwnership};
 use sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, Statement};
 use tauri_graphql::TransportApiImpl;
+use ticketry_graphql_schema::graphql_foundation::{
+    adopt_worktracker_and_install, InstallationOwnership,
+};
 use ticketry_installation::final_schema_migrations;
 use ticketry_settings::provider_catalog_migrations;
 use ticketry_work_management::work_management::{

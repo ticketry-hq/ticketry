@@ -5,9 +5,9 @@
 //! pass-through repository. The two authority columns and the whole generated
 //! mutation bundle must be absent.
 
-use muxed_studio_lib::graphql_foundation::initialize_with_worktracker_and_install;
 use sea_orm::{ConnectionTrait, Database};
 use tauri_graphql::{TransportApi, TransportApiImpl};
+use ticketry_graphql_schema::graphql_foundation::initialize_with_worktracker_and_install;
 
 fn request(query: &str, variables: serde_json::Value) -> String {
     serde_json::json!({ "query": query, "variables": variables }).to_string()

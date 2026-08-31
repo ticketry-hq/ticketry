@@ -21,20 +21,19 @@ pub struct AdoptedWorktracker {
 /// rather than rebuilt, because a second Documents service would publish facts
 /// through a second outbox handle and a second supervisor would run a second
 /// watcher for every active run.
-pub(crate) struct ComposedWorktracker {
-    pub(crate) commands: DatabaseConnection,
-    pub(crate) documents: DocumentsService,
+pub struct ComposedWorktracker {
+    pub commands: DatabaseConnection,
+    pub documents: DocumentsService,
     /// Absent when the Documents capability could not be composed at all; a
     /// registry refresh still works, only live discovery is missing.
-    pub(crate) document_watch: Option<DocumentWatchSupervisor>,
+    pub document_watch: Option<DocumentWatchSupervisor>,
     /// Whether every startup Workspace Operation reconciliation pass finished.
     /// Deliberately not "the backlog is empty": an ambiguous document or
     /// repository is meant to stay deferred without disabling unrelated ones.
-    pub(crate) workspace_reconciled: bool,
-    pub(crate) viewer_ownership: ticketry_terminal::viewer_ownership::ViewerOwnershipService,
-    pub(crate) terminal_runtime:
-        ticketry_terminal::terminal::lifecycle::InteractiveTerminalLaunchRuntime,
-    pub(crate) output_activity:
+    pub workspace_reconciled: bool,
+    pub viewer_ownership: ticketry_terminal::viewer_ownership::ViewerOwnershipService,
+    pub terminal_runtime: ticketry_terminal::terminal::lifecycle::InteractiveTerminalLaunchRuntime,
+    pub output_activity:
         ticketry_terminal::terminal::output_activity::TerminalOutputActivityService,
 }
 
@@ -52,7 +51,7 @@ pub struct ComposedCommandRuntime {
 }
 
 impl ComposedCommandRuntime {
-    pub(crate) fn new(composed: ComposedWorktracker) -> Self {
+    pub fn new(composed: ComposedWorktracker) -> Self {
         Self {
             commands: composed.commands,
             documents: composed.documents,

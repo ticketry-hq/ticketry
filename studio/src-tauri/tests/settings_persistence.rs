@@ -334,7 +334,7 @@ async fn adoption_refuses_malformed_json_before_snapshot_or_ledger() {
 
 #[tokio::test]
 async fn settings_storage_has_no_generated_crud_surface() {
-    let sdl = muxed_studio_lib::graphql_foundation::generated_schema_sdl()
+    let sdl = ticketry_graphql_schema::graphql_foundation::generated_schema_sdl()
         .await
         .unwrap();
     assert!(!sdl.contains("appSetting"));

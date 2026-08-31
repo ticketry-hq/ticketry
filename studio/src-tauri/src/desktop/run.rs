@@ -17,7 +17,7 @@ use crate::desktop::lifecycle::{
 use crate::desktop::service_state::DesktopServiceState;
 use crate::desktop::startup::initialize_services;
 use crate::native_terminal::focus_trace;
-use crate::{app_updates, graphql_foundation, native_terminal};
+use crate::{app_updates, native_terminal};
 use ticketry_terminal::terminal::viewer::webview_commands;
 
 pub fn run(file_logging_requested: bool) {
@@ -38,7 +38,7 @@ pub fn run(file_logging_requested: bool) {
     if let Some(error) = ownership.startup_error.as_deref() {
         eprintln!("Ticketry could not acquire data-directory ownership: {error}");
     }
-    let graphql_api = graphql_foundation::transport_api();
+    let graphql_api = ticketry_graphql_schema::graphql_foundation::transport_api();
     let setup_graphql_api = graphql_api.clone();
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -53,40 +53,42 @@ pub fn run(file_logging_requested: bool) {
         .manage(DesktopLaunchRuntime::new())
         .manage(webview_commands::ViewerCommandState::new())
         .manage(native_terminal::NativeTerminalState::new())
-        .invoke_handler(graphql_foundation::combine_with_native_handler(
-            tauri::generate_handler![
-                commands::desktop_runtime_configuration,
-                commands::desktop_launch_default_coding_agent,
-                commands::desktop_append_frontend_log,
-                commands::desktop_file_logging_enabled,
-                commands::desktop_retry_services,
-                commands::desktop_pick_folder,
-                commands::desktop_validate_module_folder,
-                commands::desktop_preflight_report,
-                commands::desktop_approve_executable_path,
-                app_updates::desktop_update_check,
-                app_updates::install::desktop_update_download_and_install,
-                app_updates::install::desktop_update_restart,
-                crate::desktop::crash_reports::desktop_latest_crash_collection_outcome,
-                crate::desktop::crash_reports::desktop_reveal_crash_report_folder,
-                commands::terminal_viewer::viewer_attach,
-                commands::terminal_viewer::viewer_input,
-                commands::terminal_viewer::viewer_resize,
-                commands::terminal_viewer::viewer_scroll,
-                commands::terminal_viewer::viewer_detach,
-                commands::terminal_viewer::viewer_status,
-                native_terminal::native_terminal_available,
-                native_terminal::native_terminal_attach,
-                native_terminal::native_terminal_reconcile_frame,
-                native_terminal::native_terminal_set_frame,
-                native_terminal::native_terminal_hide,
-                native_terminal::native_terminal_show,
-                native_terminal::native_terminal_focus,
-                native_terminal::native_terminal_detach,
-                focus_trace::native_terminal_trace
-            ],
-            graphql_api,
-        ))
+        .invoke_handler(
+            ticketry_graphql_schema::graphql_foundation::combine_with_native_handler(
+                tauri::generate_handler![
+                    commands::desktop_runtime_configuration,
+                    commands::desktop_launch_default_coding_agent,
+                    commands::desktop_append_frontend_log,
+                    commands::desktop_file_logging_enabled,
+                    commands::desktop_retry_services,
+                    commands::desktop_pick_folder,
+                    commands::desktop_validate_module_folder,
+                    commands::desktop_preflight_report,
+                    commands::desktop_approve_executable_path,
+                    app_updates::desktop_update_check,
+                    app_updates::install::desktop_update_download_and_install,
+                    app_updates::install::desktop_update_restart,
+                    crate::desktop::crash_reports::desktop_latest_crash_collection_outcome,
+                    crate::desktop::crash_reports::desktop_reveal_crash_report_folder,
+                    commands::terminal_viewer::viewer_attach,
+                    commands::terminal_viewer::viewer_input,
+                    commands::terminal_viewer::viewer_resize,
+                    commands::terminal_viewer::viewer_scroll,
+                    commands::terminal_viewer::viewer_detach,
+                    commands::terminal_viewer::viewer_status,
+                    native_terminal::native_terminal_available,
+                    native_terminal::native_terminal_attach,
+                    native_terminal::native_terminal_reconcile_frame,
+                    native_terminal::native_terminal_set_frame,
+                    native_terminal::native_terminal_hide,
+                    native_terminal::native_terminal_show,
+                    native_terminal::native_terminal_focus,
+                    native_terminal::native_terminal_detach,
+                    focus_trace::native_terminal_trace
+                ],
+                graphql_api,
+            ),
+        )
         .register_asynchronous_uri_scheme_protocol(
             document_protocol::DOCUMENT_SCHEME,
             document_protocol::serve_document_request,

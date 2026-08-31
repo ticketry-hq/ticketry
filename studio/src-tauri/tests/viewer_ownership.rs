@@ -283,7 +283,7 @@ async fn native_and_xterm_acquisitions_leave_exactly_one_interactive_owner() {
 
 #[tokio::test]
 async fn graphql_keeps_generated_writes_private_and_exposes_restricted_model_crud() {
-    let sdl = muxed_studio_lib::graphql_foundation::generated_schema_sdl()
+    let sdl = ticketry_graphql_schema::graphql_foundation::generated_schema_sdl()
         .await
         .unwrap();
     assert!(sdl.contains("agentRunViewerLeases(filters:"));

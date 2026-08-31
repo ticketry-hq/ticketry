@@ -26,7 +26,7 @@ subscription RunStatusStream($projectId: String!, $afterCursor: Int) {
 
 async fn installed() -> (tempfile::TempDir, DatabaseConnection, TransportApiImpl) {
     let (directory, database) = common::runs_status_fixture::open().await;
-    let schema = muxed_studio_lib::query_root::foundation_schema(
+    let schema = ticketry_graphql_schema::query_root::foundation_schema(
         database.clone(),
         Some(database.clone()),
         None,
@@ -253,7 +253,7 @@ async fn a_status_stream_without_installed_runs_services_reports_unavailable() {
     let (_directory, database) = common::runs_status_fixture::open().await;
     // The probe schema installs no Runs services, which is how Studio can
     // reach the transport before adoption completes.
-    let schema = muxed_studio_lib::query_root::foundation_schema(
+    let schema = ticketry_graphql_schema::query_root::foundation_schema(
         database, None, None, None, None, None, None, None, None,
     )
     .expect("build the schema without Runs services");

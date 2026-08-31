@@ -74,12 +74,12 @@ async fn fixture() -> DatabaseConnection {
 }
 
 fn schema(database: DatabaseConnection) -> seaography::async_graphql::dynamic::Schema {
-    muxed_studio_lib::query_root::generated_contract_schema(database).unwrap()
+    ticketry_graphql_schema::query_root::generated_contract_schema(database).unwrap()
 }
 
 #[tokio::test]
 async fn preserves_the_update_delete_and_reorder_sdl() {
-    let sdl = muxed_studio_lib::graphql_foundation::generated_schema_sdl()
+    let sdl = ticketry_graphql_schema::graphql_foundation::generated_schema_sdl()
         .await
         .expect("build generated contract");
     assert!(sdl.contains(

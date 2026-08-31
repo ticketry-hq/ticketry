@@ -11,8 +11,8 @@ use std::sync::OnceLock;
 
 use sea_orm::DatabaseConnection;
 
-use crate::graphql_foundation::ComposedCommandRuntime;
 use ticketry_documents::DocumentsService;
+use ticketry_graphql_schema::graphql_foundation::ComposedCommandRuntime;
 
 /// Managed state for the lifetime of the process. Empty until adoption
 /// succeeds; a launch attempted before that is a startup failure, not a

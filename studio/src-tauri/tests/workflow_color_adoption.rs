@@ -1,6 +1,6 @@
-use muxed_studio_lib::graphql_foundation::initialize_with_worktracker_commands_and_install;
 use sea_orm::{ConnectionTrait, Database, DbBackend, Statement};
 use tauri_graphql::{TransportApi, TransportApiImpl};
+use ticketry_graphql_schema::graphql_foundation::initialize_with_worktracker_commands_and_install;
 use ticketry_installation::adoption::provisioning;
 use ticketry_work_management::work_management::workflow_color_migration::{
     install, LEDGER_TABLE, MIGRATION_ID, SOURCE_COMMIT,

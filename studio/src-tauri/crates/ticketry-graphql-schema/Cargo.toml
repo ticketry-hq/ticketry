@@ -1,0 +1,33 @@
+[package]
+name = "ticketry-graphql-schema"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+async-graphql.workspace = true
+async-trait.workspace = true
+sea-orm.workspace = true
+sea-orm-migration.workspace = true
+seaography.workspace = true
+seaolim.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tauri.workspace = true
+tauri-graphql.workspace = true
+taurpc.workspace = true
+ticketry-agent-execution.workspace = true
+ticketry-documents.workspace = true
+ticketry-entities.workspace = true
+ticketry-installation.workspace = true
+ticketry-launch.workspace = true
+ticketry-runs.workspace = true
+ticketry-settings.workspace = true
+ticketry-terminal.workspace = true
+ticketry-work-management.workspace = true
+ticketry-workspace-runtime.workspace = true
+tokio.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

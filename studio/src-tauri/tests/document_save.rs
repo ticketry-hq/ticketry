@@ -11,12 +11,12 @@
 //! assert convergence on one file version, one operation result, one registry
 //! digest, and no duplicate fact.
 
-use muxed_studio_lib::graphql_foundation::initialize_with_worktracker_commands_and_install;
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use tauri_graphql::{TransportApi, TransportApiImpl};
 use ticketry_documents::DocumentFactRecorder;
+use ticketry_graphql_schema::graphql_foundation::initialize_with_worktracker_commands_and_install;
 use ticketry_runs::persistence::RunsServices;
 use ticketry_workspace_runtime::workspace::document_save::{
     staging_file_name, DocumentSaveService, STAGING_PREFIX,

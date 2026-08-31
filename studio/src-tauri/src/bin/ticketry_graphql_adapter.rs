@@ -84,11 +84,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             )
         })?;
     let api = TransportApiImpl::new();
-    let adopted = muxed_studio_lib::graphql_foundation::adopt_worktracker_and_install(
+    let adopted = ticketry_graphql_schema::graphql_foundation::adopt_worktracker_and_install(
         &data_directory.join("rust-core.sqlite3"),
         &data_directory,
         &api,
-        muxed_studio_lib::graphql_foundation::InstallationOwnership::Owned,
+        ticketry_graphql_schema::graphql_foundation::InstallationOwnership::Owned,
     )
     .await
     .map_err(|error| error.message)?;

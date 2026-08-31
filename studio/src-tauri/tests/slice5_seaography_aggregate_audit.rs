@@ -6,9 +6,9 @@
 //! documents on disk. A new terminal field, a new raw-SQL CRUD path, or a
 //! missing child handoff fails here rather than in Review.
 
-use muxed_studio_lib::graphql_foundation::generated_schema_sdl;
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
+use ticketry_graphql_schema::graphql_foundation::generated_schema_sdl;
 use ticketry_terminal::terminal::persistence::aggregate_seaography_audit::{
     AUDITED_MODULES, CUSTOM_MUTATIONS, CUSTOM_OUTPUTS, CUSTOM_QUERIES, NEEDS_PROOF,
     NON_SEAORM_CRUD_PATHS, RAW_SQL_EVIDENCE_ONLY, REGISTERED_ENTITIES, VERDICT,

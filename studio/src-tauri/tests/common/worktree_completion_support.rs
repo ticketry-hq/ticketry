@@ -1,8 +1,8 @@
 use std::path::{Path, PathBuf};
 
-use muxed_studio_lib::graphql_foundation::initialize_with_worktracker_commands_and_install;
 use sea_orm::{ConnectionTrait, Database, DbBackend, Statement};
 use tauri_graphql::{TransportApi, TransportApiImpl};
+use ticketry_graphql_schema::graphql_foundation::initialize_with_worktracker_commands_and_install;
 
 use super::git_fixture::{GitFixture, RepositorySnapshot, Scenario, BRANCH};
 

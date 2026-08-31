@@ -63,7 +63,7 @@ async fn row_count(database: &sea_orm::DatabaseConnection, table: &str) -> i64 {
 }
 
 fn schema(database: sea_orm::DatabaseConnection) -> seaography::async_graphql::dynamic::Schema {
-    muxed_studio_lib::query_root::foundation_schema(
+    ticketry_graphql_schema::query_root::foundation_schema(
         database.clone(),
         Some(database.clone()),
         Some(CommandDatabase(database)),

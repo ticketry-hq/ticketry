@@ -123,7 +123,8 @@ async fn update_visibility(
     module_id: &str,
     tab_hidden: bool,
 ) -> presentation::Model {
-    let schema = muxed_studio_lib::query_root::generated_contract_schema(database.clone()).unwrap();
+    let schema =
+        ticketry_graphql_schema::query_root::generated_contract_schema(database.clone()).unwrap();
     let response = schema
         .execute(format!(
             r#"mutation {{
@@ -225,7 +226,8 @@ async fn visibility_preserves_rank_and_an_empty_rank_does_not_enable_manual_orde
 #[tokio::test]
 async fn visibility_requires_a_valid_module_identity() {
     let (_directory, database) = fixture().await;
-    let schema = muxed_studio_lib::query_root::generated_contract_schema(database.clone()).unwrap();
+    let schema =
+        ticketry_graphql_schema::query_root::generated_contract_schema(database.clone()).unwrap();
 
     let invalid = schema
         .execute(
@@ -361,7 +363,7 @@ async fn concurrent_first_drags_serialize_and_seed_one_complete_order() {
 
 #[tokio::test]
 async fn graphql_contract_allowlists_visibility_and_records_reorder() {
-    let sdl = muxed_studio_lib::graphql_foundation::generated_schema_sdl()
+    let sdl = ticketry_graphql_schema::graphql_foundation::generated_schema_sdl()
         .await
         .unwrap();
     let mutation = sdl

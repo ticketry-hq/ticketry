@@ -23,14 +23,14 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, MutexGuard};
 use std::time::Duration;
 
-use muxed_studio_lib::graphql_foundation::{
-    adopt_worktracker_and_install, ComposedCommandRuntime, InstallationOwnership,
-};
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection};
 use serde_json::{json, Value};
 use tauri_graphql::{TransportApi, TransportApiImpl};
 use ticketry_agent_execution::execution::reconciliation::{
     ExecutionReconciliationConfig, ExecutionReconciliationRuntime, ExecutionReconciliationService,
+};
+use ticketry_graphql_schema::graphql_foundation::{
+    adopt_worktracker_and_install, ComposedCommandRuntime, InstallationOwnership,
 };
 use ticketry_mcp::{McpConfiguration, McpRuntime};
 use ticketry_runs::persistence::{publish_readiness, Slice3Readiness};

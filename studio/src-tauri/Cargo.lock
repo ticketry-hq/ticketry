@@ -6810,6 +6810,7 @@ dependencies = [
  "ticketry-diagnostics",
  "ticketry-documents",
  "ticketry-entities",
+ "ticketry-graphql-schema",
  "ticketry-installation",
  "ticketry-launch",
  "ticketry-mcp",
@@ -6900,6 +6901,36 @@ dependencies = [
  "sea-orm",
  "seaography",
  "serde",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
+name = "ticketry-graphql-schema"
+version = "0.0.0"
+dependencies = [
+ "async-graphql",
+ "async-trait",
+ "sea-orm",
+ "sea-orm-migration",
+ "seaography",
+ "seaolim",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-graphql",
+ "taurpc",
+ "tempfile",
+ "ticketry-agent-execution",
+ "ticketry-documents",
+ "ticketry-entities",
+ "ticketry-installation",
+ "ticketry-launch",
+ "ticketry-runs",
+ "ticketry-settings",
+ "ticketry-terminal",
+ "ticketry-work-management",
+ "ticketry-workspace-runtime",
  "tokio",
  "uuid",
 ]

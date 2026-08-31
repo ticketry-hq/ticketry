@@ -63,7 +63,7 @@ async fn row_count(database: &sea_orm::DatabaseConnection, table: &str) -> i64 {
 #[tokio::test]
 async fn project_create_returns_the_aggregate_after_seeding_reviewed_defaults() {
     let database = fixture().await;
-    let schema = muxed_studio_lib::query_root::foundation_schema(
+    let schema = ticketry_graphql_schema::query_root::foundation_schema(
         database.clone(),
         Some(database.clone()),
         Some(CommandDatabase(database.clone())),

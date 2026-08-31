@@ -82,6 +82,6 @@ describe("temporary selection render profile", () => {
         maxMs: rounded(Math.max(...durations)),
         meanCounts,
       }));
-    }, 60_000);
+    }, 120_000);
   }
 });

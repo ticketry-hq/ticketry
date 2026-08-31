@@ -1,6 +1,13 @@
 import { execFileSync, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  renameSync,
+  rmSync,
+} from "node:fs";
 import { createRequire } from "node:module";
 import net from "node:net";
 import { tmpdir } from "node:os";
@@ -13,6 +20,8 @@ const studioRoot = fileURLToPath(new URL("..", import.meta.url));
 const require = createRequire(import.meta.url);
 const defaultFrontendPort = 5174;
 const frontendPortCandidates = 10;
+const defaultMcpPort = 8123;
+const mcpPortCandidates = 32;
 const isolatedMode = "isolated";
 const temporarySqlitePrefix = "ticketry-temp-sqlite-";
 const workspaceRoot = path.resolve(studioRoot, "..");
@@ -29,7 +38,9 @@ export function resolveDevelopmentDataDirectory({
   cwd = studioRoot,
   environment = process.env,
 } = {}) {
-  if (environment.MUXED_DATA_DIR) return environment.MUXED_DATA_DIR;
+  if (environment.TICKETRY_DEV_DATA_DIR) {
+    return environment.TICKETRY_DEV_DATA_DIR;
+  }
 
   let worktreeRoot;
   try {
@@ -65,6 +76,38 @@ export function resolveDevelopmentTmuxSocket(dataDirectory) {
   return `muxed-dev-${identity}`;
 }
 
+export function seedDevelopmentDataDirectory({
+  dataDirectory,
+  productDataDirectory,
+  createSnapshot,
+  prepareSnapshot = () => {},
+}) {
+  const destination = path.resolve(dataDirectory);
+  const source = path.resolve(productDataDirectory);
+  if (destination === source) {
+    throw new Error("development data must not use the product data directory");
+  }
+  if (existsSync(destination)) {
+    throw new Error(
+      `development profile already exists at ${destination}; seeding never overwrites it`,
+    );
+  }
+  const parent = path.dirname(destination);
+  mkdirSync(parent, { recursive: true });
+  const snapshot = createSnapshot({
+    sourceDirectory: source,
+    temporaryRoot: parent,
+  });
+  try {
+    prepareSnapshot(snapshot);
+    renameSync(snapshot, destination);
+  } catch (error) {
+    rmSync(snapshot, { recursive: true, force: true });
+    throw error;
+  }
+  return true;
+}
+
 export function resolveDevelopmentLogPath({ root = workspaceRoot } = {}) {
   return path.join(path.resolve(root), ".ticketry-dev", "logs", "ticketry.log");
 }
@@ -75,9 +118,9 @@ export function prepareDevelopmentLog({ root = workspaceRoot } = {}) {
   return logPath;
 }
 
-function parseFrontendPort(value) {
+function parsePort(value, variable) {
   if (!/^\d+$/.test(value ?? "") || Number(value) < 1 || Number(value) > 65_535) {
-    throw new Error("MUXED_FRONTEND_PORT must be a valid TCP port (1-65535)");
+    throw new Error(`${variable} must be a valid TCP port (1-65535)`);
   }
   return Number(value);
 }
@@ -104,7 +147,7 @@ export async function selectFrontendPort({
   isAvailable = canListen,
 } = {}) {
   if (requestedPort !== undefined) {
-    const port = parseFrontendPort(String(requestedPort));
+    const port = parsePort(String(requestedPort), "MUXED_FRONTEND_PORT");
     if (!await isAvailable(port)) {
       throw new Error(
         `Requested frontend port ${port} is unavailable; choose a free MUXED_FRONTEND_PORT or stop the process using it`,
@@ -122,16 +165,54 @@ export async function selectFrontendPort({
   );
 }
 
+export async function selectMcpPort({
+  requestedPort,
+  isAvailable = canListen,
+} = {}) {
+  if (requestedPort !== undefined) {
+    const port = parsePort(String(requestedPort), "MUXED_DESKTOP_MCP_PORT");
+    if (!await isAvailable(port)) {
+      throw new Error(
+        `Requested MCP port ${port} is unavailable; choose a free MUXED_DESKTOP_MCP_PORT or stop the process using it`,
+      );
+    }
+    return port;
+  }
+
+  for (let offset = 0; offset < mcpPortCandidates; offset += 1) {
+    const port = defaultMcpPort + offset;
+    if (await isAvailable(port)) return port;
+  }
+  throw new Error(
+    `No MCP port is available in ${defaultMcpPort}-${defaultMcpPort + mcpPortCandidates - 1}; set MUXED_DESKTOP_MCP_PORT to a free port`,
+  );
+}
+
 export function parseDesktopDevOptions(args = []) {
   const normalized = args[0] === "--" ? args.slice(1) : args;
   if (normalized.length === 0) {
-    return { mode: isolatedMode, temporarySqlite: false };
+    return {
+      mode: isolatedMode,
+      seedFromProduct: false,
+      temporarySqlite: false,
+    };
   }
   if (normalized.length === 1 && normalized[0] === "--temp-sqlite") {
-    return { mode: isolatedMode, temporarySqlite: true };
+    return {
+      mode: isolatedMode,
+      seedFromProduct: false,
+      temporarySqlite: true,
+    };
+  }
+  if (normalized.length === 1 && normalized[0] === "--seed-from-product") {
+    return {
+      mode: isolatedMode,
+      seedFromProduct: true,
+      temporarySqlite: false,
+    };
   }
   throw new Error(
-    "usage: pnpm --filter @worktracker/studio desktop:dev -- [--temp-sqlite]",
+    "usage: pnpm --filter @worktracker/studio desktop:dev -- [--temp-sqlite|--seed-from-product]",
   );
 }
 
@@ -251,6 +332,23 @@ export async function main() {
   const dataDirectory = options.temporarySqlite
     ? createTemporarySqliteProfile()
     : resolveDevelopmentDataDirectory();
+  if (options.seedFromProduct) {
+    const {
+      createProductDataSnapshot,
+      resolveProductDataDirectory,
+      sanitizeDevelopmentDataSnapshot,
+    } = await import("../../scripts/product-data-snapshot.mjs");
+    const productDataDirectory = resolveProductDataDirectory({ cwd: workspaceRoot });
+    seedDevelopmentDataDirectory({
+      dataDirectory,
+      productDataDirectory,
+      createSnapshot: createProductDataSnapshot,
+      prepareSnapshot(snapshotDirectory) {
+        sanitizeDevelopmentDataSnapshot({ snapshotDirectory });
+      },
+    });
+    console.log(`Seeded development data from ${productDataDirectory}`);
+  }
   const tmuxSocket = resolveDevelopmentTmuxSocket(dataDirectory);
   const logPath = prepareDevelopmentLog();
   const buildEnvironment = {
@@ -267,10 +365,14 @@ export async function main() {
     const frontendPort = await selectFrontendPort({
       requestedPort: process.env.MUXED_FRONTEND_PORT,
     });
+    const mcpPort = await selectMcpPort({
+      requestedPort: process.env.MUXED_DESKTOP_MCP_PORT,
+    });
     const frontendOrigin = `http://127.0.0.1:${frontendPort}`;
     const environment = {
       ...buildEnvironment,
       MUXED_DESKTOP_ORIGIN: frontendOrigin,
+      MUXED_DESKTOP_MCP_PORT: String(mcpPort),
     };
     const config = JSON.stringify(buildTauriDevelopmentConfig(frontendPort));
     console.log(formatDevelopmentIdentity({

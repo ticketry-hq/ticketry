@@ -13,7 +13,7 @@ import {
 import { useCachedStates } from "../../../features/projects";
 import { stateColor } from "../../../shared/utilities/display";
 import { useModuleOpen } from ".";
-import { useInstantRunTickets } from "../../agents/terminal/instantRunTickets";
+import { useInstantRunTickets } from "../../agents/terminal";
 
 const EMPTY_EXPANDED_IDS: string[] = [];
 
@@ -154,6 +154,7 @@ export function useStoriesTree() {
   return {
     rows: derived.rows,
     tree,
+    itemsById,
     sectionIdsByState: derived.sectionIdsByState,
     loadingTasks: loadingTasks || loadingRecords,
     isSearchActive,

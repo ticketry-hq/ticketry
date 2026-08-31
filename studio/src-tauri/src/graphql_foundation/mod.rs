@@ -169,6 +169,16 @@ async fn initialize_with_worktracker_commands_and_install_inner(
                 format!("could not install the final WorkTracker schema: {error}"),
             )
         })?;
+    crate::work_management::commands::catalog::seed_empty_installation_project_catalog(
+        &worktracker_database,
+    )
+    .await
+    .map_err(|error| {
+        FoundationInitializationError::new(
+            FoundationInitializationErrorCode::WorktrackerDatabaseOpen,
+            format!("could not initialize the installation project catalog: {error}"),
+        )
+    })?;
     let settings_repository =
         crate::settings_persistence::AppSettingRepository::open(worktracker_database_path)
             .await

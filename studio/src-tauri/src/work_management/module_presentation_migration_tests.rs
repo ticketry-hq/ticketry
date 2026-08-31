@@ -217,6 +217,53 @@ async fn repeat_install_is_a_no_op() {
 }
 
 #[tokio::test]
+async fn django_migrated_presentation_table_is_adopted_without_losing_rows() {
+    let database = fixture().await;
+    project(&database, "manual", false).await;
+    module(&database, "module", "manual", 1, "rank", false).await;
+    database
+        .execute_unprepared(
+            r#"
+            ALTER TABLE worktracker_project DROP COLUMN manual_module_order;
+            CREATE TABLE worktracker_modulepresentation (
+                module_id varchar(32) NOT NULL PRIMARY KEY
+                    REFERENCES worktracker_issue(id) ON DELETE CASCADE
+                    DEFERRABLE INITIALLY DEFERRED,
+                rank varchar(64) NOT NULL DEFAULT '',
+                tab_hidden bool NOT NULL DEFAULT 0
+            );
+            CREATE INDEX worktracker_modulepresentation_rank_idx
+                ON worktracker_modulepresentation(rank);
+            INSERT INTO worktracker_modulepresentation (module_id, rank, tab_hidden)
+                VALUES ('module', 'django-rank', 1);
+            CREATE TABLE django_migrations (
+                id integer NOT NULL PRIMARY KEY AUTOINCREMENT,
+                app varchar(255) NOT NULL,
+                name varchar(255) NOT NULL,
+                applied datetime NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+            INSERT INTO django_migrations (app, name)
+                VALUES ('worktracker', '0050_module_presentation');
+            "#,
+        )
+        .await
+        .expect("create Django-migrated presentation fixture");
+
+    install(&database)
+        .await
+        .expect("adopt Django module-presentation migration");
+
+    let row = module_presentation::Entity::find_by_id("module")
+        .one(&database)
+        .await
+        .expect("read adopted presentation")
+        .expect("presentation remains present");
+    assert_eq!(row.rank, "django-rank");
+    assert!(row.tab_hidden);
+    assert_eq!(count(&database, LEDGER_TABLE).await, 1);
+}
+
+#[tokio::test]
 async fn failed_column_removal_rolls_back_the_old_shape() {
     let database = fixture().await;
     project(&database, "manual", true).await;

@@ -88,25 +88,36 @@ pub(crate) async fn install(
 
 pub(crate) async fn upgrade_v1(
     database: &sea_orm::DatabaseConnection,
+    stable_digest: &str,
 ) -> Result<(), RunsPersistenceError> {
     let transaction = database.begin().await.map_err(storage)?;
     rebuild_premerge_agent_runs(&transaction).await?;
     transaction
         .execute_unprepared(
-            "CREATE TABLE ticketry_runs_adoption__v2 (\n\
+            "ALTER TABLE ticketry_runs_adoption RENAME TO ticketry_runs_adoption__v1;\n\
+             CREATE TABLE ticketry_runs_adoption (\n\
                  singleton integer PRIMARY KEY CHECK (singleton = 1),\n\
                  version integer NOT NULL CHECK (version = 2),\n\
                  source_leaf varchar(255) NOT NULL,\n\
                  stable_digest char(64) NOT NULL,\n\
                  adopted_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP\n\
-             );\n\
-             INSERT INTO ticketry_runs_adoption__v2\n\
-                 (singleton, version, source_leaf, stable_digest, adopted_at)\n\
-             SELECT singleton, 2, source_leaf, stable_digest, adopted_at\n\
-             FROM ticketry_runs_adoption;\n\
-             DROP TABLE ticketry_runs_adoption;\n\
-             ALTER TABLE ticketry_runs_adoption__v2 RENAME TO ticketry_runs_adoption;",
+             );",
         )
+        .await
+        .map_err(storage)?;
+    transaction
+        .execute_raw(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
+            "INSERT INTO ticketry_runs_adoption \
+             (singleton, version, source_leaf, stable_digest, adopted_at) \
+             SELECT singleton, 2, source_leaf, ?, adopted_at \
+             FROM ticketry_runs_adoption__v1",
+            [stable_digest.into()],
+        ))
+        .await
+        .map_err(storage)?;
+    transaction
+        .execute_unprepared("DROP TABLE ticketry_runs_adoption__v1")
         .await
         .map_err(storage)?;
     transaction.commit().await.map_err(storage)?;
@@ -417,12 +428,12 @@ mod tests {
             .await
             .unwrap();
 
-        upgrade_v1(&database).await.unwrap();
+        upgrade_v1(&database, "upgraded-digest").await.unwrap();
 
         let ledger = database
             .query_one_raw(Statement::from_string(
                 DbBackend::Sqlite,
-                "SELECT version, adopted_at FROM ticketry_runs_adoption WHERE singleton=1"
+                "SELECT version, adopted_at, stable_digest FROM ticketry_runs_adoption WHERE singleton=1"
                     .to_owned(),
             ))
             .await
@@ -432,6 +443,10 @@ mod tests {
         assert_eq!(
             ledger.try_get::<String>("", "adopted_at").unwrap(),
             "2026-08-01"
+        );
+        assert_eq!(
+            ledger.try_get::<String>("", "stable_digest").unwrap(),
+            "upgraded-digest"
         );
         let run = database
             .query_one_raw(Statement::from_string(

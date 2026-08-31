@@ -108,7 +108,8 @@ async fn fixture() -> Fixture {
                 repo_root text NOT NULL, path text NOT NULL, branch text NOT NULL,
                 base_branch text NOT NULL, base_commit text NOT NULL,
                 status text NOT NULL, ephemeral bool NOT NULL,
-                created_at text NOT NULL, updated_at text NOT NULL
+                created_at text NOT NULL, updated_at text NOT NULL,
+                pull_request_url text
             );
             CREATE TABLE design_documents (
                 id text PRIMARY KEY, module_id text NOT NULL, task_id text NOT NULL,
@@ -372,6 +373,37 @@ async fn instant_settings_add_standing_instructions_and_auto_close_authority() {
     );
     assert!(!prompt.contains("May I terminate this run"));
     assert!(prompt.contains("then invoke terminate_current_run"));
+}
+
+#[tokio::test]
+async fn every_document_producing_launch_names_the_watched_document_contract() {
+    let fixture = fixture().await;
+
+    for kind in [
+        TerminalLaunchKind::Task,
+        TerminalLaunchKind::Planning,
+        TerminalLaunchKind::Instant,
+    ] {
+        let resolved = fixture
+            .authority
+            .resolve(&caller_request(kind))
+            .await
+            .expect("resolve a document-producing launch");
+        let prompt = resolved.prompt.expect("the launch carries a prompt");
+
+        assert!(
+            prompt.contains(
+                "Ticketry watches this exact design directory recursively for .md and .html files."
+            ),
+            "{kind:?} prompt does not explain the document watcher"
+        );
+        assert!(
+            prompt.contains(
+                "Create every design or spec document inside this directory; files written elsewhere will not appear in Ticketry."
+            ),
+            "{kind:?} prompt does not constrain document placement"
+        );
+    }
 }
 
 #[tokio::test]

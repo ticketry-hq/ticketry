@@ -526,7 +526,7 @@ test.describe("complete browser application", () => {
       response.request().postDataJSON()?.operationName ===
         "UpdateWorkTrackerModulePresentation"
     );
-    await search.press("Enter");
+    await hiddenModule.click();
     await restored;
 
     await expect(picker).toHaveCount(0);
@@ -534,6 +534,34 @@ test.describe("complete browser application", () => {
       .toHaveAttribute("aria-selected", "true");
     await page.reload();
     await expect(page.getByRole("tab", { name: names.secondModule }).last())
+      .toBeVisible();
+  });
+
+  test("creates a module from the top-bar module picker", async ({ page }) => {
+    await openModule(page, names.module);
+    await page.getByRole("button", { name: "Open module picker" }).click();
+    const picker = page.getByRole("dialog", { name: "Module picker" });
+    await picker.getByRole("option", { name: "Create new module" }).click();
+
+    const dialog = page.getByRole("dialog", { name: "Add Module" });
+    await expect(dialog).toBeVisible();
+    const moduleName = "Created from top bar";
+    await dialog.getByPlaceholder("Module name").fill(moduleName);
+    await dialog.getByRole("textbox", { name: "Module folder" })
+      .fill(fixture.folder);
+    const created = page.waitForResponse((response) =>
+      response.url().endsWith("/graphql") &&
+      response.request().postDataJSON()?.operationName ===
+        "CreateWorkTrackerWorkItem"
+    );
+    await dialog.getByRole("button", { name: "Create module" }).click();
+    await created;
+
+    await expect(dialog).toHaveCount(0);
+    await expect(page.getByRole("tab", { name: moduleName }).last())
+      .toHaveAttribute("aria-selected", "true");
+    await page.reload();
+    await expect(page.getByRole("tab", { name: moduleName }).last())
       .toBeVisible();
   });
 
@@ -1707,6 +1735,45 @@ test.describe("complete browser application", () => {
     )).toBeLessThan(labelsAfterReload.findIndex((label) =>
       label.includes(names.reorderFirst)
     ));
+  });
+
+  test("moves a story across statuses and persists the destination", async ({
+    page,
+  }) => {
+    await openModule(page, names.module);
+    const story = page.getByRole("treeitem", { name: names.reorderSecond });
+    const grill = page.getByRole("button", { name: "Collapse Grill" });
+    const moved = page.waitForResponse((response) =>
+      response.url().endsWith("/graphql") &&
+      response.request().postDataJSON()?.operationName ===
+        "TransitionWorkTrackerWorkItem"
+    );
+    const reordered = page.waitForResponse((response) =>
+      response.url().endsWith("/graphql") &&
+      response.request().postDataJSON()?.operationName ===
+        "ReorderWorkTrackerWorkItem"
+    );
+    await story.dragTo(grill);
+    await Promise.all([moved, reordered]);
+
+    await expect.poll(async () => {
+      const labels = await page.locator('[role="tree"] > li').allTextContents();
+      const grillIndex = labels.findIndex((label) => label.includes("Grill"));
+      const storyIndex = labels.findIndex((label) =>
+        label.includes(names.reorderSecond));
+      const specIndex = labels.findIndex((label) => label.includes("Spec"));
+      return grillIndex < storyIndex && storyIndex < specIndex;
+    }).toBe(true);
+
+    await page.reload();
+    await expect.poll(async () => {
+      const labels = await page.locator('[role="tree"] > li').allTextContents();
+      const grillIndex = labels.findIndex((label) => label.includes("Grill"));
+      const storyIndex = labels.findIndex((label) =>
+        label.includes(names.reorderSecond));
+      const specIndex = labels.findIndex((label) => label.includes("Spec"));
+      return grillIndex < storyIndex && storyIndex < specIndex;
+    }).toBe(true);
   });
 
   test("resizes adjacent panes and persists the split", async ({ page }) => {

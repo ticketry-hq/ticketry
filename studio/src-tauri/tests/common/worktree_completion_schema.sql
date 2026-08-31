@@ -42,7 +42,8 @@ CREATE TABLE worktrees (
     workspace_slug VARCHAR, project_id VARCHAR, module_id VARCHAR, ticket_seq INTEGER,
     repo_root VARCHAR NOT NULL, path VARCHAR NOT NULL, branch VARCHAR NOT NULL,
     base_branch VARCHAR NOT NULL, base_commit VARCHAR NOT NULL, status VARCHAR NOT NULL,
-    ephemeral BOOLEAN NOT NULL, created_at VARCHAR NOT NULL, updated_at VARCHAR NOT NULL
+    ephemeral BOOLEAN NOT NULL, created_at VARCHAR NOT NULL, updated_at VARCHAR NOT NULL,
+    pull_request_url VARCHAR
 );
 CREATE TABLE runs_status_events (
     cursor INTEGER PRIMARY KEY AUTOINCREMENT, event_id TEXT NOT NULL UNIQUE,
@@ -74,5 +75,5 @@ INSERT INTO worktracker_issuetypetransition
 INSERT INTO worktrees VALUES (
     '70000000000000000000000000000001', '$WORK_ITEM', 'codin', '$PROJECT', '$MODULE',
     881, '$REPOSITORY', '$CHECKOUT', '$BRANCH', 'main', '$BASE_COMMIT', 'active', 0,
-    '2026-08-30T00:00:00+00:00', '2026-08-30T00:00:00+00:00'
+    '2026-08-30T00:00:00+00:00', '2026-08-30T00:00:00+00:00', NULL
 );

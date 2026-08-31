@@ -12,6 +12,8 @@
 //! cleaning up. Callers may open only explicitly supplied databases.
 
 mod adoption;
+#[cfg(test)]
+mod adoption_tests;
 mod attempt_commands;
 mod attempt_queries;
 use crate::entities::runs as entities;
@@ -81,6 +83,9 @@ pub use repositories::{
     LaunchEffectRepository, NewStatusEvent, StatusEventRepository,
 };
 pub use schema::{AUTHORED_TABLES, CURRENT_DJANGO_LEAF, VERSION};
+
+/// Ledger versions this release can reopen and migrate in place.
+pub const SUPPORTED_OWNERSHIP_VERSIONS: &[i32] = &[1, VERSION];
 pub use services::{
     AttemptService, CompatibilityService, EffectService, LifecycleService, OutboxService,
     QueryProjectionService, RunsServices, StatusStreamService,

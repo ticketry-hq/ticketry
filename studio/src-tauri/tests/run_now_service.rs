@@ -158,11 +158,12 @@ async fn fixture(failure: Option<&str>) -> Fixture {
             );
             CREATE TABLE agent_runs (
                 id text PRIMARY KEY, issue_id text NOT NULL, ticket_seq integer,
-                agent text, model text, reasoning text, status text NOT NULL,
+                agent text, status text NOT NULL,
                 started_at text NOT NULL, ended_at text, exit_code integer, error text,
                 cwd text, provider_session_id text, lifecycle_state text,
                 lifecycle_updated_at text, design_dir text, resumed_from text,
-                scope text NOT NULL, launch_state text, launch_model text
+                scope text NOT NULL, launch_state text, launch_model text, initial_prompt text,
+                launch_reasoning text, launch_unattended bool NOT NULL DEFAULT 0
             );
             CREATE TABLE agent_terminal_sessions (
                 agent_run_id text PRIMARY KEY, tmux_session_name text NOT NULL,

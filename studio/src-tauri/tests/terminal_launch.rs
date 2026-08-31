@@ -448,7 +448,7 @@ async fn module_shell_derives_routing_and_persists_no_agent_metadata() {
         .query_one_raw(Statement::from_string(
             DbBackend::Sqlite,
             format!(
-                "SELECT agent, model, reasoning, launch_state, launch_model, provider_session_id FROM agent_runs WHERE id='{}'",
+                "SELECT agent, launch_state, launch_model, initial_prompt, launch_reasoning, launch_unattended, provider_session_id FROM agent_runs WHERE id='{}'",
                 first.agent_run_id
             ),
         ))
@@ -457,14 +457,15 @@ async fn module_shell_derives_routing_and_persists_no_agent_metadata() {
         .unwrap();
     for column in [
         "agent",
-        "model",
-        "reasoning",
         "launch_state",
         "launch_model",
+        "initial_prompt",
+        "launch_reasoning",
         "provider_session_id",
     ] {
         assert_eq!(row.try_get::<Option<String>>("", column).unwrap(), None);
     }
+    assert!(!row.try_get::<bool>("", "launch_unattended").unwrap());
     let restarted = service
         .create_module_shell(
             "shell-create-fresh".to_owned(),

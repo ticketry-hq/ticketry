@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import {
   existsSync,
   mkdtempSync,
+  mkdirSync,
+  readFileSync,
   realpathSync,
   rmSync,
   symlinkSync,
@@ -22,18 +24,34 @@ import {
   resolveDevelopmentLogPath,
   resolveDevelopmentTmuxSocket,
   resolveTauriCliPath,
+  seedDevelopmentDataDirectory,
   selectFrontendPort,
+  selectMcpPort,
   stopTemporaryTmuxServer,
 } from "./desktop-dev.mjs";
 import { addLinkedWorktree, createRepository } from "./git-fixtures.mjs";
 
-test("a non-empty explicit override wins exactly without consulting Git", () => {
+test("a development-only override wins exactly without consulting Git", () => {
   const selected = resolveDevelopmentDataDirectory({
     cwd: "/definitely/not/a/repository",
-    environment: { MUXED_DATA_DIR: "../exact profile" },
+    environment: { TICKETRY_DEV_DATA_DIR: "../exact profile" },
   });
 
   assert.equal(selected, "../exact profile");
+});
+
+test("the product runtime data override cannot redirect desktop development", () => {
+  const { parent, repository } = createRepository("isolated from product override");
+  const selected = resolveDevelopmentDataDirectory({
+    cwd: repository,
+    environment: {
+      HOME: parent,
+      MUXED_DATA_DIR: path.join(parent, "live-product-data"),
+    },
+  });
+
+  assert.match(selected, /worktracker-studio-rust-development/);
+  assert.notEqual(selected, path.join(parent, "live-product-data"));
 });
 
 test("the same canonical worktree has one stable profile", () => {
@@ -71,6 +89,38 @@ test("linked worktrees resolve distinct stable profiles", () => {
   assert.notEqual(primaryProfile, linkedProfile);
   assert.match(path.basename(primaryProfile), /-[0-9a-f]{16}$/);
   assert.match(path.basename(linkedProfile), /-[0-9a-f]{16}$/);
+});
+
+test("a new development profile is populated from a read-only product snapshot", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "ticketry-seeded-development-"));
+  const product = path.join(root, "product");
+  const development = path.join(root, "development", "worktree-profile");
+  mkdirSync(product, { recursive: true });
+  writeFileSync(path.join(product, "state.db"), "production rows");
+
+  const seeded = seedDevelopmentDataDirectory({
+    dataDirectory: development,
+    productDataDirectory: product,
+    createSnapshot({ sourceDirectory, temporaryRoot }) {
+      assert.equal(sourceDirectory, product);
+      const snapshot = path.join(temporaryRoot, "snapshot");
+      mkdirSync(snapshot, { recursive: true });
+      writeFileSync(path.join(snapshot, "state.db"), "copied rows");
+      return snapshot;
+    },
+    prepareSnapshot(snapshot) {
+      writeFileSync(path.join(snapshot, "sanitized"), "runtime ownership removed");
+    },
+  });
+
+  assert.equal(seeded, true);
+  assert.equal(readFileSync(path.join(development, "state.db"), "utf8"), "copied rows");
+  assert.equal(
+    readFileSync(path.join(development, "sanitized"), "utf8"),
+    "runtime ownership removed",
+  );
+  assert.equal(readFileSync(path.join(product, "state.db"), "utf8"), "production rows");
+  rmSync(root, { recursive: true });
 });
 
 test("development tmux sockets are stable per isolated data directory", () => {
@@ -126,19 +176,39 @@ test("desktop development selects the first free frontend port", async () => {
   assert.deepEqual(checked, [5174, 5175]);
 });
 
+test("desktop development selects an MCP port that does not collide with Ticketry", async () => {
+  const checked = [];
+  const port = await selectMcpPort({
+    isAvailable: async (candidate) => {
+      checked.push(candidate);
+      return candidate !== 8123;
+    },
+  });
+
+  assert.equal(port, 8124);
+  assert.deepEqual(checked, [8123, 8124]);
+});
+
 test("desktop development accepts temporary SQLite mode", () => {
   assert.equal(parseDesktopDevMode([]), "isolated");
+  assert.deepEqual(parseDesktopDevOptions(["--seed-from-product"]), {
+    mode: "isolated",
+    seedFromProduct: true,
+    temporarySqlite: false,
+  });
   assert.deepEqual(parseDesktopDevOptions(["--temp-sqlite"]), {
     mode: "isolated",
+    seedFromProduct: false,
     temporarySqlite: true,
   });
   assert.deepEqual(parseDesktopDevOptions(["--", "--temp-sqlite"]), {
     mode: "isolated",
+    seedFromProduct: false,
     temporarySqlite: true,
   });
   assert.throws(
     () => parseDesktopDevMode(["--unknown"]),
-    /usage: pnpm --filter @worktracker\/studio desktop:dev -- \[--temp-sqlite\]/,
+    /usage: pnpm --filter @worktracker\/studio desktop:dev -- \[--temp-sqlite\|--seed-from-product\]/,
   );
 });
 

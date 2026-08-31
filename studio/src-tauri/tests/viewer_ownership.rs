@@ -548,8 +548,6 @@ async fn fixture() -> DatabaseConnection {
                 issue_id varchar NOT NULL,
                 ticket_seq integer,
                 agent varchar NOT NULL,
-                model varchar,
-                reasoning varchar,
                 status varchar NOT NULL,
                 started_at varchar NOT NULL,
                 ended_at varchar,
@@ -563,7 +561,10 @@ async fn fixture() -> DatabaseConnection {
                 resumed_from varchar,
                 scope varchar NOT NULL,
                 launch_state varchar,
-                launch_model varchar
+                launch_model varchar,
+                initial_prompt text,
+                launch_reasoning varchar,
+                launch_unattended bool NOT NULL DEFAULT 0
             );
             CREATE TABLE worktracker_project (id varchar PRIMARY KEY);
             CREATE TABLE agent_terminal_sessions (

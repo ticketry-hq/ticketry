@@ -5,7 +5,7 @@
 //! which the compaction machinery is complete, correct, and never called. Two
 //! things are asserted here: the schedule a desktop launch installs advances a
 //! watermark under the *shipped* policy, and the desktop handoff still calls
-//! that schedule after reconciliation.
+//! that schedule before publishing readiness.
 
 use std::path::Path;
 use std::time::Duration;
@@ -159,7 +159,9 @@ async fn the_periodic_driver_runs_the_pass_again() {
     let advanced = tokio::time::timeout(Duration::from_secs(20), async {
         loop {
             let current = watermark(&database, PROJECT).await;
-            if current > after_startup {
+            // The watermark intentionally commits before incremental deletion.
+            // Observe the whole pass, not its crash-safe midpoint.
+            if current > after_startup && event_count(&database, PROJECT).await == 8 {
                 return current;
             }
             tokio::time::sleep(Duration::from_millis(25)).await;
@@ -183,11 +185,10 @@ fn the_shipped_interval_is_measured_in_hours() {
 }
 
 /// The regression this ticket was filed for: the machinery existed and had no
-/// production caller. The handoff is the one production startup path, and it
-/// is not reachable from a test without a live sidecar, so the wiring itself
-/// is asserted here rather than left to be silently deleted.
+/// production caller. The handoff is the one production startup path, so the
+/// wiring itself is asserted here rather than left to be silently deleted.
 #[test]
-fn the_desktop_handoff_drives_compaction_after_reconciliation() {
+fn the_desktop_handoff_drives_compaction_before_readiness() {
     let source = std::fs::read_to_string(
         Path::new(env!("CARGO_MANIFEST_DIR")).join("src/desktop/runs_handoff.rs"),
     )
@@ -204,13 +205,13 @@ fn the_desktop_handoff_drives_compaction_after_reconciliation() {
             .split_once(gate)
             .expect("both gates are still declared")
             .1;
-        let reconcile = body
-            .find("reconcile(database")
-            .expect("the gate reconciles");
         let compact = body.find("compact(database").expect("the gate compacts");
+        let readiness = body
+            .find("publish_readiness")
+            .expect("the gate publishes readiness");
         assert!(
-            reconcile < compact,
-            "{gate} must compact after it reconciles"
+            compact < readiness,
+            "{gate} must compact before it publishes readiness"
         );
     }
 }

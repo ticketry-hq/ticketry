@@ -9,10 +9,11 @@ async fn schema() -> (GraphQlEndpoint, String) {
              CREATE TABLE worktracker_issue (id TEXT PRIMARY KEY, project_id TEXT NOT NULL);\n\
              CREATE TABLE agent_runs (\n\
                id TEXT PRIMARY KEY, issue_id TEXT NOT NULL, ticket_seq INTEGER, agent TEXT NOT NULL,\n\
-               model TEXT, reasoning TEXT, status TEXT NOT NULL, started_at TEXT NOT NULL,\n\
+               status TEXT NOT NULL, started_at TEXT NOT NULL,\n\
                ended_at TEXT, exit_code INTEGER, error TEXT, cwd TEXT, provider_session_id TEXT,\n\
                lifecycle_state TEXT, lifecycle_updated_at TEXT, design_dir TEXT, resumed_from TEXT,\n\
-               scope TEXT NOT NULL, launch_state TEXT, launch_model TEXT\n\
+               scope TEXT NOT NULL, launch_state TEXT, launch_model TEXT, initial_prompt TEXT,\n\
+               launch_reasoning TEXT, launch_unattended BOOL NOT NULL DEFAULT 0\n\
              );\n\
              CREATE TABLE agent_terminal_sessions (\n\
                agent_run_id TEXT PRIMARY KEY, tmux_session_name TEXT NOT NULL, task_id TEXT NOT NULL,\n\

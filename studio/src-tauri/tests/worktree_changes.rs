@@ -253,7 +253,7 @@ async fn fixture() -> Fixture {
                 branch VARCHAR NOT NULL, base_branch VARCHAR NOT NULL,
                 base_commit VARCHAR NOT NULL, status VARCHAR NOT NULL,
                 ephemeral BOOLEAN NOT NULL, created_at VARCHAR NOT NULL,
-                updated_at VARCHAR NOT NULL
+                updated_at VARCHAR NOT NULL, pull_request_url VARCHAR
             );
             INSERT INTO worktracker_project VALUES
                 ('{PROJECT}', 'Coding', 'CODIN', '', 900, 1, 0,
@@ -280,7 +280,7 @@ async fn fixture() -> Fixture {
                 '70000000000000000000000000000001', '{TASK}', 'meml', '{PROJECT}',
                 '{MODULE}', 881, '{repository}', '{checkout}', 'wt/CODIN-881-task',
                 'main', '{base_commit}', 'active', 0,
-                '2026-08-01T00:00:00+00:00', '2026-08-01T00:00:00+00:00'
+                '2026-08-01T00:00:00+00:00', '2026-08-01T00:00:00+00:00', NULL
             );
             "#,
             repository = repository_root.display(),

@@ -1,15 +1,11 @@
 //! The one-way Slice 3 Runs handoff, in the order the crash boundaries need.
 //!
-//! Adoption happens before the write lease changes hands, while the sidecar is
-//! still stopped and no Django writer is running. Reconciliation and the
-//! readiness publication happen after the sidecar is up, because both need the
-//! temporary terminal executor to answer. Outbox compaction runs between the
-//! two: it settles the replay watermark while no client can be streaming, and
-//! it installs the periodic driver that keeps the outbox bounded for as long
-//! as this process lives. Readiness is published only when
-//! every one of those steps succeeded; a partial result closes the gate and
-//! every Runs surface answers a structured unavailable error instead of
-//! reaching for a Django writer that no longer exists.
+//! Adoption happens before the write lease changes hands. Outbox compaction
+//! then settles the replay watermark while no client can be streaming and
+//! installs the periodic driver that keeps the outbox bounded for as long as
+//! this process lives. Readiness is published only after those steps succeed;
+//! a partial result closes the gate and every Runs surface answers a structured
+//! unavailable error.
 
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -25,9 +21,7 @@ pub(crate) fn close_gate(data_directory: &Path) -> Result<(), RunsPersistenceErr
     runs_persistence::publish_readiness(data_directory, &Slice3Readiness::unavailable())
 }
 
-/// Reopen the gate after the supervised pair recovered. Every step is
-/// idempotent: the health probe is a read, and a reconciliation pass that has
-/// nothing to decide changes nothing.
+/// Reopen the gate after the Rust runtime recovered. Every step is idempotent.
 pub(crate) async fn reopen_gate(
     data_directory: &Path,
     database: &DatabaseConnection,
@@ -45,9 +39,9 @@ static PERIODIC_COMPACTION_INSTALLED: AtomicBool = AtomicBool::new(false);
 /// Retire outbox history the retention policy no longer covers, then keep
 /// retiring it for the life of the process.
 ///
-/// This runs after reconciliation and before readiness is published, so the
-/// compaction watermark a resuming client reads is settled before any client
-/// can be streaming. A failed pass does not hold the gate closed: an outbox
+/// This runs before readiness is published, so the compaction watermark a
+/// resuming client reads is settled before any client can be streaming. A
+/// failed pass does not hold the gate closed: an outbox
 /// that could not be pruned still answers every status subscription correctly,
 /// and the periodic driver offers it the next pass.
 async fn compact(database: &DatabaseConnection) {
@@ -60,11 +54,8 @@ async fn compact(database: &DatabaseConnection) {
     }
 }
 
-/// Drain the durable launch backlog. A conflicting runtime is surfaced rather
-/// than swallowed: it needs a person, and it is never overwritten or retried.
-/// Complete the handoff once the sidecar answers: prove the temporary executor
-/// gave up its Runs writers, drain the durable launch backlog, prove the status
-/// surface is registered, and only then open the gate.
+/// Complete the handoff by settling compaction, proving the status surface is
+/// registered, and only then opening the gate.
 pub(crate) async fn open_gate(
     data_directory: &Path,
     database: &DatabaseConnection,

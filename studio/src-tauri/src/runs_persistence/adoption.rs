@@ -128,7 +128,7 @@ pub async fn adopt(data_directory: &Path) -> Result<AdoptionEvidence, RunsPersis
         SourceClassification::Django(generation) => {
             schema::install(&writable, Some(generation.leaf()), &before).await?
         }
-        SourceClassification::RustOwnedV1 => schema::upgrade_v1(&writable).await?,
+        SourceClassification::RustOwnedV1 => schema::upgrade_v1(&writable, &before).await?,
         SourceClassification::RustOwned => unreachable!(),
     }
     writable
@@ -235,41 +235,40 @@ async fn validate_manifest(
         .iter()
         .map(|value| (*value).to_owned())
         .collect::<BTreeSet<_>>();
-    if source == SourceClassification::RustOwnedV1 {
-        expected_agent.remove("initial_prompt");
-        expected_agent.remove("launch_reasoning");
-        expected_agent.remove("launch_unattended");
-        expected_agent.insert("model".to_owned());
-        expected_agent.insert("reasoning".to_owned());
-        if agent.contains("initial_prompt") {
-            expected_agent.insert("initial_prompt".to_owned());
+    match source {
+        SourceClassification::RustOwned => {}
+        SourceClassification::RustOwnedV1 => {
+            expected_agent.remove("initial_prompt");
+            expected_agent.remove("launch_reasoning");
+            expected_agent.remove("launch_unattended");
+            expected_agent.insert("model".to_owned());
+            expected_agent.insert("reasoning".to_owned());
+            if agent.contains("initial_prompt") {
+                expected_agent.insert("initial_prompt".to_owned());
+            }
         }
-    }
-    if matches!(source, SourceClassification::Django(generation) if generation.number() < 17) {
-        expected_agent.remove("launch_unattended");
-    }
-    if matches!(source, SourceClassification::Django(generation) if generation.number() < 16) {
-        expected_agent.remove("launch_reasoning");
-    }
-    if matches!(
-        source,
-        SourceClassification::Django(DjangoGeneration::Current | DjangoGeneration::Merged)
-    ) {
-        expected_agent.insert("model".to_owned());
-        expected_agent.insert("reasoning".to_owned());
-    }
-    if matches!(source, SourceClassification::Django(generation) if generation.number() < 14) {
-        expected_agent.remove("launch_state");
-        expected_agent.remove("launch_model");
-    }
-    if matches!(
-        source,
-        SourceClassification::Django(DjangoGeneration::LegacyTerminalAuthority)
-    ) {
-        // already part of the final owned shape
-    } else if matches!(source, SourceClassification::Django(generation) if generation.number() < 16)
-    {
-        expected_agent.remove("initial_prompt");
+        SourceClassification::Django(generation) => {
+            if generation.number() < 17 {
+                expected_agent.remove("launch_unattended");
+            }
+            if generation.number() < 16 {
+                expected_agent.remove("launch_reasoning");
+            }
+            if matches!(
+                generation,
+                DjangoGeneration::Current | DjangoGeneration::Merged
+            ) {
+                expected_agent.insert("model".to_owned());
+                expected_agent.insert("reasoning".to_owned());
+            }
+            if generation.number() < 14 {
+                expected_agent.remove("launch_state");
+                expected_agent.remove("launch_model");
+            }
+            if generation != DjangoGeneration::LegacyTerminalAuthority && generation.number() < 16 {
+                expected_agent.remove("initial_prompt");
+            }
+        }
     }
     if matches!(source, SourceClassification::Django(generation) if generation != DjangoGeneration::Current)
         && agent.contains("run_kind")

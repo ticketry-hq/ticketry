@@ -191,6 +191,8 @@ named gate before the full Studio suite, typecheck, and build.
 | 206 | Browser update checks defer quietly to the desktop application. |
 | 207 | After a Dirty Shutdown, Studio shows a dismissible, non-modal Crash Notice that reveals the fixed Crash Report folder; clean launches stay silent. |
 | 208 | Desktop launch checks contact the update feed once, show available updates on the Settings entry point, retain the result in App updates, and keep launch failures quiet until that section opens. |
+| 209 | Native Ghostty copy and paste use the macOS clipboard, preserve Ghostty's paste and OSC 52 confirmation boundary, and reject stale surface ownership. |
+| 210 | A locked startup database is presented as an actionable already-running message without exposing raw SQL. |
 
 Each executable case carries one stable `[overhaul-NN]` marker. The gate has a
 contract test that fails if a marker is missing or duplicated. When a Studio UI

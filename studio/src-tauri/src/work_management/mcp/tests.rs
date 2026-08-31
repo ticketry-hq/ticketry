@@ -73,11 +73,13 @@ async fn prepare_projects(directory: &tempfile::TempDir) {
             );
             CREATE TABLE agent_runs (
                 id varchar PRIMARY KEY, issue_id char(32) NOT NULL, ticket_seq integer,
-                agent varchar, model varchar, reasoning varchar, status varchar NOT NULL,
+                agent varchar, status varchar NOT NULL,
                 started_at varchar NOT NULL, ended_at varchar, exit_code integer, error varchar,
                 cwd varchar, provider_session_id varchar, lifecycle_state varchar,
                 lifecycle_updated_at varchar, design_dir varchar, resumed_from varchar,
-                scope varchar NOT NULL, launch_state varchar, launch_model varchar
+                scope varchar NOT NULL, launch_state varchar, launch_model varchar,
+                initial_prompt text, launch_reasoning varchar,
+                launch_unattended boolean NOT NULL DEFAULT 0
             );
             INSERT INTO worktracker_project VALUES
                 ('10000000000000000000000000000000',

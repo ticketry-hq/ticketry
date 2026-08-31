@@ -72,7 +72,6 @@ impl Authorization {
             issue_id: Set(binding.issue_id),
             ticket_seq: Set(None),
             agent: Set(Some("codex".to_owned())),
-            initial_prompt: Set(None),
             status: Set("running".to_owned()),
             started_at: Set("2026-08-19T17:00:00Z".to_owned()),
             ended_at: Set(None),
@@ -87,6 +86,7 @@ impl Authorization {
             scope: Set("task".to_owned()),
             launch_state: Set(None),
             launch_model: Set(None),
+            initial_prompt: Set(None),
             launch_reasoning: Set(None),
             launch_unattended: Set(false),
         }

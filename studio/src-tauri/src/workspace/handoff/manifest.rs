@@ -85,6 +85,11 @@ pub const OWNED_TABLES: &[(&str, ProductionWriter, &[&str])] = &[
         ADOPTION_LEDGER_COLUMNS,
     ),
     (
+        crate::worktree::persistence::pull_request_url_migration::LEDGER_TABLE,
+        ProductionWriter::Worktrees,
+        crate::worktree::persistence::ownership_manifest::AUTHORED_TABLES[1].1,
+    ),
+    (
         "workspace_operations",
         ProductionWriter::WorkspaceOperations,
         OPERATION_COLUMNS,

@@ -24,8 +24,8 @@ export function useWorkspaceTabPresentation({
   activeTerminalId,
   resumableSessions,
   savedTabOrder,
-  hasChangesTab,
   terminalOnly = false,
+  hasChangesTab,
 }: {
   bucket: string | null;
   projectId: string | null;
@@ -35,8 +35,8 @@ export function useWorkspaceTabPresentation({
   activeTerminalId: string | null;
   resumableSessions: readonly ResumableTerminalSession[];
   savedTabOrder: readonly TaskWorkspaceTabIdentity[];
-  hasChangesTab: boolean;
   terminalOnly?: boolean;
+  hasChangesTab: boolean;
 }) {
   const workspaces = useTicketWorkspaceStore((state) => state.workspaces);
   const workspace = bucket

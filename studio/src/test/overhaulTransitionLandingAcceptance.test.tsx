@@ -4,7 +4,7 @@ import { fixture, mountStudio, workItem } from "./seam";
 import { dragWorkItem } from "./workItemDragGestures";
 
 describe("overhaul acceptance — transition landing", () => {
-  it("[overhaul-60] keeps authoritative transition landing and explicit drag placement", async () => {
+  it("[overhaul-60] moves a rendered story across statuses with explicit drag placement", async () => {
     const http = fixture();
     const grill = {
       id: "grill",
@@ -56,6 +56,8 @@ describe("overhaul acceptance — transition landing", () => {
       "drag-move",
     ]));
 
+    // The drag source is resolved from the rendered module query. A secondary
+    // imperative fragment lookup may be incomplete and must not cancel it.
     const dragged = within(stories).getByRole("treeitem", { name: /Drag move/ });
     const target = within(stories).getByRole("treeitem", { name: /Ideas bottom/ });
     const transitioned = http.expectPatch("drag-move", {

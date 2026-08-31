@@ -226,11 +226,12 @@ async fn seed_workspace_identities(
             );
             CREATE TABLE agent_runs (
                 id TEXT PRIMARY KEY, issue_id TEXT NOT NULL, ticket_seq INTEGER,
-                agent TEXT, model TEXT, reasoning TEXT, status TEXT NOT NULL,
+                agent TEXT, status TEXT NOT NULL,
                 started_at TEXT NOT NULL, ended_at TEXT, exit_code INTEGER, error TEXT,
                 cwd TEXT, provider_session_id TEXT, lifecycle_state TEXT,
                 lifecycle_updated_at TEXT, design_dir TEXT, resumed_from TEXT,
-                scope TEXT NOT NULL, launch_state TEXT, launch_model TEXT
+                scope TEXT NOT NULL, launch_state TEXT, launch_model TEXT, initial_prompt TEXT,
+                launch_reasoning TEXT, launch_unattended BOOL NOT NULL DEFAULT 0
             );
             INSERT INTO design_documents
                 (id, module_id, task_id, scope, root_dir, rel_path, created_at, updated_at)

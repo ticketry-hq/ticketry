@@ -15,12 +15,26 @@ pub const SOURCE_COMMIT: &str = "9d752d77b3da9766c3e4c79e32624cc66d860ddb";
 const PROJECT_TABLE: &str = "worktracker_project";
 const ISSUE_TABLE: &str = "worktracker_issue";
 const MANUAL_ORDER_COLUMN: &str = "manual_module_order";
+const DJANGO_MIGRATION_ID: &str = "0050_module_presentation";
 
 pub async fn install(database: &DatabaseConnection) -> Result<(), DbErr> {
     let transaction = database.begin().await?;
     if table_exists(&transaction, LEDGER_TABLE).await? {
         verify_ledger(&transaction).await?;
         verify_shape(&transaction).await?;
+        transaction.commit().await?;
+        return Ok(());
+    }
+
+    if table_exists(&transaction, PRESENTATION_TABLE).await? {
+        if !django_migration_applied(&transaction).await? {
+            return Err(DbErr::Custom(
+                "module-presentation table exists without recognized migration provenance"
+                    .to_owned(),
+            ));
+        }
+        verify_shape(&transaction).await?;
+        write_ledger(&transaction).await?;
         transaction.commit().await?;
         return Ok(());
     }
@@ -32,6 +46,23 @@ pub async fn install(database: &DatabaseConnection) -> Result<(), DbErr> {
     verify_shape(&transaction).await?;
     transaction.commit().await?;
     Ok(())
+}
+
+async fn django_migration_applied(database: &impl ConnectionTrait) -> Result<bool, DbErr> {
+    if !table_exists(database, "django_migrations").await? {
+        return Ok(false);
+    }
+    let row = database
+        .query_one_raw(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
+            "SELECT COUNT(*) AS count FROM django_migrations WHERE app = ? AND name = ?",
+            ["worktracker".into(), DJANGO_MIGRATION_ID.into()],
+        ))
+        .await?
+        .ok_or_else(|| {
+            DbErr::Custom("module-presentation migration provenance returned no row".to_owned())
+        })?;
+    Ok(row.try_get::<i64>("", "count")? == 1)
 }
 
 async fn create_presentation_table(database: &impl ConnectionTrait) -> Result<(), DbErr> {

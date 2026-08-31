@@ -234,7 +234,7 @@ fn failed(detail: String) -> AdoptionFailure {
 mod tests {
     use super::{manifest, RECORDED_SCHEMA};
     use crate::work_management::entities::{issue_type, state};
-    use sea_orm::{DatabaseConnection, EntityTrait};
+    use sea_orm::{ConnectionTrait, DatabaseConnection, EntityTrait};
 
     #[test]
     fn the_recorded_schema_names_the_generation_it_reproduces() {
@@ -298,18 +298,81 @@ mod tests {
             .all(&database)
             .await
             .expect("read provisioned states");
-        let issue_types = issue_type::Entity::find()
+        let mut issue_types = issue_type::Entity::find()
             .all(&database)
             .await
             .expect("read provisioned issue types");
 
-        assert!(!states.is_empty());
-        assert!(issue_types
-            .iter()
-            .any(|issue_type| issue_type.name == "Module" && issue_type.level == "module"));
-        assert!(issue_types
-            .iter()
-            .any(|issue_type| issue_type.name == "Story" && issue_type.level == "task"));
+        issue_types.sort_by_key(|issue_type| issue_type.sort_order);
+        assert_eq!(states.len(), 8);
+        assert_eq!(
+            issue_types
+                .iter()
+                .map(|issue_type| (issue_type.name.as_str(), issue_type.level.as_str()))
+                .collect::<Vec<_>>(),
+            [
+                ("Module", "module"),
+                ("Story", "task"),
+                ("PathFind", "task"),
+                ("Implementation", "task"),
+            ],
+        );
         database.close().await.expect("close provisioned database");
+    }
+
+    #[tokio::test]
+    async fn startup_repairs_an_empty_installation_catalog_once() {
+        let directory = tempfile::tempdir().expect("create a data directory");
+        let path = directory.path().join("state.db");
+        let database = super::open(&path)
+            .await
+            .expect("open the installation database");
+        database
+            .execute_unprepared(super::RECORDED_SCHEMA)
+            .await
+            .expect("apply the recorded schema");
+        super::verify(&database)
+            .await
+            .expect("verify the recorded schema");
+        database
+            .execute_unprepared(super::RECORDED_LEDGER)
+            .await
+            .expect("record migration provenance");
+        super::seed_installation_project(&database)
+            .await
+            .expect("seed the installation project");
+        crate::settings_persistence::provision_provider_catalog(&database)
+            .await
+            .expect("seed the provider catalog");
+        crate::work_management::final_schema_migrations::install(&database)
+            .await
+            .expect("install the final WorkTracker schema");
+
+        assert!(
+            crate::work_management::commands::catalog::seed_empty_installation_project_catalog(
+                &database,
+            )
+            .await
+            .expect("repair the empty installation catalog")
+        );
+        assert!(
+            !crate::work_management::commands::catalog::seed_empty_installation_project_catalog(
+                &database,
+            )
+            .await
+            .expect("leave the repaired installation catalog unchanged")
+        );
+
+        let states = state::Entity::find()
+            .all(&database)
+            .await
+            .expect("read repaired states");
+        let issue_types = issue_type::Entity::find()
+            .all(&database)
+            .await
+            .expect("read repaired issue types");
+        assert_eq!(states.len(), 8);
+        assert_eq!(issue_types.len(), 4);
+        database.close().await.expect("close repaired database");
     }
 }

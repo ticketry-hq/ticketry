@@ -246,8 +246,8 @@ export function SelectedTicketContent({
     activeTerminalId: activeTermId,
     resumableSessions,
     savedTabOrder: savedTabOrder.order,
-    hasChangesTab,
     terminalOnly: Boolean(conversationRunId),
+    hasChangesTab,
   });
   const workspaceTabReorder = useWorkspaceTabOrdering({
     workItemId: workspaceTabWorkItemId,

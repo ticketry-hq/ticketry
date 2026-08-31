@@ -195,6 +195,7 @@ async fn fixture() -> Fixture {
                 state_revision bigint NOT NULL, name varchar(512) NOT NULL,
                 sequence_id integer NOT NULL, is_archived bool NOT NULL,
                 rank varchar(64) NOT NULL, description text NOT NULL,
+                workspace_tab_order JSON NOT NULL DEFAULT '[]',
                 created_at datetime NOT NULL, updated_at datetime NOT NULL,
                 UNIQUE(project_id, sequence_id)
             );
@@ -205,7 +206,7 @@ async fn fixture() -> Fixture {
                 branch VARCHAR NOT NULL, base_branch VARCHAR NOT NULL,
                 base_commit VARCHAR NOT NULL, status VARCHAR NOT NULL,
                 ephemeral BOOLEAN NOT NULL, created_at VARCHAR NOT NULL,
-                updated_at VARCHAR NOT NULL
+                updated_at VARCHAR NOT NULL, pull_request_url VARCHAR
             );
             INSERT INTO worktracker_project VALUES
                 ('{PROJECT}', 'Coding', 'CODIN', '', 900, 1, 0,
@@ -220,19 +221,19 @@ async fn fixture() -> Fixture {
                  CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
             INSERT INTO worktracker_issue VALUES
                 ('{MODULE}', '{PROJECT}', 'module', '{MODULE_TYPE}', NULL, NULL,
-                 '{BACKLOG}', 1, 'Ticketry', 880, 0, 'y', '',
+                 '{BACKLOG}', 1, 'Ticketry', 880, 0, 'y', '', '[]',
                  CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
                 ('{OTHER_MODULE}', '{PROJECT}', 'module', '{MODULE_TYPE}', NULL, NULL,
-                 '{BACKLOG}', 1, 'Unlinked', 879, 0, 'y', '',
+                 '{BACKLOG}', 1, 'Unlinked', 879, 0, 'y', '', '[]',
                  CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
                 ('{PARENT_TASK}', '{PROJECT}', 'task', '{TASK_TYPE}', '{MODULE}',
-                 '{MODULE}', '{BACKLOG}', 1, 'Parent story', 881, 0, 'z', '',
+                 '{MODULE}', '{BACKLOG}', 1, 'Parent story', 881, 0, 'z', '', '[]',
                  CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
                 ('{CHILD_TASK}', '{PROJECT}', 'task', '{TASK_TYPE}', '{PARENT_TASK}',
-                 '{MODULE}', '{BACKLOG}', 1, 'Child task', 882, 0, 'za', '',
+                 '{MODULE}', '{BACKLOG}', 1, 'Child task', 882, 0, 'za', '', '[]',
                  CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
                 ('{UNLINKED_TASK}', '{PROJECT}', 'task', '{TASK_TYPE}', '{OTHER_MODULE}',
-                 '{OTHER_MODULE}', '{BACKLOG}', 1, 'Unlinked story', 883, 0, 'zb', '',
+                 '{OTHER_MODULE}', '{BACKLOG}', 1, 'Unlinked story', 883, 0, 'zb', '', '[]',
                  CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
             "#
         ))
@@ -282,7 +283,7 @@ async fn index_worktree(fixture: &Fixture, status: &str) {
                 '70000000000000000000000000000001', '{PARENT_TASK}', 'meml', '{PROJECT}',
                 '{MODULE}', 881, '{repository}', '{path}', 'wt/CODIN-881-parent-story',
                 'main', '{base}', '{status}', 0,
-                '2026-08-01T00:00:00+00:00', '2026-08-01T00:00:00+00:00'
+                '2026-08-01T00:00:00+00:00', '2026-08-01T00:00:00+00:00', NULL
             );"#,
             repository = fixture.repository_root.display(),
             path = path.display(),

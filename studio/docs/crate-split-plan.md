@@ -1,6 +1,7 @@
 # Crate-Split Plan: Slicing the `ticketry` Backend into a Cargo Workspace
 
-**Status:** Proposal (not started)
+**Status:** Phase 1 complete (untangled; `cargo test module_graph` proves the
+target slice graph is acyclic). Phase 2 (crate extraction) in progress.
 **Scope:** `studio/src-tauri/` Rust backend only. No frontend, GraphQL contract, or runtime behavior changes.
 **Goal:** Convert the single ~96k-line `ticketry` crate into a wide workspace of
 domain-slice crates so that (a) incremental rebuilds only recompile the slice
@@ -119,24 +120,25 @@ studio/src-tauri/
 ├── src/main.rs                     # bin only: builds Tauri app from desktop crate
 └── crates/
     │  ── shared vocabulary (small, boring, no upward deps) ──
-    ├── ticketry-entities/          # ALL SeaORM entities incl. those now in
-    │                               #   work_management::entities; migrations’ schema types
+    ├── ticketry-entities/          # ALL SeaORM entities + graphql_scalars
     ├── ticketry-diagnostics/       # current diagnostics/ (leaf, 0 outgoing edges)
     ├── ticketry-data-directory/    # current data_directory/ (leaf)
     ├── ticketry-tool-discovery/    # tool_discovery (depends: data-directory)
     │
     │  ── domain slices (vertical: entities-usage + services + GraphQL registration) ──
+    ├── ticketry-settings/          # settings_persistence
+    ├── ticketry-runs-persistence/  # runs_persistence + runs + hook_spool
+    │                               #   + run_authority
     ├── ticketry-work-management/   # work_management + module_links
-    ├── ticketry-agent-execution/   # runs_persistence + execution + graph_run_service
-    │                               #   + runs + hook_spool
+    ├── ticketry-documents/         # documents
+    ├── ticketry-workspace-runtime/ # worktree + workspace (merged — genuinely
+    │                               #   bidirectional; see §3.4)
+    ├── ticketry-launch/            # launch (+ the launch DTOs hoisted from terminal)
     ├── ticketry-terminal/          # terminal + tmux_adapter(+root file) + viewer_ownership
     │                               #   + temporary_profile
-    ├── ticketry-workspace-runtime/ # worktree + workspace (merged — genuinely
-    │                               #   bidirectional; see §3.4) 
-    ├── ticketry-documents/         # documents
-    ├── ticketry-launch/            # launch (+ the launch DTOs hoisted from terminal)
+    ├── ticketry-agent-execution/   # execution + graph_run_service
+    ├── ticketry-mcp/               # mcp (the tool listener; dispatches across slices)
     ├── ticketry-installation/      # installation
-    ├── ticketry-settings/          # settings_persistence
     │
     │  ── composition (cross-slice by nature) ──
     ├── ticketry-graphql-schema/    # graphql_foundation + query_root(+root file), merged
@@ -145,6 +147,29 @@ studio/src-tauri/
     ├── ticketry-dev-tools/         # current src/bin/* generation/export/verify binaries
     └── tauri-graphql/              # unchanged (already a crate)
 ```
+
+### 2.1 Corrections made during Phase 1
+
+Three groupings in the original §2 could not be built as written. The guard
+test in §5.1 is the authority on the current mapping
+(`tests/module_graph_support/mod.rs`, `SLICES`):
+
+- **`agent-execution` split in two.** The original crate merged
+  `runs_persistence` — which `terminal` reads 27 times — with `execution` and
+  `graph_run_service`, which read `terminal` back. No ordering makes that one
+  acyclic crate. It is now `runs-persistence` (below terminal) and
+  `agent-execution` (above it), matching this document's own measured layering
+  in Appendix A.
+- **`mcp` is its own slice.** The MCP tool listener lived in
+  `work_management::mcp` and dispatched into terminal, execution, graph runs,
+  and launch — the single largest source of `work_management` back-edges. It
+  is composition, not work-management model code, so it sits above everything
+  it dispatches to. `run_authority` (the run-scoped credential store, which
+  terminal needs) split out of it and joined `runs-persistence`.
+- **`graphql_scalars` joined `entities`.** `StringList` is a Seaography scalar
+  six slices need; it lived in `work_management::read_types`, which is why
+  `settings` reached up into work management.
+
 
 Notes on grouping decisions:
 
@@ -186,7 +211,7 @@ entities  diagnostics  data-directory
 
 ---
 
-## 3. Phase 1 — Untangle (no workspace changes yet)
+## 3. Phase 1 — Untangle (no workspace changes yet) — **DONE**
 
 Everything in this phase happens inside the existing single crate. Each step
 is independently landable, testable with the standard validation commands, and
@@ -194,7 +219,7 @@ makes `lib.rs`'s module graph strictly more acyclic. **Do these as separate
 PRs.** Enforce progress with the guard test in §5.1 so broken cycles cannot
 silently return.
 
-### 3.1 Hoist `work_management::entities` into `entities/` (keystone move)
+### 3.1 Hoist `work_management::entities` into `entities/` (keystone move) — done
 
 There are two SeaORM entity namespaces today: `src/entities/**` and
 `src/work_management/entities/**`. Cross-slice relation targets point into the
@@ -223,7 +248,7 @@ cycle membership of `entities`, `settings_persistence`, `runs_persistence`,
 `documents`, `workspace`, `terminal`, and `launch` versus `work_management`
 (their only upward reach was `::entities`).
 
-### 3.2 Move launch DTOs out of `terminal`
+### 3.2 Move launch DTOs out of `terminal` — done
 
 `launch → terminal` exists only for two request types:
 
@@ -237,7 +262,7 @@ transitively require that is plain data) from `terminal/launch/` into
 `launch`. This *inverts* the 3-ref direction and preserves the 32-ref
 direction (`terminal → launch`), which matches the intended slice DAG.
 
-### 3.3 Move misplaced Tauri command handlers into `desktop`
+### 3.3 Move misplaced Tauri command handlers into `desktop` — done
 
 `terminal → desktop` and `native_terminal → desktop` back-edges are Tauri
 state injections inside command handlers that structurally belong to the
@@ -257,7 +282,7 @@ procedure definitions), since commands are shell composition by definition.
 Update the capability/permission lists in
 `capabilities/studio-main.json` if command module paths are referenced there.
 
-### 3.4 Resolve the three genuinely-coupled pairs
+### 3.4 Resolve the three genuinely-coupled pairs — done
 
 1. **`workspace ↔ worktree` (15 vs 26 refs, 9 files of workspace reach into
    worktree):** do NOT try to break this with symbol moves. Decision: they
@@ -293,7 +318,7 @@ Update the capability/permission lists in
      likely shared types → hoist the shared structs into `entities` (if they
      are persistence-shaped) and keep one direction.
 
-### 3.5 Clean the freebies
+### 3.5 Clean the freebies — done
 
 - Delete/inline edges that exist **only in doc comments** (`entities→documents`,
   `entities→worktree`, `entities→workspace`, `entities→module_links`,
@@ -306,12 +331,23 @@ Update the capability/permission lists in
 - `temporary_profile` has zero inbound edges — it can be extracted at any
   time with no coordination.
 
-**Exit criterion for Phase 1:** the guard test in §5.1 passes with the target
-DAG, i.e. `cargo test module_graph_is_acyclic` proves no back-edges remain.
+**Exit criterion for Phase 1: met.** `ALLOWED_BACK_EDGES` in
+`tests/module_graph_support/mod.rs` is empty and
+`cargo test --test module_graph` passes, so the target slice graph is a DAG.
+Every step exported the foundation SDL and diffed it against the pre-Phase-1
+baseline; the diff was empty throughout, and no test that passed before a step
+failed after it.
+
+The §3.4 work landed as: launch delivery and the merge-preparation adapter
+moved up into `execution`; the MCP listener moved out of work management
+(§2.1); `final_schema_migrations` moved to `installation`; `StringList` moved
+to `graphql_scalars`; settings stopped importing a work-management migration
+ledger constant; `documents::save` and the gated directory-completion query
+moved into `workspace`.
 
 ---
 
-## 4. Phase 2 — Extract crates (bottom-up)
+## 4. Phase 2 — Extract crates (bottom-up) — **IN PROGRESS**
 
 Extract in dependency order so every extraction lands against an
 already-extracted substrate. After each step: `cargo build`, `cargo test`,

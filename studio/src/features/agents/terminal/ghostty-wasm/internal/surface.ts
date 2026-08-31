@@ -165,6 +165,18 @@ export function openGhosttyWasmSurface(
     input.value = "";
   }
 
+  /**
+   * Scrolling is forwarded to the durable viewer rather than handled against
+   * this renderer's local scrollback, so all three renderers move the same
+   * tmux history and a renderer switch cannot change where the user is.
+   */
+  function onWheel(event: WheelEvent): void {
+    if (!client || event.deltaY === 0) return;
+    event.preventDefault();
+    client.scroll(event.deltaY < 0 ? "up" : "down", Math.max(1, Math.round(Math.abs(event.deltaY) / 20)));
+  }
+
+  host.addEventListener("wheel", onWheel, { passive: false });
   input.addEventListener("keydown", onKeyDown);
   input.addEventListener("paste", onPaste);
   input.addEventListener("compositionend", onCompositionEnd);
@@ -218,6 +230,7 @@ export function openGhosttyWasmSurface(
     disposed = true;
     if (frameHandle !== null) cancelAnimationFrame(frameHandle);
     resizeObserver?.disconnect();
+    host.removeEventListener("wheel", onWheel);
     input.removeEventListener("keydown", onKeyDown);
     input.removeEventListener("paste", onPaste);
     input.removeEventListener("compositionend", onCompositionEnd);

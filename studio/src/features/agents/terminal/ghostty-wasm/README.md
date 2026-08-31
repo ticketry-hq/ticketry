@@ -86,20 +86,24 @@ skips when the artifact has not been prepared.
 - **Font handling is the browser's.** Nerd Font and Powerline coverage depends
   on what the WebView has, not on Ghostty's font stack.
 
-## Seeing it without a live run
+## Running it
 
-`studio/ghostty-wasm-demo.html` mounts the real surface against a scripted byte
-stream instead of a tmux viewer. Everything below the transport is production
-code, so it exercises the wasm runtime, the frame reader, the Canvas painter and
-the key encoder:
+The renderer is selected inside the real Studio window; there is no separate
+harness page. Start the app the usual way and pass the experiment flag:
 
 ```bash
-npm run dev --workspace @worktracker/studio
-# then open http://127.0.0.1:5174/ghostty-wasm-demo.html
+npm run web            # or npm run desktop:dev
+# then open http://127.0.0.1:5174/?terminalRenderer=ghostty-wasm
 ```
 
-Typing into it round-trips through Ghostty's key encoder and echoes back, and
-the footer shows the live measurement counters.
+Any task terminal opened in that window is drawn by libghostty into a Canvas.
+The bytes come from the same tmux viewer the native and xterm renderers use, so
+the run, the tmux session and the persisted terminal records are unchanged.
+
+Below the transport there is nothing simulated: the wasm runtime, frame reader,
+Canvas painter and key encoder are the shipped modules, and the ABI contract
+test in `internal/ghosttyVtContract.test.ts` exercises them against the real
+artifact.
 
 ## Reporting
 

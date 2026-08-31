@@ -17,7 +17,38 @@ impl LaunchPolicyResolver {
         Self { database }
     }
 
+    /// Resolves one launch policy request.
+    ///
+    /// A refusal is traced here: no launch follows it, so this is the only
+    /// place the refusal can be observed. An admission is traced by the
+    /// delivery that carries the decision, under that launch's own attempt.
     pub async fn resolve(
+        &self,
+        request: LaunchPolicyRequest,
+    ) -> Result<LaunchPolicyDecision, LaunchPolicyError> {
+        let scope = request.caller_scope;
+        let task_id = request.task_id.clone();
+        let outcome = self.resolve_inner(request).await;
+        if let Err(error) = &outcome {
+            crate::launch::trace::requested_by(scope.into(), async {
+                if let Some(attempt) = crate::launch::trace::current() {
+                    attempt.note(|facts| {
+                        facts.work_item_id = Some(task_id);
+                        facts.scope = Some(scope.as_str().to_owned());
+                    });
+                }
+                crate::launch::trace::refused(
+                    crate::launch::trace::stages::POLICY_EVALUATED,
+                    error.code(),
+                )
+                .record();
+            })
+            .await;
+        }
+        outcome
+    }
+
+    async fn resolve_inner(
         &self,
         request: LaunchPolicyRequest,
     ) -> Result<LaunchPolicyDecision, LaunchPolicyError> {

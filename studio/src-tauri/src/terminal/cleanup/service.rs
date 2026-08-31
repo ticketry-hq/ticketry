@@ -5,8 +5,8 @@ use sea_orm::{
 };
 use serde_json::json;
 
-use crate::runs_persistence::RunsServices;
 use ticketry_entities::{runs::agent_run, terminals::session};
+use ticketry_runs::persistence::RunsServices;
 
 use super::{
     checkpoint::NoCleanupCheckpoints, CleanupCause, CleanupCheckpoint, CleanupCheckpoints,

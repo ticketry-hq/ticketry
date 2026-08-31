@@ -48,8 +48,8 @@ impl From<sea_orm::DbErr> for TerminalReconciliationError {
     }
 }
 
-impl From<crate::runs_persistence::RunsPersistenceError> for TerminalReconciliationError {
-    fn from(error: crate::runs_persistence::RunsPersistenceError) -> Self {
+impl From<ticketry_runs::persistence::RunsPersistenceError> for TerminalReconciliationError {
+    fn from(error: ticketry_runs::persistence::RunsPersistenceError) -> Self {
         Self::new(TerminalReconciliationErrorCode::Storage, error.to_string())
     }
 }

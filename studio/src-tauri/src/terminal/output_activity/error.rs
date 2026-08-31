@@ -55,8 +55,8 @@ impl From<sea_orm::DbErr> for TerminalOutputActivityError {
     }
 }
 
-impl From<crate::runs_persistence::RunsPersistenceError> for TerminalOutputActivityError {
-    fn from(_: crate::runs_persistence::RunsPersistenceError) -> Self {
+impl From<ticketry_runs::persistence::RunsPersistenceError> for TerminalOutputActivityError {
+    fn from(_: ticketry_runs::persistence::RunsPersistenceError) -> Self {
         Self::new(
             TerminalOutputActivityErrorCode::StorageFailed,
             "Terminal output activity could not be recorded.",

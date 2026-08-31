@@ -208,7 +208,7 @@ fn build_schema(
     let builder = crate::workspace::worktree::register_graphql(builder);
     let builder = crate::work_management::graphql::register(builder);
     let builder = ticketry_settings::schema::register(builder);
-    let builder = crate::runs::register_graphql(builder);
+    let builder = ticketry_runs::graphql::register_graphql(builder);
     let builder = crate::terminal::persistence::register_graphql(builder);
     let builder = crate::terminal::instant_run_ticket::register_graphql(builder);
     let builder = crate::terminal::resume::register_graphql(builder);
@@ -254,7 +254,7 @@ fn build_schema(
             let work_items = worktracker_database.as_ref()?;
             work_facts.is_some().then(|| {
                 crate::documents::DocumentFactRecorder::new(
-                    crate::runs_persistence::RunsServices::new(work_items.clone())
+                    ticketry_runs::persistence::RunsServices::new(work_items.clone())
                         .outbox()
                         .events()
                         .clone(),
@@ -328,7 +328,7 @@ fn build_schema(
         schema = schema.data(crate::terminal::cleanup::TerminalCleanupService::with_tmux(
             worktracker_database.clone(),
         ));
-        let runs = crate::runs_persistence::RunsServices::new(worktracker_database.clone());
+        let runs = ticketry_runs::persistence::RunsServices::new(worktracker_database.clone());
         schema = schema.data(
             terminal_services
                 .as_ref()
@@ -376,7 +376,7 @@ fn build_schema(
         // Runs status and Runs commands consult their own gate, because the
         // Slice 3 handoff completes after the Slice 2 one and must not open
         // merely because settings ownership did.
-        schema = schema.data(crate::runs_persistence::RunsReadinessGate::watching(
+        schema = schema.data(ticketry_runs::persistence::RunsReadinessGate::watching(
             &data_directory,
         ));
         // Documents and Worktrees consult a third gate for the same reason: the

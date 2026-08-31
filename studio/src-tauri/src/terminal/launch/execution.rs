@@ -1,8 +1,8 @@
 use sea_orm::EntityTrait;
 use serde_json::json;
 
-use crate::runs_persistence::{ClaimedLaunch, LaunchOutcome};
 use ticketry_entities::terminals::{launch_material, session};
+use ticketry_runs::persistence::{ClaimedLaunch, LaunchOutcome};
 
 use super::settlement::SessionSettlement;
 use super::{

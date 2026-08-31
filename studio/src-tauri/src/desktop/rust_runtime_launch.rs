@@ -30,7 +30,7 @@ pub(crate) fn launch_rust_runtime(
     let launch_runtime = application.state::<DesktopLaunchRuntime>();
     let composed = launch_runtime.composed_runtime()?.clone();
     let database = composed.commands().clone();
-    let spool_directory = crate::terminal::lifecycle::ensure_hook_spool_directory(&data_directory)?;
+    let spool_directory = ticketry_runs::hook_spool::ensure_hook_spool_directory(&data_directory)?;
 
     let terminal_launch = crate::terminal::launch::TerminalLaunchService::new(
         database.clone(),
@@ -46,7 +46,7 @@ pub(crate) fn launch_rust_runtime(
             hook_runner,
             hook_spool_directory: spool_directory.clone(),
             mcp_url: String::new(),
-            run_authority: crate::run_authority::RunAuthority::new(database.clone()),
+            run_authority: ticketry_runs::authority::RunAuthority::new(database.clone()),
             granted_operations: crate::mcp::allowed_provider_operations(),
         },
     )?;
@@ -78,12 +78,12 @@ pub(crate) fn launch_rust_runtime(
         &database,
         graphql_api,
     ))?;
-    let spool = crate::hook_spool::HookSpool::new(
+    let spool = ticketry_runs::hook_spool::HookSpool::new(
         spool_directory,
-        crate::runs_persistence::RunsServices::new(database.clone())
+        ticketry_runs::persistence::RunsServices::new(database.clone())
             .lifecycle()
             .clone(),
-        crate::hook_spool::DEFAULT_BATCH_SIZE,
+        ticketry_runs::hook_spool::DEFAULT_BATCH_SIZE,
     )
     .map_err(|error| format!("terminal lifecycle startup failed: {error}"))?;
     let reconciliation = crate::terminal::reconciliation::TerminalReconciliationService::new(

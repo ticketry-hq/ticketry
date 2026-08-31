@@ -7,9 +7,7 @@ use std::{
 use async_trait::async_trait;
 use sea_orm::{DatabaseConnection, EntityTrait};
 
-use crate::hook_spool::{DrainReport, HookSpool};
 use crate::launch::terminal_session::{TerminalLaunchError, TerminalLaunchErrorCode};
-use crate::runs_persistence::LifecycleService;
 use crate::terminal::launch::{
     TerminalLaunchCheckpoint, TerminalLaunchRuntime, TerminalRuntimeObservation,
     VerifiedTerminalRuntime,
@@ -22,6 +20,8 @@ use crate::tmux_adapter::{
     RuntimeObservation, TerminalGeometry, TmuxAdapter,
 };
 use crate::viewer_ownership::ViewerOwnershipService;
+use ticketry_runs::hook_spool::{DrainReport, HookSpool};
+use ticketry_runs::persistence::LifecycleService;
 
 #[async_trait]
 pub trait TerminalLifecycleWork: Send + Sync + 'static {
@@ -172,7 +172,7 @@ pub struct TerminalRuntimeAuthority {
     pub hook_runner: PathBuf,
     pub hook_spool_directory: PathBuf,
     pub mcp_url: String,
-    pub run_authority: crate::run_authority::RunAuthority,
+    pub run_authority: ticketry_runs::authority::RunAuthority,
     /// The operations a launched run's grant may name. The composer supplies
     /// them, so terminal never reads the MCP tool registry above it.
     pub granted_operations: Vec<String>,
@@ -213,7 +213,7 @@ impl InteractiveTerminalLaunchRuntime {
     pub fn replace_mcp_authority(
         &self,
         mcp_url: String,
-        run_authority: crate::run_authority::RunAuthority,
+        run_authority: ticketry_runs::authority::RunAuthority,
     ) -> Result<(), String> {
         let mut authority = self
             .authority

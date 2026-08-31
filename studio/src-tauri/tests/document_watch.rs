@@ -20,8 +20,8 @@ use muxed_studio_lib::documents::watch::filesystem_events::{
 };
 use muxed_studio_lib::documents::watch::DocumentWatchSupervisor;
 use muxed_studio_lib::documents::{DocumentFactRecorder, DocumentsService, TaskRegistryScope};
-use muxed_studio_lib::runs_persistence::RunsServices;
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection};
+use ticketry_runs::persistence::RunsServices;
 use tokio::sync::mpsc;
 
 const PROJECT: &str = "11111111111111111111111111111111";

@@ -274,10 +274,10 @@ mod tests {
     use async_trait::async_trait;
 
     use super::*;
-    use crate::hook_spool::DrainReport;
     use crate::terminal::cleanup::TerminalCleanupRecoveryReport;
     use crate::terminal::launch::TerminalLaunchRecoveryReport;
     use crate::terminal::reconciliation::TerminalReconciliationReport;
+    use ticketry_runs::hook_spool::DrainReport;
 
     #[derive(Default)]
     struct FakeWork {

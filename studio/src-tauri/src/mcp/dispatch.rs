@@ -27,11 +27,11 @@ use super::{
 /// other publisher's subscribers delays delivery to the next reread rather than
 /// losing the fact.
 pub(super) async fn work_facts(database: &DatabaseConnection) -> Option<WorkFactRecorder> {
-    crate::runs_persistence::outbox_adopted(database)
+    ticketry_runs::persistence::outbox_adopted(database)
         .await
         .then(|| {
             WorkFactRecorder::new(
-                crate::runs_persistence::RunsServices::new(database.clone())
+                ticketry_runs::persistence::RunsServices::new(database.clone())
                     .outbox()
                     .events()
                     .clone(),

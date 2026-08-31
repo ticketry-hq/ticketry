@@ -13,10 +13,10 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crate::runs_persistence::{
+use ticketry_entities::{runs::agent_run, terminals::session};
+use ticketry_runs::persistence::{
     run_holding_in, timestamp, NewStatusEvent, RunsServices, StatusEventRepository,
 };
-use ticketry_entities::{runs::agent_run, terminals::session};
 
 use super::{
     capture::{production_capture, TerminalScreenCapture},

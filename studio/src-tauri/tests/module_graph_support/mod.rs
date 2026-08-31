@@ -14,10 +14,6 @@ use syn::{Attribute, ImplItem, Item, Meta, UseTree};
 /// must appear here; a missing one fails [`crate::module_graph`]'s coverage
 /// assertion so new modules get a home deliberately.
 pub const SLICES: &[(&str, &str)] = &[
-    ("runs_persistence", "runs-persistence"),
-    ("run_authority", "runs-persistence"),
-    ("runs", "runs-persistence"),
-    ("hook_spool", "runs-persistence"),
     ("work_management", "work-management"),
     ("module_links", "work-management"),
     ("execution", "agent-execution"),

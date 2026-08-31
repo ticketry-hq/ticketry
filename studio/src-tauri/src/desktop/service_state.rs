@@ -16,7 +16,7 @@ pub(crate) struct DesktopServiceState {
     pub(crate) mcp_runtime: Mutex<Option<crate::mcp::McpRuntime>>,
     pub(crate) terminal_runtime:
         Mutex<Option<std::sync::Arc<crate::terminal::lifecycle::TerminalLifecycleRuntime>>>,
-    pub(crate) hook_spool_runtime: Mutex<Option<crate::hook_spool::HookSpoolRuntime>>,
+    pub(crate) hook_spool_runtime: Mutex<Option<ticketry_runs::hook_spool::HookSpoolRuntime>>,
     pub(crate) execution_runtime:
         Mutex<Option<crate::execution::reconciliation::ExecutionReconciliationRuntime>>,
     pub(crate) terminal_launch: Mutex<Option<crate::terminal::launch::TerminalLaunchService>>,

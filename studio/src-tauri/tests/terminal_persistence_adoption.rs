@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use muxed_studio_lib::{runs_persistence, terminal};
+use muxed_studio_lib::terminal;
 use sea_orm::{ConnectionTrait, Database, DbBackend, Statement};
 
 const LEAVES: &[&str] = &[
@@ -21,7 +21,9 @@ const LEAVES: &[&str] = &[
 async fn fresh_database_without_terminal_history_installs_rust_schema_idempotently() {
     let directory = tempfile::tempdir().expect("create fresh Terminal fixture");
     provision_without_terminal_history(directory.path());
-    runs_persistence::adopt(directory.path()).await.unwrap();
+    ticketry_runs::persistence::adopt(directory.path())
+        .await
+        .unwrap();
 
     assert_eq!(
         terminal::persistence::preflight(directory.path())
@@ -60,8 +62,12 @@ async fn every_supported_django_leaf_has_an_exact_classifier() {
 async fn adoption_preserves_history_expires_leases_and_is_idempotent() {
     let directory = tempfile::tempdir().expect("create Terminal adoption fixture");
     provision_current(directory.path());
-    runs_persistence::preflight(directory.path()).await.unwrap();
-    runs_persistence::adopt(directory.path()).await.unwrap();
+    ticketry_runs::persistence::preflight(directory.path())
+        .await
+        .unwrap();
+    ticketry_runs::persistence::adopt(directory.path())
+        .await
+        .unwrap();
 
     let first = terminal::persistence::adopt(directory.path())
         .await

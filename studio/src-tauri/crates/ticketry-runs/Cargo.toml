@@ -1,0 +1,32 @@
+[package]
+name = "ticketry-runs"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[features]
+# Test seams other crates' tests need; never enabled in a shipped build.
+test-support = []
+
+[dependencies]
+async-graphql.workspace = true
+async-trait.workspace = true
+base64.workspace = true
+chrono.workspace = true
+futures-util.workspace = true
+libc.workspace = true
+rand.workspace = true
+sea-orm.workspace = true
+seaography.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+ticketry-diagnostics.workspace = true
+ticketry-entities.workspace = true
+ticketry-settings.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

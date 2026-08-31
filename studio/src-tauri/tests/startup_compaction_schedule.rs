@@ -10,11 +10,11 @@
 use std::path::Path;
 use std::time::Duration;
 
-use muxed_studio_lib::runs_persistence::{
+use sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, FromQueryResult, Statement};
+use ticketry_runs::persistence::{
     CompactionPolicy, CompactionSchedule, RunsServices, COMPACTION_INTERVAL, RETAINED_EVENTS,
     RETENTION_DAYS,
 };
-use sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, FromQueryResult, Statement};
 
 mod common;
 use common::runs_status_fixture::{FOREIGN_PROJECT, PROJECT};

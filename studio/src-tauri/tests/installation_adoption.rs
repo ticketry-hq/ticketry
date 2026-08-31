@@ -72,7 +72,7 @@ async fn adopt_and_open(data_directory: &Path) -> adoption::Adoption {
         Readiness::Closed,
         "readiness must stay closed until the boundary is published"
     );
-    muxed_studio_lib::runs_persistence::adopt(data_directory)
+    ticketry_runs::persistence::adopt(data_directory)
         .await
         .expect("the Runs capability must hand over");
     adoption::open_readiness(data_directory, adopted)
@@ -281,7 +281,7 @@ async fn a_new_authoritative_event_boundary_is_published_without_replaying_histo
     let adopted = adoption::adopt(installation.path())
         .await
         .expect("a current installation must adopt");
-    muxed_studio_lib::runs_persistence::adopt(installation.path())
+    ticketry_runs::persistence::adopt(installation.path())
         .await
         .expect("the Runs capability must hand over");
     // Counted after the handoff and before the boundary: this is every event

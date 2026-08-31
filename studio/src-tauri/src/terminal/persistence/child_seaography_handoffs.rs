@@ -121,8 +121,8 @@ pub const CHILD_HANDOFFS: &[ChildHandoff] = &[
         verdict: "aligned: filesystem spool only, no GraphQL surface",
         evidence: "spec/rusting--cf2de16d/T870--port-provider-hook-spooling-and-ingestio/AUDIT.md",
         files_checked: &[
-            "studio/src-tauri/src/hook_spool",
-            "studio/src-tauri/src/terminal/lifecycle/spool_layout.rs",
+            "studio/src-tauri/crates/ticketry-runs/src/hook_spool",
+            "studio/src-tauri/crates/ticketry-runs/src/hook_spool/directory_layout.rs",
         ],
     },
     ChildHandoff {

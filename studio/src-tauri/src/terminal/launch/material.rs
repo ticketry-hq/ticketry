@@ -4,11 +4,11 @@ use sea_orm::{
 };
 use serde_json::json;
 
-use crate::runs_persistence::{
+use ticketry_entities::terminals::launch_material;
+use ticketry_runs::persistence::{
     LaunchIntent, LaunchPreparationParticipant, PrepareLaunchRequest, RunSnapshot,
     RunsPersistenceError, RunsPersistenceErrorCode,
 };
-use ticketry_entities::terminals::launch_material;
 
 use super::service::{compact, storage};
 use crate::launch::terminal_session::{

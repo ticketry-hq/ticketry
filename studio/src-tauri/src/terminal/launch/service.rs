@@ -3,9 +3,10 @@ use std::sync::Arc;
 use sea_orm::{DatabaseConnection, EntityTrait};
 
 use crate::launch::authority::InteractiveLaunchAuthority;
-use crate::runs_persistence::LaunchPreparationParticipant;
-use crate::runs_persistence::RunsServices;
+use crate::launch::trace;
 use ticketry_entities::{terminals::session, work_management::issue};
+use ticketry_runs::persistence::LaunchPreparationParticipant;
+use ticketry_runs::persistence::RunsServices;
 
 use super::checkpoint::LaunchCheckpoints;
 use super::material::PreparedMaterial;
@@ -159,13 +160,37 @@ impl TerminalLaunchService {
         self.execute_accepted(accepted).await
     }
 
+    /// Every launch enters here, so this is where the launch attempt identity
+    /// the trace keys on is established. A launch whose surface named itself
+    /// keeps that surface; one that did not is traced as unknown rather than
+    /// left untraced.
     async fn prepare_inner(
         &self,
         request: CreateTerminalSession,
         participant: Option<&dyn LaunchPreparationParticipant>,
         policy_launch_state: Option<Option<String>>,
     ) -> Result<AcceptedTerminalLaunch, TerminalLaunchError> {
-        request.validate_identity_and_geometry()?;
+        let attempt = trace::current()
+            .unwrap_or_else(|| trace::LaunchAttempt::beginning_at(trace::LaunchSurface::Unknown));
+        trace::within(
+            attempt,
+            self.prepare_traced(request, participant, policy_launch_state),
+        )
+        .await
+    }
+
+    async fn prepare_traced(
+        &self,
+        request: CreateTerminalSession,
+        participant: Option<&dyn LaunchPreparationParticipant>,
+        policy_launch_state: Option<Option<String>>,
+    ) -> Result<AcceptedTerminalLaunch, TerminalLaunchError> {
+        note_requested_launch(&request);
+        if let Err(error) = request.validate_identity_and_geometry() {
+            trace::refused(trace::stages::REQUESTED, error.code_str()).record();
+            return Err(error);
+        }
+        trace::admitted(trace::stages::REQUESTED).record();
         crate::terminal::resume::validate_resume_request(&self.database, &request).await?;
         self.validate_scope(&request).await?;
         self.runtime.preflight(&request).await?;
@@ -209,6 +234,8 @@ impl TerminalLaunchService {
         self.checkpoints
             .checkpoint(TerminalLaunchBoundary::EffectPrepared)
             .await?;
+
+        trace::attempt_committed(&material.agent_run_id);
 
         Ok(AcceptedTerminalLaunch {
             agent_run_id: material.agent_run_id.clone(),
@@ -398,4 +425,19 @@ pub(super) fn storage(error: sea_orm::DbErr) -> TerminalLaunchError {
         TerminalLaunchErrorCode::Storage,
         format!("Terminal launch storage failed: {error}"),
     )
+}
+
+/// Records what the trace can know from the request itself, before any stage
+/// has run. Interactive requests carry no provider yet; authority supplies it.
+fn note_requested_launch(request: &CreateTerminalSession) {
+    if let Some(attempt) = trace::current() {
+        attempt.note(|facts| {
+            facts.project_id = Some(request.project_id.clone());
+            facts.work_item_id = Some(request.issue_id.clone());
+            facts.provider = request.provider.clone();
+            facts.model = request.model.clone();
+            facts.reasoning = request.reasoning.clone();
+            facts.scope = Some(request.kind.scope().to_owned());
+        });
+    }
 }

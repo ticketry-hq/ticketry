@@ -8,7 +8,7 @@ use axum::{
 use serde::Deserialize;
 use serde_json::{json, Value};
 
-use crate::runs_persistence::{LifecycleFact, RunsServices};
+use ticketry_runs::persistence::{LifecycleFact, RunsServices};
 
 #[derive(Clone)]
 pub(super) struct RunsIngressState {

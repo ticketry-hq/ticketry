@@ -29,9 +29,9 @@ use tokio_util::sync::CancellationToken;
 
 use crate::work_management::{commands::attachments::AttachmentStorage, open_for_commands};
 
-pub use crate::run_authority::{RunAuthority, RunPrincipal};
 pub use registry::allowed_provider_operations;
 use service::WorktrackerMcpService;
+pub use ticketry_runs::authority::{RunAuthority, RunPrincipal};
 
 #[derive(Clone, Debug)]
 pub struct McpConfiguration {
@@ -222,7 +222,7 @@ impl McpRuntime {
         token: &str,
         allowed_tools: impl IntoIterator<Item = String>,
         expired: bool,
-    ) -> Result<String, crate::run_authority::AuthorizationFailure> {
+    ) -> Result<String, ticketry_runs::authority::AuthorizationFailure> {
         self.authority
             .grant_for_test(agent_run_id, token, allowed_tools, expired)
             .await

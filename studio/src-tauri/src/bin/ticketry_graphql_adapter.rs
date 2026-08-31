@@ -55,9 +55,9 @@ fn publish_development_readiness(
         data_directory,
         &ticketry_settings::Slice2Readiness::complete(),
     )?;
-    muxed_studio_lib::runs_persistence::publish_readiness(
+    ticketry_runs::persistence::publish_readiness(
         data_directory,
-        &muxed_studio_lib::runs_persistence::Slice3Readiness::complete(),
+        &ticketry_runs::persistence::Slice3Readiness::complete(),
     )?;
     muxed_studio_lib::workspace::handoff::publish_readiness(
         data_directory,
@@ -102,7 +102,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let hook_runner = hook_runner::HookRunnerResolver::from_environment().resolve()?;
     let database = adopted.runtime.commands().clone();
     let hook_spool_directory =
-        muxed_studio_lib::terminal::lifecycle::ensure_hook_spool_directory(&data_directory)?;
+        ticketry_runs::hook_spool::ensure_hook_spool_directory(&data_directory)?;
     adopted
         .runtime
         .terminal_runtime()
@@ -271,9 +271,9 @@ mod tests {
         assert!(ticketry_settings::published_readiness_is_complete(
             directory.path(),
         ));
-        assert!(
-            muxed_studio_lib::runs_persistence::published_readiness_is_complete(directory.path())
-        );
+        assert!(ticketry_runs::persistence::published_readiness_is_complete(
+            directory.path()
+        ));
         assert!(
             muxed_studio_lib::workspace::handoff::published_readiness_is_complete(directory.path())
         );

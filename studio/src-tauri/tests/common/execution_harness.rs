@@ -30,7 +30,6 @@ use muxed_studio_lib::graphql_foundation::{
     adopt_worktracker_and_install, ComposedCommandRuntime, InstallationOwnership,
 };
 use muxed_studio_lib::mcp::{McpConfiguration, McpRuntime};
-use muxed_studio_lib::runs_persistence::{publish_readiness, Slice3Readiness};
 use muxed_studio_lib::terminal::launch::{TerminalLaunchBoundary, TerminalLaunchService};
 use muxed_studio_lib::terminal::lifecycle::{
     ProductionTerminalLifecycleWork, TerminalLifecycleConfig, TerminalLifecycleRuntime,
@@ -40,6 +39,7 @@ use muxed_studio_lib::work_management::launch_policy::LaunchPolicyResolver;
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection};
 use serde_json::{json, Value};
 use tauri_graphql::{TransportApi, TransportApiImpl};
+use ticketry_runs::persistence::{publish_readiness, Slice3Readiness};
 
 use super::execution_authorization::{Authorization, AUTHORIZATION_CREDENTIAL};
 use super::execution_fixture as fixture;
@@ -228,7 +228,7 @@ impl ExecutionHarness {
         // Modules themselves exist rather than written into a profile file.
         link_modules(&commands, &data_directory).await;
         let spool_directory =
-            muxed_studio_lib::terminal::lifecycle::ensure_hook_spool_directory(&data_directory)
+            ticketry_runs::hook_spool::ensure_hook_spool_directory(&data_directory)
                 .expect("create the provider hook spool directory");
 
         // The interactive runtime is shared with the GraphQL composition, so
@@ -271,12 +271,12 @@ impl ExecutionHarness {
                 granted_operations: muxed_studio_lib::mcp::allowed_provider_operations(),
             });
 
-        let spool = muxed_studio_lib::hook_spool::HookSpool::new(
+        let spool = ticketry_runs::hook_spool::HookSpool::new(
             spool_directory,
-            muxed_studio_lib::runs_persistence::RunsServices::new(commands.clone())
+            ticketry_runs::persistence::RunsServices::new(commands.clone())
                 .lifecycle()
                 .clone(),
-            muxed_studio_lib::hook_spool::DEFAULT_BATCH_SIZE,
+            ticketry_runs::hook_spool::DEFAULT_BATCH_SIZE,
         )
         .expect("open the provider hook spool");
         let reconciliation =

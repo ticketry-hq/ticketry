@@ -1,5 +1,4 @@
 use async_trait::async_trait;
-use muxed_studio_lib::runs_persistence::{RunsServices, TerminalFact, TerminalOutcome};
 use muxed_studio_lib::terminal::output_activity::{
     LiveOutputSweepRuntime, TerminalOutputActivityError, TerminalOutputActivityService,
     TerminalScreenCapture,
@@ -10,6 +9,7 @@ use std::sync::{
     Arc, Mutex,
 };
 use std::time::Duration;
+use ticketry_runs::persistence::{RunsServices, TerminalFact, TerminalOutcome};
 
 const PROJECT: &str = "11111111111111111111111111111111";
 const PUBLIC_PROJECT: &str = "11111111-1111-1111-1111-111111111111";

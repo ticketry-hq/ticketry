@@ -9,11 +9,11 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use muxed_studio_lib::runs_persistence::{
+use sea_orm::{ConnectionTrait, Database, DbBackend, Statement};
+use ticketry_runs::persistence::{
     self, ownership_manifest, publish_readiness, published_readiness_is_complete,
     RunsReadinessGate, Slice3Readiness,
 };
-use sea_orm::{ConnectionTrait, Database, DbBackend, Statement};
 
 fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -58,7 +58,7 @@ async fn the_manifest_names_exactly_the_tables_adoption_installs() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("state.db");
     django_fixture(&path);
-    runs_persistence::adopt(directory.path())
+    persistence::adopt(directory.path())
         .await
         .expect("adopt the Runs schema");
     let database = open(&path).await;
@@ -160,7 +160,7 @@ async fn adoption_refuses_an_unknown_runs_schema_before_the_lease_changes_hands(
         .unwrap();
     database.close().await.unwrap();
 
-    let refusal = runs_persistence::preflight(directory.path())
+    let refusal = persistence::preflight(directory.path())
         .await
         .expect_err("an unknown Runs schema must be refused");
 

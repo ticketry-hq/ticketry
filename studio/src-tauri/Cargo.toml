@@ -56,6 +56,11 @@ path = "src/bin/ticketry_graphql_adapter.rs"
 required-features = ["development-tools"]
 
 [[bin]]
+name = "report_launch_trace"
+path = "src/bin/report_launch_trace.rs"
+required-features = ["development-tools"]
+
+[[bin]]
 name = "verify_slice4_copy"
 path = "src/bin/verify_slice4_copy.rs"
 required-features = ["development-tools"]
@@ -72,9 +77,9 @@ required-features = ["development-tools"]
 
 [dependencies]
 async-graphql.workspace = true
-async-trait = "=0.1.92"
+async-trait.workspace = true
 axum = { version = "=0.8.9", features = ["ws"] }
-base64 = "0.22"
+base64.workspace = true
 blake2 = "0.10"
 chrono.workspace = true
 futures-util.workspace = true
@@ -105,13 +110,15 @@ taurpc.workspace = true
 ticketry-data-directory.workspace = true
 ticketry-diagnostics.workspace = true
 ticketry-entities.workspace = true
+ticketry-runs.workspace = true
 ticketry-settings.workspace = true
 ticketry-tool-discovery.workspace = true
 tokio.workspace = true
-tokio-util = "=0.7.18"
+tokio-util.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
+ticketry-runs = { workspace = true, features = ["test-support"] }
 log = "=0.4.33"
 syn = { version = "=2.0.119", features = ["full", "visit"] }
 tempfile.workspace = true
@@ -122,6 +129,7 @@ members = [
     "crates/tauri-graphql",
     "crates/ticketry-data-directory",
     "crates/ticketry-entities",
+    "crates/ticketry-runs",
     "crates/ticketry-settings",
     "crates/ticketry-tool-discovery",
     "crates/ticketry-diagnostics",
@@ -130,6 +138,8 @@ resolver = "2"
 
 [workspace.dependencies]
 async-graphql = { version = "=7.0.19", features = ["dynamic-schema"] }
+async-trait = "=0.1.92"
+base64 = "0.22"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 futures-util = "=0.3.32"
 libc = "0.2"
@@ -147,9 +157,11 @@ tempfile = "=3.23.0"
 ticketry-data-directory = { path = "crates/ticketry-data-directory" }
 ticketry-diagnostics = { path = "crates/ticketry-diagnostics" }
 ticketry-entities = { path = "crates/ticketry-entities" }
+ticketry-runs = { path = "crates/ticketry-runs" }
 ticketry-settings = { path = "crates/ticketry-settings" }
 ticketry-tool-discovery = { path = "crates/ticketry-tool-discovery" }
 tokio = { version = "=1.53.1", features = ["macros", "net", "rt-multi-thread", "sync", "time"] }
+tokio-util = "=0.7.18"
 uuid = { version = "1.24", features = ["v4", "v5"] }
 
 # Development builds keep only the line tables. Full DWARF for a workspace this

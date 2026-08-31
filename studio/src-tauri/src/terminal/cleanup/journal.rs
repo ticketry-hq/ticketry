@@ -7,8 +7,8 @@ use sea_orm::{
 };
 use serde_json::{json, Value};
 
-use crate::runs_persistence::{TerminalFact, TerminalOutcome};
 use ticketry_entities::terminals::{cleanup_effect, session};
+use ticketry_runs::persistence::{TerminalFact, TerminalOutcome};
 
 use super::service::{not_found, observation_name, TerminalCleanupService};
 use super::{
@@ -309,10 +309,10 @@ fn now() -> String {
 fn cleanup_checkpoint(
     checkpoints: &Arc<dyn CleanupCheckpoints>,
     checkpoint: CleanupCheckpoint,
-) -> Result<(), crate::runs_persistence::RunsPersistenceError> {
+) -> Result<(), ticketry_runs::persistence::RunsPersistenceError> {
     checkpoints.reached(checkpoint).map_err(|_| {
-        crate::runs_persistence::RunsPersistenceError::new(
-            crate::runs_persistence::RunsPersistenceErrorCode::Conflict,
+        ticketry_runs::persistence::RunsPersistenceError::new(
+            ticketry_runs::persistence::RunsPersistenceErrorCode::Conflict,
             "Terminal cleanup stopped at an injected checkpoint.",
         )
     })

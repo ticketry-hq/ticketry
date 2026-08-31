@@ -181,11 +181,11 @@ async fn initialize_with_worktracker_commands_and_install_inner(
     // through it. Before adoption the same commands run unchanged and publish
     // nothing, so composing this schema can never make a write depend on a
     // table that does not exist yet.
-    let work_facts = crate::runs_persistence::outbox_adopted(&worktracker_database)
+    let work_facts = ticketry_runs::persistence::outbox_adopted(&worktracker_database)
         .await
         .then(|| {
             crate::work_management::commands::status_facts::WorkFactRecorder::new(
-                crate::runs_persistence::RunsServices::new(worktracker_database.clone())
+                ticketry_runs::persistence::RunsServices::new(worktracker_database.clone())
                     .outbox()
                     .events()
                     .clone(),
@@ -276,11 +276,11 @@ async fn initialize_with_worktracker_commands_and_install_inner(
 async fn document_facts(
     worktracker_database: &sea_orm::DatabaseConnection,
 ) -> Option<crate::documents::DocumentFactRecorder> {
-    crate::runs_persistence::outbox_adopted(worktracker_database)
+    ticketry_runs::persistence::outbox_adopted(worktracker_database)
         .await
         .then(|| {
             crate::documents::DocumentFactRecorder::new(
-                crate::runs_persistence::RunsServices::new(worktracker_database.clone())
+                ticketry_runs::persistence::RunsServices::new(worktracker_database.clone())
                     .outbox()
                     .events()
                     .clone(),
@@ -332,7 +332,7 @@ async fn compose_worktree_operations(
     }
     let mut reconciled = true;
     let events = outbox_adopted.then(|| {
-        crate::runs_persistence::RunsServices::new(worktracker_database.clone())
+        ticketry_runs::persistence::RunsServices::new(worktracker_database.clone())
             .outbox()
             .events()
             .clone()
@@ -398,7 +398,7 @@ async fn compose_document_saves(
     }
     let facts = outbox_adopted.then(|| {
         crate::documents::DocumentFactRecorder::new(
-            crate::runs_persistence::RunsServices::new(worktracker_database.clone())
+            ticketry_runs::persistence::RunsServices::new(worktracker_database.clone())
                 .outbox()
                 .events()
                 .clone(),
@@ -510,10 +510,10 @@ pub async fn adopt_worktracker_and_install(
     // The Runs write lease changes hands here, before any Rust Runs command is
     // reachable. An unknown or corrupt Runs schema refuses adoption and leaves
     // the pre-cutover snapshot restorable.
-    crate::runs_persistence::preflight(data_directory)
+    ticketry_runs::persistence::preflight(data_directory)
         .await
         .map_err(runs_adoption_error)?;
-    crate::runs_persistence::adopt(data_directory)
+    ticketry_runs::persistence::adopt(data_directory)
         .await
         .map_err(runs_adoption_error)?;
     // Terminal persistence depends on the adopted Agent Run and Launch Effect
@@ -587,7 +587,7 @@ fn workspace_adoption_error(
 }
 
 fn runs_adoption_error(
-    error: crate::runs_persistence::RunsPersistenceError,
+    error: ticketry_runs::persistence::RunsPersistenceError,
 ) -> FoundationInitializationError {
     FoundationInitializationError::new(
         FoundationInitializationErrorCode::WorktrackerDatabaseOpen,

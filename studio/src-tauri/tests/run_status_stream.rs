@@ -7,11 +7,11 @@
 use std::time::Duration;
 
 use futures_util::{Stream, StreamExt};
-use muxed_studio_lib::runs_persistence::{
+use sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, Statement};
+use ticketry_runs::persistence::{
     failure_code, open_status_stream, reset_reason, LifecycleFact, RunStatusFrame, RunsServices,
     StatusStreamRequest, TerminalFact, TerminalOutcome,
 };
-use sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, Statement};
 
 mod common;
 use common::runs_status_fixture::{
@@ -68,9 +68,9 @@ fn kinds(frames: &[RunStatusFrame]) -> Vec<&str> {
 }
 
 fn holding<'a>(
-    rows: &'a [muxed_studio_lib::runs_persistence::AgentRunHolding],
+    rows: &'a [ticketry_runs::persistence::AgentRunHolding],
     id: &str,
-) -> &'a muxed_studio_lib::runs_persistence::AgentRunHolding {
+) -> &'a ticketry_runs::persistence::AgentRunHolding {
     rows.iter().find(|run| run.agent_run_id == id).unwrap()
 }
 

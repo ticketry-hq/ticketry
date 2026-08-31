@@ -1,7 +1,7 @@
-use muxed_studio_lib::runs_persistence::{
+use sea_orm::{ConnectionTrait, Database, DatabaseConnection, DbBackend, Statement};
+use ticketry_runs::persistence::{
     AgentRunHolding, LifecycleFact, RunsServices, TerminalFact, TerminalOutcome,
 };
-use sea_orm::{ConnectionTrait, Database, DatabaseConnection, DbBackend, Statement};
 
 async fn fixture() -> (tempfile::TempDir, DatabaseConnection, RunsServices) {
     let directory = tempfile::tempdir().unwrap();

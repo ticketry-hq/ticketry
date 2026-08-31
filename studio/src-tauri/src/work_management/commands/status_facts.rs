@@ -15,7 +15,7 @@ use sea_orm::DatabaseTransaction;
 use serde_json::json;
 
 use super::CommandError;
-use crate::runs_persistence::{NewStatusEvent, StatusEventRepository};
+use ticketry_runs::persistence::{NewStatusEvent, StatusEventRepository};
 
 /// The payload schema these facts are written at. A consumer that does not
 /// understand a higher version skips the row rather than guessing at it.

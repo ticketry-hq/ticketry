@@ -74,9 +74,9 @@ pub(super) async fn launch(
             )
         }
     };
-    match state
-        .service
-        .create(CreateTerminalSession {
+    match crate::launch::trace::requested_by(
+        crate::launch::trace::LaunchSurface::McpLaunchIngress,
+        state.service.create(CreateTerminalSession {
             client_request_id: body.client_request_id,
             project_id: body.project_id,
             issue_id: body.issue_id,
@@ -96,8 +96,9 @@ pub(super) async fn launch(
             document_relative_path: None,
             columns: 120,
             rows: 32,
-        })
-        .await
+        }),
+    )
+    .await
     {
         Ok(session) => (
             StatusCode::OK,

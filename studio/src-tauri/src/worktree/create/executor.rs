@@ -29,7 +29,6 @@ use async_trait::async_trait;
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 use serde_json::json;
 
-use crate::runs_persistence::StatusEventRepository;
 use crate::workspace::operations::{
     ClaimedOperation, WorkspaceOperationExecutor, WorkspaceOperationJournal,
     WorkspaceOperationOutcome,
@@ -39,6 +38,7 @@ use crate::worktree::status::{
     owner, repository as repository_resolution, GitPort, RepositoryLocks,
 };
 use ticketry_entities::worktrees::worktree;
+use ticketry_runs::persistence::StatusEventRepository;
 
 use super::error::WorktreeCreateError;
 use super::git_effects::{self, CheckoutObservation};

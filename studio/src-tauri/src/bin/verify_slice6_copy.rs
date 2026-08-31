@@ -93,10 +93,10 @@ async fn adopt(
     muxed_studio_lib::execution::persistence::AdoptionEvidence,
     String,
 ) {
-    muxed_studio_lib::runs_persistence::preflight(data_directory)
+    ticketry_runs::persistence::preflight(data_directory)
         .await
         .unwrap_or_else(|error| fail(&format!("{pass} Runs adoption preflight failed: {error}")));
-    muxed_studio_lib::runs_persistence::adopt(data_directory)
+    ticketry_runs::persistence::adopt(data_directory)
         .await
         .unwrap_or_else(|error| fail(&format!("{pass} Runs adoption failed: {error}")));
     muxed_studio_lib::terminal::persistence::preflight(data_directory)

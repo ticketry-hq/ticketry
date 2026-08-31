@@ -8,11 +8,11 @@
 use std::time::Duration;
 
 use futures_util::{Stream, StreamExt};
-use muxed_studio_lib::runs_persistence::{
+use sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, FromQueryResult, Statement};
+use ticketry_runs::persistence::{
     open_status_stream, reset_reason, CompactionPolicy, RunStatusFrame, RunsServices,
     StatusStreamRequest, MAX_REPLAY_EVENTS, RETAINED_EVENTS, RETENTION_DAYS,
 };
-use sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, FromQueryResult, Statement};
 
 mod common;
 use common::runs_status_fixture::{insert_event, FOREIGN_PROJECT, PROJECT, PUBLIC_PROJECT};

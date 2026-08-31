@@ -142,7 +142,7 @@ pub fn external_roots(data_directory: &Path) -> Vec<ExternalRoot> {
         ExternalRoot {
             kind: "hook-spool".to_owned(),
             name: "ticketry-hook-spool".to_owned(),
-            present: crate::terminal::lifecycle::hook_spool_directory(data_directory).exists(),
+            present: ticketry_runs::hook_spool::hook_spool_directory(data_directory).exists(),
         },
         local("profiles", "profiles.json"),
         local("features", "features.json"),

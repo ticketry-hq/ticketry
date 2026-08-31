@@ -10,9 +10,9 @@ use chrono::{SecondsFormat, Utc};
 use sea_orm::{ActiveModelTrait, ActiveValue::Set, DatabaseTransaction};
 use serde_json::json;
 
-use crate::runs_persistence::StatusEventRepository;
 use crate::worktree::facts::{record_worktree, WorktreeChange, WorktreeFact, WorktreeFactScope};
 use ticketry_entities::worktrees::worktree;
+use ticketry_runs::persistence::StatusEventRepository;
 
 use super::error::{WorktreeCreateError, WorktreeCreateErrorCode};
 use super::plan::CreatePlan;

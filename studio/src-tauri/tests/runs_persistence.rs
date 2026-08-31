@@ -1,8 +1,8 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use muxed_studio_lib::runs_persistence::{adopt, LaunchIntent, RunsServices, SourceClassification};
 use sea_orm::{ConnectionTrait, Database, DbBackend, Statement, TransactionTrait};
+use ticketry_runs::persistence::{adopt, LaunchIntent, RunsServices, SourceClassification};
 
 fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))

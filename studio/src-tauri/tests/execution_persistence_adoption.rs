@@ -80,7 +80,7 @@ async fn every_supported_execution_leaf_adopts_twice_without_row_drift() {
 async fn adoption_preserves_campaign_identity_history_and_policy() {
     let directory = tempfile::tempdir().expect("create Execution adoption fixture");
     fixture::provision_current(directory.path()).await;
-    muxed_studio_lib::runs_persistence::adopt(directory.path())
+    ticketry_runs::persistence::adopt(directory.path())
         .await
         .expect("adopt Runs before campaign claims");
 
@@ -142,7 +142,7 @@ async fn adoption_preserves_campaign_identity_history_and_policy() {
 async fn an_active_claim_is_adopted_when_its_runtime_names_the_child_in_either_form() {
     let directory = tempfile::tempdir().expect("create active Execution fixture");
     fixture::provision_current(directory.path()).await;
-    muxed_studio_lib::runs_persistence::adopt(directory.path())
+    ticketry_runs::persistence::adopt(directory.path())
         .await
         .expect("adopt Runs before campaign claims");
     muxed_studio_lib::terminal::persistence::adopt(directory.path())

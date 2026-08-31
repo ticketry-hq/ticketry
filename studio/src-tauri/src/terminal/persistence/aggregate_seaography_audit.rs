@@ -219,7 +219,7 @@ pub const AUDITED_MODULES: &[&str] = &[
     "src/tmux_adapter",
     "src/launch/planning",
     "src/launch/paths",
-    "src/hook_spool",
+    "crates/ticketry-runs/src/hook_spool",
     "src/native_terminal.rs",
     "src/native_terminal",
 ];

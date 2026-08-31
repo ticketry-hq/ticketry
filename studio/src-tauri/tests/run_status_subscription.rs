@@ -3,10 +3,10 @@
 
 use std::time::Duration;
 
-use muxed_studio_lib::runs_persistence::{failure_code, LifecycleFact, RunsServices};
 use sea_orm::DatabaseConnection;
 use tauri::ipc::{Channel, InvokeResponseBody};
 use tauri_graphql::{GraphQlEndpoint, TransportApi, TransportApiImpl};
+use ticketry_runs::persistence::{failure_code, LifecycleFact, RunsServices};
 
 mod common;
 use common::runs_status_fixture::{insert_run, PUBLIC_PROJECT, TASK};

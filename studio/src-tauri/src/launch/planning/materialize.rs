@@ -3,6 +3,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use super::provider::{provider_contract, validate_options};
+use crate::launch::trace;
 use super::types::LAUNCH_MATERIAL_VERSION;
 use super::{
     DurableLaunchMaterial, LaunchKind, LaunchPlanningError, LaunchPlanningErrorCode,
@@ -45,7 +46,39 @@ impl ExecutionAuthority {
     }
 }
 
+/// Materialises one launch's argv.
+///
+/// Both the provider-validation stage and the argv stage are observed here,
+/// because this is the one seam both run in. The trace records argv by its
+/// shape — never its values.
 pub fn materialize(
+    durable: &DurableLaunchMaterial,
+    authority: &ExecutionAuthority,
+) -> Result<MaterializedLaunch, LaunchPlanningError> {
+    let outcome = materialize_inner(durable, authority);
+    if let Err(error) = &outcome {
+        let stage = if matches!(
+            error.code,
+            LaunchPlanningErrorCode::UnknownProvider
+                | LaunchPlanningErrorCode::UnsupportedModel
+                | LaunchPlanningErrorCode::UnsupportedReasoning
+                | LaunchPlanningErrorCode::UnsupportedVersion
+        ) {
+            trace::stages::PROVIDER_VALIDATED
+        } else {
+            trace::stages::ARGV_MATERIALISED
+        };
+        trace::refused(stage, trace::planning_reason(error.code)).record();
+    } else if let Ok(launch) = &outcome {
+        trace::admitted(trace::stages::ARGV_MATERIALISED)
+            .with("argumentCount", launch.argv.len())
+            .with("hasRuntimeSettings", launch.settings.is_some())
+            .record();
+    }
+    outcome
+}
+
+fn materialize_inner(
     durable: &DurableLaunchMaterial,
     authority: &ExecutionAuthority,
 ) -> Result<MaterializedLaunch, LaunchPlanningError> {
@@ -59,6 +92,9 @@ pub fn materialize(
         ));
     }
     validate_options(durable.provider, &durable.options)?;
+    trace::admitted(trace::stages::PROVIDER_VALIDATED)
+        .with("providerSlug", provider_contract(durable.provider).slug)
+        .record();
     validate_authority(durable.provider, authority)?;
     for skill in &durable.required_skills {
         if !authority.available_skills.contains(skill) {

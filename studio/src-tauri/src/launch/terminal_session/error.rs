@@ -1,4 +1,4 @@
-use crate::runs_persistence::RunsPersistenceError;
+use ticketry_runs::persistence::RunsPersistenceError;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TerminalLaunchErrorCode {
@@ -70,7 +70,7 @@ impl TerminalLaunchError {
 
 impl From<RunsPersistenceError> for TerminalLaunchError {
     fn from(error: RunsPersistenceError) -> Self {
-        use crate::runs_persistence::RunsPersistenceErrorCode;
+        use ticketry_runs::persistence::RunsPersistenceErrorCode;
         let code = match error.code() {
             RunsPersistenceErrorCode::LaunchConflict => TerminalLaunchErrorCode::Conflict,
             RunsPersistenceErrorCode::LaunchLeaseNotHeld => TerminalLaunchErrorCode::EffectBusy,

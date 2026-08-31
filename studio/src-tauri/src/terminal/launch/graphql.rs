@@ -70,13 +70,21 @@ impl TerminalSessionMutations {
                     "Shell creation accepts only request identity, module identity, and geometry.",
                 ));
             }
-            return service
-                .create_module_shell(client_request_id, module_id, columns, rows)
-                .await
-                .map_err(graphql_error);
+            return crate::launch::trace::requested_by(
+                crate::launch::trace::LaunchSurface::LaunchPicker,
+                service.create_module_shell(client_request_id, module_id, columns, rows),
+            )
+            .await
+            .map_err(graphql_error);
         }
-        service
-            .create(CreateTerminalSession {
+        let surface = if resume_from_agent_run_id.is_some() {
+            crate::launch::trace::LaunchSurface::Resume
+        } else {
+            crate::launch::trace::LaunchSurface::LaunchPicker
+        };
+        crate::launch::trace::requested_by(
+            surface,
+            service.create(CreateTerminalSession {
                 client_request_id,
                 project_id: required(project_id, "project")?,
                 issue_id: required(issue_id, "Work Item")?,
@@ -99,9 +107,10 @@ impl TerminalSessionMutations {
                 document_relative_path,
                 columns,
                 rows,
-            })
-            .await
-            .map_err(graphql_error)
+            }),
+        )
+        .await
+        .map_err(graphql_error)
     }
 }
 

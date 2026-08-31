@@ -5,10 +5,10 @@ use sea_orm::{
 
 use crate::{
     query_root,
-    runs_persistence::RunsServices,
     work_management::commands::{status_facts::WorkFactRecorder, CommandDatabase},
 };
 use ticketry_entities::{runs::status_event, work_management::state};
+use ticketry_runs::persistence::RunsServices;
 
 const PROJECT: &str = "10000000000000000000000000000000";
 const FOREIGN_PROJECT: &str = "10000000000000000000000000000009";

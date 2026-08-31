@@ -6,12 +6,12 @@ use sea_orm::{
 };
 use serde_json::json;
 
-use crate::runs_persistence::{NewStatusEvent, RunsServices, TerminalFact, TerminalOutcome};
 use crate::terminal::cleanup::{
     CleanupCause, CleanupRuntimeObservation, TerminalCleanupRuntime, TerminalCleanupService,
 };
 use crate::terminal::launch::{TerminalLaunchRuntime, TerminalLaunchService};
 use ticketry_entities::{runs::agent_run, terminals::session};
+use ticketry_runs::persistence::{NewStatusEvent, RunsServices, TerminalFact, TerminalOutcome};
 
 use super::batch::{recorded_session_batch, RecordedSessionCursors};
 use super::{
@@ -313,10 +313,10 @@ fn checkpoint(
     checkpoints: &Arc<dyn ReconciliationCheckpoints>,
     agent_run_id: &str,
     point: ReconciliationCheckpoint,
-) -> Result<(), crate::runs_persistence::RunsPersistenceError> {
+) -> Result<(), ticketry_runs::persistence::RunsPersistenceError> {
     checkpoints.reached(agent_run_id, point).map_err(|error| {
-        crate::runs_persistence::RunsPersistenceError::new(
-            crate::runs_persistence::RunsPersistenceErrorCode::Storage,
+        ticketry_runs::persistence::RunsPersistenceError::new(
+            ticketry_runs::persistence::RunsPersistenceErrorCode::Storage,
             error.to_string(),
         )
     })

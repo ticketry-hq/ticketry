@@ -24,12 +24,12 @@ use std::sync::Arc;
 
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 
-use crate::runs_persistence::StatusEventRepository;
 use crate::workspace::operations::{
     WorkspaceOperationJournal, WorkspaceOperationOutcome, WorkspaceOperationReconciler,
 };
 use crate::worktree::status::{owner, RepositoryLocks, WorktreeStatusService, WorktreeStatusView};
 use ticketry_entities::worktrees::worktree;
+use ticketry_runs::persistence::StatusEventRepository;
 
 use super::error::{WorktreeDiscardError, WorktreeDiscardErrorCode};
 use super::executor::DiscardExecutor;

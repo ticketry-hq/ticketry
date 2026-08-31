@@ -2,8 +2,10 @@ use async_trait::async_trait;
 use chrono::Utc;
 use sea_orm::{ActiveModelTrait, ActiveValue::Set, DatabaseTransaction, EntityTrait};
 
-use crate::runs_persistence::{LaunchSettlementParticipant, LifecycleFact, RunsPersistenceError};
 use ticketry_entities::terminals::{launch_material, session};
+use ticketry_runs::persistence::{
+    LaunchSettlementParticipant, LifecycleFact, RunsPersistenceError,
+};
 
 use super::material::material_conflict;
 use super::{TerminalLaunchBoundary, TerminalLaunchCheckpoint, VerifiedTerminalRuntime};
@@ -11,7 +13,7 @@ use super::{TerminalLaunchBoundary, TerminalLaunchCheckpoint, VerifiedTerminalRu
 pub(super) struct SessionSettlement {
     pub(super) material: launch_material::Model,
     pub(super) runtime: VerifiedTerminalRuntime,
-    pub(super) lifecycle: crate::runs_persistence::LifecycleService,
+    pub(super) lifecycle: ticketry_runs::persistence::LifecycleService,
     pub(super) checkpoints: super::checkpoint::LaunchCheckpoints,
 }
 
@@ -20,7 +22,7 @@ impl LaunchSettlementParticipant for SessionSettlement {
     async fn settle_applied_in(
         &self,
         transaction: &DatabaseTransaction,
-        _effect: &crate::runs_persistence::LaunchEffectRecord,
+        _effect: &ticketry_runs::persistence::LaunchEffectRecord,
         settled_at: &str,
         _runtime_evidence: &serde_json::Value,
     ) -> Result<(), RunsPersistenceError> {
@@ -59,7 +61,7 @@ impl LaunchSettlementParticipant for SessionSettlement {
             .await
             .map_err(|error| {
                 RunsPersistenceError::new(
-                    crate::runs_persistence::RunsPersistenceErrorCode::Storage,
+                    ticketry_runs::persistence::RunsPersistenceErrorCode::Storage,
                     error.to_string(),
                 )
             })?;

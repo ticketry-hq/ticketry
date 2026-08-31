@@ -18,11 +18,11 @@ use std::sync::Arc;
 
 use sea_orm::DatabaseConnection;
 
-use crate::runs_persistence::StatusEventRepository;
 use crate::workspace::operations::{
     WorkspaceOperationJournal, WorkspaceOperationOutcome, WorkspaceOperationReconciler,
 };
 use crate::worktree::status::{RepositoryLocks, WorktreeStatusService, WorktreeStatusView};
+use ticketry_runs::persistence::StatusEventRepository;
 
 use super::error::{WorktreeCreateError, WorktreeCreateErrorCode};
 use super::executor::CreateExecutor;

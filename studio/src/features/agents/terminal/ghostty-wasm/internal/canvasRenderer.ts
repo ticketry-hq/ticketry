@@ -9,13 +9,10 @@
  * Deliberately free of React and of terminal state — it takes a frame and puts
  * pixels on a canvas.
  */
+import { measureCellMetrics, type CellMetrics } from "./cellMetrics";
 import type { Frame, FrameCell, FrameRow } from "./frameTypes";
 
-export interface CellMetrics {
-  width: number;
-  height: number;
-  baseline: number;
-}
+export type { CellMetrics };
 
 export interface CanvasRendererOptions {
   fontFamily: string;
@@ -168,20 +165,9 @@ export class TerminalCanvasRenderer {
   }
 
   private measureCell(): CellMetrics {
-    this.applyFont();
-    const metrics = this.context.measureText("M");
-    // jsdom reports zero-width text; fall back to a plausible monospace box so
-    // geometry maths stays finite in tests.
-    const width = metrics.width > 0 ? metrics.width : this.options.fontSize * 0.6;
-    const height = Math.ceil(this.options.fontSize * 1.35);
-    const ascent =
-      metrics.actualBoundingBoxAscent > 0
-        ? metrics.actualBoundingBoxAscent
-        : this.options.fontSize * 0.8;
-    return {
-      width,
-      height,
-      baseline: Math.min(height - 1, Math.round((height + ascent) / 2)),
-    };
+    return measureCellMetrics(
+      { fontFamily: this.options.fontFamily, fontSize: this.options.fontSize },
+      this.context,
+    );
   }
 }

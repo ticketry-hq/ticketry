@@ -47,8 +47,6 @@ pub const SLICES: &[(&str, &str)] = &[
 /// crate-split plan, and a stale entry fails the guard so the list cannot
 /// drift. Adding an entry means a new cycle was introduced.
 pub const ALLOWED_BACK_EDGES: &[(&str, &str)] = &[
-    // §3.3 move misplaced Tauri command handlers into `desktop`
-    ("terminal", "desktop"),
     // §3.4 code motion out of `work_management` and the remaining pairs
     ("documents", "workspace"),
     ("execution", "terminal"),
@@ -166,7 +164,7 @@ pub fn slice_of(module: &str) -> Option<&'static str> {
 ///
 /// Commands are shell composition by definition, so `desktop` is their only
 /// home. This list may only shrink; see the crate-split plan §3.3.
-pub const ALLOWED_COMMAND_MODULES_OUTSIDE_DESKTOP: &[&str] = &["terminal"];
+pub const ALLOWED_COMMAND_MODULES_OUTSIDE_DESKTOP: &[&str] = &[];
 
 /// Top-level modules that declare at least one `#[tauri::command]`.
 pub fn modules_declaring_tauri_commands() -> Vec<String> {

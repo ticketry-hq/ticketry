@@ -2,6 +2,8 @@
 //! own authority: the main window only, no caller-supplied program, path,
 //! port, or environment value.
 
+pub(crate) mod terminal_viewer;
+
 use std::path::PathBuf;
 use tauri_plugin_dialog::DialogExt;
 

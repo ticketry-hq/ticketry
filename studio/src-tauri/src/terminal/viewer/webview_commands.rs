@@ -17,7 +17,10 @@ use std::thread;
 use std::time::Duration;
 use tauri::ipc::Channel;
 
-use crate::viewer_ownership::{CreateViewerLease, PreparedViewerMechanics, ViewerDetachReason};
+use crate::terminal::output_activity::TerminalOutputActivityService;
+use crate::viewer_ownership::{
+    CreateViewerLease, PreparedViewerMechanics, ViewerDetachReason, ViewerOwnershipService,
+};
 
 const MAX_INPUT_BYTES: usize = 64 * 1024;
 const OUTPUT_CHANNEL_CAPACITY: usize = 64;
@@ -332,10 +335,13 @@ enum WorkerCommand {
 
 /// Attachment prepares transport mechanics. The caller's following GraphQL
 /// lease mutation atomically chooses the winner and detaches any old viewer.
-#[tauri::command]
-pub(crate) fn viewer_attach(
-    state: tauri::State<'_, ViewerCommandState>,
-    launch: tauri::State<'_, crate::desktop::launch_runtime::DesktopLaunchRuntime>,
+///
+/// The shell resolves `output_activity` and `ownership` from its launch
+/// runtime and passes them in, so this stays a terminal operation.
+pub fn viewer_attach(
+    state: &ViewerCommandState,
+    output_activity: Option<TerminalOutputActivityService>,
+    ownership: ViewerOwnershipService,
     run_id: String,
     viewer_id: String,
     columns: u16,
@@ -375,9 +381,7 @@ pub(crate) fn viewer_attach(
         output,
         command_sender,
         command_receiver,
-        launch
-            .output_activity()
-            .ok()
+        output_activity
             .zip(tokio::runtime::Handle::try_current().ok())
             .map(|(service, runtime)| OutputObservationTrigger {
                 service,
@@ -390,9 +394,6 @@ pub(crate) fn viewer_attach(
         viewer_id,
         transport: "xterm".to_owned(),
     };
-    let ownership = launch
-        .viewer_ownership()
-        .map_err(|message| ViewerCommandError::Pty { message })?;
     if let Err(error) = ownership.stage_prepared(
         &lease,
         Arc::new(FallbackViewerMechanics {
@@ -410,9 +411,8 @@ pub(crate) fn viewer_attach(
     Ok(status)
 }
 
-#[tauri::command]
 pub fn viewer_input(
-    state: tauri::State<'_, ViewerCommandState>,
+    state: &ViewerCommandState,
     viewer_handle: String,
     data: Vec<u8>,
 ) -> Result<(), ViewerCommandError> {
@@ -425,9 +425,8 @@ pub fn viewer_input(
     request(&sender, |reply| WorkerCommand::Input(data, reply))
 }
 
-#[tauri::command]
 pub fn viewer_resize(
-    state: tauri::State<'_, ViewerCommandState>,
+    state: &ViewerCommandState,
     viewer_handle: String,
     columns: u16,
     rows: u16,
@@ -437,9 +436,8 @@ pub fn viewer_resize(
     request(&sender, |reply| WorkerCommand::Resize(columns, rows, reply))
 }
 
-#[tauri::command]
 pub fn viewer_scroll(
-    state: tauri::State<'_, ViewerCommandState>,
+    state: &ViewerCommandState,
     viewer_handle: String,
     direction: ViewerScrollDirection,
     lines: u16,
@@ -451,18 +449,16 @@ pub fn viewer_scroll(
     })
 }
 
-#[tauri::command]
 pub fn viewer_detach(
-    state: tauri::State<'_, ViewerCommandState>,
+    state: &ViewerCommandState,
     viewer_handle: String,
 ) -> Result<ViewerStatus, ViewerCommandError> {
     let sender = begin_detach(&state.0, &viewer_handle)?;
     request(&sender, WorkerCommand::Detach)
 }
 
-#[tauri::command]
 pub fn viewer_status(
-    state: tauri::State<'_, ViewerCommandState>,
+    state: &ViewerCommandState,
     viewer_handle: String,
 ) -> Result<ViewerStatus, ViewerCommandError> {
     validate_handle(&viewer_handle)?;

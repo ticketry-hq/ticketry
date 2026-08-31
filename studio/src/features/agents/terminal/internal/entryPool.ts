@@ -11,6 +11,15 @@ import {
   recordTerminalPoolDisposal,
   recordTerminalViewerEvent,
 } from "./terminalViewerDiagnostics";
+// CODING-1304 — the compatibility renderer records the same counters as the
+// experiment so the comparison matrix has a like-for-like xterm column.
+import {
+  measurePaint,
+  publishRendererMeasurements,
+  recordAttachStart,
+  recordBytes,
+  recordFirstPaint,
+} from "../ghostty-wasm/internal/rendererMeasurement";
 
 // CODIN-749 — shared terminal entry pool.
 //
@@ -223,6 +232,10 @@ export function ensureConnected(sessionId: string, meta: SessionMeta): void {
   // gone session from a transient transport failure (CODIN-799/800).
 
   let firstReady = true;
+  let firstPaintPending = true;
+  const measuredRunId = entry.agentRunId;
+  publishRendererMeasurements();
+  recordAttachStart("xterm", measuredRunId);
   const handle = terminalClientTransport.attach(
     {
       agentRunId: entry.agentRunId,
@@ -267,7 +280,20 @@ export function ensureConnected(sessionId: string, meta: SessionMeta): void {
         return;
       }
       if (event.type === "output") {
-        entry.term.write(event.bytes);
+        recordBytes("xterm", measuredRunId, event.bytes.length);
+        // xterm renders its own buffer asynchronously, so this measures the
+        // parse-and-enqueue cost, not the frame. The matrix must read it that
+        // way when comparing against a renderer that owns its paint.
+        measurePaint("xterm", measuredRunId, () => entry.term.write(event.bytes));
+        if (firstPaintPending) {
+          firstPaintPending = false;
+          recordFirstPaint("xterm", measuredRunId);
+        }
+        return;
+      }
+      if (event.type === "resumed") {
+        firstPaintPending = true;
+        recordAttachStart("xterm", measuredRunId, "warm");
         return;
       }
       if (event.type === "connecting" && !firstReady && event.attempt > 0) {

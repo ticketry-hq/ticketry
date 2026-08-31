@@ -62,6 +62,14 @@ pinned libghostty revision through its C API, while tmux remains responsible for
 durable sessions. Preserve the existing fallback unless a deliberate migration
 removes it.
 
+A third renderer, `ghostty-wasm`, exists as a development-only experiment under
+`studio/src/features/agents/terminal/ghostty-wasm/` (CODING-1304). It draws
+libghostty-vt frames on a Canvas surface inside the webview, behind its own
+pinned wasm artifact prepared by `npm run ghostty-vt:prepare --workspace
+@worktracker/studio`. It changes no run, no tmux session identity, and no
+persisted terminal record, and it must not become the default without a
+separate ticket.
+
 Development data must remain isolated from live application data. Generated
 databases, caches, native libraries, and build output must not be
 committed.

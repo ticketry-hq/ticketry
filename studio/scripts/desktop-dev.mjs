@@ -174,12 +174,19 @@ export function stopTemporaryTmuxServer(
 
 export function buildTauriDevelopmentConfig(port) {
   const origin = `http://127.0.0.1:${port}`;
+  // Local experiment hook: MUXED_TERMINAL_RENDERER=ghostty-wasm launches the
+  // dev window straight onto the renderer gate's query flag. Unset by default,
+  // so devUrl stays the bare origin.
+  const renderer = process.env.MUXED_TERMINAL_RENDERER;
+  const devUrl = renderer
+    ? `${origin}/?terminalRenderer=${encodeURIComponent(renderer)}`
+    : origin;
   return {
     productName: "Ticketry Dev",
     identifier: "com.ticketry.desktop.dev",
     build: {
       beforeDevCommand: `npm run dev -- --host 127.0.0.1 --port ${port} --strictPort`,
-      devUrl: origin,
+      devUrl,
     },
     app: {
       windows: [{

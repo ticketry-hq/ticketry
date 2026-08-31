@@ -32,6 +32,11 @@ import {
 } from "./internal/nativeViewerMountRegistry";
 import { ensureNativeViewerLifecycle } from "./internal/nativeViewerLifecycle";
 import { reportNativeRenderSuccess } from "./internal/nativeRenderRecovery";
+import {
+  publishRendererMeasurements,
+  recordAttachStart,
+  recordFirstPaint,
+} from "./ghostty-wasm/internal/rendererMeasurement";
 import { activeElementLabel, traceViewerFocus } from "./internal/focusTrace";
 
 const OWNER_LABEL: Record<ForegroundOwner, string> = {
@@ -90,6 +95,20 @@ export function NativeGhosttyTerminal({
   visibleRef.current = visible;
   const presentedHandleRef = useRef<string | null>(sharedHandle);
   presentedHandleRef.current = sharedHandle;
+
+  // CODING-1304 — the default renderer records the attach latency half of the
+  // comparison matrix. Bytes and paint duration have no JS-side equivalent
+  // here: they never leave Rust and libghostty, which is the native
+  // renderer's central advantage and shows in the matrix as an empty column.
+  useEffect(() => {
+    if (!runId) return;
+    publishRendererMeasurements();
+    recordAttachStart("native", runId);
+  }, [runId]);
+
+  useEffect(() => {
+    if (presentedHere && visible && runId) recordFirstPaint("native", runId);
+  }, [presentedHere, runId, visible]);
 
   useEffect(() => {
     if (failureReason) onUnavailable?.(failureReason);

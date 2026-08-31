@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "vite",
     "libghostty:prepare": "sh scripts/prepare-libghostty.sh",
+    "ghostty-vt:prepare": "sh scripts/prepare-ghostty-vt-wasm.sh",
     "predesktop:build": "npm run libghostty:prepare",
     "predesktop:dev": "npm run libghostty:prepare",
     "prerelease:build": "npm run libghostty:prepare",

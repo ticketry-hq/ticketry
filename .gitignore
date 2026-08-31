@@ -40,3 +40,6 @@ studio/src-tauri/binaries/
 
 # Editor / OS
 .DS_Store
+
+# CODING-1304 — prepared libghostty-vt wasm artifact (built, not committed)
+studio/public/ghostty-vt/

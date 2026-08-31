@@ -10,9 +10,6 @@ use crate::execution::graph::{
 use crate::launch::authority::{compose_task_prompt, TaskPromptSource};
 use crate::launch::terminal_session::{CreateTerminalSession, TerminalLaunchKind};
 use crate::terminal::launch::TerminalLaunchService;
-use crate::work_management::launch_policy::{
-    CallerScope, LaunchPolicyDecision, LaunchPolicyRequest, LaunchPolicyResolver,
-};
 use serde::{Deserialize, Serialize};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -21,6 +18,9 @@ use std::sync::{
 use ticketry_entities::{
     execution::{graph_run, launch_claim},
     work_management::issue,
+};
+use ticketry_work_management::work_management::launch_policy::{
+    CallerScope, LaunchPolicyDecision, LaunchPolicyRequest, LaunchPolicyResolver,
 };
 
 static PRODUCTION_MUTATIONS_OPEN: AtomicBool = AtomicBool::new(false);

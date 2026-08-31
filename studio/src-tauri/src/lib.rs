@@ -12,14 +12,12 @@ pub mod graphql_foundation;
 pub mod installation;
 pub mod launch;
 pub mod mcp;
-pub mod module_links;
 pub mod native_terminal;
 pub mod query_root;
 pub mod temporary_profile;
 pub mod terminal;
 pub mod tmux_adapter;
 pub mod viewer_ownership;
-pub mod work_management;
 pub mod workspace;
 pub mod worktree;
 

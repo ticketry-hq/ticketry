@@ -6,6 +6,7 @@
 
 pub mod approved_paths;
 pub mod candidate_paths;
+mod consulted;
 pub mod diagnostics;
 pub mod probe;
 pub mod supported_tools;
@@ -24,6 +25,7 @@ use supported_tools::SUPPORTED_TOOLS;
 use ticketry_data_directory::established_data_directory;
 
 pub use approved_paths::approve_executable_path;
+pub use consulted::{consulted_discovery, ConsultedDiscovery};
 pub use diagnostics::{AccessHint, PreflightReport, ToolDiagnostic, ToolHealth};
 pub use supported_tools::SupportedTool;
 

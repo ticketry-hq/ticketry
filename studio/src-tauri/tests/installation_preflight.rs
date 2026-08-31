@@ -740,7 +740,7 @@ fn corrupt_a_content_page(database: &Path) {
 /// launch, every subsequent one preflights a Rust-owned database whose
 /// status-event ledger and effect journals a Django-era source never had.
 async fn adopt_every_capability(data_directory: &Path) {
-    muxed_studio_lib::work_management::adoption::adopt(data_directory)
+    ticketry_work_management::work_management::adoption::adopt(data_directory)
         .await
         .expect("adopt Work Management");
     ticketry_runs::persistence::adopt(data_directory)

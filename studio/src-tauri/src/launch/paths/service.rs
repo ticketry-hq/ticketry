@@ -22,12 +22,12 @@ use std::path::{Path, PathBuf};
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 
 use crate::documents::design_directory::{self, ModuleIdentity, TaskIdentity, SPEC_ROOT};
-use crate::module_links::resolution;
 use crate::worktree::status::identity::{canonical_uuid, compact_uuid};
 use crate::worktree::status::owner::{self, WorktreeOwner};
 use ticketry_entities::documents::design_document;
 use ticketry_entities::work_management::issue;
 use ticketry_entities::worktrees::worktree;
+use ticketry_work_management::module_links::resolution;
 
 use super::error::{LaunchPathsError, LaunchPathsErrorCode};
 use super::request::{LaunchPathsRequest, LaunchScope, SUPPORTED_VERSION};

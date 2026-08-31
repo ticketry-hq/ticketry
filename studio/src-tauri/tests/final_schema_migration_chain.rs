@@ -1,14 +1,14 @@
 use muxed_studio_lib::{
     graphql_foundation::{adopt_worktracker_and_install, InstallationOwnership},
     installation::final_schema_migrations,
-    work_management::{
-        launch_binding_entry_skill_migration, module_presentation_migration, open_for_commands,
-        project_onboarding_migration, workflow_color_migration, workspace_tab_order_migration,
-    },
 };
 use sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, Statement};
 use tauri_graphql::TransportApiImpl;
 use ticketry_settings::provider_catalog_migrations;
+use ticketry_work_management::work_management::{
+    launch_binding_entry_skill_migration, module_presentation_migration, open_for_commands,
+    project_onboarding_migration, workflow_color_migration, workspace_tab_order_migration,
+};
 
 #[path = "final_schema_migration_chain/support.rs"]
 mod support;

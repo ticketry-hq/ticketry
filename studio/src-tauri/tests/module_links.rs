@@ -10,13 +10,13 @@
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
-use muxed_studio_lib::module_links::{
+use sea_orm::{ConnectionTrait, Database, DatabaseConnection, DbBackend, Statement};
+use ticketry_work_management::module_links::{
     self, legacy_source, receipt::ImportReceipt, ImportOutcome, LinkStatus, LocalModulePath,
     ModuleLinkErrorCode, ModuleLinkStore, SkipReason,
 };
-use muxed_studio_lib::module_links::{identity, ownership_manifest, schema};
-use muxed_studio_lib::work_management::open_for_commands;
-use sea_orm::{ConnectionTrait, Database, DatabaseConnection, DbBackend, Statement};
+use ticketry_work_management::module_links::{identity, ownership_manifest, schema};
+use ticketry_work_management::work_management::open_for_commands;
 
 const PROJECT: &str = "10000000000000000000000000000000";
 const MODULE_TYPE: &str = "30000000000000000000000000000003";
@@ -645,7 +645,10 @@ fn no_supported_django_generation_or_postgresql_staging_schema_carries_these_tab
 #[test]
 fn no_importer_reaches_a_database_its_caller_did_not_name() {
     let mut sources = Vec::new();
-    collect_rust_sources(&crate_root().join("src/module_links"), &mut sources);
+    collect_rust_sources(
+        &crate_root().join("crates/ticketry-work-management/src/module_links"),
+        &mut sources,
+    );
     assert!(
         sources.len() >= 8,
         "the capability's sources were not found"
@@ -720,7 +723,7 @@ async fn contract_sdl() -> String {
     // The Work Item graph names Agent Runs, so the read graph only closes once
     // that entity is registered alongside it.
     seaography::register_entity!(builder, agent_run, mutation: false);
-    muxed_studio_lib::module_links::register_graphql(builder)
+    ticketry_work_management::module_links::register_graphql(builder)
         .schema_builder()
         .finish()
         .expect("build the Module Link contract")
@@ -743,11 +746,11 @@ async fn executable_contract(
     builder.schema = Schema::build("Query", Some("Mutation"), None);
     let mut builder = ticketry_entities::work_management::register_entity_modules(builder);
     seaography::register_entity!(builder, agent_run, mutation: false);
-    let builder = muxed_studio_lib::module_links::register_graphql(builder);
+    let builder = ticketry_work_management::module_links::register_graphql(builder);
     let mut schema = builder.schema_builder().data(database.clone());
     if writable {
-        schema =
-            schema.data(muxed_studio_lib::work_management::commands::CommandDatabase(database));
+        schema = schema
+            .data(ticketry_work_management::work_management::commands::CommandDatabase(database));
     }
     schema
         .finish()

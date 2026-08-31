@@ -12,8 +12,8 @@ use sea_orm::DatabaseConnection;
 use serde_json::{json, Map, Value};
 
 use crate::terminal::cleanup::TerminalCleanupService;
-use crate::work_management::commands::attachments::AttachmentStorage;
-use crate::work_management::launch_policy::LaunchPolicyResolver;
+use ticketry_work_management::work_management::commands::attachments::AttachmentStorage;
+use ticketry_work_management::work_management::launch_policy::LaunchPolicyResolver;
 
 use super::{dispatch, registry, RunAuthority};
 
@@ -67,7 +67,7 @@ impl WorktrackerMcpService {
 pub(super) async fn execute_launch_decision(
     database: &DatabaseConnection,
     service: Option<&crate::terminal::launch::TerminalLaunchService>,
-    decision: &crate::work_management::launch_policy::LaunchPolicyDecision,
+    decision: &ticketry_work_management::work_management::launch_policy::LaunchPolicyDecision,
 ) -> Result<ticketry_entities::terminals::session::Model, ()> {
     let Some(service) = service else {
         return Err(());

@@ -3,16 +3,16 @@
 //! Source commit `3a5f434a90696f40a4911e401a84db009cdfa4e7`, migrations
 //! `0045_project_onboarding_required` and `0046_remove_workspace`.
 
-use muxed_studio_lib::work_management::project_onboarding_migration::{
-    install, LEDGER_TABLE, MIGRATION_ID, SOURCE_COMMIT, VERSION,
-};
 use muxed_studio_lib::{
     graphql_foundation::initialize_with_worktracker_commands_and_install,
     installation::adoption::provisioning,
-    work_management::{commands::catalog, open_for_commands},
 };
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection, DbBackend, Statement};
 use tauri_graphql::TransportApiImpl;
+use ticketry_work_management::work_management::project_onboarding_migration::{
+    install, LEDGER_TABLE, MIGRATION_ID, SOURCE_COMMIT, VERSION,
+};
+use ticketry_work_management::work_management::{commands::catalog, open_for_commands};
 
 const WORKSPACE_SHAPED_SCHEMA: &str = "
     CREATE TABLE worktracker_workspace (
@@ -540,7 +540,7 @@ async fn a_fresh_installation_starts_up_project_only_and_owns_its_onboarding() {
 
     // Rust and MCP must name that same project.
     assert_eq!(
-        muxed_studio_lib::work_management::read_queries::installation_project(&database)
+        ticketry_work_management::work_management::read_queries::installation_project(&database)
             .await
             .expect("resolve the installation project")
             .expect("a first launch has an installation project")

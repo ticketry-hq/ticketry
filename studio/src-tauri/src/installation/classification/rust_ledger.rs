@@ -25,31 +25,31 @@ pub fn owned_ledgers() -> Vec<(&'static str, i32)> {
         ),
         (
             "ticketry_worktracker_adoption",
-            crate::work_management::ownership_manifest::VERSION,
+            ticketry_work_management::work_management::ownership_manifest::VERSION,
         ),
         (
             ticketry_settings::provider_catalog_migrations::CODEX_5_6_LEDGER,
             ticketry_settings::provider_catalog_migrations::VERSION,
         ),
         (
-            crate::work_management::project_onboarding_migration::LEDGER_TABLE,
-            crate::work_management::project_onboarding_migration::VERSION,
+            ticketry_work_management::work_management::project_onboarding_migration::LEDGER_TABLE,
+            ticketry_work_management::work_management::project_onboarding_migration::VERSION,
         ),
         (
-            crate::work_management::launch_binding_entry_skill_migration::LEDGER_TABLE,
-            crate::work_management::launch_binding_entry_skill_migration::VERSION,
+            ticketry_work_management::work_management::launch_binding_entry_skill_migration::LEDGER_TABLE,
+            ticketry_work_management::work_management::launch_binding_entry_skill_migration::VERSION,
         ),
         (
-            crate::work_management::workflow_color_migration::LEDGER_TABLE,
-            crate::work_management::workflow_color_migration::VERSION,
+            ticketry_work_management::work_management::workflow_color_migration::LEDGER_TABLE,
+            ticketry_work_management::work_management::workflow_color_migration::VERSION,
         ),
         (
-            crate::work_management::workspace_tab_order_migration::LEDGER_TABLE,
-            crate::work_management::workspace_tab_order_migration::VERSION,
+            ticketry_work_management::work_management::workspace_tab_order_migration::LEDGER_TABLE,
+            ticketry_work_management::work_management::workspace_tab_order_migration::VERSION,
         ),
         (
-            crate::work_management::module_presentation_migration::LEDGER_TABLE,
-            crate::work_management::module_presentation_migration::VERSION,
+            ticketry_work_management::work_management::module_presentation_migration::LEDGER_TABLE,
+            ticketry_work_management::work_management::module_presentation_migration::VERSION,
         ),
         (
             ticketry_settings::provider_catalog_migrations::CODEX_SPARK_LEDGER,

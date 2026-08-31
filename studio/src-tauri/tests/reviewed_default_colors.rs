@@ -1,13 +1,13 @@
 use muxed_studio_lib::graphql_foundation::initialize_with_worktracker_commands_and_install;
 use muxed_studio_lib::installation::adoption::provisioning;
-use muxed_studio_lib::work_management::commands::catalog::{self, CreateProject};
-use muxed_studio_lib::work_management::open_for_commands;
-use muxed_studio_lib::work_management::project_onboarding_migration;
 use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder};
 use tauri_graphql::{TransportApi, TransportApiImpl};
 use ticketry_entities::work_management::{
     issue_type, issue_type_transition, launch_binding, project, state,
 };
+use ticketry_work_management::work_management::commands::catalog::{self, CreateProject};
+use ticketry_work_management::work_management::open_for_commands;
+use ticketry_work_management::work_management::project_onboarding_migration;
 
 const EXPECTED_STATES: [(&str, &str, &str, i32, bool); 8] = [
     ("Ideas", "backlog", "#60646C", 0, true),

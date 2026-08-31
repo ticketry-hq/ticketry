@@ -1,6 +1,8 @@
-use muxed_studio_lib::work_management::{commands::workflow, open_for_commands, read_queries};
 use sea_orm::{ConnectionTrait, Database, EntityTrait, PaginatorTrait};
 use ticketry_entities::work_management::{issue_type, launch_binding};
+use ticketry_work_management::work_management::{
+    commands::workflow, open_for_commands, read_queries,
+};
 
 const PROJECT: &str = "10000000000000000000000000000000";
 const FOREIGN_PROJECT: &str = "10000000000000000000000000000001";

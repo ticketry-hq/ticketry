@@ -30,11 +30,17 @@ struct EntityContract {
 pub fn foundation_schema(
     database: DatabaseConnection,
     worktracker_database: Option<DatabaseConnection>,
-    worktracker_commands: Option<crate::work_management::commands::CommandDatabase>,
-    attachment_storage: Option<crate::work_management::commands::attachments::AttachmentStorage>,
+    worktracker_commands: Option<
+        ticketry_work_management::work_management::commands::CommandDatabase,
+    >,
+    attachment_storage: Option<
+        ticketry_work_management::work_management::commands::attachments::AttachmentStorage,
+    >,
     settings_repository: Option<ticketry_settings::AppSettingRepository>,
     readiness_data_directory: Option<PathBuf>,
-    work_facts: Option<crate::work_management::commands::status_facts::WorkFactRecorder>,
+    work_facts: Option<
+        ticketry_work_management::work_management::commands::status_facts::WorkFactRecorder,
+    >,
     worktree_operations: Option<crate::worktree::operations::WorktreeOperations>,
     documents: Option<crate::documents::DocumentsService>,
 ) -> Result<Schema, FoundationInitializationError> {
@@ -55,11 +61,17 @@ pub fn foundation_schema(
 pub(crate) fn foundation_schema_with_terminal_services(
     database: DatabaseConnection,
     worktracker_database: Option<DatabaseConnection>,
-    worktracker_commands: Option<crate::work_management::commands::CommandDatabase>,
-    attachment_storage: Option<crate::work_management::commands::attachments::AttachmentStorage>,
+    worktracker_commands: Option<
+        ticketry_work_management::work_management::commands::CommandDatabase,
+    >,
+    attachment_storage: Option<
+        ticketry_work_management::work_management::commands::attachments::AttachmentStorage,
+    >,
     settings_repository: Option<ticketry_settings::AppSettingRepository>,
     readiness_data_directory: Option<PathBuf>,
-    work_facts: Option<crate::work_management::commands::status_facts::WorkFactRecorder>,
+    work_facts: Option<
+        ticketry_work_management::work_management::commands::status_facts::WorkFactRecorder,
+    >,
     worktree_operations: Option<crate::worktree::operations::WorktreeOperations>,
     documents: Option<crate::documents::DocumentsService>,
     terminal_services: Option<TerminalServices>,
@@ -84,7 +96,12 @@ pub(crate) fn foundation_schema_with_terminal_services(
     )
 }
 
-pub(crate) fn generated_contract_schema(
+/// The schema with only the generated contract installed: no service is
+/// supplied, so every authored write reports itself unavailable.
+///
+/// The contract tests that assert this live above the slices they cover, in
+/// this package's `tests/`, which is why it is `pub`.
+pub fn generated_contract_schema(
     database: DatabaseConnection,
 ) -> Result<Schema, FoundationInitializationError> {
     build_schema(
@@ -133,11 +150,17 @@ pub(crate) fn keybinding_settings_schema(
 fn build_schema(
     database: DatabaseConnection,
     worktracker_database: Option<DatabaseConnection>,
-    worktracker_commands: Option<crate::work_management::commands::CommandDatabase>,
-    attachment_storage: Option<crate::work_management::commands::attachments::AttachmentStorage>,
+    worktracker_commands: Option<
+        ticketry_work_management::work_management::commands::CommandDatabase,
+    >,
+    attachment_storage: Option<
+        ticketry_work_management::work_management::commands::attachments::AttachmentStorage,
+    >,
     settings_repository: Option<ticketry_settings::AppSettingRepository>,
     readiness_data_directory: Option<PathBuf>,
-    work_facts: Option<crate::work_management::commands::status_facts::WorkFactRecorder>,
+    work_facts: Option<
+        ticketry_work_management::work_management::commands::status_facts::WorkFactRecorder,
+    >,
     worktree_operations: Option<crate::worktree::operations::WorktreeOperations>,
     documents: Option<crate::documents::DocumentsService>,
     terminal_services: Option<TerminalServices>,
@@ -156,7 +179,7 @@ fn build_schema(
         (Some(work_items), Some(terminals)) => {
             Some(crate::graph_run_service::GraphRunService::production(
                 work_items.clone(),
-                crate::work_management::launch_policy::LaunchPolicyResolver::new(
+                ticketry_work_management::work_management::launch_policy::LaunchPolicyResolver::new(
                     work_items.clone(),
                 ),
                 terminals.launch.clone(),
@@ -167,7 +190,9 @@ fn build_schema(
     let run_now_service = match (worktracker_database.as_ref(), terminal_services.as_ref()) {
         (Some(work_items), Some(terminals)) => Some(crate::execution::run_now::RunNowService::new(
             work_items.clone(),
-            crate::work_management::launch_policy::LaunchPolicyResolver::new(work_items.clone()),
+            ticketry_work_management::work_management::launch_policy::LaunchPolicyResolver::new(
+                work_items.clone(),
+            ),
             terminals.launch.clone(),
             work_facts.clone(),
         )),
@@ -194,19 +219,19 @@ fn build_schema(
         builder
     };
     let builder = if contract.product_generated_mutations {
-        crate::work_management::graphql::register_model_mutations(builder)
+        ticketry_work_management::work_management::graphql::register_model_mutations(builder)
     } else {
         builder
     };
     // The Module Link is Rust-authored and lives in the same store, so its
     // generated read graph and its one restricted write register alongside the
     // WorkTracker entities they name.
-    let builder = crate::module_links::register_graphql(builder);
+    let builder = ticketry_work_management::module_links::register_graphql(builder);
     let builder = crate::worktree::persistence::register_graphql(builder);
     let builder = crate::worktree::status::register_graphql(builder);
     let builder = crate::worktree::changes::register_graphql(builder);
     let builder = crate::workspace::worktree::register_graphql(builder);
-    let builder = crate::work_management::graphql::register(builder);
+    let builder = ticketry_work_management::work_management::graphql::register(builder);
     let builder = ticketry_settings::schema::register(builder);
     let builder = ticketry_runs::graphql::register_graphql(builder);
     let builder = crate::terminal::persistence::register_graphql(builder);
@@ -346,9 +371,11 @@ fn build_schema(
         schema = schema.data(ticketry_settings::ProviderCatalogService::new(
             worktracker_database.clone(),
         ));
-        schema = schema.data(crate::work_management::read_queries::ReadDatabase(
-            worktracker_database,
-        ));
+        schema = schema.data(
+            ticketry_work_management::work_management::read_queries::ReadDatabase(
+                worktracker_database,
+            ),
+        );
     }
     if let Some(worktracker_commands) = worktracker_commands {
         if let Some(terminal_services) = terminal_services {

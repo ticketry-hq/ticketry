@@ -1,7 +1,7 @@
 use crate::execution::graph::GraphFactsError;
 use crate::launch::authority::LaunchAuthorityError;
 use crate::launch::terminal_session::TerminalLaunchError;
-use crate::work_management::launch_policy::LaunchPolicyError;
+use ticketry_work_management::work_management::launch_policy::LaunchPolicyError;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GraphRunServiceErrorCode {

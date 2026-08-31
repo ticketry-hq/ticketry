@@ -112,7 +112,9 @@ pub(crate) fn launch_rust_runtime(
             .map_err(|error| format!("provider hook ingestion startup failed: {error}"))?;
     let execution_service = crate::execution::reconciliation::ExecutionReconciliationService::new(
         database.clone(),
-        crate::work_management::launch_policy::LaunchPolicyResolver::new(database.clone()),
+        ticketry_work_management::work_management::launch_policy::LaunchPolicyResolver::new(
+            database.clone(),
+        ),
         terminal_launch.clone(),
     );
     let execution_runtime = tauri::async_runtime::block_on(

@@ -99,10 +99,10 @@ fn repository(root: &Path) -> String {
 }
 
 async fn link_module(database: &DatabaseConnection, folder: &Path) {
-    muxed_studio_lib::module_links::schema::install(database)
+    ticketry_work_management::module_links::schema::install(database)
         .await
         .expect("install the Module Link schema");
-    muxed_studio_lib::module_links::ModuleLinkStore::new(database.clone())
+    ticketry_work_management::module_links::ModuleLinkStore::new(database.clone())
         .set(MODULE, &folder.display().to_string())
         .await
         .expect("link the fixture module");

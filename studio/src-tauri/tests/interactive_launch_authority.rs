@@ -2,14 +2,12 @@
 //! policy: the provider catalog, the launch binding, the document registry,
 //! and the canonical prompt shapes decide what a run is allowed to start with.
 
-use muxed_studio_lib::{
-    launch::{
-        authority::{InteractiveLaunchAuthority, LaunchAuthorityService},
-        terminal_session::{CreateTerminalSession, TerminalLaunchKind},
-    },
-    work_management::open_for_commands,
+use muxed_studio_lib::launch::{
+    authority::{InteractiveLaunchAuthority, LaunchAuthorityService},
+    terminal_session::{CreateTerminalSession, TerminalLaunchKind},
 };
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection};
+use ticketry_work_management::work_management::open_for_commands;
 
 const WORKSPACE: &str = "10000000000000000000000000000000";
 const PROJECT: &str = "20000000000000000000000000000000";
@@ -166,10 +164,10 @@ async fn fixture() -> Fixture {
     let database = open_for_commands(&path).await.unwrap();
     // The folder a launch runs in is the module's typed link, not a profile
     // entry, so the prompt facts and the design directory resolve from here.
-    muxed_studio_lib::module_links::schema::install(&database)
+    ticketry_work_management::module_links::schema::install(&database)
         .await
         .unwrap();
-    muxed_studio_lib::module_links::ModuleLinkStore::new(database.clone())
+    ticketry_work_management::module_links::ModuleLinkStore::new(database.clone())
         .set(MODULE, &folder)
         .await
         .expect("link the fixture module");

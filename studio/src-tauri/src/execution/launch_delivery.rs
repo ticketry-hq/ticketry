@@ -11,7 +11,9 @@ use crate::launch::terminal_session::{CreateTerminalSession, TerminalLaunchKind}
 use crate::terminal::launch::TerminalLaunchService;
 use ticketry_entities::runs::automation_attempt;
 
-use crate::work_management::launch_policy::{mark_delivered, CallerScope, LaunchPolicyDecision};
+use ticketry_work_management::work_management::launch_policy::{
+    mark_delivered, CallerScope, LaunchPolicyDecision,
+};
 
 /// Prepare one durable policy decision through the Rust Terminal owner, then
 /// mark it delivered before attempting the recoverable external effect.
@@ -140,7 +142,7 @@ fn request(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::work_management::launch_policy::ModuleLinkInput;
+    use ticketry_work_management::work_management::launch_policy::ModuleLinkInput;
 
     fn decision(decision_id: &str) -> LaunchPolicyDecision {
         LaunchPolicyDecision {

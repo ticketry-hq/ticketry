@@ -7,10 +7,10 @@ use crate::launch::planning::{
     DocumentChatPrompt, InstantPrompt, PlanningPrompt, Provider,
 };
 use crate::launch::terminal_session::{CreateTerminalSession, TerminalLaunchKind};
-use crate::work_management::launch_policy::{
+use ticketry_entities::runs::agent_run;
+use ticketry_work_management::work_management::launch_policy::{
     CallerScope, LaunchPolicyRequest, LaunchPolicyResolver,
 };
-use ticketry_entities::runs::agent_run;
 
 use super::error::LaunchAuthorityError;
 use super::facts;

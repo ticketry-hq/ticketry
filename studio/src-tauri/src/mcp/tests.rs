@@ -97,7 +97,7 @@ async fn prepare_projects(directory: &tempfile::TempDir) {
         )
         .await
         .expect("create MCP project fixture");
-    crate::work_management::module_presentation_migration::install(&database)
+    ticketry_work_management::work_management::module_presentation_migration::install(&database)
         .await
         .expect("install final module-presentation shape");
     database.close().await.expect("close MCP fixture writer");
@@ -558,4 +558,65 @@ fn mcp_dispatch_has_no_backend_http_authorization_path() {
         .expect("MCP module directory")
         .join("backend_port.rs")
         .exists());
+}
+
+#[test]
+fn mcp_write_adapters_do_not_own_seaorm_queries_or_domain_sequencing() {
+    let dependency = include_str!("dependency_tools.rs");
+    let dispatch = include_str!("dispatch.rs");
+    let workflow = include_str!("workflow_tools.rs");
+    for (name, source) in [
+        ("dependency_tools.rs", dependency),
+        ("dispatch.rs", dispatch),
+        ("workflow_tools.rs", workflow),
+    ] {
+        for forbidden in [
+            "EntityTrait",
+            "QueryFilter",
+            "ActiveModelTrait",
+            "::Entity::",
+        ] {
+            assert!(
+                !source.contains(forbidden),
+                "{name} imports SeaORM query capability {forbidden}"
+            );
+        }
+    }
+    assert!(!dependency.contains("blockers::replace"));
+    assert_eq!(dependency.matches("blockers::change(").count(), 2);
+
+    let append = dispatch
+        .split("async fn append_description")
+        .nth(1)
+        .unwrap()
+        .split("async fn update_status")
+        .next()
+        .unwrap();
+    assert_eq!(append.matches("work_items::append_description(").count(), 1);
+    assert!(!append.contains("work_items::update("));
+
+    let finding = dispatch
+        .split("async fn create_review_finding")
+        .nth(1)
+        .unwrap()
+        .split("fn hyphenate")
+        .next()
+        .unwrap();
+    assert_eq!(
+        finding
+            .matches("work_items::create_review_finding(")
+            .count(),
+        1
+    );
+    assert!(!finding.contains("read_queries"));
+
+    let launch = workflow
+        .split("async fn upsert_launch_binding")
+        .nth(1)
+        .unwrap()
+        .split("pub fn rejection")
+        .next()
+        .unwrap();
+    assert_eq!(launch.matches("workflow::patch_launch_binding(").count(), 1);
+    assert!(!launch.contains("read_queries::launch_bindings"));
 }

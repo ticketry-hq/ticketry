@@ -129,7 +129,11 @@ pub fn journal_profile_teardown(profile: &Path) -> ProfileTeardownOutcome {
         }
     };
     runtime.block_on(async move {
-        let database = match crate::work_management::open_for_commands(&database_path).await {
+        let database = match ticketry_work_management::work_management::open_for_commands(
+            &database_path,
+        )
+        .await
+        {
             Ok(database) => database,
             Err(error) => {
                 return ProfileTeardownOutcome::Unavailable(format!(

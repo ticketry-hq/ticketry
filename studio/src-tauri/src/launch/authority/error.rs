@@ -49,9 +49,13 @@ impl From<sea_orm::DbErr> for LaunchAuthorityError {
     }
 }
 
-impl From<crate::work_management::launch_policy::LaunchPolicyError> for LaunchAuthorityError {
-    fn from(error: crate::work_management::launch_policy::LaunchPolicyError) -> Self {
-        use crate::work_management::launch_policy::LaunchPolicyError as Policy;
+impl From<ticketry_work_management::work_management::launch_policy::LaunchPolicyError>
+    for LaunchAuthorityError
+{
+    fn from(
+        error: ticketry_work_management::work_management::launch_policy::LaunchPolicyError,
+    ) -> Self {
+        use ticketry_work_management::work_management::launch_policy::LaunchPolicyError as Policy;
         match error {
             Policy::Database(error) => Self::from(error),
             rejected => Self::new(

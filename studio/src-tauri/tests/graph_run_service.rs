@@ -17,10 +17,10 @@ use muxed_studio_lib::terminal::launch::{
     TerminalLaunchBoundary, TerminalLaunchCheckpoint, TerminalLaunchRuntime, TerminalLaunchService,
     TerminalRuntimeObservation, VerifiedTerminalRuntime,
 };
-use muxed_studio_lib::work_management::launch_policy::LaunchPolicyResolver;
 use sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, Statement};
 use seaography::{Builder, BuilderContext};
 use ticketry_entities::{runs::agent_run, terminals::launch_material};
+use ticketry_work_management::work_management::launch_policy::LaunchPolicyResolver;
 
 const CHILD_A: &str = "00000000000000000000000000008951";
 const CHILD_B: &str = "00000000000000000000000000008952";
@@ -732,10 +732,10 @@ async fn seed(database: &DatabaseConnection, directory: &std::path::Path) {
     .unwrap();
     // The folder a graph run launches in is the Module's typed link. The
     // profile above still decides which workspace may launch at all.
-    muxed_studio_lib::module_links::schema::install(database)
+    ticketry_work_management::module_links::schema::install(database)
         .await
         .unwrap();
-    muxed_studio_lib::module_links::ModuleLinkStore::new(database.clone())
+    ticketry_work_management::module_links::ModuleLinkStore::new(database.clone())
         .set(&compact_module, &directory.display().to_string())
         .await
         .expect("link the harness module");

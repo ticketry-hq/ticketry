@@ -1,15 +1,14 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use muxed_studio_lib::{
-    installation::adoption::provisioning,
-    work_management::{
-        launch_binding_entry_skill_migration, module_presentation_migration, open_for_commands,
-        project_onboarding_migration, workflow_color_migration, workspace_tab_order_migration,
-    },
-    worktree::persistence::pull_request_url_migration,
+    installation::adoption::provisioning, worktree::persistence::pull_request_url_migration,
 };
 use sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, Statement};
 use ticketry_settings::provider_catalog_migrations;
+use ticketry_work_management::work_management::{
+    launch_binding_entry_skill_migration, module_presentation_migration, open_for_commands,
+    project_onboarding_migration, workflow_color_migration, workspace_tab_order_migration,
+};
 
 const PROJECT: &str = "00000000000000000000000000001001";
 const GRILL: &str = "00000000000000000000000000001002";

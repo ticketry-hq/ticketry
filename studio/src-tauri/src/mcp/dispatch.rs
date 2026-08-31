@@ -8,10 +8,10 @@ use crate::execution::run_now::{RunNowCaller, RunNowRequest, RunNowService};
 use crate::graph_run_service::{GraphRunRequest, GraphRunService};
 use crate::terminal::cleanup::TerminalCleanupService;
 use crate::terminal::launch::TerminalLaunchService;
-use crate::work_management::commands::{
+use ticketry_work_management::work_management::commands::{
     attachments, status_facts::WorkFactRecorder, work_items, workflow, CommandError,
 };
-use crate::work_management::launch_policy::{
+use ticketry_work_management::work_management::launch_policy::{
     self, CallerScope, LaunchPolicyRequest, LaunchPolicyResolver,
 };
 

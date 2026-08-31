@@ -13,11 +13,11 @@ use muxed_studio_lib::terminal::launch::{
     TerminalLaunchBoundary, TerminalLaunchCheckpoint, TerminalLaunchRuntime,
     TerminalRuntimeObservation, VerifiedTerminalRuntime,
 };
-use muxed_studio_lib::work_management::launch_policy::{
-    self, CallerScope, LaunchPolicyRequest, LaunchPolicyResolver,
-};
 use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter};
 use ticketry_entities::terminals::launch_material;
+use ticketry_work_management::work_management::launch_policy::{
+    self, CallerScope, LaunchPolicyRequest, LaunchPolicyResolver,
+};
 
 const IMPLEMENT: &str = "00000000000000000000000000008959";
 const MODEL: &str = "00000000000000000000000000008958";
@@ -200,10 +200,10 @@ async fn seed(database: &sea_orm::DatabaseConnection, directory: &std::path::Pat
     .unwrap();
     // The folder the prompt names is the Module's typed link. The profile above
     // still decides which workspace may launch at all.
-    muxed_studio_lib::module_links::schema::install(database)
+    ticketry_work_management::module_links::schema::install(database)
         .await
         .unwrap();
-    muxed_studio_lib::module_links::ModuleLinkStore::new(database.clone())
+    ticketry_work_management::module_links::ModuleLinkStore::new(database.clone())
         .set(&compact(MODULE_ID), &directory.display().to_string())
         .await
         .expect("link the harness module");

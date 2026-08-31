@@ -35,11 +35,11 @@ use muxed_studio_lib::terminal::lifecycle::{
     ProductionTerminalLifecycleWork, TerminalLifecycleConfig, TerminalLifecycleRuntime,
     TerminalRuntimeAuthority,
 };
-use muxed_studio_lib::work_management::launch_policy::LaunchPolicyResolver;
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection};
 use serde_json::{json, Value};
 use tauri_graphql::{TransportApi, TransportApiImpl};
 use ticketry_runs::persistence::{publish_readiness, Slice3Readiness};
+use ticketry_work_management::work_management::launch_policy::LaunchPolicyResolver;
 
 use super::execution_authorization::{Authorization, AUTHORIZATION_CREDENTIAL};
 use super::execution_fixture as fixture;
@@ -519,7 +519,7 @@ fn approve_module_link(data_directory: &Path) {
 /// has a real usable folder to resolve. A Module that is not seeded in this
 /// campaign simply has no link, which is ordinary data.
 async fn link_modules(commands: &sea_orm::DatabaseConnection, data_directory: &Path) {
-    let store = muxed_studio_lib::module_links::ModuleLinkStore::new(commands.clone());
+    let store = ticketry_work_management::module_links::ModuleLinkStore::new(commands.clone());
     let folder = data_directory.display().to_string();
     for module in [fixture::CAMPAIGN_MODULE, fixture::FOREIGN_MODULE] {
         let _ = store.set(module, &folder).await;

@@ -15,6 +15,7 @@ mod adoption;
 mod attempt_commands;
 mod attempt_queries;
 use ticketry_entities::runs as entities;
+mod end_of_life;
 mod error;
 mod intent;
 mod launch_claim;
@@ -49,6 +50,7 @@ mod work_item_scope;
 pub use adoption::{
     adopt, outbox_adopted, preflight, AdoptionEvidence, DjangoGeneration, SourceClassification,
 };
+pub use end_of_life::{record_run_ended, record_sweep_ended, terminating_signal, EndOfLifeOrigin};
 pub use error::{RunsPersistenceError, RunsPersistenceErrorCode};
 pub use intent::LaunchIntent;
 pub use launch_claim::{ClaimedLaunch, MAX_LEASE_SECONDS};

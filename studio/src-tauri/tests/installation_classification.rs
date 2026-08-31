@@ -169,7 +169,7 @@ async fn an_empty_installation_classifies_idempotently() {
 #[tokio::test]
 async fn an_already_rust_owned_installation_classifies_idempotently() {
     let installation = corpus::install("django-current");
-    muxed_studio_lib::work_management::adoption::adopt(installation.path())
+    ticketry_work_management::work_management::adoption::adopt(installation.path())
         .await
         .expect("adopt Work Management, so Rust owns the installation");
 
@@ -310,7 +310,7 @@ async fn a_future_django_generation_is_refused() {
 #[tokio::test]
 async fn a_future_rust_ownership_version_is_refused() {
     let installation = corpus::install("django-current");
-    muxed_studio_lib::work_management::adoption::adopt(installation.path())
+    ticketry_work_management::work_management::adoption::adopt(installation.path())
         .await
         .expect("adopt Work Management first");
     corpus::execute(

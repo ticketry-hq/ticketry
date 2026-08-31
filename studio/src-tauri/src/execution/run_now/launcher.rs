@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use sea_orm::DatabaseConnection;
 
 use crate::terminal::launch::TerminalLaunchService;
-use crate::work_management::launch_policy::LaunchPolicyDecision;
+use ticketry_work_management::work_management::launch_policy::LaunchPolicyDecision;
 
 use super::RunNowRun;
 

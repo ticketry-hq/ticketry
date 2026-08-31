@@ -1,16 +1,16 @@
-use muxed_studio_lib::work_management::workflow_color_migration::{
-    install, LEDGER_TABLE, MIGRATION_ID, SOURCE_COMMIT,
-};
 use muxed_studio_lib::{
     graphql_foundation::initialize_with_worktracker_commands_and_install,
     installation::adoption::provisioning,
-    work_management::{
-        commands::catalog::{self, CreateProject},
-        module_presentation_migration, open_for_commands, project_onboarding_migration,
-    },
 };
 use sea_orm::{ConnectionTrait, Database, DbBackend, Statement};
 use tauri_graphql::{TransportApi, TransportApiImpl};
+use ticketry_work_management::work_management::workflow_color_migration::{
+    install, LEDGER_TABLE, MIGRATION_ID, SOURCE_COMMIT,
+};
+use ticketry_work_management::work_management::{
+    commands::catalog::{self, CreateProject},
+    module_presentation_migration, open_for_commands, project_onboarding_migration,
+};
 
 async fn mixed_database() -> sea_orm::DatabaseConnection {
     let database = Database::connect("sqlite::memory:")
@@ -195,7 +195,7 @@ fn workflow_color_checkpoint_follows_entry_skill_in_the_rust_ledger() {
         .iter()
         .position(|(table, _)| {
             *table
-                == muxed_studio_lib::work_management::launch_binding_entry_skill_migration::LEDGER_TABLE
+                == ticketry_work_management::work_management::launch_binding_entry_skill_migration::LEDGER_TABLE
         })
         .expect("entry-skill ledger");
     let colors = ledgers

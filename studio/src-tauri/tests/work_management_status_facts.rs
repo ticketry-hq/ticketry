@@ -2,15 +2,15 @@
 //! ordered outbox — the same table and cursor sequence the Runs capability
 //! already writes, so one subscription carries every status family.
 
-use muxed_studio_lib::work_management::commands::status_facts::WorkFactRecorder;
-use muxed_studio_lib::work_management::commands::{
-    catalog, hierarchy, reorder, work_items, workflow,
-};
-use muxed_studio_lib::work_management::{
-    module_presentation_migration, open_for_commands, workspace_tab_order_migration,
-};
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection, DbBackend, Statement};
 use ticketry_runs::persistence::{outbox_adopted, RunsServices};
+use ticketry_work_management::work_management::commands::status_facts::WorkFactRecorder;
+use ticketry_work_management::work_management::commands::{
+    catalog, hierarchy, reorder, work_items, workflow,
+};
+use ticketry_work_management::work_management::{
+    module_presentation_migration, open_for_commands, workspace_tab_order_migration,
+};
 
 const PROJECT: &str = "10000000000000000000000000000000";
 const TASK_TYPE: &str = "30000000000000000000000000000001";

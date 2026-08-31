@@ -5,11 +5,11 @@
 
 use sea_orm::{DatabaseConnection, DbErr};
 
-use crate::work_management::{
+use ticketry_settings::provider_catalog_migrations;
+use ticketry_work_management::work_management::{
     launch_binding_entry_skill_migration, module_presentation_migration,
     project_onboarding_migration, workflow_color_migration, workspace_tab_order_migration,
 };
-use ticketry_settings::provider_catalog_migrations;
 
 pub const ORDERED_MIGRATION_IDS: &[&str] = &[
     provider_catalog_migrations::CODEX_5_6_MIGRATION_ID,

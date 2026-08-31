@@ -234,10 +234,10 @@ async fn fixture() -> Fixture {
 
     // The module's folder is a typed link, so a launch resolves it from the
     // installation rather than from whichever profile happens to be selected.
-    muxed_studio_lib::module_links::schema::install(&database)
+    ticketry_work_management::module_links::schema::install(&database)
         .await
         .expect("install the Module Link schema");
-    muxed_studio_lib::module_links::ModuleLinkStore::new(database.clone())
+    ticketry_work_management::module_links::ModuleLinkStore::new(database.clone())
         .set(MODULE, &repository_root.display().to_string())
         .await
         .expect("link the fixture module");

@@ -70,7 +70,9 @@ async fn evaluate<R: tauri::Runtime>(
     readiness.operation_reconciliation = runtime.workspace_reconciled();
     // An authorized root is now resolved from the module's typed link, so what
     // this asks is whether the link schema this build authored is installed.
-    readiness.authorized_roots = crate::module_links::schema::verify(database).await.is_ok();
+    readiness.authorized_roots = ticketry_work_management::module_links::schema::verify(database)
+        .await
+        .is_ok();
     readiness.graphql_workspace = verify_workspace_surface(api).await?;
     // The scheme itself is registered on the shell at build time. What the
     // protocol needs at runtime is the very Documents boundary GraphQL resolves

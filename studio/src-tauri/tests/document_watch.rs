@@ -113,10 +113,10 @@ impl Fixture {
     /// Link the module to a real local folder, which is where an authorized
     /// root is resolved from.
     async fn link_module(&self) {
-        muxed_studio_lib::module_links::schema::install(&self.database)
+        ticketry_work_management::module_links::schema::install(&self.database)
             .await
             .expect("install the Module Link schema");
-        muxed_studio_lib::module_links::ModuleLinkStore::new(self.database.clone())
+        ticketry_work_management::module_links::ModuleLinkStore::new(self.database.clone())
             .set(
                 PUBLIC_MODULE,
                 &self.path().join("checkout").to_string_lossy(),

@@ -1,8 +1,8 @@
-use muxed_studio_lib::work_management::{
+use sea_orm::{ConnectionTrait, Database, DbBackend, Statement};
+use ticketry_work_management::work_management::{
     module_presentation_migration, workflow_color_migration,
     workspace_tab_order_migration::{self, LEDGER_TABLE, MIGRATION_ID, SOURCE_COMMIT},
 };
-use sea_orm::{ConnectionTrait, Database, DbBackend, Statement};
 
 async fn memory_database() -> sea_orm::DatabaseConnection {
     Database::connect("sqlite::memory:")

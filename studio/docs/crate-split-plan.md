@@ -148,41 +148,6 @@ studio/src-tauri/
     └── tauri-graphql/              # unchanged (already a crate)
 ```
 
-### 2.3 Open blocker before step 2.5
-
-`work_management::launch_policy::resolver` calls `launch::trace`, and
-`launch::trace` reads `launch::authority`, `launch::planning`, and
-`work_management::launch_policy::CallerScope`. That is
-`work-management -> launch -> work-management`: a cycle Cargo forbids, so the
-hub cannot be extracted while it stands. The guard test in §5.1 reports it.
-
-The launch-trace module is an in-flight feature written by another worker in
-this tree, so the shape of the fix is its author's call. The usual one is to
-split the emitter: stage names and the ambient attempt context sit below
-work-management with no upward reads, while the `LaunchAuthorityErrorCode`,
-`LaunchPlanningErrorCode`, and `CallerScope` adapters stay in the slices that
-own those types and convert on the way in.
-
-### 2.2 Corrections made during Phase 2
-
-- **The Runs slice is `ticketry-runs`, not `ticketry-runs-persistence`.**
-  Persistence is one of its four modules — the others are the GraphQL views,
-  the run-scoped authority, and the hook spool — and the longer crate name
-  would have read `ticketry_runs_persistence::runs_persistence::` at every
-  call site. Inside the crate the four modules are named for what they are:
-  `persistence`, `graphql`, `authority`, `hook_spool`.
-- **Extraction order follows the measured layering, not the original table.**
-  The hub (`work-management`) reads `runs`, so `runs` precedes it. The table
-  above is renumbered to the order actually being executed.
-- **`#[cfg(test)]` helpers used across slices become `test-support`
-  features.** `#[cfg(test)]` only ever meant "this crate's own tests"; once
-  the caller is a different crate it cannot reach the helper. Each such seam
-  ships behind a `test-support` feature that only `[dev-dependencies]`
-  enables.
-- **`terminal::lifecycle::spool_layout` moved to `hook_spool`.** It is the
-  hook spool's own directory layout, and living under terminal was the spool's
-  only reference back up into it.
-
 ### 2.1 Corrections made during Phase 1
 
 Three groupings in the original §2 could not be built as written. The guard
@@ -205,8 +170,46 @@ test in §5.1 is the authority on the current mapping
   six slices need; it lived in `work_management::read_types`, which is why
   `settings` reached up into work management.
 
+### 2.2 Corrections made during Phase 2
 
-Notes on grouping decisions:
+- **The Runs slice is `ticketry-runs`, not `ticketry-runs-persistence`.**
+  Persistence is one of its four modules — the others are the GraphQL views,
+  the run-scoped authority, and the hook spool — and the longer crate name
+  would have read `ticketry_runs_persistence::runs_persistence::` at every
+  call site. Inside the crate the four modules are named for what they are:
+  `persistence`, `graphql`, `authority`, `hook_spool`.
+- **Extraction order follows the measured layering, not the original table.**
+  The hub (`work-management`) reads `runs`, so `runs` precedes it. The table
+  above is renumbered to the order actually being executed.
+- **`#[cfg(test)]` helpers used across slices become `test-support`
+  features.** `#[cfg(test)]` only ever meant "this crate's own tests"; once
+  the caller is a different crate it cannot reach the helper. Each such seam
+  ships behind a `test-support` feature that only `[dev-dependencies]`
+  enables.
+- **`terminal::lifecycle::spool_layout` moved to `hook_spool`.** It is the
+  hook spool's own directory layout, and living under terminal was the spool's
+  only reference back up into it.
+
+### 2.3 The launch-trace cycle, and how it was broken
+
+`work_management::launch_policy::resolver` called `launch::trace`, and
+`launch::trace` read `launch::authority`, `launch::planning`, and
+`work_management::launch_policy::CallerScope`. That is
+`work-management -> launch -> work-management`: a cycle Cargo forbids, so the
+hub could not be extracted while it stood. The guard test in §5.1 reported it.
+
+The emitter is now `ticketry_diagnostics::launch_trace`, which reads nothing
+above itself, and the two upward-reading adapters moved into the slices that
+own the types they convert: `launch::trace_reasons` renders
+`LaunchPlanningErrorCode` and `LaunchAuthorityErrorCode`, and
+`work_management::launch_policy::launch_surface` converts `CallerScope` into
+`LaunchSurface`. Both halves of the trace — the emitting probes and the
+reading report — sit together in `ticketry-diagnostics` so that one `stages`
+vocabulary names each stage exactly once and a probe cannot drift from the
+reader that looks for it.
+
+### 2.4 Grouping decisions
+
 
 - **`worktree` + `workspace` merge** into one crate: their dependency is
   bidirectional in substance (worktree uses workspace error/operation types;
@@ -216,7 +219,7 @@ Notes on grouping decisions:
 - **`graphql_foundation` + `query_root` merge**: schema assembly calls schema
   definition and back; they are one concern.
 - **Small tail modules are folded into their owning slice**, not made
-  micro-crates: `runs`/`hook_spool` → agent-execution; `viewer_ownership`/
+  micro-crates: `hook_spool` → runs; `viewer_ownership`/
   `tmux_adapter`/`temporary_profile` → terminal; `module_links` →
   work-management; `app_updates`/`native_terminal` → desktop. A 400-line crate
   is pure overhead.
@@ -418,13 +421,13 @@ Extraction order:
 | 2.2 | `ticketry-entities` | **DONE.** Post-§3.1 it's a leaf; unblocks everything. SeaORM/seaography deps move here, `graphql_scalars` with them |
 | 2.3 | `ticketry-tool-discovery`, `ticketry-settings` | **DONE.** One dep each |
 | 2.4 | `ticketry-runs` | **DONE.** Below terminal; work-management reads it, so it precedes the hub |
-| 2.5 | `ticketry-work-management` (incl. `module_links`) | The hub; largest single win. Its Seaography registration hooks stay with it; schema *assembly* does not |
-| 2.6 | `ticketry-documents`, `ticketry-agent-execution` | Parallel siblings over entities/work-management |
-| 2.7 | `ticketry-workspace-runtime` (worktree+workspace merged) | Needs work-management |
+| 2.5 | `ticketry-work-management` (incl. `module_links`) | **DONE.** The hub; largest single win. Its Seaography registration hooks stay with it; schema *assembly* does not |
+| 2.6 | `ticketry-documents` | Needs entities, runs, work-management. Agent execution is *not* a sibling here: it reads terminal, launch, and worktree, so it sits far higher |
+| 2.7 | `ticketry-workspace-runtime` (worktree+workspace merged) | Needs work-management, documents |
 | 2.8 | `ticketry-launch` | Needs workspace-runtime, work-management, settings, documents |
-| 2.9 | `ticketry-terminal` (incl. tmux_adapter, viewer_ownership, temporary_profile) | Needs launch, agent-execution |
-| 2.10 | `ticketry-installation`, `ticketry-mcp` | Need terminal, work-management |
-| 2.11 | `ticketry-graphql-schema` (graphql_foundation + query_root) | Registers all slices; depends on all of them + tauri-graphql |
+| 2.9 | `ticketry-terminal` (incl. tmux_adapter, viewer_ownership, temporary_profile) | Needs launch |
+| 2.10 | `ticketry-agent-execution` (execution + graph_run_service), `ticketry-installation` | Parallel siblings over terminal and launch |
+| 2.11 | `ticketry-mcp`, `ticketry-graphql-schema` (graphql_foundation + query_root) | Siblings. The schema registers every slice, so it depends on all of them plus tauri-graphql |
 | 2.12 | `ticketry-desktop` (desktop + native_terminal + app_updates) | Composition root: all `tauri::command`s, taurpc router, plugin setup, `tauri::Builder` |
 | 2.13 | `ticketry-dev-tools` | All `src/bin/*` dev binaries move here behind their existing `development-tools` feature; the `required-features` gymnastics in the root manifest disappear |
 | 2.14 | Slim the root | Root `ticketry` package keeps only `main.rs` (+ the `staticlib`/`cdylib` lib target if the mobile/native embedding needs it) delegating to `ticketry-desktop::run()`. `build.rs`/`tauri-build` stays at the root with `tauri.conf.json` |

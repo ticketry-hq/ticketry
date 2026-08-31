@@ -15,7 +15,6 @@ use crate::desktop::runtime_configuration::RuntimeStartupConfiguration;
 use crate::desktop::service_state::DesktopServiceState;
 use ticketry_tool_discovery as discovery;
 
-use crate::work_management;
 use serde::Serialize;
 
 #[tauri::command]
@@ -39,20 +38,24 @@ pub(crate) async fn desktop_launch_default_coding_agent(
     // re-run the launch-policy DDL and take an exclusive write lock on a
     // `state.db` several writers are already sharing.
     let database = launch.commands()?;
-    let resolver = work_management::launch_policy::LaunchPolicyResolver::new(database.clone());
+    let resolver =
+        ticketry_work_management::work_management::launch_policy::LaunchPolicyResolver::new(
+            database.clone(),
+        );
     let decision = resolver
-        .resolve(work_management::launch_policy::LaunchPolicyRequest {
+        .resolve(ticketry_work_management::work_management::launch_policy::LaunchPolicyRequest {
             task_id: issue_id,
             destination_state_id: None,
             provider_override: None,
-            caller_scope: work_management::launch_policy::CallerScope::Interactive,
+            caller_scope: ticketry_work_management::work_management::launch_policy::CallerScope::Interactive,
             idempotency_key: uuid::Uuid::new_v4().simple().to_string(),
         })
         .await
         .map_err(|error| error.code().to_owned())?;
-    let decision = work_management::launch_policy::record(database, &decision)
-        .await
-        .map_err(|error| error.code().to_owned())?;
+    let decision =
+        ticketry_work_management::work_management::launch_policy::record(database, &decision)
+            .await
+            .map_err(|error| error.code().to_owned())?;
     let terminal_launch = services
         .terminal_launch
         .lock()
@@ -131,22 +134,23 @@ pub(crate) struct ModuleFolderValidation {
 /// command to the webview.
 #[tauri::command]
 pub(crate) fn desktop_validate_module_folder(path: String) -> ModuleFolderValidation {
-    match crate::module_links::folder_preflight::validate_configured(Some(&path)) {
+    match ticketry_work_management::module_links::folder_preflight::validate_configured(Some(&path))
+    {
         Ok(_) => ModuleFolderValidation {
             valid: true,
             reason: None,
         },
         Err(error) => {
             let reason = match error {
-                crate::module_links::folder_preflight::ModuleFolderFailure::Relative
-                | crate::module_links::folder_preflight::ModuleFolderFailure::Unset => {
+                ticketry_work_management::module_links::folder_preflight::ModuleFolderFailure::Relative
+                | ticketry_work_management::module_links::folder_preflight::ModuleFolderFailure::Unset => {
                     "module_folder_not_absolute"
                 }
-                crate::module_links::folder_preflight::ModuleFolderFailure::Missing
-                | crate::module_links::folder_preflight::ModuleFolderFailure::Inaccessible => {
+                ticketry_work_management::module_links::folder_preflight::ModuleFolderFailure::Missing
+                | ticketry_work_management::module_links::folder_preflight::ModuleFolderFailure::Inaccessible => {
                     "module_folder_missing"
                 }
-                crate::module_links::folder_preflight::ModuleFolderFailure::NotDirectory => {
+                ticketry_work_management::module_links::folder_preflight::ModuleFolderFailure::NotDirectory => {
                     "module_folder_not_a_directory"
                 }
             };

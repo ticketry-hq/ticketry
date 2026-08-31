@@ -85,7 +85,9 @@ pub(super) async fn canonical_task_root(
     module_id: &str,
     task_id: &str,
 ) -> Option<String> {
-    let folder = crate::module_links::resolution::resolved_folder(database, module_id).await?;
+    let folder =
+        ticketry_work_management::module_links::resolution::resolved_folder(database, module_id)
+            .await?;
     // Both rows are read through the generated entity, and both must belong to
     // the project the caller named. A module or Work Item from another project
     // resolves to nothing rather than to a directory in someone else's folder.

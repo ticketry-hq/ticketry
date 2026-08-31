@@ -2,11 +2,11 @@ use std::sync::Arc;
 
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 
-use crate::work_management::launch_policy::{
-    CallerScope, LaunchPolicyRequest, LaunchPolicyResolver,
-};
 use crate::worktree::status;
 use ticketry_entities::worktrees::worktree;
+use ticketry_work_management::work_management::launch_policy::{
+    CallerScope, LaunchPolicyRequest, LaunchPolicyResolver,
+};
 
 use super::super::{
     command, command_git, repository, PullRequestStatusView, WorktreeChangesService,

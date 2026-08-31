@@ -195,7 +195,7 @@ async fn prepare_command_database(directory: &tempfile::TempDir) {
         )
         .await
         .expect("create MCP command fixture");
-    crate::work_management::module_presentation_migration::install(&database)
+    ticketry_work_management::work_management::module_presentation_migration::install(&database)
         .await
         .expect("install final module-presentation shape");
     database.close().await.expect("close MCP command fixture");

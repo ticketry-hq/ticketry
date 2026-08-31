@@ -447,10 +447,11 @@ async fn a_first_launch_exposes_the_shipping_provider_catalog() {
         .await
         .expect("a first launch must include the provider catalog required by startup");
 
-    let database =
-        muxed_studio_lib::work_management::open_for_commands(&installation.path().join("state.db"))
-            .await
-            .expect("open the provisioned catalog");
+    let database = ticketry_work_management::work_management::open_for_commands(
+        &installation.path().join("state.db"),
+    )
+    .await
+    .expect("open the provisioned catalog");
     let catalog = ticketry_settings::ProviderCatalogService::open(database)
         .await
         .expect("the provisioned providers must match the shipping adapters")

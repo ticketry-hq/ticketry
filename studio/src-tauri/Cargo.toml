@@ -92,7 +92,7 @@ process-wrap = { version = "9.1", default-features = false, features = [
     "process-group",
 ] }
 rand.workspace = true
-reqwest = { version = "=0.13.4", default-features = false, features = ["json", "rustls"] }
+reqwest.workspace = true
 rmcp = { version = "=3.0.0", features = ["transport-streamable-http-server"] }
 sea-orm.workspace = true
 sea-orm-migration = { version = "=2.0.1", features = ["runtime-tokio-rustls", "sqlx-sqlite"] }
@@ -113,12 +113,14 @@ ticketry-entities.workspace = true
 ticketry-runs.workspace = true
 ticketry-settings.workspace = true
 ticketry-tool-discovery.workspace = true
+ticketry-work-management.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
 ticketry-runs = { workspace = true, features = ["test-support"] }
+ticketry-work-management = { workspace = true, features = ["test-support"] }
 log = "=0.4.33"
 syn = { version = "=2.0.119", features = ["full", "visit"] }
 tempfile.workspace = true
@@ -131,6 +133,7 @@ members = [
     "crates/ticketry-entities",
     "crates/ticketry-runs",
     "crates/ticketry-settings",
+    "crates/ticketry-work-management",
     "crates/ticketry-tool-discovery",
     "crates/ticketry-diagnostics",
 ]
@@ -144,6 +147,7 @@ chrono = { version = "0.4", default-features = false, features = ["clock"] }
 futures-util = "=0.3.32"
 libc = "0.2"
 rand = "0.8"
+reqwest = { version = "=0.13.4", default-features = false, features = ["json", "rustls"] }
 sea-orm = { version = "=2.0.1", features = ["runtime-tokio-rustls", "seaography", "sqlx-postgres", "sqlx-sqlite"] }
 seaography = { version = "=2.0.0-rc.9", default-features = false, features = ["field-camel-case", "macros", "with-chrono", "with-json"] }
 seaolim = { git = "https://github.com/charleeagni/seaolim", rev = "29f24172be1ab423e9b8b14b11ba1fa73452f1cd" }
@@ -160,6 +164,7 @@ ticketry-entities = { path = "crates/ticketry-entities" }
 ticketry-runs = { path = "crates/ticketry-runs" }
 ticketry-settings = { path = "crates/ticketry-settings" }
 ticketry-tool-discovery = { path = "crates/ticketry-tool-discovery" }
+ticketry-work-management = { path = "crates/ticketry-work-management" }
 tokio = { version = "=1.53.1", features = ["macros", "net", "rt-multi-thread", "sync", "time"] }
 tokio-util = "=0.7.18"
 uuid = { version = "1.24", features = ["v4", "v5"] }
@@ -170,6 +175,9 @@ uuid = { version = "1.24", features = ["v4", "v5"] }
 # and the desktop crash reports actually read.
 [profile.dev]
 debug = "line-tables-only"
+# Crate granularity is what makes a rebuild small now, so the incremental
+# cache buys little and costs tens of gigabytes of `target/`.
+incremental = false
 
 [profile.dev.package."*"]
 debug = false

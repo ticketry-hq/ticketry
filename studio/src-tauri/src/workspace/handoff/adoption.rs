@@ -96,7 +96,7 @@ pub async fn adopt(data_directory: &Path) -> Result<HandoffEvidence, WorkspaceHa
 }
 
 async fn open(data_directory: &Path) -> Result<sea_orm::DatabaseConnection, WorkspaceHandoffError> {
-    crate::work_management::open_for_commands(&data_directory.join("state.db"))
+    ticketry_work_management::work_management::open_for_commands(&data_directory.join("state.db"))
         .await
         .map_err(|error| {
             WorkspaceHandoffError::new(

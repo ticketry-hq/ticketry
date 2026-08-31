@@ -52,14 +52,15 @@ pub async fn initialize_with_worktracker_and_install(
     api: &tauri_graphql::TransportApiImpl,
 ) -> Result<(), FoundationInitializationError> {
     let foundation_database = database::open(foundation_database_path).await?;
-    let worktracker_database = crate::work_management::open(worktracker_database_path)
-        .await
-        .map_err(|error| {
-            FoundationInitializationError::new(
-                FoundationInitializationErrorCode::WorktrackerDatabaseOpen,
-                error.to_string(),
-            )
-        })?;
+    let worktracker_database =
+        ticketry_work_management::work_management::open(worktracker_database_path)
+            .await
+            .map_err(|error| {
+                FoundationInitializationError::new(
+                    FoundationInitializationErrorCode::WorktrackerDatabaseOpen,
+                    error.to_string(),
+                )
+            })?;
     let schema = crate::query_root::foundation_schema_with_terminal_services(
         foundation_database,
         Some(worktracker_database),
@@ -152,14 +153,15 @@ async fn initialize_with_worktracker_commands_and_install_inner(
     api: &tauri_graphql::TransportApiImpl,
 ) -> Result<composed_commands::ComposedWorktracker, FoundationInitializationError> {
     let foundation_database = database::open(foundation_database_path).await?;
-    let worktracker_database = crate::work_management::open_for_commands(worktracker_database_path)
-        .await
-        .map_err(|error| {
-            FoundationInitializationError::new(
-                FoundationInitializationErrorCode::WorktrackerDatabaseOpen,
-                error.to_string(),
-            )
-        })?;
+    let worktracker_database =
+        ticketry_work_management::work_management::open_for_commands(worktracker_database_path)
+            .await
+            .map_err(|error| {
+                FoundationInitializationError::new(
+                    FoundationInitializationErrorCode::WorktrackerDatabaseOpen,
+                    error.to_string(),
+                )
+            })?;
     crate::installation::final_schema_migrations::install(&worktracker_database)
         .await
         .map_err(|error| {
@@ -184,7 +186,7 @@ async fn initialize_with_worktracker_commands_and_install_inner(
     let work_facts = ticketry_runs::persistence::outbox_adopted(&worktracker_database)
         .await
         .then(|| {
-            crate::work_management::commands::status_facts::WorkFactRecorder::new(
+            ticketry_work_management::work_management::commands::status_facts::WorkFactRecorder::new(
                 ticketry_runs::persistence::RunsServices::new(worktracker_database.clone())
                     .outbox()
                     .events()
@@ -235,10 +237,10 @@ async fn initialize_with_worktracker_commands_and_install_inner(
     let schema = crate::query_root::foundation_schema_with_terminal_services(
         foundation_database,
         Some(worktracker_database.clone()),
-        Some(crate::work_management::commands::CommandDatabase(
+        Some(ticketry_work_management::work_management::commands::CommandDatabase(
             worktracker_database.clone(),
         )),
-        Some(crate::work_management::commands::attachments::AttachmentStorage::new(media_root)),
+        Some(ticketry_work_management::work_management::commands::attachments::AttachmentStorage::new(media_root)),
         Some(settings_repository),
         readiness_data_directory.map(Path::to_path_buf),
         work_facts,
@@ -422,15 +424,17 @@ async fn compose_document_saves(
 /// state database. It never resolves the established data directory itself, so
 /// an import cannot reach an installation the caller did not name.
 async fn import_module_links(data_directory: &Path) -> Result<(), FoundationInitializationError> {
-    let database = crate::work_management::open_for_commands(&data_directory.join("state.db"))
-        .await
-        .map_err(|error| {
-            FoundationInitializationError::new(
-                FoundationInitializationErrorCode::ModuleLinkImport,
-                error.to_string(),
-            )
-        })?;
-    let outcome = crate::module_links::import(&database, data_directory)
+    let database = ticketry_work_management::work_management::open_for_commands(
+        &data_directory.join("state.db"),
+    )
+    .await
+    .map_err(|error| {
+        FoundationInitializationError::new(
+            FoundationInitializationErrorCode::ModuleLinkImport,
+            error.to_string(),
+        )
+    })?;
+    let outcome = ticketry_work_management::module_links::import(&database, data_directory)
         .await
         .map_err(|error| {
             FoundationInitializationError::new(
@@ -469,7 +473,7 @@ pub async fn adopt_worktracker_and_install(
                 error.to_string(),
             )
         })?;
-    crate::work_management::adoption::adopt(data_directory)
+    ticketry_work_management::work_management::adoption::adopt(data_directory)
         .await
         .map_err(|error| {
             FoundationInitializationError::new(
@@ -477,15 +481,16 @@ pub async fn adopt_worktracker_and_install(
                 error.to_string(),
             )
         })?;
-    let provider_database =
-        crate::work_management::open_for_commands(&data_directory.join("state.db"))
-            .await
-            .map_err(|error| {
-                FoundationInitializationError::new(
-                    FoundationInitializationErrorCode::SettingsDatabaseOpen,
-                    error.to_string(),
-                )
-            })?;
+    let provider_database = ticketry_work_management::work_management::open_for_commands(
+        &data_directory.join("state.db"),
+    )
+    .await
+    .map_err(|error| {
+        FoundationInitializationError::new(
+            FoundationInitializationErrorCode::SettingsDatabaseOpen,
+            error.to_string(),
+        )
+    })?;
     ticketry_settings::ProviderCatalogService::open(provider_database)
         .await
         .map_err(|error| {

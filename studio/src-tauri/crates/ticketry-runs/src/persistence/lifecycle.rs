@@ -6,9 +6,9 @@ use serde_json::json;
 use super::entities::agent_run;
 use super::work_item_scope;
 use super::{
-    run_holding_in, timestamp, LifecycleAcceptance, LifecycleFact, LifecycleService,
-    NewStatusEvent, RunsPersistenceError, RunsPersistenceErrorCode, TerminalAcceptance,
-    TerminalFact,
+    run_holding_in, timestamp, EndOfLifeOrigin, LifecycleAcceptance, LifecycleFact,
+    LifecycleService, NewStatusEvent, RunsPersistenceError, RunsPersistenceErrorCode,
+    TerminalAcceptance, TerminalFact,
 };
 
 struct RunState {
@@ -171,8 +171,23 @@ impl LifecycleService {
         &self,
         fact: TerminalFact,
     ) -> Result<TerminalAcceptance, RunsPersistenceError> {
+        self.apply_terminal_fact_attributed(fact, EndOfLifeOrigin::Unattributed)
+            .await
+    }
+
+    /// Record terminal authority together with what ended the run.
+    ///
+    /// A caller that knows why the run ended states it here; one that does not
+    /// uses `apply_terminal_fact` and the end is recorded as unattributed.
+    pub async fn apply_terminal_fact_attributed(
+        &self,
+        fact: TerminalFact,
+        origin: EndOfLifeOrigin,
+    ) -> Result<TerminalAcceptance, RunsPersistenceError> {
         let transaction = self.database().begin().await?;
-        let acceptance = self.apply_terminal_fact_in(&transaction, fact).await?;
+        let acceptance = self
+            .apply_terminal_fact_in_attributed(&transaction, fact, origin)
+            .await?;
         transaction.commit().await?;
         if acceptance.applied {
             self.events().wake_committed();
@@ -189,7 +204,17 @@ impl LifecycleService {
         transaction: &sea_orm::DatabaseTransaction,
         fact: TerminalFact,
     ) -> Result<TerminalAcceptance, RunsPersistenceError> {
-        self.apply_terminal_fact_in_observed(transaction, fact, || Ok(()), || Ok(()))
+        self.apply_terminal_fact_in_attributed(transaction, fact, EndOfLifeOrigin::Unattributed)
+            .await
+    }
+
+    pub async fn apply_terminal_fact_in_attributed(
+        &self,
+        transaction: &sea_orm::DatabaseTransaction,
+        fact: TerminalFact,
+        origin: EndOfLifeOrigin,
+    ) -> Result<TerminalAcceptance, RunsPersistenceError> {
+        self.apply_terminal_fact_in_observed(transaction, fact, origin, || Ok(()), || Ok(()))
             .await
     }
 
@@ -197,6 +222,7 @@ impl LifecycleService {
         &self,
         transaction: &sea_orm::DatabaseTransaction,
         fact: TerminalFact,
+        origin: EndOfLifeOrigin,
         after_run_fact: F,
         after_status_append: G,
     ) -> Result<TerminalAcceptance, RunsPersistenceError>
@@ -283,6 +309,15 @@ impl LifecycleService {
             )
             .await?;
         after_status_append()?;
+        // The run has ended; record what ended it, alongside the status and
+        // lifecycle state that cannot say.
+        super::end_of_life::record_run_ended(
+            &fact.agent_run_id,
+            Some(&run.project_id),
+            origin,
+            fact.outcome.status(),
+            fact.exit_code.or(run.exit_code),
+        );
         Ok(TerminalAcceptance {
             applied: true,
             state: public_state,

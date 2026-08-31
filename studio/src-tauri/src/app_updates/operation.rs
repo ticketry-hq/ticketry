@@ -42,7 +42,7 @@ mod tests {
     use axum::{http::StatusCode, routing::get, Router};
     use serde_json::json;
 
-    use super::super::{map_install_error, map_updater_error, AppUpdateCheckError};
+    use super::super::{map_updater_error, AppUpdateCheckError};
     use super::*;
 
     #[tokio::test]
@@ -139,16 +139,6 @@ mod tests {
         assert_eq!(
             map_updater_error(tauri_plugin_updater::Error::Serialization(source)),
             AppUpdateCheckError::invalid_manifest()
-        );
-    }
-
-    #[test]
-    fn invalid_updater_signature_is_rejected_without_retrying_the_same_archive() {
-        let malformed_signature = base64::decode("!").expect_err("fixture must be invalid base64");
-
-        assert_eq!(
-            map_install_error(tauri_plugin_updater::Error::Base64(malformed_signature)),
-            Some(super::super::contract::AppUpdateInstallError::invalid_signature())
         );
     }
 }

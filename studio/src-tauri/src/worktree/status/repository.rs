@@ -74,12 +74,12 @@ pub(crate) async fn discover(
 /// disagree about which folder a Module is checked out into.
 ///
 /// Shared with [`crate::launch::paths`] through
-/// [`crate::module_links::resolution`].
+/// [`ticketry_work_management::module_links::resolution`].
 pub(crate) async fn module_folder(
     database: &DatabaseConnection,
     module_id: &str,
 ) -> Option<PathBuf> {
-    crate::module_links::resolution::linked_folder(database, module_id)
+    ticketry_work_management::module_links::resolution::linked_folder(database, module_id)
         .await
         .ok()
         .flatten()
@@ -89,7 +89,7 @@ pub(crate) async fn module_folder(
 mod tests {
     use sea_orm::Database;
 
-    use crate::module_links::test_support;
+    use ticketry_work_management::module_links::test_support;
 
     use super::*;
 

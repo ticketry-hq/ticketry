@@ -27,7 +27,9 @@ use rmcp::transport::streamable_http_server::{
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
-use crate::work_management::{commands::attachments::AttachmentStorage, open_for_commands};
+use ticketry_work_management::work_management::{
+    commands::attachments::AttachmentStorage, open_for_commands,
+};
 
 pub use registry::allowed_provider_operations;
 use service::WorktrackerMcpService;
@@ -109,7 +111,9 @@ impl McpRuntime {
             ingress_credential.clone(),
         );
         let launch_policy =
-            crate::work_management::launch_policy::LaunchPolicyResolver::new(database.clone());
+            ticketry_work_management::work_management::launch_policy::LaunchPolicyResolver::new(
+                database.clone(),
+            );
         let graph_runs = terminal_launch.clone().map(|terminal_launch| {
             crate::graph_run_service::GraphRunService::production(
                 database.clone(),

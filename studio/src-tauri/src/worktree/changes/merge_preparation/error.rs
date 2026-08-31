@@ -1,6 +1,6 @@
 use sea_orm::DbErr;
 
-use crate::work_management::launch_policy::LaunchPolicyError;
+use ticketry_work_management::work_management::launch_policy::LaunchPolicyError;
 
 use super::super::WorktreeChangesError;
 

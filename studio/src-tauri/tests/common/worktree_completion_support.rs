@@ -213,10 +213,10 @@ pub async fn fixture(scenario: Scenario) -> Fixture {
         ))
         .await
         .expect("create completion fixture schema");
-    muxed_studio_lib::module_links::schema::install(&writer)
+    ticketry_work_management::module_links::schema::install(&writer)
         .await
         .expect("install Module Link schema");
-    muxed_studio_lib::module_links::ModuleLinkStore::new(writer.clone())
+    ticketry_work_management::module_links::ModuleLinkStore::new(writer.clone())
         .set(MODULE, &git.repository().display().to_string())
         .await
         .expect("link module to repository");

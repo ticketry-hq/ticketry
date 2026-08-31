@@ -2,8 +2,10 @@
 
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 
-use crate::work_management::commands::workflow::{self, TransitionOrigin, TransitionWorkItem};
 use ticketry_entities::work_management::{issue, state};
+use ticketry_work_management::work_management::commands::workflow::{
+    self, TransitionOrigin, TransitionWorkItem,
+};
 
 use super::{
     PullRequestStatusView, WorkItemClosureFailureView, WorktreeChangesService,

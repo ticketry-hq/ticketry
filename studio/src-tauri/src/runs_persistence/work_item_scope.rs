@@ -2,7 +2,7 @@ use sea_orm::{
     ColumnTrait, ConnectionTrait, DbErr, EntityTrait, FromQueryResult, QueryFilter, QuerySelect,
 };
 
-use crate::work_management::entities::issue;
+use crate::entities::work_management::issue;
 
 #[derive(FromQueryResult)]
 pub(crate) struct HoldingScope {

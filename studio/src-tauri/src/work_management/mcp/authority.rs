@@ -9,7 +9,7 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 
 use crate::entities::runs::agent_run;
-use crate::work_management::entities::issue;
+use crate::entities::work_management::issue;
 
 use super::grant_store::{GrantStore, StoredGrant};
 

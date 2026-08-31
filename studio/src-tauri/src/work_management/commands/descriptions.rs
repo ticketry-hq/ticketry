@@ -5,7 +5,7 @@ use sea_orm::{
 
 use super::identifiers::database_uuid;
 use super::{work_items, CommandError};
-use crate::work_management::entities::{issue, project};
+use crate::entities::work_management::{issue, project};
 
 #[derive(Debug, Clone)]
 pub struct AppendDescription {

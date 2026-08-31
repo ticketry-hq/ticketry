@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use sea_orm::{ConnectionTrait, Database, EntityTrait};
 
 use super::{blockers, work_items, workflow};
-use crate::work_management::entities::{issue, issue_type, launch_binding, project};
+use crate::entities::work_management::{issue, issue_type, launch_binding, project};
 use crate::work_management::open_for_commands;
 
 const PROJECT: &str = "10000000000000000000000000000000";

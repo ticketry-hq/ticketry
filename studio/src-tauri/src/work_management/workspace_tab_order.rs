@@ -12,7 +12,7 @@ use super::commands::status_facts::{
     record_work_item, stamp, WorkFactRecorder, WorkItemChange, WorkItemIdentity,
 };
 use super::commands::{work_items, CommandError};
-use super::entities::issue;
+use crate::entities::work_management::issue;
 use crate::entities::{documents::design_document, runs::agent_run};
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize)]

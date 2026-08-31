@@ -10,7 +10,7 @@ use super::status_facts::{
     record_work_item, stamp, WorkFactRecorder, WorkItemChange, WorkItemFact, WorkItemIdentity,
 };
 use super::CommandError;
-use crate::work_management::entities::{issue, issue_type, module_presentation, project, state};
+use crate::entities::work_management::{issue, issue_type, module_presentation, project, state};
 
 pub use super::descriptions::{append_description, AppendDescription};
 pub use super::review_findings::{create_review_finding, CreateReviewFinding};

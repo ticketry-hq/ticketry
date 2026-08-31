@@ -1,6 +1,6 @@
+use muxed_studio_lib::entities::work_management::issue;
 use muxed_studio_lib::work_management::{
     commands::workflow::{self, TransitionOrigin, TransitionWorkItem},
-    entities::issue,
     open_for_commands,
 };
 use sea_orm::{ConnectionTrait, Database, DbBackend, EntityTrait, Statement};

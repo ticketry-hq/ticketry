@@ -14,7 +14,7 @@ use super::global_launch_default::{
     GlobalLaunchDefault, PROVIDER_CATALOG_KEY, PROVIDER_CATALOG_SCOPE,
 };
 use super::provider_catalog_read::load_from;
-use crate::work_management::entities::{
+use crate::entities::work_management::{
     agent_model, agent_model_reasoning_level, provider, reasoning_level,
 };
 

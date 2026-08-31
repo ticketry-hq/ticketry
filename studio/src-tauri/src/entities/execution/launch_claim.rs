@@ -18,7 +18,7 @@ pub struct Model {
     pub launched_at: DateTime,
     pub root_id: String,
     #[sea_orm(belongs_to, from = "task_id", to = "id")]
-    pub task: BelongsTo<crate::work_management::entities::issue::Entity>,
+    pub task: BelongsTo<crate::entities::work_management::issue::Entity>,
     #[sea_orm(belongs_to, from = "root_id", to = "root_id")]
     pub graph_run: BelongsTo<super::graph_run::Entity>,
     #[sea_orm(belongs_to, from = "agent_run_id", to = "id")]

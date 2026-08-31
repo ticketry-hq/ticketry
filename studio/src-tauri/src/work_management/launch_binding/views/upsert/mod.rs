@@ -5,9 +5,9 @@ use seaography::{
     Builder, CustomFields,
 };
 
+use crate::entities::work_management::launch_binding;
 use crate::work_management::{
     commands::workflow,
-    entities::launch_binding,
     graphql::{self, GraphqlPatchBool, GraphqlPatchString, GraphqlPatchStringList},
 };
 

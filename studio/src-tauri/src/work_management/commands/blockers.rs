@@ -7,7 +7,7 @@ use sea_orm::{
 
 use super::identifiers::database_uuid;
 use super::CommandError;
-use crate::work_management::entities::{issue, issue_blocker, project};
+use crate::entities::work_management::{issue, issue_blocker, project};
 
 #[derive(Debug, Clone)]
 pub enum BlockerChange {

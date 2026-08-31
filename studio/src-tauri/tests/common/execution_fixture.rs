@@ -6,7 +6,7 @@
 //! start. It does not describe or recreate a historical Django installation.
 #![allow(dead_code)]
 
-use muxed_studio_lib::work_management::entities::{
+use muxed_studio_lib::entities::work_management::{
     agent_model, issue, issue_blocker, issue_type, issue_type_transition, launch_binding, project,
     provider, state,
 };

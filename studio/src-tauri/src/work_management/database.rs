@@ -122,7 +122,7 @@ mod tests {
     };
 
     use super::{open, open_for_commands};
-    use crate::work_management::entities::project;
+    use crate::entities::work_management::project;
 
     #[tokio::test]
     async fn connection_reads_wal_and_rejects_writes() {

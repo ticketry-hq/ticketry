@@ -1,8 +1,5 @@
-use muxed_studio_lib::work_management::{
-    commands::workflow,
-    entities::{issue_type, launch_binding},
-    open_for_commands, read_queries,
-};
+use muxed_studio_lib::entities::work_management::{issue_type, launch_binding};
+use muxed_studio_lib::work_management::{commands::workflow, open_for_commands, read_queries};
 use sea_orm::{ConnectionTrait, Database, EntityTrait, PaginatorTrait};
 
 const PROJECT: &str = "10000000000000000000000000000000";

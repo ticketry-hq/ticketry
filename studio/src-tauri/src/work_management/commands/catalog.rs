@@ -6,7 +6,7 @@ use super::status_facts::{
     record_workflow_state, stamp, WorkFactRecorder, WorkflowStateChange, WorkflowStateFact,
 };
 use super::CommandError;
-use crate::work_management::entities::{issue, issue_type, project, state};
+use crate::entities::work_management::{issue, issue_type, project, state};
 use rand::seq::SliceRandom;
 use sea_orm::{
     sea_query::Expr, ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseConnection,
@@ -373,8 +373,8 @@ pub async fn delete_issue_type(
         .one(&transaction)
         .await?
         .ok_or_else(|| CommandError::NotFound("Issue type not found.".to_owned()))?;
-    let in_use = super::super::entities::issue::Entity::find()
-        .filter(super::super::entities::issue::Column::IssueTypeId.eq(&id))
+    let in_use = crate::entities::work_management::issue::Entity::find()
+        .filter(crate::entities::work_management::issue::Column::IssueTypeId.eq(&id))
         .count(&transaction)
         .await?;
     if in_use != 0 && reassign_to.is_none() {

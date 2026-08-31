@@ -8,7 +8,7 @@ use std::collections::HashMap;
 
 use super::identifiers::new_database_uuid;
 use super::{reviewed_defaults, CommandError};
-use crate::work_management::entities::{issue_type, issue_type_transition, launch_binding, state};
+use crate::entities::work_management::{issue_type, issue_type_transition, launch_binding, state};
 use sea_orm::{ActiveModelTrait, ConnectionTrait, Set};
 
 pub(crate) async fn seed(

@@ -4,7 +4,7 @@ use sea_orm::{
 };
 
 use super::*;
-use crate::work_management::entities::{issue, module_presentation};
+use crate::entities::work_management::{issue, module_presentation};
 
 async fn fixture() -> DatabaseConnection {
     let mut options = ConnectOptions::new("sqlite::memory:");

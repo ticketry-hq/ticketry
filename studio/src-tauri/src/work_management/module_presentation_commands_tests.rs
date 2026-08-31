@@ -1,7 +1,7 @@
 use sea_orm::{ActiveModelTrait, ActiveValue::Set, ConnectionTrait, Database, EntityTrait};
 
 use super::commands::{reorder, work_items};
-use super::entities::{issue, module_presentation as presentation};
+use crate::entities::work_management::{issue, module_presentation as presentation};
 use super::{open_for_commands, read_queries};
 
 const PROJECT: &str = "10000000000000000000000000000000";

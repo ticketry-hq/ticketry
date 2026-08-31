@@ -233,7 +233,7 @@ fn failed(detail: String) -> AdoptionFailure {
 #[cfg(test)]
 mod tests {
     use super::{manifest, RECORDED_SCHEMA};
-    use crate::work_management::entities::{issue_type, state};
+    use crate::entities::work_management::{issue_type, state};
     use sea_orm::{DatabaseConnection, EntityTrait};
 
     #[test]

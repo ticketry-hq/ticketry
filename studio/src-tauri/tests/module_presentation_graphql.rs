@@ -1,6 +1,6 @@
 use muxed_studio_lib::{
+    entities::work_management::{issue, module_presentation},
     query_root,
-    work_management::entities::{issue, module_presentation},
 };
 use sea_orm::{
     ActiveModelTrait, ActiveValue::Set, ConnectOptions, ConnectionTrait, Database,

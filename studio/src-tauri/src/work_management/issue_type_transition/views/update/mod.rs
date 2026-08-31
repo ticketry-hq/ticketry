@@ -5,7 +5,8 @@ use seaography::{
     Builder, CustomFields,
 };
 
-use crate::work_management::{commands::workflow, entities::issue_type_transition, graphql};
+use crate::entities::work_management::issue_type_transition;
+use crate::work_management::{commands::workflow, graphql};
 
 struct UpdateIssueTypeTransition;
 

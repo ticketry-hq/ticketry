@@ -17,7 +17,7 @@ use super::{
     LaunchPolicyResolver,
 };
 use crate::entities::runs::automation_attempt;
-use crate::work_management::entities::{launch_policy_decision, launch_policy_rejection};
+use crate::entities::work_management::{launch_policy_decision, launch_policy_rejection};
 
 pub async fn prepare_pending_retries(
     database: &DatabaseConnection,

@@ -1,7 +1,7 @@
 use muxed_studio_lib::graphql_foundation::initialize_with_worktracker_commands_and_install;
 use muxed_studio_lib::installation::adoption::provisioning;
 use muxed_studio_lib::work_management::commands::catalog::{self, CreateProject};
-use muxed_studio_lib::work_management::entities::{
+use muxed_studio_lib::entities::work_management::{
     issue_type, issue_type_transition, launch_binding, project, state,
 };
 use muxed_studio_lib::work_management::open_for_commands;

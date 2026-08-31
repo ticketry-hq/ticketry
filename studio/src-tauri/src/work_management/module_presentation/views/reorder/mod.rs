@@ -9,9 +9,9 @@ use seaography::{
     Builder, CustomFields,
 };
 
+use crate::entities::work_management::module_presentation;
 use crate::work_management::{
     commands::{reorder, CommandError},
-    entities::module_presentation,
     graphql::{command_database, command_error, work_facts},
     read_types::StringList,
 };

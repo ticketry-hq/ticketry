@@ -1,6 +1,6 @@
 use sea_orm::entity::prelude::*;
 
-use crate::work_management::entities::{issue, project};
+use crate::entities::work_management::{issue, project};
 
 #[sea_orm::model]
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel)]

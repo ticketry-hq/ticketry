@@ -11,7 +11,7 @@ use crate::work_management::commands::{
     },
     CommandError,
 };
-use crate::work_management::entities::{
+use crate::entities::work_management::{
     issue, issue_type, issue_type_transition, state, transition_occurrence,
 };
 use crate::work_management::launch_policy::{

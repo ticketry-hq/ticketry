@@ -5,7 +5,7 @@ use sea_orm::{
     QuerySelect, RelationTrait,
 };
 
-use super::entities::{issue, issue_blocker, module_presentation, project};
+use crate::entities::work_management::{issue, issue_blocker, module_presentation, project};
 use super::read_types as output;
 
 mod catalog;

@@ -3,10 +3,10 @@ use std::collections::HashMap;
 use sea_orm::{ColumnTrait, DatabaseConnection, DbErr, EntityTrait, QueryFilter, QueryOrder};
 
 use super::{database_uuid, timestamp, uuid};
-use crate::work_management::{
-    entities::{issue_type, issue_type_transition, launch_binding, state},
-    read_types as output,
+use crate::entities::work_management::{
+    issue_type, issue_type_transition, launch_binding, state,
 };
+use crate::work_management::read_types as output;
 
 pub async fn states(
     database: &DatabaseConnection,

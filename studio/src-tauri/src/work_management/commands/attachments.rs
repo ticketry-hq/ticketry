@@ -8,7 +8,7 @@ use sea_orm::{
 
 use super::identifiers::{database_uuid, new_database_uuid};
 use super::CommandError;
-use crate::work_management::entities::{attachment, issue};
+use crate::entities::work_management::{attachment, issue};
 
 const RELATIVE_DIRECTORY: &str = "worktracker/attachments";
 

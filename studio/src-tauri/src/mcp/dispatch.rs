@@ -3,9 +3,9 @@ use std::path::Path;
 use sea_orm::DatabaseConnection;
 use serde_json::{json, Map, Value};
 
-use crate::execution::graph::GraphAccess;
-use crate::execution::run_now::{RunNowCaller, RunNowRequest, RunNowService};
-use crate::graph_run_service::{GraphRunRequest, GraphRunService};
+use ticketry_agent_execution::execution::graph::GraphAccess;
+use ticketry_agent_execution::execution::run_now::{RunNowCaller, RunNowRequest, RunNowService};
+use ticketry_agent_execution::graph_run_service::{GraphRunRequest, GraphRunService};
 use ticketry_terminal::terminal::cleanup::TerminalCleanupService;
 use ticketry_terminal::terminal::launch::TerminalLaunchService;
 use ticketry_work_management::work_management::commands::{
@@ -162,7 +162,11 @@ async fn dispatch_checked(
             // edges inside it are returned; MCP must not restate it.
             let access = GraphAccess::caller_roots(&task.project_id, [&task.id]);
             Ok(DispatchOutput::direct(
-                match crate::execution::graph::dependency_graph(database, &task.id, &access).await {
+                match ticketry_agent_execution::execution::graph::dependency_graph(
+                    database, &task.id, &access,
+                )
+                .await
+                {
                     Ok(graph) => json!({
                         "root_id": graph.root_id,
                         "nodes": graph
@@ -577,7 +581,10 @@ fn reset_requested(arguments: &Map<String, Value>) -> bool {
         .unwrap_or(false)
 }
 
-fn graph_run_success(root_id: &str, result: crate::graph_run_service::GraphRunResult) -> Value {
+fn graph_run_success(
+    root_id: &str,
+    result: ticketry_agent_execution::graph_run_service::GraphRunResult,
+) -> Value {
     json!({
         "root_id": root_id,
         "launched": result
@@ -588,7 +595,10 @@ fn graph_run_success(root_id: &str, result: crate::graph_run_service::GraphRunRe
     })
 }
 
-fn graph_run_error(root_id: &str, error: &crate::graph_run_service::GraphRunServiceError) -> Value {
+fn graph_run_error(
+    root_id: &str,
+    error: &ticketry_agent_execution::graph_run_service::GraphRunServiceError,
+) -> Value {
     json!({"root_id": root_id, "error": error.code_str()})
 }
 
@@ -597,7 +607,7 @@ mod graph_run_contract_tests {
     use chrono::NaiveDateTime;
 
     use super::*;
-    use crate::graph_run_service::{GraphRunResult, LaunchedChild};
+    use ticketry_agent_execution::graph_run_service::{GraphRunResult, LaunchedChild};
     use ticketry_entities::execution::graph_run;
 
     #[test]

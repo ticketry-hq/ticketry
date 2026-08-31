@@ -245,6 +245,8 @@ fn superseded_seaolim_migration_files_stay_removed() {
     // the `src/<module>/` prefix it had in the root package.
     let workspace = Path::new(env!("CARGO_MANIFEST_DIR"));
     for relative in [
+        "crates/ticketry-agent-execution/src/graph_run_service/graphql.rs",
+        "crates/ticketry-agent-execution/src/graph_run_service/operation_registry.rs",
         "crates/ticketry-documents/src/save/graphql.rs",
         "crates/ticketry-runs/src/persistence/attempt_graphql.rs",
         "crates/ticketry-runs/src/persistence/lifecycle_graphql.rs",

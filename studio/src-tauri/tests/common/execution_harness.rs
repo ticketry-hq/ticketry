@@ -23,9 +23,6 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, MutexGuard};
 use std::time::Duration;
 
-use muxed_studio_lib::execution::reconciliation::{
-    ExecutionReconciliationConfig, ExecutionReconciliationRuntime, ExecutionReconciliationService,
-};
 use muxed_studio_lib::graphql_foundation::{
     adopt_worktracker_and_install, ComposedCommandRuntime, InstallationOwnership,
 };
@@ -33,6 +30,9 @@ use muxed_studio_lib::mcp::{McpConfiguration, McpRuntime};
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection};
 use serde_json::{json, Value};
 use tauri_graphql::{TransportApi, TransportApiImpl};
+use ticketry_agent_execution::execution::reconciliation::{
+    ExecutionReconciliationConfig, ExecutionReconciliationRuntime, ExecutionReconciliationService,
+};
 use ticketry_runs::persistence::{publish_readiness, Slice3Readiness};
 use ticketry_terminal::terminal::launch::{TerminalLaunchBoundary, TerminalLaunchService};
 use ticketry_terminal::terminal::lifecycle::{

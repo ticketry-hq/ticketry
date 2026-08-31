@@ -12,7 +12,7 @@ pub struct ExecutionPersistenceError {
 }
 
 impl ExecutionPersistenceError {
-    pub(crate) fn new(code: ExecutionPersistenceErrorCode, message: impl Into<String>) -> Self {
+    pub fn new(code: ExecutionPersistenceErrorCode, message: impl Into<String>) -> Self {
         Self {
             code,
             message: message.into(),

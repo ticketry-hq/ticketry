@@ -6805,6 +6805,7 @@ dependencies = [
  "tauri-plugin-wdio-webdriver",
  "taurpc",
  "tempfile",
+ "ticketry-agent-execution",
  "ticketry-data-directory",
  "ticketry-diagnostics",
  "ticketry-documents",
@@ -6814,6 +6815,30 @@ dependencies = [
  "ticketry-settings",
  "ticketry-terminal",
  "ticketry-tool-discovery",
+ "ticketry-work-management",
+ "ticketry-workspace-runtime",
+ "tokio",
+ "tokio-util",
+ "uuid",
+]
+
+[[package]]
+name = "ticketry-agent-execution"
+version = "0.0.0"
+dependencies = [
+ "async-graphql",
+ "async-trait",
+ "chrono",
+ "sea-orm",
+ "seaography",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "ticketry-diagnostics",
+ "ticketry-entities",
+ "ticketry-launch",
+ "ticketry-runs",
+ "ticketry-terminal",
  "ticketry-work-management",
  "ticketry-workspace-runtime",
  "tokio",

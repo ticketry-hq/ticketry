@@ -3,8 +3,8 @@ mod common;
 use std::path::Path;
 
 use common::execution_legacy_fixture as fixture;
-use muxed_studio_lib::execution::persistence::{self, SourceClassification};
 use sea_orm::{ConnectionTrait, Database, DbBackend, Statement};
+use ticketry_agent_execution::execution::persistence::{self, SourceClassification};
 
 #[tokio::test]
 async fn fresh_database_without_execution_history_installs_rust_schema_idempotently() {

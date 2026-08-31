@@ -5,7 +5,7 @@ use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter};
 use crate::execution::graph::{types::compact_id, GraphFactsError};
 use ticketry_entities::{runs::agent_run, terminals::session as terminal_session};
 
-pub(crate) async fn live_work_item_ids(
+pub async fn live_work_item_ids(
     database: &impl ConnectionTrait,
     task_ids: &[String],
     exclude_agent_run_id: Option<&str>,

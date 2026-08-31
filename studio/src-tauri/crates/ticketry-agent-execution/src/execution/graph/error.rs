@@ -31,7 +31,7 @@ pub struct GraphFactsError {
 }
 
 impl GraphFactsError {
-    pub(crate) const fn new(code: GraphFactsErrorCode, message: &'static str) -> Self {
+    pub const fn new(code: GraphFactsErrorCode, message: &'static str) -> Self {
         Self {
             code,
             message,

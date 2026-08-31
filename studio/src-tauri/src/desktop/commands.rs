@@ -62,8 +62,12 @@ pub(crate) async fn desktop_launch_default_coding_agent(
         .expect("terminal launch lock poisoned")
         .clone()
         .ok_or_else(|| "terminal launch is unavailable".to_owned())?;
-    let session =
-        crate::execution::launch_delivery::execute(database, &terminal_launch, &decision).await?;
+    let session = ticketry_agent_execution::execution::launch_delivery::execute(
+        database,
+        &terminal_launch,
+        &decision,
+    )
+    .await?;
     Ok(serde_json::json!({ "agent_run_id": session.agent_run_id }))
 }
 

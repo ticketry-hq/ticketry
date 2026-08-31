@@ -53,7 +53,7 @@ fn public_errors_discard_private_service_details() {
 
 #[test]
 fn generated_contract_pins_the_restricted_mutation_bundle() {
-    let sdl = include_str!("../../../../../src/graphql-foundation/generated/schema.graphql");
+    let sdl = include_str!("../../../../../../../src/graphql-foundation/generated/schema.graphql");
     let graph_run = sdl
         .split("type GraphRuns {")
         .nth(1)

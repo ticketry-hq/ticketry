@@ -18,8 +18,9 @@ pub(crate) struct DesktopServiceState {
         Option<std::sync::Arc<ticketry_terminal::terminal::lifecycle::TerminalLifecycleRuntime>>,
     >,
     pub(crate) hook_spool_runtime: Mutex<Option<ticketry_runs::hook_spool::HookSpoolRuntime>>,
-    pub(crate) execution_runtime:
-        Mutex<Option<crate::execution::reconciliation::ExecutionReconciliationRuntime>>,
+    pub(crate) execution_runtime: Mutex<
+        Option<ticketry_agent_execution::execution::reconciliation::ExecutionReconciliationRuntime>,
+    >,
     pub(crate) terminal_launch:
         Mutex<Option<ticketry_terminal::terminal::launch::TerminalLaunchService>>,
     pub(crate) output_sweep:

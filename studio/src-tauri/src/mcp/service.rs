@@ -23,7 +23,7 @@ pub struct WorktrackerMcpService {
     storage: AttachmentStorage,
     authority: RunAuthority,
     launch_policy: LaunchPolicyResolver,
-    graph_runs: Option<crate::graph_run_service::GraphRunService>,
+    graph_runs: Option<ticketry_agent_execution::graph_run_service::GraphRunService>,
     terminal_cleanup: TerminalCleanupService,
     terminal_launch: Option<ticketry_terminal::terminal::launch::TerminalLaunchService>,
     readiness_data_directory: PathBuf,
@@ -36,7 +36,7 @@ impl WorktrackerMcpService {
         storage: AttachmentStorage,
         authority: RunAuthority,
         launch_policy: LaunchPolicyResolver,
-        graph_runs: Option<crate::graph_run_service::GraphRunService>,
+        graph_runs: Option<ticketry_agent_execution::graph_run_service::GraphRunService>,
         terminal_cleanup: TerminalCleanupService,
         terminal_launch: Option<ticketry_terminal::terminal::launch::TerminalLaunchService>,
         readiness_data_directory: PathBuf,
@@ -72,7 +72,7 @@ pub(super) async fn execute_launch_decision(
     let Some(service) = service else {
         return Err(());
     };
-    crate::execution::launch_delivery::execute(database, service, decision)
+    ticketry_agent_execution::execution::launch_delivery::execute(database, service, decision)
         .await
         .map_err(|error| {
             eprintln!(

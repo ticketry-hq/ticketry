@@ -111,18 +111,19 @@ pub(crate) fn launch_rust_runtime(
     let (_, hook_spool_runtime) =
         tauri::async_runtime::block_on(periodic_spool.start(provider_hook_sweep_interval()))
             .map_err(|error| format!("provider hook ingestion startup failed: {error}"))?;
-    let execution_service = crate::execution::reconciliation::ExecutionReconciliationService::new(
-        database.clone(),
-        ticketry_work_management::work_management::launch_policy::LaunchPolicyResolver::new(
+    let execution_service =
+        ticketry_agent_execution::execution::reconciliation::ExecutionReconciliationService::new(
             database.clone(),
-        ),
-        terminal_launch.clone(),
-    );
+            ticketry_work_management::work_management::launch_policy::LaunchPolicyResolver::new(
+                database.clone(),
+            ),
+            terminal_launch.clone(),
+        );
     let execution_runtime = tauri::async_runtime::block_on(
-        crate::execution::reconciliation::ExecutionReconciliationRuntime::start(
+        ticketry_agent_execution::execution::reconciliation::ExecutionReconciliationRuntime::start(
             execution_service,
             Arc::clone(&terminal_runtime),
-            crate::execution::reconciliation::ExecutionReconciliationConfig::default(),
+            ticketry_agent_execution::execution::reconciliation::ExecutionReconciliationConfig::default(),
         ),
     )
     .map_err(|error| format!("execution reconciliation startup failed: {error}"))?;

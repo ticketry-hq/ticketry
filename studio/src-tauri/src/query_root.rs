@@ -183,26 +183,28 @@ fn build_schema(
             .unwrap_or_else(|| database.clone())
     });
     let graph_run_service = match (worktracker_database.as_ref(), terminal_services.as_ref()) {
-        (Some(work_items), Some(terminals)) => {
-            Some(crate::graph_run_service::GraphRunService::production(
+        (Some(work_items), Some(terminals)) => Some(
+            ticketry_agent_execution::graph_run_service::GraphRunService::production(
                 work_items.clone(),
                 ticketry_work_management::work_management::launch_policy::LaunchPolicyResolver::new(
                     work_items.clone(),
                 ),
                 terminals.launch.clone(),
-            ))
-        }
+            ),
+        ),
         _ => None,
     };
     let run_now_service = match (worktracker_database.as_ref(), terminal_services.as_ref()) {
-        (Some(work_items), Some(terminals)) => Some(crate::execution::run_now::RunNowService::new(
-            work_items.clone(),
-            ticketry_work_management::work_management::launch_policy::LaunchPolicyResolver::new(
+        (Some(work_items), Some(terminals)) => Some(
+            ticketry_agent_execution::execution::run_now::RunNowService::new(
                 work_items.clone(),
+                ticketry_work_management::work_management::launch_policy::LaunchPolicyResolver::new(
+                    work_items.clone(),
+                ),
+                terminals.launch.clone(),
+                work_facts.clone(),
             ),
-            terminals.launch.clone(),
-            work_facts.clone(),
-        )),
+        ),
         _ => None,
     };
     let mut builder = Builder::new(&CONTEXT, entity_database.clone());
@@ -247,9 +249,9 @@ fn build_schema(
     let builder = ticketry_terminal::terminal::launch::register_graphql(builder);
     let builder = ticketry_terminal::terminal::cleanup::register_graphql(builder);
     let builder = ticketry_terminal::terminal::session::register_graphql(builder);
-    let builder = crate::execution::run_now::register_graphql(builder);
+    let builder = ticketry_agent_execution::execution::run_now::register_graphql(builder);
     let builder = if contract.product_generated_mutations {
-        crate::execution::graph_run::register_graphql(builder)
+        ticketry_agent_execution::execution::graph_run::register_graphql(builder)
     } else {
         builder
     };
@@ -260,7 +262,7 @@ fn build_schema(
         ticketry_workspace_runtime::workspace::directory_completion_query::register(builder);
     let mut schema = builder.schema_builder().data(entity_database);
     if contract.product_generated_mutations {
-        schema = schema.data(crate::graph_run_service::GraphRunCaller);
+        schema = schema.data(ticketry_agent_execution::graph_run_service::GraphRunCaller);
     }
     if let Some(graph_run_service) = graph_run_service {
         schema = schema.data(graph_run_service);
@@ -354,7 +356,7 @@ fn build_schema(
         schema = schema.data(ticketry_workspace_runtime::worktree::changes::MergePreparationService::new(
             changes,
             std::sync::Arc::new(
-                crate::execution::merge_preparation_launcher::TerminalMergePreparationLauncher::new(
+                ticketry_agent_execution::execution::merge_preparation_launcher::TerminalMergePreparationLauncher::new(
                     work_items.clone(),
                     terminals.launch.clone(),
                 ),

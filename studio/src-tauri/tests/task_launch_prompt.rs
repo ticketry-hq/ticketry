@@ -6,9 +6,9 @@ use std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use common::submitted_launch_authority::launch_service;
 use common::terminal_lifecycle_harness::{TerminalLifecycleHarness, MODULE_ID, TASK_ID};
-use muxed_studio_lib::execution::reconciliation::ExecutionReconciliationService;
-use muxed_studio_lib::execution::run_now::{RunNowCaller, RunNowRequest, RunNowService};
 use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter};
+use ticketry_agent_execution::execution::reconciliation::ExecutionReconciliationService;
+use ticketry_agent_execution::execution::run_now::{RunNowCaller, RunNowRequest, RunNowService};
 use ticketry_entities::terminals::launch_material;
 use ticketry_launch::terminal_session::TerminalLaunchError;
 use ticketry_terminal::terminal::launch::{

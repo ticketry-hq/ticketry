@@ -15,4 +15,6 @@ pub use types::{
 };
 
 pub use graphql_scope::GraphRunCaller;
-pub(crate) use graphql_scope::GraphRunReadScope;
+/// Public because the assembled schema in the root crate installs this read
+/// scope on the GraphQL context (`query_root::context`).
+pub use graphql_scope::GraphRunReadScope;

@@ -94,7 +94,9 @@ impl GraphRunService {
         }
     }
 
-    pub(crate) fn production(
+    /// Public because the MCP listener and the assembled query root both build
+    /// the production graph-run service from the root crate.
+    pub fn production(
         database: DatabaseConnection,
         policy: LaunchPolicyResolver,
         terminal_launch: TerminalLaunchService,

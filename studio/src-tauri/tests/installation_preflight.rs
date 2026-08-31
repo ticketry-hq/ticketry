@@ -746,7 +746,7 @@ async fn adopt_every_capability(data_directory: &Path) {
     ticketry_runs::persistence::adopt(data_directory)
         .await
         .expect("adopt Runs");
-    muxed_studio_lib::execution::persistence::adopt(data_directory)
+    ticketry_agent_execution::execution::persistence::adopt(data_directory)
         .await
         .expect("adopt graph execution");
     ticketry_terminal::terminal::persistence::adopt(data_directory)

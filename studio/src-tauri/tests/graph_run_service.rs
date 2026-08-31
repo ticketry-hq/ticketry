@@ -8,12 +8,12 @@ use common::submitted_launch_authority::launch_service;
 use common::terminal_lifecycle_harness::{
     TerminalLifecycleHarness, MODULE_ID, PROJECT_ID, TASK_ID,
 };
-use muxed_studio_lib::execution::graph::{ExecutionMode, GraphAccess};
-use muxed_studio_lib::execution::reconciliation::ExecutionReconciliationService;
-use muxed_studio_lib::graph_run_service::GraphRunCaller;
-use muxed_studio_lib::graph_run_service::{GraphRunRequest, GraphRunService};
 use sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, Statement};
 use seaography::{Builder, BuilderContext};
+use ticketry_agent_execution::execution::graph::{ExecutionMode, GraphAccess};
+use ticketry_agent_execution::execution::reconciliation::ExecutionReconciliationService;
+use ticketry_agent_execution::graph_run_service::GraphRunCaller;
+use ticketry_agent_execution::graph_run_service::{GraphRunRequest, GraphRunService};
 use ticketry_entities::{runs::agent_run, terminals::launch_material};
 use ticketry_launch::terminal_session::TerminalLaunchError;
 use ticketry_terminal::terminal::launch::{
@@ -185,7 +185,7 @@ async fn graph_run_graphql_contract_returns_authoritative_models_and_child_ids()
     ));
     let mut builder = ticketry_entities::execution::register_entity_modules(builder);
     seaography::register_entity!(builder, agent_run, mutation: false);
-    let schema = muxed_studio_lib::execution::graph_run::register_graphql(builder)
+    let schema = ticketry_agent_execution::execution::graph_run::register_graphql(builder)
         .schema_builder()
         .data(database.clone())
         .data(service)
@@ -741,7 +741,7 @@ async fn seed(database: &DatabaseConnection, directory: &std::path::Path) {
         .expect("link the harness module");
 }
 
-fn task_ids(result: &muxed_studio_lib::graph_run_service::GraphRunResult) -> Vec<&str> {
+fn task_ids(result: &ticketry_agent_execution::graph_run_service::GraphRunResult) -> Vec<&str> {
     result
         .launched
         .iter()

@@ -16,7 +16,7 @@ const GRAPH_RUNS: &str = "GraphRuns";
 #[doc(hidden)]
 pub struct GraphRunCaller;
 
-pub(crate) struct GraphRunReadScope;
+pub struct GraphRunReadScope;
 
 impl LifecycleHooksInterface for GraphRunReadScope {
     fn entity_guard(

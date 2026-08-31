@@ -546,10 +546,10 @@ pub async fn adopt_worktracker_and_install(
     // Execution campaigns depend on adopted Work Management, Runs, and
     // Terminal identities. Classify and validate them only after those three
     // stores are ready, and before any future Graph Run command is composed.
-    crate::execution::persistence::preflight(data_directory)
+    ticketry_agent_execution::execution::persistence::preflight(data_directory)
         .await
         .map_err(execution_adoption_error)?;
-    crate::execution::persistence::adopt(data_directory)
+    ticketry_agent_execution::execution::persistence::adopt(data_directory)
         .await
         .map_err(execution_adoption_error)?;
     // The Documents and Worktrees write leases change hands here, after Runs
@@ -623,7 +623,7 @@ fn terminal_adoption_error(
 }
 
 fn execution_adoption_error(
-    error: crate::execution::persistence::ExecutionPersistenceError,
+    error: ticketry_agent_execution::execution::persistence::ExecutionPersistenceError,
 ) -> FoundationInitializationError {
     FoundationInitializationError::new(
         FoundationInitializationErrorCode::WorktrackerDatabaseOpen,

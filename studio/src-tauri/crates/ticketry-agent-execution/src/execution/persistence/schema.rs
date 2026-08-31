@@ -45,7 +45,7 @@ pub const POLICY_EFFECT_COLUMNS: &[&str] = &[
     "updated_at",
 ];
 
-pub(crate) async fn install(
+pub async fn install(
     database: &sea_orm::DatabaseConnection,
     source_leaf: &str,
     stable_digest: &str,
@@ -186,7 +186,7 @@ fn migration_number(leaf: &str) -> Result<usize, ExecutionPersistenceError> {
         .ok_or_else(|| incompatible(format!("unknown execution migration leaf '{leaf}'")))
 }
 
-pub(crate) async fn columns(
+pub async fn columns(
     database: &impl ConnectionTrait,
     table: &str,
 ) -> Result<BTreeSet<String>, ExecutionPersistenceError> {

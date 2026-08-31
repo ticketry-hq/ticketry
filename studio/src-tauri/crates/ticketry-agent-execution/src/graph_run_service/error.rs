@@ -21,7 +21,7 @@ pub struct GraphRunServiceError {
 }
 
 impl GraphRunServiceError {
-    pub(crate) fn new(
+    pub fn new(
         code: GraphRunServiceErrorCode,
         public_code: impl Into<String>,
         message: impl Into<String>,

@@ -52,7 +52,10 @@ async fn main() {
     );
 }
 
-fn rows(evidence: &muxed_studio_lib::execution::persistence::AdoptionEvidence, table: &str) -> i64 {
+fn rows(
+    evidence: &ticketry_agent_execution::execution::persistence::AdoptionEvidence,
+    table: &str,
+) -> i64 {
     evidence
         .tables
         .get(table)
@@ -90,7 +93,7 @@ async fn adopt(
     data_directory: &Path,
     pass: &str,
 ) -> (
-    muxed_studio_lib::execution::persistence::AdoptionEvidence,
+    ticketry_agent_execution::execution::persistence::AdoptionEvidence,
     String,
 ) {
     ticketry_runs::persistence::preflight(data_directory)
@@ -109,14 +112,14 @@ async fn adopt(
     ticketry_terminal::terminal::persistence::adopt(data_directory)
         .await
         .unwrap_or_else(|error| fail(&format!("{pass} Terminal adoption failed: {error}")));
-    let source = muxed_studio_lib::execution::persistence::preflight(data_directory)
+    let source = ticketry_agent_execution::execution::persistence::preflight(data_directory)
         .await
         .unwrap_or_else(|error| {
             fail(&format!(
                 "{pass} Execution adoption preflight failed: {error}"
             ))
         });
-    let evidence = muxed_studio_lib::execution::persistence::adopt(data_directory)
+    let evidence = ticketry_agent_execution::execution::persistence::adopt(data_directory)
         .await
         .unwrap_or_else(|error| fail(&format!("{pass} Execution adoption failed: {error}")));
     (

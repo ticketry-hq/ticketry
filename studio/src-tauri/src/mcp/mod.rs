@@ -119,7 +119,7 @@ impl McpRuntime {
                 database.clone(),
             );
         let graph_runs = terminal_launch.clone().map(|terminal_launch| {
-            crate::graph_run_service::GraphRunService::production(
+            ticketry_agent_execution::graph_run_service::GraphRunService::production(
                 database.clone(),
                 launch_policy.clone(),
                 terminal_launch,

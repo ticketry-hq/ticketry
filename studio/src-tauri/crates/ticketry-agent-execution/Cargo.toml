@@ -1,0 +1,25 @@
+[package]
+name = "ticketry-agent-execution"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+async-graphql.workspace = true
+async-trait.workspace = true
+chrono.workspace = true
+sea-orm.workspace = true
+seaography.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+ticketry-diagnostics.workspace = true
+ticketry-entities.workspace = true
+ticketry-launch.workspace = true
+ticketry-runs.workspace = true
+ticketry-terminal.workspace = true
+ticketry-work-management.workspace = true
+ticketry-workspace-runtime.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+uuid.workspace = true

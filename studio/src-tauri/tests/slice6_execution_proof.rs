@@ -606,7 +606,7 @@ fn string_list(value: &Value, context: &Value) -> Vec<String> {
 }
 
 fn launched_by(
-    report: &muxed_studio_lib::execution::reconciliation::ExecutionReconciliationReport,
+    report: &ticketry_agent_execution::execution::reconciliation::ExecutionReconciliationReport,
 ) -> Vec<String> {
     let mut launched = report
         .roots

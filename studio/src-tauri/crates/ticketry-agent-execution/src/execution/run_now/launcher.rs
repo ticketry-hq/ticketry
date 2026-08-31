@@ -11,13 +11,13 @@ pub trait RunNowLauncher: Send + Sync {
     async fn launch(&self, decision: &LaunchPolicyDecision) -> Result<RunNowRun, String>;
 }
 
-pub(crate) struct TerminalRunNowLauncher {
+pub struct TerminalRunNowLauncher {
     database: DatabaseConnection,
     terminals: TerminalLaunchService,
 }
 
 impl TerminalRunNowLauncher {
-    pub(crate) fn new(database: DatabaseConnection, terminals: TerminalLaunchService) -> Self {
+    pub fn new(database: DatabaseConnection, terminals: TerminalLaunchService) -> Self {
         Self {
             database,
             terminals,

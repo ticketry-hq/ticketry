@@ -7,7 +7,7 @@ pub enum RunNowCaller {
 }
 
 impl RunNowCaller {
-    pub(crate) fn excluded_run_id(&self) -> Option<&str> {
+    pub fn excluded_run_id(&self) -> Option<&str> {
         match self {
             Self::Human => None,
             Self::Agent {

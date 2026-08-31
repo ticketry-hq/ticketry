@@ -29,7 +29,7 @@ impl GraphAccess {
         }
     }
 
-    pub(crate) fn allows(&self, project_id: &str, root_id: &str) -> bool {
+    pub fn allows(&self, project_id: &str, root_id: &str) -> bool {
         self.project_id == project_id
             && self
                 .authorized_root_ids
@@ -83,7 +83,7 @@ pub enum ExecutionMode {
     Serial,
 }
 
-pub(crate) fn compact_id(value: String) -> String {
+pub fn compact_id(value: String) -> String {
     uuid::Uuid::parse_str(&value)
         .map(|identifier| identifier.simple().to_string())
         .unwrap_or(value)

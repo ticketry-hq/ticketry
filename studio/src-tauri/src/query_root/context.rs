@@ -153,7 +153,7 @@ pub(super) fn builder_context() -> BuilderContext {
     context.hooks = LifecycleHooks::new(
         MultiLifecycleHooks::default()
             .add(ticketry_terminal::terminal::persistence::TerminalReadScope)
-            .add(crate::graph_run_service::GraphRunReadScope),
+            .add(ticketry_agent_execution::graph_run_service::GraphRunReadScope),
     );
 
     context

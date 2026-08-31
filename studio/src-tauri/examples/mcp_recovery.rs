@@ -3,7 +3,7 @@ use std::net::{Ipv4Addr, SocketAddr};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let data_directory = muxed_studio_lib::data_directory::established_data_directory()?;
+    let data_directory = ticketry_data_directory::established_data_directory()?;
     let runtime = McpRuntime::start(McpConfiguration {
         address: SocketAddr::from((Ipv4Addr::LOCALHOST, 8123)),
         database_path: data_directory.join("state.db"),

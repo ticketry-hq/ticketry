@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use super::diagnostics::ToolDiagnostic;
 use super::probe::{inspect_candidate, version_probe};
 use super::supported_tools::SupportedTool;
-use crate::data_directory::established_data_directory;
+use ticketry_data_directory::established_data_directory;
 
 pub(super) const APPROVED_PATHS_FILE: &str = "approved-executables.json";
 

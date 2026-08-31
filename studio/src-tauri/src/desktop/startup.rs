@@ -4,7 +4,7 @@
 
 use tauri::Manager;
 
-use crate::data_directory::established_data_directory;
+use ticketry_data_directory::established_data_directory;
 use crate::desktop::data_directory::DesktopDataDirectoryOwnership;
 use crate::desktop::environment::automated_startup_exit_requested;
 use crate::desktop::launch_runtime::DesktopLaunchRuntime;

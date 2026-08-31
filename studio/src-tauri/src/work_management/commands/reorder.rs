@@ -50,7 +50,7 @@ async fn reorder(
     facts: Option<&WorkFactRecorder>,
     kind: ReorderKind,
 ) -> Result<String, CommandError> {
-    crate::diagnostics::record_story_move(
+    ticketry_diagnostics::record_story_move(
         "info",
         "backend-reorder-started",
         serde_json::json!({
@@ -92,7 +92,7 @@ async fn reorder(
                 .to_owned(),
             )
         })?;
-    crate::diagnostics::record_story_move(
+    ticketry_diagnostics::record_story_move(
         "info",
         "backend-reorder-candidate-loaded",
         serde_json::json!({
@@ -142,7 +142,7 @@ async fn reorder(
     }
 
     transaction.commit().await?;
-    crate::diagnostics::record_story_move(
+    ticketry_diagnostics::record_story_move(
         "info",
         "backend-reorder-committed",
         serde_json::json!({"id": id}),
@@ -205,7 +205,7 @@ async fn reorder_task(
 ) -> Result<(), CommandError> {
     let before = task_neighbor(database, &current, before_id).await?;
     let after = task_neighbor(database, &current, after_id).await?;
-    crate::diagnostics::record_story_move(
+    ticketry_diagnostics::record_story_move(
         "info",
         "backend-reorder-neighbors-loaded",
         serde_json::json!({
@@ -238,7 +238,7 @@ async fn reorder_task(
                 .zip(after.as_ref())
                 .is_some_and(|(before, after)| before.rank == after.rank) =>
         {
-            crate::diagnostics::record_story_move(
+            ticketry_diagnostics::record_story_move(
                 "warn",
                 "backend-reorder-duplicate-ranks",
                 serde_json::json!({
@@ -257,7 +257,7 @@ async fn reorder_task(
             ));
         }
     };
-    crate::diagnostics::record_story_move(
+    ticketry_diagnostics::record_story_move(
         "info",
         "backend-reorder-rank-computed",
         serde_json::json!({"id": current.id, "old_rank": current.rank, "new_rank": rank}),

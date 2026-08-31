@@ -154,7 +154,7 @@ fn forced_quit_relaunches_without_manual_cleanup() {
     let status = std::process::Command::new(env::current_exe().expect("test executable"))
         .args([
             "--exact",
-            "data_directory::tests::forced_quit_child",
+            "tests::forced_quit_child",
             "--nocapture",
         ])
         .env("MUXED_OWNERSHIP_FORCED_QUIT_DIRECTORY", &directory)

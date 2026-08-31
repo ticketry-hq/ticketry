@@ -24,6 +24,13 @@ fn every_module_belongs_to_a_target_slice() {
         "these `src/` modules have no entry in SLICES; give each one a target \
          crate in module_graph_support::SLICES: {unassigned:?}"
     );
+
+    let stale = module_graph_support::stale_slice_entries();
+    assert!(
+        stale.is_empty(),
+        "these SLICES entries name modules that are no longer under src/; they \
+         have been extracted, so delete their entries: {stale:?}"
+    );
 }
 
 #[test]
@@ -66,7 +73,7 @@ fn tauri_commands_live_only_in_the_desktop_shell() {
 
     let offenders: Vec<_> = declaring
         .iter()
-        .filter(|module| slice_of(module) != Some("desktop"))
+        .filter(|module| slice_of(module).as_deref() != Some("desktop"))
         .filter(|module| !ALLOWED_COMMAND_MODULES_OUTSIDE_DESKTOP.contains(&module.as_str()))
         .collect();
     assert!(

@@ -71,7 +71,7 @@ fn private_copy_argument() -> PathBuf {
     let supplied = data_directory
         .canonicalize()
         .unwrap_or_else(|_| fail("could not resolve the supplied data directory"));
-    let established = muxed_studio_lib::data_directory::established_data_directory()
+    let established = ticketry_data_directory::established_data_directory()
         .unwrap_or_else(|_| fail("could not resolve the established data directory"));
     let established = established.canonicalize().unwrap_or(established);
     if supplied == established {

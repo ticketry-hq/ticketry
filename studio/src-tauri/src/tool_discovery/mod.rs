@@ -21,7 +21,7 @@ use diagnostics::{
 use probe::{inspect_candidate, version_probe};
 use supported_tools::SUPPORTED_TOOLS;
 
-use crate::data_directory::established_data_directory;
+use ticketry_data_directory::established_data_directory;
 
 pub use approved_paths::approve_executable_path;
 pub use diagnostics::{AccessHint, PreflightReport, ToolDiagnostic, ToolHealth};

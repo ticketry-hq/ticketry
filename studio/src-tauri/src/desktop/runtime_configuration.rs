@@ -19,7 +19,7 @@ pub(crate) fn development_runtime_configuration() -> Result<RuntimeStartupConfig
 
 pub(crate) fn rust_runtime_configuration() -> RuntimeStartupConfiguration {
     RuntimeStartupConfiguration {
-        runtime_instance: crate::diagnostics::runtime_instance().to_owned(),
+        runtime_instance: ticketry_diagnostics::runtime_instance().to_owned(),
         service_health: ServiceHealth::ready(),
         initial_notices: Vec::new(),
     }
@@ -27,7 +27,7 @@ pub(crate) fn rust_runtime_configuration() -> RuntimeStartupConfiguration {
 
 pub(crate) fn failed_runtime_configuration(health: ServiceHealth) -> RuntimeStartupConfiguration {
     RuntimeStartupConfiguration {
-        runtime_instance: crate::diagnostics::runtime_instance().to_owned(),
+        runtime_instance: ticketry_diagnostics::runtime_instance().to_owned(),
         service_health: health,
         initial_notices: Vec::new(),
     }

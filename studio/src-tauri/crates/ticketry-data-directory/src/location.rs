@@ -12,7 +12,7 @@ use serde::Deserialize;
 
 use super::error::OwnershipError;
 
-const PRODUCT_IDENTITY_JSON: &str = include_str!("../../../../config/product-identity.json");
+const PRODUCT_IDENTITY_JSON: &str = include_str!("../../../../../config/product-identity.json");
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]

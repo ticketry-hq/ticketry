@@ -3,6 +3,7 @@
 //! architecture guard tests; see `studio/docs/crate-split-plan.md`.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::{Mutex, OnceLock};
 use std::path::{Path, PathBuf};
 
 use syn::visit::Visit;
@@ -15,8 +16,6 @@ use syn::{Attribute, ImplItem, Item, Meta, UseTree};
 pub const SLICES: &[(&str, &str)] = &[
     ("entities", "entities"),
     ("graphql_scalars", "entities"),
-    ("diagnostics", "diagnostics"),
-    ("data_directory", "data-directory"),
     ("tool_discovery", "tool-discovery"),
     ("settings_persistence", "settings"),
     ("runs_persistence", "runs-persistence"),
@@ -64,16 +63,23 @@ impl ModuleGraph {
         for module in top_level_modules(&source_root) {
             let mut reached = BTreeSet::new();
             for file in module_files(&source_root, &module) {
-                let text = std::fs::read_to_string(&file)
-                    .unwrap_or_else(|error| panic!("read {}: {error}", file.display()));
-                let parsed = syn::parse_file(&text)
-                    .unwrap_or_else(|error| panic!("parse {}: {error}", file.display()));
-                let mut collector = CrateReferences::default();
-                collector.visit_file(&parsed);
-                reached.extend(collector.reached);
+                reached.extend(references_in(&file));
             }
             reached.remove(&module);
             edges.insert(module, reached);
+        }
+        // Already-extracted crates are single nodes: their name is their slice,
+        // and they reach other slices only through `ticketry_<slice>::` paths.
+        for (slice, directory) in extracted_crates() {
+            let mut files = Vec::new();
+            collect_rust_files(&directory.join("src"), &mut files);
+            files.retain(|file| !is_test_file(file));
+            let mut reached = BTreeSet::new();
+            for file in &files {
+                reached.extend(references_in(file));
+            }
+            reached.remove(&slice);
+            edges.insert(slice, reached);
         }
         Self { edges }
     }
@@ -117,6 +123,9 @@ impl ModuleGraph {
         for (_, slice) in SLICES {
             slice_edges.entry(slice).or_default();
         }
+        for (slice, _) in extracted_crates() {
+            slice_edges.entry(intern(slice)).or_default();
+        }
         for (from, to) in self.edges() {
             if allowed.contains(&(from, to)) {
                 continue;
@@ -125,7 +134,10 @@ impl ModuleGraph {
                 continue;
             };
             if from_slice != to_slice {
-                slice_edges.entry(from_slice).or_default().insert(to_slice);
+                slice_edges
+                    .entry(intern(from_slice))
+                    .or_default()
+                    .insert(intern(to_slice));
             }
         }
         let adjacency: BTreeMap<&str, Vec<&str>> = slice_edges
@@ -140,11 +152,56 @@ impl ModuleGraph {
     }
 }
 
-pub fn slice_of(module: &str) -> Option<&'static str> {
+/// The slice a graph node belongs to. Extracted crates are their own slice,
+/// so their name resolves to itself; `src/` modules come from [`SLICES`].
+pub fn slice_of(module: &str) -> Option<String> {
+    if extracted_crates().iter().any(|(slice, _)| slice == module) {
+        return Some(module.to_owned());
+    }
     SLICES
         .iter()
         .find(|(name, _)| *name == module)
-        .map(|(_, slice)| *slice)
+        .map(|(_, slice)| (*slice).to_owned())
+}
+
+/// `(slice name, crate directory)` for every already-extracted crate.
+pub fn extracted_crates() -> Vec<(String, PathBuf)> {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("crates");
+    let Ok(entries) = std::fs::read_dir(root) else {
+        return Vec::new();
+    };
+    let mut crates: Vec<_> = entries
+        .flatten()
+        .filter(|entry| entry.path().is_dir())
+        .filter_map(|entry| {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            name.strip_prefix("ticketry-")
+                .map(|slice| (slice.to_owned(), entry.path()))
+        })
+        .collect();
+    crates.sort();
+    crates
+}
+
+/// `SLICES` entries whose module is no longer under `src/`.
+pub fn stale_slice_entries() -> Vec<&'static str> {
+    let source_root = source_root();
+    let present = top_level_modules(&source_root);
+    SLICES
+        .iter()
+        .map(|(module, _)| *module)
+        .filter(|module| !present.iter().any(|found| found == module))
+        .collect()
+}
+
+fn references_in(file: &Path) -> BTreeSet<String> {
+    let text = std::fs::read_to_string(file)
+        .unwrap_or_else(|error| panic!("read {}: {error}", file.display()));
+    let parsed = syn::parse_file(&text)
+        .unwrap_or_else(|error| panic!("parse {}: {error}", file.display()));
+    let mut collector = CrateReferences::default();
+    collector.visit_file(&parsed);
+    collector.reached
 }
 
 /// Modules that still declare `#[tauri::command]` outside the desktop shell.
@@ -256,15 +313,25 @@ impl<'ast> Visit<'ast> for CrateReferences {
     }
 
     fn visit_path(&mut self, path: &'ast syn::Path) {
-        if path.leading_colon.is_none()
-            && path.segments.len() >= 2
-            && path.segments[0].ident == "crate"
-        {
-            self.reached
-                .insert(path.segments[1].ident.to_string());
+        if path.leading_colon.is_none() && !path.segments.is_empty() {
+            let first = path.segments[0].ident.to_string();
+            if first == "crate" && path.segments.len() >= 2 {
+                self.reached.insert(path.segments[1].ident.to_string());
+            } else if let Some(slice) = extracted_crate_slice(&first) {
+                self.reached.insert(slice);
+            }
         }
         syn::visit::visit_path(self, path);
     }
+}
+
+/// `ticketry_data_directory` -> `data-directory`, when that crate exists.
+fn extracted_crate_slice(ident: &str) -> Option<String> {
+    let slice = ident.strip_prefix("ticketry_")?.replace('_', "-");
+    extracted_crates()
+        .into_iter()
+        .any(|(name, _)| name == slice)
+        .then_some(slice)
 }
 
 fn collect_use_tree(tree: &UseTree, after_crate: bool, reached: &mut BTreeSet<String>) {
@@ -274,6 +341,8 @@ fn collect_use_tree(tree: &UseTree, after_crate: bool, reached: &mut BTreeSet<St
                 reached.insert(path.ident.to_string());
             } else if path.ident == "crate" {
                 collect_use_tree(&path.tree, true, reached);
+            } else if let Some(slice) = extracted_crate_slice(&path.ident.to_string()) {
+                reached.insert(slice);
             }
         }
         UseTree::Name(name) if after_crate => {
@@ -401,4 +470,19 @@ fn strongly_connected_components<'a>(
         }
     }
     state.components
+}
+
+/// Slice names are compared as `&'static str` inside the cycle finder, but
+/// extracted crate names are discovered at runtime. Leaking each distinct name
+/// once keeps the finder allocation-free without a lifetime parameter.
+fn intern(name: String) -> &'static str {
+    static NAMES: OnceLock<Mutex<BTreeSet<&'static str>>> = OnceLock::new();
+    let names = NAMES.get_or_init(|| Mutex::new(BTreeSet::new()));
+    let mut names = names.lock().expect("interned slice names lock poisoned");
+    if let Some(existing) = names.iter().find(|existing| ***existing == *name) {
+        return existing;
+    }
+    let leaked: &'static str = Box::leak(name.into_boxed_str());
+    names.insert(leaked);
+    leaked
 }

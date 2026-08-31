@@ -185,9 +185,9 @@ impl EffectService {
             .await?;
         transaction.commit().await?;
         let trace = || {
-            crate::diagnostics::LaunchDiscoveryRecord::new(
+            ticketry_diagnostics::LaunchDiscoveryRecord::new(
                 "launch-transaction-committed",
-                crate::diagnostics::runtime_instance(),
+                ticketry_diagnostics::runtime_instance(),
                 Some(&intent.project_id),
                 Some(&intent.agent_run_id),
                 Some(cursor),
@@ -204,12 +204,12 @@ impl EffectService {
                 serde_json::json!(self.events().wakeup_authority_instance()),
             )
         };
-        crate::diagnostics::record_launch_discovery(trace());
+        ticketry_diagnostics::record_launch_discovery(trace());
         self.events().wake_committed();
-        crate::diagnostics::record_launch_discovery(
-            crate::diagnostics::LaunchDiscoveryRecord::new(
+        ticketry_diagnostics::record_launch_discovery(
+            ticketry_diagnostics::LaunchDiscoveryRecord::new(
                 "wake-up-published",
-                crate::diagnostics::runtime_instance(),
+                ticketry_diagnostics::runtime_instance(),
                 Some(&intent.project_id),
                 Some(&intent.agent_run_id),
                 Some(cursor),

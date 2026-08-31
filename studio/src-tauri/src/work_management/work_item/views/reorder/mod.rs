@@ -11,7 +11,6 @@ use seaography::{
 use crate::work_management::{
     commands::reorder,
     graphql::{authoritative_work_item, command_database, command_error, work_facts},
-    read_types as output,
 };
 
 pub(super) struct ReorderWorkItemMutation;
@@ -26,7 +25,7 @@ impl ReorderWorkItemMutation {
         initial_order_ids: Option<StringList>,
     ) -> Result<crate::entities::work_management::issue::Model> {
         let database = command_database(ctx)?;
-        crate::diagnostics::record_story_move(
+        ticketry_diagnostics::record_story_move(
             "info",
             "graphql-reorder-requested",
             serde_json::json!({
@@ -49,7 +48,7 @@ impl ReorderWorkItemMutation {
         .await;
         let id = match result {
             Ok(id) => {
-                crate::diagnostics::record_story_move(
+                ticketry_diagnostics::record_story_move(
                     "info",
                     "graphql-reorder-succeeded",
                     serde_json::json!({"id": id}),
@@ -57,7 +56,7 @@ impl ReorderWorkItemMutation {
                 id
             }
             Err(error) => {
-                crate::diagnostics::record_story_move(
+                ticketry_diagnostics::record_story_move(
                     "error",
                     "graphql-reorder-failed",
                     serde_json::json!({
@@ -72,7 +71,7 @@ impl ReorderWorkItemMutation {
         };
         let authoritative = authoritative_work_item(database, &id).await;
         if let Err(error) = &authoritative {
-            crate::diagnostics::record_story_move(
+            ticketry_diagnostics::record_story_move(
                 "error",
                 "graphql-reorder-readback-failed",
                 serde_json::json!({"id": id, "message": error.message}),

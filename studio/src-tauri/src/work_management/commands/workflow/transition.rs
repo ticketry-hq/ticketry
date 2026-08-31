@@ -59,7 +59,7 @@ pub async fn transition_with_expectation(
 ) -> Result<String, CommandError> {
     let id = database_uuid(&input.id, "id")?;
     let target_id = database_uuid(&input.target_state_id, "target_state_id")?;
-    crate::diagnostics::record_story_move(
+    ticketry_diagnostics::record_story_move(
         "info",
         "backend-transition-started",
         serde_json::json!({
@@ -90,7 +90,7 @@ pub async fn transition_with_expectation(
         .one(&transaction)
         .await?
         .ok_or_else(|| CommandError::NotFound("Work-item type not found.".to_owned()))?;
-    crate::diagnostics::record_story_move(
+    ticketry_diagnostics::record_story_move(
         "info",
         "backend-transition-candidate-loaded",
         serde_json::json!({
@@ -230,7 +230,7 @@ pub async fn transition_with_expectation(
     } else {
         current.rank.clone()
     };
-    crate::diagnostics::record_story_move(
+    ticketry_diagnostics::record_story_move(
         "info",
         "backend-transition-rank-computed",
         serde_json::json!({
@@ -324,7 +324,7 @@ pub async fn transition_with_expectation(
     )
     .await?;
     transaction.commit().await?;
-    crate::diagnostics::record_story_move(
+    ticketry_diagnostics::record_story_move(
         "info",
         "backend-transition-committed",
         serde_json::json!({

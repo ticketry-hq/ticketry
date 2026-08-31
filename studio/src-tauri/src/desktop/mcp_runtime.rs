@@ -3,7 +3,6 @@
 //! provider launches remain blocked.
 
 use crate::desktop::environment::{optional_port, DEVELOPMENT_MCP_PORT_ENV};
-use crate::work_management;
 use std::net::SocketAddr;
 use std::path::Path;
 

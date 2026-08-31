@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 use tauri::Manager;
 
-use crate::data_directory::{established_data_directory, DataDirectoryGuard};
+use ticketry_data_directory::{established_data_directory, DataDirectoryGuard};
 
 /// Kept in Tauri managed state for the process lifetime.
 pub(crate) struct DesktopDataDirectoryOwnership {

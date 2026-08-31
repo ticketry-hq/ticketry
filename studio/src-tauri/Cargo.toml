@@ -76,17 +76,17 @@ async-trait = "=0.1.92"
 axum = { version = "=0.8.9", features = ["ws"] }
 base64 = "0.22"
 blake2 = "0.10"
-chrono = { version = "0.4", default-features = false, features = ["clock"] }
+chrono.workspace = true
 futures-util.workspace = true
 http = "=1.4.2"
-libc = "0.2"
+libc.workspace = true
 notify = "=8.2.0"
 portable-pty = "0.9"
 process-wrap = { version = "9.1", default-features = false, features = [
     "std",
     "process-group",
 ] }
-rand = "0.8"
+rand.workspace = true
 reqwest = { version = "=0.13.4", default-features = false, features = ["json", "rustls"] }
 rmcp = { version = "=3.0.0", features = ["transport-streamable-http-server"] }
 sea-orm = { version = "=2.0.1", features = ["runtime-tokio-rustls", "seaography", "sqlx-postgres", "sqlx-sqlite"] }
@@ -102,25 +102,39 @@ tauri-plugin-dialog = "2.6"
 tauri-plugin-updater = "2"
 tauri-plugin-wdio-webdriver = { version = "=1.3.0", optional = true }
 taurpc.workspace = true
+ticketry-data-directory.workspace = true
+ticketry-diagnostics.workspace = true
 tokio.workspace = true
 tokio-util = "=0.7.18"
-uuid = { version = "1.24", features = ["v4", "v5"] }
+uuid.workspace = true
 
 [dev-dependencies]
 log = "=0.4.33"
 syn = { version = "=2.0.119", features = ["full", "visit"] }
-tempfile = "=3.23.0"
+tempfile.workspace = true
 
 [workspace]
-members = [".", "crates/tauri-graphql"]
+members = [
+    ".",
+    "crates/tauri-graphql",
+    "crates/ticketry-data-directory",
+    "crates/ticketry-diagnostics",
+]
 resolver = "2"
 
 [workspace.dependencies]
 async-graphql = { version = "=7.0.19", features = ["dynamic-schema"] }
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
 futures-util = "=0.3.32"
+libc = "0.2"
+rand = "0.8"
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.151"
 specta = { version = "=2.0.0-rc.25", features = ["derive"] }
 tauri = "=2.11.5"
 taurpc = "=0.8.2"
 tokio = { version = "=1.53.1", features = ["macros", "net", "rt-multi-thread", "sync", "time"] }
+tempfile = "=3.23.0"
+uuid = { version = "1.24", features = ["v4", "v5"] }
+ticketry-data-directory = { path = "crates/ticketry-data-directory" }
+ticketry-diagnostics = { path = "crates/ticketry-diagnostics" }

@@ -144,9 +144,9 @@ trait RecordTrace {
     fn record(self);
 }
 
-impl RecordTrace for crate::diagnostics::LaunchDiscoveryRecord {
+impl RecordTrace for ticketry_diagnostics::LaunchDiscoveryRecord {
     fn record(self) {
-        crate::diagnostics::record_launch_discovery(self);
+        ticketry_diagnostics::record_launch_discovery(self);
     }
 }
 
@@ -156,10 +156,10 @@ impl StreamState {
         event: &str,
         agent_run_id: Option<&str>,
         cursor: Option<i64>,
-    ) -> crate::diagnostics::LaunchDiscoveryRecord {
-        crate::diagnostics::LaunchDiscoveryRecord::new(
+    ) -> ticketry_diagnostics::LaunchDiscoveryRecord {
+        ticketry_diagnostics::LaunchDiscoveryRecord::new(
             event,
-            crate::diagnostics::runtime_instance(),
+            ticketry_diagnostics::runtime_instance(),
             (!self.public_project_id.is_empty()).then_some(self.public_project_id.as_str()),
             agent_run_id,
             cursor,

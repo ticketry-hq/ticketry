@@ -71,7 +71,7 @@ pub(crate) async fn desktop_launch_default_coding_agent(
 pub(crate) fn desktop_append_frontend_log(
     window: tauri::WebviewWindow,
     _state: tauri::State<'_, DesktopServiceState>,
-    log: tauri::State<'_, crate::diagnostics::FileLog>,
+    log: tauri::State<'_, ticketry_diagnostics::FileLog>,
     level: String,
     message: String,
 ) -> Result<(), String> {
@@ -85,7 +85,7 @@ pub(crate) fn desktop_append_frontend_log(
 #[tauri::command]
 pub(crate) fn desktop_file_logging_enabled(
     window: tauri::WebviewWindow,
-    log: tauri::State<'_, crate::diagnostics::FileLog>,
+    log: tauri::State<'_, ticketry_diagnostics::FileLog>,
 ) -> Result<bool, String> {
     if window.label() != MAIN_WINDOW_LABEL {
         return Err("file logging status is restricted to the local main window".to_owned());

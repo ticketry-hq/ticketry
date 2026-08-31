@@ -42,7 +42,7 @@ const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Refuse when a live process other than this one holds the lease.
 pub fn hold_lease(data_directory: &Path) -> Result<(), AdoptionFailure> {
-    if let Some(owner) = crate::data_directory::live_lease_owner(data_directory) {
+    if let Some(owner) = ticketry_data_directory::live_lease_owner(data_directory) {
         if owner.pid != std::process::id() {
             return Err(AdoptionFailure::new(
                 Phase::LeaseAcquisition,

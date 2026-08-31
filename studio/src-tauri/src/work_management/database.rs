@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use sea_orm::{ConnectOptions, Database, DatabaseConnection, DbErr};
 
-use crate::data_directory::{established_data_directory, OwnershipError};
+use ticketry_data_directory::{established_data_directory, OwnershipError};
 
 #[derive(Debug)]
 pub enum ReadDatabaseError {

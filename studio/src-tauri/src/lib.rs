@@ -4,9 +4,7 @@
 //! `main.rs` calls. The desktop shell itself lives in [`desktop`].
 
 pub(crate) mod app_updates;
-pub mod data_directory;
 pub mod desktop;
-pub(crate) mod diagnostics;
 pub mod documents;
 pub mod entities;
 pub mod execution;
@@ -43,13 +41,13 @@ pub fn run_with_file_logging(requested: bool) {
 }
 
 pub fn file_logging_requested(arguments: &[std::ffi::OsString]) -> bool {
-    diagnostics::file_logging_requested(arguments)
+    ticketry_diagnostics::file_logging_requested(arguments)
 }
 
 pub fn configure_file_logging(
     data_directory: &std::path::Path,
     log_path: Option<std::path::PathBuf>,
 ) -> bool {
-    diagnostics::configure_process_file_log(log_path.is_some(), data_directory, log_path)
+    ticketry_diagnostics::configure_process_file_log(log_path.is_some(), data_directory, log_path)
         .is_enabled()
 }

@@ -5,11 +5,11 @@ use std::sync::LazyLock;
 static RUNTIME_INSTANCE: LazyLock<String> =
     LazyLock::new(|| uuid::Uuid::new_v4().simple().to_string());
 
-pub(crate) fn runtime_instance() -> &'static str {
+pub fn runtime_instance() -> &'static str {
     RUNTIME_INSTANCE.as_str()
 }
 
-pub(crate) fn record(record: LaunchDiscoveryRecord) {
+pub fn record(record: LaunchDiscoveryRecord) {
     let log = super::file_log::process_file_log();
     if !log.is_enabled() {
         return;
@@ -19,12 +19,12 @@ pub(crate) fn record(record: LaunchDiscoveryRecord) {
     }
 }
 
-pub(crate) struct LaunchDiscoveryRecord {
+pub struct LaunchDiscoveryRecord {
     fields: Map<String, Value>,
 }
 
 impl LaunchDiscoveryRecord {
-    pub(crate) fn new(
+    pub fn new(
         event: &str,
         runtime_instance: &str,
         project_id: Option<&str>,
@@ -57,12 +57,12 @@ impl LaunchDiscoveryRecord {
         Self { fields }
     }
 
-    pub(crate) fn with_detail(mut self, key: &str, value: Value) -> Self {
+    pub fn with_detail(mut self, key: &str, value: Value) -> Self {
         self.fields.insert(key.to_owned(), value);
         self
     }
 
-    pub(crate) fn into_value(self) -> Value {
+    pub fn into_value(self) -> Value {
         Value::Object(self.fields)
     }
 }

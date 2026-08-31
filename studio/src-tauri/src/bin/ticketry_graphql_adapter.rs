@@ -76,7 +76,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         &data_directory,
         std::env::var_os("MUXED_DEVELOPMENT_LOG_PATH").map(PathBuf::from),
     );
-    let _data_directory_guard = muxed_studio_lib::data_directory::DataDirectoryGuard::acquire(
+    let _data_directory_guard = ticketry_data_directory::DataDirectoryGuard::acquire(
         &data_directory,
     )
     .map_err(|error| {

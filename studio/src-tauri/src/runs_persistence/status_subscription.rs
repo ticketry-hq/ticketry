@@ -77,10 +77,10 @@ fn record_delivery(frame: &RunStatusFrame) {
         ),
         RunStatusFrame::RunStatusFailed(_) => (None, None, None, "failed"),
     };
-    crate::diagnostics::record_launch_discovery(
-        crate::diagnostics::LaunchDiscoveryRecord::new(
+    ticketry_diagnostics::record_launch_discovery(
+        ticketry_diagnostics::LaunchDiscoveryRecord::new(
             "graphql-frame-delivered",
-            crate::diagnostics::runtime_instance(),
+            ticketry_diagnostics::runtime_instance(),
             project_id,
             agent_run_id,
             cursor,

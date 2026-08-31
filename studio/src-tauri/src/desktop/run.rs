@@ -24,13 +24,13 @@ use crate::{app_updates, graphql_foundation, native_terminal};
 
 pub fn run(file_logging_requested: bool) {
     let ownership = data_directory_ownership_for_startup();
-    let file_log = crate::diagnostics::configure_process_file_log(
+    let file_log = ticketry_diagnostics::configure_process_file_log(
         file_logging_requested,
         &ownership.data_directory,
         development_log_path(),
     );
-    let diagnostic_reports_directory = crate::diagnostics::system_diagnostic_reports_directory();
-    let crash_report = crate::diagnostics::collect_dirty_shutdown(
+    let diagnostic_reports_directory = ticketry_diagnostics::system_diagnostic_reports_directory();
+    let crash_report = ticketry_diagnostics::collect_dirty_shutdown(
         &ownership.data_directory,
         &diagnostic_reports_directory,
         file_log.path(),
@@ -137,7 +137,7 @@ pub fn run(file_logging_requested: bool) {
                     .state::<crate::desktop::data_directory::DesktopDataDirectoryOwnership>(
                 );
                 if let Err(error) =
-                    crate::diagnostics::clean_session_marker(&ownership.data_directory)
+                    ticketry_diagnostics::clean_session_marker(&ownership.data_directory)
                 {
                     eprintln!("Ticketry could not remove its Session Marker: {error}");
                 }

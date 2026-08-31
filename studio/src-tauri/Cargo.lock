@@ -6806,8 +6806,33 @@ dependencies = [
  "tauri-plugin-wdio-webdriver",
  "taurpc",
  "tempfile",
+ "ticketry-data-directory",
+ "ticketry-diagnostics",
  "tokio",
  "tokio-util",
+ "uuid",
+]
+
+[[package]]
+name = "ticketry-data-directory"
+version = "0.0.0"
+dependencies = [
+ "chrono",
+ "libc",
+ "rand 0.8.7",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
+name = "ticketry-diagnostics"
+version = "0.0.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
+ "tempfile",
  "uuid",
 ]
 

@@ -6,18 +6,18 @@ use std::sync::{Arc, OnceLock};
 
 use chrono::{SecondsFormat, Utc};
 
-pub(crate) const FILE_LOGGING_FLAG: &str = "--log-to-file";
+pub const FILE_LOGGING_FLAG: &str = "--log-to-file";
 const LOG_FILE_NAME: &str = "ticketry.log";
 
 static PROCESS_FILE_LOG: OnceLock<FileLog> = OnceLock::new();
 
 #[derive(Clone, Debug, Default)]
-pub(crate) struct FileLog {
+pub struct FileLog {
     path: Option<Arc<PathBuf>>,
 }
 
 impl FileLog {
-    pub(crate) fn disabled() -> Self {
+    pub fn disabled() -> Self {
         Self::default()
     }
 
@@ -40,15 +40,15 @@ impl FileLog {
         Ok(log)
     }
 
-    pub(crate) fn is_enabled(&self) -> bool {
+    pub fn is_enabled(&self) -> bool {
         self.path.is_some()
     }
 
-    pub(crate) fn path(&self) -> Option<&Path> {
+    pub fn path(&self) -> Option<&Path> {
         self.path.as_deref().map(PathBuf::as_path)
     }
 
-    pub(crate) fn append_line(&self, line: &str) -> Result<(), String> {
+    pub fn append_line(&self, line: &str) -> Result<(), String> {
         let Some(path) = self.path() else {
             return Err("file logging is disabled".to_owned());
         };
@@ -67,7 +67,7 @@ impl FileLog {
             .map_err(|error| format!("could not append {}: {error}", path.display()))
     }
 
-    pub(crate) fn record(
+    pub fn record(
         &self,
         component: &str,
         level: &str,
@@ -81,13 +81,13 @@ impl FileLog {
     }
 }
 
-pub(crate) fn file_logging_requested(arguments: &[OsString]) -> bool {
+pub fn file_logging_requested(arguments: &[OsString]) -> bool {
     arguments
         .iter()
         .any(|argument| argument == FILE_LOGGING_FLAG)
 }
 
-pub(crate) fn configure_process_file_log(
+pub fn configure_process_file_log(
     requested: bool,
     data_directory: &Path,
     development_log_path: Option<PathBuf>,
@@ -115,11 +115,11 @@ fn resolved_log_path(
     development_log_path.or_else(|| requested.then(|| data_directory.join(LOG_FILE_NAME)))
 }
 
-pub(crate) fn process_file_log() -> FileLog {
+pub fn process_file_log() -> FileLog {
     PROCESS_FILE_LOG.get().cloned().unwrap_or_default()
 }
 
-pub(crate) fn record_story_move(level: &str, event: &str, details: serde_json::Value) {
+pub fn record_story_move(level: &str, event: &str, details: serde_json::Value) {
     let log = process_file_log();
     if !log.is_enabled() {
         return;

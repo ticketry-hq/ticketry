@@ -4,13 +4,13 @@ mod crash_report;
 mod file_log;
 mod launch_discovery;
 
-pub(crate) use crash_report::{
+pub use crash_report::{
     clean_session_marker, collect_dirty_shutdown, system_diagnostic_reports_directory,
 };
 
-pub(crate) use file_log::{
+pub use file_log::{
     configure_process_file_log, file_logging_requested, record_story_move, FileLog,
 };
-pub(crate) use launch_discovery::{
+pub use launch_discovery::{
     record as record_launch_discovery, runtime_instance, LaunchDiscoveryRecord,
 };

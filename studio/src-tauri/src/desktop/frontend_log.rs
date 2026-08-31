@@ -20,7 +20,7 @@ pub(crate) fn frontend_log_line(level: &str, message: &str) -> Result<String, St
 }
 
 pub(crate) fn append_frontend_log(
-    log: &crate::diagnostics::FileLog,
+    log: &ticketry_diagnostics::FileLog,
     line: &str,
 ) -> Result<(), String> {
     log.append_line(line)

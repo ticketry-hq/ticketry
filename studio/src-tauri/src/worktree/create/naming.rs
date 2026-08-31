@@ -29,7 +29,7 @@ pub(crate) fn worktrees_directory() -> PathBuf {
             return override_path;
         }
     }
-    crate::data_directory::established_data_directory()
+    ticketry_data_directory::established_data_directory()
         .unwrap_or_else(|_| home_directory().join(".config"))
         .join("worktrees")
 }

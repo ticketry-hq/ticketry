@@ -44,7 +44,7 @@ struct CrashReportSidecar {
 
 /// Collect a stale Session Marker, then mark the session that is starting now.
 /// Errors are reported to stderr and never escape into desktop startup.
-pub(crate) fn collect_dirty_shutdown(
+pub fn collect_dirty_shutdown(
     data_directory: &Path,
     diagnostic_reports_directory: &Path,
     event_log_path: Option<&Path>,
@@ -64,7 +64,7 @@ pub(crate) fn collect_dirty_shutdown(
     report
 }
 
-pub(crate) fn clean_session_marker(data_directory: &Path) -> Result<(), String> {
+pub fn clean_session_marker(data_directory: &Path) -> Result<(), String> {
     let marker = marker_path(data_directory);
     match fs::remove_file(&marker) {
         Ok(()) => Ok(()),
@@ -73,7 +73,7 @@ pub(crate) fn clean_session_marker(data_directory: &Path) -> Result<(), String> 
     }
 }
 
-pub(crate) fn system_diagnostic_reports_directory() -> PathBuf {
+pub fn system_diagnostic_reports_directory() -> PathBuf {
     std::env::var_os("HOME")
         .map(PathBuf::from)
         .unwrap_or_default()

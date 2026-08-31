@@ -8,7 +8,6 @@ use crate::desktop::readiness_publication::ReadinessPublication;
 use crate::desktop::runtime_configuration::RuntimeStartupConfiguration;
 use crate::desktop::service_health::ServiceHealth;
 use crate::desktop::user_notices::UserNotice;
-use crate::work_management;
 
 pub(crate) const HEALTH_EVENT: &str = "desktop-service-health";
 pub(crate) const USER_NOTICE_EVENT: &str = "desktop-user-notice";

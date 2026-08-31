@@ -4,11 +4,11 @@
 //! product-session tmux commands. Callers provide structured identities,
 //! approved provider arguments, geometry, and bounded viewer controls.
 
-use crate::tool_discovery::{preflight_report, SupportedTool, ToolHealth};
 use portable_pty::CommandBuilder;
 use std::ffi::OsString;
 use std::path::PathBuf;
 use std::process::{Command, Output, Stdio};
+use ticketry_tool_discovery::{preflight_report, SupportedTool, ToolHealth};
 
 mod hosted_command;
 mod inventory;

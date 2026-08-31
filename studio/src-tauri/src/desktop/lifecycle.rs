@@ -6,8 +6,8 @@ use tauri::Manager;
 
 use crate::desktop::data_directory::DesktopDataDirectoryOwnership;
 use crate::desktop::service_state::DesktopServiceState;
+use crate::native_terminal;
 use crate::terminal::viewer::webview_commands;
-use crate::{native_terminal, settings_persistence};
 
 pub(crate) const MAIN_WINDOW_LABEL: &str = "main";
 
@@ -60,8 +60,8 @@ pub(crate) fn shutdown_rust_runtime(application: &tauri::AppHandle) {
         launch.stop_document_watchers();
     }
     let ownership = application.state::<DesktopDataDirectoryOwnership>();
-    let unavailable = settings_persistence::Slice2Readiness::unavailable();
-    if settings_persistence::publish_readiness(&ownership.data_directory, &unavailable).is_ok() {
+    let unavailable = ticketry_settings::Slice2Readiness::unavailable();
+    if ticketry_settings::publish_readiness(&ownership.data_directory, &unavailable).is_ok() {
         state.readiness.record(&unavailable);
     }
     // Runs status must be closed before the pair goes down, so a relaunch

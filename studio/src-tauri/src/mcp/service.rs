@@ -137,9 +137,7 @@ impl ServerHandler for WorktrackerMcpService {
         }
         let readiness_file = self.readiness_data_directory.join("slice2-readiness.json");
         if readiness_file.exists()
-            && !crate::settings_persistence::published_readiness_is_complete(
-                &self.readiness_data_directory,
-            )
+            && !ticketry_settings::published_readiness_is_complete(&self.readiness_data_directory)
         {
             return Ok(CallToolResult::structured(json!({
                 "ok": false,

@@ -165,7 +165,7 @@ impl LaunchAuthorityService {
             Provider::try_from(provider.as_str())
                 .map_err(|error| LaunchAuthorityError::unresolvable(error.to_string()))?,
         );
-        let settings = crate::settings_persistence::instant_launch::load(&self.database).await?;
+        let settings = ticketry_settings::instant_launch::load(&self.database).await?;
         let prompt = build_instant_prompt(&InstantPrompt {
             module,
             user_input,

@@ -45,7 +45,7 @@ impl Extension for Slice2CommandGateExtension {
             .iter()
             .any(|(_, operation)| operation.node.ty == OperationType::Mutation);
         if contains_mutation
-            && !crate::settings_persistence::published_readiness_is_complete(&self.data_directory)
+            && !ticketry_settings::published_readiness_is_complete(&self.data_directory)
         {
             let mut error =
                 ServerError::new("Slice 2 is not ready; GraphQL commands are disabled", None);
@@ -107,9 +107,9 @@ mod tests {
             ))
         );
 
-        crate::settings_persistence::publish_readiness(
+        ticketry_settings::publish_readiness(
             directory.path(),
-            &crate::settings_persistence::Slice2Readiness::complete(),
+            &ticketry_settings::Slice2Readiness::complete(),
         )
         .expect("publish complete readiness");
         assert!(schema

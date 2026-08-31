@@ -1,8 +1,6 @@
-use muxed_studio_lib::settings_persistence::{
-    GlobalLaunchDefault, ProviderCatalogService, ProviderCatalogUpdate,
-};
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection};
 use tauri_graphql::{TransportApi, TransportApiImpl};
+use ticketry_settings::{GlobalLaunchDefault, ProviderCatalogService, ProviderCatalogUpdate};
 
 const CLAUDE: &str = "10000000000000000000000000000001";
 const AGY: &str = "10000000000000000000000000000002";

@@ -143,7 +143,7 @@ impl ImportReceipt {
         if std::fs::read(&path).is_ok_and(|existing| existing == encoded) {
             return Ok(false);
         }
-        crate::settings_persistence::write_json_atomically(&path, self)
+        ticketry_settings::write_json_atomically(&path, self)
             .map_err(|error| ModuleLinkError::new(ModuleLinkErrorCode::Io, error.to_string()))?;
         Ok(true)
     }

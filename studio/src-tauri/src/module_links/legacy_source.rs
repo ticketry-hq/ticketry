@@ -7,7 +7,7 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::settings_persistence::ProfileCatalog;
+use ticketry_settings::ProfileCatalog;
 
 use super::ModuleLinkError;
 
@@ -51,7 +51,7 @@ pub fn locate(data_directory: &Path) -> Option<LegacySource> {
 /// is not readable configuration. The import then changes nothing, so a
 /// malformed file is never partially adopted.
 pub fn read(source: &LegacySource) -> Result<ProfileCatalog, ModuleLinkError> {
-    crate::settings_persistence::read_profile_file(&source.path)
+    ticketry_settings::read_profile_file(&source.path)
         .map_err(|_| ModuleLinkError::unreadable_legacy_source(&source.path))
 }
 

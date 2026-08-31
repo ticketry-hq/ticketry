@@ -100,7 +100,7 @@ async fn install(database: &DatabaseConnection) -> Result<(), AdoptionFailure> {
             ))
         })?;
     let project_id = seed_installation_project(database).await?;
-    crate::settings_persistence::provision_provider_catalog(database)
+    ticketry_settings::provision_provider_catalog(database)
         .await
         .map_err(|error| {
             failed(format!(

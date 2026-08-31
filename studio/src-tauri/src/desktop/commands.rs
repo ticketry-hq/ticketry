@@ -13,7 +13,9 @@ use crate::desktop::launch_runtime::DesktopLaunchRuntime;
 use crate::desktop::lifecycle::MAIN_WINDOW_LABEL;
 use crate::desktop::runtime_configuration::RuntimeStartupConfiguration;
 use crate::desktop::service_state::DesktopServiceState;
-use crate::{tool_discovery as discovery, work_management};
+use ticketry_tool_discovery as discovery;
+
+use crate::work_management;
 use serde::Serialize;
 
 #[tauri::command]

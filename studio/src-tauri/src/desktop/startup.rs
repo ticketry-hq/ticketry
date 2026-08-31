@@ -13,7 +13,7 @@ use crate::desktop::runtime_configuration::{
 use crate::desktop::rust_runtime_launch::launch_rust_runtime;
 use crate::desktop::service_health::{ServiceHealth, ServiceHealthState};
 use crate::desktop::service_state::DesktopServiceState;
-use crate::{graphql_foundation, settings_persistence};
+use crate::graphql_foundation;
 use ticketry_data_directory::established_data_directory;
 
 pub(crate) fn initialize_services(
@@ -28,8 +28,8 @@ pub(crate) fn initialize_services(
         .expect("data-directory lock poisoned")
         .is_some();
     if startup_error.is_none() && owns_data_directory {
-        let unavailable = settings_persistence::Slice2Readiness::unavailable();
-        match settings_persistence::publish_readiness(&ownership.data_directory, &unavailable) {
+        let unavailable = ticketry_settings::Slice2Readiness::unavailable();
+        match ticketry_settings::publish_readiness(&ownership.data_directory, &unavailable) {
             Ok(()) => application
                 .state::<DesktopServiceState>()
                 .readiness

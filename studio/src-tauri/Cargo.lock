@@ -6809,6 +6809,8 @@ dependencies = [
  "ticketry-data-directory",
  "ticketry-diagnostics",
  "ticketry-entities",
+ "ticketry-settings",
+ "ticketry-tool-discovery",
  "tokio",
  "tokio-util",
  "uuid",
@@ -6847,6 +6849,33 @@ dependencies = [
  "serde",
  "tokio",
  "uuid",
+]
+
+[[package]]
+name = "ticketry-settings"
+version = "0.0.0"
+dependencies = [
+ "async-graphql",
+ "sea-orm",
+ "seaography",
+ "seaolim",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "ticketry-data-directory",
+ "ticketry-entities",
+ "uuid",
+]
+
+[[package]]
+name = "ticketry-tool-discovery"
+version = "0.0.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tempfile",
+ "ticketry-data-directory",
 ]
 
 [[package]]

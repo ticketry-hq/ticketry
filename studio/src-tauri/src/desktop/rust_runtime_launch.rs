@@ -12,7 +12,6 @@ use crate::desktop::runtime_configuration::rust_runtime_configuration;
 use crate::desktop::service_health::ServiceHealth;
 use crate::desktop::service_state::DesktopServiceState;
 use crate::desktop::{runs_handoff, workspace_handoff};
-use crate::settings_persistence;
 use crate::terminal::lifecycle::{
     ProductionTerminalLifecycleWork, TerminalLifecycleConfig, TerminalLifecycleRuntime,
 };
@@ -131,8 +130,8 @@ pub(crate) fn launch_rust_runtime(
         graphql_api,
         application.handle(),
     ))?;
-    let complete = settings_persistence::Slice2Readiness::complete();
-    settings_persistence::publish_readiness(&data_directory, &complete)
+    let complete = ticketry_settings::Slice2Readiness::complete();
+    ticketry_settings::publish_readiness(&data_directory, &complete)
         .map_err(|error| format!("could not publish Slice 2 readiness: {error}"))?;
     state.readiness.record(&complete);
 

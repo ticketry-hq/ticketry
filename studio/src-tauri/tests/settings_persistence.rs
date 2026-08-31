@@ -2,11 +2,11 @@ use std::collections::BTreeSet;
 use std::fs;
 use std::sync::Arc;
 
-use muxed_studio_lib::settings_persistence::{
+use sea_orm::{ConnectionTrait, Database};
+use ticketry_settings::{
     adopt, AppSetting, AppSettingRepository, JsonSourceClassification, ModuleLink, SettingKey,
     SettingScope, Slice2Readiness, SourceClassification,
 };
-use sea_orm::{ConnectionTrait, Database};
 
 async fn fixture() -> tempfile::TempDir {
     let directory = tempfile::tempdir().expect("create settings fixture");
@@ -399,18 +399,15 @@ fn readiness_is_one_restartable_fail_closed_result() {
     let path = directory.path().join("slice2-readiness.json");
     let complete = Slice2Readiness::complete();
 
-    muxed_studio_lib::settings_persistence::publish_readiness(directory.path(), &complete).unwrap();
-    muxed_studio_lib::settings_persistence::publish_readiness(directory.path(), &complete).unwrap();
+    ticketry_settings::publish_readiness(directory.path(), &complete).unwrap();
+    ticketry_settings::publish_readiness(directory.path(), &complete).unwrap();
     let persisted: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
     assert_eq!(persisted["ready"], true);
     assert_eq!(persisted["django_write_fallback"], false);
 
     let mut partial = complete;
     partial.django_effect_port = false;
-    assert!(
-        muxed_studio_lib::settings_persistence::publish_readiness(directory.path(), &partial,)
-            .is_err()
-    );
+    assert!(ticketry_settings::publish_readiness(directory.path(), &partial,).is_err());
     let unchanged: serde_json::Value = serde_json::from_slice(&fs::read(path).unwrap()).unwrap();
     assert_eq!(unchanged["ready"], true);
 }

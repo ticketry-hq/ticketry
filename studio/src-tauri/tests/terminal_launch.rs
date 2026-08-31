@@ -540,9 +540,9 @@ async fn request_identity_rejects_rebinding_and_fresh_requests_launch_every_kind
 #[tokio::test]
 async fn graphql_create_contract_returns_a_stable_typed_error() {
     let harness = TerminalLifecycleHarness::start().await;
-    muxed_studio_lib::settings_persistence::publish_readiness(
+    ticketry_settings::publish_readiness(
         harness.data_directory(),
-        &muxed_studio_lib::settings_persistence::Slice2Readiness::complete(),
+        &ticketry_settings::Slice2Readiness::complete(),
     )
     .unwrap();
     let response = harness

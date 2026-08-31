@@ -9,7 +9,7 @@ mod adoption;
 mod app_setting;
 mod app_settings;
 mod atomic_json;
-pub(crate) use ticketry_entities::settings as entities;
+pub use ticketry_entities::settings as entities;
 mod error;
 mod global_launch_default;
 pub mod instant_launch;
@@ -27,17 +27,17 @@ pub use adoption::{
     adopt, preflight, AdoptionEvidence, JsonSourceClassification, SourceClassification,
 };
 pub use app_settings::{AppSetting, AppSettingRepository, SettingKey, SettingScope};
-pub(crate) use atomic_json::write_json_atomically;
+pub use atomic_json::write_json_atomically;
 pub use error::SettingsPersistenceError;
 pub use global_launch_default::{
     parse_global_launch_default, read_global_launch_default, GlobalLaunchDefault,
 };
-pub(crate) use legacy_profile_files::read_profile_file;
+pub use legacy_profile_files::read_profile_file;
 pub use legacy_profile_files::{ModuleLink, Profile, ProfileCatalog};
 pub use provider_catalog::{
     ProviderCatalog, ProviderCatalogError, ProviderCatalogService, ProviderCatalogUpdate,
 };
-pub(crate) use provider_catalog_provisioning::provision as provision_provider_catalog;
+pub use provider_catalog_provisioning::provision as provision_provider_catalog;
 pub use readiness::{
     publish as publish_readiness, published_readiness_is_complete, Slice2Readiness,
 };

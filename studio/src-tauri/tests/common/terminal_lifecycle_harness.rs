@@ -14,10 +14,10 @@ use muxed_studio_lib::graphql_foundation::{
     adopt_worktracker_and_install, ComposedCommandRuntime, InstallationOwnership,
 };
 use muxed_studio_lib::runs_persistence::{publish_readiness, Slice3Readiness};
-use muxed_studio_lib::tool_discovery::{approve_executable_path, SupportedTool, ToolHealth};
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection, DbBackend, Statement};
 use serde_json::Value;
 use tauri_graphql::{TransportApi, TransportApiImpl};
+use ticketry_tool_discovery::{approve_executable_path, SupportedTool, ToolHealth};
 
 use super::isolated_tmux::{IsolatedTmux, TmuxEnvironmentOverride, TMUX_ENV_LOCK};
 

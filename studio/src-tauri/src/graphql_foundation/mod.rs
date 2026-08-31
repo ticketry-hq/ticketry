@@ -100,15 +100,14 @@ pub async fn initialize_with_keybinding_settings_and_install(
     api: &tauri_graphql::TransportApiImpl,
 ) -> Result<(), FoundationInitializationError> {
     let foundation_database = database::open(foundation_database_path).await?;
-    let settings_repository =
-        crate::settings_persistence::AppSettingRepository::open(settings_database_path)
-            .await
-            .map_err(|error| {
-                FoundationInitializationError::new(
-                    FoundationInitializationErrorCode::SettingsDatabaseOpen,
-                    error.to_string(),
-                )
-            })?;
+    let settings_repository = ticketry_settings::AppSettingRepository::open(settings_database_path)
+        .await
+        .map_err(|error| {
+            FoundationInitializationError::new(
+                FoundationInitializationErrorCode::SettingsDatabaseOpen,
+                error.to_string(),
+            )
+        })?;
     let settings_database = settings_repository.database();
     let schema = crate::query_root::keybinding_settings_schema(
         foundation_database,
@@ -170,7 +169,7 @@ async fn initialize_with_worktracker_commands_and_install_inner(
             )
         })?;
     let settings_repository =
-        crate::settings_persistence::AppSettingRepository::open(worktracker_database_path)
+        ticketry_settings::AppSettingRepository::open(worktracker_database_path)
             .await
             .map_err(|error| {
                 FoundationInitializationError::new(
@@ -462,7 +461,7 @@ pub async fn adopt_worktracker_and_install(
                 .map_err(installation_adoption_error)?,
         ),
     };
-    crate::settings_persistence::preflight(data_directory)
+    ticketry_settings::preflight(data_directory)
         .await
         .map_err(|error| {
             FoundationInitializationError::new(
@@ -487,7 +486,7 @@ pub async fn adopt_worktracker_and_install(
                     error.to_string(),
                 )
             })?;
-    crate::settings_persistence::ProviderCatalogService::open(provider_database)
+    ticketry_settings::ProviderCatalogService::open(provider_database)
         .await
         .map_err(|error| {
             FoundationInitializationError::new(
@@ -495,7 +494,7 @@ pub async fn adopt_worktracker_and_install(
                 error.to_string(),
             )
         })?;
-    crate::settings_persistence::adopt(data_directory)
+    ticketry_settings::adopt(data_directory)
         .await
         .map_err(|error| {
             FoundationInitializationError::new(

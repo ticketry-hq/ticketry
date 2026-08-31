@@ -1,9 +1,7 @@
 use muxed_studio_lib::graphql_foundation::initialize_with_keybinding_settings_and_install;
-use muxed_studio_lib::settings_persistence::{
-    AppSetting, AppSettingRepository, SettingKey, SettingScope,
-};
 use sea_orm::{ConnectionTrait, Database};
 use tauri_graphql::{TransportApi, TransportApiImpl};
+use ticketry_settings::{AppSetting, AppSettingRepository, SettingKey, SettingScope};
 
 fn request(query: &str, variables: serde_json::Value) -> String {
     serde_json::json!({

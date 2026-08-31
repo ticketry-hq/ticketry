@@ -69,9 +69,9 @@ impl CleanupCheckpoints for StopOnce {
 #[tokio::test]
 async fn action_candidate_preserves_tri_state_input_sdl_and_entity_result() {
     let harness = TerminalLifecycleHarness::start().await;
-    muxed_studio_lib::settings_persistence::publish_readiness(
+    ticketry_settings::publish_readiness(
         harness.data_directory(),
-        &muxed_studio_lib::settings_persistence::Slice2Readiness::complete(),
+        &ticketry_settings::Slice2Readiness::complete(),
     )
     .unwrap();
 

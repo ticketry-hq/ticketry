@@ -32,7 +32,7 @@ pub fn foundation_schema(
     worktracker_database: Option<DatabaseConnection>,
     worktracker_commands: Option<crate::work_management::commands::CommandDatabase>,
     attachment_storage: Option<crate::work_management::commands::attachments::AttachmentStorage>,
-    settings_repository: Option<crate::settings_persistence::AppSettingRepository>,
+    settings_repository: Option<ticketry_settings::AppSettingRepository>,
     readiness_data_directory: Option<PathBuf>,
     work_facts: Option<crate::work_management::commands::status_facts::WorkFactRecorder>,
     worktree_operations: Option<crate::worktree::operations::WorktreeOperations>,
@@ -57,7 +57,7 @@ pub(crate) fn foundation_schema_with_terminal_services(
     worktracker_database: Option<DatabaseConnection>,
     worktracker_commands: Option<crate::work_management::commands::CommandDatabase>,
     attachment_storage: Option<crate::work_management::commands::attachments::AttachmentStorage>,
-    settings_repository: Option<crate::settings_persistence::AppSettingRepository>,
+    settings_repository: Option<ticketry_settings::AppSettingRepository>,
     readiness_data_directory: Option<PathBuf>,
     work_facts: Option<crate::work_management::commands::status_facts::WorkFactRecorder>,
     worktree_operations: Option<crate::worktree::operations::WorktreeOperations>,
@@ -109,7 +109,7 @@ pub(crate) fn generated_contract_schema(
 pub(crate) fn keybinding_settings_schema(
     database: DatabaseConnection,
     settings_database: DatabaseConnection,
-    settings_repository: crate::settings_persistence::AppSettingRepository,
+    settings_repository: ticketry_settings::AppSettingRepository,
 ) -> Result<Schema, FoundationInitializationError> {
     build_schema(
         database,
@@ -135,7 +135,7 @@ fn build_schema(
     worktracker_database: Option<DatabaseConnection>,
     worktracker_commands: Option<crate::work_management::commands::CommandDatabase>,
     attachment_storage: Option<crate::work_management::commands::attachments::AttachmentStorage>,
-    settings_repository: Option<crate::settings_persistence::AppSettingRepository>,
+    settings_repository: Option<ticketry_settings::AppSettingRepository>,
     readiness_data_directory: Option<PathBuf>,
     work_facts: Option<crate::work_management::commands::status_facts::WorkFactRecorder>,
     worktree_operations: Option<crate::worktree::operations::WorktreeOperations>,
@@ -207,7 +207,7 @@ fn build_schema(
     let builder = crate::worktree::changes::register_graphql(builder);
     let builder = crate::workspace::worktree::register_graphql(builder);
     let builder = crate::work_management::graphql::register(builder);
-    let builder = crate::settings_persistence::schema::register(builder);
+    let builder = ticketry_settings::schema::register(builder);
     let builder = crate::runs::register_graphql(builder);
     let builder = crate::terminal::persistence::register_graphql(builder);
     let builder = crate::terminal::instant_run_ticket::register_graphql(builder);
@@ -343,7 +343,7 @@ fn build_schema(
         // reach a command service from the resolver context.
         schema = schema.data(runs.stream().clone());
         schema = schema.data(runs);
-        schema = schema.data(crate::settings_persistence::ProviderCatalogService::new(
+        schema = schema.data(ticketry_settings::ProviderCatalogService::new(
             worktracker_database.clone(),
         ));
         schema = schema.data(crate::work_management::read_queries::ReadDatabase(

@@ -207,9 +207,9 @@ impl ExecutionHarness {
         // Startup opens each slice gate in order. Graph Run mutations travel
         // over the same authored GraphQL endpoint, so the Slice 2 command gate
         // has to be open before any of them is reachable.
-        muxed_studio_lib::settings_persistence::publish_readiness(
+        ticketry_settings::publish_readiness(
             &data_directory,
-            &muxed_studio_lib::settings_persistence::Slice2Readiness::complete(),
+            &ticketry_settings::Slice2Readiness::complete(),
         )
         .expect("open the local settings gate");
         publish_readiness(&data_directory, &Slice3Readiness::complete())
@@ -490,15 +490,12 @@ fn approve_disposable_provider(data_directory: &Path) {
                 .expect("make the disposable executable runnable");
         }
     }
-    let approved = muxed_studio_lib::tool_discovery::approve_executable_path(
-        muxed_studio_lib::tool_discovery::SupportedTool::Codex,
+    let approved = ticketry_tool_discovery::approve_executable_path(
+        ticketry_tool_discovery::SupportedTool::Codex,
         executable,
     )
     .expect("approve the disposable provider through the product boundary");
-    assert_eq!(
-        approved.health,
-        muxed_studio_lib::tool_discovery::ToolHealth::Ready
-    );
+    assert_eq!(approved.health, ticketry_tool_discovery::ToolHealth::Ready);
 }
 
 /// The selected profile a launch decision needs. Module folders are no longer

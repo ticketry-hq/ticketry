@@ -1,0 +1,20 @@
+[package]
+name = "ticketry-settings"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+async-graphql.workspace = true
+sea-orm.workspace = true
+seaography.workspace = true
+seaolim.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+ticketry-data-directory.workspace = true
+ticketry-entities.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

@@ -443,7 +443,7 @@ async fn a_first_launch_exposes_the_shipping_provider_catalog() {
     let installation = tempfile::tempdir().expect("create an empty data directory");
     adopt_and_open(installation.path()).await;
 
-    muxed_studio_lib::settings_persistence::preflight(installation.path())
+    ticketry_settings::preflight(installation.path())
         .await
         .expect("a first launch must include the provider catalog required by startup");
 
@@ -451,7 +451,7 @@ async fn a_first_launch_exposes_the_shipping_provider_catalog() {
         muxed_studio_lib::work_management::open_for_commands(&installation.path().join("state.db"))
             .await
             .expect("open the provisioned catalog");
-    let catalog = muxed_studio_lib::settings_persistence::ProviderCatalogService::open(database)
+    let catalog = ticketry_settings::ProviderCatalogService::open(database)
         .await
         .expect("the provisioned providers must match the shipping adapters")
         .load()

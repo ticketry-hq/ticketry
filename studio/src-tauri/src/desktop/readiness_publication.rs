@@ -6,7 +6,7 @@
 use std::path::Path;
 use std::sync::Mutex;
 
-use crate::settings_persistence::{self, SettingsPersistenceError, Slice2Readiness};
+use ticketry_settings::{self, SettingsPersistenceError, Slice2Readiness};
 
 pub(crate) struct ReadinessPublication {
     last_published: Mutex<Option<Slice2Readiness>>,
@@ -43,7 +43,7 @@ impl ReadinessPublication {
         if last_published.as_ref() == Some(readiness) {
             return Ok(false);
         }
-        settings_persistence::publish_readiness(data_directory, readiness)?;
+        ticketry_settings::publish_readiness(data_directory, readiness)?;
         *last_published = Some(readiness.clone());
         Ok(true)
     }
@@ -84,7 +84,7 @@ mod tests {
         assert!(publication
             .publish_if_changed(directory.path(), &Slice2Readiness::complete())
             .expect("publish complete readiness"));
-        assert!(settings_persistence::published_readiness_is_complete(
+        assert!(ticketry_settings::published_readiness_is_complete(
             directory.path()
         ));
     }

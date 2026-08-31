@@ -109,9 +109,8 @@ async fn oversized_initial_prompt_is_rejected_before_the_model_write() {
     initialize_with_keybinding_settings_and_install(&foundation_path, &settings_path, &api)
         .await
         .unwrap();
-    let oversized = "x".repeat(
-        muxed_studio_lib::settings_persistence::instant_launch::MAX_INITIAL_PROMPT_CHARACTERS + 1,
-    );
+    let oversized =
+        "x".repeat(ticketry_settings::instant_launch::MAX_INITIAL_PROMPT_CHARACTERS + 1);
 
     let response = execute(
         &api,

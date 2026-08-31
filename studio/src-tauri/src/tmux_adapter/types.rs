@@ -1,9 +1,9 @@
 use super::approved_tool_path;
-use crate::tool_discovery::SupportedTool;
 use std::collections::BTreeMap;
 use std::ffi::OsString;
 use std::fmt;
 use std::path::PathBuf;
+use ticketry_tool_discovery::SupportedTool;
 
 #[derive(Clone, Debug)]
 pub struct ApprovedArgv {

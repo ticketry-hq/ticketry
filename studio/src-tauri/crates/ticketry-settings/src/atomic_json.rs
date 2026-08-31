@@ -6,11 +6,11 @@ use serde::Serialize;
 
 use super::SettingsPersistenceError;
 
-pub(crate) trait AtomicFileOperations: Send + Sync {
+pub trait AtomicFileOperations: Send + Sync {
     fn replace(&self, source: &Path, destination: &Path) -> std::io::Result<()>;
 }
 
-pub(crate) struct RealAtomicFileOperations;
+pub struct RealAtomicFileOperations;
 
 impl AtomicFileOperations for RealAtomicFileOperations {
     fn replace(&self, source: &Path, destination: &Path) -> std::io::Result<()> {
@@ -18,7 +18,7 @@ impl AtomicFileOperations for RealAtomicFileOperations {
     }
 }
 
-pub(crate) fn write_json<T: Serialize>(
+pub fn write_json<T: Serialize>(
     path: &Path,
     value: &T,
     operations: &dyn AtomicFileOperations,
@@ -53,7 +53,7 @@ pub(crate) fn write_json<T: Serialize>(
 }
 
 /// Replace `path` with the pretty-printed encoding of `value`, atomically.
-pub(crate) fn write_json_atomically<T: Serialize>(
+pub fn write_json_atomically<T: Serialize>(
     path: &Path,
     value: &T,
 ) -> Result<(), SettingsPersistenceError> {

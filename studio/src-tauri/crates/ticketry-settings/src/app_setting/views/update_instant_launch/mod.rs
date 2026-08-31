@@ -13,7 +13,7 @@ use seaolim::{
     RestrictedMutationField, ViewSerializers,
 };
 
-use crate::settings_persistence::{
+use crate::{
     entities::app_settings,
     instant_launch::{self, InstantLaunchSettings, MAX_INITIAL_PROMPT_CHARACTERS},
     schema::settings_error,

@@ -10,7 +10,7 @@ use seaolim::{
     RestrictedMutationField, ViewSerializers,
 };
 
-use crate::settings_persistence::{
+use crate::{
     entities::app_settings, keybindings, schema::settings_error, SettingsPersistenceError,
 };
 

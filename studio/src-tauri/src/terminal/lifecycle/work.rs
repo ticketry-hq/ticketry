@@ -553,12 +553,12 @@ fn write_private(path: &Path, contents: &[u8]) -> Result<(), TerminalLaunchError
 
 fn provider_tool(
     provider: crate::launch::planning::Provider,
-) -> crate::tool_discovery::SupportedTool {
+) -> ticketry_tool_discovery::SupportedTool {
     match provider {
-        crate::launch::planning::Provider::Claude => crate::tool_discovery::SupportedTool::Claude,
-        crate::launch::planning::Provider::Codex => crate::tool_discovery::SupportedTool::Codex,
-        crate::launch::planning::Provider::Gemini => crate::tool_discovery::SupportedTool::Gemini,
-        crate::launch::planning::Provider::Agy => crate::tool_discovery::SupportedTool::Agy,
+        crate::launch::planning::Provider::Claude => ticketry_tool_discovery::SupportedTool::Claude,
+        crate::launch::planning::Provider::Codex => ticketry_tool_discovery::SupportedTool::Codex,
+        crate::launch::planning::Provider::Gemini => ticketry_tool_discovery::SupportedTool::Gemini,
+        crate::launch::planning::Provider::Agy => ticketry_tool_discovery::SupportedTool::Agy,
     }
 }
 

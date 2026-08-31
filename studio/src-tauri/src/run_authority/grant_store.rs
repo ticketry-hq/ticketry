@@ -36,7 +36,7 @@ impl GrantStore {
     }
 
     pub fn save(&self, grants: &HashMap<String, StoredGrant>) -> Result<(), String> {
-        crate::settings_persistence::write_json_atomically(&self.path, grants)
+        ticketry_settings::write_json_atomically(&self.path, grants)
             .map_err(|error| format!("could not persist {}: {error}", self.path.display()))
     }
 

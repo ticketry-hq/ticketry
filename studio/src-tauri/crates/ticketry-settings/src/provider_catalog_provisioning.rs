@@ -46,7 +46,7 @@ const PROVIDERS: &[ProviderDefault] = &[
     },
 ];
 
-pub(crate) async fn provision(database: &DatabaseConnection) -> Result<(), DbErr> {
+pub async fn provision(database: &DatabaseConnection) -> Result<(), DbErr> {
     let transaction = database.begin().await?;
     let mut reasoning_ids = BTreeMap::new();
 

@@ -315,9 +315,9 @@ async fn listener_lists_the_thirty_one_tools_and_recovers_on_the_same_port() {
 async fn listener_returns_structured_unavailable_until_runtime_reconciliation_finishes() {
     let directory = tempfile::tempdir().unwrap();
     prepare_projects(&directory).await;
-    crate::settings_persistence::publish_readiness(
+    ticketry_settings::publish_readiness(
         directory.path(),
-        &crate::settings_persistence::Slice2Readiness::unavailable(),
+        &ticketry_settings::Slice2Readiness::unavailable(),
     )
     .expect("close readiness");
     let (backend, backend_cancellation, backend_task) = start_authorizer().await;

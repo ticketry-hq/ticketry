@@ -51,9 +51,9 @@ struct SubscriptionRequest {
 fn publish_development_readiness(
     data_directory: &std::path::Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    muxed_studio_lib::settings_persistence::publish_readiness(
+    ticketry_settings::publish_readiness(
         data_directory,
-        &muxed_studio_lib::settings_persistence::Slice2Readiness::complete(),
+        &ticketry_settings::Slice2Readiness::complete(),
     )?;
     muxed_studio_lib::runs_persistence::publish_readiness(
         data_directory,
@@ -268,11 +268,9 @@ mod tests {
 
         publish_development_readiness(directory.path()).expect("publish development readiness");
 
-        assert!(
-            muxed_studio_lib::settings_persistence::published_readiness_is_complete(
-                directory.path(),
-            )
-        );
+        assert!(ticketry_settings::published_readiness_is_complete(
+            directory.path(),
+        ));
         assert!(
             muxed_studio_lib::runs_persistence::published_readiness_is_complete(directory.path())
         );

@@ -92,10 +92,10 @@ rmcp = { version = "=3.0.0", features = ["transport-streamable-http-server"] }
 sea-orm.workspace = true
 sea-orm-migration = { version = "=2.0.1", features = ["runtime-tokio-rustls", "sqlx-sqlite"] }
 seaography.workspace = true
-seaolim = { git = "https://github.com/charleeagni/seaolim", rev = "29f24172be1ab423e9b8b14b11ba1fa73452f1cd" }
+seaolim.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-sha2 = "0.10"
+sha2.workspace = true
 tauri.workspace = true
 tauri-graphql = { path = "crates/tauri-graphql" }
 tauri-plugin-dialog = "2.6"
@@ -105,6 +105,8 @@ taurpc.workspace = true
 ticketry-data-directory.workspace = true
 ticketry-diagnostics.workspace = true
 ticketry-entities.workspace = true
+ticketry-settings.workspace = true
+ticketry-tool-discovery.workspace = true
 tokio.workspace = true
 tokio-util = "=0.7.18"
 uuid.workspace = true
@@ -120,6 +122,8 @@ members = [
     "crates/tauri-graphql",
     "crates/ticketry-data-directory",
     "crates/ticketry-entities",
+    "crates/ticketry-settings",
+    "crates/ticketry-tool-discovery",
     "crates/ticketry-diagnostics",
 ]
 resolver = "2"
@@ -132,8 +136,10 @@ libc = "0.2"
 rand = "0.8"
 sea-orm = { version = "=2.0.1", features = ["runtime-tokio-rustls", "seaography", "sqlx-postgres", "sqlx-sqlite"] }
 seaography = { version = "=2.0.0-rc.9", default-features = false, features = ["field-camel-case", "macros", "with-chrono", "with-json"] }
+seaolim = { git = "https://github.com/charleeagni/seaolim", rev = "29f24172be1ab423e9b8b14b11ba1fa73452f1cd" }
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.151"
+sha2 = "0.10"
 specta = { version = "=2.0.0-rc.25", features = ["derive"] }
 tauri = "=2.11.5"
 taurpc = "=0.8.2"
@@ -141,6 +147,8 @@ tempfile = "=3.23.0"
 ticketry-data-directory = { path = "crates/ticketry-data-directory" }
 ticketry-diagnostics = { path = "crates/ticketry-diagnostics" }
 ticketry-entities = { path = "crates/ticketry-entities" }
+ticketry-settings = { path = "crates/ticketry-settings" }
+ticketry-tool-discovery = { path = "crates/ticketry-tool-discovery" }
 tokio = { version = "=1.53.1", features = ["macros", "net", "rt-multi-thread", "sync", "time"] }
 uuid = { version = "1.24", features = ["v4", "v5"] }
 

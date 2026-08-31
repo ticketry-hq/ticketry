@@ -254,9 +254,9 @@ async fn update_patch_and_mcp_principal_keep_termination_identity_bound() {
 #[tokio::test]
 async fn graphql_update_returns_the_authoritative_terminal_model() {
     let harness = TerminalLifecycleHarness::start().await;
-    muxed_studio_lib::settings_persistence::publish_readiness(
+    ticketry_settings::publish_readiness(
         harness.data_directory(),
-        &muxed_studio_lib::settings_persistence::Slice2Readiness::complete(),
+        &ticketry_settings::Slice2Readiness::complete(),
     )
     .unwrap();
     let response = harness

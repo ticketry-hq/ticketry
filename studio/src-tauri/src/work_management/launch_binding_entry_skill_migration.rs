@@ -167,7 +167,7 @@ mod ledger_name_tests {
     fn settings_adoption_probes_this_ledger_by_the_same_name() {
         assert_eq!(
             super::LEDGER_TABLE,
-            crate::settings_persistence::ownership_manifest::LAUNCH_BINDING_ENTRY_SKILL_LEDGER,
+            ticketry_settings::ownership_manifest::LAUNCH_BINDING_ENTRY_SKILL_LEDGER,
             "settings adoption probes this ledger by name; keep the two in step"
         );
     }

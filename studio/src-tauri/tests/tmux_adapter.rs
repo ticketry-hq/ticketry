@@ -3,9 +3,9 @@ use muxed_studio_lib::tmux_adapter::{
     ApprovedArgv, CreateOutcome, CreateSession, InventoryConflictKind, InventoryEntry, KillOutcome,
     RuntimeIdentity, RuntimeObservation, TerminalGeometry, TmuxAdapter,
 };
-use muxed_studio_lib::tool_discovery::SupportedTool;
 use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
+use ticketry_tool_discovery::SupportedTool;
 
 mod common;
 

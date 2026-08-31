@@ -1,7 +1,7 @@
 //! The two pre-Rust configuration files, read but never written.
 //!
 //! `profiles.json` and `features.json` are historical: a Module's folder is now
-//! its own typed [`crate::module_links`] row, and this version ships one
+//! its own typed `module_link` row, and this version ships one
 //! installation project with no feature gates. Both files survive only so
 //! settings adoption can classify what a previous install left behind and the
 //! Module Link importer can adopt the links recorded inside.
@@ -46,14 +46,14 @@ pub struct ProfileCatalog {
 ///
 /// The historical `module_folders` spelling is normalized to `module_links` so
 /// the importer sees one shape regardless of which release wrote the file.
-pub(crate) fn read_profile_file(path: &Path) -> Result<ProfileCatalog, SettingsPersistenceError> {
+pub fn read_profile_file(path: &Path) -> Result<ProfileCatalog, SettingsPersistenceError> {
     let bytes = fs::read(path).map_err(|error| SettingsPersistenceError::io(path, error))?;
     let value: Value = serde_json::from_slice(&bytes).map_err(|_| corrupt(path))?;
     normalize_catalog(value, path)
 }
 
 /// Whether a `profiles.json` beside an adopted store is readable configuration.
-pub(crate) fn validate_profile_file(path: &Path) -> Result<(), SettingsPersistenceError> {
+pub fn validate_profile_file(path: &Path) -> Result<(), SettingsPersistenceError> {
     read_profile_file(path).map(drop)
 }
 
@@ -62,7 +62,7 @@ pub(crate) fn validate_profile_file(path: &Path) -> Result<(), SettingsPersisten
 /// The flags themselves are inert in this version, so the check confirms only
 /// that the file is a JSON object rather than something else left in the data
 /// directory under that name.
-pub(crate) fn validate_feature_file(path: &Path) -> Result<(), SettingsPersistenceError> {
+pub fn validate_feature_file(path: &Path) -> Result<(), SettingsPersistenceError> {
     let bytes = fs::read(path).map_err(|error| SettingsPersistenceError::io(path, error))?;
     let value: Value = serde_json::from_slice(&bytes).map_err(|_| corrupt(path))?;
     value.as_object().ok_or_else(|| corrupt(path)).map(drop)

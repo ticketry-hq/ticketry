@@ -80,7 +80,7 @@ impl AppSettingRepository {
         })
     }
 
-    pub(crate) fn database(&self) -> DatabaseConnection {
+    pub fn database(&self) -> DatabaseConnection {
         self.database.clone()
     }
 

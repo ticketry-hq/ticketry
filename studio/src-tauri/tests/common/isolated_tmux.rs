@@ -7,13 +7,13 @@
 //! Shared by several integration binaries, so not every helper is used by all.
 #![allow(dead_code)]
 
-use muxed_studio_lib::tool_discovery::{preflight_report, SupportedTool, ToolHealth};
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
+use ticketry_tool_discovery::{preflight_report, SupportedTool, ToolHealth};
 
 pub const SOCKET: &str = "muxed";
 pub const RUN_ID: &str = "integration-run";

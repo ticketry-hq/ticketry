@@ -12,6 +12,7 @@ use sea_orm::{
     DatabaseTransaction, EntityTrait, QueryFilter, TransactionTrait,
 };
 use serde_json::json;
+use std::time::Instant;
 
 use super::entities::{agent_run as agent_run_entity, launch_effect as launch_effect_entity};
 use super::repositories::launch_effect;
@@ -32,6 +33,8 @@ use super::{
 pub struct RunSnapshot {
     pub model: Option<String>,
     pub reasoning: Option<String>,
+    pub initial_prompt: Option<String>,
+    pub unattended: bool,
     pub cwd: Option<String>,
     pub design_dir: Option<String>,
     pub resumed_from: Option<String>,
@@ -99,6 +102,7 @@ impl EffectService {
         request: PrepareLaunchRequest,
         participant: &dyn LaunchPreparationParticipant,
     ) -> Result<PreparedLaunch, RunsPersistenceError> {
+        let trace_started = Instant::now();
         let intent = normalize(request.intent.clone())?;
         let transaction = self.database().begin().await?;
         validate_work_item_scope(&transaction, &intent).await?;
@@ -149,6 +153,8 @@ impl EffectService {
         .await
         .map_err(|_| conflict("The launch identity is already durable."))?;
 
+        participant.prepare_in(&transaction, &intent, false).await?;
+        let run = super::run_holding_in(&transaction, &intent.agent_run_id, &started_at).await?;
         let event_id = uuid::Uuid::new_v4().simple().to_string();
         let payload = json!({
             "agentRunId": intent.agent_run_id,
@@ -157,6 +163,7 @@ impl EffectService {
             "providerSessionCaptured": false,
             "launchState": request.snapshot.launch_state,
             "launchModel": request.snapshot.launch_model,
+            "run": run,
         });
         let cursor = self
             .events()
@@ -176,9 +183,44 @@ impl EffectService {
                 },
             )
             .await?;
-        participant.prepare_in(&transaction, &intent, false).await?;
         transaction.commit().await?;
+        let trace = || {
+            crate::diagnostics::LaunchDiscoveryRecord::new(
+                "launch-transaction-committed",
+                crate::diagnostics::runtime_instance(),
+                Some(&intent.project_id),
+                Some(&intent.agent_run_id),
+                Some(cursor),
+                None,
+                None,
+            )
+            .with_detail(
+                "elapsedMs",
+                serde_json::json!(trace_started.elapsed().as_millis()),
+            )
+            .with_detail("workItemId", serde_json::json!(intent.issue_id))
+            .with_detail(
+                "wakeupAuthority",
+                serde_json::json!(self.events().wakeup_authority_instance()),
+            )
+        };
+        crate::diagnostics::record_launch_discovery(trace());
         self.events().wake_committed();
+        crate::diagnostics::record_launch_discovery(
+            crate::diagnostics::LaunchDiscoveryRecord::new(
+                "wake-up-published",
+                crate::diagnostics::runtime_instance(),
+                Some(&intent.project_id),
+                Some(&intent.agent_run_id),
+                Some(cursor),
+                None,
+                None,
+            )
+            .with_detail(
+                "wakeupAuthority",
+                serde_json::json!(self.events().wakeup_authority_instance()),
+            ),
+        );
         Ok(PreparedLaunch {
             effect: launch_effect(effect),
             reused: false,
@@ -305,8 +347,6 @@ async fn mint_or_validate_run(
         issue_id: Set(intent.issue_id.clone()),
         ticket_seq: NotSet,
         agent: Set(intent.provider.clone()),
-        model: Set(request.snapshot.model.clone()),
-        reasoning: Set(request.snapshot.reasoning.clone()),
         status: Set("running".to_owned()),
         started_at: Set(started_at.to_owned()),
         ended_at: NotSet,
@@ -321,6 +361,9 @@ async fn mint_or_validate_run(
         scope: Set(intent.scope.clone()),
         launch_state: Set(request.snapshot.launch_state.clone()),
         launch_model: Set(request.snapshot.launch_model.clone()),
+        initial_prompt: Set(request.snapshot.initial_prompt.clone()),
+        launch_reasoning: Set(request.snapshot.reasoning.clone()),
+        launch_unattended: Set(request.snapshot.unattended),
     }
     .insert(transaction)
     .await

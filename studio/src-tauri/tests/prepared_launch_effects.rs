@@ -223,6 +223,16 @@ async fn preparation_commits_run_effect_lifecycle_and_event_together() {
     assert_eq!(holdings[0].launch_state.as_deref(), Some("Implement"));
     assert_eq!(holdings[0].launch_model.as_deref(), Some("gpt-5"));
     assert_eq!(count(&database, "runs_status_events").await, 1);
+    let events = services
+        .outbox()
+        .events()
+        .replay(&id(801).replace('-', ""), 0, i64::MAX, 10)
+        .await
+        .unwrap();
+    let payload: serde_json::Value = serde_json::from_str(&events[0].payload).unwrap();
+    assert_eq!(payload["run"]["agent_run_id"], "run-900");
+    assert_eq!(payload["run"]["state"], "starting");
+    assert_eq!(payload["run"]["task_id"], id(804));
 }
 
 #[tokio::test]

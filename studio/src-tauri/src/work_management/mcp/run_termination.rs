@@ -8,6 +8,8 @@ use crate::terminal::cleanup::{
 
 use super::RunPrincipal;
 
+const RESPONSE_GRACE: std::time::Duration = std::time::Duration::from_millis(250);
+
 /// Terminate only the run named by the authenticated MCP principal. The tool
 /// accepts no target argument, so no caller can widen the blast radius.
 pub async fn terminate_current_run(
@@ -20,24 +22,41 @@ pub async fn terminate_current_run(
         .ok()
         .flatten()
         .is_some_and(|terminal| terminal.terminated_at.is_some());
+    let authenticated = AuthenticatedAgentRun {
+        agent_run_id: principal.agent_run_id.clone(),
+        issue_id: principal.issue_id.clone(),
+        project_id: principal.project_id.clone(),
+        scope: principal.scope.clone(),
+    };
+    let request_id = format!("mcp-self:{}", principal.agent_run_id);
     match service
-        .terminate_current_run(
-            &AuthenticatedAgentRun {
-                agent_run_id: principal.agent_run_id.clone(),
-                issue_id: principal.issue_id.clone(),
-                project_id: principal.project_id.clone(),
-                scope: principal.scope.clone(),
-            },
-            &format!("mcp-self:{}", principal.agent_run_id),
-        )
+        .request_current_run_termination(&authenticated, &request_id)
         .await
     {
-        Ok(terminal) => json!({
-            "ok": true,
-            "terminated": terminal.terminated_at.is_some(),
-            "already_terminated": already_terminated,
-            "agent_run_id": terminal.agent_run_id,
-        }),
+        Ok(terminal) => {
+            if !already_terminated {
+                let service = service.clone();
+                tokio::spawn(async move {
+                    tokio::time::sleep(RESPONSE_GRACE).await;
+                    if let Err(error) = service
+                        .terminate_current_run(&authenticated, &request_id)
+                        .await
+                    {
+                        eprintln!(
+                            "Ticketry could not complete requested self-termination for {}: {}",
+                            authenticated.agent_run_id, error
+                        );
+                    }
+                });
+            }
+            json!({
+                "ok": true,
+                "termination_requested": true,
+                "terminated": terminal.terminated_at.is_some(),
+                "already_terminated": already_terminated,
+                "agent_run_id": terminal.agent_run_id,
+            })
+        }
         Err(error) => json!({"ok": false, "error": compatibility_code(&error)}),
     }
 }

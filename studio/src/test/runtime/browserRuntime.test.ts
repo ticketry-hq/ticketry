@@ -13,6 +13,7 @@ describe("browser runtime contract", () => {
 
     expect(runtime.platform).toBe("browser");
     expect(runtime.startup()).toEqual({
+      runtimeInstance: expect.stringMatching(/^browser-/),
       serviceHealth: {
         state: "ready",
         service: "rust-graphql-adapter",
@@ -34,6 +35,7 @@ describe("browser runtime contract", () => {
       serviceSupervision: false,
       nativeTerminal: false,
       nativeFolderPicker: false,
+      appUpdates: false,
     });
     await expect(runtime.pickFolder()).resolves.toBeNull();
   });
@@ -83,6 +85,7 @@ describe("browser runtime contract", () => {
     });
 
     expect(runtime.startup()).toEqual({
+      runtimeInstance: expect.stringMatching(/^browser-/),
       serviceHealth: {
         state: "ready",
         service: "rust-graphql-adapter",

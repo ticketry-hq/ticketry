@@ -25,12 +25,13 @@ async fn main() {
             "CREATE TABLE worktracker_issue (id varchar(32) PRIMARY KEY);\n\
              CREATE TABLE agent_runs (\n\
                id varchar(255) PRIMARY KEY, issue_id varchar(32) NOT NULL REFERENCES worktracker_issue(id),\n\
-               ticket_seq integer, agent varchar(32), model varchar(255), reasoning varchar(255),\n\
+               ticket_seq integer, agent varchar(32),\n\
                status varchar(32) NOT NULL, started_at varchar(255) NOT NULL, ended_at varchar(255),\n\
                exit_code integer, error text, cwd text, provider_session_id varchar(255),\n\
                lifecycle_state varchar(32), lifecycle_updated_at varchar(255), design_dir text,\n\
                resumed_from varchar(255), scope varchar(32) NOT NULL,\n\
-               launch_state varchar(255), launch_model varchar(255)\n\
+               launch_state varchar(255), launch_model varchar(255), initial_prompt text,\n\
+               launch_reasoning varchar(255), launch_unattended boolean NOT NULL DEFAULT 0\n\
              );\n\
              CREATE TABLE agent_terminal_sessions (\n\
                agent_run_id varchar(255) PRIMARY KEY REFERENCES agent_runs(id) ON DELETE CASCADE,\n\

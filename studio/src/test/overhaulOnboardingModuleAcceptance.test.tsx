@@ -130,6 +130,10 @@ function folderPickerRuntime(): StudioRuntime {
       serviceSupervision: true,
       nativeTerminal: false,
       nativeFolderPicker: true,
+      appUpdates: true,
+    },
+    appUpdates: {
+      check: async () => ({ installedVersion: "0.0.0", status: "current" }),
     },
     readWorkTracker: async () => { throw new Error("unused"); },
     writeWorkTracker: async () => { throw new Error("unused"); },

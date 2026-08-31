@@ -10,7 +10,34 @@
     "tauri": {
       "command": ["npm", "run", "tauri", "--", "build", "--features", "native-libghostty"],
       "binary_name": "ticketry",
-      "bundle_formats": ["app", "dmg"]
+      "bundle_formats": ["app", "dmg", "app.tar.gz"]
+    },
+    "updater": {
+      "archive_suffix": ".app.tar.gz",
+      "signature_suffix": ".app.tar.gz.sig",
+      "latest_manifest": {
+        "filename": "latest.json",
+        "format": "tauri-static-json-v2",
+        "version_matches_release_version": true,
+        "notes_required": true,
+        "required_fields": [
+          "version",
+          "notes",
+          "pub_date",
+          "platforms.darwin-aarch64.signature",
+          "platforms.darwin-aarch64.url"
+        ]
+      },
+      "archive_policy": {
+        "signed": true,
+        "notarized": true
+      },
+      "signing": {
+        "private_key_environment": "TAURI_SIGNING_PRIVATE_KEY",
+        "private_key_password_environment": "TAURI_SIGNING_PRIVATE_KEY_PASSWORD",
+        "distinct_from_apple_signing": true,
+        "offline_backup_owner": "Ticketry release owner"
+      }
     },
     "runtime_resources": [
       "src-tauri/tauri.conf.json",
@@ -34,7 +61,13 @@
       }
     },
     "update": {
-      "delivery": "verified-manual-installer",
+      "delivery": "in-app-user-initiated",
+      "feed": {
+        "repository": "ticketry-hq/ticketry-updates",
+        "repository_visibility": "public",
+        "channel": "stable",
+        "latest_url": "https://github.com/ticketry-hq/ticketry-updates/releases/latest/download/latest.json"
+      },
       "compatibility": [
         "app_version",
         "runtime_protocol",

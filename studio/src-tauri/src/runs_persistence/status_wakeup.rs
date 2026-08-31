@@ -5,11 +5,15 @@
 //! emitted cursor. Dropped, delayed, duplicated, and reordered wake-ups are
 //! therefore all safe: the database remains the only ordering authority.
 
+use std::sync::OnceLock;
+
 use tokio::sync::broadcast;
 
 /// A lagged subscriber must not be starved of a reread, so the channel keeps a
 /// small buffer and reports overflow instead of dropping the subscriber.
 const WAKEUP_BUFFER: usize = 64;
+
+static LIVE_AUTHORITY: OnceLock<StatusWakeup> = OnceLock::new();
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum Wakeup {
@@ -22,6 +26,7 @@ pub(crate) enum Wakeup {
 #[derive(Clone)]
 pub struct StatusWakeup {
     sender: broadcast::Sender<()>,
+    authority_instance: String,
 }
 
 impl Default for StatusWakeup {
@@ -34,7 +39,15 @@ impl StatusWakeup {
     pub fn new() -> Self {
         Self {
             sender: broadcast::channel(WAKEUP_BUFFER).0,
+            authority_instance: uuid::Uuid::new_v4().simple().to_string(),
         }
+    }
+
+    /// Every independently composed Runs service in this process publishes to
+    /// and listens on the same post-commit channel. The durable outbox remains
+    /// authoritative; cross-project wake-ups only cause harmless rereads.
+    pub(crate) fn live_authority() -> Self {
+        LIVE_AUTHORITY.get_or_init(Self::new).clone()
     }
 
     /// Register interest before the snapshot read so a commit that lands during
@@ -48,6 +61,10 @@ impl StatusWakeup {
     /// Called only after the authoritative row and its event have committed.
     pub(crate) fn publish(&self) {
         let _ = self.sender.send(());
+    }
+
+    pub(crate) fn authority_instance(&self) -> &str {
+        &self.authority_instance
     }
 }
 

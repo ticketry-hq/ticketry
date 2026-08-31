@@ -1,6 +1,7 @@
-use std::collections::{BTreeSet, HashMap};
+use std::collections::HashMap;
+use std::path::Path;
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use base64::Engine;
 use sea_orm::EntityTrait;
@@ -9,6 +10,8 @@ use sha2::{Digest, Sha256};
 
 use crate::entities::runs::agent_run;
 use crate::work_management::entities::issue;
+
+use super::grant_store::{GrantStore, StoredGrant};
 
 const AUTHORITY_LIFETIME: Duration = Duration::from_secs(24 * 60 * 60);
 
@@ -38,14 +41,8 @@ impl RunPrincipal {
 #[derive(Clone)]
 pub struct RunAuthority {
     database: sea_orm::DatabaseConnection,
-    grants: Arc<Mutex<HashMap<[u8; 32], Grant>>>,
-}
-
-#[derive(Clone)]
-struct Grant {
-    agent_run_id: String,
-    allowed_tools: BTreeSet<String>,
-    expires_at: Instant,
+    grants: Arc<Mutex<HashMap<String, StoredGrant>>>,
+    store: Option<GrantStore>,
 }
 
 #[derive(Debug)]
@@ -56,7 +53,21 @@ impl RunAuthority {
         Self {
             database,
             grants: Arc::new(Mutex::new(HashMap::new())),
+            store: None,
         }
+    }
+
+    pub fn persistent(
+        database: sea_orm::DatabaseConnection,
+        data_directory: &Path,
+    ) -> Result<Self, String> {
+        let store = GrantStore::in_directory(data_directory);
+        let grants = store.load()?;
+        Ok(Self {
+            database,
+            grants: Arc::new(Mutex::new(grants)),
+            store: Some(store),
+        })
     }
 
     pub async fn issue(
@@ -68,17 +79,15 @@ impl RunAuthority {
         let mut bytes = [0_u8; 32];
         rand::RngCore::fill_bytes(&mut rand::thread_rng(), &mut bytes);
         let token = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(bytes);
-        self.grants
-            .lock()
-            .expect("run authority lock poisoned")
-            .insert(
-                digest(&token),
-                Grant {
-                    agent_run_id: run.id,
-                    allowed_tools: allowed_tools.into_iter().collect(),
-                    expires_at: Instant::now() + AUTHORITY_LIFETIME,
-                },
-            );
+        self.insert(
+            &token,
+            StoredGrant {
+                agent_run_id: run.id,
+                allowed_tools: allowed_tools.into_iter().collect(),
+                expires_at_epoch_seconds: now_epoch_seconds()
+                    .saturating_add(AUTHORITY_LIFETIME.as_secs()),
+            },
+        )?;
         Ok(format!("Bearer {token}"))
     }
 
@@ -87,7 +96,9 @@ impl RunAuthority {
         authorization: Option<&str>,
         tool: &str,
     ) -> Result<RunPrincipal, AuthorizationFailure> {
-        let (principal, grant) = self.authenticate_grant(authorization).await?;
+        let (principal, grant) = self
+            .authenticate_grant(authorization, tool == "terminate_current_run")
+            .await?;
         if !grant.allowed_tools.contains(tool) {
             return Err(failure("tool_not_allowed", "authorization_tool_disallowed"));
         }
@@ -98,7 +109,7 @@ impl RunAuthority {
         &self,
         authorization: Option<&str>,
     ) -> Result<RunPrincipal, AuthorizationFailure> {
-        self.authenticate_grant(authorization)
+        self.authenticate_grant(authorization, false)
             .await
             .map(|(principal, _)| principal)
     }
@@ -106,7 +117,8 @@ impl RunAuthority {
     async fn authenticate_grant(
         &self,
         authorization: Option<&str>,
-    ) -> Result<(RunPrincipal, Grant), AuthorizationFailure> {
+        allow_inactive: bool,
+    ) -> Result<(RunPrincipal, StoredGrant), AuthorizationFailure> {
         let token = bearer_token(authorization)?;
         let grant = self
             .grants
@@ -115,10 +127,10 @@ impl RunAuthority {
             .get(&digest(token))
             .cloned()
             .ok_or_else(|| failure("caller_run_unbound", "authorization_invalid"))?;
-        if grant.expires_at <= Instant::now() {
+        if grant.expires_at_epoch_seconds <= now_epoch_seconds() {
             return Err(failure("caller_run_unbound", "authorization_expired"));
         }
-        let principal = self.principal(&grant.agent_run_id).await?;
+        let principal = self.principal(&grant.agent_run_id, allow_inactive).await?;
         Ok((principal, grant))
     }
 
@@ -138,13 +150,21 @@ impl RunAuthority {
         &self,
         agent_run_id: &str,
     ) -> Result<agent_run::Model, AuthorizationFailure> {
+        self.run(agent_run_id, false).await
+    }
+
+    async fn run(
+        &self,
+        agent_run_id: &str,
+        allow_inactive: bool,
+    ) -> Result<agent_run::Model, AuthorizationFailure> {
         agent_run::Entity::find_by_id(agent_run_id)
             .one(&self.database)
             .await
             .map_err(|_| failure("run_control_unavailable", "authorization_unavailable"))?
             .ok_or_else(|| failure("caller_run_unknown", "caller_run_unknown"))
             .and_then(|run| {
-                if run.ended_at.is_some() {
+                if run.ended_at.is_some() && !allow_inactive {
                     Err(failure("caller_run_unbound", "caller_run_inactive"))
                 } else {
                     Ok(run)
@@ -152,8 +172,12 @@ impl RunAuthority {
             })
     }
 
-    async fn principal(&self, agent_run_id: &str) -> Result<RunPrincipal, AuthorizationFailure> {
-        let run = self.active_run(agent_run_id).await?;
+    async fn principal(
+        &self,
+        agent_run_id: &str,
+        allow_inactive: bool,
+    ) -> Result<RunPrincipal, AuthorizationFailure> {
+        let run = self.run(agent_run_id, allow_inactive).await?;
         let item = issue::Entity::find_by_id(&run.issue_id)
             .one(&self.database)
             .await
@@ -176,22 +200,42 @@ impl RunAuthority {
         expired: bool,
     ) -> Result<String, AuthorizationFailure> {
         let run = self.active_run(agent_run_id).await?;
-        self.grants
-            .lock()
-            .expect("run authority lock poisoned")
-            .insert(
-                digest(token),
-                Grant {
-                    agent_run_id: run.id,
-                    allowed_tools: allowed_tools.into_iter().collect(),
-                    expires_at: if expired {
-                        Instant::now()
-                    } else {
-                        Instant::now() + AUTHORITY_LIFETIME
-                    },
+        self.insert(
+            token,
+            StoredGrant {
+                agent_run_id: run.id,
+                allowed_tools: allowed_tools.into_iter().collect(),
+                expires_at_epoch_seconds: if expired {
+                    now_epoch_seconds()
+                } else {
+                    now_epoch_seconds().saturating_add(AUTHORITY_LIFETIME.as_secs())
                 },
-            );
+            },
+        )?;
         Ok(format!("Bearer {token}"))
+    }
+
+    fn insert(&self, token: &str, grant: StoredGrant) -> Result<(), AuthorizationFailure> {
+        let digest = digest(token);
+        let mut grants = self.grants.lock().expect("run authority lock poisoned");
+        let previous = grants.insert(digest.clone(), grant);
+        if let Some(store) = &self.store {
+            if store.save(&grants).is_err() {
+                match previous {
+                    Some(previous) => {
+                        grants.insert(digest, previous);
+                    }
+                    None => {
+                        grants.remove(&digest);
+                    }
+                }
+                return Err(failure(
+                    "run_control_unavailable",
+                    "authorization_persistence_failed",
+                ));
+            }
+        }
+        Ok(())
     }
 }
 
@@ -207,8 +251,15 @@ fn bearer_token(authorization: Option<&str>) -> Result<&str, AuthorizationFailur
     Ok(token)
 }
 
-fn digest(token: &str) -> [u8; 32] {
-    Sha256::digest(token.as_bytes()).into()
+fn digest(token: &str) -> String {
+    format!("{:x}", Sha256::digest(token.as_bytes()))
+}
+
+fn now_epoch_seconds() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs()
 }
 
 fn failure(error: &str, reason: &str) -> AuthorizationFailure {

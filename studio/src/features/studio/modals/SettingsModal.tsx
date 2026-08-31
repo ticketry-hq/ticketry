@@ -28,6 +28,11 @@ import {
 } from "../../settings/changeLedger";
 import { KeybindingSettings } from "./KeybindingSettings";
 import { InstantSettingsPanel } from "../../settings";
+import {
+  AppUpdateAvailabilityIndicator,
+  AppUpdatesSection,
+  useAppUpdateAvailable,
+} from "../../app-updates";
 
 const ModelConfigurationPanel = lazy(async () => ({
   default: (await import("../../workflows"))
@@ -37,7 +42,11 @@ const ModelConfigurationPanel = lazy(async () => ({
 const MODELS_LEDE =
   "Which providers are available to launch, and what runs when a configuration leaves it unset.";
 
-type SettingsSection = "models" | "instant" | "keyboard-shortcuts";
+type SettingsSection =
+  | "models"
+  | "instant"
+  | "keyboard-shortcuts"
+  | "app-updates";
 
 type SettingsStatus = {
   tone: "success" | "attention" | "danger";
@@ -58,6 +67,7 @@ export function SettingsModal() {
   });
   const [activeSection, setActiveSection] =
     useState<SettingsSection>(requestedSection);
+  const updateAvailable = useAppUpdateAvailable();
   const [ledger, setLedger] = useState<SettingsChangeLedger>(
     createSettingsChangeLedger,
   );
@@ -111,6 +121,12 @@ export function SettingsModal() {
                 label="Keyboard shortcuts"
                 onClick={() => setActiveSection("keyboard-shortcuts")}
               />
+              <RailItem
+                active={activeSection === "app-updates"}
+                label="App updates"
+                onClick={() => setActiveSection("app-updates")}
+                updateAvailable={updateAvailable}
+              />
             </RailGroup>
           </div>
           <AppliedChangesLedger entries={ledger.entries} />
@@ -161,6 +177,12 @@ export function SettingsModal() {
           {activeSection === "instant" ? (
             <div className="row-start-2 min-h-0 min-w-0 overflow-x-hidden overflow-y-auto px-5 py-4">
               <InstantSettingsPanel />
+            </div>
+          ) : null}
+
+          {activeSection === "app-updates" ? (
+            <div className="row-start-2 min-h-0 min-w-0 overflow-x-hidden overflow-y-auto px-5 py-4">
+              <AppUpdatesSection />
             </div>
           ) : null}
 
@@ -327,16 +349,22 @@ function RailItem({
   active,
   label,
   onClick,
+  updateAvailable = false,
 }: {
   active: boolean;
   label: string;
   onClick: () => void;
+  updateAvailable?: boolean;
 }) {
   return (
     <button
       type="button"
       role="tab"
       aria-selected={active}
+      aria-label={label}
+      aria-describedby={
+        updateAvailable ? "app-updates-tab-update-available" : undefined
+      }
       onClick={onClick}
       className={
         active
@@ -344,7 +372,12 @@ function RailItem({
           : "border-l-2 border-transparent px-2 py-1.5 text-left text-sm text-text-secondary hover:text-text-primary"
       }
     >
-      {label}
+      <span className="flex items-center gap-2">
+        {label}
+        {updateAvailable ? (
+          <AppUpdateAvailabilityIndicator descriptionId="app-updates-tab-update-available" />
+        ) : null}
+      </span>
     </button>
   );
 }

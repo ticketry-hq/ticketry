@@ -1,11 +1,13 @@
 use std::env;
 use std::fs;
 use std::path::PathBuf;
+use std::process::Command;
 
 const GHOSTTY_REVISION: &str = "332b2aefc6e72d363aa93ab6ecfc86eeeeb5ed28";
 
 fn main() {
     println!("cargo:rerun-if-changed=../../config/product-identity.json");
+    record_build_commit();
     build_native_libghostty();
 
     tauri_build::try_build(tauri_build::Attributes::new().app_manifest(
@@ -19,6 +21,9 @@ fn main() {
             "desktop_preflight_report",
             "desktop_approve_executable_path",
             "desktop_launch_default_coding_agent",
+            "desktop_update_check",
+            "desktop_latest_crash_collection_outcome",
+            "desktop_reveal_crash_report_folder",
             "viewer_attach",
             "viewer_input",
             "viewer_resize",
@@ -40,6 +45,38 @@ fn main() {
         ]),
     ))
     .expect("failed to build the Ticketry Tauri application");
+}
+
+fn record_build_commit() {
+    println!("cargo:rerun-if-env-changed=TICKETRY_COMMIT");
+    let manifest = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").unwrap());
+    let commit = env::var("TICKETRY_COMMIT")
+        .ok()
+        .filter(|commit| !commit.trim().is_empty())
+        .or_else(|| {
+            Command::new("git")
+                .args(["rev-parse", "HEAD"])
+                .current_dir(&manifest)
+                .output()
+                .ok()
+                .filter(|output| output.status.success())
+                .and_then(|output| String::from_utf8(output.stdout).ok())
+                .map(|commit| commit.trim().to_owned())
+                .filter(|commit| !commit.is_empty())
+        })
+        .unwrap_or_else(|| "unknown".to_owned());
+    println!("cargo:rustc-env=TICKETRY_COMMIT={commit}");
+    if let Ok(git_head) = Command::new("git")
+        .args(["rev-parse", "--git-path", "HEAD"])
+        .current_dir(manifest)
+        .output()
+    {
+        if git_head.status.success() {
+            if let Ok(path) = String::from_utf8(git_head.stdout) {
+                println!("cargo:rerun-if-changed={}", path.trim());
+            }
+        }
+    }
 }
 
 fn build_native_libghostty() {

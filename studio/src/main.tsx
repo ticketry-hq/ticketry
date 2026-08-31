@@ -9,6 +9,8 @@ import ToastHost from "./app/shell/ToastHost";
 import { installDesktopFileLogging } from "./shared/logging/desktopFileLogging";
 import { installWebFileLogging } from "./shared/logging/webFileLogging";
 import { StudioApolloProvider } from "./shared/apollo/StudioApolloProvider";
+import { setLaunchDiscoveryRuntimeInstance } from "./features/agents/status/launchDiscoveryTrace";
+import { AppUpdatesLaunchCheck } from "./features/app-updates";
 
 // Self-hosted fonts (Fontsource, upright variable axes only — no external
 // request). Hanken Grotesk = UI/body; JetBrains Mono = KEY-N / code.
@@ -26,6 +28,7 @@ import { suppressNativeContextMenu } from "./app/startup/suppressNativeContextMe
 import {
   initializeBrowserRuntime,
   initializeStudioRuntime,
+  runtimeConfiguration,
 } from "./runtime";
 
 if (isTauri()) {
@@ -51,16 +54,19 @@ async function startStudio(): Promise<void> {
   try {
     if (isTauri()) {
       await installDesktopFileLogging({ invoke });
-      initializeStudioRuntime(await createDesktopRuntime({ invoke, listen }));
+      const runtime = await createDesktopRuntime({ invoke, listen });
+      initializeStudioRuntime(runtime);
     } else {
       await installWebFileLogging();
       initializeBrowserRuntime();
     }
+    setLaunchDiscoveryRuntimeInstance(runtimeConfiguration().runtimeInstance ?? null);
     root.render(
       <React.StrictMode>
         <StudioApolloProvider>
           <div className="h-screen w-screen">
             <div className="studio-surface h-full">
+              <AppUpdatesLaunchCheck />
               <StudioApp />
             </div>
             <ModalHost />

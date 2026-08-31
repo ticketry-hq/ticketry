@@ -103,7 +103,7 @@ pub async fn inspect(
                 ),
             ));
         }
-        if version != expected {
+        if version != expected && !supported_upgrade(table, version, expected) {
             return Err(ClassificationError::new(
                 Refusal::UnsupportedGeneration,
                 format!("{table} records unsupported ownership version {version}"),
@@ -115,6 +115,22 @@ pub async fn inspect(
         return Ok(None);
     }
     Ok(Some(RustOwnership { adopted, pending }))
+}
+
+fn supported_upgrade(table: &str, version: i32, expected: i32) -> bool {
+    table == "ticketry_runs_adoption" && version == 1 && expected == 2
+}
+
+#[cfg(test)]
+mod tests {
+    use super::supported_upgrade;
+
+    #[test]
+    fn only_the_named_runs_v1_to_v2_upgrade_is_accepted() {
+        assert!(supported_upgrade("ticketry_runs_adoption", 1, 2));
+        assert!(!supported_upgrade("ticketry_runs_adoption", 2, 3));
+        assert!(!supported_upgrade("ticketry_worktracker_adoption", 1, 2));
+    }
 }
 
 async fn ledger_version(

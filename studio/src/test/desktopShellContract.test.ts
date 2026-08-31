@@ -76,6 +76,9 @@ describe("desktop shell security contract", () => {
         "allow-desktop-preflight-report",
         "allow-desktop-approve-executable-path",
         "allow-desktop-launch-default-coding-agent",
+        "allow-desktop-update-check",
+        "allow-desktop-latest-crash-collection-outcome",
+        "allow-desktop-reveal-crash-report-folder",
         "allow-TauRPC--graphql-execute",
         "allow-TauRPC--graphql-subscribe",
         "allow-TauRPC--graphql-unsubscribe",
@@ -100,6 +103,68 @@ describe("desktop shell security contract", () => {
     expect(JSON.stringify(capability)).not.toContain("remote");
     expect(JSON.stringify(capability)).not.toContain("shell");
     expect(JSON.stringify(capability)).not.toContain("dialog:");
+  });
+
+  it("exposes one permissioned desktop update check through the updater plugin", async () => {
+    const cargo = await text("../../src-tauri/Cargo.toml");
+    const build = await text("../../src-tauri/build.rs");
+    const run = await text("../../src-tauri/src/desktop/run.rs");
+    const appUpdates = await text("../../src-tauri/src/app_updates/mod.rs");
+    const capability = await json("../../src-tauri/capabilities/studio-main.json");
+    const configuration = await json("../../src-tauri/tauri.conf.json");
+
+    expect(cargo).toContain('tauri-plugin-updater = "2"');
+    expect(run).toContain("tauri_plugin_updater::Builder::new().build()");
+    expect(build).toContain('"desktop_update_check"');
+    expect(run).toContain("app_updates::desktop_update_check");
+    expect(appUpdates).toContain("pub(crate) async fn desktop_update_check");
+    expect(appUpdates).toContain("UpdaterExt");
+    expect(appUpdates).toContain("updater_builder()");
+    expect(appUpdates).toContain('var("TICKETRY_UPDATE_FEED_URL")');
+
+    const permissions = capability.permissions as string[];
+    expect(permissions).toContain("allow-desktop-update-check");
+    expect(permissions.some((permission) => permission.startsWith("updater:")))
+      .toBe(false);
+    expect(configuration.plugins).toEqual({
+      updater: {
+        pubkey: expect.any(String),
+        endpoints: [
+          "https://github.com/ticketry-hq/ticketry-releases/releases/latest/download/latest.json",
+        ],
+      },
+    });
+    expect((configuration.bundle as Record<string, unknown>).createUpdaterArtifacts)
+      .toBeUndefined();
+  });
+
+  it("exposes only fixed Crash Report outcome and reveal commands", async () => {
+    const build = await text("../../src-tauri/build.rs");
+    const run = await text("../../src-tauri/src/desktop/run.rs");
+    const commands = await text(
+      "../../src-tauri/src/desktop/crash_reports.rs",
+    );
+    const capability = await json(
+      "../../src-tauri/capabilities/studio-main.json",
+    );
+
+    for (const command of [
+      "desktop_latest_crash_collection_outcome",
+      "desktop_reveal_crash_report_folder",
+    ]) {
+      expect(build).toContain(`"${command}"`);
+      expect(run).toContain(`crash_reports::${command}`);
+      expect(commands).toContain(`pub(crate) fn ${command}`);
+    }
+    expect(run).toContain("CrashReportsRuntime::new(");
+    expect(run).toContain(".manage(crash_reports)");
+    expect(capability.permissions).toEqual(
+      expect.arrayContaining([
+        "allow-desktop-latest-crash-collection-outcome",
+        "allow-desktop-reveal-crash-report-folder",
+      ]),
+    );
+    expect(JSON.stringify(capability)).not.toContain("shell:");
   });
 
   // Tauri defaults `dragDropEnabled` to true, which installs an OS drag

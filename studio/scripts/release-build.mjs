@@ -42,6 +42,39 @@ export function validateManifest(manifest) {
   }
   requireValue(artifacts.tauri?.binary_name, "artifacts.tauri.binary_name");
   requireArray(artifacts.tauri?.bundle_formats, "artifacts.tauri.bundle_formats");
+  const updater = requireValue(artifacts.updater, "artifacts.updater");
+  if (updater.archive_suffix !== ".app.tar.gz") {
+    throw new ReleaseManifestError("artifacts.updater.archive_suffix must be .app.tar.gz");
+  }
+  if (updater.signature_suffix !== `${updater.archive_suffix}.sig`) {
+    throw new ReleaseManifestError("artifacts.updater.signature_suffix must be .app.tar.gz.sig");
+  }
+  if (updater.latest_manifest?.filename !== "latest.json") {
+    throw new ReleaseManifestError(
+      "artifacts.updater.latest_manifest.filename must be latest.json",
+    );
+  }
+  if (updater.archive_policy?.signed !== true || updater.archive_policy?.notarized !== true) {
+    throw new ReleaseManifestError(
+      "release manifest must require signed and notarized updater archives",
+    );
+  }
+  if (updater.signing?.private_key_environment !== "TAURI_SIGNING_PRIVATE_KEY") {
+    throw new ReleaseManifestError(
+      "artifacts.updater.signing.private_key_environment must be TAURI_SIGNING_PRIVATE_KEY",
+    );
+  }
+  if (
+    updater.signing?.private_key_password_environment
+    !== "TAURI_SIGNING_PRIVATE_KEY_PASSWORD"
+  ) {
+    throw new ReleaseManifestError(
+      "artifacts.updater.signing.private_key_password_environment must be TAURI_SIGNING_PRIVATE_KEY_PASSWORD",
+    );
+  }
+  if (updater.signing?.distinct_from_apple_signing !== true) {
+    throw new ReleaseManifestError("updater signing must be distinct from Apple code signing");
+  }
   requireArray(artifacts.runtime_resources, "artifacts.runtime_resources");
   const policy = requireValue(manifest.release_policy, "release_policy");
   requireValue(policy.macos?.signing?.identity_environment, "release policy macOS signing identity environment");
@@ -54,6 +87,26 @@ export function validateManifest(manifest) {
   }
   requireArray(policy.macos?.notarization?.authentication, "release policy macOS notarization authentication");
   requireValue(policy.update?.delivery, "release policy update delivery");
+  const updateRepository = requireValue(
+    policy.update?.feed?.repository,
+    "release policy update feed repository",
+  );
+  if (policy.update?.feed?.repository_visibility !== "public") {
+    throw new ReleaseManifestError("release policy update feed repository must be public");
+  }
+  if (policy.update?.feed?.channel !== "stable") {
+    throw new ReleaseManifestError("release policy update feed channel must be stable");
+  }
+  const expectedLatestUrl = `https://github.com/${updateRepository}/releases/latest/download/latest.json`;
+  const latestUrl = requireValue(
+    policy.update?.feed?.latest_url,
+    "release policy update feed latest URL",
+  );
+  if (latestUrl !== expectedLatestUrl) {
+    throw new ReleaseManifestError(
+      `release policy update feed latest URL must be ${expectedLatestUrl}`,
+    );
+  }
   requireArray(policy.update?.compatibility, "release policy update compatibility");
   if (policy.update?.automatic_updates !== false) {
     throw new ReleaseManifestError("release policy must explicitly disable unverified automatic updates");
@@ -94,11 +147,18 @@ function macOSCredentialState(environment) {
   return {
     hasSigningIdentity: Boolean(environment.APPLE_SIGNING_IDENTITY),
     hasNotarizationAuthentication: hasPasswordAuthentication || hasApiKeyAuthentication,
+    hasUpdaterSigningKey: Boolean(environment.TAURI_SIGNING_PRIVATE_KEY),
+    hasUpdaterSigningKeyPassword: Boolean(environment.TAURI_SIGNING_PRIVATE_KEY_PASSWORD),
   };
 }
 
 export function validateMacOSReleaseEnvironment(environment = process.env, { allowUnsigned = false } = {}) {
-  const { hasSigningIdentity, hasNotarizationAuthentication } = macOSCredentialState(environment);
+  const {
+    hasSigningIdentity,
+    hasNotarizationAuthentication,
+    hasUpdaterSigningKey,
+    hasUpdaterSigningKeyPassword,
+  } = macOSCredentialState(environment);
   if (allowUnsigned) {
     if (hasSigningIdentity && hasNotarizationAuthentication) {
       throw new ReleaseManifestError(
@@ -111,6 +171,9 @@ export function validateMacOSReleaseEnvironment(environment = process.env, { all
   if (!hasSigningIdentity) missing.push("APPLE_SIGNING_IDENTITY");
   if (!hasNotarizationAuthentication) {
     missing.push("APPLE_ID,APPLE_PASSWORD,APPLE_TEAM_ID or APPLE_API_KEY,APPLE_API_ISSUER,APPLE_API_KEY_PATH");
+  }
+  if (!hasUpdaterSigningKey || !hasUpdaterSigningKeyPassword) {
+    missing.push("TAURI_SIGNING_PRIVATE_KEY and TAURI_SIGNING_PRIVATE_KEY_PASSWORD");
   }
   if (missing.length > 0) {
     throw new ReleaseManifestError(`macOS release signing/notarization credentials are missing: ${missing.join("; ")}`);

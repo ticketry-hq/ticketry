@@ -14,6 +14,10 @@ import type {
   RunStatusResetRequiredFrame,
 } from "../types";
 import {
+  recordLaunchDiscovery,
+  type LaunchDiscoveryIdentity,
+} from "../launchDiscoveryTrace";
+import {
   createStatusStreamClient,
   type StatusStreamClient,
 } from "../statusStreamClient";
@@ -72,6 +76,12 @@ interface ActiveFeed {
   stop(): void;
 }
 
+interface ReplacementTrace {
+  readonly agentRunId: string;
+  readonly cursor: number;
+  readonly reason: "unknown_run";
+}
+
 let active: ActiveFeed | null = null;
 
 export const statusStreamFeed = {
@@ -99,6 +109,16 @@ export const statusStreamFeed = {
     /** Only the currently owned subscription may write into this project. */
     const owns = (subscription: number) =>
       !stopped && subscription === generation;
+    const traceIdentity = (
+      agentRunId: string | null,
+      cursor: number | null,
+      connectionGeneration: number = generation,
+    ): LaunchDiscoveryIdentity => ({
+      projectId,
+      agentRunId,
+      cursor,
+      connectionGeneration,
+    });
 
     const scheduleReconnect = () => {
       if (stopped || retry) return;
@@ -116,20 +136,48 @@ export const statusStreamFeed = {
      * snapshot — becomes a complete record rather than a state applied to
      * nothing.
      */
-    const resync = () => {
+    const resync = (replacement: ReplacementTrace) => {
       if (stopped || resyncTimer) return;
+      recordLaunchDiscovery(
+        "unknown-run-resync-scheduled",
+        traceIdentity(replacement.agentRunId, replacement.cursor),
+        { debounceMs: RESYNC_DEBOUNCE_MS },
+      );
       resyncTimer = setTimeout(() => {
         resyncTimer = null;
-        reconnectNow();
+        recordLaunchDiscovery(
+          "unknown-run-resync-started",
+          traceIdentity(replacement.agentRunId, replacement.cursor),
+        );
+        reconnectNow(replacement);
       }, RESYNC_DEBOUNCE_MS);
     };
 
     const applyEvent = (frame: RunStatusEventFrame): void => {
       const fact = readStatusFact(frame);
+      const agentRunId = fact?.family === "agent_run"
+        ? fact.agentRunId
+        : fact?.family === "agent_run_activity"
+          ? fact.run.agent_run_id
+          : frame.agent_run_id;
+      recordLaunchDiscovery(
+        "graphql-frame-received",
+        traceIdentity(agentRunId, frame.cursor),
+        { frameType: "event", eventKind: frame.event_kind },
+      );
       if (!fact) return;
       const runResult = applyRunStatusFact(fact);
+      if (runResult !== "not_run_fact") {
+        recordLaunchDiscovery(
+          "apollo-event-applied",
+          traceIdentity(agentRunId, frame.cursor),
+          { eventKind: frame.event_kind, result: runResult },
+        );
+      }
       if (runResult === "unknown_run") {
-        resync();
+        if (agentRunId) {
+          resync({ agentRunId, cursor: frame.cursor, reason: "unknown_run" });
+        }
         return;
       }
       if (runResult === "applied") return;
@@ -195,10 +243,24 @@ export const statusStreamFeed = {
       reset.begin(frame.cursor);
     };
 
-    const connect = () => {
+    const connect = (replacement?: ReplacementTrace & {
+      readonly replacedConnectionGeneration: number;
+    }) => {
       if (stopped) return;
       const subscription = ++generation;
       snapshotCursor = null;
+      const identity = (agentRunId: string | null, cursor: number | null) =>
+        traceIdentity(agentRunId, cursor, subscription);
+      if (replacement) {
+        recordLaunchDiscovery(
+          "replacement-generation-started",
+          identity(replacement.agentRunId, replacement.cursor),
+          {
+            reason: replacement.reason,
+            replacedConnectionGeneration: replacement.replacedConnectionGeneration,
+          },
+        );
+      }
       const next = createStatusStreamClient({
         projectId,
         subscriptionId: `run-status_${projectId}_${subscription}`,
@@ -208,7 +270,27 @@ export const statusStreamFeed = {
           onSnapshot(frame) {
             if (!owns(subscription)) return;
             attempt = 0;
-            if (applySnapshotFrame(frame)) snapshotCursor = frame.cursor;
+            const runIds = frame.runs.length > 0
+              ? frame.runs.map((run) => run.agent_run_id)
+              : [null];
+            for (const runId of runIds) {
+              recordLaunchDiscovery(
+                "graphql-frame-received",
+                identity(runId, frame.cursor),
+                { frameType: "snapshot" },
+              );
+            }
+            const applied = applySnapshotFrame(frame);
+            if (applied) snapshotCursor = frame.cursor;
+            if (applied) {
+              for (const run of frame.runs) {
+                recordLaunchDiscovery(
+                  "apollo-run-applied",
+                  identity(run.agent_run_id, frame.cursor),
+                  { source: "snapshot" },
+                );
+              }
+            }
           },
           onEvent(frame) {
             if (!owns(subscription)) return;
@@ -218,6 +300,10 @@ export const statusStreamFeed = {
           },
           onCaughtUp() {
             if (!owns(subscription)) return;
+            recordLaunchDiscovery(
+              "caught-up",
+              identity(null, cursors.get(projectId) ?? null),
+            );
             // Replay is complete, so this is the reconnect boundary at which
             // capabilities outside the outbox refresh authoritatively.
             invalidator.flush();
@@ -244,12 +330,25 @@ export const statusStreamFeed = {
         },
       });
       client = next;
-      void next.start().catch(() => {
-        if (owns(subscription)) scheduleReconnect();
-      });
+      recordLaunchDiscovery(
+        "subscription-started",
+        identity(null, cursors.get(projectId) ?? null),
+      );
+      void next.start()
+        .then(() => {
+          if (owns(subscription)) {
+            recordLaunchDiscovery(
+              "subscription-accepted",
+              identity(null, cursors.get(projectId) ?? null),
+            );
+          }
+        })
+        .catch(() => {
+          if (owns(subscription)) scheduleReconnect();
+        });
     };
 
-    const reconnectNow = () => {
+    const reconnectNow = (replacement?: ReplacementTrace) => {
       if (stopped) return;
       if (retry) {
         clearTimeout(retry);
@@ -257,29 +356,33 @@ export const statusStreamFeed = {
       }
       const previous = client;
       client = null;
+      const replacedConnectionGeneration = generation;
       // Bumping the generation first makes every frame still queued from the
       // previous subscription unowned, so teardown cannot cross a boundary.
       generation += 1;
       void previous?.stop().catch(() => {});
-      connect();
+      connect(replacement
+        ? { ...replacement, replacedConnectionGeneration }
+        : undefined);
     };
 
     const onVisibility = () => {
       if (document.visibilityState !== "visible") return;
       reconnectNow();
     };
+    const onOnline = () => reconnectNow();
     // A transport does not reliably report closure while the network is down.
     // Replacing the subscription as soon as the page is online again
     // guarantees the retained cursor is replayed promptly.
     document.addEventListener("visibilitychange", onVisibility);
-    window.addEventListener("online", reconnectNow);
+    window.addEventListener("online", onOnline);
     connect();
 
     const stop = () => {
       stopped = true;
       generation += 1;
       document.removeEventListener("visibilitychange", onVisibility);
-      window.removeEventListener("online", reconnectNow);
+      window.removeEventListener("online", onOnline);
       invalidator.cancel();
       documents.cancel();
       worktrees.cancel();

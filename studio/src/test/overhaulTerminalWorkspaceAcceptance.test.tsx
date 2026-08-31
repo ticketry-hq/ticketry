@@ -4,6 +4,7 @@ import { SelectedTicketContent } from "../app/shell/ticket-workspace/selected-ti
 import { useStudioStore } from "../features/projects/store";
 import { useAgentStatusStore } from "../features/agents/status/testStore";
 import { statusStreamFeed } from "../features/agents/status/stream/statusStreamFeed";
+import { recordLaunchDiscovery } from "../features/agents/status/launchDiscoveryTrace";
 import {
   useTerminalStore,
   type SessionMeta,
@@ -293,5 +294,45 @@ describe("overhaul acceptance — terminals", () => {
     expect(Object.values(useTerminalStore.getState().sessions)).toContainEqual(
       expect.objectContaining({ agentRunId: "run-foreign" }),
     );
+  });
+
+  it("records the first committed workspace render for a discovered run", async () => {
+    recordLaunchDiscovery("apollo-run-applied", {
+      projectId: "project-1",
+      agentRunId: "run-traced",
+      cursor: 42,
+      connectionGeneration: 3,
+    });
+    const trace = vi.spyOn(console, "info").mockImplementation(() => {});
+    useAgentStatusStore.setState({
+      runs: { "run-traced": run("run-traced", "story-1") },
+    });
+
+    render(
+      <SelectedTicketContent
+        bucket="story-1"
+        projectId="project-1"
+        moduleId="module-1"
+        owner="studio"
+        details={<div>Issue details</div>}
+      />,
+    );
+
+    expect(await screen.findByRole("tab", { name: "codex terminal" }))
+      .toBeInTheDocument();
+    await waitFor(() => {
+      expect(trace.mock.calls).toContainEqual([
+        "[launch-discovery]",
+        expect.objectContaining({
+          event: "workspace-render-committed",
+          projectId: "project-1",
+          agentRunId: "run-traced",
+          cursor: 42,
+          connectionGeneration: 3,
+          bucket: "story-1",
+          moduleId: "module-1",
+        }),
+      ]);
+    });
   });
 });

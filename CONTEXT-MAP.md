@@ -10,8 +10,9 @@
   tmux-backed terminal sessions, document access, and task worktrees.
 - **Studio Experience** owns the human-facing workspace, navigation, local view
   projections, editing interactions, and desktop API client.
-- **Desktop Runtime** owns the Tauri/webview boundary, in-process Rust tasks,
-  native terminal renderer, and application lifecycle.
+- **[Desktop Runtime](./studio/src-tauri/src/desktop/CONTEXT.md)** owns the
+  Tauri/webview boundary, in-process Rust tasks, native terminal renderer, and
+  application lifecycle.
 
 ## Relationships
 

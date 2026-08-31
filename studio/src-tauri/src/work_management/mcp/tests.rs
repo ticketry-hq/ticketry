@@ -474,7 +474,7 @@ async fn global_mcp_allows_task_tools_while_run_credentials_remain_scoped() {
 
     first.shutdown().await;
     let second = McpRuntime::start(configuration(port)).await.unwrap();
-    let stale = post(
+    let recovered = post(
         &url,
         Some("Bearer valid"),
         call(5, "list_projects", json!({})),
@@ -484,8 +484,8 @@ async fn global_mcp_allows_task_tools_while_run_credentials_remain_scoped() {
     .await
     .unwrap();
     assert_eq!(
-        stale["result"]["structuredContent"]["reason"],
-        "authorization_invalid"
+        recovered["result"]["structuredContent"]["result"][0]["id"],
+        PROJECT
     );
     second
         .grant_for_test("run-valid", "current", allowed_provider_operations(), false)

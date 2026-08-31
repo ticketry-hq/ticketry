@@ -42,6 +42,7 @@ const ATTEMPT_KINDS: ReadonlySet<string> = new Set([
 export interface AgentRunFact {
   readonly family: "agent_run";
   readonly agentRunId: string;
+  readonly run: RunRecord | null;
   readonly state: RawLifecycleState;
   readonly effectiveState: RunPresentationState;
   readonly occurredAt: string;
@@ -168,6 +169,24 @@ function readAttempt(value: unknown): AutomationAttemptRecord | null {
   return toAutomationAttemptRecord(value as unknown as AutomationAttemptPayload);
 }
 
+function readRun(value: unknown): RunRecord | null {
+  if (!isRecord(value)) return null;
+  if (
+    text(value.agent_run_id) === null ||
+    text(value.project_id) === null ||
+    text(value.module_id) === null ||
+    text(value.scope) === null ||
+    text(value.started_at) === null ||
+    text(value.state) === null ||
+    text(value.effective_state) === null ||
+    text(value.updated_at) === null ||
+    typeof value.output_sequence !== "number"
+  ) {
+    return null;
+  }
+  return toRunRecord(value as unknown as RunHoldingPayload);
+}
+
 /** Narrow one durable event into the fact its family describes. */
 export function readStatusFact(frame: RunStatusEventFrame): StatusFact | null {
   const payload = frame.payload as Record<string, unknown>;
@@ -180,9 +199,15 @@ export function readStatusFact(frame: RunStatusEventFrame): StatusFact | null {
       if (agentRunId === null || state === null) return null;
       const effectiveState = text(payload.effectiveState) ?? state;
       const exitCode = typeof payload.exitCode === "number" ? payload.exitCode : null;
+      const candidate = readRun(payload.run);
+      const run = candidate?.agent_run_id === agentRunId &&
+          candidate.project_id === frame.project_id
+        ? candidate
+        : null;
       return {
         family: "agent_run",
         agentRunId,
+        run,
         state: state as RawLifecycleState,
         effectiveState: effectiveState as RunPresentationState,
         occurredAt,
@@ -191,24 +216,11 @@ export function readStatusFact(frame: RunStatusEventFrame): StatusFact | null {
       };
     }
     case AGENT_RUN_TERMINAL_ACTIVITY: {
-      if (!isRecord(payload.run)) return null;
-      const run = payload.run;
-      if (
-        text(run.agent_run_id) === null ||
-        text(run.project_id) === null ||
-        text(run.module_id) === null ||
-        text(run.scope) === null ||
-        text(run.started_at) === null ||
-        text(run.state) === null ||
-        text(run.effective_state) === null ||
-        text(run.updated_at) === null ||
-        typeof run.output_sequence !== "number"
-      ) {
-        return null;
-      }
+      const run = readRun(payload.run);
+      if (!run) return null;
       return {
         family: "agent_run_activity",
-        run: toRunRecord(run as unknown as RunHoldingPayload),
+        run,
       };
     }
     case WORK_ITEM_CHANGED:

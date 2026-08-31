@@ -20,7 +20,7 @@ export function DormantWorkspaceTabs({
   resumableChips,
   historyChips,
   resumableSessions,
-  resumingRunId,
+  resumingRunIds,
   onReopenDocument,
   onResumeTerminal,
 }: {
@@ -28,7 +28,7 @@ export function DormantWorkspaceTabs({
   resumableChips: readonly DormantTerminalChip[];
   historyChips: readonly DormantTerminalChip[];
   resumableSessions: readonly ResumableTerminalSession[];
-  resumingRunId: string | null;
+  resumingRunIds: ReadonlySet<string>;
   onReopenDocument: (docId: string) => void;
   onResumeTerminal: (session: ResumableTerminalSession) => void;
 }) {
@@ -64,13 +64,13 @@ export function DormantWorkspaceTabs({
             type="button"
             aria-label={`Resume ${chip.accessibleName}`}
             title={chip.hoverTitle || undefined}
-            disabled={resumingRunId !== null}
+            disabled={resumingRunIds.has(chip.key)}
             onClick={() => onResumeTerminal(session)}
             className={`shrink-0 border border-dashed px-2 py-0.5 text-xs hover:border-focus-accent disabled:cursor-wait disabled:opacity-50 ${providerToneClasses(
               { agent: chip.agent, live: chip.live, selected: false },
             )}`}
           >
-            {resumingRunId === chip.key ? "Resuming…" : `↻ ${chip.label}`}
+            {resumingRunIds.has(chip.key) ? "Resuming…" : `↻ ${chip.label}`}
           </button>
         );
       })}

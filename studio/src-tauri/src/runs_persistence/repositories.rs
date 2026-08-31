@@ -94,6 +94,10 @@ impl StatusEventRepository {
         self.wakeup.publish();
     }
 
+    pub(crate) fn wakeup_authority_instance(&self) -> &str {
+        self.wakeup.authority_instance()
+    }
+
     pub async fn append(
         &self,
         transaction: &DatabaseTransaction,
@@ -344,8 +348,8 @@ fn agent_run(row: agent_run_entity::Model) -> Option<AgentRunRecord> {
         issue_id: row.issue_id,
         ticket_seq: row.ticket_seq,
         agent: row.agent,
-        model: row.model,
-        reasoning: row.reasoning,
+        model: row.launch_model.clone(),
+        reasoning: row.launch_reasoning.clone(),
         status: row.status,
         started_at: row.started_at,
         ended_at: row.ended_at,

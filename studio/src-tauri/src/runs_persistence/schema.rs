@@ -4,10 +4,11 @@ use sea_orm::{ConnectionTrait, DbBackend, Statement, TransactionTrait};
 
 use super::{RunsPersistenceError, RunsPersistenceErrorCode};
 
-pub const VERSION: i32 = 1;
+pub const VERSION: i32 = 2;
 pub const CURRENT_DJANGO_LEAF: &str = "0013_agentrun_launch_configuration_snapshot";
 pub const LEGACY_TERMINAL_DJANGO_LEAF: &str = "0015_agentrun_initial_prompt";
 pub const MERGED_DJANGO_LEAF: &str = "0015_merge_20260819_1521";
+pub const FINAL_DJANGO_LEAF: &str = "0017_agentrun_launch_unattended";
 
 pub const AUTHORED_TABLES: &[&str] = &[
     "agent_runs",
@@ -22,8 +23,6 @@ pub(crate) const AGENT_RUN_COLUMNS: &[&str] = &[
     "issue_id",
     "ticket_seq",
     "agent",
-    "model",
-    "reasoning",
     "status",
     "started_at",
     "ended_at",
@@ -38,6 +37,9 @@ pub(crate) const AGENT_RUN_COLUMNS: &[&str] = &[
     "scope",
     "launch_state",
     "launch_model",
+    "initial_prompt",
+    "launch_reasoning",
+    "launch_unattended",
 ];
 
 pub(crate) const ATTEMPT_BASE_COLUMNS: &[&str] = &[
@@ -84,6 +86,33 @@ pub(crate) async fn install(
     Ok(())
 }
 
+pub(crate) async fn upgrade_v1(
+    database: &sea_orm::DatabaseConnection,
+) -> Result<(), RunsPersistenceError> {
+    let transaction = database.begin().await.map_err(storage)?;
+    rebuild_premerge_agent_runs(&transaction).await?;
+    transaction
+        .execute_unprepared(
+            "CREATE TABLE ticketry_runs_adoption__v2 (\n\
+                 singleton integer PRIMARY KEY CHECK (singleton = 1),\n\
+                 version integer NOT NULL CHECK (version = 2),\n\
+                 source_leaf varchar(255) NOT NULL,\n\
+                 stable_digest char(64) NOT NULL,\n\
+                 adopted_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP\n\
+             );\n\
+             INSERT INTO ticketry_runs_adoption__v2\n\
+                 (singleton, version, source_leaf, stable_digest, adopted_at)\n\
+             SELECT singleton, 2, source_leaf, stable_digest, adopted_at\n\
+             FROM ticketry_runs_adoption;\n\
+             DROP TABLE ticketry_runs_adoption;\n\
+             ALTER TABLE ticketry_runs_adoption__v2 RENAME TO ticketry_runs_adoption;",
+        )
+        .await
+        .map_err(storage)?;
+    transaction.commit().await.map_err(storage)?;
+    Ok(())
+}
+
 async fn bridge(
     transaction: &sea_orm::DatabaseTransaction,
     source_leaf: Option<&str>,
@@ -91,28 +120,14 @@ async fn bridge(
     let Some(source_leaf) = source_leaf else {
         return Ok(());
     };
-    if source_leaf == LEGACY_TERMINAL_DJANGO_LEAF {
-        transaction
-            .execute_unprepared(
-                "ALTER TABLE agent_runs ADD COLUMN model varchar NULL;\n\
-                 ALTER TABLE agent_runs ADD COLUMN reasoning varchar NULL;\n\
-                 UPDATE agent_runs SET model=launch_model WHERE model IS NULL;",
-            )
-            .await
-            .map_err(storage)?;
-        for migration in [CURRENT_DJANGO_LEAF, MERGED_DJANGO_LEAF] {
-            transaction
-                .execute_raw(Statement::from_sql_and_values(
-                    DbBackend::Sqlite,
-                    "INSERT INTO django_migrations (app, name, applied) VALUES ('runs', ?, CURRENT_TIMESTAMP)",
-                    [migration.into()],
-                ))
-                .await
-                .map_err(storage)?;
-        }
+    if source_leaf == FINAL_DJANGO_LEAF {
         return Ok(());
     }
-    if source_leaf == MERGED_DJANGO_LEAF {
+    if matches!(
+        source_leaf,
+        LEGACY_TERMINAL_DJANGO_LEAF | MERGED_DJANGO_LEAF
+    ) {
+        rebuild_premerge_agent_runs(transaction).await?;
         return Ok(());
     }
     let source_number = migration_number(source_leaf)?;
@@ -176,6 +191,12 @@ async fn rebuild_premerge_agent_runs(
         .map(|column| {
             if installed.contains(*column) {
                 format!("\"{column}\"")
+            } else if *column == "launch_model" && installed.contains("model") {
+                "\"model\"".to_owned()
+            } else if *column == "launch_reasoning" && installed.contains("reasoning") {
+                "\"reasoning\"".to_owned()
+            } else if *column == "launch_unattended" {
+                "0".to_owned()
             } else {
                 "NULL".to_owned()
             }
@@ -246,7 +267,7 @@ pub(crate) const DJANGO_MIGRATIONS: [&str; 13] = [
 const FOCUSED_SCHEMA: &str = r#"
 CREATE TABLE ticketry_runs_adoption (
     singleton integer PRIMARY KEY CHECK (singleton = 1),
-    version integer NOT NULL CHECK (version = 1),
+    version integer NOT NULL CHECK (version = 2),
     source_leaf varchar(255) NOT NULL,
     stable_digest char(64) NOT NULL,
     adopted_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -336,8 +357,6 @@ CREATE TABLE agent_runs__rust (
     issue_id char(32) NOT NULL REFERENCES worktracker_issue(id) DEFERRABLE INITIALLY DEFERRED,
     ticket_seq integer NULL,
     agent varchar NULL,
-    model varchar NULL,
-    reasoning varchar NULL,
     status varchar NOT NULL,
     started_at varchar NOT NULL,
     ended_at varchar NULL,
@@ -351,10 +370,91 @@ CREATE TABLE agent_runs__rust (
     resumed_from varchar NULL,
     scope varchar NOT NULL,
     launch_state varchar NULL,
-    launch_model varchar NULL
+    launch_model varchar NULL,
+    initial_prompt text NULL,
+    launch_reasoning varchar NULL,
+    launch_unattended bool NOT NULL DEFAULT 0
 );
 "#;
 
 fn storage(source: sea_orm::DbErr) -> RunsPersistenceError {
     RunsPersistenceError::storage("Runs schema operation failed", source)
+}
+
+#[cfg(test)]
+mod tests {
+    use sea_orm::{ConnectionTrait, Database, DbBackend, Statement};
+
+    use super::*;
+
+    #[tokio::test]
+    async fn version_one_upgrade_preserves_launch_material_and_relabels_ownership() {
+        let database = Database::connect("sqlite::memory:").await.unwrap();
+        database
+            .execute_unprepared(
+                "CREATE TABLE worktracker_issue (id char(32) PRIMARY KEY);\n\
+                 INSERT INTO worktracker_issue (id) VALUES ('issue-1');\n\
+                 CREATE TABLE agent_runs (\n\
+                   id varchar PRIMARY KEY, issue_id char(32) NOT NULL, agent varchar NULL,\n\
+                   model varchar NULL, reasoning varchar NULL, status varchar NOT NULL,\n\
+                   started_at varchar NOT NULL, scope varchar NOT NULL, launch_model varchar NULL,\n\
+                   initial_prompt text NULL\n\
+                 );\n\
+                 INSERT INTO agent_runs\n\
+                   (id, issue_id, agent, model, reasoning, status, started_at, scope, launch_model, initial_prompt)\n\
+                 VALUES\n\
+                   ('run-1', 'issue-1', 'codex', 'fallback-model', 'high', 'running', 'now', 'task', 'gpt-5', 'Keep this prompt');\n\
+                 CREATE TABLE ticketry_runs_adoption (\n\
+                   singleton integer PRIMARY KEY CHECK (singleton = 1),\n\
+                   version integer NOT NULL CHECK (version = 1),\n\
+                   source_leaf varchar(255) NOT NULL, stable_digest char(64) NOT NULL,\n\
+                   adopted_at datetime NOT NULL\n\
+                 );\n\
+                 INSERT INTO ticketry_runs_adoption\n\
+                   (singleton, version, source_leaf, stable_digest, adopted_at)\n\
+                 VALUES (1, 1, '0015_merge_20260819_1521', 'digest', '2026-08-01');",
+            )
+            .await
+            .unwrap();
+
+        upgrade_v1(&database).await.unwrap();
+
+        let ledger = database
+            .query_one_raw(Statement::from_string(
+                DbBackend::Sqlite,
+                "SELECT version, adopted_at FROM ticketry_runs_adoption WHERE singleton=1"
+                    .to_owned(),
+            ))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(ledger.try_get::<i32>("", "version").unwrap(), 2);
+        assert_eq!(
+            ledger.try_get::<String>("", "adopted_at").unwrap(),
+            "2026-08-01"
+        );
+        let run = database
+            .query_one_raw(Statement::from_string(
+                DbBackend::Sqlite,
+                "SELECT launch_model, initial_prompt, launch_reasoning, launch_unattended FROM agent_runs WHERE id='run-1'"
+                    .to_owned(),
+            ))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(run.try_get::<String>("", "launch_model").unwrap(), "gpt-5");
+        assert_eq!(
+            run.try_get::<String>("", "initial_prompt").unwrap(),
+            "Keep this prompt"
+        );
+        assert_eq!(
+            run.try_get::<String>("", "launch_reasoning").unwrap(),
+            "high"
+        );
+        assert!(!run.try_get::<bool>("", "launch_unattended").unwrap());
+        assert!(!columns(&database, "agent_runs")
+            .await
+            .unwrap()
+            .contains("model"));
+    }
 }

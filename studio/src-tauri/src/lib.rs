@@ -3,6 +3,7 @@
 //! This file declares the module tree and exports the single entry point
 //! `main.rs` calls. The desktop shell itself lives in [`desktop`].
 
+pub(crate) mod app_updates;
 pub mod data_directory;
 pub mod desktop;
 pub(crate) mod diagnostics;

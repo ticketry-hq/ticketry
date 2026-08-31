@@ -558,8 +558,7 @@ async fn insert_run(
         issue_id: Set(task_id.to_owned()),
         ticket_seq: Set(None),
         agent: Set(Some("codex".to_owned())),
-        model: Set(None),
-        reasoning: Set(None),
+        initial_prompt: Set(None),
         status: Set(if ended_at.is_some() {
             "exited"
         } else {
@@ -579,6 +578,8 @@ async fn insert_run(
         scope: Set("task".to_owned()),
         launch_state: Set(None),
         launch_model: Set(None),
+        launch_reasoning: Set(None),
+        launch_unattended: Set(false),
     }
     .insert(database)
     .await

@@ -3,6 +3,7 @@
 mod authority;
 mod dependency_tools;
 mod dispatch;
+mod grant_store;
 mod launch_paths;
 mod projection;
 mod registry;
@@ -91,7 +92,12 @@ impl McpRuntime {
         let database = open_for_commands(&configuration.database_path)
             .await
             .map_err(|error| format!("could not open WorkTracker commands for MCP: {error}"))?;
-        let authority = RunAuthority::new(database.clone());
+        let data_directory = configuration
+            .database_path
+            .parent()
+            .unwrap_or_else(|| std::path::Path::new("."))
+            .to_path_buf();
+        let authority = RunAuthority::persistent(database.clone(), &data_directory)?;
         let listener = tokio::net::TcpListener::bind(configuration.address)
             .await
             .map_err(|error| format!("could not bind WorkTracker MCP listener: {error}"))?;
@@ -121,11 +127,7 @@ impl McpRuntime {
             graph_runs,
             crate::terminal::cleanup::TerminalCleanupService::new(database, cleanup_runtime),
             terminal_launch.clone(),
-            configuration
-                .database_path
-                .parent()
-                .unwrap_or_else(|| std::path::Path::new("."))
-                .to_path_buf(),
+            data_directory,
         );
         let service: StreamableHttpService<WorktrackerMcpService, LocalSessionManager> =
             StreamableHttpService::new(

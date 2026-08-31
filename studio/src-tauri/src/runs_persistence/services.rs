@@ -25,7 +25,7 @@ pub struct RunsServices {
 
 impl RunsServices {
     pub fn new(database: DatabaseConnection) -> Self {
-        let wakeup = StatusWakeup::new();
+        let wakeup = StatusWakeup::live_authority();
         let runs = AgentRunRepository::new(database.clone());
         let attempts = AutomationAttemptRepository::new(database.clone());
         let events = StatusEventRepository::new(database.clone(), wakeup.clone());

@@ -64,7 +64,7 @@ impl ResumeScope {
                 .add(compact_session_column(session::Column::ModuleId).eq(module_id.clone()))
                 .add(
                     compact_session_column(session::Column::TaskId)
-                        .eq(compact(crate::documents::SCRATCH_TASK_ID)),
+                        .eq(compact(ticketry_documents::SCRATCH_TASK_ID)),
                 )
                 .add(session::Column::Scope.is_in(["plan", "instant"])),
         }

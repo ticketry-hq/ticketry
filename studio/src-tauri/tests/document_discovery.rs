@@ -6,12 +6,10 @@
 //! filesystem actually holds. Nothing here pins a private helper, a scan
 //! order, or a query count.
 
-use muxed_studio_lib::documents::{
-    registry_refresh, DocumentsService, TaskRegistryScope, SCRATCH_TASK_ID,
-};
 use muxed_studio_lib::graphql_foundation::initialize_with_worktracker_commands_and_install;
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection};
 use tauri_graphql::{TransportApi, TransportApiImpl};
+use ticketry_documents::{registry_refresh, DocumentsService, TaskRegistryScope, SCRATCH_TASK_ID};
 
 const PROJECT: &str = "11111111111111111111111111111111";
 const PUBLIC_PROJECT: &str = "11111111-1111-1111-1111-111111111111";

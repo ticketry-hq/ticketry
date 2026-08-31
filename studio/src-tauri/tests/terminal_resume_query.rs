@@ -229,7 +229,7 @@ async fn insert_ended_scratch_run(
          INSERT INTO agent_terminal_sessions (agent_run_id, tmux_session_name, task_id, module_id, project_id, created_at, terminated_at, scope, runtime_cleanup_pending, runtime_namespace, output_sequence, agent) \
          VALUES ('{run_id}', 'pt-{run_id}', '{}', '{}', '{}', '2026-08-19T10:00:00Z', '2026-08-19T14:00:00Z', '{scope}', 0, '{namespace}', 0, 'codex');",
         compact(TASK_ID),
-        compact(muxed_studio_lib::documents::SCRATCH_TASK_ID),
+        compact(ticketry_documents::SCRATCH_TASK_ID),
         compact(MODULE_ID),
         compact(PROJECT_ID),
     );

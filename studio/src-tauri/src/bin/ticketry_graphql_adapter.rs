@@ -33,7 +33,7 @@ mod viewer_session;
 #[derive(Clone)]
 struct AdapterState {
     api: TransportApiImpl,
-    documents: muxed_studio_lib::documents::DocumentsService,
+    documents: ticketry_documents::DocumentsService,
     /// In-process MCP is retained for the adapter's whole process lifetime;
     /// dropping it would cancel the listener and its reconciler.
     #[allow(dead_code)]

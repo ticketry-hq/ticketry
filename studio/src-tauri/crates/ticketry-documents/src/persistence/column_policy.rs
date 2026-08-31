@@ -34,7 +34,7 @@ pub fn apply(context: &mut BuilderContext) {
 }
 
 /// `"<TypeName>.<fieldName>"` for every protected column.
-pub(crate) fn protected_input_names(context: &BuilderContext) -> Vec<String> {
+pub fn protected_input_names(context: &BuilderContext) -> Vec<String> {
     let type_name = (context.entity_object.type_name)(design_document::Entity.table_name());
     design_document::Column::iter()
         .filter(|column| PROTECTED_COLUMNS.contains(&column.as_str()))

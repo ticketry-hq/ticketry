@@ -48,7 +48,7 @@ pub async fn adopt(data_directory: &Path) -> Result<HandoffEvidence, WorkspaceHa
         })?;
     database.close().await.map_err(storage)?;
 
-    crate::documents::persistence::preflight(data_directory)
+    ticketry_documents::persistence::preflight(data_directory)
         .await
         .map_err(|error| {
             unknown(format!(
@@ -56,7 +56,7 @@ pub async fn adopt(data_directory: &Path) -> Result<HandoffEvidence, WorkspaceHa
                 error.code_str()
             ))
         })?;
-    let documents = crate::documents::persistence::adopt(data_directory)
+    let documents = ticketry_documents::persistence::adopt(data_directory)
         .await
         .map_err(|error| {
             unknown(format!(

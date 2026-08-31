@@ -20,7 +20,7 @@ use std::time::Duration;
 use sea_orm::DatabaseConnection;
 use tokio_util::sync::CancellationToken;
 
-use crate::documents::{DocumentFactRecorder, DocumentsError, DocumentsService};
+use crate::{DocumentFactRecorder, DocumentsError, DocumentsService};
 
 use super::debounce::DEBOUNCE;
 use super::eligibility::{self, WatchTarget};

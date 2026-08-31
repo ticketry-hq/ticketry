@@ -21,9 +21,9 @@ use std::path::{Path, PathBuf};
 
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 
-use crate::documents::design_directory::{self, ModuleIdentity, TaskIdentity, SPEC_ROOT};
 use crate::worktree::status::identity::{canonical_uuid, compact_uuid};
 use crate::worktree::status::owner::{self, WorktreeOwner};
+use ticketry_documents::design_directory::{self, ModuleIdentity, TaskIdentity, SPEC_ROOT};
 use ticketry_entities::documents::design_document;
 use ticketry_entities::work_management::issue;
 use ticketry_entities::worktrees::worktree;
@@ -295,7 +295,7 @@ fn display(path: PathBuf) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::documents::design_directory::PLANNING_SUBDIR;
+    use ticketry_documents::design_directory::PLANNING_SUBDIR;
 
     #[test]
     fn a_scratch_directory_is_created_under_the_canonical_layout() {

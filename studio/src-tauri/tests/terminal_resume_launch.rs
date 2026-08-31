@@ -221,7 +221,7 @@ async fn scratch_resume_preserves_the_scratch_holding() {
     assert_eq!(created.scope, "plan");
     assert_eq!(
         created.task_id,
-        compact(muxed_studio_lib::documents::SCRATCH_TASK_ID)
+        compact(ticketry_documents::SCRATCH_TASK_ID)
     );
     assert_eq!(created.module_id, compact(MODULE_ID));
     assert_eq!(created.project_id, compact(PROJECT_ID));
@@ -308,7 +308,7 @@ async fn insert_agentless_shell(database: &sea_orm::DatabaseConnection, run_id: 
              INSERT INTO agent_terminal_sessions (agent_run_id, tmux_session_name, task_id, module_id, project_id, created_at, terminated_at, scope, runtime_cleanup_pending, runtime_namespace, output_sequence, agent) \
              VALUES ('{run_id}', 'pt-{run_id}', '{}', '{}', '{}', '2026-08-19T10:00:00Z', '2026-08-19T13:00:00Z', 'shell', 0, '{namespace}', 0, NULL);",
             compact(MODULE_ID),
-            compact(muxed_studio_lib::documents::SCRATCH_TASK_ID),
+            compact(ticketry_documents::SCRATCH_TASK_ID),
             compact(MODULE_ID),
             compact(PROJECT_ID),
         ))
@@ -325,7 +325,7 @@ async fn insert_scratch_source(database: &sea_orm::DatabaseConnection, run_id: &
              INSERT INTO agent_terminal_sessions (agent_run_id, tmux_session_name, task_id, module_id, project_id, created_at, terminated_at, scope, runtime_cleanup_pending, runtime_namespace, output_sequence, agent) \
              VALUES ('{run_id}', 'pt-{run_id}', '{}', '{}', '{}', '2026-08-19T10:00:00Z', '2026-08-19T13:00:00Z', 'plan', 0, '{namespace}', 0, 'codex');",
             compact(TASK_ID),
-            compact(muxed_studio_lib::documents::SCRATCH_TASK_ID),
+            compact(ticketry_documents::SCRATCH_TASK_ID),
             compact(MODULE_ID),
             compact(PROJECT_ID),
         ))

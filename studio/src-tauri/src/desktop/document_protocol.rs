@@ -16,7 +16,7 @@ use tauri::http::{Request, Response, StatusCode};
 use tauri::{Manager, Runtime, UriSchemeContext};
 
 use crate::desktop::launch_runtime::DesktopLaunchRuntime;
-use crate::documents::{DocumentAsset, DocumentsService};
+use ticketry_documents::{DocumentAsset, DocumentsService};
 
 /// The URL scheme Studio builds document URLs on.
 pub(crate) const DOCUMENT_SCHEME: &str = "ticketrydoc";

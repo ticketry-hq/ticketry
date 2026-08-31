@@ -214,7 +214,7 @@ async fn initialize_with_worktracker_commands_and_install_inner(
     // through this service, the desktop asset protocol serves bytes through it,
     // and the watcher supervisor settles through it, so path authorization and
     // fact publication have exactly one implementation in the process.
-    let documents = crate::documents::DocumentsService::new(worktracker_database.clone())
+    let documents = ticketry_documents::DocumentsService::new(worktracker_database.clone())
         .publishing(document_facts(&worktracker_database).await);
     let document_watch = compose_document_watch(&documents).await;
     let viewer_ownership =
@@ -277,11 +277,11 @@ async fn initialize_with_worktracker_commands_and_install_inner(
 /// nothing. A caller's own response stays authoritative either way.
 async fn document_facts(
     worktracker_database: &sea_orm::DatabaseConnection,
-) -> Option<crate::documents::DocumentFactRecorder> {
+) -> Option<ticketry_documents::DocumentFactRecorder> {
     ticketry_runs::persistence::outbox_adopted(worktracker_database)
         .await
         .then(|| {
-            crate::documents::DocumentFactRecorder::new(
+            ticketry_documents::DocumentFactRecorder::new(
                 ticketry_runs::persistence::RunsServices::new(worktracker_database.clone())
                     .outbox()
                     .events()
@@ -297,9 +297,9 @@ async fn document_facts(
 /// was written while Ticketry was down — before Studio can ask for a registry.
 /// Supervision then continues in the background.
 async fn compose_document_watch(
-    documents: &crate::documents::DocumentsService,
-) -> Option<crate::documents::watch::DocumentWatchSupervisor> {
-    let supervisor = crate::documents::watch::DocumentWatchSupervisor::new(documents);
+    documents: &ticketry_documents::DocumentsService,
+) -> Option<ticketry_documents::watch::DocumentWatchSupervisor> {
+    let supervisor = ticketry_documents::watch::DocumentWatchSupervisor::new(documents);
     if let Err(error) = supervisor.reconcile().await {
         // Live discovery is an optimization over rescanning, so failing to
         // start it degrades promptness rather than the capability.
@@ -399,7 +399,7 @@ async fn compose_document_saves(
         return false;
     }
     let facts = outbox_adopted.then(|| {
-        crate::documents::DocumentFactRecorder::new(
+        ticketry_documents::DocumentFactRecorder::new(
             ticketry_runs::persistence::RunsServices::new(worktracker_database.clone())
                 .outbox()
                 .events()

@@ -26,11 +26,11 @@ use async_trait::async_trait;
 use sea_orm::DatabaseConnection;
 use serde_json::json;
 
-use crate::documents::registry_facts::DocumentFactRecorder;
 use crate::workspace::operations::{
     ClaimedOperation, WorkspaceOperationExecutor, WorkspaceOperationJournal,
     WorkspaceOperationOutcome,
 };
+use ticketry_documents::registry_facts::DocumentFactRecorder;
 
 use super::document_locks::DocumentLocks;
 use super::error::DocumentSaveError;

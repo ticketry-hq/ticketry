@@ -57,7 +57,7 @@ async fn evaluate<R: tauri::Runtime>(
     let mut readiness = Slice4Readiness::unavailable();
 
     readiness.documents_ownership =
-        crate::documents::persistence::documents_adopted(database).await;
+        ticketry_documents::persistence::documents_adopted(database).await;
     readiness.worktree_ownership = crate::worktree::persistence::worktrees_adopted(database).await;
     // The journal has never had a Django writer, so its ownership is simply
     // whether the installed shape is the one this build authored. Without it no

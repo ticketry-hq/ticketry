@@ -145,7 +145,7 @@ pub(super) fn builder_context() -> BuilderContext {
     crate::worktree::persistence::column_policy::apply(&mut context);
     // Design Document roots and provenance leave the contract on the entity
     // itself; every remaining adopted column is skipped in generated inputs.
-    crate::documents::persistence::column_policy::apply(&mut context);
+    ticketry_documents::persistence::column_policy::apply(&mut context);
     // Terminal writes remain private, but the generated inputs are still
     // denylisted centrally so later registration cannot expose lifecycle data.
     crate::terminal::persistence::column_policy::apply(&mut context);

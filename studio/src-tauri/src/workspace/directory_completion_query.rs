@@ -13,7 +13,7 @@ use seaography::{
 
 use ticketry_entities::graphql_scalars::StringList;
 
-use crate::documents::directory_completion::complete_directories;
+use ticketry_documents::directory_completion::complete_directories;
 
 pub struct DirectoryCompletionQueries;
 

@@ -139,7 +139,7 @@ pub(super) fn is_readable_root(root: &str) -> bool {
 /// Without a single spelling the same file registers twice, under two roots,
 /// and every change to it publishes two facts. A root that cannot be resolved
 /// keeps the spelling it has: it is about to be skipped or pruned anyway.
-pub(crate) fn canonical_root(root: &str) -> String {
+pub fn canonical_root(root: &str) -> String {
     Path::new(root)
         .canonicalize()
         .map(|resolved| resolved.to_string_lossy().into_owned())

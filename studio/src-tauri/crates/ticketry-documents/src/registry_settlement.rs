@@ -61,13 +61,13 @@ impl RegistryPlan {
 /// The identity a newly discovered row is registered under. It is derived from
 /// the bucket being reconciled, never from the file.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct RegistrationIdentity {
-    pub(crate) module_id: String,
-    pub(crate) task_id: String,
-    pub(crate) scope: String,
+pub struct RegistrationIdentity {
+    pub module_id: String,
+    pub task_id: String,
+    pub scope: String,
     /// The Agent Run whose watcher observed the file, when one did. Provenance
     /// only: it never widens what may be read.
-    pub(crate) discovered_by_run_id: Option<String>,
+    pub discovered_by_run_id: Option<String>,
 }
 
 /// Commit one plan and publish a fact for everything it committed.

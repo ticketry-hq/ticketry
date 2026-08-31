@@ -10,7 +10,7 @@
 
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 
-use crate::documents::{DocumentsError, RegistrationIdentity, SCRATCH_TASK_ID};
+use crate::{DocumentsError, RegistrationIdentity, SCRATCH_TASK_ID};
 use ticketry_entities::runs::agent_run;
 
 /// The statuses that end a run. Everything else is still live: a status this
@@ -24,16 +24,16 @@ const SCRATCH_SCOPES: &[&str] = &["plan", "instant"];
 
 /// One run a watcher may be started for.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct WatchTarget {
-    pub(crate) agent_run_id: String,
+pub struct WatchTarget {
+    pub agent_run_id: String,
     /// The already-authorized design directory recorded on the run. It is
     /// never taken from a caller, and never composed here.
-    pub(crate) design_dir: String,
-    pub(crate) identity: RegistrationIdentity,
+    pub design_dir: String,
+    pub identity: RegistrationIdentity,
 }
 
 /// Every active durable run with an existing authorized design directory.
-pub(crate) async fn eligible_targets(
+pub async fn eligible_targets(
     database: &DatabaseConnection,
 ) -> Result<Vec<WatchTarget>, DocumentsError> {
     let rows = agent_run::Entity::find()
@@ -61,7 +61,7 @@ pub(crate) async fn eligible_targets(
             // whichever spelling launched it, and registering under that one
             // would duplicate every document the canonical rescan already
             // registered under the resolved design directory.
-            design_dir: crate::documents::canonical_root(&design_dir),
+            design_dir: crate::canonical_root(&design_dir),
             identity,
         });
     }

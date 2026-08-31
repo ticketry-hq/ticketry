@@ -12,8 +12,8 @@
 
 use sea_orm::DbErr;
 
-use crate::documents::DocumentsError;
 use crate::workspace::operations::{WorkspaceOperationError, WorkspaceOperationErrorCode};
+use ticketry_documents::DocumentsError;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[non_exhaustive]

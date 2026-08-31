@@ -17,7 +17,7 @@ pub struct DocumentsPersistenceError {
 }
 
 impl DocumentsPersistenceError {
-    pub(crate) fn new(code: DocumentsPersistenceErrorCode, message: impl Into<String>) -> Self {
+    pub fn new(code: DocumentsPersistenceErrorCode, message: impl Into<String>) -> Self {
         Self {
             code,
             message: message.into(),
@@ -25,7 +25,7 @@ impl DocumentsPersistenceError {
         }
     }
 
-    pub(crate) fn storage(context: &'static str, source: DbErr) -> Self {
+    pub fn storage(context: &'static str, source: DbErr) -> Self {
         Self {
             code: DocumentsPersistenceErrorCode::Storage,
             message: context.to_owned(),

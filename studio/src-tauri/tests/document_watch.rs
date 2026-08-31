@@ -15,12 +15,12 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use muxed_studio_lib::documents::watch::filesystem_events::{
+use sea_orm::{ConnectionTrait, Database, DatabaseConnection};
+use ticketry_documents::watch::filesystem_events::{
     DirectoryWatch, FilesystemEvent, FilesystemWatcher, WatchUnavailable,
 };
-use muxed_studio_lib::documents::watch::DocumentWatchSupervisor;
-use muxed_studio_lib::documents::{DocumentFactRecorder, DocumentsService, TaskRegistryScope};
-use sea_orm::{ConnectionTrait, Database, DatabaseConnection};
+use ticketry_documents::watch::DocumentWatchSupervisor;
+use ticketry_documents::{DocumentFactRecorder, DocumentsService, TaskRegistryScope};
 use ticketry_runs::persistence::RunsServices;
 use tokio::sync::mpsc;
 

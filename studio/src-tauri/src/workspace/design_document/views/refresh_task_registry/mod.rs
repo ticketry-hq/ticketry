@@ -5,7 +5,7 @@ use seaography::{
     Builder, CustomFields,
 };
 
-use crate::documents::TaskRegistryScope;
+use ticketry_documents::TaskRegistryScope;
 use ticketry_entities::documents::design_document;
 
 use super::support::{documents_error, service};

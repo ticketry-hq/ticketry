@@ -42,7 +42,7 @@ pub fn foundation_schema(
         ticketry_work_management::work_management::commands::status_facts::WorkFactRecorder,
     >,
     worktree_operations: Option<crate::worktree::operations::WorktreeOperations>,
-    documents: Option<crate::documents::DocumentsService>,
+    documents: Option<ticketry_documents::DocumentsService>,
 ) -> Result<Schema, FoundationInitializationError> {
     foundation_schema_with_terminal_services(
         database,
@@ -73,7 +73,7 @@ pub(crate) fn foundation_schema_with_terminal_services(
         ticketry_work_management::work_management::commands::status_facts::WorkFactRecorder,
     >,
     worktree_operations: Option<crate::worktree::operations::WorktreeOperations>,
-    documents: Option<crate::documents::DocumentsService>,
+    documents: Option<ticketry_documents::DocumentsService>,
     terminal_services: Option<TerminalServices>,
 ) -> Result<Schema, FoundationInitializationError> {
     let contract = EntityContract {
@@ -162,7 +162,7 @@ fn build_schema(
         ticketry_work_management::work_management::commands::status_facts::WorkFactRecorder,
     >,
     worktree_operations: Option<crate::worktree::operations::WorktreeOperations>,
-    documents: Option<crate::documents::DocumentsService>,
+    documents: Option<ticketry_documents::DocumentsService>,
     terminal_services: Option<TerminalServices>,
     contract: EntityContract,
     entity_database_override: Option<DatabaseConnection>,
@@ -247,7 +247,7 @@ fn build_schema(
         builder
     };
     let builder = crate::terminal::viewer_lease::register_graphql(builder);
-    let builder = crate::documents::persistence::register_graphql(builder);
+    let builder = ticketry_documents::persistence::register_graphql(builder);
     let builder = crate::workspace::design_document::register_graphql(builder);
     let builder = crate::workspace::directory_completion_query::register(builder);
     let mut schema = builder.schema_builder().data(entity_database);
@@ -278,7 +278,7 @@ fn build_schema(
         .or_else(|| {
             let work_items = worktracker_database.as_ref()?;
             work_facts.is_some().then(|| {
-                crate::documents::DocumentFactRecorder::new(
+                ticketry_documents::DocumentFactRecorder::new(
                     ticketry_runs::persistence::RunsServices::new(work_items.clone())
                         .outbox()
                         .events()
@@ -289,7 +289,9 @@ fn build_schema(
     if let Some(documents) = documents {
         schema = schema.data(documents);
     } else if let Some(work_items) = &worktracker_database {
-        schema = schema.data(crate::documents::DocumentsService::new(work_items.clone()));
+        schema = schema.data(ticketry_documents::DocumentsService::new(
+            work_items.clone(),
+        ));
     }
     // Saving a document is a Workspace Operation over the same registry rows,
     // so it needs that store and the publisher discovery already uses. The

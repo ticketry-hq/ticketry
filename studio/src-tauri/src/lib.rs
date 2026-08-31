@@ -5,7 +5,6 @@
 
 pub(crate) mod app_updates;
 pub mod desktop;
-pub mod documents;
 pub mod execution;
 pub mod graph_run_service;
 pub mod graphql_foundation;

@@ -102,7 +102,7 @@ pub async fn refresh_scratch(
 ///
 /// The rows compared are the ones registered under this root, so one run's
 /// watcher can never register or prune another root's documents.
-pub(crate) async fn settle_paths(
+pub async fn settle_paths(
     database: &DatabaseConnection,
     facts: Option<&DocumentFactRecorder>,
     identity: &RegistrationIdentity,
@@ -122,7 +122,7 @@ pub(crate) async fn settle_paths(
 /// This is the watcher's universal fallback: after an error, an overflowed
 /// queue, or a restart, the event stream is not treated as complete, and the
 /// filesystem is re-read instead.
-pub(crate) async fn rescan_root(
+pub async fn rescan_root(
     database: &DatabaseConnection,
     facts: Option<&DocumentFactRecorder>,
     identity: &RegistrationIdentity,

@@ -18,7 +18,7 @@ use std::time::{Duration, Instant};
 use sea_orm::DatabaseConnection;
 use tokio_util::sync::CancellationToken;
 
-use crate::documents::{registry_refresh, DocumentFactRecorder, RegistrationIdentity};
+use crate::{registry_refresh, DocumentFactRecorder, RegistrationIdentity};
 
 use super::debounce::{PendingPaths, DEBOUNCE};
 use super::filesystem_events::{DirectoryWatch, FilesystemEvent};

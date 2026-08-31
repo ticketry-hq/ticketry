@@ -24,6 +24,6 @@ pub use error::{DocumentsPersistenceError, DocumentsPersistenceErrorCode};
 pub use schema::{AUTHORED_TABLES, CURRENT_DJANGO_LEAF, LEDGER_TABLE, VERSION};
 
 /// Register the generated Design Document read contract on the composed schema.
-pub(crate) fn register_graphql(builder: seaography::Builder) -> seaography::Builder {
+pub fn register_graphql(builder: seaography::Builder) -> seaography::Builder {
     ticketry_entities::documents::register_entity_modules(builder)
 }

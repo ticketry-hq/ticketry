@@ -15,7 +15,7 @@
 use std::io;
 use std::path::{Path, PathBuf};
 
-use crate::documents::asset_access;
+use ticketry_documents::asset_access;
 
 /// The name every Ticketry staging file starts with. Conservative cleanup
 /// removes nothing that does not match it, so a person's own dotfile inside a

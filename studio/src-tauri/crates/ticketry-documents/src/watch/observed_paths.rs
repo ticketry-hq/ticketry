@@ -18,7 +18,7 @@
 
 use std::path::Path;
 
-use crate::documents::document_scan::is_document_path;
+use crate::document_scan::is_document_path;
 
 /// The root-relative POSIX path of a supported document under `root`.
 ///

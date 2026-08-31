@@ -8,8 +8,8 @@
 
 use sea_orm::DatabaseConnection;
 
-use crate::documents::watch::DocumentWatchSupervisor;
-use crate::documents::DocumentsService;
+use ticketry_documents::watch::DocumentWatchSupervisor;
+use ticketry_documents::DocumentsService;
 
 /// The handles a completed one-writer handoff leaves for the desktop shell.
 pub struct AdoptedWorktracker {

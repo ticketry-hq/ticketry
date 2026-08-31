@@ -8,11 +8,11 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use muxed_studio_lib::documents::persistence::{
+use sea_orm::{ConnectionTrait, Database, DbBackend, Statement};
+use ticketry_documents::persistence::{
     adopt, documents_adopted, preflight, DocumentsPersistenceErrorCode, SourceClassification,
     LEDGER_TABLE,
 };
-use sea_orm::{ConnectionTrait, Database, DbBackend, Statement};
 
 fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))

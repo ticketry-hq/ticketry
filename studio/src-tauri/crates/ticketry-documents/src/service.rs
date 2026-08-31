@@ -41,11 +41,11 @@ impl DocumentsService {
         self
     }
 
-    pub(crate) fn database(&self) -> &DatabaseConnection {
+    pub fn database(&self) -> &DatabaseConnection {
         &self.database
     }
 
-    pub(crate) fn facts(&self) -> Option<&DocumentFactRecorder> {
+    pub fn facts(&self) -> Option<&DocumentFactRecorder> {
         self.facts.as_ref()
     }
 

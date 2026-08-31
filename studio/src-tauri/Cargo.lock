@@ -6784,7 +6784,6 @@ dependencies = [
  "http",
  "libc",
  "log",
- "notify",
  "portable-pty",
  "process-wrap",
  "rand 0.8.7",
@@ -6808,6 +6807,7 @@ dependencies = [
  "tempfile",
  "ticketry-data-directory",
  "ticketry-diagnostics",
+ "ticketry-documents",
  "ticketry-entities",
  "ticketry-runs",
  "ticketry-settings",
@@ -6839,6 +6839,26 @@ dependencies = [
  "serde_json",
  "tempfile",
  "tokio",
+ "uuid",
+]
+
+[[package]]
+name = "ticketry-documents"
+version = "0.0.0"
+dependencies = [
+ "chrono",
+ "notify",
+ "sea-orm",
+ "seaography",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "ticketry-entities",
+ "ticketry-runs",
+ "ticketry-work-management",
+ "tokio",
+ "tokio-util",
  "uuid",
 ]
 

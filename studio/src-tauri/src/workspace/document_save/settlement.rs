@@ -17,7 +17,7 @@ use chrono::{SecondsFormat, Utc};
 use sea_orm::{sea_query::Expr, ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter};
 use serde_json::{json, Value};
 
-use crate::documents::registry_facts::{self, DocumentChange, DocumentFactRecorder};
+use ticketry_documents::registry_facts::{self, DocumentChange, DocumentFactRecorder};
 use ticketry_entities::documents::design_document;
 
 use super::error::{DocumentSaveError, DocumentSaveErrorCode};

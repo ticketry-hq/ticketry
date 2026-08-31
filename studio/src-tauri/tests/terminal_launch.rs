@@ -432,7 +432,7 @@ async fn module_shell_derives_routing_and_persists_no_agent_metadata() {
     assert_eq!(first.agent, None);
     assert_eq!(
         first.task_id,
-        muxed_studio_lib::documents::SCRATCH_TASK_ID.replace('-', "")
+        ticketry_documents::SCRATCH_TASK_ID.replace('-', "")
     );
     assert_eq!(first.module_id, MODULE_ID.replace('-', ""));
     assert_eq!(runtime.create_count(), 1);

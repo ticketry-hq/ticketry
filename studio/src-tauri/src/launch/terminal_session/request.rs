@@ -136,9 +136,9 @@ impl CreateTerminalSession {
     pub(crate) fn terminal_task_id(&self) -> String {
         match self.kind {
             TerminalLaunchKind::Planning | TerminalLaunchKind::Instant => {
-                crate::documents::SCRATCH_TASK_ID.to_owned()
+                ticketry_documents::SCRATCH_TASK_ID.to_owned()
             }
-            TerminalLaunchKind::Shell => crate::documents::SCRATCH_TASK_ID.to_owned(),
+            TerminalLaunchKind::Shell => ticketry_documents::SCRATCH_TASK_ID.to_owned(),
             TerminalLaunchKind::Task
             | TerminalLaunchKind::DocumentChat
             | TerminalLaunchKind::Automation => self.issue_id.clone(),

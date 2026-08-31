@@ -190,25 +190,44 @@ fn rust_sources(directory: &Path, files: &mut Vec<PathBuf>) {
     }
 }
 
+/// Every directory the registration contract audits: the root package's `src`
+/// plus each extracted slice crate's `src`. Slices keep their own Seaography
+/// registrars, so the audit follows them out of the root crate rather than
+/// silently shrinking as the workspace split proceeds.
+fn audited_source_roots() -> Vec<PathBuf> {
+    let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let mut roots = vec![manifest.join("src")];
+    let crates = manifest.join("crates");
+    let mut slices: Vec<PathBuf> = fs::read_dir(&crates)
+        .unwrap_or_else(|error| panic!("read {}: {error}", crates.display()))
+        .map(|entry| entry.expect("read crates entry").path().join("src"))
+        .filter(|path| path.is_dir())
+        .collect();
+    slices.sort();
+    roots.extend(slices);
+    roots
+}
+
 #[test]
 fn migrated_graphql_registrars_use_nested_view_owned_bindings() {
-    let source_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
-    let mut files = Vec::new();
-    rust_sources(&source_root, &mut files);
-    files.sort();
-
     let mut failures = Vec::new();
-    for path in files {
-        let source = fs::read_to_string(&path)
-            .unwrap_or_else(|error| panic!("read {}: {error}", path.display()));
-        for violation in audit_source(&path, &source) {
-            let relative = path.strip_prefix(&source_root).unwrap_or(&path);
-            failures.push(format!(
-                "{}: {}: {}",
-                relative.display(),
-                violation.registrar,
-                violation.reason
-            ));
+    for source_root in audited_source_roots() {
+        let mut files = Vec::new();
+        rust_sources(&source_root, &mut files);
+        files.sort();
+
+        for path in files {
+            let source = fs::read_to_string(&path)
+                .unwrap_or_else(|error| panic!("read {}: {error}", path.display()));
+            for violation in audit_source(&path, &source) {
+                let relative = path.strip_prefix(&source_root).unwrap_or(&path);
+                failures.push(format!(
+                    "{}: {}: {}",
+                    relative.display(),
+                    violation.registrar,
+                    violation.reason
+                ));
+            }
         }
     }
 
@@ -221,31 +240,42 @@ fn migrated_graphql_registrars_use_nested_view_owned_bindings() {
 
 #[test]
 fn superseded_seaolim_migration_files_stay_removed() {
-    let source_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    // Workspace-relative, because a superseded file's home moves with its
+    // slice: a module extracted into `crates/` keeps its filenames but loses
+    // the `src/<module>/` prefix it had in the root package.
+    let workspace = Path::new(env!("CARGO_MANIFEST_DIR"));
     for relative in [
-        "documents/save/graphql.rs",
-        "graph_run_service/graphql.rs",
-        "graph_run_service/operation_registry.rs",
-        "run_now/graphql.rs",
-        "run_now/launcher.rs",
-        "run_now/mod.rs",
-        "run_now/operation_registry.rs",
-        "run_now/service.rs",
-        "run_now/types.rs",
-        "runs_persistence/attempt_graphql.rs",
-        "runs_persistence/lifecycle_graphql.rs",
-        "terminal/output_activity/graphql.rs",
-        "terminal/output_activity/operation_registry.rs",
-        "work_management/commands/module_presentation.rs",
-        "work_management/graphql/catalog.rs",
-        "work_management/graphql/module_presentations.rs",
-        "work_management/graphql/work_items.rs",
-        "work_management/graphql/workflow_configuration.rs",
-        "worktree/create/graphql.rs",
-        "worktree/discard/graphql.rs",
+        "crates/ticketry-documents/src/save/graphql.rs",
+        "crates/ticketry-runs/src/persistence/attempt_graphql.rs",
+        "crates/ticketry-runs/src/persistence/lifecycle_graphql.rs",
+        "crates/ticketry-work-management/src/work_management/commands/module_presentation.rs",
+        "crates/ticketry-work-management/src/work_management/graphql/catalog.rs",
+        "crates/ticketry-work-management/src/work_management/graphql/module_presentations.rs",
+        "crates/ticketry-work-management/src/work_management/graphql/work_items.rs",
+        "crates/ticketry-work-management/src/work_management/graphql/workflow_configuration.rs",
+        "src/documents/save/graphql.rs",
+        "src/graph_run_service/graphql.rs",
+        "src/graph_run_service/operation_registry.rs",
+        "src/run_now/graphql.rs",
+        "src/run_now/launcher.rs",
+        "src/run_now/mod.rs",
+        "src/run_now/operation_registry.rs",
+        "src/run_now/service.rs",
+        "src/run_now/types.rs",
+        "src/runs_persistence/attempt_graphql.rs",
+        "src/runs_persistence/lifecycle_graphql.rs",
+        "src/terminal/output_activity/graphql.rs",
+        "src/terminal/output_activity/operation_registry.rs",
+        "src/work_management/commands/module_presentation.rs",
+        "src/work_management/graphql/catalog.rs",
+        "src/work_management/graphql/module_presentations.rs",
+        "src/work_management/graphql/work_items.rs",
+        "src/work_management/graphql/workflow_configuration.rs",
+        "src/worktree/create/graphql.rs",
+        "src/worktree/discard/graphql.rs",
     ] {
         assert!(
-            !source_root.join(relative).exists(),
+            !workspace.join(relative).exists(),
             "superseded Seaolim migration file returned: {relative}"
         );
     }

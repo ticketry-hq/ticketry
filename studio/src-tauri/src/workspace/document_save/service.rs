@@ -20,12 +20,12 @@ use sea_orm::DatabaseConnection;
 use seaography::CustomOutputType;
 use serde::Serialize;
 
-use crate::documents::asset_access;
-use crate::documents::registry_facts::DocumentFactRecorder;
 use crate::workspace::operations::{
     WorkspaceOperationJournal, WorkspaceOperationOutcome, WorkspaceOperationReconciler,
     WorkspaceOperationRecord,
 };
+use ticketry_documents::asset_access;
+use ticketry_documents::registry_facts::DocumentFactRecorder;
 
 use super::error::{DocumentSaveError, DocumentSaveErrorCode};
 use super::executor::{SaveExecutor, STALE_CODE};

@@ -1,7 +1,8 @@
-//! Discovering, authorizing, and serving design documents.
+//! Design documents: discovering them, authorizing them, and serving them.
 //!
-//! [`crate::documents::persistence`] owns the adopted `design_documents` table
-//! and its generated Seaography contract. This module owns everything the
+//! A design document is a Markdown file on disk that the product also tracks
+//! as a row. [`persistence`] owns the adopted `design_documents` table and its
+//! generated Seaography contract; the rest of this crate owns everything the
 //! filesystem side of that contract needs: the canonical design-directory
 //! layout, recursive discovery, the authorization boundary every byte is read
 //! through, registry reconciliation, and trusted directory completion.
@@ -24,7 +25,7 @@ mod registry_settlement;
 mod service;
 pub mod watch;
 
-pub(crate) mod authorized_roots;
+pub mod authorized_roots;
 pub mod registry_facts;
 pub mod registry_refresh;
 
@@ -34,5 +35,5 @@ pub use registry_facts::{DocumentFactRecorder, DOCUMENT_CHANGED, DOCUMENT_DELETE
 pub use registry_refresh::{TaskRegistryScope, SCRATCH_TASK_ID};
 pub use service::DocumentsService;
 
-pub(crate) use authorized_roots::canonical_root;
-pub(crate) use registry_settlement::RegistrationIdentity;
+pub use authorized_roots::canonical_root;
+pub use registry_settlement::RegistrationIdentity;

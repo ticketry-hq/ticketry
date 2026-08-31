@@ -1,6 +1,6 @@
 use seaography::async_graphql::{Context, Error, ErrorExtensions, Result};
 
-use crate::documents::{DocumentsError, DocumentsService};
+use ticketry_documents::{DocumentsError, DocumentsService};
 
 pub(super) fn service<'a>(ctx: &'a Context<'a>) -> Result<&'a DocumentsService> {
     // Registry refresh writes discovered rows and prunes missing files. It may

@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use muxed_studio_lib::installation::adoption::provisioning;
 use sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, Statement};
+use ticketry_installation::adoption::provisioning;
 use ticketry_settings::provider_catalog_migrations;
 use ticketry_work_management::work_management::{
     launch_binding_entry_skill_migration, module_presentation_migration, open_for_commands,

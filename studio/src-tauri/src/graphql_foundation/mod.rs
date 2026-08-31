@@ -162,7 +162,7 @@ async fn initialize_with_worktracker_commands_and_install_inner(
                     error.to_string(),
                 )
             })?;
-    crate::installation::final_schema_migrations::install(&worktracker_database)
+    ticketry_installation::final_schema_migrations::install(&worktracker_database)
         .await
         .map_err(|error| {
             FoundationInitializationError::new(
@@ -473,7 +473,7 @@ pub async fn adopt_worktracker_and_install(
     //
     let installation = match ownership {
         InstallationOwnership::Owned => Some(
-            crate::installation::adoption::adopt(data_directory)
+            ticketry_installation::adoption::adopt(data_directory)
                 .await
                 .map_err(installation_adoption_error)?,
         ),
@@ -565,7 +565,7 @@ pub async fn adopt_worktracker_and_install(
     // last handoff and before the endpoint is installed, because the endpoint
     // is what makes a mutation reachable.
     if let Some(installation) = installation {
-        crate::installation::adoption::open_readiness(data_directory, installation)
+        ticketry_installation::adoption::open_readiness(data_directory, installation)
             .await
             .map_err(installation_adoption_error)?;
     }
@@ -584,7 +584,7 @@ pub async fn adopt_worktracker_and_install(
 }
 
 fn installation_adoption_error(
-    error: crate::installation::adoption::AdoptionFailure,
+    error: ticketry_installation::adoption::AdoptionFailure,
 ) -> FoundationInitializationError {
     FoundationInitializationError::new(
         FoundationInitializationErrorCode::WorktrackerDatabaseOpen,

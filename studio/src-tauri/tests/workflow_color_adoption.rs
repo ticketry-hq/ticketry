@@ -1,9 +1,7 @@
-use muxed_studio_lib::{
-    graphql_foundation::initialize_with_worktracker_commands_and_install,
-    installation::adoption::provisioning,
-};
+use muxed_studio_lib::graphql_foundation::initialize_with_worktracker_commands_and_install;
 use sea_orm::{ConnectionTrait, Database, DbBackend, Statement};
 use tauri_graphql::{TransportApi, TransportApiImpl};
+use ticketry_installation::adoption::provisioning;
 use ticketry_work_management::work_management::workflow_color_migration::{
     install, LEDGER_TABLE, MIGRATION_ID, SOURCE_COMMIT,
 };
@@ -190,7 +188,7 @@ async fn skips_color_adoption_when_the_worktracker_state_table_is_absent() {
 
 #[test]
 fn workflow_color_checkpoint_follows_entry_skill_in_the_rust_ledger() {
-    let ledgers = muxed_studio_lib::installation::classification::rust_ledger::owned_ledgers();
+    let ledgers = ticketry_installation::classification::rust_ledger::owned_ledgers();
     let entry_skill = ledgers
         .iter()
         .position(|(table, _)| {

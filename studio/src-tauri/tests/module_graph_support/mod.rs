@@ -15,7 +15,6 @@ use syn::{Attribute, ImplItem, Item, Meta, UseTree};
 /// assertion so new modules get a home deliberately.
 pub const SLICES: &[(&str, &str)] = &[
     ("mcp", "mcp"),
-    ("installation", "installation"),
     ("graphql_foundation", "graphql-schema"),
     ("query_root", "graphql-schema"),
     ("desktop", "desktop"),

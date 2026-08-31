@@ -11,8 +11,8 @@ mod common;
 use std::path::Path;
 
 use common::installation_corpus as corpus;
-use muxed_studio_lib::installation::classification::{self as classification, Installation};
-use muxed_studio_lib::installation::preflight::{
+use ticketry_installation::classification::{self as classification, Installation};
+use ticketry_installation::preflight::{
     self as preflight, Area, PreflightFailure, PreflightReport, Verdict,
 };
 

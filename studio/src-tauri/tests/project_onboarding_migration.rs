@@ -3,12 +3,10 @@
 //! Source commit `3a5f434a90696f40a4911e401a84db009cdfa4e7`, migrations
 //! `0045_project_onboarding_required` and `0046_remove_workspace`.
 
-use muxed_studio_lib::{
-    graphql_foundation::initialize_with_worktracker_commands_and_install,
-    installation::adoption::provisioning,
-};
+use muxed_studio_lib::graphql_foundation::initialize_with_worktracker_commands_and_install;
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection, DbBackend, Statement};
 use tauri_graphql::TransportApiImpl;
+use ticketry_installation::adoption::provisioning;
 use ticketry_work_management::work_management::project_onboarding_migration::{
     install, LEDGER_TABLE, MIGRATION_ID, SOURCE_COMMIT, VERSION,
 };
@@ -603,7 +601,7 @@ async fn acknowledging_a_first_launch_clears_onboarding_and_survives_a_reload() 
 #[tokio::test]
 async fn the_migration_ledger_is_a_recognized_rust_ownership_ledger() {
     assert!(
-        muxed_studio_lib::installation::classification::rust_ledger::owned_ledgers()
+        ticketry_installation::classification::rust_ledger::owned_ledgers()
             .iter()
             .any(|(table, version)| *table == LEDGER_TABLE && *version == VERSION),
         "classification must recognize the project-onboarding ledger"

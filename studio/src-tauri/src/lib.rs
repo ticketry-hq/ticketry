@@ -6,7 +6,6 @@
 pub(crate) mod app_updates;
 pub mod desktop;
 pub mod graphql_foundation;
-pub mod installation;
 pub mod mcp;
 pub mod native_terminal;
 pub mod query_root;

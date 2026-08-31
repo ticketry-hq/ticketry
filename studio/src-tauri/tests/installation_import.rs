@@ -4,10 +4,8 @@
 //! Django backend. The test is inert when that explicit disposable source is
 //! absent, so ordinary builds never contact a developer's database.
 
-use muxed_studio_lib::installation::adoption::{
-    self, AdoptionPath, AdoptionPlan, Phase, Readiness,
-};
 use sea_orm::{ConnectionTrait, Database, DbBackend, Statement};
+use ticketry_installation::adoption::{self, AdoptionPath, AdoptionPlan, Phase, Readiness};
 
 #[tokio::test]
 async fn imports_a_current_postgres_snapshot_and_switches_once() {
@@ -77,7 +75,7 @@ async fn imports_a_current_postgres_snapshot_and_switches_once() {
     ))
     .await
     .expect("open imported target for final-schema migrations");
-    muxed_studio_lib::installation::final_schema_migrations::install(&imported_database)
+    ticketry_installation::final_schema_migrations::install(&imported_database)
         .await
         .expect("run the ordinary final-schema chain over the PostgreSQL import");
     let spark = imported_database

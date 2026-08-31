@@ -6810,6 +6810,7 @@ dependencies = [
  "ticketry-diagnostics",
  "ticketry-documents",
  "ticketry-entities",
+ "ticketry-installation",
  "ticketry-launch",
  "ticketry-runs",
  "ticketry-settings",
@@ -6898,6 +6899,30 @@ dependencies = [
  "sea-orm",
  "seaography",
  "serde",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
+name = "ticketry-installation"
+version = "0.2.0"
+dependencies = [
+ "base64 0.22.1",
+ "chrono",
+ "sea-orm",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "ticketry-agent-execution",
+ "ticketry-data-directory",
+ "ticketry-documents",
+ "ticketry-entities",
+ "ticketry-runs",
+ "ticketry-settings",
+ "ticketry-terminal",
+ "ticketry-work-management",
+ "ticketry-workspace-runtime",
  "tokio",
  "uuid",
 ]

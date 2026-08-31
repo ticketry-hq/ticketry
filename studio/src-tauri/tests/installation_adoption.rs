@@ -12,10 +12,10 @@ mod common;
 use std::path::Path;
 
 use common::installation_corpus as corpus;
-use muxed_studio_lib::installation::adoption::{
+use ticketry_installation::adoption::{
     self as adoption, AdoptionPath, AdoptionPlan, Completion, Phase, Readiness, Refusal,
 };
-use muxed_studio_lib::installation::classification::{self as classification, Installation};
+use ticketry_installation::classification::{self as classification, Installation};
 
 /// Read one scalar out of an installation, for the preservation assertions.
 async fn scalar(data_directory: &Path, query: &str) -> String {
@@ -692,8 +692,8 @@ async fn a_semantic_bridge_fault_rolls_back_the_repair_and_ledger() {
 
 #[tokio::test]
 async fn every_historical_generation_bridges_to_one_canonical_leaf_and_reopens_twice() {
-    use muxed_studio_lib::installation::adoption::inventory;
     use sea_orm::Database;
+    use ticketry_installation::adoption::inventory;
 
     let canonical = corpus::install("django-current");
     let database = Database::connect(format!(
@@ -754,8 +754,8 @@ async fn every_historical_generation_bridges_to_one_canonical_leaf_and_reopens_t
 
 #[tokio::test]
 async fn an_alembic_source_with_rows_fails_its_recorded_precondition() {
-    use muxed_studio_lib::installation::adoption::bridge;
     use sea_orm::{Database, TransactionTrait};
+    use ticketry_installation::adoption::bridge;
 
     let installation = corpus::install("alembic-0006_design_documents");
     corpus::execute(
@@ -932,7 +932,7 @@ async fn the_final_python_era_snapshot_is_pinned_outside_rotation() {
 
     let pinned = installation
         .path()
-        .join(muxed_studio_lib::installation::adoption::snapshot::PINNED_SNAPSHOT);
+        .join(ticketry_installation::adoption::snapshot::PINNED_SNAPSHOT);
     assert!(pinned.is_file(), "the cutover snapshot must be pinned");
     let bytes = std::fs::read(&pinned).expect("read the pinned snapshot");
 
@@ -1029,8 +1029,8 @@ async fn recovery_validation_rejects_a_snapshot_changed_after_discovery() {
 
 #[tokio::test]
 async fn a_snapshot_that_does_not_reproduce_the_source_is_refused() {
-    use muxed_studio_lib::installation::adoption::{inventory, snapshot};
     use sea_orm::Database;
+    use ticketry_installation::adoption::{inventory, snapshot};
 
     let installation = corpus::install("current-representative");
     let source = {
@@ -1074,8 +1074,8 @@ async fn a_snapshot_that_does_not_reproduce_the_source_is_refused() {
 
 #[tokio::test]
 async fn every_product_table_holds_the_same_values_after_adoption() {
-    use muxed_studio_lib::installation::adoption::inventory;
     use sea_orm::Database;
+    use ticketry_installation::adoption::inventory;
 
     async fn preserved(data_directory: &Path) -> inventory::Inventory {
         let database = Database::connect(format!(

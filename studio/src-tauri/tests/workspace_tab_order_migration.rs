@@ -141,7 +141,7 @@ async fn failed_ledger_creation_rolls_back_the_issue_column() {
 
 #[test]
 fn workspace_tab_checkpoint_is_between_colors_and_module_presentation() {
-    let ledgers = muxed_studio_lib::installation::classification::rust_ledger::owned_ledgers();
+    let ledgers = ticketry_installation::classification::rust_ledger::owned_ledgers();
     let colors = ledgers
         .iter()
         .position(|(table, _)| *table == workflow_color_migration::LEDGER_TABLE)

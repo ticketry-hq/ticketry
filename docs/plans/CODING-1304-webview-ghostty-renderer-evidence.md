@@ -147,11 +147,12 @@ Ticketry build on the same machine. Nothing below has been filled in yet.
 
 1. **Terminal replies are not sent.** Ghostty answers device attribute and
    status queries through its `WRITE_PTY` callback, which needs a function
-   reference in the wasm indirect table. JavaScriptCore cannot install a JS
-   function into a wasm table today, so those queries currently go unanswered
-   and a program that waits on one will stall. This blocks any promotion
-   decision on its own and must be resolved or ruled out before the matrix is
-   read as favourable.
+   reference in the wasm indirect table. The artifact is built with an exported,
+   growable table for exactly this purpose, but installing a JS function into it
+   is not wired and has not been verified against WKWebView's JavaScriptCore.
+   Until it is, those queries go unanswered and a program that waits on one will
+   stall. This blocks a promotion decision on its own and must be resolved or
+   ruled out before the matrix is read as favourable.
 2. **Mouse reporting, OSC 8 hyperlinks, selection rendering and Kitty
    graphics** exist in the C ABI but are not wired to the canvas.
 3. **Font coverage is the WebView's,** not Ghostty's font stack, so Nerd Font

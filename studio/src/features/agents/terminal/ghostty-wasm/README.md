@@ -70,11 +70,13 @@ skips when the artifact has not been prepared.
 
 ## Known gaps
 
-- **Terminal replies are not sent.** Ghostty's `WRITE_PTY` callback needs a
-  function reference in the wasm indirect table, which WKWebView's
-  JavaScriptCore cannot supply from JS today. Device attribute and status
-  queries therefore go unanswered. Programs that wait on one will stall, and
-  this must be resolved before any promotion decision.
+- **Terminal replies are not sent.** Ghostty answers device attribute and
+  status queries through its `WRITE_PTY` callback, which needs a function
+  reference in the wasm indirect table. The artifact is built with an exported,
+  growable table for exactly this, but installing a JS function into it has not
+  been wired or verified against WKWebView's JavaScriptCore. Until it is, those
+  queries go unanswered and a program that waits on one will stall. Resolving
+  or ruling this out is a prerequisite for any promotion decision.
 - **Mouse reporting, OSC 8 hyperlinks, selection and Kitty graphics** are
   present in the C ABI but not wired to the canvas yet.
 - **Font handling is the browser's.** Nerd Font and Powerline coverage depends

@@ -8,6 +8,7 @@ use crate::desktop::user_notices::UserNotice;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct RuntimeStartupConfiguration {
+    pub(crate) runtime_instance: String,
     pub(crate) service_health: ServiceHealth,
     pub(crate) initial_notices: Vec<UserNotice>,
 }
@@ -18,6 +19,7 @@ pub(crate) fn development_runtime_configuration() -> Result<RuntimeStartupConfig
 
 pub(crate) fn rust_runtime_configuration() -> RuntimeStartupConfiguration {
     RuntimeStartupConfiguration {
+        runtime_instance: crate::diagnostics::runtime_instance().to_owned(),
         service_health: ServiceHealth::ready(),
         initial_notices: Vec::new(),
     }
@@ -25,6 +27,7 @@ pub(crate) fn rust_runtime_configuration() -> RuntimeStartupConfiguration {
 
 pub(crate) fn failed_runtime_configuration(health: ServiceHealth) -> RuntimeStartupConfiguration {
     RuntimeStartupConfiguration {
+        runtime_instance: crate::diagnostics::runtime_instance().to_owned(),
         service_health: health,
         initial_notices: Vec::new(),
     }
@@ -54,5 +57,10 @@ mod tests {
     fn development_uses_the_same_in_process_contract() {
         let configuration = development_runtime_configuration().expect("development runtime");
         assert_eq!(configuration, rust_runtime_configuration());
+        assert!(!configuration.runtime_instance.is_empty());
+        assert_eq!(
+            configuration.runtime_instance,
+            rust_runtime_configuration().runtime_instance
+        );
     }
 }

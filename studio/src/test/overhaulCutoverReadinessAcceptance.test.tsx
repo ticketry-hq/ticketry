@@ -14,6 +14,10 @@ function runtime(health: ServiceHealth): StudioRuntime {
       serviceSupervision: true,
       nativeTerminal: true,
       nativeFolderPicker: true,
+      appUpdates: true,
+    },
+    appUpdates: {
+      check: async () => ({ installedVersion: "0.0.0", status: "current" }),
     },
     startup: () => ({
       serviceHealth: health,
@@ -100,7 +104,7 @@ describe("cutover readiness", () => {
     expect(screen.queryByText(/sidecar/i)).not.toBeInTheDocument();
   });
 
-  it("[overhaul-205] turns a locked startup database into an actionable launch message", () => {
+  it("[overhaul-210] turns a locked startup database into an actionable launch message", () => {
     render(
       <ServiceHealthGate runtime={runtime({
         state: "failed",

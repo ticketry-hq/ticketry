@@ -6,6 +6,7 @@
 //! service health plus user notices to the frontend.
 
 pub(crate) mod commands;
+pub(crate) mod crash_reports;
 pub(crate) mod data_directory;
 pub(crate) mod document_protocol;
 pub(crate) mod environment;

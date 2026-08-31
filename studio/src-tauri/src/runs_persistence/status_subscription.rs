@@ -33,7 +33,10 @@ pub fn register(builder: seaography::Builder) -> seaography::Builder {
                 // needs, so cancellation only has to drop it.
                 let opened = open(&ctx);
                 SubscriptionFieldFuture::new(async move {
-                    Ok(opened?.map(move |frame| field_value(context, frame)))
+                    Ok(opened?.map(move |frame| {
+                        record_delivery(&frame);
+                        field_value(context, frame)
+                    }))
                 })
             },
         )
@@ -44,6 +47,48 @@ pub fn register(builder: seaography::Builder) -> seaography::Builder {
         .argument(InputValue::new(AFTER_CURSOR, TypeRef::named(TypeRef::INT))),
     );
     builder
+}
+
+fn record_delivery(frame: &RunStatusFrame) {
+    let (project_id, agent_run_id, cursor, frame_kind) = match frame {
+        RunStatusFrame::RunStatusSnapshot(frame) => (
+            Some(frame.project_id.as_str()),
+            None,
+            Some(frame.cursor),
+            "snapshot",
+        ),
+        RunStatusFrame::RunStatusEvent(frame) => (
+            Some(frame.project_id.as_str()),
+            frame.agent_run_id.as_deref(),
+            Some(frame.cursor),
+            "event",
+        ),
+        RunStatusFrame::RunStatusCaughtUp(frame) => (
+            Some(frame.project_id.as_str()),
+            None,
+            Some(frame.cursor),
+            "caught_up",
+        ),
+        RunStatusFrame::RunStatusResetRequired(frame) => (
+            Some(frame.project_id.as_str()),
+            None,
+            Some(frame.cursor),
+            "reset_required",
+        ),
+        RunStatusFrame::RunStatusFailed(_) => (None, None, None, "failed"),
+    };
+    crate::diagnostics::record_launch_discovery(
+        crate::diagnostics::LaunchDiscoveryRecord::new(
+            "graphql-frame-delivered",
+            crate::diagnostics::runtime_instance(),
+            project_id,
+            agent_run_id,
+            cursor,
+            None,
+            None,
+        )
+        .with_detail("frameKind", serde_json::json!(frame_kind)),
+    );
 }
 
 fn open(ctx: &ResolverContext<'_>) -> Result<BoxStream<'static, RunStatusFrame>, Error> {

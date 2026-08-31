@@ -246,6 +246,16 @@ pub fn build_instant_prompt(input: &InstantPrompt) -> String {
     let request = user_input
         .map(|value| format!("User's request:\n  {value}\n\n"))
         .unwrap_or_default();
+    let configured = input
+        .initial_prompt
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(|value| format!("Configured Instant instructions:\n{value}\n\n"))
+        .unwrap_or_default();
+    let request = user_input
+        .map(|value| format!("User's request:\n  {value}\n\n"))
+        .unwrap_or_default();
     format!(
         "You are an agent making a small, instant change in the '{}' module.\n\nContext:\n  Project: {}\n  Project ID:  {}\n  Module ID:   {}\n  Local Codebase: {}\n\n{}{}Your job:\n{}\n{}Do not create or update WorkTracker tasks for this work.",
         module.name, module.project_slug, module.project_id, module.module_id,

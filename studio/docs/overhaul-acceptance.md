@@ -166,10 +166,33 @@ named gate before the full Studio suite, typecheck, and build.
 | 181 | Root tasks reorder through the GraphQL write path. |
 | 182 | Imported root tasks with equal ranks still send deterministic reorder neighbors. |
 | 183 | A Module tab's close hover background remains a compact square inside the tab. |
-| 184 | Conversations replaces Scratch: its header combines lifecycle chicklets, New conversation immediately opens the global default model for terminal input, and each row shows only its own terminal with no row chicklet or add-agent control. |
-| 185 | Instant settings persist a standing initial prompt and the auto-close default used by new runs. |
-| 186 | Native Ghostty copy and paste use the macOS clipboard, preserve Ghostty's paste and OSC 52 confirmation boundary, and reject stale surface ownership. |
-| 187 | A locked startup database is presented as an actionable already-running message without exposing raw SQL. |
+| 184 | A task worktree keeps cumulative committed changes in one labeled, accessible Changes tab. |
+| 185 | A task workspace restores Details and explains the state when its worktree disappears. |
+| 186 | One caught-up project feed turns one guarded launch acknowledgement and its authoritative update into one visible Agent Run without a second click, subscription, or reconnect. |
+| 187 | A clean module opens Changes beside Terminal and presents the empty task list. |
+| 188 | Module Changes orders the required facts and navigates module and task rows without a write. |
+| 189 | Module Changes distinguishes an unavailable module checkout. |
+| 190 | Task Commit and Push remain independent, and Push excludes dirty work. |
+| 191 | Module Push is offered for a clean ahead branch while Commit requires dirty work. |
+| 192 | Task Create PR pushes committed work first, then becomes Open PR. |
+| 193 | A rejected task Create PR remains retryable. |
+| 194 | Task Create PR requires committed work. |
+| 195 | A module-checkout pull request targets the default branch without changing a Work Item. |
+| 196 | The module default branch has no pull-request action. |
+| 197 | Every mapped pull-request state exposes only its safe actions. |
+| 198 | Closed pull requests can be replaced with explicit follow-ups. |
+| 199 | Merge preparation launches only after a click and reports refusal. |
+| 200 | Cleanup blockers explain why removal is unavailable. |
+| 201 | Cleanup confirmation keeps a partial failure retryable. |
+| 202 | Conversations replaces Scratch and selects each conversation's exact terminal. |
+| 203 | Instant settings persist the standing prompt and auto-close default. |
+| 204 | Past Agent Runs remain independently resumable. |
+| 205 | A cold Changes restoration clears when the resolved worktree has no checkout. |
+| 206 | Browser update checks defer quietly to the desktop application. |
+| 207 | After a Dirty Shutdown, Studio shows a dismissible, non-modal Crash Notice that reveals the fixed Crash Report folder; clean launches stay silent. |
+| 208 | Desktop launch checks contact the update feed once, show available updates on the Settings entry point, retain the result in App updates, and keep launch failures quiet until that section opens. |
+| 209 | Native Ghostty copy and paste use the macOS clipboard, preserve Ghostty's paste and OSC 52 confirmation boundary, and reject stale surface ownership. |
+| 210 | A locked startup database is presented as an actionable already-running message without exposing raw SQL. |
 
 Each executable case carries one stable `[overhaul-NN]` marker. The gate has a
 contract test that fails if a marker is missing or duplicated. When a Studio UI

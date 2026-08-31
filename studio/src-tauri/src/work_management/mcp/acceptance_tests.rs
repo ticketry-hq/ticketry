@@ -4,6 +4,9 @@ use async_trait::async_trait;
 use sea_orm::{ConnectionTrait, Database};
 use serde_json::{json, Value};
 use tauri_graphql::{TransportApi, TransportApiImpl};
+use tokio::time::{timeout, Duration};
+
+mod termination;
 
 use super::tests::{post, start_authorizer, PROJECT};
 use super::{loopback, McpConfiguration, McpRuntime};
@@ -225,6 +228,20 @@ async fn terminal_record(directory: &tempfile::TempDir) -> (Option<String>, i64)
     );
     database.close().await.expect("close terminal fact reader");
     record
+}
+
+async fn wait_for_terminal_record(directory: &tempfile::TempDir) -> (Option<String>, i64) {
+    timeout(Duration::from_secs(2), async {
+        loop {
+            let record = terminal_record(directory).await;
+            if record.0.is_some() {
+                return record;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("background terminal cleanup did not settle")
 }
 
 async fn call(url: &str, id: u64, name: &str, arguments: Value) -> Value {
@@ -545,18 +562,23 @@ async fn mcp_mutations_cover_crud_hierarchy_workflow_and_blockers_through_rust_c
     assert_eq!(launched["error"], "module_folder_unusable", "{launched}");
     let terminated = call(&url, 13, "terminate_current_run", json!({})).await;
     assert_eq!(terminated["agent_run_id"], "run-valid", "{terminated}");
-    assert_eq!(terminated["terminated"], true);
+    assert_eq!(terminated["termination_requested"], true);
+    assert_eq!(terminated["terminated"], false);
     assert_eq!(terminated["already_terminated"], false);
     // Rust authorized the run and owns its terminal outcome; the Python
     // boundary only executed the effect.
-    let (ended_at, events) = terminal_record(&directory).await;
+    let (ended_at, events) = wait_for_terminal_record(&directory).await;
     assert!(ended_at.is_some(), "the terminal outcome was not recorded");
     assert_eq!(events, 1);
 
-    // The credential becomes inactive with the Run, before a second tool body
-    // can reach termination. The durable effect remains single-shot.
+    // A caller can lose the first response when its own terminal exits. The
+    // run-bound credential therefore keeps this one tool retryable, while the
+    // durable effect remains single-shot.
     let repeated = call(&url, 14, "terminate_current_run", json!({})).await;
-    assert_eq!(repeated["reason"], "caller_run_inactive", "{repeated}");
+    assert_eq!(repeated["ok"], true, "{repeated}");
+    assert_eq!(repeated["agent_run_id"], "run-valid", "{repeated}");
+    assert_eq!(repeated["terminated"], true, "{repeated}");
+    assert_eq!(repeated["already_terminated"], true, "{repeated}");
     assert_eq!(terminal_record(&directory).await, (ended_at, 1));
 
     let external_create = post(

@@ -2,6 +2,7 @@ import type { RunStatusEventFrame } from "../types";
 import {
   applyAgentRunActivity,
   applyAgentRunState,
+  upsertAgentRun,
 } from "../apolloHolding";
 import { readStatusFact, type StatusFact } from "./statusFacts";
 import {
@@ -18,6 +19,7 @@ export function applyRunStatusFact(fact: StatusFact | null): RunStatusApplyResul
     if (!applyAgentRunActivity(fact.run)) return "unknown_run";
     return "applied";
   }
+  if (fact.run) upsertAgentRun(fact.run);
   if (!applyAgentRunState(
     fact.agentRunId,
     fact.state,

@@ -317,7 +317,7 @@ describe("overhaul acceptance - task worktree Changes", () => {
   });
 
   it.each(["none", "no_repo"] as const)(
-    "[overhaul-186] clears a cold Changes restoration when status resolves %s",
+    "[overhaul-205] clears a cold Changes restoration when status resolves %s",
     async (initialKind) => {
       const http = fixture();
       let worktreeStatus = {

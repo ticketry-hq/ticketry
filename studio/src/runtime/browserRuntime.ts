@@ -167,6 +167,7 @@ export function createBrowserRuntime({
   );
   const terminalWebSocket = websocketEndpoint(graphQlApi);
   const startup: RuntimeStartupConfiguration = Object.freeze({
+    runtimeInstance: `browser-${crypto.randomUUID()}`,
     serviceHealth: Object.freeze({
       state: "ready",
       service: "rust-graphql-adapter",
@@ -193,6 +194,19 @@ export function createBrowserRuntime({
       serviceSupervision: false,
       nativeTerminal: false,
       nativeFolderPicker: false,
+      appUpdates: false,
+    }),
+    appUpdates: Object.freeze({
+      check: async () => {
+        throw new Error("App updates are managed by the desktop app.");
+      },
+      downloadAndInstall: async () => {
+        throw new Error("App updates are managed by the desktop app.");
+      },
+      restart: async () => {
+        throw new Error("App updates are managed by the desktop app.");
+      },
+      subscribeProgress: () => () => {},
     }),
     readWorkTracker,
     // Browser development uses the same owned GraphQL operations through the

@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "studio-main",
-  "description": "Allows bundled Studio code in the local main window to load runtime configuration, inspect optional file logging, append bounded frontend logs when enabled, retry the fixed supervised pair, use the in-process GraphQL foundation, pick one native directory, request a fixed preflight report, approve a validated path for a named supported tool, launch one policy-authorized coding agent, listen for backend lifecycle events, use the narrow opaque-handle terminal viewer and native libghostty commands, and use native zoom hotkeys.",
+  "description": "Allows bundled Studio code in the local main window to load runtime configuration, inspect optional file logging, append bounded frontend logs when enabled, retry the fixed supervised pair, use the in-process GraphQL foundation, pick one native directory, request a fixed preflight report, approve a validated path for a named supported tool, launch one policy-authorized coding agent, check the stable channel update feed, inspect this launch's Crash Report outcome, reveal the fixed Crash Report folder, listen for backend lifecycle events, use the narrow opaque-handle terminal viewer and native libghostty commands, and use native zoom hotkeys.",
   "local": true,
   "windows": ["main"],
   "permissions": [
@@ -14,6 +14,9 @@
     "allow-desktop-preflight-report",
     "allow-desktop-approve-executable-path",
     "allow-desktop-launch-default-coding-agent",
+    "allow-desktop-update-check",
+    "allow-desktop-latest-crash-collection-outcome",
+    "allow-desktop-reveal-crash-report-folder",
     "allow-TauRPC--graphql-execute",
     "allow-TauRPC--graphql-subscribe",
     "allow-TauRPC--graphql-unsubscribe",

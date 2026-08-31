@@ -49,6 +49,7 @@ pub(crate) fn open(
         after_cursor: request.after_cursor,
         last_emitted: 0,
         pending: VecDeque::new(),
+        next_read_path: DeliveryPath::PostHandshake,
         phase: Phase::Handshake,
         service,
     };
@@ -59,6 +60,13 @@ pub(crate) fn open(
             // Registered before any read. Everything committed from this point
             // on is guaranteed to reach the drain phase.
             state.listener = Some(state.service.wakeup().listen());
+            state
+                .trace("wake-up-listener-registered", None, None)
+                .with_detail(
+                    "wakeupAuthority",
+                    serde_json::json!(state.service.wakeup().authority_instance()),
+                )
+                .record();
         }
         Ok(_) => state.fail(
             failure_code::BAD_REQUEST,
@@ -109,10 +117,57 @@ struct StreamState {
     after_cursor: Option<i64>,
     last_emitted: i64,
     pending: VecDeque<RunStatusFrame>,
+    next_read_path: DeliveryPath,
     phase: Phase,
 }
 
+#[derive(Clone, Copy)]
+enum DeliveryPath {
+    PostHandshake,
+    WakeUp,
+    SafetyReread,
+    DurableBacklog,
+}
+
+impl DeliveryPath {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::PostHandshake => "post_handshake",
+            Self::WakeUp => "wake_up",
+            Self::SafetyReread => "safety_reread",
+            Self::DurableBacklog => "durable_backlog",
+        }
+    }
+}
+
+trait RecordTrace {
+    fn record(self);
+}
+
+impl RecordTrace for crate::diagnostics::LaunchDiscoveryRecord {
+    fn record(self) {
+        crate::diagnostics::record_launch_discovery(self);
+    }
+}
+
 impl StreamState {
+    fn trace(
+        &self,
+        event: &str,
+        agent_run_id: Option<&str>,
+        cursor: Option<i64>,
+    ) -> crate::diagnostics::LaunchDiscoveryRecord {
+        crate::diagnostics::LaunchDiscoveryRecord::new(
+            event,
+            crate::diagnostics::runtime_instance(),
+            (!self.public_project_id.is_empty()).then_some(self.public_project_id.as_str()),
+            agent_run_id,
+            cursor,
+            None,
+            None,
+        )
+    }
+
     fn fail(&mut self, code: &str, message: &str) {
         self.pending
             .push_back(RunStatusFrame::RunStatusFailed(RunStatusFailed {
@@ -182,6 +237,12 @@ impl StreamState {
                 project_id: self.public_project_id.clone(),
                 cursor: high_water,
             }));
+        self.trace("subscription-caught-up", None, Some(high_water))
+            .with_detail(
+                "wakeupAuthority",
+                serde_json::json!(self.service.wakeup().authority_instance()),
+            )
+            .record();
         self.phase = Phase::Live;
     }
 
@@ -244,6 +305,7 @@ impl StreamState {
     }
 
     async fn live(&mut self) {
+        let delivery_path = self.next_read_path;
         let rows = match self
             .service
             .events()
@@ -258,30 +320,58 @@ impl StreamState {
             Ok(rows) => rows,
             Err(_) => return self.fail(failure_code::STORAGE, STORAGE_MESSAGE),
         };
+        for row in &rows {
+            self.trace(
+                "durable-event-reread",
+                row.agent_run_id.as_deref(),
+                Some(row.cursor),
+            )
+            .with_detail("deliveryPath", serde_json::json!(delivery_path.as_str()))
+            .with_detail("committedAt", serde_json::json!(row.committed_at))
+            .with_detail(
+                "wakeupAuthority",
+                serde_json::json!(self.service.wakeup().authority_instance()),
+            )
+            .record();
+        }
         if let Some(cursor) = rows.last().map(|row| row.cursor) {
             if self.push_events(rows).is_ok() {
                 self.last_emitted = cursor;
             }
             // A full page means more rows are already durable, so the next
             // turn reads again instead of waiting for another wake-up.
+            self.next_read_path = DeliveryPath::DurableBacklog;
             return;
         }
-        self.wait_for_commit().await;
+        self.next_read_path = self.wait_for_commit().await;
     }
 
-    async fn wait_for_commit(&mut self) {
+    async fn wait_for_commit(&mut self) -> DeliveryPath {
         let Some(listener) = self.listener.as_mut() else {
             tokio::time::sleep(REREAD_INTERVAL).await;
-            return;
+            return DeliveryPath::SafetyReread;
         };
-        tokio::select! {
+        let path = tokio::select! {
             signal = listener.wait() => {
                 if signal == Wakeup::Silent {
                     tokio::time::sleep(REREAD_INTERVAL).await;
+                    DeliveryPath::SafetyReread
+                } else {
+                    DeliveryPath::WakeUp
                 }
             }
-            () = tokio::time::sleep(REREAD_INTERVAL) => {}
+            () = tokio::time::sleep(REREAD_INTERVAL) => DeliveryPath::SafetyReread
+        };
+        if matches!(path, DeliveryPath::WakeUp) {
+            self.trace("wake-up-received", None, Some(self.last_emitted))
+                .with_detail("deliveryPath", serde_json::json!(path.as_str()))
+                .with_detail(
+                    "wakeupAuthority",
+                    serde_json::json!(self.service.wakeup().authority_instance()),
+                )
+                .record();
         }
+        path
     }
 
     /// Publish rows in cursor order, refusing history this build cannot read

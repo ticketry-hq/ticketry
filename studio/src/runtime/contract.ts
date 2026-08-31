@@ -15,6 +15,7 @@ export interface RuntimeCapabilities {
   readonly serviceSupervision: boolean;
   readonly nativeTerminal: boolean;
   readonly nativeFolderPicker: boolean;
+  readonly appUpdates: boolean;
 }
 
 /** Process-independent desktop service state, including actionable failures. */
@@ -46,14 +47,85 @@ export interface WorkTrackerReadRoutes<TResult> {
 export type SettingsRoutes<TResult> = WorkTrackerReadRoutes<TResult>;
 
 export interface RuntimeStartupConfiguration {
+  readonly runtimeInstance?: string;
   readonly serviceHealth: ServiceHealth;
   readonly initialNotices: readonly UserNotice[];
+}
+
+export interface AppUpdateCheckResult {
+  readonly installedVersion: string;
+  readonly status: "current" | "available";
+  readonly availableVersion?: string;
+  readonly notes?: string;
+}
+
+export type AppUpdateCheckErrorCode =
+  | "update_feed_unreachable"
+  | "update_manifest_invalid"
+  | "update_check_failed";
+
+/** Actionable failure from a stable channel update check. */
+export class AppUpdateCheckError extends Error {
+  readonly name = "AppUpdateCheckError";
+  readonly retryable = true;
+
+  constructor(
+    readonly code: AppUpdateCheckErrorCode,
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
+export type AppUpdateOperationErrorCode =
+  | "update_signature_invalid"
+  | "update_download_failed"
+  | "update_operation_failed";
+
+/** Actionable failure while applying or restarting into an update. */
+export class AppUpdateOperationError extends Error {
+  readonly name = "AppUpdateOperationError";
+
+  constructor(
+    readonly code: AppUpdateOperationErrorCode,
+    message: string,
+    readonly retryable: boolean,
+  ) {
+    super(message);
+  }
+}
+
+export interface AppUpdateProgress {
+  readonly receivedBytes: number;
+  readonly totalBytes?: number;
+}
+
+export type AppUpdateProgressListener = (progress: AppUpdateProgress) => void;
+
+export interface AppUpdatesRuntime {
+  readonly check: () => Promise<AppUpdateCheckResult>;
+  readonly downloadAndInstall: () => Promise<void>;
+  readonly restart: () => Promise<void>;
+  readonly subscribeProgress: (
+    listener: AppUpdateProgressListener,
+  ) => () => void;
+}
+
+export interface CrashCollectionOutcome {
+  readonly status: "none" | "report_collected";
+}
+
+export interface CrashReportsRuntime {
+  readonly latestCollectionOutcome: () => Promise<CrashCollectionOutcome>;
+  readonly revealFolder: () => Promise<void>;
 }
 
 /** Platform-neutral boundary consumed by the shared Studio application. */
 export interface StudioRuntime {
   readonly platform: StudioPlatform;
   readonly capabilities: RuntimeCapabilities;
+  readonly appUpdates: AppUpdatesRuntime;
+  readonly crashReports?: CrashReportsRuntime;
   /** The configured GraphQL transport used by both imperative reads and Apollo. */
   readonly graphQlTransport: CreateGraphQlTransportProxy;
   readWorkTracker<TResult>(

@@ -63,9 +63,16 @@ fn capture() -> (
 async fn next_frame(
     receiver: &mut tokio::sync::mpsc::UnboundedReceiver<String>,
 ) -> serde_json::Value {
-    let event = tokio::time::timeout(Duration::from_secs(10), receiver.recv())
+    next_frame_within(receiver, Duration::from_secs(10)).await
+}
+
+async fn next_frame_within(
+    receiver: &mut tokio::sync::mpsc::UnboundedReceiver<String>,
+    deadline: Duration,
+) -> serde_json::Value {
+    let event = tokio::time::timeout(deadline, receiver.recv())
         .await
-        .expect("a subscription event arrives within ten seconds")
+        .expect("a subscription event arrives before the deadline")
         .expect("the subscription channel stays open");
     let envelope: serde_json::Value =
         serde_json::from_str(&event).expect("decode the event envelope");
@@ -75,6 +82,46 @@ async fn next_frame(
         "the frame carries no transport error: {envelope}"
     );
     envelope["payload"]["data"]["run_status_stream"].clone()
+}
+
+#[tokio::test]
+async fn a_committed_event_wakes_the_listener_before_the_safety_reread() {
+    let (_directory, database, api) = installed().await;
+    insert_run(&database, "run-wakeup", TASK, "2026-08-16T10:00:00Z").await;
+    let (channel, mut frames) = capture();
+
+    api.clone()
+        .graphql_subscribe(
+            "status-wakeup".to_owned(),
+            request(PUBLIC_PROJECT, None),
+            channel,
+        )
+        .await;
+    assert_eq!(
+        next_frame(&mut frames).await["__typename"],
+        "RunStatusSnapshot"
+    );
+    assert_eq!(
+        next_frame(&mut frames).await["__typename"],
+        "RunStatusCaughtUp"
+    );
+
+    RunsServices::new(database)
+        .lifecycle()
+        .apply_lifecycle_fact(LifecycleFact {
+            agent_run_id: "run-wakeup".to_owned(),
+            kind: "turn_start".to_owned(),
+            occurred_at: "2026-08-16T10:01:00Z".to_owned(),
+            provider_session_id: None,
+        })
+        .await
+        .expect("the lifecycle fact commits");
+
+    let event = next_frame_within(&mut frames, Duration::from_millis(500)).await;
+    assert_eq!(event["__typename"], "RunStatusEvent");
+    assert_eq!(event["event_kind"], "agent_run.lifecycle");
+
+    api.graphql_unsubscribe("status-wakeup".to_owned()).await;
 }
 
 fn request(project_id: &str, after_cursor: Option<i64>) -> String {

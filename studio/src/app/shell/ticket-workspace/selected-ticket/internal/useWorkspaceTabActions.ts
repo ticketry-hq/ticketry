@@ -1,4 +1,4 @@
-import { useState, type MutableRefObject } from "react";
+import { useRef, useState, type MutableRefObject } from "react";
 import type {
   DesignDoc,
   ResumableTerminalSession,
@@ -89,7 +89,10 @@ export function useWorkspaceTabActions({
   );
   const focusSession = useTerminalStore((state) => state.focusSession);
   const openSession = useTerminalStore((state) => state.openSession);
-  const [resumingRunId, setResumingRunId] = useState<string | null>(null);
+  const [resumingRunIds, setResumingRunIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const resumingRunIdsRef = useRef(new Set<string>());
 
   function selectWorkspaceTab(tab: TaskWorkspaceTabIdentity): void {
     if (!bucket) return;
@@ -185,8 +188,12 @@ export function useWorkspaceTabActions({
   async function resumeWorkspaceTerminal(
     resumableSession: ResumableTerminalSession,
   ): Promise<void> {
-    if (!bucket || !projectId || resumingRunId) return;
-    setResumingRunId(resumableSession.agent_run_id);
+    const sourceRunId = resumableSession.agent_run_id;
+    if (!bucket || !projectId || resumingRunIdsRef.current.has(sourceRunId)) {
+      return;
+    }
+    resumingRunIdsRef.current.add(sourceRunId);
+    setResumingRunIds(new Set(resumingRunIdsRef.current));
     try {
       const resumed = await resumeTerminal({
         source: resumableSession,
@@ -217,7 +224,8 @@ export function useWorkspaceTabActions({
     } catch (error) {
       toast.error(resumeErrorMessage(error));
     } finally {
-      setResumingRunId(null);
+      resumingRunIdsRef.current.delete(sourceRunId);
+      setResumingRunIds(new Set(resumingRunIdsRef.current));
     }
   }
 
@@ -245,6 +253,6 @@ export function useWorkspaceTabActions({
     closeWorkspaceTerminal,
     resumeWorkspaceTerminal,
     launchTaskAgent,
-    resumingRunId,
+    resumingRunIds,
   };
 }

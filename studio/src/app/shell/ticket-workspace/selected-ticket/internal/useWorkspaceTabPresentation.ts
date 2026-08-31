@@ -87,17 +87,18 @@ export function useWorkspaceTabPresentation({
     activeKind = "details";
   }
   if (activeKind === "doc" && !activeDocument) activeKind = "details";
-  if (activeKind === "changes" && !hasChangesTab) activeKind = "details";
+  if (activeKind === "changes" && (!hasChangesTab || terminalOnly)) {
+    activeKind = "details";
+  }
 
   const persistentDefaultTabs: TaskWorkspaceTabIdentity[] = [
-    ...(terminalOnly ? [] : [{ kind: "details" as const }]),
-    ...(terminalOnly || !hasChangesTab
+    ...(terminalOnly
       ? []
-      : [{ kind: "changes" as const }]),
-    ...openDocuments.map((document) => ({
-      kind: "doc" as const,
-      id: document.id,
-    })),
+      : [
+          { kind: "details" as const },
+          ...(hasChangesTab ? [{ kind: "changes" as const }] : []),
+        ]),
+    ...openDocuments.map((document) => ({ kind: "doc" as const, id: document.id })),
     ...terminalTabs.map((tab) => ({
       kind: "terminal" as const,
       id: tab.meta.agentRunId ?? tab.id,

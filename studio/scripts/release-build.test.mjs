@@ -15,6 +15,7 @@ import {
   stageTarget,
   tauriBuildArguments,
   validateComponentVersions,
+  validateLatestJson,
   validateMacOSReleaseEnvironment,
   validateManifest,
   validateReleaseInputs,
@@ -26,10 +27,25 @@ const manifest = JSON.parse(
   await readFile(path.join(studioRoot, "release", "manifest.v1.json"), "utf8"),
 );
 
+function latestJson(overrides = {}) {
+  return {
+    version: manifest.release_version,
+    notes: "Security and reliability fixes.",
+    pub_date: "2026-08-31T12:00:00Z",
+    platforms: {
+      "darwin-aarch64": {
+        signature: "signed updater payload",
+        url: "https://github.com/ticketry-hq/ticketry-updates/releases/download/v0.2.0/Ticketry.app.tar.gz",
+      },
+    },
+    ...overrides,
+  };
+}
+
 test("the release is one Rust desktop artifact with native libghostty", () => {
   assert.equal(manifest.release_version, "0.2.0");
   assert.deepEqual(Object.keys(manifest.artifacts).sort(), [
-    "frontend", "runtime_resources", "tauri",
+    "frontend", "runtime_resources", "tauri", "updater",
   ]);
   assert.deepEqual(manifest.artifacts.tauri.command.slice(-2), [
     "--features", "native-libghostty",
@@ -63,6 +79,58 @@ test("manifest validation requires Rust runtime and release policy declarations"
   assert.throws(() => validateManifest(unsignedPolicy), /must require macOS notarization/);
 });
 
+test("manifest validation requires updater artifact declarations", () => {
+  const withoutUpdater = structuredClone(manifest);
+  delete withoutUpdater.artifacts.updater;
+  assert.throws(() => validateManifest(withoutUpdater), /artifacts\.updater/);
+});
+
+test("manifest validation requires the Tauri macOS updater archive suffix", () => {
+  const wrongArchive = structuredClone(manifest);
+  wrongArchive.artifacts.updater.archive_suffix = ".zip";
+  assert.throws(() => validateManifest(wrongArchive), /archive_suffix must be \.app\.tar\.gz/);
+});
+
+test("manifest validation requires the updater signature to match the archive suffix", () => {
+  const wrongSignature = structuredClone(manifest);
+  wrongSignature.artifacts.updater.signature_suffix = ".sig";
+  assert.throws(
+    () => validateManifest(wrongSignature),
+    /signature_suffix must be \.app\.tar\.gz\.sig/,
+  );
+});
+
+test("manifest validation requires latest.json in Tauri static JSON format", () => {
+  const wrongLatestManifest = structuredClone(manifest);
+  wrongLatestManifest.artifacts.updater.latest_manifest.filename = "update.json";
+  assert.throws(() => validateManifest(wrongLatestManifest), /latest_manifest\.filename must be latest\.json/);
+});
+
+test("manifest validation rejects unsigned updater artifact policy", () => {
+  const unsignedUpdater = structuredClone(manifest);
+  unsignedUpdater.artifacts.updater.archive_policy.signed = false;
+  assert.throws(() => validateManifest(unsignedUpdater), /must require signed and notarized updater archives/);
+});
+
+test("manifest validation requires the configured public stable update feed", () => {
+  const withoutFeedUrl = structuredClone(manifest);
+  delete withoutFeedUrl.release_policy.update.feed.latest_url;
+  assert.throws(() => validateManifest(withoutFeedUrl), /release policy update feed latest URL/);
+});
+
+test("manifest validation binds the Tauri updater signing environment", () => {
+  const wrongSigningEnvironment = structuredClone(manifest);
+  wrongSigningEnvironment.artifacts.updater.signing.private_key_environment = "PRIVATE_KEY";
+  assert.throws(
+    () => validateManifest(wrongSigningEnvironment),
+    /private_key_environment must be TAURI_SIGNING_PRIVATE_KEY/,
+  );
+});
+
+test("latest.json requires non-empty release notes", () => {
+  assert.throws(() => validateLatestJson(manifest, latestJson({ notes: "  " })), /non-empty notes/);
+});
+
 test("target selection and component versions are exact", () => {
   assert.deepEqual(selectTargets(manifest, "all").map(({ id }) => id), ["macos-aarch64"]);
   assert.throws(() => selectTargets(manifest, "macos-x86_64"), /Unsupported release target/);
@@ -83,9 +151,18 @@ test("production signing is required unless unsigned mode is explicit", () => {
     APPLE_PASSWORD: "password",
     APPLE_TEAM_ID: "TEAM",
   };
-  assert.doesNotThrow(() => validateMacOSReleaseEnvironment(signed));
   assert.throws(
-    () => validateMacOSReleaseEnvironment(signed, { allowUnsigned: true }),
+    () => validateMacOSReleaseEnvironment(signed),
+    /TAURI_SIGNING_PRIVATE_KEY.*TAURI_SIGNING_PRIVATE_KEY_PASSWORD/,
+  );
+  const signedUpdater = {
+    ...signed,
+    TAURI_SIGNING_PRIVATE_KEY: "updater private key",
+    TAURI_SIGNING_PRIVATE_KEY_PASSWORD: "updater key password",
+  };
+  assert.doesNotThrow(() => validateMacOSReleaseEnvironment(signedUpdater));
+  assert.throws(
+    () => validateMacOSReleaseEnvironment(signedUpdater, { allowUnsigned: true }),
     /--allow-unsigned cannot be used/,
   );
 });

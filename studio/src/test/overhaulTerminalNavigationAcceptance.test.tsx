@@ -408,4 +408,101 @@ describe("overhaul acceptance — terminals", () => {
       .not.toBeInTheDocument();
   });
 
+  it("[overhaul-204] keeps past agents independently resumable", async () => {
+    const resumableSessions = [
+      {
+        agent_run_id: "run-grill",
+        agent: "codex",
+        status: "exited",
+        started_at: "2026-08-07T12:00:00Z",
+        ended_at: "2026-08-07T12:30:00Z",
+        launch_state: "Grill",
+        launch_model: "gpt-5",
+        provider_session_id: "provider-grill",
+        resumed_from: null,
+        scope: "task" as const,
+      },
+      {
+        agent_run_id: "run-spec",
+        agent: "codex",
+        status: "exited",
+        started_at: "2026-08-07T13:00:00Z",
+        ended_at: "2026-08-07T13:30:00Z",
+        launch_state: "Spec",
+        launch_model: "gpt-5",
+        provider_session_id: "provider-spec",
+        resumed_from: null,
+        scope: "task" as const,
+      },
+    ];
+    terminalReads.readTaskResumableTerminalSessions.mockResolvedValue(
+      resumableSessions,
+    );
+    const completions = new Map<
+      string,
+      (result: { agent_run_id: string; resumed_from: string }) => void
+    >();
+    terminalApi.resumeTerminal.mockImplementation(
+      ({ source }: { source: (typeof resumableSessions)[number] }) =>
+        new Promise((resolve) => completions.set(source.agent_run_id, resolve)),
+    );
+
+    render(
+      <SelectedTicketContent
+        bucket="story-1"
+        projectId="project-1"
+        moduleId="module-1"
+        owner="studio"
+        details={<div>Issue details</div>}
+      />,
+    );
+
+    const grill = await screen.findByRole("button", {
+      name: "Resume Grill codex terminal",
+    });
+    const spec = screen.getByRole("button", {
+      name: "Resume Spec codex terminal",
+    });
+    fireEvent.click(grill);
+
+    await waitFor(() => expect(grill).toBeDisabled());
+    expect(grill).toHaveTextContent("Resuming…");
+    expect(spec).toBeEnabled();
+
+    fireEvent.click(spec);
+    await waitFor(() => expect(terminalApi.resumeTerminal).toHaveBeenCalledTimes(2));
+    expect(terminalApi.resumeTerminal.mock.calls.map(([input]) =>
+      input.source.agent_run_id
+    )).toEqual(["run-grill", "run-spec"]);
+    expect(spec).toBeDisabled();
+    expect(spec).toHaveTextContent("Resuming…");
+
+    const completeGrill = completions.get("run-grill");
+    const completeSpec = completions.get("run-spec");
+    expect(completeGrill).toBeDefined();
+    expect(completeSpec).toBeDefined();
+    await act(async () => {
+      completeGrill?.({
+        agent_run_id: "run-grill-successor",
+        resumed_from: "run-grill",
+      });
+    });
+    await waitFor(() => expect(grill).toBeEnabled());
+    expect(spec).toBeDisabled();
+
+    await act(async () => {
+      completeSpec?.({
+        agent_run_id: "run-spec-successor",
+        resumed_from: "run-spec",
+      });
+    });
+    await waitFor(() => expect(spec).toBeEnabled());
+    expect(Object.values(useTerminalStore.getState().sessions)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ agentRunId: "run-grill-successor" }),
+        expect.objectContaining({ agentRunId: "run-spec-successor" }),
+      ]),
+    );
+  });
+
 });

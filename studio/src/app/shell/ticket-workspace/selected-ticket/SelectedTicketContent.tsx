@@ -293,7 +293,7 @@ export function SelectedTicketContent({
     closeWorkspaceTerminal,
     resumeWorkspaceTerminal,
     launchTaskAgent,
-    resumingRunId,
+    resumingRunIds,
   } = useWorkspaceTabActions({
     bucket,
     projectId,
@@ -377,7 +377,7 @@ export function SelectedTicketContent({
         resumableSessions={resumable}
         resumableChips={dormantChips.resumable}
         historyChips={dormantChips.history}
-        resumingRunId={resumingRunId}
+        resumingRunIds={resumingRunIds}
         onReopenDocument={reopenWorkspaceDocument}
         onResumeTerminal={(session) => void resumeWorkspaceTerminal(session)}
       />

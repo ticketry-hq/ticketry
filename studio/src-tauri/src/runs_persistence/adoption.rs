@@ -176,8 +176,8 @@ async fn classify(
             .ok_or_else(|| incompatible("Runs ownership ledger is incomplete"))?;
         let version = row.try_get::<i32>("", "version").map_err(storage)?;
         return match version {
-            1 => Ok(SourceClassification::RustOwnedV1),
             schema::VERSION => Ok(SourceClassification::RustOwned),
+            1 => Ok(SourceClassification::RustOwnedV1),
             _ => Err(incompatible(format!(
                 "unknown Rust Runs schema version {version}"
             ))),
@@ -243,6 +243,9 @@ async fn validate_manifest(
             expected_agent.remove("launch_unattended");
             expected_agent.insert("model".to_owned());
             expected_agent.insert("reasoning".to_owned());
+            if agent.contains("initial_prompt") {
+                expected_agent.insert("initial_prompt".to_owned());
+            }
         }
         SourceClassification::Django(generation) => {
             if generation.number() < 17 {
@@ -350,11 +353,14 @@ async fn validate_adopted_column_shapes(
         ("scope", "varchar"),
         ("launch_state", "varchar"),
         ("launch_model", "varchar"),
+        ("initial_prompt", "text"),
+        ("launch_reasoning", "varchar"),
+        ("launch_unattended", "bool"),
     ] {
         let Some((observed_type, not_null, default)) = facts.get(column) else {
             continue;
         };
-        let expected_not_null = if column == "scope" {
+        let expected_not_null = if matches!(column, "scope" | "launch_unattended") {
             1
         } else if column == "agent"
             && matches!(
@@ -376,7 +382,15 @@ async fn validate_adopted_column_shapes(
         } else {
             0
         };
-        if observed_type != data_type || *not_null != expected_not_null || default.is_some() {
+        let expected_default = if column == "launch_unattended" {
+            Some("0")
+        } else {
+            None
+        };
+        if observed_type != data_type
+            || *not_null != expected_not_null
+            || default.as_deref() != expected_default
+        {
             return Err(incompatible(format!(
                 "unknown definition for agent_runs.{column}"
             )));

@@ -55,6 +55,7 @@ describe("desktop runtime contract", () => {
       serviceSupervision: true,
       nativeTerminal: false,
       nativeFolderPicker: true,
+      appUpdates: true,
     });
   });
 

@@ -1,9 +1,11 @@
 //! Builder wiring for the desktop application: managed state, the invoke
 //! surface, and the mapping from Tauri run events onto lifecycle actions.
 
+use chrono::Utc;
 use tauri::Manager;
 
 use crate::desktop::commands;
+use crate::desktop::crash_reports::CrashReportsRuntime;
 use crate::desktop::data_directory::{
     data_directory_ownership_for_startup, release_data_directory_ownership,
 };
@@ -18,7 +20,7 @@ use crate::desktop::service_state::DesktopServiceState;
 use crate::desktop::startup::initialize_services;
 use crate::native_terminal::focus_trace;
 use crate::terminal::viewer::webview_commands;
-use crate::{graphql_foundation, native_terminal};
+use crate::{app_updates, graphql_foundation, native_terminal};
 
 pub fn run(file_logging_requested: bool) {
     let ownership = data_directory_ownership_for_startup();
@@ -27,16 +29,27 @@ pub fn run(file_logging_requested: bool) {
         &ownership.data_directory,
         development_log_path(),
     );
+    let diagnostic_reports_directory = crate::diagnostics::system_diagnostic_reports_directory();
+    let crash_report = crate::diagnostics::collect_dirty_shutdown(
+        &ownership.data_directory,
+        &diagnostic_reports_directory,
+        file_log.path(),
+        Utc::now,
+    );
+    let crash_reports = CrashReportsRuntime::new(&ownership.data_directory, crash_report);
     if let Some(error) = ownership.startup_error.as_deref() {
         eprintln!("Ticketry could not acquire data-directory ownership: {error}");
     }
     let graphql_api = graphql_foundation::transport_api();
     let setup_graphql_api = graphql_api.clone();
-    let builder = tauri::Builder::default().plugin(tauri_plugin_dialog::init());
+    let builder = tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build());
     #[cfg(feature = "desktop-acceptance")]
     let builder = builder.plugin(tauri_plugin_wdio_webdriver::init());
     let application = match builder
         .manage(ownership)
+        .manage(crash_reports)
         .manage(file_log)
         .manage(DesktopServiceState::new())
         .manage(DesktopLaunchRuntime::new())
@@ -53,6 +66,9 @@ pub fn run(file_logging_requested: bool) {
                 commands::desktop_validate_module_folder,
                 commands::desktop_preflight_report,
                 commands::desktop_approve_executable_path,
+                app_updates::desktop_update_check,
+                crate::desktop::crash_reports::desktop_latest_crash_collection_outcome,
+                crate::desktop::crash_reports::desktop_reveal_crash_report_folder,
                 webview_commands::viewer_attach,
                 webview_commands::viewer_input,
                 webview_commands::viewer_resize,
@@ -117,6 +133,14 @@ pub fn run(file_logging_requested: bool) {
             tauri::RunEvent::Exit => {
                 shutdown_rust_runtime(application);
                 detach_transient_viewers(application);
+                let ownership = application
+                    .state::<crate::desktop::data_directory::DesktopDataDirectoryOwnership>(
+                );
+                if let Err(error) =
+                    crate::diagnostics::clean_session_marker(&ownership.data_directory)
+                {
+                    eprintln!("Ticketry could not remove its Session Marker: {error}");
+                }
                 release_data_directory_ownership(application);
                 Some(DesktopLifecycleEvent::ApplicationShutdown)
             }

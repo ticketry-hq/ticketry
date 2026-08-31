@@ -94,6 +94,10 @@ impl StatusEventRepository {
         self.wakeup.publish();
     }
 
+    pub(crate) fn wakeup_authority_instance(&self) -> &str {
+        self.wakeup.authority_instance()
+    }
+
     pub async fn append(
         &self,
         transaction: &DatabaseTransaction,

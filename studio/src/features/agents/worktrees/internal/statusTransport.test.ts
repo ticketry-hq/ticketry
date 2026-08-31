@@ -38,6 +38,10 @@ function desktopRuntime(
       serviceSupervision: true,
       nativeTerminal: false,
       nativeFolderPicker: true,
+      appUpdates: true,
+    },
+    appUpdates: {
+      check: async () => ({ installedVersion: "0.0.0", status: "current" }),
     },
     readWorkTracker: execute,
     writeWorkTracker: execute,

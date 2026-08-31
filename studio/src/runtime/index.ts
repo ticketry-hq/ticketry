@@ -2,6 +2,14 @@ import { createBrowserRuntime } from "./browserRuntime";
 import type { RuntimeStartupConfiguration, StudioRuntime } from "./contract";
 
 export type {
+  AppUpdateCheckErrorCode,
+  AppUpdateCheckResult,
+  AppUpdateOperationErrorCode,
+  AppUpdateProgress,
+  AppUpdateProgressListener,
+  AppUpdatesRuntime,
+  CrashCollectionOutcome,
+  CrashReportsRuntime,
   RuntimeCapabilities,
   ServiceHealth,
   ServiceHealthListener,
@@ -13,6 +21,7 @@ export type {
   WorkTrackerGraphQlExecute,
   WorkTrackerReadRoutes,
 } from "./contract";
+export { AppUpdateCheckError, AppUpdateOperationError } from "./contract";
 export {
   USER_NOTICE_SEVERITIES,
   validateUserNotice,

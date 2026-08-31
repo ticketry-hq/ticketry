@@ -232,6 +232,10 @@ export function installDesktopGraphQlRuntime(
       serviceSupervision: true,
       nativeTerminal: true,
       nativeFolderPicker: true,
+      appUpdates: true,
+    },
+    appUpdates: {
+      check: async () => ({ installedVersion: "0.0.0", status: "current" }),
     },
     readWorkTracker: route,
     writeWorkTracker: route,

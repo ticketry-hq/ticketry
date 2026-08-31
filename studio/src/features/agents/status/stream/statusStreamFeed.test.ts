@@ -167,6 +167,59 @@ afterEach(() => {
 });
 
 describe("snapshot reconciliation", () => {
+  it("records subscription delivery through Apollo snapshot application", async () => {
+    const trace = vi.spyOn(console, "info").mockImplementation(() => {});
+    const transport = harness();
+
+    statusStreamFeed.start(PROJECT, { createProxy: transport.createProxy });
+    await vi.advanceTimersByTimeAsync(0);
+    transport.send(snapshot(10, [run()]));
+    transport.send(caughtUp(10));
+
+    const records = trace.mock.calls
+      .filter(([label]) => label === "[launch-discovery]")
+      .map(([, record]) => record);
+    expect(records).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        event: "subscription-started",
+        projectId: PROJECT,
+        agentRunId: null,
+        cursor: null,
+        connectionGeneration: 1,
+      }),
+      expect.objectContaining({
+        event: "subscription-accepted",
+        projectId: PROJECT,
+        agentRunId: null,
+        cursor: null,
+        connectionGeneration: 1,
+      }),
+      expect.objectContaining({
+        event: "graphql-frame-received",
+        projectId: PROJECT,
+        agentRunId: "run-1",
+        cursor: 10,
+        connectionGeneration: 1,
+        frameType: "snapshot",
+      }),
+      expect.objectContaining({
+        event: "apollo-run-applied",
+        projectId: PROJECT,
+        agentRunId: "run-1",
+        cursor: 10,
+        connectionGeneration: 1,
+        source: "snapshot",
+      }),
+      expect.objectContaining({
+        event: "caught-up",
+        projectId: PROJECT,
+        agentRunId: null,
+        cursor: 10,
+        connectionGeneration: 1,
+      }),
+    ]));
+  });
+
   it("installs the authoritative holding for the selected project", async () => {
     const transport = harness();
     statusStreamFeed.start(PROJECT, { createProxy: transport.createProxy });
@@ -662,6 +715,7 @@ describe("connection lifecycle", () => {
   });
 
   it("re-handshakes for a fact about a run this holding has never seen", async () => {
+    const trace = vi.spyOn(console, "info").mockImplementation(() => {});
     const transport = harness();
     statusStreamFeed.start(PROJECT, { createProxy: transport.createProxy });
     await vi.advanceTimersByTimeAsync(0);
@@ -682,6 +736,52 @@ describe("connection lifecycle", () => {
     await vi.advanceTimersByTimeAsync(300);
 
     expect(transport.subscriptions).toHaveLength(2);
+    transport.send(snapshot(11, [run({ agent_run_id: "run-unknown" })]));
+
+    const records = trace.mock.calls
+      .filter(([label]) => label === "[launch-discovery]")
+      .map(([, record]) => record);
+    expect(records).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        event: "graphql-frame-received",
+        projectId: PROJECT,
+        agentRunId: "run-unknown",
+        cursor: 11,
+        connectionGeneration: 1,
+        frameType: "event",
+      }),
+      expect.objectContaining({
+        event: "apollo-event-applied",
+        projectId: PROJECT,
+        agentRunId: "run-unknown",
+        cursor: 11,
+        connectionGeneration: 1,
+        result: "unknown_run",
+      }),
+      expect.objectContaining({
+        event: "unknown-run-resync-scheduled",
+        projectId: PROJECT,
+        agentRunId: "run-unknown",
+        cursor: 11,
+        connectionGeneration: 1,
+      }),
+      expect.objectContaining({
+        event: "replacement-generation-started",
+        projectId: PROJECT,
+        agentRunId: "run-unknown",
+        cursor: 11,
+        connectionGeneration: 3,
+        replacedConnectionGeneration: 1,
+      }),
+      expect.objectContaining({
+        event: "apollo-run-applied",
+        projectId: PROJECT,
+        agentRunId: "run-unknown",
+        cursor: 11,
+        connectionGeneration: 3,
+        source: "snapshot",
+      }),
+    ]));
   });
 
   it("drops queued results from the project it no longer owns", async () => {

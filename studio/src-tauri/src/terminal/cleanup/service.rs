@@ -95,6 +95,35 @@ impl TerminalCleanupService {
         principal: &AuthenticatedAgentRun,
         request_id: &str,
     ) -> Result<session::Model, TerminalCleanupError> {
+        self.authenticated_terminal(principal).await?;
+        self.cleanup(&principal.agent_run_id, CleanupCause::Explicit, request_id)
+            .await
+    }
+
+    /// Persist a self-termination request without stopping the caller that
+    /// still needs to receive the MCP response.
+    pub async fn request_current_run_termination(
+        &self,
+        principal: &AuthenticatedAgentRun,
+        request_id: &str,
+    ) -> Result<session::Model, TerminalCleanupError> {
+        let terminal = self.authenticated_terminal(principal).await?;
+        if terminal.terminated_at.is_some() && !terminal.runtime_cleanup_pending {
+            return Ok(terminal);
+        }
+        let identity = CleanupEffectIdentity::predetermined(
+            &principal.agent_run_id,
+            CleanupCause::Explicit,
+            request_id,
+        )?;
+        self.prepare(&identity).await?;
+        self.authoritative(&principal.agent_run_id).await
+    }
+
+    async fn authenticated_terminal(
+        &self,
+        principal: &AuthenticatedAgentRun,
+    ) -> Result<session::Model, TerminalCleanupError> {
         let run = agent_run::Entity::find_by_id(&principal.agent_run_id)
             .one(&self.database)
             .await?
@@ -109,8 +138,7 @@ impl TerminalCleanupService {
                 "The authenticated Agent Run scope does not match the Terminal Session.",
             ));
         }
-        self.cleanup(&principal.agent_run_id, CleanupCause::Explicit, request_id)
-            .await
+        Ok(terminal)
     }
 
     /// Execute one cause-bound cleanup. Launch compensation, hosted exit,

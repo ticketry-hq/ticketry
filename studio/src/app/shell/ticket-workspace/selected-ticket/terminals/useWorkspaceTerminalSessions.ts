@@ -1,3 +1,5 @@
+import { useEffect, useRef } from "react";
+
 import {
   isLiveTerminalState,
   isScratchBucket,
@@ -8,6 +10,9 @@ import {
   useTerminalStore,
 } from "../../../../../features/agents/terminal";
 import { useAgentStatusSelection } from "../../../../../features/agents/status";
+import {
+  recordLaunchDiscoveryForAgentRun,
+} from "../../../../../features/agents/status/launchDiscoveryTrace";
 
 export function useWorkspaceTerminalSessions(
   bucket: string | null,
@@ -48,6 +53,24 @@ export function useWorkspaceTerminalSessions(
         : runs;
     },
   );
+  const committedRunIds = useRef(new Set<string>());
+
+  useEffect(() => {
+    if (!bucket || !projectId) return;
+    for (const tab of tabs) {
+      const agentRunId = tab.meta.agentRunId;
+      if (!agentRunId) continue;
+      const committedKey = `${projectId}\0${bucket}\0${agentRunId}`;
+      if (committedRunIds.current.has(committedKey)) continue;
+      committedRunIds.current.add(committedKey);
+      recordLaunchDiscoveryForAgentRun(
+        "workspace-render-committed",
+        projectId,
+        agentRunId,
+        { bucket, moduleId, sessionId: tab.id },
+      );
+    }
+  }, [bucket, moduleId, projectId, tabs]);
 
   return {
     sessions,

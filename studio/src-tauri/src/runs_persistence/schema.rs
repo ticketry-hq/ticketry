@@ -391,3 +391,81 @@ CREATE TABLE agent_runs__rust (
 fn storage(source: sea_orm::DbErr) -> RunsPersistenceError {
     RunsPersistenceError::storage("Runs schema operation failed", source)
 }
+
+#[cfg(test)]
+mod tests {
+    use sea_orm::{ConnectionTrait, Database, DbBackend, Statement};
+
+    use super::*;
+
+    #[tokio::test]
+    async fn version_one_upgrade_preserves_launch_material_and_relabels_ownership() {
+        let database = Database::connect("sqlite::memory:").await.unwrap();
+        database
+            .execute_unprepared(
+                "CREATE TABLE worktracker_issue (id char(32) PRIMARY KEY);\n\
+                 INSERT INTO worktracker_issue (id) VALUES ('issue-1');\n\
+                 CREATE TABLE agent_runs (\n\
+                   id varchar PRIMARY KEY, issue_id char(32) NOT NULL, agent varchar NULL,\n\
+                   model varchar NULL, reasoning varchar NULL, status varchar NOT NULL,\n\
+                   started_at varchar NOT NULL, scope varchar NOT NULL, launch_model varchar NULL,\n\
+                   initial_prompt text NULL\n\
+                 );\n\
+                 INSERT INTO agent_runs\n\
+                   (id, issue_id, agent, model, reasoning, status, started_at, scope, launch_model, initial_prompt)\n\
+                 VALUES\n\
+                   ('run-1', 'issue-1', 'codex', 'fallback-model', 'high', 'running', 'now', 'task', 'gpt-5', 'Keep this prompt');\n\
+                 CREATE TABLE ticketry_runs_adoption (\n\
+                   singleton integer PRIMARY KEY CHECK (singleton = 1),\n\
+                   version integer NOT NULL CHECK (version = 1),\n\
+                   source_leaf varchar(255) NOT NULL, stable_digest char(64) NOT NULL,\n\
+                   adopted_at datetime NOT NULL\n\
+                 );\n\
+                 INSERT INTO ticketry_runs_adoption\n\
+                   (singleton, version, source_leaf, stable_digest, adopted_at)\n\
+                 VALUES (1, 1, '0015_merge_20260819_1521', 'digest', '2026-08-01');",
+            )
+            .await
+            .unwrap();
+
+        upgrade_v1(&database).await.unwrap();
+
+        let ledger = database
+            .query_one_raw(Statement::from_string(
+                DbBackend::Sqlite,
+                "SELECT version, adopted_at FROM ticketry_runs_adoption WHERE singleton=1"
+                    .to_owned(),
+            ))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(ledger.try_get::<i32>("", "version").unwrap(), 2);
+        assert_eq!(
+            ledger.try_get::<String>("", "adopted_at").unwrap(),
+            "2026-08-01"
+        );
+        let run = database
+            .query_one_raw(Statement::from_string(
+                DbBackend::Sqlite,
+                "SELECT launch_model, initial_prompt, launch_reasoning, launch_unattended FROM agent_runs WHERE id='run-1'"
+                    .to_owned(),
+            ))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(run.try_get::<String>("", "launch_model").unwrap(), "gpt-5");
+        assert_eq!(
+            run.try_get::<String>("", "initial_prompt").unwrap(),
+            "Keep this prompt"
+        );
+        assert_eq!(
+            run.try_get::<String>("", "launch_reasoning").unwrap(),
+            "high"
+        );
+        assert!(!run.try_get::<bool>("", "launch_unattended").unwrap());
+        assert!(!columns(&database, "agent_runs")
+            .await
+            .unwrap()
+            .contains("model"));
+    }
+}

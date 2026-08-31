@@ -12,6 +12,7 @@ use sea_orm::{
     DatabaseTransaction, EntityTrait, QueryFilter, TransactionTrait,
 };
 use serde_json::json;
+use std::time::Instant;
 
 use super::entities::{agent_run as agent_run_entity, launch_effect as launch_effect_entity};
 use super::repositories::launch_effect;
@@ -101,6 +102,7 @@ impl EffectService {
         request: PrepareLaunchRequest,
         participant: &dyn LaunchPreparationParticipant,
     ) -> Result<PreparedLaunch, RunsPersistenceError> {
+        let trace_started = Instant::now();
         let intent = normalize(request.intent.clone())?;
         let transaction = self.database().begin().await?;
         validate_work_item_scope(&transaction, &intent).await?;
@@ -151,6 +153,8 @@ impl EffectService {
         .await
         .map_err(|_| conflict("The launch identity is already durable."))?;
 
+        participant.prepare_in(&transaction, &intent, false).await?;
+        let run = super::run_holding_in(&transaction, &intent.agent_run_id, &started_at).await?;
         let event_id = uuid::Uuid::new_v4().simple().to_string();
         let payload = json!({
             "agentRunId": intent.agent_run_id,
@@ -159,6 +163,7 @@ impl EffectService {
             "providerSessionCaptured": false,
             "launchState": request.snapshot.launch_state,
             "launchModel": request.snapshot.launch_model,
+            "run": run,
         });
         let cursor = self
             .events()
@@ -178,9 +183,44 @@ impl EffectService {
                 },
             )
             .await?;
-        participant.prepare_in(&transaction, &intent, false).await?;
         transaction.commit().await?;
+        let trace = || {
+            crate::diagnostics::LaunchDiscoveryRecord::new(
+                "launch-transaction-committed",
+                crate::diagnostics::runtime_instance(),
+                Some(&intent.project_id),
+                Some(&intent.agent_run_id),
+                Some(cursor),
+                None,
+                None,
+            )
+            .with_detail(
+                "elapsedMs",
+                serde_json::json!(trace_started.elapsed().as_millis()),
+            )
+            .with_detail("workItemId", serde_json::json!(intent.issue_id))
+            .with_detail(
+                "wakeupAuthority",
+                serde_json::json!(self.events().wakeup_authority_instance()),
+            )
+        };
+        crate::diagnostics::record_launch_discovery(trace());
         self.events().wake_committed();
+        crate::diagnostics::record_launch_discovery(
+            crate::diagnostics::LaunchDiscoveryRecord::new(
+                "wake-up-published",
+                crate::diagnostics::runtime_instance(),
+                Some(&intent.project_id),
+                Some(&intent.agent_run_id),
+                Some(cursor),
+                None,
+                None,
+            )
+            .with_detail(
+                "wakeupAuthority",
+                serde_json::json!(self.events().wakeup_authority_instance()),
+            ),
+        );
         Ok(PreparedLaunch {
             effect: launch_effect(effect),
             reused: false,

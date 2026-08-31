@@ -169,7 +169,10 @@ pub struct TerminalRuntimeAuthority {
     pub hook_runner: PathBuf,
     pub hook_spool_directory: PathBuf,
     pub mcp_url: String,
-    pub run_authority: crate::work_management::mcp::RunAuthority,
+    pub run_authority: crate::run_authority::RunAuthority,
+    /// The operations a launched run's grant may name. The composer supplies
+    /// them, so terminal never reads the MCP tool registry above it.
+    pub granted_operations: Vec<String>,
 }
 
 /// Interactive launches materialize approved provider argv in Rust and create
@@ -207,7 +210,7 @@ impl InteractiveTerminalLaunchRuntime {
     pub fn replace_mcp_authority(
         &self,
         mcp_url: String,
-        run_authority: crate::work_management::mcp::RunAuthority,
+        run_authority: crate::run_authority::RunAuthority,
     ) -> Result<(), String> {
         let mut authority = self
             .authority
@@ -572,10 +575,7 @@ async fn issue_run_authorization(
 ) -> Result<String, TerminalLaunchError> {
     authority
         .run_authority
-        .issue(
-            agent_run_id,
-            crate::work_management::mcp::allowed_provider_operations(),
-        )
+        .issue(agent_run_id, authority.granted_operations.clone())
         .await
         .map_err(|_| invalid_launch("Run authorization was refused."))
 }

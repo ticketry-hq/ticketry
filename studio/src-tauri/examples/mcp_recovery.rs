@@ -1,4 +1,4 @@
-use muxed_studio_lib::work_management::mcp::{McpConfiguration, McpRuntime};
+use muxed_studio_lib::mcp::{McpConfiguration, McpRuntime};
 use std::net::{Ipv4Addr, SocketAddr};
 
 #[tokio::main]

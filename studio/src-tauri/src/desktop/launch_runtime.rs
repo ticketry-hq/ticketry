@@ -57,7 +57,7 @@ impl DesktopLaunchRuntime {
     pub(crate) fn replace_terminal_mcp_authority(
         &self,
         mcp_url: String,
-        authority: crate::work_management::mcp::RunAuthority,
+        authority: crate::mcp::RunAuthority,
     ) -> Result<(), String> {
         self.composed()?
             .terminal_runtime()

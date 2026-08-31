@@ -14,7 +14,7 @@ pub(crate) const HEALTH_EVENT: &str = "desktop-service-health";
 pub(crate) const USER_NOTICE_EVENT: &str = "desktop-user-notice";
 
 pub(crate) struct DesktopServiceState {
-    pub(crate) mcp_runtime: Mutex<Option<work_management::mcp::McpRuntime>>,
+    pub(crate) mcp_runtime: Mutex<Option<crate::mcp::McpRuntime>>,
     pub(crate) terminal_runtime:
         Mutex<Option<std::sync::Arc<crate::terminal::lifecycle::TerminalLifecycleRuntime>>>,
     pub(crate) hook_spool_runtime: Mutex<Option<crate::hook_spool::HookSpoolRuntime>>,

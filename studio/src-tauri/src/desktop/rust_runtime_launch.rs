@@ -47,7 +47,8 @@ pub(crate) fn launch_rust_runtime(
             hook_runner,
             hook_spool_directory: spool_directory.clone(),
             mcp_url: String::new(),
-            run_authority: crate::work_management::mcp::RunAuthority::new(database.clone()),
+            run_authority: crate::run_authority::RunAuthority::new(database.clone()),
+            granted_operations: crate::mcp::allowed_provider_operations(),
         },
     )?;
 

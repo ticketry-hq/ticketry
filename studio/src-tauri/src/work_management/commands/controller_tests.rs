@@ -82,9 +82,9 @@ async fn fixture() -> (tempfile::TempDir, sea_orm::DatabaseConnection) {
 
 #[test]
 fn mcp_write_adapters_do_not_own_seaorm_queries_or_domain_sequencing() {
-    let dependency = include_str!("../mcp/dependency_tools.rs");
-    let dispatch = include_str!("../mcp/dispatch.rs");
-    let workflow = include_str!("../mcp/workflow_tools.rs");
+    let dependency = include_str!("../../mcp/dependency_tools.rs");
+    let dispatch = include_str!("../../mcp/dispatch.rs");
+    let workflow = include_str!("../../mcp/workflow_tools.rs");
     for (name, source) in [
         ("dependency_tools.rs", dependency),
         ("dispatch.rs", dispatch),

@@ -129,7 +129,8 @@ pub fn tools() -> Vec<Tool> {
     ]
 }
 
-pub(crate) fn allowed_provider_operations() -> Vec<String> {
+/// Every operation a launched run's grant may name.
+pub fn allowed_provider_operations() -> Vec<String> {
     tools()
         .into_iter()
         .map(|tool| tool.name.into_owned())

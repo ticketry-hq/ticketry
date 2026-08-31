@@ -14,7 +14,7 @@ use axum::{
 use futures_util::StreamExt;
 use muxed_studio_lib::launch::paths::LaunchPathsService;
 use muxed_studio_lib::terminal::lifecycle::TerminalRuntimeAuthority;
-use muxed_studio_lib::work_management::mcp::{McpRuntime, RunAuthority};
+use muxed_studio_lib::mcp::{McpRuntime, RunAuthority};
 use serde::Deserialize;
 use tauri_graphql::{TransportApi, TransportApiImpl};
 
@@ -115,6 +115,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             hook_spool_directory,
             mcp_url: String::new(),
             run_authority: RunAuthority::new(database.clone()),
+            granted_operations: muxed_studio_lib::mcp::allowed_provider_operations(),
         });
 
     let mcp_runtime = Arc::new(mcp::start(&data_directory).await?);

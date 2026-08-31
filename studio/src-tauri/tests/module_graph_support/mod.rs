@@ -21,6 +21,7 @@ pub const SLICES: &[(&str, &str)] = &[
     ("work_management", "work-management"),
     ("module_links", "work-management"),
     ("runs_persistence", "runs-persistence"),
+    ("run_authority", "runs-persistence"),
     ("runs", "runs-persistence"),
     ("hook_spool", "runs-persistence"),
     ("execution", "agent-execution"),
@@ -33,6 +34,7 @@ pub const SLICES: &[(&str, &str)] = &[
     ("tmux_adapter", "terminal"),
     ("viewer_ownership", "terminal"),
     ("temporary_profile", "terminal"),
+    ("mcp", "mcp"),
     ("installation", "installation"),
     ("graphql_foundation", "graphql-schema"),
     ("query_root", "graphql-schema"),
@@ -50,11 +52,7 @@ pub const ALLOWED_BACK_EDGES: &[(&str, &str)] = &[
     // §3.4 code motion out of `work_management` and the remaining pairs
     ("documents", "workspace"),
     ("settings_persistence", "work_management"),
-    ("work_management", "execution"),
-    ("work_management", "graph_run_service"),
-    ("work_management", "launch"),
     ("work_management", "runs_persistence"),
-    ("work_management", "terminal"),
     ("work_management", "worktree"),
 ];
 

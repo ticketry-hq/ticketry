@@ -1,7 +1,7 @@
 use std::net::{Ipv4Addr, SocketAddr};
 use std::path::Path;
 
-use muxed_studio_lib::work_management::mcp::{McpConfiguration, McpRuntime};
+use muxed_studio_lib::mcp::{McpConfiguration, McpRuntime};
 
 const DEFAULT_MCP_PORT: u16 = 8123;
 const MCP_PORT_ENV: &str = "MUXED_DESKTOP_MCP_PORT";

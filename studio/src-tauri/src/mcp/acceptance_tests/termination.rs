@@ -13,8 +13,8 @@ use crate::entities::terminals::session;
 use crate::terminal::cleanup::{
     CleanupKillResult, CleanupRuntimeObservation, TerminalCleanupRuntime,
 };
-use crate::work_management::mcp::tests::post;
-use crate::work_management::mcp::{
+use crate::mcp::tests::post;
+use crate::mcp::{
     allowed_provider_operations, loopback, McpConfiguration, McpRuntime,
 };
 

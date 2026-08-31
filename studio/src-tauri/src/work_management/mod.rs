@@ -10,7 +10,6 @@ pub(crate) mod issue_type_transition;
 pub(crate) mod launch_binding;
 pub mod launch_binding_entry_skill_migration;
 pub mod launch_policy;
-pub mod mcp;
 pub(crate) mod module_presentation;
 pub mod module_presentation_migration;
 pub mod ownership_manifest;

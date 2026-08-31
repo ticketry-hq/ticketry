@@ -11,7 +11,7 @@ use sha2::{Digest, Sha256};
 use crate::entities::runs::agent_run;
 use crate::entities::work_management::issue;
 
-use super::grant_store::{GrantStore, StoredGrant};
+use crate::run_authority::grant_store::{GrantStore, StoredGrant};
 
 const AUTHORITY_LIFETIME: Duration = Duration::from_secs(24 * 60 * 60);
 

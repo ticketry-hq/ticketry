@@ -1,9 +1,7 @@
 //! In-process WorkTracker MCP transport owned by the desktop runtime.
 
-mod authority;
 mod dependency_tools;
 mod dispatch;
-mod grant_store;
 mod launch_paths;
 mod projection;
 mod registry;
@@ -31,8 +29,8 @@ use tokio_util::sync::CancellationToken;
 
 use crate::work_management::{commands::attachments::AttachmentStorage, open_for_commands};
 
-pub use authority::{RunAuthority, RunPrincipal};
-pub(crate) use registry::allowed_provider_operations;
+pub use crate::run_authority::{RunAuthority, RunPrincipal};
+pub use registry::allowed_provider_operations;
 use service::WorktrackerMcpService;
 
 #[derive(Clone, Debug)]
@@ -224,7 +222,7 @@ impl McpRuntime {
         token: &str,
         allowed_tools: impl IntoIterator<Item = String>,
         expired: bool,
-    ) -> Result<String, authority::AuthorizationFailure> {
+    ) -> Result<String, crate::run_authority::AuthorizationFailure> {
         self.authority
             .grant_for_test(agent_run_id, token, allowed_tools, expired)
             .await

@@ -87,7 +87,7 @@ impl DocumentFactRecorder {
 /// Which registry a document belongs to, and the identity a consumer keys that
 /// registry by.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(super) struct RegistryOwner {
+pub struct RegistryOwner {
     /// `task` or `scratch` — the two registries Studio holds separately.
     pub(super) scope: &'static str,
     /// The Work Item a task registry is keyed by, or the module a scratch
@@ -106,7 +106,8 @@ pub(super) const SCRATCH_REGISTRY: &str = "scratch";
 /// A scratch row is owned by its module; a task row by its Work Item. Both are
 /// read from the Work Item graph rather than from the row's own copy, so a fact
 /// can never claim a project the owner does not actually sit in.
-pub(super) async fn resolve_owner(
+/// The Work Item a saved document belongs to.
+pub async fn resolve_owner(
     database: &impl sea_orm::ConnectionTrait,
     row: &design_document::Model,
 ) -> Result<Option<RegistryOwner>, DocumentsError> {
@@ -137,7 +138,8 @@ pub(super) async fn resolve_owner(
 }
 
 /// Append one document fact inside the caller's settlement transaction.
-pub(super) async fn record_document(
+/// Record one document change as a Work Item fact.
+pub async fn record_document(
     recorder: Option<&DocumentFactRecorder>,
     transaction: &DatabaseTransaction,
     owner: &RegistryOwner,

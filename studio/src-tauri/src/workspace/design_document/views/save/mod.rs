@@ -16,7 +16,7 @@ use seaography::{
     Builder, CustomFields,
 };
 
-use crate::documents::save::{DocumentSaveError, DocumentSaveOutcome, DocumentSaveService};
+use crate::workspace::document_save::{DocumentSaveError, DocumentSaveOutcome, DocumentSaveService};
 
 struct SaveDocumentView;
 

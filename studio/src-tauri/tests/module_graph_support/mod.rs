@@ -44,15 +44,11 @@ pub const SLICES: &[(&str, &str)] = &[
     ("app_updates", "desktop"),
 ];
 
-/// Module references that still contradict the target slice DAG.
+/// Module references that contradict the target slice DAG.
 ///
-/// This list may only shrink: each entry is one Phase-1 untangle from the
-/// crate-split plan, and a stale entry fails the guard so the list cannot
-/// drift. Adding an entry means a new cycle was introduced.
-pub const ALLOWED_BACK_EDGES: &[(&str, &str)] = &[
-    // §3.4 code motion out of `work_management` and the remaining pairs
-    ("documents", "workspace"),
-];
+/// Phase 1 of the crate-split plan emptied this list, and it stays empty: a
+/// new entry means a new cycle, which is a crate that cannot be extracted.
+pub const ALLOWED_BACK_EDGES: &[(&str, &str)] = &[];
 
 /// Files and directories that are not part of the module graph.
 const IGNORED_ROOTS: &[&str] = &["bin", "lib.rs", "main.rs"];

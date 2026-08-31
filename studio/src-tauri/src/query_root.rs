@@ -224,7 +224,7 @@ fn build_schema(
     let builder = crate::terminal::viewer_lease::register_graphql(builder);
     let builder = crate::documents::persistence::register_graphql(builder);
     let builder = crate::workspace::design_document::register_graphql(builder);
-    let builder = crate::documents::register_graphql(builder);
+    let builder = crate::workspace::directory_completion_query::register(builder);
     let mut schema = builder.schema_builder().data(entity_database);
     if contract.product_generated_mutations {
         schema = schema.data(crate::graph_run_service::GraphRunCaller);
@@ -272,7 +272,7 @@ fn build_schema(
     // connection has everything the capability needs; without one the mutation
     // reports itself unavailable rather than writing a file.
     if let Some(work_items) = &worktracker_database {
-        schema = schema.data(crate::documents::save::DocumentSaveService::new(
+        schema = schema.data(crate::workspace::document_save::DocumentSaveService::new(
             work_items.clone(),
             crate::workspace::operations::WorkspaceOperationJournal::new(work_items.clone()),
             document_facts,

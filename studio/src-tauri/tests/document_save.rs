@@ -11,7 +11,7 @@
 //! assert convergence on one file version, one operation result, one registry
 //! digest, and no duplicate fact.
 
-use muxed_studio_lib::documents::save::{staging_file_name, DocumentSaveService, STAGING_PREFIX};
+use muxed_studio_lib::workspace::document_save::{staging_file_name, DocumentSaveService, STAGING_PREFIX};
 use muxed_studio_lib::documents::DocumentFactRecorder;
 use muxed_studio_lib::graphql_foundation::initialize_with_worktracker_commands_and_install;
 use muxed_studio_lib::runs_persistence::RunsServices;

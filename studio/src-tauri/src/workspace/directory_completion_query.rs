@@ -1,11 +1,10 @@
 #![allow(non_snake_case)]
 
-//! The public Documents GraphQL surface.
+//! Directory completion, the one workspace read that touches no model.
 //!
-//! Reads are generated: `designDocuments` is the registered Seaography entity
-//! contract, and Studio selects the fields it renders from it. Directory
-//! completion reads no model at all. It is a trusted local read that exists so
-//! a person can choose a module folder.
+//! It exists so a person can choose a module folder. Documents owns the
+//! filesystem walk; the gated GraphQL surface is workspace's, because the
+//! readiness gate it refuses behind is.
 
 use seaography::{
     async_graphql::{Context, Result},
@@ -14,20 +13,20 @@ use seaography::{
 
 use crate::graphql_scalars::StringList;
 
-use super::directory_completion::complete_directories;
+use crate::documents::directory_completion::complete_directories;
 
-pub struct DocumentQueries;
+pub struct DirectoryCompletionQueries;
 
 #[CustomFields]
-impl DocumentQueries {
+impl DirectoryCompletionQueries {
     /// Absolute directory paths matching the trailing prefix of `path`.
     async fn directory_completions(ctx: &Context<'_>, path: String) -> Result<StringList> {
         // Completion touches no model, but it is still a workspace capability
         // Rust now owns exclusively: while the handoff gate is closed there is
         // no Django route left to answer it, so it refuses rather than serving
         // from a runtime that has not proven itself ready.
-        if !crate::workspace::handoff::gate::open(ctx) {
-            return Err(crate::workspace::handoff::gate::unavailable());
+        if !super::handoff::gate::open(ctx) {
+            return Err(super::handoff::gate::unavailable());
         }
         let completions = tokio::task::spawn_blocking(move || complete_directories(&path))
             .await
@@ -37,6 +36,6 @@ impl DocumentQueries {
 }
 
 pub fn register(mut builder: seaography::Builder) -> seaography::Builder {
-    builder.register_custom_query::<DocumentQueries>();
+    builder.register_custom_query::<DirectoryCompletionQueries>();
     builder
 }

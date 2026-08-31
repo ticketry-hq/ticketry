@@ -405,7 +405,7 @@ async fn compose_document_saves(
                 .clone(),
         )
     });
-    let service = crate::documents::save::DocumentSaveService::new(
+    let service = crate::workspace::document_save::DocumentSaveService::new(
         worktracker_database.clone(),
         crate::workspace::operations::WorkspaceOperationJournal::new(worktracker_database.clone()),
         facts,

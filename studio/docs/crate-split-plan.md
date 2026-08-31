@@ -127,8 +127,8 @@ studio/src-tauri/
     │
     │  ── domain slices (vertical: entities-usage + services + GraphQL registration) ──
     ├── ticketry-settings/          # settings_persistence
-    ├── ticketry-runs-persistence/  # runs_persistence + runs + hook_spool
-    │                               #   + run_authority
+    ├── ticketry-runs/              # persistence + graphql + authority
+    │                               #   + hook_spool
     ├── ticketry-work-management/   # work_management + module_links
     ├── ticketry-documents/         # documents
     ├── ticketry-workspace-runtime/ # worktree + workspace (merged — genuinely
@@ -147,6 +147,26 @@ studio/src-tauri/
     ├── ticketry-dev-tools/         # current src/bin/* generation/export/verify binaries
     └── tauri-graphql/              # unchanged (already a crate)
 ```
+
+### 2.2 Corrections made during Phase 2
+
+- **The Runs slice is `ticketry-runs`, not `ticketry-runs-persistence`.**
+  Persistence is one of its four modules — the others are the GraphQL views,
+  the run-scoped authority, and the hook spool — and the longer crate name
+  would have read `ticketry_runs_persistence::runs_persistence::` at every
+  call site. Inside the crate the four modules are named for what they are:
+  `persistence`, `graphql`, `authority`, `hook_spool`.
+- **Extraction order follows the measured layering, not the original table.**
+  The hub (`work-management`) reads `runs`, so `runs` precedes it. The table
+  above is renumbered to the order actually being executed.
+- **`#[cfg(test)]` helpers used across slices become `test-support`
+  features.** `#[cfg(test)]` only ever meant "this crate's own tests"; once
+  the caller is a different crate it cannot reach the helper. Each such seam
+  ships behind a `test-support` feature that only `[dev-dependencies]`
+  enables.
+- **`terminal::lifecycle::spool_layout` moved to `hook_spool`.** It is the
+  hook spool's own directory layout, and living under terminal was the spool's
+  only reference back up into it.
 
 ### 2.1 Corrections made during Phase 1
 
@@ -379,19 +399,20 @@ Extraction order:
 
 | Step | Crate | Why this order |
 | --- | --- | --- |
-| 2.1 | `ticketry-diagnostics`, `ticketry-data-directory` | Leaves, zero outgoing edges; proves the pipeline |
-| 2.2 | `ticketry-entities` | Post-§3.1 it's a leaf; unblocks everything. SeaORM/seaography deps move here |
-| 2.3 | `ticketry-tool-discovery`, `ticketry-settings` | One dep each |
-| 2.4 | `ticketry-work-management` (incl. `module_links`) | The hub; largest single win. Its Seaography registration hooks stay with it; schema *assembly* does not |
-| 2.5 | `ticketry-documents`, `ticketry-agent-execution` | Parallel siblings over entities/work-management |
-| 2.6 | `ticketry-workspace-runtime` (worktree+workspace merged) | Needs work-management |
-| 2.7 | `ticketry-launch` | Needs workspace-runtime, work-management, settings, documents |
-| 2.8 | `ticketry-terminal` (incl. tmux_adapter, viewer_ownership, temporary_profile) | Needs launch, agent-execution |
-| 2.9 | `ticketry-installation` | Needs terminal, work-management |
-| 2.10 | `ticketry-graphql-schema` (graphql_foundation + query_root) | Registers all slices; depends on all of them + tauri-graphql |
-| 2.11 | `ticketry-desktop` (desktop + native_terminal + app_updates) | Composition root: all `tauri::command`s, taurpc router, plugin setup, `tauri::Builder` |
-| 2.12 | `ticketry-dev-tools` | All `src/bin/*` dev binaries move here behind their existing `development-tools` feature; the `required-features` gymnastics in the root manifest disappear |
-| 2.13 | Slim the root | Root `ticketry` package keeps only `main.rs` (+ the `staticlib`/`cdylib` lib target if the mobile/native embedding needs it) delegating to `ticketry-desktop::run()`. `build.rs`/`tauri-build` stays at the root with `tauri.conf.json` |
+| 2.1 | `ticketry-diagnostics`, `ticketry-data-directory` | **DONE.** Leaves, zero outgoing edges; proves the pipeline |
+| 2.2 | `ticketry-entities` | **DONE.** Post-§3.1 it's a leaf; unblocks everything. SeaORM/seaography deps move here, `graphql_scalars` with them |
+| 2.3 | `ticketry-tool-discovery`, `ticketry-settings` | **DONE.** One dep each |
+| 2.4 | `ticketry-runs` | **DONE.** Below terminal; work-management reads it, so it precedes the hub |
+| 2.5 | `ticketry-work-management` (incl. `module_links`) | The hub; largest single win. Its Seaography registration hooks stay with it; schema *assembly* does not |
+| 2.6 | `ticketry-documents`, `ticketry-agent-execution` | Parallel siblings over entities/work-management |
+| 2.7 | `ticketry-workspace-runtime` (worktree+workspace merged) | Needs work-management |
+| 2.8 | `ticketry-launch` | Needs workspace-runtime, work-management, settings, documents |
+| 2.9 | `ticketry-terminal` (incl. tmux_adapter, viewer_ownership, temporary_profile) | Needs launch, agent-execution |
+| 2.10 | `ticketry-installation`, `ticketry-mcp` | Need terminal, work-management |
+| 2.11 | `ticketry-graphql-schema` (graphql_foundation + query_root) | Registers all slices; depends on all of them + tauri-graphql |
+| 2.12 | `ticketry-desktop` (desktop + native_terminal + app_updates) | Composition root: all `tauri::command`s, taurpc router, plugin setup, `tauri::Builder` |
+| 2.13 | `ticketry-dev-tools` | All `src/bin/*` dev binaries move here behind their existing `development-tools` feature; the `required-features` gymnastics in the root manifest disappear |
+| 2.14 | Slim the root | Root `ticketry` package keeps only `main.rs` (+ the `staticlib`/`cdylib` lib target if the mobile/native embedding needs it) delegating to `ticketry-desktop::run()`. `build.rs`/`tauri-build` stays at the root with `tauri.conf.json` |
 
 Special handling:
 

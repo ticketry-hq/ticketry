@@ -148,7 +148,7 @@ mod tests {
 
         assert_eq!(
             map_install_error(tauri_plugin_updater::Error::Base64(malformed_signature)),
-            super::super::contract::AppUpdateInstallError::invalid_signature()
+            Some(super::super::contract::AppUpdateInstallError::invalid_signature())
         );
     }
 }

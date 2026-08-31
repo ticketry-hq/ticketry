@@ -7,7 +7,7 @@ use std::env;
 
 use tauri_plugin_updater::{Error as UpdaterError, UpdaterExt};
 
-use contract::AppUpdateCheckError;
+use contract::{AppUpdateCheckError, AppUpdateInstallError};
 use operation::AvailableUpdate;
 
 fn map_updater_error(error: UpdaterError) -> AppUpdateCheckError {
@@ -25,6 +25,20 @@ fn map_updater_error(error: UpdaterError) -> AppUpdateCheckError {
         | UpdaterError::TargetNotFound(_)
         | UpdaterError::TargetsNotFound(_) => AppUpdateCheckError::invalid_manifest(),
         _ => AppUpdateCheckError::check_failed(),
+    }
+}
+
+/// Classifies an install failure the shell reports under its own contract.
+///
+/// Only signature rejection has a contract code: the downloaded archive is
+/// discarded rather than retried. Every other install failure is `None`, for
+/// the caller to report as a generic failure.
+fn map_install_error(error: UpdaterError) -> Option<AppUpdateInstallError> {
+    match error {
+        UpdaterError::Minisign(_) | UpdaterError::Base64(_) | UpdaterError::SignatureUtf8(_) => {
+            Some(AppUpdateInstallError::invalid_signature())
+        }
+        _ => None,
     }
 }
 

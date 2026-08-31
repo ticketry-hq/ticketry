@@ -11,10 +11,10 @@ mod termination;
 use super::tests::{post, start_authorizer, PROJECT};
 use super::{loopback, McpConfiguration, McpRuntime};
 use crate::graphql_foundation::initialize_with_worktracker_commands_and_install;
-use crate::terminal::cleanup::{
+use ticketry_entities::terminals::session;
+use ticketry_terminal::terminal::cleanup::{
     CleanupKillResult, CleanupRuntimeObservation, TerminalCleanupRuntime,
 };
-use ticketry_entities::terminals::session;
 
 const TASK_TYPE: &str = "30000000-0000-0000-0000-000000000001";
 const BACKLOG: &str = "40000000-0000-0000-0000-000000000001";

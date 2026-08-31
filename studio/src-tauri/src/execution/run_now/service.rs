@@ -3,10 +3,10 @@ use std::sync::Arc;
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 
 use crate::execution::graph::has_live_work;
-use crate::terminal::launch::TerminalLaunchService;
 use ticketry_entities::work_management::{
     issue, issue_type, issue_type_transition, state, transition_occurrence,
 };
+use ticketry_terminal::terminal::launch::TerminalLaunchService;
 use ticketry_work_management::work_management::commands::{
     status_facts::WorkFactRecorder,
     workflow::{

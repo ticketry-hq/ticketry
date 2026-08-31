@@ -99,14 +99,14 @@ async fn adopt(
     ticketry_runs::persistence::adopt(data_directory)
         .await
         .unwrap_or_else(|error| fail(&format!("{pass} Runs adoption failed: {error}")));
-    muxed_studio_lib::terminal::persistence::preflight(data_directory)
+    ticketry_terminal::terminal::persistence::preflight(data_directory)
         .await
         .unwrap_or_else(|error| {
             fail(&format!(
                 "{pass} Terminal adoption preflight failed: {error}"
             ))
         });
-    muxed_studio_lib::terminal::persistence::adopt(data_directory)
+    ticketry_terminal::terminal::persistence::adopt(data_directory)
         .await
         .unwrap_or_else(|error| fail(&format!("{pass} Terminal adoption failed: {error}")));
     let source = muxed_studio_lib::execution::persistence::preflight(data_directory)

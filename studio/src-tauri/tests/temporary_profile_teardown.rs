@@ -11,14 +11,14 @@ use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 use common::terminal_lifecycle_harness::{TerminalLifecycleHarness, DOCUMENT_RUN_ID, TASK_RUN_ID};
-use muxed_studio_lib::temporary_profile::{
-    journal_profile_teardown, journal_terminal_cleanup, ProfileTeardownOutcome,
-};
-use muxed_studio_lib::terminal::cleanup::{
-    CleanupKillResult, CleanupRuntimeObservation, TerminalCleanupRuntime, TerminalCleanupService,
-};
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QueryOrder};
 use ticketry_entities::terminals::{cleanup_effect, session};
+use ticketry_terminal::temporary_profile::{
+    journal_profile_teardown, journal_terminal_cleanup, ProfileTeardownOutcome,
+};
+use ticketry_terminal::terminal::cleanup::{
+    CleanupKillResult, CleanupRuntimeObservation, TerminalCleanupRuntime, TerminalCleanupService,
+};
 
 /// Answers every inspection the same way, so a whole-profile teardown meets a
 /// single, deliberate runtime condition.

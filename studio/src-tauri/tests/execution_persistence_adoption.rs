@@ -145,7 +145,7 @@ async fn an_active_claim_is_adopted_when_its_runtime_names_the_child_in_either_f
     ticketry_runs::persistence::adopt(directory.path())
         .await
         .expect("adopt Runs before campaign claims");
-    muxed_studio_lib::terminal::persistence::adopt(directory.path())
+    ticketry_terminal::terminal::persistence::adopt(directory.path())
         .await
         .expect("adopt Terminal before campaign claims");
     // A real installation's Terminal Sessions carry the hyphenated Work Item

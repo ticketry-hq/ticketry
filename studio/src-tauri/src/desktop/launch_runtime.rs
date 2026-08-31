@@ -48,7 +48,7 @@ impl DesktopLaunchRuntime {
 
     pub(crate) fn configure_terminal_authority(
         &self,
-        authority: crate::terminal::lifecycle::TerminalRuntimeAuthority,
+        authority: ticketry_terminal::terminal::lifecycle::TerminalRuntimeAuthority,
     ) -> Result<(), String> {
         self.composed()?.terminal_runtime().configure(authority);
         Ok(())
@@ -66,14 +66,15 @@ impl DesktopLaunchRuntime {
 
     pub(crate) fn viewer_ownership(
         &self,
-    ) -> Result<crate::viewer_ownership::ViewerOwnershipService, String> {
+    ) -> Result<ticketry_terminal::viewer_ownership::ViewerOwnershipService, String> {
         self.composed()
             .map(|runtime| runtime.viewer_ownership().clone())
     }
 
     pub(crate) fn output_activity(
         &self,
-    ) -> Result<crate::terminal::output_activity::TerminalOutputActivityService, String> {
+    ) -> Result<ticketry_terminal::terminal::output_activity::TerminalOutputActivityService, String>
+    {
         self.composed()
             .map(|runtime| runtime.output_activity().clone())
     }

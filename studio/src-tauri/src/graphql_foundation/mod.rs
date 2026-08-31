@@ -217,11 +217,13 @@ async fn initialize_with_worktracker_commands_and_install_inner(
     let documents = ticketry_documents::DocumentsService::new(worktracker_database.clone())
         .publishing(document_facts(&worktracker_database).await);
     let document_watch = compose_document_watch(&documents).await;
-    let viewer_ownership =
-        crate::viewer_ownership::ViewerOwnershipService::new(worktracker_database.clone());
-    let terminal_runtime = crate::terminal::lifecycle::InteractiveTerminalLaunchRuntime::new();
+    let viewer_ownership = ticketry_terminal::viewer_ownership::ViewerOwnershipService::new(
+        worktracker_database.clone(),
+    );
+    let terminal_runtime =
+        ticketry_terminal::terminal::lifecycle::InteractiveTerminalLaunchRuntime::new();
     let terminal_services = Some(crate::query_root::TerminalServices {
-        launch: crate::terminal::launch::TerminalLaunchService::new(
+        launch: ticketry_terminal::terminal::launch::TerminalLaunchService::new(
             worktracker_database.clone(),
             std::sync::Arc::new(terminal_runtime.clone()),
         )
@@ -230,7 +232,7 @@ async fn initialize_with_worktracker_commands_and_install_inner(
         )),
         viewers: viewer_ownership.clone(),
         output_activity:
-            crate::terminal::output_activity::TerminalOutputActivityService::production(
+            ticketry_terminal::terminal::output_activity::TerminalOutputActivityService::production(
                 worktracker_database.clone(),
             ),
     });
@@ -535,10 +537,10 @@ pub async fn adopt_worktracker_and_install(
     // Terminal persistence depends on the adopted Agent Run and Launch Effect
     // identities. Refuse an unknown Terminal leaf before the product schema or
     // any Rust terminal writer becomes reachable.
-    crate::terminal::persistence::preflight(data_directory)
+    ticketry_terminal::terminal::persistence::preflight(data_directory)
         .await
         .map_err(terminal_adoption_error)?;
-    crate::terminal::persistence::adopt(data_directory)
+    ticketry_terminal::terminal::persistence::adopt(data_directory)
         .await
         .map_err(terminal_adoption_error)?;
     // Execution campaigns depend on adopted Work Management, Runs, and
@@ -612,7 +614,7 @@ fn runs_adoption_error(
 }
 
 fn terminal_adoption_error(
-    error: crate::terminal::persistence::TerminalPersistenceError,
+    error: ticketry_terminal::terminal::persistence::TerminalPersistenceError,
 ) -> FoundationInitializationError {
     FoundationInitializationError::new(
         FoundationInitializationErrorCode::WorktrackerDatabaseOpen,

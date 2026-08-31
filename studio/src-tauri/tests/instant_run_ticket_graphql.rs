@@ -104,7 +104,7 @@ async fn launch_material_stays_out_of_the_public_contract() {
 #[tokio::test]
 async fn instant_ticket_projection_is_bounded() {
     assert_eq!(
-        muxed_studio_lib::terminal::instant_run_ticket::INSTANT_RUN_TICKET_LIMIT,
+        ticketry_terminal::terminal::instant_run_ticket::INSTANT_RUN_TICKET_LIMIT,
         100
     );
 }

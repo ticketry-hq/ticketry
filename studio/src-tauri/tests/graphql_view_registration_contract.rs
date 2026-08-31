@@ -266,6 +266,8 @@ fn superseded_seaolim_migration_files_stay_removed() {
         "src/run_now/types.rs",
         "src/runs_persistence/attempt_graphql.rs",
         "src/runs_persistence/lifecycle_graphql.rs",
+        "crates/ticketry-terminal/src/terminal/output_activity/graphql.rs",
+        "crates/ticketry-terminal/src/terminal/output_activity/operation_registry.rs",
         "src/terminal/output_activity/graphql.rs",
         "src/terminal/output_activity/operation_registry.rs",
         "src/work_management/commands/module_presentation.rs",

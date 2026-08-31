@@ -24,7 +24,7 @@ async fn schema() -> (GraphQlEndpoint, String) {
         )
         .await
         .unwrap();
-    let namespace = muxed_studio_lib::tmux_adapter::current_runtime_namespace().unwrap();
+    let namespace = ticketry_terminal::tmux_adapter::current_runtime_namespace().unwrap();
     let insert = format!(
         "INSERT INTO worktracker_project VALUES ('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');\n\
          INSERT INTO worktracker_issue VALUES ('local-task', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');\n\

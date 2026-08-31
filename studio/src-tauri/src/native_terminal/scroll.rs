@@ -7,10 +7,10 @@
 //! late callback from a replaced viewer cannot scroll its replacement.
 
 use super::worker::NativeViewerCommand;
-use crate::terminal::viewer::attachment::TerminalScrollDirection;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Sender;
 use std::sync::Arc;
+use ticketry_terminal::terminal::viewer::attachment::TerminalScrollDirection;
 
 /// Direction codes shared with the native host's scroll intent.
 pub const SCROLL_DIRECTION_NONE: u8 = 0;

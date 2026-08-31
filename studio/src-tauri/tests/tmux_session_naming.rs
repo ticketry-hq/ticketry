@@ -7,15 +7,29 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use muxed_studio_lib::tmux_adapter::{
+use ticketry_terminal::tmux_adapter::{
     OwnedSession, PersistedSessionName, RuntimeIdentity, SESSION_PREFIX,
 };
 
 /// Literal spellings of the naming convention that only the adapter may use.
 const LOCAL_DERIVATIONS: [&str; 2] = ["pt-{", "pt-%"];
 
-fn source_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("src")
+/// Every directory the naming guard scans: the root package's `src` plus each
+/// extracted slice crate's `src`. The adapter itself now lives in
+/// `crates/ticketry-terminal`, so scanning only the root package would let a
+/// second copy of the convention appear anywhere in the workspace unnoticed.
+fn source_roots() -> Vec<PathBuf> {
+    let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let mut roots = vec![manifest.join("src")];
+    let crates = manifest.join("crates");
+    let mut slices: Vec<PathBuf> = fs::read_dir(&crates)
+        .expect("readable crates directory")
+        .map(|entry| entry.expect("readable crates entry").path().join("src"))
+        .filter(|path| path.is_dir())
+        .collect();
+    slices.sort();
+    roots.extend(slices);
+    roots
 }
 
 fn adapter_owned(path: &Path) -> bool {
@@ -73,7 +87,9 @@ fn persistence_discovery_cleanup_and_lifecycle_share_one_derivation() {
 #[test]
 fn no_module_outside_the_adapter_spells_the_session_name_itself() {
     let mut sources = Vec::new();
-    rust_sources(&source_root(), &mut sources);
+    for root in source_roots() {
+        rust_sources(&root, &mut sources);
+    }
     assert!(!sources.is_empty(), "no Rust sources were scanned");
 
     let offenders = sources

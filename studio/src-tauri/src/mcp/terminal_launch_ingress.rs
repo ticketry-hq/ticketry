@@ -8,8 +8,8 @@ use axum::{
 use serde::Deserialize;
 use serde_json::{json, Value};
 
-use crate::terminal::launch::TerminalLaunchService;
 use ticketry_launch::terminal_session::{CreateTerminalSession, TerminalLaunchKind};
+use ticketry_terminal::terminal::launch::TerminalLaunchService;
 
 #[derive(Clone)]
 pub(super) struct TerminalLaunchIngressState {

@@ -8,10 +8,6 @@ use common::submitted_launch_authority::launch_service;
 use common::terminal_lifecycle_harness::{
     TerminalLifecycleHarness, MODULE_ID, PROJECT_ID, TASK_ID,
 };
-use muxed_studio_lib::terminal::launch::{
-    TerminalLaunchBoundary, TerminalLaunchCheckpoint, TerminalLaunchRuntime, TerminalLaunchService,
-    TerminalRuntimeObservation, VerifiedTerminalRuntime,
-};
 use sea_orm::{ConnectionTrait, DbBackend, Statement};
 use ticketry_entities::terminals::launch_material;
 use ticketry_launch::authority::{
@@ -19,6 +15,10 @@ use ticketry_launch::authority::{
 };
 use ticketry_launch::terminal_session::{
     CreateTerminalSession, TerminalLaunchError, TerminalLaunchKind,
+};
+use ticketry_terminal::terminal::launch::{
+    TerminalLaunchBoundary, TerminalLaunchCheckpoint, TerminalLaunchRuntime, TerminalLaunchService,
+    TerminalRuntimeObservation, VerifiedTerminalRuntime,
 };
 
 struct RecordingRuntime {

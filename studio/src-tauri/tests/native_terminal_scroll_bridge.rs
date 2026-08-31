@@ -9,13 +9,13 @@ use muxed_studio_lib::native_terminal::scroll::{
 use muxed_studio_lib::native_terminal::worker::{
     run_native_worker, NativeViewerCommand, NativeWorkerExit,
 };
-use muxed_studio_lib::terminal::viewer::attachment::{
-    TerminalAttachment, TerminalCommandAttachment,
-};
 use std::io::Read;
 use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
+use ticketry_terminal::terminal::viewer::attachment::{
+    TerminalAttachment, TerminalCommandAttachment,
+};
 
 mod common;
 

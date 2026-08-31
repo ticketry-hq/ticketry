@@ -17,8 +17,8 @@ use crate::desktop::lifecycle::{
 use crate::desktop::service_state::DesktopServiceState;
 use crate::desktop::startup::initialize_services;
 use crate::native_terminal::focus_trace;
-use crate::terminal::viewer::webview_commands;
 use crate::{app_updates, graphql_foundation, native_terminal};
+use ticketry_terminal::terminal::viewer::webview_commands;
 
 pub fn run(file_logging_requested: bool) {
     let ownership = data_directory_ownership_for_startup();

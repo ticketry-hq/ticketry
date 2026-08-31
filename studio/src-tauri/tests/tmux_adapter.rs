@@ -1,10 +1,10 @@
 use common::terminal_lifecycle_harness::TerminalLifecycleHarness;
-use muxed_studio_lib::tmux_adapter::{
+use std::collections::BTreeMap;
+use std::time::{Duration, Instant};
+use ticketry_terminal::tmux_adapter::{
     ApprovedArgv, CreateOutcome, CreateSession, InventoryConflictKind, InventoryEntry, KillOutcome,
     RuntimeIdentity, RuntimeObservation, TerminalGeometry, TmuxAdapter,
 };
-use std::collections::BTreeMap;
-use std::time::{Duration, Instant};
 use ticketry_tool_discovery::SupportedTool;
 
 mod common;

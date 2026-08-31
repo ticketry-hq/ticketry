@@ -16,10 +16,6 @@ use syn::{Attribute, ImplItem, Item, Meta, UseTree};
 pub const SLICES: &[(&str, &str)] = &[
     ("execution", "agent-execution"),
     ("graph_run_service", "agent-execution"),
-    ("terminal", "terminal"),
-    ("tmux_adapter", "terminal"),
-    ("viewer_ownership", "terminal"),
-    ("temporary_profile", "terminal"),
     ("mcp", "mcp"),
     ("installation", "installation"),
     ("graphql_foundation", "graphql-schema"),

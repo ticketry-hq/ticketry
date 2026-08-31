@@ -1,5 +1,5 @@
 use muxed_studio_lib::file_logging_requested;
-use muxed_studio_lib::temporary_profile::{TemporarySqliteProfile, TEMP_SQLITE_FLAG};
+use ticketry_terminal::temporary_profile::{TemporarySqliteProfile, TEMP_SQLITE_FLAG};
 
 fn main() {
     let arguments: Vec<_> = std::env::args_os().skip(1).collect();
@@ -22,6 +22,6 @@ fn main() {
     };
     muxed_studio_lib::run_with_file_logging(file_logging_requested(&arguments));
     // Teardown journals the profile's terminal cleanup before its database can
-    // be removed. See `muxed_studio_lib::temporary_profile`.
+    // be removed. See `ticketry_terminal::temporary_profile`.
     drop(temporary_profile);
 }

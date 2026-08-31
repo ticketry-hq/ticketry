@@ -749,7 +749,7 @@ async fn adopt_every_capability(data_directory: &Path) {
     muxed_studio_lib::execution::persistence::adopt(data_directory)
         .await
         .expect("adopt graph execution");
-    muxed_studio_lib::terminal::persistence::adopt(data_directory)
+    ticketry_terminal::terminal::persistence::adopt(data_directory)
         .await
         .expect("adopt terminals");
 }

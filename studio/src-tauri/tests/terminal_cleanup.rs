@@ -7,15 +7,15 @@ use async_trait::async_trait;
 use common::terminal_lifecycle_harness::{
     TerminalLifecycleHarness, PROJECT_ID, TASK_ID, TASK_RUN_ID,
 };
-use muxed_studio_lib::terminal::cleanup::{
-    AuthenticatedAgentRun, CleanupCause, CleanupCheckpoint, CleanupCheckpoints, CleanupKillResult,
-    CleanupRuntimeObservation, TerminalCleanupError, TerminalCleanupRuntime,
-    TerminalCleanupService, TerminationPatch,
-};
 use sea_orm::{sea_query::Expr, ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter};
 use ticketry_entities::{
     runs::agent_run,
     terminals::{cleanup_effect, session},
+};
+use ticketry_terminal::terminal::cleanup::{
+    AuthenticatedAgentRun, CleanupCause, CleanupCheckpoint, CleanupCheckpoints, CleanupKillResult,
+    CleanupRuntimeObservation, TerminalCleanupError, TerminalCleanupRuntime,
+    TerminalCleanupService, TerminationPatch,
 };
 
 struct ScriptedRuntime {

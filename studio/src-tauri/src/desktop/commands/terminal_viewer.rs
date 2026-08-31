@@ -7,7 +7,7 @@
 use tauri::ipc::Channel;
 
 use crate::desktop::launch_runtime::DesktopLaunchRuntime;
-use crate::terminal::viewer::webview_commands::{
+use ticketry_terminal::terminal::viewer::webview_commands::{
     self, ViewerChannelEvent, ViewerCommandError, ViewerCommandState, ViewerScrollDirection,
     ViewerStatus,
 };

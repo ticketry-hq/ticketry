@@ -3,10 +3,6 @@ use std::{
     time::Duration,
 };
 
-use muxed_studio_lib::viewer_ownership::{
-    CreateViewerLease, DeleteViewerLease, PreparedViewerMechanics, UpdateViewerLease,
-    ViewerDetachReason, ViewerOwnershipError, ViewerOwnershipErrorCode, ViewerOwnershipService,
-};
 use sea_orm::{
     ActiveModelTrait, ActiveValue::Set, ConnectionTrait, Database, DatabaseConnection, EntityTrait,
 };
@@ -18,6 +14,10 @@ use seaography::{
     Builder, BuilderContext,
 };
 use ticketry_entities::terminals::{session, viewer_lease};
+use ticketry_terminal::viewer_ownership::{
+    CreateViewerLease, DeleteViewerLease, PreparedViewerMechanics, UpdateViewerLease,
+    ViewerDetachReason, ViewerOwnershipError, ViewerOwnershipErrorCode, ViewerOwnershipService,
+};
 
 const RUN_ID: &str = "run-viewer-ownership";
 const OTHER_RUN_ID: &str = "run-viewer-ownership-2";
@@ -317,14 +317,14 @@ async fn graphql_restricted_views_preserve_ownership_and_nullable_release() {
         .stage_prepared(&create("graphql-native", "native"), mechanics.clone())
         .unwrap();
     let mut context = BuilderContext::default();
-    muxed_studio_lib::terminal::persistence::column_policy::apply(&mut context);
+    ticketry_terminal::terminal::persistence::column_policy::apply(&mut context);
     let context = Box::leak(Box::new(context));
     let mut builder = Builder::new(context, database.clone());
     builder.mutation = Object::new("Mutation");
     builder.schema = Schema::build("Query", Some("Mutation"), None);
     let builder = ticketry_entities::work_management::register_entity_modules(builder);
-    let builder = muxed_studio_lib::terminal::persistence::register_graphql(builder);
-    let builder = muxed_studio_lib::terminal::viewer_lease::register_graphql(builder);
+    let builder = ticketry_terminal::terminal::persistence::register_graphql(builder);
+    let builder = ticketry_terminal::terminal::viewer_lease::register_graphql(builder);
     let schema = builder
         .schema_builder()
         .data(database.clone())
@@ -513,7 +513,7 @@ async fn assert_session_live(database: &DatabaseConnection) {
 }
 
 async fn insert_second_run(database: &DatabaseConnection) {
-    let namespace = muxed_studio_lib::tmux_adapter::current_runtime_namespace().unwrap();
+    let namespace = ticketry_terminal::tmux_adapter::current_runtime_namespace().unwrap();
     database
         .execute_unprepared(&format!(
             r#"
@@ -536,7 +536,7 @@ async fn insert_second_run(database: &DatabaseConnection) {
 
 async fn fixture() -> DatabaseConnection {
     let database = Database::connect("sqlite::memory:").await.unwrap();
-    let namespace = muxed_studio_lib::tmux_adapter::current_runtime_namespace().unwrap();
+    let namespace = ticketry_terminal::tmux_adapter::current_runtime_namespace().unwrap();
     database
         .execute_unprepared(&format!(
             r#"

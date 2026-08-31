@@ -9,7 +9,7 @@ use crate::desktop::data_directory::{
 };
 use crate::desktop::service_state::DesktopServiceState;
 use crate::native_terminal;
-use crate::terminal::viewer::webview_commands;
+use ticketry_terminal::terminal::viewer::webview_commands;
 
 pub(crate) const MAIN_WINDOW_LABEL: &str = "main";
 

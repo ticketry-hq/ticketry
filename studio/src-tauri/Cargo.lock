@@ -6812,6 +6812,7 @@ dependencies = [
  "ticketry-launch",
  "ticketry-runs",
  "ticketry-settings",
+ "ticketry-terminal",
  "ticketry-tool-discovery",
  "ticketry-work-management",
  "ticketry-workspace-runtime",
@@ -6935,6 +6936,38 @@ dependencies = [
  "tempfile",
  "ticketry-data-directory",
  "ticketry-entities",
+ "uuid",
+]
+
+[[package]]
+name = "ticketry-terminal"
+version = "0.0.0"
+dependencies = [
+ "async-graphql",
+ "async-trait",
+ "blake2",
+ "chrono",
+ "libc",
+ "portable-pty",
+ "rand 0.8.7",
+ "sea-orm",
+ "seaography",
+ "seaolim",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tauri",
+ "tempfile",
+ "ticketry-diagnostics",
+ "ticketry-documents",
+ "ticketry-entities",
+ "ticketry-launch",
+ "ticketry-runs",
+ "ticketry-tool-discovery",
+ "ticketry-work-management",
+ "ticketry-workspace-runtime",
+ "tokio",
+ "tokio-util",
  "uuid",
 ]
 

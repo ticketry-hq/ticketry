@@ -11,10 +11,10 @@ use tokio::time::{timeout, Duration};
 use super::{prepare_command_database, wait_for_terminal_record, MissingTerminalRuntime};
 use crate::mcp::tests::post;
 use crate::mcp::{allowed_provider_operations, loopback, McpConfiguration, McpRuntime};
-use crate::terminal::cleanup::{
+use ticketry_entities::terminals::session;
+use ticketry_terminal::terminal::cleanup::{
     CleanupKillResult, CleanupRuntimeObservation, TerminalCleanupRuntime,
 };
-use ticketry_entities::terminals::session;
 
 struct BlockingTerminalRuntime {
     kill_started: Notify,

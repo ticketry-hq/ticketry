@@ -80,12 +80,12 @@ async-graphql.workspace = true
 async-trait.workspace = true
 axum = { version = "=0.8.9", features = ["ws"] }
 base64.workspace = true
-blake2 = "0.10"
+blake2.workspace = true
 chrono.workspace = true
 futures-util.workspace = true
 http = "=1.4.2"
 libc.workspace = true
-portable-pty = "0.9"
+portable-pty.workspace = true
 process-wrap = { version = "9.1", default-features = false, features = [
     "std",
     "process-group",
@@ -113,6 +113,7 @@ ticketry-entities.workspace = true
 ticketry-launch.workspace = true
 ticketry-runs.workspace = true
 ticketry-settings.workspace = true
+ticketry-terminal.workspace = true
 ticketry-tool-discovery.workspace = true
 ticketry-work-management.workspace = true
 ticketry-workspace-runtime.workspace = true
@@ -141,6 +142,7 @@ members = [
     "crates/ticketry-documents",
     "crates/ticketry-workspace-runtime",
     "crates/ticketry-launch",
+    "crates/ticketry-terminal",
 ]
 resolver = "2"
 
@@ -148,10 +150,12 @@ resolver = "2"
 async-graphql = { version = "=7.0.19", features = ["dynamic-schema"] }
 async-trait = "=0.1.92"
 base64 = "0.22"
+blake2 = "0.10"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 futures-util = "=0.3.32"
 libc = "0.2"
 notify = "=8.2.0"
+portable-pty = "0.9"
 rand = "0.8"
 reqwest = { version = "=0.13.4", default-features = false, features = ["json", "rustls"] }
 sea-orm = { version = "=2.0.1", features = ["runtime-tokio-rustls", "seaography", "sqlx-postgres", "sqlx-sqlite"] }
@@ -171,6 +175,7 @@ ticketry-entities = { path = "crates/ticketry-entities" }
 ticketry-launch = { path = "crates/ticketry-launch" }
 ticketry-runs = { path = "crates/ticketry-runs" }
 ticketry-settings = { path = "crates/ticketry-settings" }
+ticketry-terminal = { path = "crates/ticketry-terminal" }
 ticketry-tool-discovery = { path = "crates/ticketry-tool-discovery" }
 ticketry-work-management = { path = "crates/ticketry-work-management" }
 ticketry-workspace-runtime = { path = "crates/ticketry-workspace-runtime" }

@@ -11,7 +11,7 @@
 //! ask whether a session is alive: reconciliation decides what is live, and it
 //! runs long after adoption commits.
 
-use crate::tmux_adapter::PersistedSessionName;
+use ticketry_terminal::tmux_adapter::PersistedSessionName;
 
 /// Why one recorded runtime name is not one Ticketry may reuse.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -81,7 +81,7 @@ pub fn runtime_namespace(recorded: &str) -> Option<NameDefect> {
 /// an argument.
 fn safe_session_name(recorded: &str) -> bool {
     recorded
-        .strip_prefix(crate::tmux_adapter::SESSION_PREFIX)
+        .strip_prefix(ticketry_terminal::tmux_adapter::SESSION_PREFIX)
         .map_or_else(|| safe_identifier(recorded), safe_identifier)
 }
 
@@ -102,7 +102,7 @@ fn safe_identifier(value: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{runtime_namespace, session_name, NameDefect};
-    use crate::tmux_adapter::PersistedSessionName;
+    use ticketry_terminal::tmux_adapter::PersistedSessionName;
 
     #[test]
     fn the_adapters_own_derived_name_is_accepted() {

@@ -24,7 +24,7 @@ async fn generated_crud_schema() -> Schema {
     builder.mutation = Object::new("Mutation");
     builder.schema = Schema::build("Query", Some("Mutation"), None);
 
-    let mut builder = muxed_studio_lib::terminal::persistence::register_graphql(builder);
+    let mut builder = ticketry_terminal::terminal::persistence::register_graphql(builder);
     seaography::register_entity!(builder, project);
     seaography::register_entity!(builder, state);
     seaography::register_entity!(builder, issue_type);

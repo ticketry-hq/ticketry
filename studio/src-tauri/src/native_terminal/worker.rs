@@ -4,11 +4,11 @@
 //! through one channel and applied to its direct tmux controls. Keyboard and
 //! mouse input stay entirely inside libghostty's PTY.
 
-use crate::terminal::viewer::attachment::{
+use std::sync::mpsc::Receiver;
+use ticketry_terminal::terminal::viewer::attachment::{
     AttachmentOutcome, TerminalAttachmentError, TerminalCommandAttachmentControl,
     TerminalScrollDirection,
 };
-use std::sync::mpsc::Receiver;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NativeViewerCommand {

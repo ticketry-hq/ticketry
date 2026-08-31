@@ -1,11 +1,11 @@
 use crate::common::isolated_tmux::{IsolatedTmux, TmuxEnvironmentOverride, RUN_ID, TMUX_ENV_LOCK};
-use muxed_studio_lib::terminal::viewer::attachment::{
-    AttachmentOutcome, TerminalAttachment, TerminalAttachmentError, TerminalScrollDirection,
-};
 use std::io::Read;
 use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
+use ticketry_terminal::terminal::viewer::attachment::{
+    AttachmentOutcome, TerminalAttachment, TerminalAttachmentError, TerminalScrollDirection,
+};
 
 mod common;
 
@@ -96,7 +96,7 @@ fn rejects_unbounded_input_without_ending_the_session() {
     assert!(matches!(
         viewer.write_all(&vec![
             0_u8;
-            muxed_studio_lib::tmux_adapter::MAX_INPUT_BYTES + 1
+            ticketry_terminal::tmux_adapter::MAX_INPUT_BYTES + 1
         ]),
         Err(TerminalAttachmentError::InputTooLarge { .. })
     ));

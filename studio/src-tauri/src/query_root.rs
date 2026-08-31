@@ -16,9 +16,10 @@ static CONTEXT: LazyLock<BuilderContext> = LazyLock::new(context::builder_contex
 
 #[derive(Clone)]
 pub struct TerminalServices {
-    pub launch: crate::terminal::launch::TerminalLaunchService,
-    pub viewers: crate::viewer_ownership::ViewerOwnershipService,
-    pub output_activity: crate::terminal::output_activity::TerminalOutputActivityService,
+    pub launch: ticketry_terminal::terminal::launch::TerminalLaunchService,
+    pub viewers: ticketry_terminal::viewer_ownership::ViewerOwnershipService,
+    pub output_activity:
+        ticketry_terminal::terminal::output_activity::TerminalOutputActivityService,
 }
 
 #[derive(Clone, Copy)]
@@ -240,19 +241,19 @@ fn build_schema(
     let builder = ticketry_work_management::work_management::graphql::register(builder);
     let builder = ticketry_settings::schema::register(builder);
     let builder = ticketry_runs::graphql::register_graphql(builder);
-    let builder = crate::terminal::persistence::register_graphql(builder);
-    let builder = crate::terminal::instant_run_ticket::register_graphql(builder);
-    let builder = crate::terminal::resume::register_graphql(builder);
-    let builder = crate::terminal::launch::register_graphql(builder);
-    let builder = crate::terminal::cleanup::register_graphql(builder);
-    let builder = crate::terminal::session::register_graphql(builder);
+    let builder = ticketry_terminal::terminal::persistence::register_graphql(builder);
+    let builder = ticketry_terminal::terminal::instant_run_ticket::register_graphql(builder);
+    let builder = ticketry_terminal::terminal::resume::register_graphql(builder);
+    let builder = ticketry_terminal::terminal::launch::register_graphql(builder);
+    let builder = ticketry_terminal::terminal::cleanup::register_graphql(builder);
+    let builder = ticketry_terminal::terminal::session::register_graphql(builder);
     let builder = crate::execution::run_now::register_graphql(builder);
     let builder = if contract.product_generated_mutations {
         crate::execution::graph_run::register_graphql(builder)
     } else {
         builder
     };
-    let builder = crate::terminal::viewer_lease::register_graphql(builder);
+    let builder = ticketry_terminal::terminal::viewer_lease::register_graphql(builder);
     let builder = ticketry_documents::persistence::register_graphql(builder);
     let builder = ticketry_workspace_runtime::workspace::design_document::register_graphql(builder);
     let builder =
@@ -368,16 +369,18 @@ fn build_schema(
         schema = schema.data(worktree_operations.discard().clone());
     }
     if let Some(worktracker_database) = worktracker_database {
-        schema = schema.data(crate::terminal::cleanup::TerminalCleanupService::with_tmux(
-            worktracker_database.clone(),
-        ));
+        schema = schema.data(
+            ticketry_terminal::terminal::cleanup::TerminalCleanupService::with_tmux(
+                worktracker_database.clone(),
+            ),
+        );
         let runs = ticketry_runs::persistence::RunsServices::new(worktracker_database.clone());
         schema = schema.data(
             terminal_services
                 .as_ref()
                 .map(|services| services.output_activity.clone())
                 .unwrap_or_else(|| {
-                    crate::terminal::output_activity::TerminalOutputActivityService::production(
+                    ticketry_terminal::terminal::output_activity::TerminalOutputActivityService::production(
                         worktracker_database.clone(),
                     )
                 }),
@@ -400,9 +403,11 @@ fn build_schema(
             schema = schema.data(terminal_services.launch);
             schema = schema.data(terminal_services.viewers);
         } else {
-            schema = schema.data(crate::viewer_ownership::ViewerOwnershipService::new(
-                worktracker_commands.0.clone(),
-            ));
+            schema = schema.data(
+                ticketry_terminal::viewer_ownership::ViewerOwnershipService::new(
+                    worktracker_commands.0.clone(),
+                ),
+            );
         }
         schema = schema.data(worktracker_commands);
     }

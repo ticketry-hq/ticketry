@@ -30,15 +30,15 @@ use muxed_studio_lib::graphql_foundation::{
     adopt_worktracker_and_install, ComposedCommandRuntime, InstallationOwnership,
 };
 use muxed_studio_lib::mcp::{McpConfiguration, McpRuntime};
-use muxed_studio_lib::terminal::launch::{TerminalLaunchBoundary, TerminalLaunchService};
-use muxed_studio_lib::terminal::lifecycle::{
-    ProductionTerminalLifecycleWork, TerminalLifecycleConfig, TerminalLifecycleRuntime,
-    TerminalRuntimeAuthority,
-};
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection};
 use serde_json::{json, Value};
 use tauri_graphql::{TransportApi, TransportApiImpl};
 use ticketry_runs::persistence::{publish_readiness, Slice3Readiness};
+use ticketry_terminal::terminal::launch::{TerminalLaunchBoundary, TerminalLaunchService};
+use ticketry_terminal::terminal::lifecycle::{
+    ProductionTerminalLifecycleWork, TerminalLifecycleConfig, TerminalLifecycleRuntime,
+    TerminalRuntimeAuthority,
+};
 use ticketry_work_management::work_management::launch_policy::LaunchPolicyResolver;
 
 use super::execution_authorization::{Authorization, AUTHORIZATION_CREDENTIAL};
@@ -280,10 +280,10 @@ impl ExecutionHarness {
         )
         .expect("open the provider hook spool");
         let reconciliation =
-            muxed_studio_lib::terminal::reconciliation::TerminalReconciliationService::new(
+            ticketry_terminal::terminal::reconciliation::TerminalReconciliationService::new(
                 commands.clone(),
                 launch_runtime,
-                Arc::new(muxed_studio_lib::terminal::cleanup::TmuxCleanupRuntime),
+                Arc::new(ticketry_terminal::terminal::cleanup::TmuxCleanupRuntime),
             );
         let terminal = Arc::new(
             TerminalLifecycleRuntime::start(

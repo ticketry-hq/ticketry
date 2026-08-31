@@ -10,15 +10,6 @@ use common::terminal_lifecycle_harness::{
 use common::terminal_reconciliation_runtime::{
     service, ScriptedRuntime, StopCleanupPreparation, StopOnce,
 };
-use muxed_studio_lib::terminal::cleanup::{
-    CleanupCause, CleanupRuntimeObservation, TerminalCleanupService,
-};
-use muxed_studio_lib::terminal::launch::TerminalLaunchBoundary;
-use muxed_studio_lib::terminal::reconciliation::{
-    ReconciliationCheckpoint, RecordedSessionDecision, UnrecordedRuntimeDecision,
-    MAX_RECORDED_SESSION_BATCH,
-};
-use muxed_studio_lib::tmux_adapter::{InventoryConflictKind, InventoryEntry, OwnedSession};
 use sea_orm::{
     sea_query::Expr, ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, PaginatorTrait,
     QueryFilter,
@@ -28,6 +19,15 @@ use ticketry_entities::{
     terminals::{cleanup_effect, session},
 };
 use ticketry_launch::terminal_session::{CreateTerminalSession, TerminalLaunchKind};
+use ticketry_terminal::terminal::cleanup::{
+    CleanupCause, CleanupRuntimeObservation, TerminalCleanupService,
+};
+use ticketry_terminal::terminal::launch::TerminalLaunchBoundary;
+use ticketry_terminal::terminal::reconciliation::{
+    ReconciliationCheckpoint, RecordedSessionDecision, UnrecordedRuntimeDecision,
+    MAX_RECORDED_SESSION_BATCH,
+};
+use ticketry_terminal::tmux_adapter::{InventoryConflictKind, InventoryEntry, OwnedSession};
 
 #[tokio::test]
 async fn recorded_session_authority_table_converges_and_second_pass_is_stable() {
@@ -636,7 +636,7 @@ async fn terminal_events(database: &sea_orm::DatabaseConnection, run_id: &str) -
 }
 
 fn inspected(
-    report: &muxed_studio_lib::terminal::reconciliation::TerminalReconciliationReport,
+    report: &ticketry_terminal::terminal::reconciliation::TerminalReconciliationReport,
 ) -> BTreeSet<String> {
     report
         .sessions
@@ -646,7 +646,7 @@ fn inspected(
 }
 
 fn decision(
-    sessions: &[muxed_studio_lib::terminal::reconciliation::ReconciledSession],
+    sessions: &[ticketry_terminal::terminal::reconciliation::ReconciledSession],
     run_id: &str,
 ) -> RecordedSessionDecision {
     sessions

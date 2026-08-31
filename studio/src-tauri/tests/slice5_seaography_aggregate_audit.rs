@@ -7,15 +7,15 @@
 //! missing child handoff fails here rather than in Review.
 
 use muxed_studio_lib::graphql_foundation::generated_schema_sdl;
-use muxed_studio_lib::terminal::persistence::aggregate_seaography_audit::{
+use std::collections::BTreeSet;
+use std::path::{Path, PathBuf};
+use ticketry_terminal::terminal::persistence::aggregate_seaography_audit::{
     AUDITED_MODULES, CUSTOM_MUTATIONS, CUSTOM_OUTPUTS, CUSTOM_QUERIES, NEEDS_PROOF,
     NON_SEAORM_CRUD_PATHS, RAW_SQL_EVIDENCE_ONLY, REGISTERED_ENTITIES, VERDICT,
 };
-use muxed_studio_lib::terminal::persistence::child_seaography_handoffs::{
+use ticketry_terminal::terminal::persistence::child_seaography_handoffs::{
     reconciled_handoffs, CHILD_HANDOFFS,
 };
-use std::collections::BTreeSet;
-use std::path::{Path, PathBuf};
 
 /// `studio/src-tauri`, the crate the audited module paths are relative to.
 fn crate_root() -> PathBuf {

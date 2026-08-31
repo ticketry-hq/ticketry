@@ -7,9 +7,6 @@ use super::visibility::NativeTerminalVisibility;
 use super::worker::{run_native_worker, NativeViewerCommand, NativeWorkerExit};
 use super::NativeTerminalFrame;
 use crate::native_terminal::chords::{ChordSink, StudioChord, NATIVE_CHORD_EVENT};
-use crate::terminal::viewer::attachment::{
-    TerminalCommandAttachment, TerminalCommandAttachmentControl,
-};
 use rand::Rng;
 use serde::Serialize;
 use std::collections::HashMap;
@@ -20,6 +17,9 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 use tauri::Emitter;
+use ticketry_terminal::terminal::viewer::attachment::{
+    TerminalCommandAttachment, TerminalCommandAttachmentControl,
+};
 
 const PREPARATION_TIMEOUT: Duration = Duration::from_secs(5);
 /// How many times preparation adopts newer geometry before presenting.

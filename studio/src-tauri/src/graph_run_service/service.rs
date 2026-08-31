@@ -7,7 +7,6 @@ use sea_orm::{
 use crate::execution::graph::{
     automatic_candidates, manual_candidates, scheduling_facts, ExecutionMode, GraphAccess,
 };
-use crate::terminal::launch::TerminalLaunchService;
 use serde::{Deserialize, Serialize};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -19,6 +18,7 @@ use ticketry_entities::{
 };
 use ticketry_launch::authority::{compose_task_prompt, TaskPromptSource};
 use ticketry_launch::terminal_session::{CreateTerminalSession, TerminalLaunchKind};
+use ticketry_terminal::terminal::launch::TerminalLaunchService;
 use ticketry_work_management::work_management::launch_policy::{
     CallerScope, LaunchPolicyDecision, LaunchPolicyRequest, LaunchPolicyResolver,
 };

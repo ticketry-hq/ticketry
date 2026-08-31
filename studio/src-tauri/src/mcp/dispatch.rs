@@ -6,8 +6,8 @@ use serde_json::{json, Map, Value};
 use crate::execution::graph::GraphAccess;
 use crate::execution::run_now::{RunNowCaller, RunNowRequest, RunNowService};
 use crate::graph_run_service::{GraphRunRequest, GraphRunService};
-use crate::terminal::cleanup::TerminalCleanupService;
-use crate::terminal::launch::TerminalLaunchService;
+use ticketry_terminal::terminal::cleanup::TerminalCleanupService;
+use ticketry_terminal::terminal::launch::TerminalLaunchService;
 use ticketry_work_management::work_management::commands::{
     attachments, status_facts::WorkFactRecorder, work_items, workflow, CommandError,
 };

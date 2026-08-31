@@ -82,7 +82,7 @@ async fn schema() -> GraphQlEndpoint {
         )
         .await
         .unwrap();
-    let namespace = muxed_studio_lib::tmux_adapter::current_runtime_namespace().unwrap();
+    let namespace = ticketry_terminal::tmux_adapter::current_runtime_namespace().unwrap();
     database
         .execute_unprepared(&format!(
             "INSERT INTO agent_terminal_sessions VALUES

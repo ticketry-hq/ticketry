@@ -1,10 +1,10 @@
 use std::thread;
 use std::time::{Duration, Instant};
 
-use muxed_studio_lib::terminal::viewer::attachment::{
+use sea_orm::{ConnectionTrait, DbBackend, Statement};
+use ticketry_terminal::terminal::viewer::attachment::{
     AttachmentOutcome, TerminalAttachment, TerminalAttachmentError,
 };
-use sea_orm::{ConnectionTrait, DbBackend, Statement};
 
 mod common;
 use common::terminal_lifecycle_harness::{

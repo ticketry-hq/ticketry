@@ -148,11 +148,11 @@ pub(super) fn builder_context() -> BuilderContext {
     ticketry_documents::persistence::column_policy::apply(&mut context);
     // Terminal writes remain private, but the generated inputs are still
     // denylisted centrally so later registration cannot expose lifecycle data.
-    crate::terminal::persistence::column_policy::apply(&mut context);
+    ticketry_terminal::terminal::persistence::column_policy::apply(&mut context);
     ticketry_work_management::work_management::graphql::apply_generated_input_policy(&mut context);
     context.hooks = LifecycleHooks::new(
         MultiLifecycleHooks::default()
-            .add(crate::terminal::persistence::TerminalReadScope)
+            .add(ticketry_terminal::terminal::persistence::TerminalReadScope)
             .add(crate::graph_run_service::GraphRunReadScope),
     );
 

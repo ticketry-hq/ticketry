@@ -6,10 +6,10 @@
 
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 
-use crate::terminal::launch::TerminalLaunchService;
 use ticketry_entities::runs::automation_attempt;
 use ticketry_launch::authority::{compose_task_prompt, TaskPromptSource};
 use ticketry_launch::terminal_session::{CreateTerminalSession, TerminalLaunchKind};
+use ticketry_terminal::terminal::launch::TerminalLaunchService;
 
 use ticketry_work_management::work_management::launch_policy::{
     mark_delivered, CallerScope, LaunchPolicyDecision,

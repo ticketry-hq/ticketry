@@ -12,12 +12,12 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use muxed_studio_lib::terminal::launch::{TerminalLaunchRuntime, TerminalLaunchService};
 use sea_orm::DatabaseConnection;
 use ticketry_launch::authority::{
     InteractiveLaunchAuthority, LaunchAuthorityError, ResolvedLaunchMaterial,
 };
 use ticketry_launch::terminal_session::CreateTerminalSession;
+use ticketry_terminal::terminal::launch::{TerminalLaunchRuntime, TerminalLaunchService};
 
 pub struct SubmittedLaunchAuthority;
 

@@ -6,6 +6,9 @@ mod crash_report;
 mod file_log;
 mod launch_discovery;
 mod launch_trace;
+mod native_crash_report;
+mod native_minidump_report;
+mod panic_attribution;
 
 pub use crash_report::{
     clean_session_marker, collect_dirty_shutdown, system_diagnostic_reports_directory,
@@ -16,6 +19,7 @@ pub use file_log::{
 };
 pub use launch_discovery::{
     record as record_launch_discovery, runtime_instance, LaunchDiscoveryRecord,
+    LaunchRequestSurface, LaunchRequestedRecord,
 };
 pub use launch_trace::{
     admitted, attempt_committed, attempt_keyed_stages, correlate as correlate_launch_traces,
@@ -30,3 +34,7 @@ pub use launch_trace::{
     PROMPT_DELIVERED, PROVIDER_VALIDATED, REQUESTED, RUNTIME_SPAWNED, RUN_ENDED_STAGE, SWEEP_STAGE,
     VISIBILITY_STAGES,
 };
+pub use native_minidump_report::ghostty_sentry_database_directory;
+#[cfg(debug_assertions)]
+pub use panic_attribution::force_development_panic_abort;
+pub use panic_attribution::install_hook as install_panic_attribution_hook;

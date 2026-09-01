@@ -614,25 +614,45 @@ function ownValue<T>(state: WorkflowEditorState, key: keyof WorkflowEditorState)
   return descriptor && "value" in descriptor ? (descriptor.value as T) : undefined;
 }
 
-function routeAndAttachWorkflowServerState(state: WorkflowEditorState): void {
+function changedOwnValue<T>(
+  state: WorkflowEditorState,
+  previousState: WorkflowEditorState | undefined,
+  key: keyof WorkflowEditorState,
+): T | undefined {
+  const value = ownValue<T>(state, key);
+  return value !== undefined && (!previousState || !Object.is(value, previousState[key]))
+    ? value
+    : undefined;
+}
+
+function routeAndAttachWorkflowServerState(
+  state: WorkflowEditorState,
+  previousState?: WorkflowEditorState,
+): void {
   const projectId = state.projectId;
   if (projectId) {
-    const issueTypes = ownValue<IssueType[]>(state, "issueTypes");
+    const issueTypes = changedOwnValue<IssueType[]>(state, previousState, "issueTypes");
     if (issueTypes !== undefined) setWorkflowIssueTypes(projectId, issueTypes);
-    const states = ownValue<State[]>(state, "states");
+    const states = changedOwnValue<State[]>(state, previousState, "states");
     if (states !== undefined) setWorkflowStates(projectId, states);
-    const counts = ownValue<Record<string, number>>(state, "stateWorkItemCounts");
-    if (counts !== undefined) setWorkflowStateCounts(projectId, counts);
-    const workflows = ownValue<Record<string, ScopedWorkflowSettings>>(
+    const counts = changedOwnValue<Record<string, number>>(
       state,
+      previousState,
+      "stateWorkItemCounts",
+    );
+    if (counts !== undefined) setWorkflowStateCounts(projectId, counts);
+    const workflows = changedOwnValue<Record<string, ScopedWorkflowSettings>>(
+      state,
+      previousState,
       "workflows",
     );
     if (workflows !== undefined) {
       setProjectWorkflowSettings(projectId, workflows);
     }
   }
-  const providerCapabilities = ownValue<ProviderCapabilities[]>(
+  const providerCapabilities = changedOwnValue<ProviderCapabilities[]>(
     state,
+    previousState,
     "providerCapabilities",
   );
   if (providerCapabilities !== undefined) {

@@ -154,6 +154,7 @@ export function useStoriesTree() {
   return {
     rows: derived.rows,
     tree,
+    itemsById,
     sectionIdsByState: derived.sectionIdsByState,
     loadingTasks: loadingTasks || loadingRecords,
     isSearchActive,

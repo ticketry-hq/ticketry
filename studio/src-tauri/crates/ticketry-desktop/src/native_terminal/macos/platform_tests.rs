@@ -322,6 +322,106 @@ mod tests {
         assert!(NativeAttachReservation::acquire(&entries, &attaching, "run-one",).is_ok());
     }
 
+    /// Builds one registered viewer whose native view pointer is null, so the
+    /// libghostty bridge treats every free as a no-op while the teardown's
+    /// ordering and scheduling stay observable.
+    fn registered_viewer(run_id: &str) -> (NativeEntry, Receiver<NativeViewerCommand>) {
+        let (worker, commands) = mpsc::channel();
+        (
+            NativeEntry {
+                run_id: run_id.to_owned(),
+                view: 0,
+                worker: worker.clone(),
+                scroll_sink: ScrollGestureSink::new(worker),
+                chord_sink: ChordSink::new(|_| {}),
+                contexts: NativeViewContexts::default(),
+                visibility: NativeTerminalVisibility::hidden(),
+                preparation_phase: Arc::new(AtomicU8::new(PRESENTED)),
+            },
+            commands,
+        )
+    }
+
+    /// Page reload teardown runs inside WebKit's navigation-commit callback.
+    /// Every native free must leave through the scheduler so none of them runs
+    /// underneath WebKit; see `NativeTeardownTiming::Deferred`.
+    #[test]
+    fn page_load_teardown_schedules_every_native_free_instead_of_running_it() {
+        let state = NativeTerminalState::new();
+        // A null runtime and null views: the libghostty bridge guards every
+        // free against null, so the frees stay real calls and safe no-ops.
+        *state.runtime.lock().expect("runtime") = Some(0);
+        let (first, first_commands) = registered_viewer("run-one");
+        let (second, _second_commands) = registered_viewer("run-two");
+        let first_phase = Arc::clone(&first.preparation_phase);
+        {
+            let mut registry = state.entries.lock().expect("registry");
+            registry.insert("native-one".to_owned(), first);
+            registry.insert("native-two".to_owned(), second);
+        }
+
+        let scheduled = Mutex::new(Vec::new());
+        let schedule = |free: NativeFree| scheduled.lock().expect("scheduled").push(free);
+        state.detach_every_viewer(NativeTeardownTiming::Deferred(&schedule));
+
+        // Two views and the shared runtime, none of them freed inline.
+        assert_eq!(scheduled.lock().expect("scheduled").len(), 3);
+        // The registry is drained and the viewers silenced before returning,
+        // so the next document cannot reach a detached viewer.
+        assert!(state.entries.lock().expect("registry").is_empty());
+        assert!(state.runtime.lock().expect("runtime").is_none());
+        assert_eq!(first_phase.load(Ordering::Acquire), FAILED);
+        assert!(matches!(
+            first_commands.try_recv(),
+            Ok(NativeViewerCommand::Detach)
+        ));
+
+        for free in scheduled.into_inner().expect("scheduled") {
+            free();
+        }
+    }
+
+    /// Shutdown leaves through this event, so there is no later main-thread
+    /// turn to defer to and the frees must complete inline.
+    #[test]
+    fn exit_teardown_frees_every_viewer_before_returning() {
+        let state = NativeTerminalState::new();
+        *state.runtime.lock().expect("runtime") = Some(0);
+        let (entry, commands) = registered_viewer("run-one");
+        state
+            .entries
+            .lock()
+            .expect("registry")
+            .insert("native-one".to_owned(), entry);
+
+        state.detach_all();
+
+        assert!(state.entries.lock().expect("registry").is_empty());
+        assert!(state.runtime.lock().expect("runtime").is_none());
+        assert!(matches!(
+            commands.try_recv(),
+            Ok(NativeViewerCommand::Detach)
+        ));
+    }
+
+    /// A cancelled preparation may still be unwinding a main-thread libghostty
+    /// operation, so the shared runtime outlives this teardown.
+    #[test]
+    fn teardown_keeps_the_shared_runtime_while_an_attach_is_in_flight() {
+        let state = NativeTerminalState::new();
+        *state.runtime.lock().expect("runtime") = Some(1);
+        let _reservation =
+            NativeAttachReservation::acquire(&state.entries, &state.attaching, "run-one")
+                .expect("attach reservation");
+
+        let scheduled = Mutex::new(Vec::new());
+        let schedule = |free: NativeFree| scheduled.lock().expect("scheduled").push(free);
+        state.detach_every_viewer(NativeTeardownTiming::Deferred(&schedule));
+
+        assert!(scheduled.lock().expect("scheduled").is_empty());
+        assert_eq!(*state.runtime.lock().expect("runtime"), Some(1));
+    }
+
     #[test]
     fn teardown_cancels_in_flight_attach_and_fences_late_insertion() {
         let entries = Arc::new(Mutex::new(HashMap::new()));

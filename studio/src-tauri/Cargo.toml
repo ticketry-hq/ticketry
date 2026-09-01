@@ -164,3 +164,10 @@ incremental = false
 
 [profile.dev.package."*"]
 debug = false
+
+[profile.release]
+# Unwinding must stay enabled: wry answers WKURLSchemeTask requests inside
+# `objc2::exception::catch`, which cannot catch the "task has already been
+# stopped" NSException under `panic = "abort"`. Aborting there turns a stale
+# asset request into a process crash (CODING-1368 investigation).
+panic = "unwind"

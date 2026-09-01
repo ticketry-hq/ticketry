@@ -33,4 +33,5 @@ include!("state.rs");
 include!("attach_commands.rs");
 include!("presentation_commands.rs");
 include!("lifecycle.rs");
+include!("teardown.rs");
 include!("platform_tests.rs");

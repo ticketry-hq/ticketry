@@ -290,3 +290,52 @@ async fn launch_binding_patch_preserves_omissions_and_does_not_revision_a_noop()
         2
     );
 }
+
+/// A launch that resolves a prompt-less binding fails with
+/// `prompt_not_configured` and records nothing, so the whole type/state stops
+/// launching silently. The write boundary must refuse to create that row.
+#[tokio::test]
+async fn a_launch_binding_may_not_be_stored_without_a_prompt() {
+    let (_directory, database) = fixture().await;
+    let id = workflow::patch_launch_binding(
+        &database,
+        workflow::PatchLaunchBinding {
+            issue_type_id: STORY.to_owned(),
+            state_id: BACKLOG.to_owned(),
+            workflow_revision: 1,
+            prompt: workflow::PatchValue::Value("Configured".to_owned()),
+            required_skills: workflow::PatchValue::Unset,
+            model_id: workflow::PatchValue::Unset,
+            reasoning_id: workflow::PatchValue::Unset,
+            auto_start: workflow::PatchValue::Unset,
+            subtree_run_enabled: workflow::PatchValue::Unset,
+        },
+    )
+    .await
+    .unwrap();
+
+    let error = workflow::patch_launch_binding(
+        &database,
+        workflow::PatchLaunchBinding {
+            issue_type_id: STORY.to_owned(),
+            state_id: BACKLOG.to_owned(),
+            workflow_revision: 2,
+            prompt: workflow::PatchValue::Value(String::new()),
+            required_skills: workflow::PatchValue::Unset,
+            model_id: workflow::PatchValue::Unset,
+            reasoning_id: workflow::PatchValue::Unset,
+            auto_start: workflow::PatchValue::Unset,
+            subtree_run_enabled: workflow::PatchValue::Unset,
+        },
+    )
+    .await
+    .unwrap_err();
+
+    assert_eq!(error.code(), "prompt_required");
+    let row = launch_binding::Entity::find_by_id(id)
+        .one(&database)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(row.prompt, "Configured");
+}

@@ -11,6 +11,12 @@ import {
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
+import {
+  buildLaunchTraceReport,
+  parseLaunchTraceRecords,
+  renderLaunchTraceReport,
+} from "./launch-trace-report.mjs";
+
 export const workspaceRoot = fileURLToPath(new URL("..", import.meta.url));
 export const developmentLogPath = path.join(
   workspaceRoot,
@@ -49,6 +55,27 @@ export function clearDevelopmentLogs(logPath = developmentLogPath) {
   for (const rotated of developmentLogPaths(logPath).slice(1)) {
     if (existsSync(rotated)) unlinkSync(rotated);
   }
+}
+
+export function launchTraceReportFromLog(
+  launchTraceIdentity,
+  logPath = developmentLogPath,
+) {
+  const records = parseLaunchTraceRecords(
+    recentLogLines({ logPath, limit: Infinity }),
+    launchTraceIdentity,
+  );
+  if (records.length === 0) {
+    throw new Error(
+      `no launch-discovery records found for launch trace identity ${launchTraceIdentity}; ` +
+        `no launch-discovery records found for Agent Run ${launchTraceIdentity} or launch attempt ${launchTraceIdentity}`,
+    );
+  }
+  return renderLaunchTraceReport(
+    launchTraceIdentity,
+    buildLaunchTraceReport(records),
+    { label: "Launch trace" },
+  );
 }
 
 function showLogs() {
@@ -91,6 +118,16 @@ function main(command = "show") {
     case "follow":
       followLogs();
       break;
+    case "trace": {
+      const launchTraceIdentity = process.argv[3];
+      if (!launchTraceIdentity) {
+        throw new Error(
+          "usage: npm run logs:trace -- <launch-trace-identity>",
+        );
+      }
+      process.stdout.write(`${launchTraceReportFromLog(launchTraceIdentity)}\n`);
+      break;
+    }
     default:
       throw new Error(`unknown development log command: ${command}`);
   }

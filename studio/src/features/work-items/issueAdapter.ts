@@ -32,12 +32,19 @@ export function workItemFromIssue(item: GeneratedWorkTrackerWorkItemFieldsFragme
   };
 }
 
+// Ranks are base-62 fractional-index keys the server compares byte-wise
+// (`0-9 < A-Z < a-z`). Locale collation folds case, so it reports "a" before
+// "V" and scrambles any order that mixes cases; compare code units instead.
+function compareRankKeys(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
 export function orderedWorkItems(
   items: readonly GeneratedWorkTrackerWorkItemFieldsFragment[],
 ): WorkItem[] {
   return items.map(workItemFromIssue).sort((left, right) =>
-    left.rank.localeCompare(right.rank)
+    compareRankKeys(left.rank, right.rank)
     || left.sequence_id - right.sequence_id
-    || left.id.localeCompare(right.id)
+    || compareRankKeys(left.id, right.id)
   );
 }

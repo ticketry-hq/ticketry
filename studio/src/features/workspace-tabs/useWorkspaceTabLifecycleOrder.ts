@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { saveWorkspaceTabOrder } from "./mutations";
+import { appendWorkspaceTabs } from "./mutations";
 import { workspaceTabIdentityKey } from "./ordering";
 import type { WorkspaceTabIdentity } from "./types";
 
@@ -34,8 +34,6 @@ export function useWorkspaceTabLifecycleOrder({
     const attemptKey = `${workItemId}\0${savedKey}\0${visibleKey}`;
     if (lastAttemptRef.current === attemptKey) return;
     lastAttemptRef.current = attemptKey;
-    void saveWorkspaceTabOrder(workItemId, [...savedOrder, ...appended]).catch(
-      () => undefined,
-    );
+    void appendWorkspaceTabs(workItemId, appended).catch(() => undefined);
   }, [orderReady, savedKey, savedOrder, visibleKey, workItemId]);
 }

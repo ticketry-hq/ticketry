@@ -162,14 +162,28 @@ export function useAxisDragAndDrop<Payload, TargetId extends string>(
       expectedTargetId: TargetId | null,
     ) => {
       try {
-        const serialized = event.dataTransfer?.getData(codec.type) ?? "";
-        const payload = codec.deserialize(serialized);
         const current = stateRef.current;
+        const activeSerialized = serializedPayloadRef.current;
+        const transfer = event.dataTransfer;
+        const serialized = transfer?.getData(codec.type) ?? "";
+        // Desktop webviews may keep drag data protected through the release, so
+        // the release itself reads back as an empty string. An empty read on a
+        // transfer that still advertises this codec is the live gesture, not a
+        // foreign one: fall back to the payload captured at dragstart.
+        const carriesActivePayload =
+          transfer !== null &&
+          activeSerialized !== null &&
+          transferHasType(transfer, codec.type) &&
+          (serialized === "" || serialized === activeSerialized);
+        const payload = carriesActivePayload
+          ? serialized === ""
+            ? current.payload
+            : codec.deserialize(serialized)
+          : null;
         const targetId = expectedTargetId ?? current.targetId;
         if (
           !disabledRef.current &&
           payload !== null &&
-          serialized === serializedPayloadRef.current &&
           targetId !== null &&
           current.targetId === targetId &&
           current.intent !== null

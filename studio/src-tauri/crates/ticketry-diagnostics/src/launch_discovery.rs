@@ -19,6 +19,66 @@ pub fn record(record: LaunchDiscoveryRecord) {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum LaunchRequestSurface {
+    StudioLaunchPicker,
+    RunNow,
+    DefaultCodingAgent,
+    DependencyGraph,
+    WorkflowAutoStart,
+}
+
+impl LaunchRequestSurface {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::StudioLaunchPicker => "studio-launch-picker",
+            Self::RunNow => "run-now",
+            Self::DefaultCodingAgent => "default-coding-agent",
+            Self::DependencyGraph => "dependency-graph",
+            Self::WorkflowAutoStart => "workflow-auto-start",
+        }
+    }
+}
+
+pub struct LaunchRequestedRecord<'a> {
+    pub launch_attempt_id: &'a str,
+    pub surface: LaunchRequestSurface,
+    pub project_id: Option<&'a str>,
+    pub work_item_id: Option<&'a str>,
+    pub provider_slug: Option<&'a str>,
+    pub model: Option<&'a str>,
+    pub reasoning_level: Option<&'a str>,
+    pub scope: Option<&'a str>,
+}
+
+impl LaunchRequestedRecord<'_> {
+    pub fn record(self) {
+        record(self.into_record(runtime_instance()));
+    }
+
+    fn into_record(self, runtime_instance: &str) -> LaunchDiscoveryRecord {
+        LaunchDiscoveryRecord::new(
+            "launch-requested",
+            runtime_instance,
+            self.project_id,
+            None,
+            None,
+            None,
+            None,
+        )
+        .with_detail("launchAttemptId", json_string(self.launch_attempt_id))
+        .with_detail("launchSurface", json_string(self.surface.as_str()))
+        .with_detail("requestedProviderSlug", optional_string(self.provider_slug))
+        .with_detail("requestedModel", optional_string(self.model))
+        .with_detail(
+            "requestedReasoningLevel",
+            optional_string(self.reasoning_level),
+        )
+        .with_detail("requestedScope", optional_string(self.scope))
+        .with_detail("workItemId", optional_string(self.work_item_id))
+    }
+}
+
 pub struct LaunchDiscoveryRecord {
     fields: Map<String, Value>,
 }
@@ -71,6 +131,10 @@ fn optional_string(value: Option<&str>) -> Value {
     value.map_or(Value::Null, |value| Value::String(value.to_owned()))
 }
 
+fn json_string(value: &str) -> Value {
+    Value::String(value.to_owned())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -102,5 +166,56 @@ mod tests {
             assert!(value.get(field).is_some(), "missing {field}: {value}");
         }
         assert_eq!(value["deliveryPath"], "wake_up");
+    }
+
+    #[test]
+    fn launch_requests_name_each_requesting_surface_without_sensitive_material() {
+        let surfaces = [
+            LaunchRequestSurface::StudioLaunchPicker,
+            LaunchRequestSurface::RunNow,
+            LaunchRequestSurface::DefaultCodingAgent,
+            LaunchRequestSurface::DependencyGraph,
+            LaunchRequestSurface::WorkflowAutoStart,
+        ];
+        let names = surfaces.map(LaunchRequestSurface::as_str);
+        assert_eq!(
+            names,
+            [
+                "studio-launch-picker",
+                "run-now",
+                "default-coding-agent",
+                "dependency-graph",
+                "workflow-auto-start",
+            ],
+        );
+
+        let value = LaunchRequestedRecord {
+            launch_attempt_id: "attempt-1374",
+            surface: LaunchRequestSurface::StudioLaunchPicker,
+            project_id: Some("project-1"),
+            work_item_id: Some("task-1"),
+            provider_slug: Some("claude"),
+            model: None,
+            reasoning_level: None,
+            scope: Some("task"),
+        }
+        .into_record("runtime-1")
+        .into_value();
+
+        assert_eq!(value["event"], "launch-requested");
+        assert_eq!(value["launchAttemptId"], "attempt-1374");
+        assert_eq!(value["launchSurface"], "studio-launch-picker");
+        assert_eq!(value["requestedProviderSlug"], "claude");
+        assert_eq!(value["requestedModel"], Value::Null);
+        assert_eq!(value["requestedReasoningLevel"], Value::Null);
+        assert_eq!(value["requestedScope"], "task");
+        assert_eq!(value["workItemId"], "task-1");
+        assert_eq!(value["agentRunId"], Value::Null);
+        for forbidden in ["prompt", "credentials", "environment", "argv"] {
+            assert!(
+                value.get(forbidden).is_none(),
+                "leaked {forbidden}: {value}"
+            );
+        }
     }
 }

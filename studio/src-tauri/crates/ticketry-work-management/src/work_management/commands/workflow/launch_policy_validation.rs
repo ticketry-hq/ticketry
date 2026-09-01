@@ -32,7 +32,8 @@ pub(super) async fn validate_launch_binding(
     database: &impl ConnectionTrait,
     candidate: LaunchBindingCandidate<'_>,
 ) -> Result<(), CommandError> {
-    validate_required_skills(candidate.required_skills, candidate.prompt)?;
+    validate_prompt(candidate.prompt)?;
+    validate_required_skills(candidate.required_skills)?;
     if candidate.reasoning_id.is_some() && candidate.model_id.is_none() {
         return Err(rejected(
             "model_id",
@@ -85,7 +86,7 @@ pub(super) async fn validate_launch_binding(
     Ok(())
 }
 
-fn validate_required_skills(values: &[String], prompt: &str) -> Result<(), CommandError> {
+fn validate_required_skills(values: &[String]) -> Result<(), CommandError> {
     let lock: RequiredSkillLock = serde_json::from_str(REQUIRED_SKILL_LOCK)
         .map_err(|_| CommandError::validation("The pinned required-skill catalog is invalid."))?;
     let mut seen = std::collections::HashSet::new();
@@ -105,11 +106,24 @@ fn validate_required_skills(values: &[String], prompt: &str) -> Result<(), Comma
             ));
         }
     }
-    if !values.is_empty() && prompt.is_empty() {
+    Ok(())
+}
+
+/// A stored launch binding must carry the prompt its launches are built from.
+///
+/// `LaunchPolicyResolver` refuses a prompt-less binding with
+/// `prompt_not_configured`, and that refusal writes no durable trace: every
+/// launch for the type/state simply fails. Rejecting the write keeps that
+/// unlaunchable row from existing at all, so a partial patch that omits the
+/// prompt can never clear a configured one. Removing a binding is
+/// `delete_launch_binding`, not emptying its prompt.
+fn validate_prompt(prompt: &str) -> Result<(), CommandError> {
+    if prompt.is_empty() {
         return Err(rejected(
             "prompt",
-            "prompt_required_for_skills",
-            "A launch binding with required skills must have a non-empty prompt.",
+            "prompt_required",
+            "A launch binding must have a non-empty prompt. Delete the binding \
+             instead of clearing it.",
         ));
     }
     Ok(())

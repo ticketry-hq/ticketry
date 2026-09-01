@@ -1,4 +1,5 @@
 import type { IssueType, ScopedWorkflowSettings, State } from "../../../shared/api/types";
+import { compactWorktrackerId } from "../../../shared/api/generatedWorktracker";
 
 interface CatalogProvider { id: string; slug: string; activated?: boolean }
 interface CatalogModel { id: string; provider: string; name: string }
@@ -42,17 +43,32 @@ export function assembleScopedWorkflowSettings(
   reasoningLevels: CatalogReasoning[],
   hasGlobalDefault: boolean,
 ): ScopedWorkflowSettings {
-  const providerById = new Map(providers.map((provider) => [provider.id, provider]));
-  const modelById = new Map(models.map((model) => [model.id, model]));
-  const reasoningById = new Map(reasoningLevels.map((level) => [level.id, level]));
+  // Catalog rows arrive with the server's compact UUIDs while binding rows are
+  // normalized to the hyphenated public form. Key both sides compactly so a
+  // stored model/reasoning id still resolves to its catalog row; keying on the
+  // raw strings silently dropped every saved model and reasoning selection.
+  const providerById = new Map(
+    providers.map((provider) => [compactWorktrackerId(provider.id), provider]),
+  );
+  const modelById = new Map(
+    models.map((model) => [compactWorktrackerId(model.id), model]),
+  );
+  const reasoningById = new Map(
+    reasoningLevels.map((level) => [compactWorktrackerId(level.id), level]),
+  );
   const scopedTransitions = transitions.map((transition) => ({
     from_state_id: transition.from_state,
     to_state_id: transition.to_state,
     agent_allowed: transition.agent_allowed ?? true,
   }));
   const scopedBindings = bindings.filter((binding) => binding.issue_type === issueType.id).map((binding) => {
-    const model = binding.model ? modelById.get(binding.model) : undefined;
-    const provider = model ? providerById.get(model.provider) ?? providers.find((item) => item.slug === model.provider) : undefined;
+    const model = binding.model
+      ? modelById.get(compactWorktrackerId(binding.model))
+      : undefined;
+    const provider = model
+      ? providerById.get(compactWorktrackerId(model.provider))
+        ?? providers.find((item) => item.slug === model.provider)
+      : undefined;
     return {
       state_id: binding.state,
       prompt: binding.prompt ?? "",
@@ -61,7 +77,9 @@ export function assembleScopedWorkflowSettings(
         : [],
       agent: provider?.slug ?? null,
       model: model?.name ?? null,
-      reasoning: binding.reasoning ? reasoningById.get(binding.reasoning)?.name ?? null : null,
+      reasoning: binding.reasoning
+        ? reasoningById.get(compactWorktrackerId(binding.reasoning))?.name ?? null
+        : null,
       auto_start: binding.auto_start ?? false,
       subtree_run_enabled: binding.subtree_run_enabled ?? false,
     };

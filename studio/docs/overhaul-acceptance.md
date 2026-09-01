@@ -191,6 +191,25 @@ named gate before the full Studio suite, typecheck, and build.
 | 206 | Browser update checks defer quietly to the desktop application. |
 | 207 | After a Dirty Shutdown, Studio shows a dismissible, non-modal Crash Notice that reveals the fixed Crash Report folder; clean launches stay silent. |
 | 208 | Desktop launch checks contact the update feed once, show available updates on the Settings entry point, retain the result in App updates, and keep launch failures quiet until that section opens. |
+| 209 | An update check reports the installed version and confirms when Ticketry is current. |
+| 210 | An available update shows its version and release notes without installing it. |
+| 211 | Update downloads report determinate and indeterminate progress. |
+| 212 | An unreachable update feed can be retried without restarting Ticketry. |
+| 213 | An invalid update signature is refused without requesting a restart. |
+| 214 | A failed update download can retry the same release without another feed check. |
+| 215 | Restart is requested exactly once and only after update installation finishes. |
+| 216 | Desktop launch checks for updates once and shares the result with Settings. |
+| 217 | Settings opens from the bootstrap connecting screen, so a web session held before the local server answers can still reach Settings. |
+| 218 | Settings opens from the failed service-health screen. |
+| 219 | Settings opens while service health is still starting up. |
+| 220 | A failed modal chunk shows a recoverable panel instead of blanking the app. |
+| 221 | Retrying a failed modal chunk opens the requested dialog. |
+| 222 | A failed modal can close without blanking the app. |
+| 223 | A pending modal chunk shows a visible loading status. |
+| 224 | An empty modal stack renders no modal UI. |
+| 225 | A saved launch model configuration reads back with its provider, model, and reasoning after reopening the workflow settings. |
+| 226 | A launch configuration naming an agent/provider without a model is refused with that reason rather than saved as unconfigured. |
+| 227 | Saving a launch configuration after the workflow editor loads sends the catalog's model and reasoning UUIDs, not name-keyed placeholders the host rejects with "Enter a valid UUID.". |
 
 Each executable case carries one stable `[overhaul-NN]` marker. The gate has a
 contract test that fails if a marker is missing or duplicated. When a Studio UI

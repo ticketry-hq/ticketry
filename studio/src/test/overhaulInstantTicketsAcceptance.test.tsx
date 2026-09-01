@@ -4,6 +4,7 @@ import { ModalHost, useModalStore } from "../app/modal";
 import { SelectedTicketContent } from "../app/shell/ticket-workspace/selected-ticket/SelectedTicketContent";
 import { TasksPane } from "../app/shell/ticket-workspace/tasks/TasksPane";
 import { useAgentStatusStore } from "../features/agents/status/testStore";
+import { useSelectedInstantRunId } from "../app/shell/ticket-workspace/tasks/internal/instantRunTicketNavigation";
 import {
   scratchBucketId,
   useTerminalStore,
@@ -53,6 +54,27 @@ function instantSession(
     initialPrompt: null,
     agentRunId: runId,
   };
+}
+
+/** Mirrors SelectedTicket's wiring: bucket + conversation row follow selection. */
+function ConversationWorkspaceHarness() {
+  const selectedTaskId = useClientStore((state) => state.selectedTaskId);
+  const selectedModuleId = useClientStore((state) => state.selectedModuleId);
+  const conversationRunId = useSelectedInstantRunId();
+  const bucket =
+    selectedTaskId === TEMP_TASK_ID
+      ? scratchBucketId(selectedModuleId ?? "")
+      : selectedTaskId;
+  return (
+    <SelectedTicketContent
+      bucket={bucket}
+      projectId="project-1"
+      moduleId={selectedModuleId}
+      owner="studio"
+      details={<div>Conversation details</div>}
+      conversationRunId={conversationRunId}
+    />
+  );
 }
 
 describe("overhaul acceptance — Conversations", () => {
@@ -313,5 +335,38 @@ describe("overhaul acceptance — Conversations", () => {
     expect(screen.queryByRole("tab", { name: "Details" })).toBeNull();
     expect(screen.queryByRole("button", { name: "＋ Agent" })).toBeNull();
     expect(screen.getByRole("tab")).toHaveAccessibleName(/codex/i);
+  });
+
+  it("focuses the clicked conversation on the first click, not the remembered one", async () => {
+    const bucket = scratchBucketId("module-1");
+    localStorage.setItem(
+      "studio.activeWorkspaceByBucket:v1",
+      JSON.stringify({
+        [bucket]: { kind: "terminal", agentRunId: "instant-run-1" },
+      }),
+    );
+    useClientStore.setState({
+      selectedTaskId: null,
+      workspaces: {},
+      activeByTask: {},
+    });
+
+    render(
+      <StudioApolloProvider>
+        <TasksPane />
+        <ConversationWorkspaceHarness />
+      </StudioApolloProvider>,
+    );
+
+    const row = await screen.findByRole("treeitem", {
+      name: /Tighten the launch prompt/,
+    });
+    fireEvent.click(row);
+
+    await waitFor(() =>
+      expect(useClientStore.getState().workspaces[bucket]?.active).toBe("terminal"),
+    );
+    expect(useClientStore.getState().activeByTask[bucket]).toBe("session-2");
+    expect(row).toHaveAttribute("aria-selected", "true");
   });
 });

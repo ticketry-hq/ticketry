@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { createBrowserRuntime, initializeStudioRuntime } from "../../runtime";
 import { studioApolloClient, resetStudioApolloClient } from "../../shared/apollo/client";
 import { GeneratedWorkTrackerWorkItemFieldsFragmentDoc } from "../work-items";
-import { saveWorkspaceTabOrder } from "./mutations";
+import { appendWorkspaceTabs, saveWorkspaceTabOrder } from "./mutations";
 import type { WorkspaceTabIdentity } from "./types";
 
 const WORK_ITEM_ID = "11111111111111111111111111111111";
@@ -141,5 +141,32 @@ describe("Apollo workspace tab saves", () => {
     }));
     await secondSave;
     expect(cachedOrder()).toEqual(second);
+  });
+
+  it("merges a queued lifecycle append without overwriting a newer reorder", async () => {
+    const response = deferred<string>();
+    const requests: Array<{ variables: Record<string, unknown> }> = [];
+    installTransport(async (request) => {
+      requests.push(JSON.parse(request));
+      return response.promise;
+    });
+    const reordered: WorkspaceTabIdentity[] = [
+      { kind: "doc", id: "design" },
+      { kind: "details" },
+    ];
+
+    const saving = saveWorkspaceTabOrder(WORK_ITEM_ID, reordered);
+    const appending = appendWorkspaceTabs(WORK_ITEM_ID, [
+      { kind: "doc", id: "design" },
+    ]);
+    await waitFor(() => expect(requests).toHaveLength(1));
+    response.resolve(JSON.stringify({
+      data: { update_work_item: issue(reordered) },
+    }));
+
+    await expect(saving).resolves.toEqual({ order: reordered });
+    await expect(appending).resolves.toEqual({ order: reordered });
+    expect(requests).toHaveLength(1);
+    expect(cachedOrder()).toEqual(reordered);
   });
 });

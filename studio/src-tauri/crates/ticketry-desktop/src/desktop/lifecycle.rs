@@ -67,6 +67,24 @@ pub fn tear_down_before_exit(application: &tauri::AppHandle) {
 pub fn shutdown_rust_runtime(application: &tauri::AppHandle) {
     let state = application.state::<DesktopServiceState>();
     state.stopping.store(true, Ordering::Release);
+    shutdown_running_services(application, &state);
+}
+
+/// Page reload teardown. These views live outside the WebView, so a reload
+/// that leaves them attached lets a stale native surface cover the freshly
+/// loaded Studio layout. Neither path signals or kills a durable tmux session.
+///
+/// This runs inside WebKit's navigation-commit callback, so the native frees
+/// are handed to a later main-thread turn rather than performed underneath
+/// WebKit.
+pub(crate) fn detach_transient_viewers_for_page_load(application: &tauri::AppHandle) {
+    application.state::<ViewerCommandState>().detach_all();
+    application
+        .state::<native_terminal::NativeTerminalState>()
+        .detach_all_for_page_load(application);
+}
+
+fn shutdown_running_services(application: &tauri::AppHandle, state: &DesktopServiceState) {
     // Live document discovery is the first thing to stop: a watcher settling
     // into a store that is about to close would write for a workspace nobody
     // is looking at any more.

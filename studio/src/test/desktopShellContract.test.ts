@@ -107,7 +107,7 @@ describe("desktop shell security contract", () => {
     expect(JSON.stringify(capability)).not.toContain("dialog:");
   });
 
-  it("exposes one permissioned desktop update check through the updater plugin", async () => {
+  it("exposes only the permissioned desktop update actions through the updater plugin", async () => {
     const cargo = await text("../../src-tauri/Cargo.toml");
     const build = await text("../../src-tauri/build.rs");
     const run = await text("../../src-tauri/src/desktop/run.rs");
@@ -118,7 +118,11 @@ describe("desktop shell security contract", () => {
     expect(cargo).toContain('tauri-plugin-updater = "2"');
     expect(run).toContain("tauri_plugin_updater::Builder::new().build()");
     expect(build).toContain('"desktop_update_check"');
+    expect(build).toContain('"desktop_update_download_and_install"');
+    expect(build).toContain('"desktop_update_restart"');
     expect(run).toContain("app_updates::desktop_update_check");
+    expect(run).toContain("app_updates::desktop_update_download_and_install");
+    expect(run).toContain("app_updates::desktop_update_restart");
     expect(appUpdates).toContain("pub(crate) async fn desktop_update_check");
     expect(appUpdates).toContain("UpdaterExt");
     expect(appUpdates).toContain("updater_builder()");
@@ -126,6 +130,10 @@ describe("desktop shell security contract", () => {
 
     const permissions = capability.permissions as string[];
     expect(permissions).toContain("allow-desktop-update-check");
+    expect(permissions).toContain(
+      "allow-desktop-update-download-and-install",
+    );
+    expect(permissions).toContain("allow-desktop-update-restart");
     expect(permissions.some((permission) => permission.startsWith("updater:")))
       .toBe(false);
     expect(configuration.plugins).toEqual({

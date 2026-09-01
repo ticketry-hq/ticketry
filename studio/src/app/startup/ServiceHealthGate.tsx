@@ -5,6 +5,7 @@ import {
   type StudioRuntime,
 } from "../../runtime";
 import { reloadStudio } from "./reloadStudio";
+import { SettingsAccess } from "./SettingsAccess";
 
 export function ServiceHealthGate({
   children,
@@ -68,14 +69,18 @@ export function ServiceHealthGate({
               </span>
             </p>
           )}
-          <button
-            type="button"
-            disabled={retrying}
-            onClick={() => void retry()}
-            className="mt-5 bg-accent px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
-          >
-            {retrying ? "Retrying…" : "Retry"}
-          </button>
+          <div className="mt-5 flex items-center justify-center gap-2">
+            <button
+              type="button"
+              disabled={retrying}
+              onClick={() => void retry()}
+              className="bg-accent px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+            >
+              {retrying ? "Retrying…" : "Retry"}
+            </button>
+            {/* Settings is otherwise unreachable while this gate owns the screen. */}
+            <SettingsAccess />
+          </div>
         </div>
       </div>
     );
@@ -107,6 +112,10 @@ export function ServiceHealthGate({
             The verified snapshot is the automatic restore point until Studio opens. After that, recovery is a manual support operation.
           </p>
         )}
+        <div className="mt-5 flex items-center justify-center">
+          {/* Settings is otherwise unreachable while this gate owns the screen. */}
+          <SettingsAccess />
+        </div>
       </div>
     </div>
   );

@@ -12,6 +12,7 @@ import {
   type WorkspaceTabIdentity,
   type WorkspaceTabOrder,
 } from "./types";
+import { workspaceTabIdentityKey } from "./ordering";
 
 const saveQueues = new Map<string, Promise<WorkspaceTabOrder>>();
 const pendingCounts = new Map<string, number>();
@@ -84,16 +85,23 @@ async function executeSave(
   );
 }
 
-/** Serialize all writes for one WorkItem while allowing unrelated tabs to save. */
-export function saveWorkspaceTabOrder(
+function enqueueWorkspaceTabOrder(
   workItemId: string,
-  order: readonly WorkspaceTabIdentity[],
+  resolveOrder: () => readonly WorkspaceTabIdentity[] | null,
 ): Promise<WorkspaceTabOrder> {
   changePending(workItemId, 1);
   const previous = saveQueues.get(workItemId) ?? Promise.resolve({ order: [] });
   const request = previous
     .catch(() => ({ order: [] }))
-    .then(() => executeSave(workItemId, order));
+    .then(() => {
+      const order = resolveOrder();
+      if (order) return executeSave(workItemId, order);
+      const current = cachedIssue(workItemId);
+      if (!current) {
+        throw new Error(`Cannot read workspace tabs for ${workItemId}.`);
+      }
+      return workspaceTabOrderFromJson(current.workspace_tab_order);
+    });
   saveQueues.set(workItemId, request);
   const clean = () => {
     changePending(workItemId, -1);
@@ -101,6 +109,36 @@ export function saveWorkspaceTabOrder(
   };
   void request.then(clean, clean);
   return request;
+}
+
+/** Serialize all writes for one WorkItem while allowing unrelated tabs to save. */
+export function saveWorkspaceTabOrder(
+  workItemId: string,
+  order: readonly WorkspaceTabIdentity[],
+): Promise<WorkspaceTabOrder> {
+  return enqueueWorkspaceTabOrder(workItemId, () => order);
+}
+
+/** Merge lifecycle additions when their queued write executes so they cannot undo a reorder. */
+export function appendWorkspaceTabs(
+  workItemId: string,
+  identities: readonly WorkspaceTabIdentity[],
+): Promise<WorkspaceTabOrder> {
+  return enqueueWorkspaceTabOrder(workItemId, () => {
+    const current = cachedIssue(workItemId);
+    if (!current) {
+      throw new Error(`Cannot append workspace tabs before ${workItemId} is loaded.`);
+    }
+    const order = workspaceTabOrderFromJson(current.workspace_tab_order).order;
+    const known = new Set(order.map(workspaceTabIdentityKey));
+    const appended = identities.filter((identity) => {
+      const key = workspaceTabIdentityKey(identity);
+      if (known.has(key)) return false;
+      known.add(key);
+      return true;
+    });
+    return appended.length > 0 ? [...order, ...appended] : null;
+  });
 }
 
 function useSavePending(workItemId: string | null): boolean {

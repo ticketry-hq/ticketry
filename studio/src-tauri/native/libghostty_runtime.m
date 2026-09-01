@@ -155,10 +155,26 @@ void *muxed_ghostty_runtime_new(void) {
   return runtime;
 }
 
+// Retires the runtime in place instead of freeing the record.
+//
+// `runtime_wakeup` captures this pointer in a block it hands to the main
+// queue, and dispatch offers no way to cancel a block that is already queued.
+// libghostty's io and renderer threads post wakeups continuously, so a free
+// here leaves any wakeup queued just before it reading `runtime->app` out of
+// released memory and ticking a wild app pointer. That is a use-after-free
+// whose fault address is whatever the heap reused, and it crashes the process
+// with no Rust panic to attribute it (CODING-1368 investigation).
+//
+// The record is two pointers and a process creates a handful of runtimes at
+// most, so it is cleared and kept. A late wakeup then reads a NULL app and
+// does nothing.
 void muxed_ghostty_runtime_free(void *opaque) {
   MuxedGhosttyRuntime *runtime = opaque;
   if (runtime == NULL) return;
-  if (runtime->app != NULL) ghostty_app_free(runtime->app);
-  if (runtime->config != NULL) ghostty_config_free(runtime->config);
-  free(runtime);
+  ghostty_app_t app = runtime->app;
+  ghostty_config_t config = runtime->config;
+  runtime->app = NULL;
+  runtime->config = NULL;
+  if (app != NULL) ghostty_app_free(app);
+  if (config != NULL) ghostty_config_free(config);
 }

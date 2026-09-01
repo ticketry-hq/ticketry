@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { getCapabilitiesSnapshot } from "../features/settings";
+import { upsertIssueTypeWorkflowLaunchBinding } from "../features/workflows/mutationTransport";
 import { useWorkflowEditorStore } from "../features/workflows/workflowEditorStore";
 import { initializeStudioRuntime } from "../runtime";
 import { createBrowserRuntime } from "../runtime/browserRuntime";
@@ -139,5 +140,47 @@ describe("launch-binding desktop runtime acceptance", () => {
       "UpsertWorkTrackerLaunchBinding",
       "WorkTrackerProjectOpen",
     ]);
+  });
+
+  it("omits an unsupplied prompt instead of clearing the stored one", async () => {
+    // The transport used to send `prompt: binding.prompt ?? ""`, so a patch
+    // that did not carry a prompt cleared the configured one. Every launch for
+    // the type/state then failed with `prompt_not_configured`, which records no
+    // durable trace at all (ticket #1372).
+    let variables: Record<string, unknown> | null = null;
+    const graphqlExecute = vi.fn(async (encoded: string) => {
+      const request = JSON.parse(encoded) as {
+        operationName: string;
+        variables: Record<string, unknown>;
+      };
+      if (request.operationName === "WorkTrackerProjectOpen") {
+        return JSON.stringify({ data: catalog(false, 8) });
+      }
+      variables = request.variables;
+      return JSON.stringify({ data: { upsert_issue_type_launch_binding: { id: 1 } } });
+    });
+    initializeStudioRuntime(await createDesktopRuntime({
+      invoke: vi.fn().mockResolvedValue(startup),
+      createGraphQlProxy: () => ({
+        graphql_execute: graphqlExecute,
+        graphql_subscribe: vi.fn(),
+        graphql_unsubscribe: vi.fn(),
+      }),
+    }));
+
+    await upsertIssueTypeWorkflowLaunchBinding(
+      "project-1",
+      "story",
+      "build",
+      { agent: "codex", model: model.name, reasoning: "medium" },
+      8,
+      false,
+      false,
+    );
+
+    expect(variables).not.toBeNull();
+    expect(variables!).not.toHaveProperty("prompt");
+    expect(variables!).not.toHaveProperty("requiredSkills");
+    expect(variables!.modelId).toBe(model.id);
   });
 });

@@ -12,7 +12,7 @@ mod probe;
 mod record;
 mod render;
 mod report;
-pub mod stages;
+mod stages;
 mod surface;
 
 #[cfg(test)]
@@ -31,7 +31,9 @@ pub use report::{
 };
 pub use stages::{
     attempt_keyed_stages, is_path_stage, is_pre_commit_stage, path_stages, stage_index,
-    COMMIT_STAGES, EXECUTION_STAGES, FINAL_STAGE, JOIN_STAGE, PRE_COMMIT_STAGES, RUN_ENDED_STAGE,
-    SWEEP_STAGE, VISIBILITY_STAGES,
+    ARGV_MATERIALISED, AUTHORITY_RESOLVED, COMMIT_STAGES, DIRECTORY_PREFLIGHTED,
+    EXECUTABLE_RESOLVED, EXECUTION_STAGES, FINAL_STAGE, JOIN_STAGE, POLICY_EVALUATED,
+    PRE_COMMIT_STAGES, PROMPT_DELIVERED, PROVIDER_VALIDATED, REQUESTED, RUNTIME_SPAWNED,
+    RUN_ENDED_STAGE, SWEEP_STAGE, VISIBILITY_STAGES,
 };
 pub use surface::LaunchSurface;

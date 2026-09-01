@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use super::provider::{provider_contract, validate_options};
-use ticketry_diagnostics::launch_trace as trace;
+use ticketry_diagnostics as trace;
 
 use super::types::LAUNCH_MATERIAL_VERSION;
 use super::{
@@ -66,13 +66,13 @@ pub fn materialize(
                 | LaunchPlanningErrorCode::UnsupportedReasoning
                 | LaunchPlanningErrorCode::UnsupportedVersion
         ) {
-            trace::stages::PROVIDER_VALIDATED
+            trace::PROVIDER_VALIDATED
         } else {
-            trace::stages::ARGV_MATERIALISED
+            trace::ARGV_MATERIALISED
         };
         trace::refused(stage, trace_reasons::planning_reason(error.code)).record();
     } else if let Ok(launch) = &outcome {
-        trace::admitted(trace::stages::ARGV_MATERIALISED)
+        trace::admitted(trace::ARGV_MATERIALISED)
             .with("argumentCount", launch.argv.len())
             .with("hasRuntimeSettings", launch.settings.is_some())
             .record();
@@ -94,7 +94,7 @@ fn materialize_inner(
         ));
     }
     validate_options(durable.provider, &durable.options)?;
-    trace::admitted(trace::stages::PROVIDER_VALIDATED)
+    trace::admitted(trace::PROVIDER_VALIDATED)
         .with("providerSlug", provider_contract(durable.provider).slug)
         .record();
     validate_authority(durable.provider, authority)?;

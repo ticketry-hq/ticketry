@@ -53,7 +53,7 @@ async fn main() {
 }
 
 fn rows(
-    evidence: &ticketry_agent_execution::execution::persistence::AdoptionEvidence,
+    evidence: &ticketry_agent_execution::persistence::AdoptionEvidence,
     table: &str,
 ) -> i64 {
     evidence
@@ -93,33 +93,33 @@ async fn adopt(
     data_directory: &Path,
     pass: &str,
 ) -> (
-    ticketry_agent_execution::execution::persistence::AdoptionEvidence,
+    ticketry_agent_execution::persistence::AdoptionEvidence,
     String,
 ) {
-    ticketry_runs::persistence::preflight(data_directory)
+    ticketry_runs::preflight(data_directory)
         .await
         .unwrap_or_else(|error| fail(&format!("{pass} Runs adoption preflight failed: {error}")));
-    ticketry_runs::persistence::adopt(data_directory)
+    ticketry_runs::adopt(data_directory)
         .await
         .unwrap_or_else(|error| fail(&format!("{pass} Runs adoption failed: {error}")));
-    ticketry_terminal::terminal::persistence::preflight(data_directory)
+    ticketry_terminal::preflight_terminal_persistence(data_directory)
         .await
         .unwrap_or_else(|error| {
             fail(&format!(
                 "{pass} Terminal adoption preflight failed: {error}"
             ))
         });
-    ticketry_terminal::terminal::persistence::adopt(data_directory)
+    ticketry_terminal::adopt_terminal_persistence(data_directory)
         .await
         .unwrap_or_else(|error| fail(&format!("{pass} Terminal adoption failed: {error}")));
-    let source = ticketry_agent_execution::execution::persistence::preflight(data_directory)
+    let source = ticketry_agent_execution::persistence::preflight(data_directory)
         .await
         .unwrap_or_else(|error| {
             fail(&format!(
                 "{pass} Execution adoption preflight failed: {error}"
             ))
         });
-    let evidence = ticketry_agent_execution::execution::persistence::adopt(data_directory)
+    let evidence = ticketry_agent_execution::persistence::adopt(data_directory)
         .await
         .unwrap_or_else(|error| fail(&format!("{pass} Execution adoption failed: {error}")));
     (

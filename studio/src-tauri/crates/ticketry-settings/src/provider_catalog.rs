@@ -14,9 +14,7 @@ use super::global_launch_default::{
     GlobalLaunchDefault, PROVIDER_CATALOG_KEY, PROVIDER_CATALOG_SCOPE,
 };
 use super::provider_catalog_read::load_from;
-use ticketry_entities::work_management::{
-    agent_model, agent_model_reasoning_level, provider, reasoning_level,
-};
+use ticketry_entities::{agent_model, agent_model_reasoning_level, provider, reasoning_level};
 
 const ADAPTER_SLUGS: [&str; 4] = ["claude", "agy", "codex", "gemini"];
 pub(super) const CONFIGURABLE_PROVIDER_SLUGS: [&str; 3] = ["claude", "codex", "gemini"];

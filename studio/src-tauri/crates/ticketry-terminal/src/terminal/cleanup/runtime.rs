@@ -4,7 +4,7 @@ use crate::tmux_adapter::{
     InventoryEntry, KillOutcome, PersistedSessionName, RuntimeIdentity, RuntimeObservation,
     TmuxAdapter,
 };
-use ticketry_entities::terminals::session;
+use ticketry_entities::session;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CleanupRuntimeObservation {

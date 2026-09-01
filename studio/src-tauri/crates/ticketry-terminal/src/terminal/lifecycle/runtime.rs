@@ -277,7 +277,7 @@ mod tests {
     use crate::terminal::cleanup::TerminalCleanupRecoveryReport;
     use crate::terminal::launch::TerminalLaunchRecoveryReport;
     use crate::terminal::reconciliation::TerminalReconciliationReport;
-    use ticketry_runs::hook_spool::DrainReport;
+    use ticketry_runs::DrainReport;
 
     #[derive(Default)]
     struct FakeWork {

@@ -5,12 +5,12 @@
 
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection, DbBackend, Statement};
 use tauri_graphql::TransportApiImpl;
-use ticketry_graphql_schema::graphql_foundation::initialize_with_worktracker_commands_and_install;
+use ticketry_graphql_schema::initialize_with_worktracker_commands_and_install;
 use ticketry_installation::adoption::provisioning;
-use ticketry_work_management::work_management::project_onboarding_migration::{
+use ticketry_work_management::project_onboarding_migration::{
     install, LEDGER_TABLE, MIGRATION_ID, SOURCE_COMMIT, VERSION,
 };
-use ticketry_work_management::work_management::{commands::catalog, open_for_commands};
+use ticketry_work_management::{commands::catalog, open_for_commands};
 
 const WORKSPACE_SHAPED_SCHEMA: &str = "
     CREATE TABLE worktracker_workspace (
@@ -538,7 +538,7 @@ async fn a_fresh_installation_starts_up_project_only_and_owns_its_onboarding() {
 
     // Rust and MCP must name that same project.
     assert_eq!(
-        ticketry_work_management::work_management::read_queries::installation_project(&database)
+        ticketry_work_management::read_queries::installation_project(&database)
             .await
             .expect("resolve the installation project")
             .expect("a first launch has an installation project")

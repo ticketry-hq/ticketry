@@ -13,11 +13,11 @@ use tokio::time::{timeout, Duration};
 #[path = "mcp_acceptance/termination.rs"]
 mod termination;
 
-use ticketry_entities::terminals::session;
-use ticketry_graphql_schema::graphql_foundation::initialize_with_worktracker_commands_and_install;
-use ticketry_mcp::test_support::{post, start_authorizer, PROJECT};
+use ticketry_entities::session;
+use ticketry_graphql_schema::initialize_with_worktracker_commands_and_install;
+use ticketry_mcp::{post, start_authorizer, PROJECT};
 use ticketry_mcp::{loopback, McpConfiguration, McpRuntime};
-use ticketry_terminal::terminal::cleanup::{
+use ticketry_terminal::{
     CleanupKillResult, CleanupRuntimeObservation, TerminalCleanupRuntime,
 };
 
@@ -200,7 +200,7 @@ async fn prepare_command_database(directory: &tempfile::TempDir) {
         )
         .await
         .expect("create MCP command fixture");
-    ticketry_work_management::work_management::module_presentation_migration::install(&database)
+    ticketry_work_management::module_presentation_migration::install(&database)
         .await
         .expect("install final module-presentation shape");
     database.close().await.expect("close MCP command fixture");

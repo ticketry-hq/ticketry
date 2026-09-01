@@ -18,7 +18,7 @@ use seaolim::{
 };
 
 use crate::work_management::{commands::catalog, graphql};
-use ticketry_entities::work_management::issue_type;
+use ticketry_entities::issue_type;
 
 struct UpdateIssueType;
 

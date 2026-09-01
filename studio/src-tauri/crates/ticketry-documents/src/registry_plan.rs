@@ -14,7 +14,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use ticketry_entities::documents::design_document;
+use ticketry_entities::design_document;
 
 use super::authorized_roots;
 use super::content_digest::digest_of;

@@ -15,7 +15,7 @@ use super::report::{Area, Defect, Skipped, REPORTED_IDENTITIES};
 use super::schema::Schema;
 
 /// One semantic rule and the query that finds its violations.
-pub struct Invariant {
+pub(crate) struct Invariant {
     /// The stable machine-readable rule name, reported as-is.
     pub code: &'static str,
     /// Which capability the rule belongs to.
@@ -42,7 +42,7 @@ pub struct Invariant {
 
 /// What running the invariant list produced.
 #[derive(Default)]
-pub struct Findings {
+pub(crate) struct Findings {
     /// Rules that applied and ran.
     pub checked: usize,
     /// Rules this installation has no table for.
@@ -83,7 +83,7 @@ impl Findings {
 ///
 /// Returns the underlying database error when a query cannot run at all. A
 /// query that runs and finds rows is a defect, not an error.
-pub async fn run<C: ConnectionTrait>(
+pub(crate) async fn run<C: ConnectionTrait>(
     view: &C,
     schema: &Schema,
     invariants: &[Invariant],
@@ -141,6 +141,6 @@ async fn offending_identities<C: ConnectionTrait>(
 
 /// Every rule name in a list, for a uniqueness check.
 #[must_use]
-pub fn codes(invariants: &[Invariant]) -> Vec<&'static str> {
+pub(crate) fn codes(invariants: &[Invariant]) -> Vec<&'static str> {
     invariants.iter().map(|invariant| invariant.code).collect()
 }

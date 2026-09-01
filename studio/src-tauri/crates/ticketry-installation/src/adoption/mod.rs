@@ -32,38 +32,35 @@
 //! starts no automation, launch, cleanup, Git, or filesystem effect. A
 //! PostgreSQL follows the separate staged-import path.
 
-pub mod bridge;
-pub mod checkpoint;
-pub mod error;
-pub mod event_boundary;
-pub mod exclusive;
-pub mod integrity;
-pub mod inventory;
-pub mod ledger;
-pub mod outcome;
-pub mod ownership;
-pub mod phase;
-pub mod postflight;
-pub mod protection;
-pub mod provisioning;
-pub mod recovery;
-pub mod representative_reads;
-pub mod seaography_override;
-pub mod semantic_bridge;
-pub mod snapshot;
-pub mod snapshot_manifest;
+pub(crate) mod bridge;
+mod checkpoint;
+pub(crate) mod error;
+mod event_boundary;
+pub(crate) mod exclusive;
+pub(crate) mod integrity;
+pub(crate) mod inventory;
+pub(crate) mod ledger;
+pub(crate) mod outcome;
+pub(crate) mod ownership;
+pub(crate) mod phase;
+mod postflight;
+pub(crate) mod protection;
+pub(crate) mod provisioning;
+pub(crate) mod recovery;
+pub(crate) mod representative_reads;
+mod seaography_override;
+mod semantic_bridge;
+pub(crate) mod snapshot;
+pub(crate) mod snapshot_manifest;
 
 use std::path::Path;
 
-pub use error::{AdoptionFailure, Refusal};
-pub use ledger::{Completion, LedgerRow, LEDGER_TABLE, RUST_LEAF};
-pub use outcome::{Adoption, AdoptionPath, EventBoundary, Readiness, EVIDENCE_FILE};
-pub use ownership::{open_readiness, open_readiness_with};
-pub use phase::{AdoptionPlan, Phase};
-pub use snapshot::SnapshotRecord;
+pub(crate) use error::{AdoptionFailure, Refusal};
+pub(crate) use ledger::{LEDGER_TABLE, RUST_LEAF};
+pub(crate) use outcome::{Adoption, AdoptionPath};
+pub(crate) use phase::{AdoptionPlan, Phase};
 
-use crate::classification::{self, Installation};
-use crate::preflight::{self, Verdict};
+use crate::{classification, preflight, Installation, Verdict};
 use ownership::settle;
 use protection::protect;
 
@@ -73,7 +70,7 @@ fn application_version() -> String {
 }
 
 /// The current instant, in the form evidence records use.
-pub fn now_rfc3339() -> String {
+pub(crate) fn now_rfc3339() -> String {
     chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
 }
 
@@ -110,7 +107,7 @@ pub async fn adopt_with(
     match &classified {
         Installation::SqliteHistorical(_) => existing(data_directory, &classified, plan).await,
         Installation::PostgresImportSource(source) => {
-            let staged = crate::import::stage(data_directory, source, plan).await?;
+            let staged = crate::stage_import(data_directory, source, plan).await?;
             let adopted = ownership::settle_import(
                 staged.directory(),
                 staged.generation().to_owned(),
@@ -119,7 +116,7 @@ pub async fn adopt_with(
             )
             .await;
             match adopted {
-                Ok(adopted) => crate::import::activate(data_directory, staged).map(|()| adopted),
+                Ok(adopted) => crate::activate_import(data_directory, staged).map(|()| adopted),
                 // Keep a failed postflight target as non-ready evidence. The
                 // PostgreSQL marker still selects the untouched source, and a
                 // retry builds a fresh staged target without reusing effects.

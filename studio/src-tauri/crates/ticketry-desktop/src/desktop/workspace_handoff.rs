@@ -1,7 +1,7 @@
 //! The one-way Slice 4 Documents and Worktrees handoff.
 //!
 //! Adoption already happened: the write lease moved inside
-//! [`ticketry_workspace_runtime::workspace::handoff::adopt`], before the schema was composed and while
+//! [`ticketry_workspace_runtime::handoff::adopt`], before the schema was composed and while
 //! the sidecar was still stopped. What remains is proving that the runtime built
 //! on top of it can actually serve — and saying so once, in one record, so no
 //! surface has to guess.
@@ -20,8 +20,8 @@ use std::path::Path;
 use tauri_graphql::TransportApi;
 
 use crate::desktop::document_protocol;
-use ticketry_graphql_schema::graphql_foundation::ComposedCommandRuntime;
-use ticketry_workspace_runtime::workspace::handoff::{
+use ticketry_graphql_schema::ComposedCommandRuntime;
+use ticketry_workspace_runtime::handoff::{
     self, manifest, Slice4Readiness, WorkspaceHandoffError,
 };
 
@@ -59,14 +59,14 @@ async fn evaluate<R: tauri::Runtime>(
     let mut readiness = Slice4Readiness::unavailable();
 
     readiness.documents_ownership =
-        ticketry_documents::persistence::documents_adopted(database).await;
+        ticketry_documents::documents_adopted(database).await;
     readiness.worktree_ownership =
-        ticketry_workspace_runtime::worktree::persistence::worktrees_adopted(database).await;
+        ticketry_workspace_runtime::persistence::worktrees_adopted(database).await;
     // The journal has never had a Django writer, so its ownership is simply
     // whether the installed shape is the one this build authored. Without it no
     // filesystem or Git effect has a recovery record at all.
     readiness.operation_journal_ownership =
-        ticketry_workspace_runtime::workspace::operations::schema::verify(database)
+        ticketry_workspace_runtime::workspace_operations::schema::verify(database)
             .await
             .is_ok();
     readiness.ownership_validated = manifest::validate_schema(database).await.is_ok();
@@ -74,7 +74,7 @@ async fn evaluate<R: tauri::Runtime>(
     readiness.operation_reconciliation = runtime.workspace_reconciled();
     // An authorized root is now resolved from the module's typed link, so what
     // this asks is whether the link schema this build authored is installed.
-    readiness.authorized_roots = ticketry_work_management::module_links::schema::verify(database)
+    readiness.authorized_roots = ticketry_work_management::schema::verify(database)
         .await
         .is_ok();
     readiness.graphql_workspace = verify_workspace_surface(api).await?;

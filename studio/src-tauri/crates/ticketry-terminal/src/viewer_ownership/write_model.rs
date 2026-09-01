@@ -6,7 +6,7 @@ use chrono::Utc;
 use sea_orm::{ActiveModelTrait, ActiveValue::Set, DatabaseTransaction, EntityTrait};
 use tokio::sync::OwnedMutexGuard;
 
-use ticketry_entities::terminals::viewer_lease;
+use ticketry_entities::viewer_lease;
 
 use super::service::{
     authorize_run, expires_at, identity, not_owned, parse_timestamp, timestamp, ActiveViewer,

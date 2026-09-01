@@ -16,7 +16,7 @@ use sea_orm::{
 use crate::terminal::cleanup::{
     CleanupCause, TerminalCleanupError, TerminalCleanupErrorCode, TerminalCleanupService,
 };
-use ticketry_entities::terminals::{cleanup_effect, session};
+use ticketry_entities::{cleanup_effect, session};
 
 /// One cleanup effect the journal did not settle as applied. Its runtime may
 /// survive the profile, so its history has to outlive the teardown.
@@ -129,7 +129,7 @@ pub fn journal_profile_teardown(profile: &Path) -> ProfileTeardownOutcome {
         }
     };
     runtime.block_on(async move {
-        let database = match ticketry_work_management::work_management::open_for_commands(
+        let database = match ticketry_work_management::open_for_commands(
             &database_path,
         )
         .await

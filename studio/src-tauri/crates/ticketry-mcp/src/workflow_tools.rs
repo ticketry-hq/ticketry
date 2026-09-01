@@ -1,7 +1,7 @@
 use sea_orm::DatabaseConnection;
 use serde_json::{json, Map, Value};
 
-use ticketry_work_management::work_management::{
+use ticketry_work_management::{
     commands::{catalog, workflow, CommandError},
     read_queries,
 };

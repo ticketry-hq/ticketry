@@ -1,11 +1,11 @@
 use std::collections::HashMap;
-use ticketry_entities::graphql_scalars::StringList;
+use ticketry_entities::StringList;
 
 use sea_orm::{DatabaseConnection, DbErr, EntityTrait, QueryOrder};
 
 use super::uuid;
 use crate::work_management::read_types as output;
-use ticketry_entities::work_management::{
+use ticketry_entities::{
     agent_model, agent_model_reasoning_level, provider, reasoning_level,
 };
 

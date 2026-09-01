@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection};
-use ticketry_launch::paths::{LaunchPathsErrorCode, LaunchPathsRequest, LaunchPathsService};
+use ticketry_launch::{LaunchPathsErrorCode, LaunchPathsRequest, LaunchPathsService};
 
 const WORKSPACE: &str = "90000000000000000000000000000000";
 const PROJECT: &str = "10000000000000000000000000000000";
@@ -232,10 +232,10 @@ async fn fixture() -> Fixture {
 
     // The module's folder is a typed link, so a launch resolves it from the
     // installation rather than from whichever profile happens to be selected.
-    ticketry_work_management::module_links::schema::install(&database)
+    ticketry_work_management::schema::install(&database)
         .await
         .expect("install the Module Link schema");
-    ticketry_work_management::module_links::ModuleLinkStore::new(database.clone())
+    ticketry_work_management::ModuleLinkStore::new(database.clone())
         .set(MODULE, &repository_root.display().to_string())
         .await
         .expect("link the fixture module");

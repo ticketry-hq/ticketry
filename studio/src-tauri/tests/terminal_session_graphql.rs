@@ -24,7 +24,7 @@ async fn schema() -> (GraphQlEndpoint, String) {
         )
         .await
         .unwrap();
-    let namespace = ticketry_terminal::tmux_adapter::current_runtime_namespace().unwrap();
+    let namespace = ticketry_terminal::current_runtime_namespace().unwrap();
     let insert = format!(
         "INSERT INTO worktracker_project VALUES ('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');\n\
          INSERT INTO worktracker_issue VALUES ('local-task', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');\n\
@@ -41,7 +41,7 @@ async fn schema() -> (GraphQlEndpoint, String) {
     database.execute_unprepared(&insert).await.unwrap();
 
     let foundation = Database::connect("sqlite::memory:").await.unwrap();
-    let schema = ticketry_graphql_schema::query_root::foundation_schema(
+    let schema = ticketry_graphql_schema::foundation_schema(
         foundation,
         Some(database),
         None,
@@ -98,7 +98,7 @@ async fn public_sdl_excludes_runtime_and_launch_material() {
 
 #[tokio::test]
 async fn terminal_create_action_decision_keeps_the_full_sdl_and_entity_result() {
-    let actual = ticketry_graphql_schema::graphql_foundation::generated_schema_sdl()
+    let actual = ticketry_graphql_schema::generated_schema_sdl()
         .await
         .expect("build shipping schema");
     let checked_in = include_str!("../../src/graphql-foundation/generated/schema.graphql");

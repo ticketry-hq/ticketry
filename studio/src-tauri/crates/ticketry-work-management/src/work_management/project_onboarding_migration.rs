@@ -24,7 +24,7 @@ use sea_orm::{
     Order, QueryFilter, QueryOrder, QuerySelect, Statement, TransactionTrait,
 };
 
-use ticketry_entities::work_management::project;
+use ticketry_entities::project;
 
 pub const VERSION: i32 = 1;
 pub const MIGRATION_ID: &str = "20260827-1520-project-onboarding-and-workspace-removal-v1";

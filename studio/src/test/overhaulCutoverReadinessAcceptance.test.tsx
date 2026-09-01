@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { ServiceHealthGate } from "../app/startup/ServiceHealthGate";
 import type { ServiceHealth, StudioRuntime } from "../runtime";
+import { quietAppUpdatesRuntime } from "./appUpdatesRuntimeFixture";
 
 function runtime(health: ServiceHealth): StudioRuntime {
   return {
@@ -16,9 +17,7 @@ function runtime(health: ServiceHealth): StudioRuntime {
       nativeFolderPicker: true,
       appUpdates: true,
     },
-    appUpdates: {
-      check: async () => ({ installedVersion: "0.0.0", status: "current" }),
-    },
+    appUpdates: quietAppUpdatesRuntime(),
     startup: () => ({
       serviceHealth: health,
       initialNotices: [],

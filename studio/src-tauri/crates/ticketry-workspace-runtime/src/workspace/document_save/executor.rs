@@ -30,7 +30,7 @@ use crate::workspace::operations::{
     ClaimedOperation, WorkspaceOperationExecutor, WorkspaceOperationJournal,
     WorkspaceOperationOutcome,
 };
-use ticketry_documents::registry_facts::DocumentFactRecorder;
+use ticketry_documents::DocumentFactRecorder;
 
 use super::document_locks::DocumentLocks;
 use super::error::DocumentSaveError;

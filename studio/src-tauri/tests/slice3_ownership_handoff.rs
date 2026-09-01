@@ -10,9 +10,10 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use sea_orm::{ConnectionTrait, Database, DbBackend, Statement};
-use ticketry_runs::persistence::{
-    self, ownership_manifest, publish_readiness, published_readiness_is_complete,
-    RunsReadinessGate, Slice3Readiness,
+use ticketry_runs::{
+    self, adopt, owned_run_tables, preflight, publish_readiness,
+    published_readiness_is_complete, RunsReadinessGate, Slice3Readiness, ADOPTED_TABLES,
+    AUTHORED_TABLES,
 };
 
 fn root() -> PathBuf {
@@ -58,12 +59,12 @@ async fn the_manifest_names_exactly_the_tables_adoption_installs() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("state.db");
     django_fixture(&path);
-    persistence::adopt(directory.path())
+    adopt(directory.path())
         .await
         .expect("adopt the Runs schema");
     let database = open(&path).await;
 
-    for table in ownership_manifest::owned_tables() {
+    for table in owned_run_tables() {
         let row = database
             .query_one_raw(Statement::from_sql_and_values(
                 DbBackend::Sqlite,
@@ -82,9 +83,9 @@ async fn the_manifest_names_exactly_the_tables_adoption_installs() {
 
     // The columns are part of the cutover contract: startup refuses an unknown
     // shape rather than letting a newer migration write through it.
-    for (table, columns) in ownership_manifest::ADOPTED_TABLES
+    for (table, columns) in ADOPTED_TABLES
         .iter()
-        .chain(ownership_manifest::AUTHORED_TABLES.iter())
+        .chain(AUTHORED_TABLES.iter())
     {
         let rows = database
             .query_all_raw(Statement::from_string(
@@ -160,7 +161,7 @@ async fn adoption_refuses_an_unknown_runs_schema_before_the_lease_changes_hands(
         .unwrap();
     database.close().await.unwrap();
 
-    let refusal = persistence::preflight(directory.path())
+    let refusal = preflight(directory.path())
         .await
         .expect_err("an unknown Runs schema must be refused");
 

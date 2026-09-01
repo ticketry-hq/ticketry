@@ -13,13 +13,13 @@ use std::sync::{
     Arc,
 };
 use ticketry_entities::{
-    execution::{graph_run, launch_claim},
-    work_management::issue,
+    {graph_run, launch_claim},
+    issue,
 };
-use ticketry_launch::authority::{compose_task_prompt, TaskPromptSource};
-use ticketry_launch::terminal_session::{CreateTerminalSession, TerminalLaunchKind};
-use ticketry_terminal::terminal::launch::TerminalLaunchService;
-use ticketry_work_management::work_management::launch_policy::{
+use ticketry_launch::{compose_task_prompt, TaskPromptSource};
+use ticketry_launch::{CreateTerminalSession, TerminalLaunchKind};
+use ticketry_terminal::TerminalLaunchService;
+use ticketry_work_management::launch_policy::{
     CallerScope, LaunchPolicyDecision, LaunchPolicyRequest, LaunchPolicyResolver,
 };
 
@@ -286,8 +286,8 @@ impl GraphRunService {
             .await?;
             // One child is one launch attempt, and the whole attempt — its
             // preparation and its runtime — is traced under that identity.
-            let accepted = ticketry_diagnostics::launch_trace::requested_by(
-                ticketry_diagnostics::launch_trace::LaunchSurface::DependencyGraph,
+            let accepted = ticketry_diagnostics::requested_by(
+                ticketry_diagnostics::LaunchSurface::DependencyGraph,
                 async {
                     let accepted = self
                         .terminal_launch
@@ -402,8 +402,8 @@ impl GraphRunService {
                 },
             )
             .await?;
-            let launched_child = ticketry_diagnostics::launch_trace::requested_by(
-                ticketry_diagnostics::launch_trace::LaunchSurface::DependencyGraph,
+            let launched_child = ticketry_diagnostics::requested_by(
+                ticketry_diagnostics::LaunchSurface::DependencyGraph,
                 async {
                     let accepted = self
                         .terminal_launch

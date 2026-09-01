@@ -1,3 +1,6 @@
+// This crate deliberately exposes one transport facade. The implementation
+// modules stay private so callers depend on the transport contract rather than
+// its endpoint or TauRPC wiring layout.
 mod api;
 mod endpoint;
 

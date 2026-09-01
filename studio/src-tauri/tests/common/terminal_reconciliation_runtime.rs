@@ -4,21 +4,21 @@ use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
-use ticketry_entities::terminals::{launch_material, session};
-use ticketry_launch::terminal_session::TerminalLaunchError;
-use ticketry_terminal::terminal::cleanup::{
+use ticketry_entities::{launch_material, session};
+use ticketry_launch::TerminalLaunchError;
+use ticketry_terminal::{
     CleanupCheckpoint, CleanupCheckpoints, CleanupKillResult, CleanupRuntimeObservation,
     RuntimeInventory, TerminalCleanupError, TerminalCleanupRuntime,
 };
-use ticketry_terminal::terminal::launch::{
+use ticketry_terminal::{
     TerminalLaunchBoundary, TerminalLaunchCheckpoint, TerminalLaunchRuntime,
     TerminalRuntimeObservation, VerifiedTerminalRuntime,
 };
-use ticketry_terminal::terminal::reconciliation::{
+use ticketry_terminal::{
     ReconciliationCheckpoint, ReconciliationCheckpoints, TerminalReconciliationError,
     TerminalReconciliationService,
 };
-use ticketry_terminal::tmux_adapter::InventoryEntry;
+use ticketry_terminal::InventoryEntry;
 
 #[derive(Default)]
 pub struct ScriptedRuntime {

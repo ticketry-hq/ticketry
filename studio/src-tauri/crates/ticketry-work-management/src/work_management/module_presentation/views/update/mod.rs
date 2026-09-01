@@ -12,7 +12,7 @@ use seaolim::{
 };
 
 use crate::work_management::{commands, graphql};
-use ticketry_entities::work_management::{issue, module_presentation};
+use ticketry_entities::{issue, module_presentation};
 
 struct UpdateModulePresentation;
 

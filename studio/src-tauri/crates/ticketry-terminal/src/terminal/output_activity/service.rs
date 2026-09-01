@@ -13,9 +13,10 @@ use std::{
     time::{Duration, Instant},
 };
 
-use ticketry_entities::{runs::agent_run, terminals::session};
-use ticketry_runs::persistence::{
-    run_holding_in, timestamp, NewStatusEvent, RunsServices, StatusEventRepository,
+use ticketry_entities::{agent_run, session};
+use ticketry_runs::{
+    format_timestamp, normalize_timestamp, run_holding_in, NewStatusEvent, RunsServices,
+    StatusEventRepository,
 };
 
 use super::{
@@ -70,7 +71,7 @@ impl TerminalOutputActivityService {
             return self.current(agent_run_id).await;
         }
         let screen = self.capture.capture(agent_run_id).await?;
-        self.record_captured(agent_run_id, &screen, &timestamp::format(Utc::now()))
+        self.record_captured(agent_run_id, &screen, &format_timestamp(Utc::now()))
             .await
     }
 
@@ -83,7 +84,7 @@ impl TerminalOutputActivityService {
         observed_at: &str,
     ) -> Result<TerminalOutputObservation, TerminalOutputActivityError> {
         validate_identity(agent_run_id)?;
-        let observed_at = timestamp::normalize(observed_at).map_err(|_| {
+        let observed_at = normalize_timestamp(observed_at).map_err(|_| {
             TerminalOutputActivityError::new(
                 TerminalOutputActivityErrorCode::StorageFailed,
                 "Terminal output activity could not be recorded.",

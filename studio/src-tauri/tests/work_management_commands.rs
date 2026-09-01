@@ -5,16 +5,16 @@ use sea_orm::{
     QueryFilter, QueryOrder, Set,
 };
 use tauri_graphql::{TransportApi, TransportApiImpl};
-use ticketry_entities::work_management::{
+use ticketry_entities::{
     attachment, issue, issue_type, issue_type_transition, launch_binding, module_presentation,
     project, state,
 };
-use ticketry_graphql_schema::graphql_foundation::initialize_with_worktracker_commands_and_install;
-use ticketry_work_management::work_management::commands::{
+use ticketry_graphql_schema::initialize_with_worktracker_commands_and_install;
+use ticketry_work_management::commands::{
     attachments, blockers, catalog, hierarchy, reorder, state_configuration, work_items, workflow,
 };
-use ticketry_work_management::work_management::{
-    module_presentation_migration, open_for_commands, workspace_tab_order,
+use ticketry_work_management::{
+    module_presentation_migration, open_for_commands, update_workspace_tab_order,
     workspace_tab_order_migration,
 };
 
@@ -268,7 +268,7 @@ async fn workspace_tab_order_preserves_owned_dormant_tabs_prunes_unknown_and_rej
         {"kind": "doc", "id": TARGET_DOCUMENT}
     ]);
 
-    workspace_tab_order::update(
+    update_workspace_tab_order(
         &database,
         &target,
         serde_json::json!([
@@ -290,7 +290,7 @@ async fn workspace_tab_order_preserves_owned_dormant_tabs_prunes_unknown_and_rej
     assert_eq!(stored.workspace_tab_order, expected);
     assert_eq!(stored.state_revision, before + 1);
 
-    workspace_tab_order::update(&database, &target, expected.clone(), None)
+    update_workspace_tab_order(&database, &target, expected.clone(), None)
         .await
         .expect("reopening the same order is a no-op");
     assert_eq!(
@@ -303,7 +303,7 @@ async fn workspace_tab_order_preserves_owned_dormant_tabs_prunes_unknown_and_rej
         before + 1
     );
 
-    let error = workspace_tab_order::update(
+    let error = update_workspace_tab_order(
         &database,
         &target,
         serde_json::json!([{"kind": "doc", "id": FOREIGN_DOCUMENT}]),
@@ -349,8 +349,8 @@ async fn concurrent_workspace_tab_writes_serialize_and_allocate_distinct_revisio
     ]);
 
     let (left_result, right_result) = tokio::join!(
-        workspace_tab_order::update(&database, &target, left.clone(), None),
-        workspace_tab_order::update(&database, &target, right.clone(), None)
+        update_workspace_tab_order(&database, &target, left.clone(), None),
+        update_workspace_tab_order(&database, &target, right.clone(), None)
     );
     left_result.unwrap();
     right_result.unwrap();

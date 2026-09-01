@@ -16,9 +16,8 @@ use crate::desktop::lifecycle::{
 };
 use crate::desktop::service_state::DesktopServiceState;
 use crate::desktop::startup::initialize_services;
-use crate::native_terminal::focus_trace;
 use crate::{app_updates, native_terminal};
-use ticketry_terminal::terminal::viewer::webview_commands;
+use ticketry_terminal::ViewerCommandState;
 
 /// Builds and runs the desktop application.
 ///
@@ -45,7 +44,7 @@ pub fn run(context: tauri::Context, file_logging_requested: bool) {
     if let Some(error) = ownership.startup_error.as_deref() {
         eprintln!("Ticketry could not acquire data-directory ownership: {error}");
     }
-    let graphql_api = ticketry_graphql_schema::graphql_foundation::transport_api();
+    let graphql_api = ticketry_graphql_schema::transport_api();
     let setup_graphql_api = graphql_api.clone();
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -58,10 +57,10 @@ pub fn run(context: tauri::Context, file_logging_requested: bool) {
         .manage(file_log)
         .manage(DesktopServiceState::new())
         .manage(DesktopLaunchRuntime::new())
-        .manage(webview_commands::ViewerCommandState::new())
+        .manage(ViewerCommandState::new())
         .manage(native_terminal::NativeTerminalState::new())
         .invoke_handler(
-            ticketry_graphql_schema::graphql_foundation::combine_with_native_handler(
+                    ticketry_graphql_schema::combine_with_native_handler(
                 tauri::generate_handler![
                     commands::desktop_runtime_configuration,
                     commands::desktop_launch_default_coding_agent,
@@ -91,7 +90,7 @@ pub fn run(context: tauri::Context, file_logging_requested: bool) {
                     native_terminal::native_terminal_show,
                     native_terminal::native_terminal_focus,
                     native_terminal::native_terminal_detach,
-                    focus_trace::native_terminal_trace
+                    native_terminal::focus_trace::native_terminal_trace
                 ],
                 graphql_api,
             ),

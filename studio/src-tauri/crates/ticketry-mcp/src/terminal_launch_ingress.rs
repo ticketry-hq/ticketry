@@ -8,8 +8,8 @@ use axum::{
 use serde::Deserialize;
 use serde_json::{json, Value};
 
-use ticketry_launch::terminal_session::{CreateTerminalSession, TerminalLaunchKind};
-use ticketry_terminal::terminal::launch::TerminalLaunchService;
+use ticketry_launch::{CreateTerminalSession, TerminalLaunchKind};
+use ticketry_terminal::TerminalLaunchService;
 
 #[derive(Clone)]
 pub(super) struct TerminalLaunchIngressState {
@@ -74,8 +74,8 @@ pub(super) async fn launch(
             )
         }
     };
-    match ticketry_diagnostics::launch_trace::requested_by(
-        ticketry_diagnostics::launch_trace::LaunchSurface::McpLaunchIngress,
+    match ticketry_diagnostics::requested_by(
+        ticketry_diagnostics::LaunchSurface::McpLaunchIngress,
         state.service.create(CreateTerminalSession {
             client_request_id: body.client_request_id,
             project_id: body.project_id,

@@ -11,8 +11,14 @@ mod journal;
 mod runtime;
 mod service;
 
-pub mod action_compatibility;
+mod action_compatibility;
 
+pub use action_compatibility::{
+    ActionCompatibilityStage as CleanupActionCompatibilityStage,
+    INPUT_CONTRACT as CLEANUP_ACTION_INPUT_CONTRACT,
+    RESULT_CONTRACT as CLEANUP_ACTION_RESULT_CONTRACT, STAGES as CLEANUP_ACTION_STAGES,
+    VERDICT as CLEANUP_ACTION_VERDICT,
+};
 pub use checkpoint::{CleanupCheckpoint, CleanupCheckpoints};
 pub use effect::{CleanupCause, CleanupEffectIdentity};
 pub use error::{TerminalCleanupError, TerminalCleanupErrorCode};

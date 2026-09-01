@@ -1,8 +1,8 @@
 use sea_orm::EntityTrait;
 use serde_json::{json, Value};
 
-use ticketry_entities::terminals::session;
-use ticketry_terminal::terminal::cleanup::{
+use ticketry_entities::session;
+use ticketry_terminal::{
     AuthenticatedAgentRun, TerminalCleanupError, TerminalCleanupErrorCode, TerminalCleanupService,
 };
 

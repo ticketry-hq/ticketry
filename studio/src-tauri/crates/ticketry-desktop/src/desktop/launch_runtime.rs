@@ -12,7 +12,7 @@ use std::sync::OnceLock;
 use sea_orm::DatabaseConnection;
 
 use ticketry_documents::DocumentsService;
-use ticketry_graphql_schema::graphql_foundation::ComposedCommandRuntime;
+use ticketry_graphql_schema::ComposedCommandRuntime;
 
 /// Managed state for the lifetime of the process. Empty until adoption
 /// succeeds; a launch attempted before that is a startup failure, not a
@@ -48,7 +48,7 @@ impl DesktopLaunchRuntime {
 
     pub fn configure_terminal_authority(
         &self,
-        authority: ticketry_terminal::terminal::lifecycle::TerminalRuntimeAuthority,
+        authority: ticketry_terminal::TerminalRuntimeAuthority,
     ) -> Result<(), String> {
         self.composed()?.terminal_runtime().configure(authority);
         Ok(())
@@ -66,14 +66,14 @@ impl DesktopLaunchRuntime {
 
     pub fn viewer_ownership(
         &self,
-    ) -> Result<ticketry_terminal::viewer_ownership::ViewerOwnershipService, String> {
+    ) -> Result<ticketry_terminal::ViewerOwnershipService, String> {
         self.composed()
             .map(|runtime| runtime.viewer_ownership().clone())
     }
 
     pub fn output_activity(
         &self,
-    ) -> Result<ticketry_terminal::terminal::output_activity::TerminalOutputActivityService, String>
+    ) -> Result<ticketry_terminal::TerminalOutputActivityService, String>
     {
         self.composed()
             .map(|runtime| runtime.output_activity().clone())

@@ -1,5 +1,5 @@
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection, DbBackend, Statement};
-use ticketry_runs::persistence::{
+use ticketry_runs::{
     AgentRunHolding, LifecycleFact, RunsServices, TerminalFact, TerminalOutcome,
 };
 
@@ -477,7 +477,7 @@ async fn same_timestamp_lifecycle_facts_resolve_in_arrival_order() {
 
 #[tokio::test]
 async fn generated_graphql_contract_has_scoped_holdings_and_no_legacy_run_termination() {
-    let sdl = ticketry_graphql_schema::graphql_foundation::generated_schema_sdl()
+    let sdl = ticketry_graphql_schema::generated_schema_sdl()
         .await
         .unwrap();
     assert!(sdl

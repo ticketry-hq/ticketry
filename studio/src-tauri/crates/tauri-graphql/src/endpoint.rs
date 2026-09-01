@@ -2,7 +2,7 @@ use async_graphql::{dynamic::Schema, Request, Response, Variables};
 use futures_util::{Stream, StreamExt};
 use serde::Deserialize;
 
-pub const MAX_REQUEST_BYTES: usize = 1024 * 1024;
+pub(crate) const MAX_REQUEST_BYTES: usize = 1024 * 1024;
 
 #[derive(Clone)]
 pub struct GraphQlEndpoint {

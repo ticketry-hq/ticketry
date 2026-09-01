@@ -12,21 +12,21 @@ use sea_orm::{
 use super::canonical::{Cell, Kind};
 use super::failed;
 use crate::adoption::{AdoptionFailure, Phase, Refusal};
-use crate::classification::manifest::manifest;
+use crate::manifest;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct Column {
+pub(crate) struct Column {
     pub name: String,
     pub kind: Kind,
     data_type: String,
 }
 
-pub struct Snapshot {
+pub(crate) struct Snapshot {
     connection: DatabaseConnection,
     transaction: DatabaseTransaction,
 }
 
-pub fn read_dsn(marker: &Path) -> Result<String, AdoptionFailure> {
+pub(crate) fn read_dsn(marker: &Path) -> Result<String, AdoptionFailure> {
     let dsn = fs::read_to_string(marker).map_err(|error| {
         failed(
             Phase::Classification,

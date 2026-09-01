@@ -5,7 +5,7 @@ use super::super::report::Area;
 
 /// The rules in this group, in declaration order.
 #[must_use]
-pub fn invariants() -> Vec<Invariant> {
+pub(crate) fn invariants() -> Vec<Invariant> {
     vec![
         Invariant {
             code: "worktree-work-item-missing",

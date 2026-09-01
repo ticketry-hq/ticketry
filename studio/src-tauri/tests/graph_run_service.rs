@@ -10,17 +10,16 @@ use common::terminal_lifecycle_harness::{
 };
 use sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, Statement};
 use seaography::{Builder, BuilderContext};
-use ticketry_agent_execution::execution::graph::{ExecutionMode, GraphAccess};
-use ticketry_agent_execution::execution::reconciliation::ExecutionReconciliationService;
-use ticketry_agent_execution::graph_run_service::GraphRunCaller;
-use ticketry_agent_execution::graph_run_service::{GraphRunRequest, GraphRunService};
-use ticketry_entities::{runs::agent_run, terminals::launch_material};
-use ticketry_launch::terminal_session::TerminalLaunchError;
-use ticketry_terminal::terminal::launch::{
+use ticketry_agent_execution::graph::{ExecutionMode, GraphAccess};
+use ticketry_agent_execution::reconciliation::ExecutionReconciliationService;
+use ticketry_agent_execution::{GraphRunCaller, GraphRunRequest, GraphRunService};
+use ticketry_entities::{agent_run, launch_material};
+use ticketry_launch::TerminalLaunchError;
+use ticketry_terminal::{
     TerminalLaunchBoundary, TerminalLaunchCheckpoint, TerminalLaunchRuntime, TerminalLaunchService,
     TerminalRuntimeObservation, VerifiedTerminalRuntime,
 };
-use ticketry_work_management::work_management::launch_policy::LaunchPolicyResolver;
+use ticketry_work_management::launch_policy::LaunchPolicyResolver;
 
 const CHILD_A: &str = "00000000000000000000000000008951";
 const CHILD_B: &str = "00000000000000000000000000008952";
@@ -179,13 +178,13 @@ async fn graph_run_graphql_contract_returns_authoritative_models_and_child_ids()
     seed(&database, harness.data_directory()).await;
     let service = service(&database);
     let context = Box::leak(Box::new(BuilderContext::default()));
-    let builder = ticketry_entities::work_management::register_entity_modules(Builder::new(
+    let builder = ticketry_entities::register_work_management_entities(Builder::new(
         context,
         database.clone(),
     ));
-    let mut builder = ticketry_entities::execution::register_entity_modules(builder);
+    let mut builder = ticketry_entities::register_execution_entities(builder);
     seaography::register_entity!(builder, agent_run, mutation: false);
-    let schema = ticketry_agent_execution::execution::graph_run::register_graphql(builder)
+    let schema = ticketry_agent_execution::graph_run::register_graphql(builder)
         .schema_builder()
         .data(database.clone())
         .data(service)
@@ -732,16 +731,16 @@ async fn seed(database: &DatabaseConnection, directory: &std::path::Path) {
     .unwrap();
     // The folder a graph run launches in is the Module's typed link. The
     // profile above still decides which workspace may launch at all.
-    ticketry_work_management::module_links::schema::install(database)
+    ticketry_work_management::schema::install(database)
         .await
         .unwrap();
-    ticketry_work_management::module_links::ModuleLinkStore::new(database.clone())
+    ticketry_work_management::ModuleLinkStore::new(database.clone())
         .set(&compact_module, &directory.display().to_string())
         .await
         .expect("link the harness module");
 }
 
-fn task_ids(result: &ticketry_agent_execution::graph_run_service::GraphRunResult) -> Vec<&str> {
+fn task_ids(result: &ticketry_agent_execution::GraphRunResult) -> Vec<&str> {
     result
         .launched
         .iter()

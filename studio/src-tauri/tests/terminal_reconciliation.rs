@@ -15,19 +15,19 @@ use sea_orm::{
     QueryFilter,
 };
 use ticketry_entities::{
-    runs::{agent_run, launch_effect, status_event},
-    terminals::{cleanup_effect, session},
+    {agent_run, launch_effect, status_event},
+    {cleanup_effect, session},
 };
-use ticketry_launch::terminal_session::{CreateTerminalSession, TerminalLaunchKind};
-use ticketry_terminal::terminal::cleanup::{
+use ticketry_launch::{CreateTerminalSession, TerminalLaunchKind};
+use ticketry_terminal::{
     CleanupCause, CleanupRuntimeObservation, TerminalCleanupService,
 };
-use ticketry_terminal::terminal::launch::TerminalLaunchBoundary;
-use ticketry_terminal::terminal::reconciliation::{
+use ticketry_terminal::TerminalLaunchBoundary;
+use ticketry_terminal::{
     ReconciliationCheckpoint, RecordedSessionDecision, UnrecordedRuntimeDecision,
     MAX_RECORDED_SESSION_BATCH,
 };
-use ticketry_terminal::tmux_adapter::{InventoryConflictKind, InventoryEntry, OwnedSession};
+use ticketry_terminal::{InventoryConflictKind, InventoryEntry, OwnedSession};
 
 #[tokio::test]
 async fn recorded_session_authority_table_converges_and_second_pass_is_stable() {
@@ -636,7 +636,7 @@ async fn terminal_events(database: &sea_orm::DatabaseConnection, run_id: &str) -
 }
 
 fn inspected(
-    report: &ticketry_terminal::terminal::reconciliation::TerminalReconciliationReport,
+    report: &ticketry_terminal::TerminalReconciliationReport,
 ) -> BTreeSet<String> {
     report
         .sessions
@@ -646,7 +646,7 @@ fn inspected(
 }
 
 fn decision(
-    sessions: &[ticketry_terminal::terminal::reconciliation::ReconciledSession],
+    sessions: &[ticketry_terminal::ReconciledSession],
     run_id: &str,
 ) -> RecordedSessionDecision {
     sessions

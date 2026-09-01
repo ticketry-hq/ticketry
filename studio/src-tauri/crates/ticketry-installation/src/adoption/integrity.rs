@@ -9,7 +9,7 @@
 use sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, Statement};
 
 /// Refuse a database SQLite itself reports as damaged.
-pub async fn structural(database: &DatabaseConnection) -> Result<(), String> {
+pub(crate) async fn structural(database: &DatabaseConnection) -> Result<(), String> {
     let row = database
         .query_one_raw(Statement::from_string(
             DbBackend::Sqlite,

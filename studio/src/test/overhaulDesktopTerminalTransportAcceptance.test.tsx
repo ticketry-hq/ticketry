@@ -20,6 +20,7 @@ import {
 import { readStatusFact } from "../features/agents/status/stream/statusFacts";
 import { studioApolloClient } from "../shared/apollo/client";
 import { TaskResumableTerminalSessionsDocument } from "../features/agents/terminal/generated/terminalSessions.documents";
+import { quietAppUpdatesRuntime } from "./appUpdatesRuntimeFixture";
 
 const runtime = vi.hoisted(() => ({ desktop: true }));
 
@@ -43,9 +44,7 @@ function desktopRuntime(
       nativeFolderPicker: true,
       appUpdates: true,
     },
-    appUpdates: {
-      check: async () => ({ installedVersion: "0.0.0", status: "current" }),
-    },
+    appUpdates: quietAppUpdatesRuntime(),
     readWorkTracker: writeWorkTracker,
     writeWorkTracker,
     readSettings: writeWorkTracker,

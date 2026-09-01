@@ -4,7 +4,7 @@ use std::path::Path;
 
 use common::execution_legacy_fixture as fixture;
 use sea_orm::{ConnectionTrait, Database, DbBackend, Statement};
-use ticketry_agent_execution::execution::persistence::{self, SourceClassification};
+use ticketry_agent_execution::persistence::{self, SourceClassification};
 
 #[tokio::test]
 async fn fresh_database_without_execution_history_installs_rust_schema_idempotently() {
@@ -80,7 +80,7 @@ async fn every_supported_execution_leaf_adopts_twice_without_row_drift() {
 async fn adoption_preserves_campaign_identity_history_and_policy() {
     let directory = tempfile::tempdir().expect("create Execution adoption fixture");
     fixture::provision_current(directory.path()).await;
-    ticketry_runs::persistence::adopt(directory.path())
+    ticketry_runs::adopt(directory.path())
         .await
         .expect("adopt Runs before campaign claims");
 
@@ -142,10 +142,10 @@ async fn adoption_preserves_campaign_identity_history_and_policy() {
 async fn an_active_claim_is_adopted_when_its_runtime_names_the_child_in_either_form() {
     let directory = tempfile::tempdir().expect("create active Execution fixture");
     fixture::provision_current(directory.path()).await;
-    ticketry_runs::persistence::adopt(directory.path())
+    ticketry_runs::adopt(directory.path())
         .await
         .expect("adopt Runs before campaign claims");
-    ticketry_terminal::terminal::persistence::adopt(directory.path())
+    ticketry_terminal::adopt_terminal_persistence(directory.path())
         .await
         .expect("adopt Terminal before campaign claims");
     // A real installation's Terminal Sessions carry the hyphenated Work Item

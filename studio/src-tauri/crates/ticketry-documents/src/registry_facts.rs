@@ -21,9 +21,8 @@
 use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter};
 use serde_json::json;
 
-use ticketry_entities::documents::design_document;
-use ticketry_entities::work_management::issue;
-use ticketry_runs::persistence::{NewStatusEvent, StatusEventRepository};
+use ticketry_entities::{design_document, issue};
+use ticketry_runs::{NewStatusEvent, StatusEventRepository};
 
 use super::error::DocumentsError;
 use super::identity::{canonical_uuid, compact_uuid, identity_spellings};
@@ -31,7 +30,7 @@ use super::registry_refresh::SCRATCH_TASK_ID;
 
 /// The payload schema document facts are written at. A consumer that cannot
 /// read a higher version skips the row rather than guessing at it.
-pub const PAYLOAD_VERSION: i32 = 1;
+pub(crate) const PAYLOAD_VERSION: i32 = 1;
 
 pub const DOCUMENT_CHANGED: &str = "document.changed";
 pub const DOCUMENT_DELETED: &str = "document.deleted";
@@ -87,7 +86,7 @@ impl DocumentFactRecorder {
 /// Which registry a document belongs to, and the identity a consumer keys that
 /// registry by.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct RegistryOwner {
+pub(crate) struct RegistryOwner {
     /// `task` or `scratch` — the two registries Studio holds separately.
     pub(super) scope: &'static str,
     /// The Work Item a task registry is keyed by, or the module a scratch
@@ -107,7 +106,7 @@ pub(super) const SCRATCH_REGISTRY: &str = "scratch";
 /// read from the Work Item graph rather than from the row's own copy, so a fact
 /// can never claim a project the owner does not actually sit in.
 /// The Work Item a saved document belongs to.
-pub async fn resolve_owner(
+pub(crate) async fn resolve_owner(
     database: &impl sea_orm::ConnectionTrait,
     row: &design_document::Model,
 ) -> Result<Option<RegistryOwner>, DocumentsError> {
@@ -139,7 +138,7 @@ pub async fn resolve_owner(
 
 /// Append one document fact inside the caller's settlement transaction.
 /// Record one document change as a Work Item fact.
-pub async fn record_document(
+pub(crate) async fn record_document(
     recorder: Option<&DocumentFactRecorder>,
     transaction: &DatabaseTransaction,
     owner: &RegistryOwner,
@@ -181,6 +180,23 @@ pub async fn record_document(
         .await
         .map(|_| ())
         .map_err(|error| DocumentsError::publication(error.to_string()))
+}
+
+/// Records a committed document change after resolving its project owner.
+///
+/// Workspace save settlement uses this facade so the intermediate ownership
+/// record remains private to document fact publication.
+pub async fn record_document_change(
+    recorder: Option<&DocumentFactRecorder>,
+    transaction: &DatabaseTransaction,
+    row: &design_document::Model,
+    change: DocumentChange,
+) -> Result<bool, DocumentsError> {
+    let Some(owner) = resolve_owner(transaction, row).await? else {
+        return Ok(false);
+    };
+    record_document(recorder, transaction, &owner, row, change).await?;
+    Ok(true)
 }
 
 #[cfg(test)]

@@ -10,17 +10,17 @@
 //! The list is split by what it is about, so the file tree names what preflight
 //! checks before anyone opens a query.
 
-pub mod catalogue;
-pub mod dependencies;
-pub mod projects;
-pub mod work_items;
-pub mod workflow;
+mod catalogue;
+mod dependencies;
+mod projects;
+mod work_items;
+mod workflow;
 
 use super::invariant::Invariant;
 
 /// Every Work Management rule, in reported order.
 #[must_use]
-pub fn invariants() -> Vec<Invariant> {
+pub(crate) fn invariants() -> Vec<Invariant> {
     let mut all = projects::invariants();
     all.extend(workflow::invariants());
     all.extend(work_items::invariants());

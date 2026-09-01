@@ -4,12 +4,12 @@
 //! a small, inspectable set of directories and runs a validated candidate only
 //! with its version flag and an empty environment.
 
-pub mod approved_paths;
-pub mod candidate_paths;
+mod approved_paths;
+mod candidate_paths;
 mod consulted;
-pub mod diagnostics;
-pub mod probe;
-pub mod supported_tools;
+mod diagnostics;
+mod probe;
+mod supported_tools;
 
 use std::env;
 use std::path::{Path, PathBuf};
@@ -24,6 +24,9 @@ use supported_tools::SUPPORTED_TOOLS;
 
 use ticketry_data_directory::established_data_directory;
 
+// Keep discovery's implementation modules private. The root exports below are
+// the supported discovery API; callers must not depend on candidate search,
+// probing, or persistence module paths.
 pub use approved_paths::approve_executable_path;
 pub use consulted::{consulted_discovery, ConsultedDiscovery};
 pub use diagnostics::{AccessHint, PreflightReport, ToolDiagnostic, ToolHealth};

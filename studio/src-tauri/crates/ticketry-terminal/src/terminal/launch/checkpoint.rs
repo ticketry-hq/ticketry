@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 
-use ticketry_launch::terminal_session::{TerminalLaunchError, TerminalLaunchErrorCode};
+use ticketry_launch::{TerminalLaunchError, TerminalLaunchErrorCode};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TerminalLaunchBoundary {

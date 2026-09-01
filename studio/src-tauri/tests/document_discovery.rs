@@ -9,7 +9,7 @@
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection};
 use tauri_graphql::{TransportApi, TransportApiImpl};
 use ticketry_documents::{registry_refresh, DocumentsService, TaskRegistryScope, SCRATCH_TASK_ID};
-use ticketry_graphql_schema::graphql_foundation::initialize_with_worktracker_commands_and_install;
+use ticketry_graphql_schema::initialize_with_worktracker_commands_and_install;
 
 const PROJECT: &str = "11111111111111111111111111111111";
 const PUBLIC_PROJECT: &str = "11111111-1111-1111-1111-111111111111";
@@ -39,10 +39,10 @@ impl Fixture {
     /// Link the module to a real local folder, which is where an authorized
     /// root is resolved from.
     async fn link_module(&self) {
-        ticketry_work_management::module_links::schema::install(&self.database)
+        ticketry_work_management::schema::install(&self.database)
             .await
             .expect("install the Module Link schema");
-        ticketry_work_management::module_links::ModuleLinkStore::new(self.database.clone())
+        ticketry_work_management::ModuleLinkStore::new(self.database.clone())
             .set(
                 PUBLIC_MODULE,
                 &self.path().join("checkout").to_string_lossy(),

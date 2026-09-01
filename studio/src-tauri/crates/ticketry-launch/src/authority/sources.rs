@@ -6,9 +6,9 @@ use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 use crate::paths::{LaunchPathsRequest, LaunchPathsService, LaunchPathsView, LaunchScope};
 use crate::planning::Provider;
 use crate::terminal_session::{CreateTerminalSession, TerminalLaunchKind};
-use ticketry_entities::work_management::provider;
+use ticketry_entities::provider;
 use ticketry_settings::read_global_launch_default;
-use ticketry_workspace_runtime::worktree::status::repository::module_folder;
+use ticketry_workspace_runtime::status::repository::module_folder;
 
 use super::error::{LaunchAuthorityError, LaunchAuthorityErrorCode};
 

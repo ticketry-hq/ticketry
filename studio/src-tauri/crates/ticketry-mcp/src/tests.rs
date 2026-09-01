@@ -79,7 +79,7 @@ async fn prepare_projects(directory: &tempfile::TempDir) {
         )
         .await
         .expect("create MCP project fixture");
-    ticketry_work_management::work_management::module_presentation_migration::install(&database)
+    ticketry_work_management::module_presentation_migration::install(&database)
         .await
         .expect("install final module-presentation shape");
     database.close().await.expect("close MCP fixture writer");

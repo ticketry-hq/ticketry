@@ -19,12 +19,12 @@ struct Schema {
     statement_ids: Vec<usize>,
 }
 
-pub struct Selected {
+pub(crate) struct Selected {
     pub fingerprint: &'static str,
     pub statements: Vec<&'static str>,
 }
 
-pub fn select(generation: &str) -> Result<Selected, String> {
+pub(crate) fn select(generation: &str) -> Result<Selected, String> {
     let catalog = catalog();
     let schema = catalog
         .schemas
@@ -63,7 +63,7 @@ fn catalog() -> &'static Catalog {
 #[cfg(test)]
 mod tests {
     use super::{catalog, select};
-    use crate::classification::manifest;
+    use crate::manifest;
 
     #[test]
     fn every_supported_django_generation_has_its_exact_staging_schema() {

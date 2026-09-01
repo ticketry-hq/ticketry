@@ -16,12 +16,11 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection};
-use ticketry_documents::watch::filesystem_events::{
-    DirectoryWatch, FilesystemEvent, FilesystemWatcher, WatchUnavailable,
+use ticketry_documents::{
+    DirectoryWatch, DocumentFactRecorder, DocumentWatchSupervisor, DocumentsService,
+    FilesystemEvent, FilesystemWatcher, TaskRegistryScope, WatchUnavailable,
 };
-use ticketry_documents::watch::DocumentWatchSupervisor;
-use ticketry_documents::{DocumentFactRecorder, DocumentsService, TaskRegistryScope};
-use ticketry_runs::persistence::RunsServices;
+use ticketry_runs::RunsServices;
 use tokio::sync::mpsc;
 
 const PROJECT: &str = "11111111111111111111111111111111";
@@ -113,10 +112,10 @@ impl Fixture {
     /// Link the module to a real local folder, which is where an authorized
     /// root is resolved from.
     async fn link_module(&self) {
-        ticketry_work_management::module_links::schema::install(&self.database)
+        ticketry_work_management::schema::install(&self.database)
             .await
             .expect("install the Module Link schema");
-        ticketry_work_management::module_links::ModuleLinkStore::new(self.database.clone())
+        ticketry_work_management::ModuleLinkStore::new(self.database.clone())
             .set(
                 PUBLIC_MODULE,
                 &self.path().join("checkout").to_string_lossy(),

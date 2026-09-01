@@ -13,8 +13,8 @@ use seaography::{
 };
 use std::sync::LazyLock;
 use ticketry_entities::work_management;
-use ticketry_entities::worktrees::worktree;
-use ticketry_graphql_schema::graphql_foundation::generated_schema_sdl;
+use ticketry_entities::worktree;
+use ticketry_graphql_schema::generated_schema_sdl;
 use ticketry_workspace_runtime::worktree::persistence::column_policy;
 use ticketry_workspace_runtime::worktree::persistence::ownership_manifest::{
     GENERATED_MUTATION_GAPS, PROTECTED_COLUMNS,
@@ -40,7 +40,7 @@ async fn generated_crud_schema(context: &'static BuilderContext) -> Schema {
 
     // The Work Management read graph only satisfies the Worktree relations;
     // the audited bundle is the Worktree one.
-    let builder = ticketry_terminal::terminal::persistence::register_graphql(builder);
+    let builder = ticketry_terminal::register_persistence_graphql(builder);
     let mut builder = work_management::register_entity_modules(builder);
     seaography::register_entity!(builder, worktree);
 

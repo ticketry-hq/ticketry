@@ -14,9 +14,9 @@ use axum::{
 use futures_util::StreamExt;
 use serde::Deserialize;
 use tauri_graphql::{TransportApi, TransportApiImpl};
-use ticketry_launch::paths::LaunchPathsService;
+use ticketry_launch::LaunchPathsService;
 use ticketry_mcp::{McpRuntime, RunAuthority};
-use ticketry_terminal::terminal::lifecycle::TerminalRuntimeAuthority;
+use ticketry_terminal::TerminalRuntimeAuthority;
 
 #[path = "ticketry_graphql_adapter/mcp.rs"]
 mod mcp;
@@ -55,13 +55,13 @@ fn publish_development_readiness(
         data_directory,
         &ticketry_settings::Slice2Readiness::complete(),
     )?;
-    ticketry_runs::persistence::publish_readiness(
+    ticketry_runs::publish_readiness(
         data_directory,
-        &ticketry_runs::persistence::Slice3Readiness::complete(),
+        &ticketry_runs::Slice3Readiness::complete(),
     )?;
-    ticketry_workspace_runtime::workspace::handoff::publish_readiness(
+    ticketry_workspace_runtime::handoff::publish_readiness(
         data_directory,
-        &ticketry_workspace_runtime::workspace::handoff::Slice4Readiness::complete(),
+        &ticketry_workspace_runtime::handoff::Slice4Readiness::complete(),
     )?;
     Ok(())
 }
@@ -84,11 +84,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             )
         })?;
     let api = TransportApiImpl::new();
-    let adopted = ticketry_graphql_schema::graphql_foundation::adopt_worktracker_and_install(
+    let adopted = ticketry_graphql_schema::adopt_worktracker_and_install(
         &data_directory.join("rust-core.sqlite3"),
         &data_directory,
         &api,
-        ticketry_graphql_schema::graphql_foundation::InstallationOwnership::Owned,
+        ticketry_graphql_schema::InstallationOwnership::Owned,
     )
     .await
     .map_err(|error| error.message)?;
@@ -102,7 +102,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let hook_runner = hook_runner::HookRunnerResolver::from_environment().resolve()?;
     let database = adopted.runtime.commands().clone();
     let hook_spool_directory =
-        ticketry_runs::hook_spool::ensure_hook_spool_directory(&data_directory)?;
+        ticketry_runs::ensure_hook_spool_directory(&data_directory)?;
     adopted
         .runtime
         .terminal_runtime()
@@ -271,11 +271,11 @@ mod tests {
         assert!(ticketry_settings::published_readiness_is_complete(
             directory.path(),
         ));
-        assert!(ticketry_runs::persistence::published_readiness_is_complete(
+        assert!(ticketry_runs::published_readiness_is_complete(
             directory.path()
         ));
         assert!(
-            ticketry_workspace_runtime::workspace::handoff::published_readiness_is_complete(
+            ticketry_workspace_runtime::handoff::published_readiness_is_complete(
                 directory.path()
             )
         );

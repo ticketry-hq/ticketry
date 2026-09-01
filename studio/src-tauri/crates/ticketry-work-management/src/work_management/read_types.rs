@@ -1,5 +1,5 @@
 use serde::Serialize;
-use ticketry_entities::graphql_scalars::StringList;
+use ticketry_entities::StringList;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct Project {

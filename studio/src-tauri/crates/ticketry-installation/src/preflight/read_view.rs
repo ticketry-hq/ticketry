@@ -23,7 +23,7 @@ use crate::classification::engine;
 use super::error::{PreflightError, PreflightFailure};
 
 /// A read-only connection with a read transaction open on it.
-pub struct ReadView {
+pub(crate) struct ReadView {
     connection: DatabaseConnection,
     transaction: DatabaseTransaction,
 }

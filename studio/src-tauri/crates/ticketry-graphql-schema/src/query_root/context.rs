@@ -7,9 +7,9 @@ use seaography::{
 };
 use uuid::Uuid;
 
-use ticketry_entities::terminals::session as terminal_session;
-use ticketry_entities::work_management as entities;
-use ticketry_entities::worktrees::worktree;
+use ticketry_entities::session as terminal_session;
+use ticketry_entities as entities;
+use ticketry_entities::worktree;
 
 pub(super) fn builder_context() -> BuilderContext {
     let mut context = BuilderContext::default();
@@ -131,36 +131,36 @@ pub(super) fn builder_context() -> BuilderContext {
             terminal_session::Column::TaskId,
         ],
     );
-    add_uuid_columns::<ticketry_entities::execution::graph_run::Entity>(
+    add_uuid_columns::<ticketry_entities::graph_run::Entity>(
         &mut context,
         [
-            ticketry_entities::execution::graph_run::Column::RootId,
-            ticketry_entities::execution::graph_run::Column::ModuleId,
-            ticketry_entities::execution::graph_run::Column::ProjectId,
+            ticketry_entities::graph_run::Column::RootId,
+            ticketry_entities::graph_run::Column::ModuleId,
+            ticketry_entities::graph_run::Column::ProjectId,
         ],
     );
     add_app_setting_value_column(&mut context);
     // Derived, Git-owned, and server-owned Worktree columns are never part of
     // a generated input, whatever the entity's mutation registration is.
-    ticketry_workspace_runtime::worktree::persistence::column_policy::apply(&mut context);
+    ticketry_workspace_runtime::persistence::column_policy::apply(&mut context);
     // Design Document roots and provenance leave the contract on the entity
     // itself; every remaining adopted column is skipped in generated inputs.
-    ticketry_documents::persistence::column_policy::apply(&mut context);
+    ticketry_documents::apply_column_policy(&mut context);
     // Terminal writes remain private, but the generated inputs are still
     // denylisted centrally so later registration cannot expose lifecycle data.
-    ticketry_terminal::terminal::persistence::column_policy::apply(&mut context);
-    ticketry_work_management::work_management::graphql::apply_generated_input_policy(&mut context);
+    ticketry_terminal::apply_terminal_column_policy(&mut context);
+    ticketry_work_management::graphql::apply_generated_input_policy(&mut context);
     context.hooks = LifecycleHooks::new(
         MultiLifecycleHooks::default()
-            .add(ticketry_terminal::terminal::persistence::TerminalReadScope)
-            .add(ticketry_agent_execution::graph_run_service::GraphRunReadScope),
+            .add(ticketry_terminal::TerminalReadScope)
+            .add(ticketry_agent_execution::GraphRunReadScope),
     );
 
     context
 }
 
 fn add_app_setting_value_column(context: &mut BuilderContext) {
-    use ticketry_entities::settings::app_settings;
+    use ticketry_entities::app_settings;
 
     let mut options = ColumnOptions::default();
     options.output_type = Some(seaography::async_graphql::dynamic::TypeRef::named_nn(

@@ -1,13 +1,13 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, Statement};
-use ticketry_installation::adoption::provisioning;
+use ticketry_installation::provision;
 use ticketry_settings::provider_catalog_migrations;
-use ticketry_work_management::work_management::{
+use ticketry_work_management::{
     launch_binding_entry_skill_migration, module_presentation_migration, open_for_commands,
     project_onboarding_migration, workflow_color_migration, workspace_tab_order_migration,
 };
-use ticketry_workspace_runtime::worktree::persistence::pull_request_url_migration;
+use ticketry_workspace_runtime::persistence::pull_request_url_migration;
 
 const PROJECT: &str = "00000000000000000000000000001001";
 const GRILL: &str = "00000000000000000000000000001002";
@@ -18,7 +18,7 @@ const TASK: &str = "00000000000000000000000000001006";
 
 pub async fn fixture() -> (tempfile::TempDir, DatabaseConnection) {
     let directory = tempfile::tempdir().expect("create 0043 fixture directory");
-    provisioning::provision(directory.path())
+    provision(directory.path())
         .await
         .expect("provision the generated 0043 schema");
     let database = open_for_commands(&directory.path().join("state.db"))

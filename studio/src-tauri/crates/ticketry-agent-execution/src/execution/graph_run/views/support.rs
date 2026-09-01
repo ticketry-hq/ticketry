@@ -5,7 +5,7 @@ use crate::{
     execution::graph::{ExecutionMode, GraphAccess},
     graph_run_service::{GraphRunCaller, GraphRunRequest, GraphRunService, GraphRunServiceError},
 };
-use ticketry_entities::work_management::issue;
+use ticketry_entities::issue;
 
 pub(super) async fn request(
     ctx: &Context<'_>,

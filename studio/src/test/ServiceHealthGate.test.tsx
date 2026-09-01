@@ -6,6 +6,7 @@ import type {
   ServiceHealthListener,
   StudioRuntime,
 } from "../runtime";
+import { quietAppUpdatesRuntime } from "./appUpdatesRuntimeFixture";
 
 function health(state: ServiceHealth["state"]): ServiceHealth {
   return {
@@ -30,9 +31,7 @@ function runtimeHealthHarness() {
       nativeFolderPicker: true,
       appUpdates: true,
     },
-    appUpdates: {
-      check: async () => ({ installedVersion: "0.0.0", status: "current" }),
-    },
+    appUpdates: quietAppUpdatesRuntime(),
     readWorkTracker: (routes: Parameters<StudioRuntime["readWorkTracker"]>[0]) =>
       routes.graphQl(async () => {
         throw new Error("GraphQL is not used by this test.");

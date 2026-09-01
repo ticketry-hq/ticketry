@@ -15,15 +15,15 @@ pub const USER_NOTICE_EVENT: &str = "desktop-user-notice";
 pub struct DesktopServiceState {
     pub mcp_runtime: Mutex<Option<ticketry_mcp::McpRuntime>>,
     pub terminal_runtime: Mutex<
-        Option<std::sync::Arc<ticketry_terminal::terminal::lifecycle::TerminalLifecycleRuntime>>,
+        Option<std::sync::Arc<ticketry_terminal::TerminalLifecycleRuntime>>,
     >,
-    pub hook_spool_runtime: Mutex<Option<ticketry_runs::hook_spool::HookSpoolRuntime>>,
+    pub hook_spool_runtime: Mutex<Option<ticketry_runs::HookSpoolRuntime>>,
     pub execution_runtime: Mutex<
-        Option<ticketry_agent_execution::execution::reconciliation::ExecutionReconciliationRuntime>,
+        Option<ticketry_agent_execution::reconciliation::ExecutionReconciliationRuntime>,
     >,
-    pub terminal_launch: Mutex<Option<ticketry_terminal::terminal::launch::TerminalLaunchService>>,
+    pub terminal_launch: Mutex<Option<ticketry_terminal::TerminalLaunchService>>,
     pub output_sweep:
-        Mutex<Option<ticketry_terminal::terminal::output_activity::LiveOutputSweepRuntime>>,
+        Mutex<Option<ticketry_terminal::LiveOutputSweepRuntime>>,
     pub configuration: Mutex<Option<RuntimeStartupConfiguration>>,
     pub health: Mutex<ServiceHealth>,
     pub notices: Mutex<Vec<UserNotice>>,

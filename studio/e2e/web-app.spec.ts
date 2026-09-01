@@ -15,8 +15,28 @@ import {
   LoadModuleLinksDocument,
 } from "../src/features/module-links/generated/moduleLinks.documents";
 import { WorktreeStatusDocument } from "../src/features/agents/worktrees/generated/worktreeStatus.documents";
-import { UpdateWorkTrackerModulePresentationDocument } from "../src/features/projects/generated/projects.documents";
-import { SetWorkTrackerSubtreeRunDocument } from "../src/features/workflows/generated/workflows.documents";
+import {
+  CreateWorkTrackerWorkItemDocument,
+  DeleteWorkTrackerWorkItemDocument,
+} from "../src/features/work-items/generated/workItems.documents";
+import {
+  UpdateWorkTrackerModulePresentationDocument,
+  UpdateWorkTrackerProjectDocument,
+} from "../src/features/projects/generated/projects.documents";
+import {
+  CreateWorkTrackerIssueTypeDocument,
+  CreateWorkTrackerStateDocument,
+  CreateWorkTrackerTransitionDocument,
+  DeleteWorkTrackerIssueTypeDocument,
+  DeleteWorkTrackerStateDocument,
+  DeleteWorkTrackerTransitionDocument,
+  RemoveWorkTrackerWorkflowStateDocument,
+  ReorderWorkTrackerIssueTypesDocument,
+  ReorderWorkTrackerStatesDocument,
+  SetWorkTrackerStartStateDocument,
+  SetWorkTrackerSubtreeRunDocument,
+  UpdateWorkTrackerStateDocument,
+} from "../src/features/workflows/generated/workflows.documents";
 import {
   acknowledgeOnboarding,
   captureLegacyProductApiRequests,
@@ -32,6 +52,7 @@ import {
   getWorkItems,
   getWorkflowCatalog,
   graphql,
+  graphqlRefusal,
   openModule,
   openWorkItem,
   selectModuleForProfile,
@@ -469,6 +490,77 @@ test.describe("complete browser application", () => {
     await ensureModulesPane(page);
     await expect.poll(sidebarModuleNames)
       .toEqual([names.module, names.secondModule]);
+  });
+
+  test("reorders modules by dragging inside the Modules pane", async ({
+    page,
+  }) => {
+    await openModule(page, names.module);
+    const modulesPane = await ensureModulesPane(page);
+    const seededNames = [names.module, names.secondModule];
+    const paneRow = (moduleName: string) =>
+      modulesPane.locator("li[data-module-id]").filter({ hasText: moduleName });
+    const paneOrder = () => modulesPane
+      .locator("li[data-module-id]")
+      .allTextContents()
+      .then((labels) => labels
+        .map((label) => label.replace(/^📦\s*/, "").trim())
+        .filter((label) => seededNames.includes(label)));
+    const tabOrder = () => page
+      .getByRole("tablist", { name: "Project module tabs" })
+      .getByRole("tab")
+      .allTextContents()
+      .then((labels) => labels.filter((label) => seededNames.includes(label)));
+
+    // Whichever order earlier tests left persisted, dragging the trailing row
+    // onto the leading row's near edge must swap exactly those two.
+    const before = await paneOrder();
+    expect(before).toHaveLength(2);
+    await expect.poll(tabOrder).toEqual(before);
+    const [leading, trailing] = before;
+    const after = [trailing, leading];
+
+    const leadingRow = paneRow(leading);
+    const target = await leadingRow.boundingBox();
+    expect(target).toBeTruthy();
+    const saved = page.waitForResponse((response) =>
+      response.url().endsWith("/graphql") &&
+      response.request().postDataJSON()?.operationName ===
+        "ReorderWorkTrackerModulePresentation"
+    );
+    await paneRow(trailing).dragTo(leadingRow, {
+      targetPosition: { x: target!.width / 2, y: 2 },
+    });
+    await saved;
+
+    await expect.poll(paneOrder).toEqual(after);
+    // The tab strip reads the same persisted ranks, so it must agree at once.
+    await expect.poll(tabOrder).toEqual(after);
+    // Dropping a row must not also register as a click that switches module.
+    await expect(page.getByRole("tab", { name: names.module }).last())
+      .toHaveAttribute("aria-selected", "true");
+
+    await page.reload();
+    await expect.poll(tabOrder).toEqual(after);
+    await ensureModulesPane(page);
+    await expect.poll(paneOrder).toEqual(after);
+
+    // Leave the persisted order exactly as it was found, so every later test
+    // sees the arrangement it was written against.
+    const restoredRow = paneRow(trailing);
+    const restoreTarget = await restoredRow.boundingBox();
+    expect(restoreTarget).toBeTruthy();
+    const restored = page.waitForResponse((response) =>
+      response.url().endsWith("/graphql") &&
+      response.request().postDataJSON()?.operationName ===
+        "ReorderWorkTrackerModulePresentation"
+    );
+    await paneRow(leading).dragTo(restoredRow, {
+      targetPosition: { x: restoreTarget!.width / 2, y: 2 },
+    });
+    await restored;
+    await expect.poll(paneOrder).toEqual(before);
+    await expect.poll(tabOrder).toEqual(before);
   });
 
   test("hides a module tab and restores it through the module picker", async ({
@@ -1846,6 +1938,649 @@ test.describe("complete browser application", () => {
     await dialog.getByText("Ideas", { exact: true }).click();
     await expect(dialog).toHaveCount(0);
     await expect(page.getByTestId("status-row")).toContainText("Ideas");
+  });
+
+  test("reorders the state catalog through Rust and regroups the open tree", async ({
+    page,
+    request,
+  }) => {
+    const seeded = [...fixture.states]
+      .sort((left, right) => left.sort_order - right.sort_order);
+    const seededNames = new Set(seeded.map((state) => state.name));
+    const headerOrder = () => page
+      .locator('button[aria-label^="Collapse "], button[aria-label^="Expand "]')
+      .evaluateAll((buttons) => buttons.map((button) =>
+        (button.getAttribute("aria-label") ?? "")
+          .replace(/^(?:Collapse|Expand) /, "")
+      ))
+      .then((labels) => labels.filter((label) => seededNames.has(label)));
+    const reorder = (order: typeof seeded) =>
+      graphql(request, ReorderWorkTrackerStatesDocument, {
+        projectId: fixture.project.id,
+        orderedIds: order.map((state) => state.id),
+      });
+
+    await openModule(page, names.module);
+    await expect.poll(headerOrder).toEqual(seeded.map((state) => state.name));
+
+    // Rotate the tail state to the front: an arrangement no other test leaves.
+    const rotated = [seeded[seeded.length - 1]!, ...seeded.slice(0, -1)];
+    try {
+      const reordered = (await reorder(rotated)).reorder_states;
+      // Reorder replaces the whole project-owned ordering, so every row is
+      // renumbered contiguously rather than only the state that moved.
+      expect([...reordered]
+        .sort((left, right) => left.sort_order - right.sort_order)
+        .map((state) => [state.name, state.sort_order]))
+        .toEqual(rotated.map((state, index) => [state.name, index]));
+
+      // Each reordered row is published as a durable fact carrying the whole
+      // state, so the open tree regroups without a refetch or a reload.
+      await expect.poll(headerOrder).toEqual(rotated.map((state) => state.name));
+      await page.reload();
+      await expect.poll(headerOrder).toEqual(rotated.map((state) => state.name));
+    } finally {
+      await reorder(seeded);
+    }
+
+    await page.reload();
+    await expect.poll(headerOrder).toEqual(seeded.map((state) => state.name));
+  });
+
+  test("refuses a Story move outside the published workflow until an edge exists", async ({
+    page,
+    request,
+  }) => {
+    const startStateId = fixture.storyType.start_state as string | null;
+    const origin = fixture.states.find((state) => state.id === startStateId);
+    expect(origin, "the Story start state").toBeTruthy();
+    const parkingName = "E2E Parking";
+    const probeName = "Complete workflow probe";
+
+    const parking = (await graphql(request, CreateWorkTrackerStateDocument, {
+      projectId: fixture.project.id,
+      name: parkingName,
+      group: "unstarted",
+      color: "#7C3AED",
+    })).create_state;
+    const probe = await createWorkItem(request, fixture.project.id, {
+      name: probeName,
+      issue_type_id: fixture.storyType.id,
+      parent_id: fixture.module.id,
+    });
+
+    /** The Story workflow revision every guarded write has to present. */
+    const workflowRevision = async (): Promise<number> => {
+      const catalog = await getWorkflowCatalog(request, fixture.project.id);
+      const story = catalog.issue_types.nodes.find((issueType) =>
+        issueType.id === fixture.storyType.id
+      );
+      expect(story, "the seeded Story issue type").toBeTruthy();
+      return story!.workflow_revision;
+    };
+    const attemptMoveToParking = async (): Promise<void> => {
+      await page.getByRole("button", { name: "Open Settings" }).focus();
+      await page.keyboard.press("s");
+      const dialog = page.getByRole("dialog", { name: "Set Status" });
+      await expect(dialog).toBeVisible();
+      await dialog.getByText(parkingName, { exact: true }).click();
+    };
+
+    try {
+      await openModule(page, names.module);
+      // The create fact carries the whole row, so the new section appears in
+      // the open tree without a reload.
+      await expect(page.getByRole("button", { name: `Collapse ${parkingName}` }))
+        .toBeVisible();
+      await openWorkItem(page, probeName);
+      await expect(page.getByTestId("status-row")).toContainText(origin!.name);
+
+      // No published edge reaches the new state, so Rust refuses the move and
+      // the visible status stays where it was.
+      await attemptMoveToParking();
+      await expect(page.getByTestId("toast-error")).toBeVisible();
+      await expect(page.getByTestId("status-row")).toContainText(origin!.name);
+      expect((await getWorkItem(request, probe.id)).state_id).toBe(origin!.id);
+
+      for (const edge of [
+        { fromStateId: origin!.id, toStateId: parking.id },
+        { fromStateId: parking.id, toStateId: origin!.id },
+      ]) {
+        await graphql(request, CreateWorkTrackerTransitionDocument, {
+          issueTypeId: fixture.storyType.id,
+          agentAllowed: false,
+          workflowRevision: await workflowRevision(),
+          ...edge,
+        });
+      }
+
+      await page.reload();
+      await openWorkItem(page, probeName);
+      await attemptMoveToParking();
+      await expect(page.getByTestId("status-row")).toContainText(parkingName);
+      await expect
+        .poll(async () => (await getWorkItem(request, probe.id)).state_id)
+        .toBe(parking.id);
+
+      // Withdrawing the state from the workflow closes both edges again.
+      await selectState(page, origin!.name);
+      await graphql(request, RemoveWorkTrackerWorkflowStateDocument, {
+        issueTypeId: fixture.storyType.id,
+        stateId: parking.id,
+        workflowRevision: await workflowRevision(),
+      });
+
+      await page.reload();
+      await openWorkItem(page, probeName);
+      await attemptMoveToParking();
+      await expect(page.getByTestId("toast-error")).toBeVisible();
+      await expect(page.getByTestId("status-row")).toContainText(origin!.name);
+      expect((await getWorkItem(request, probe.id)).state_id).toBe(origin!.id);
+    } finally {
+      await graphql(request, DeleteWorkTrackerWorkItemDocument, { id: probe.id });
+      await graphql(request, DeleteWorkTrackerStateDocument, { id: parking.id });
+    }
+
+    await page.reload();
+    await expect(page.getByRole("button", { name: `Collapse ${parkingName}` }))
+      .toHaveCount(0);
+  });
+
+  test("reorders issue types through Rust and reorders the visible type picker", async ({
+    page,
+    request,
+  }) => {
+    const catalog = await getWorkflowCatalog(request, fixture.project.id);
+    const seeded = [...catalog.issue_types.nodes]
+      .sort((left, right) => left.sort_order - right.sort_order);
+    expect(seeded.length).toBeGreaterThan(1);
+    const taskTypeNames = seeded
+      .filter((issueType) => issueType.level === "task")
+      .map((issueType) => issueType.name);
+    expect(taskTypeNames.length).toBeGreaterThan(1);
+    const reorder = (order: typeof seeded) =>
+      graphql(request, ReorderWorkTrackerIssueTypesDocument, {
+        projectId: fixture.project.id,
+        orderedIds: order.map((issueType) => issueType.id),
+      });
+    const pickerOrder = async (): Promise<string[]> => {
+      const picker = page.getByTestId("issue-type-picker");
+      await picker.getByRole("button").first().click();
+      const labels = await picker.getByRole("button").allTextContents();
+      await page.keyboard.press("Escape");
+      return labels
+        .map((label) => label.trim())
+        .filter((label) => taskTypeNames.includes(label));
+    };
+
+    await openModule(page, names.module);
+    await openWorkItem(page, names.blocker);
+    // The trigger repeats the selected type, so compare the tail of the list.
+    expect((await pickerOrder()).slice(-taskTypeNames.length))
+      .toEqual(taskTypeNames);
+
+    // Rotate the whole project-owned set; the picker reads only task levels.
+    const rotated = [seeded[seeded.length - 1]!, ...seeded.slice(0, -1)];
+    const rotatedTaskNames = rotated
+      .filter((issueType) => issueType.level === "task")
+      .map((issueType) => issueType.name);
+    try {
+      const reordered = (await reorder(rotated)).reorder_issue_types;
+      expect([...reordered]
+        .sort((left, right) => left.sort_order - right.sort_order)
+        .map((issueType) => [issueType.name, issueType.sort_order]))
+        .toEqual(rotated.map((issueType, index) => [issueType.name, index]));
+
+      // The catalog read is cache-first, so a fresh client proves persistence.
+      await page.reload();
+      await openWorkItem(page, names.blocker);
+      expect((await pickerOrder()).slice(-rotatedTaskNames.length))
+        .toEqual(rotatedTaskNames);
+    } finally {
+      await reorder(seeded);
+    }
+
+    await page.reload();
+    await openWorkItem(page, names.blocker);
+    expect((await pickerOrder()).slice(-taskTypeNames.length))
+      .toEqual(taskTypeNames);
+  });
+
+  test("renames and recolours a state through Rust and converges the open tree", async ({
+    page,
+    request,
+  }) => {
+    const original = [...fixture.states]
+      .sort((left, right) => left.sort_order - right.sort_order)
+      .at(-1);
+    expect(original, "the last seeded state").toBeTruthy();
+    const renamed = "E2E Shelved";
+    const recolour = "#7C3AED";
+    const header = (stateName: string) =>
+      page.getByRole("button", { name: `Collapse ${stateName}` });
+    const iconColour = async (stateName: string): Promise<string> => {
+      const icon = header(stateName).locator(`[data-stage-icon="${stateName}"]`);
+      return await icon.evaluate((element) => getComputedStyle(element).color);
+    };
+    const asComputed = (colour: string) => page.evaluate((value) => {
+      const probe = document.createElement("span");
+      probe.style.color = value;
+      document.body.append(probe);
+      const computed = getComputedStyle(probe).color;
+      probe.remove();
+      return computed;
+    }, colour);
+
+    await openModule(page, names.module);
+    await expect(header(original!.name)).toBeVisible();
+
+    try {
+      const updated = (await graphql(request, UpdateWorkTrackerStateDocument, {
+        id: original!.id,
+        name: renamed,
+        color: recolour,
+      })).update_state;
+      expect(updated).toMatchObject({ name: renamed, color: recolour });
+
+      // One updated fact carries the whole row, so the section is renamed and
+      // recoloured in place — it must not appear twice or leave a stale header.
+      await expect(header(renamed)).toBeVisible();
+      await expect(header(renamed)).toHaveCount(1);
+      await expect(header(original!.name)).toHaveCount(0);
+      expect(await iconColour(renamed)).toBe(await asComputed(recolour));
+
+      await page.reload();
+      await expect(header(renamed)).toHaveCount(1);
+      await expect(header(original!.name)).toHaveCount(0);
+    } finally {
+      await graphql(request, UpdateWorkTrackerStateDocument, {
+        id: original!.id,
+        name: original!.name,
+        color: original!.color,
+      });
+    }
+
+    await page.reload();
+    await expect(header(original!.name)).toHaveCount(1);
+    await expect(header(renamed)).toHaveCount(0);
+  });
+
+  test("creates an issue type, moves its start state, and deletes it by reassigning", async ({
+    page,
+    request,
+  }) => {
+    const byName = (stateName: string) => {
+      const state = fixture.states.find((row) => row.name === stateName);
+      expect(state, `the seeded ${stateName} state`).toBeTruthy();
+      return state!;
+    };
+    const ideas = byName("Ideas");
+    const grill = byName("Grill");
+    const typeName = "E2E Chore";
+    const firstItem = "Complete chore before the move";
+    const secondItem = "Complete chore after the move";
+
+    const chore = (await graphql(request, CreateWorkTrackerIssueTypeDocument, {
+      projectId: fixture.project.id,
+      name: typeName,
+      level: "task",
+      color: "#0EA5E9",
+    })).create_issue_type;
+    expect(chore).toMatchObject({ name: typeName, level: "task" });
+    // A fresh type publishes no workflow, so it starts with no start state.
+    expect(chore.start_state).toBeNull();
+
+    const revision = async (): Promise<number> => {
+      const catalog = await getWorkflowCatalog(request, fixture.project.id);
+      const row = catalog.issue_types.nodes.find((issueType) =>
+        issueType.id === chore.id
+      );
+      expect(row, `the ${typeName} issue type`).toBeTruthy();
+      return row!.workflow_revision;
+    };
+    const createChore = (name: string) => createWorkItem(
+      request,
+      fixture.project.id,
+      { name, issue_type_id: chore.id, parent_id: fixture.module.id },
+    );
+    const sectionFor = (name: string) => page.evaluate((itemName) => {
+      const rows = Array.from(document.querySelectorAll(
+        '[role="tree"] li, [role="tree"] [role="treeitem"]',
+      ));
+      const index = rows.findIndex((row) =>
+        row.getAttribute("role") === "treeitem" &&
+        (row.textContent ?? "").includes(itemName)
+      );
+      if (index < 0) return null;
+      for (let cursor = index; cursor >= 0; cursor -= 1) {
+        const label = rows[cursor]?.querySelector("button")
+          ?.getAttribute("aria-label") ?? "";
+        const match = /^(?:Collapse|Expand) (.+)$/.exec(label);
+        if (match && !label.endsWith("subtasks")) return match[1];
+      }
+      return null;
+    }, name);
+
+    let firstRow: WorkItemRow | null = null;
+    let secondRow: WorkItemRow | null = null;
+    try {
+      await graphql(request, SetWorkTrackerStartStateDocument, {
+        id: chore.id,
+        startStateId: ideas.id,
+        workflowRevision: await revision(),
+      });
+      firstRow = await createChore(firstItem);
+      await openModule(page, names.module);
+      await expect(page.getByRole("treeitem", { name: new RegExp(firstItem) }))
+        .toBeVisible();
+      expect(await sectionFor(firstItem)).toBe(ideas.name);
+
+      // The revision guard rejects a stale claim rather than racing it.
+      const stale = await graphqlRefusal(
+        request,
+        SetWorkTrackerStartStateDocument,
+        {
+          id: chore.id,
+          startStateId: grill.id,
+          workflowRevision: (await revision()) - 1,
+        },
+      );
+      expect(stale.message).toBeTruthy();
+
+      await graphql(request, SetWorkTrackerStartStateDocument, {
+        id: chore.id,
+        startStateId: grill.id,
+        workflowRevision: await revision(),
+      });
+      secondRow = await createChore(secondItem);
+      await page.reload();
+      await expect(page.getByRole("treeitem", { name: new RegExp(secondItem) }))
+        .toBeVisible();
+      expect(await sectionFor(secondItem)).toBe(grill.name);
+      // Moving the start state must not relocate the item already filed.
+      expect(await sectionFor(firstItem)).toBe(ideas.name);
+
+      // Two issues still use the type, so an unqualified delete is refused.
+      const refused = await graphqlRefusal(
+        request,
+        DeleteWorkTrackerIssueTypeDocument,
+        { id: chore.id },
+      );
+      expect(refused.message).toContain("reassign_to");
+
+      await graphql(request, DeleteWorkTrackerIssueTypeDocument, {
+        id: chore.id,
+        reassignTo: fixture.storyType.id,
+      });
+      // Reassignment repoints both issues before the type disappears.
+      for (const row of [firstRow, secondRow]) {
+        expect((await getWorkItem(request, row!.id)).issue_type_id)
+          .toBe(fixture.storyType.id);
+      }
+      const remaining = await getWorkflowCatalog(request, fixture.project.id);
+      expect(remaining.issue_types.nodes.map((issueType) => issueType.name))
+        .not.toContain(typeName);
+    } finally {
+      for (const row of [firstRow, secondRow]) {
+        if (row) {
+          await graphql(request, DeleteWorkTrackerWorkItemDocument, { id: row.id });
+        }
+      }
+    }
+  });
+
+  test("guards State deletion and converges the removal into the open tree", async ({
+    page,
+    request,
+  }) => {
+    const protectedState = fixture.states.find((state) => state.is_protected);
+    expect(protectedState, "a protected seeded state").toBeTruthy();
+    const origin = fixture.states.find((state) =>
+      state.id === (fixture.storyType.start_state as string | null)
+    );
+    expect(origin, "the Story start state").toBeTruthy();
+    const disposable = "E2E Disposable";
+    const header = page.getByRole("button", { name: `Collapse ${disposable}` });
+    const workflowRevision = async (): Promise<number> => {
+      const catalog = await getWorkflowCatalog(request, fixture.project.id);
+      const story = catalog.issue_types.nodes.find((issueType) =>
+        issueType.id === fixture.storyType.id
+      );
+      expect(story, "the seeded Story issue type").toBeTruthy();
+      return story!.workflow_revision;
+    };
+
+    // A reviewed default state is protected, so deletion is refused outright.
+    const refusedProtected = await graphqlRefusal(
+      request,
+      DeleteWorkTrackerStateDocument,
+      { id: protectedState!.id },
+    );
+    expect(refusedProtected.message).toContain("protected");
+
+    // The last-state-in-group guard is unreachable from here: every group the
+    // schema allows is already seeded, and the single-occupant groups hold
+    // protected states, so the protected guard always answers first.
+    const created = (await graphql(request, CreateWorkTrackerStateDocument, {
+      projectId: fixture.project.id,
+      name: disposable,
+      group: origin!.group,
+      color: "#0EA5E9",
+    })).create_state;
+
+    let removed = false;
+    try {
+      await openModule(page, names.module);
+      await expect(header).toBeVisible();
+
+      await graphql(request, CreateWorkTrackerTransitionDocument, {
+        issueTypeId: fixture.storyType.id,
+        fromStateId: origin!.id,
+        toStateId: created.id,
+        agentAllowed: false,
+        workflowRevision: await workflowRevision(),
+      });
+      const refusedReferenced = await graphqlRefusal(
+        request,
+        DeleteWorkTrackerStateDocument,
+        { id: created.id },
+      );
+      expect(refusedReferenced.message)
+        .toContain("referenced by workflow configuration");
+      await expect(header).toBeVisible();
+
+      await graphql(request, RemoveWorkTrackerWorkflowStateDocument, {
+        issueTypeId: fixture.storyType.id,
+        stateId: created.id,
+        workflowRevision: await workflowRevision(),
+      });
+      await graphql(request, DeleteWorkTrackerStateDocument, { id: created.id });
+      removed = true;
+
+      // The deletion fact evicts the row, so the section leaves the open tree
+      // without a reload and does not come back on one.
+      await expect(header).toHaveCount(0);
+      await page.reload();
+      await expect(page.getByRole("treeitem", { name: names.parent }))
+        .toBeVisible();
+      await expect(header).toHaveCount(0);
+    } finally {
+      if (!removed) {
+        await graphql(request, DeleteWorkTrackerStateDocument, { id: created.id })
+          .catch(() => undefined);
+      }
+    }
+  });
+
+  test("refuses creating a Story outside its published birth state", async ({
+    request,
+  }) => {
+    const startStateId = fixture.storyType.start_state as string | null;
+    const elsewhere = fixture.states.find((state) => state.id !== startStateId);
+    expect(elsewhere, "a state other than the Story start state").toBeTruthy();
+    const phantom = "Complete illegal birth";
+
+    const refused = await graphqlRefusal(
+      request,
+      CreateWorkTrackerWorkItemDocument,
+      {
+        projectId: fixture.project.id,
+        name: phantom,
+        issueTypeId: fixture.storyType.id,
+        parentId: fixture.module.id,
+        stateId: elsewhere!.id,
+      },
+    );
+    expect(refused.message).toMatch(/born in/i);
+
+    // A refused birth must not leave a row behind.
+    const items = await getWorkItems(request, fixture.project.id);
+    expect(items.map((item) => item.name)).not.toContain(phantom);
+  });
+
+  test("prunes a disposable workflow when its only reachable edge is deleted", async ({
+    page,
+    request,
+  }) => {
+    const byName = (stateName: string) => {
+      const state = fixture.states.find((row) => row.name === stateName);
+      expect(state, `the seeded ${stateName} state`).toBeTruthy();
+      return state!;
+    };
+    const ideas = byName("Ideas");
+    const grill = byName("Grill");
+    const spec = byName("Spec");
+    const typeName = "E2E Pipeline";
+
+    const pipeline = (await graphql(request, CreateWorkTrackerIssueTypeDocument, {
+      projectId: fixture.project.id,
+      name: typeName,
+      level: "task",
+      color: "#22C55E",
+    })).create_issue_type;
+
+    const workflow = async () => {
+      const catalog = await getWorkflowCatalog(request, fixture.project.id);
+      const row = catalog.issue_types.nodes.find((issueType) =>
+        issueType.id === pipeline.id
+      );
+      expect(row, `the ${typeName} issue type`).toBeTruthy();
+      return row!;
+    };
+    const edges = async (): Promise<string[]> => {
+      const nameById = new Map(fixture.states.map((state) => [state.id, state.name]));
+      return (await workflow()).transitions.nodes
+        .map((edge) =>
+          `${nameById.get(edge.from_state) ?? edge.from_state}->${
+            nameById.get(edge.to_state) ?? edge.to_state
+          }`
+        )
+        .sort();
+    };
+    const addEdge = async (from: string, to: string): Promise<void> => {
+      await graphql(request, CreateWorkTrackerTransitionDocument, {
+        issueTypeId: pipeline.id,
+        fromStateId: from,
+        toStateId: to,
+        agentAllowed: false,
+        workflowRevision: (await workflow()).workflow_revision,
+      });
+    };
+    const born = (name: string) => createWorkItem(
+      request,
+      fixture.project.id,
+      { name, issue_type_id: pipeline.id, parent_id: fixture.module.id },
+    );
+    const attemptMoveToGrill = async (): Promise<void> => {
+      await page.getByRole("button", { name: "Open Settings" }).focus();
+      await page.keyboard.press("s");
+      const dialog = page.getByRole("dialog", { name: "Set Status" });
+      await expect(dialog).toBeVisible();
+      await dialog.getByText(grill.name, { exact: true }).click();
+    };
+
+    const items: WorkItemRow[] = [];
+    try {
+      await graphql(request, SetWorkTrackerStartStateDocument, {
+        id: pipeline.id,
+        startStateId: ideas.id,
+        workflowRevision: (await workflow()).workflow_revision,
+      });
+      await addEdge(ideas.id, grill.id);
+      await addEdge(grill.id, spec.id);
+      expect(await edges()).toEqual(["Grill->Spec", "Ideas->Grill"]);
+
+      const allowed = await born("Complete pipeline allowed move");
+      items.push(allowed);
+      await openModule(page, names.module);
+      await openWorkItem(page, allowed.name);
+      await expect(page.getByTestId("status-row")).toContainText(ideas.name);
+      await attemptMoveToGrill();
+      await expect(page.getByTestId("status-row")).toContainText(grill.name);
+
+      // Deleting the only edge out of the start state leaves Grill->Spec
+      // unreachable, so the publish prunes it rather than keeping an orphan.
+      await graphql(request, DeleteWorkTrackerTransitionDocument, {
+        issueTypeId: pipeline.id,
+        fromStateId: ideas.id,
+        toStateId: grill.id,
+        workflowRevision: (await workflow()).workflow_revision,
+      });
+      expect(await edges()).toEqual([]);
+
+      const refusedItem = await born("Complete pipeline refused move");
+      items.push(refusedItem);
+      await page.reload();
+      await openWorkItem(page, refusedItem.name);
+      await attemptMoveToGrill();
+      await expect(page.getByTestId("toast-error")).toBeVisible();
+      await expect(page.getByTestId("status-row")).toContainText(ideas.name);
+      expect((await getWorkItem(request, refusedItem.id)).state_id).toBe(ideas.id);
+    } finally {
+      for (const item of items) {
+        await graphql(request, DeleteWorkTrackerWorkItemDocument, { id: item.id })
+          .catch(() => undefined);
+      }
+      await graphql(request, DeleteWorkTrackerIssueTypeDocument, { id: pipeline.id })
+        .catch(() => undefined);
+    }
+  });
+
+  test("renames the project through Rust and shows it in the visible breadcrumb", async ({
+    page,
+    request,
+  }) => {
+    const renamed = "Coding Renamed By E2E";
+    const crumb = page.getByTestId("crumb-project");
+
+    await openModule(page, names.module);
+    await openWorkItem(page, names.blocker);
+    await expect(crumb).toHaveText(fixture.project.name);
+
+    try {
+      const updated = (await graphql(request, UpdateWorkTrackerProjectDocument, {
+        id: fixture.project.id,
+        name: renamed,
+      })).update_project;
+      // The rename must not move the slug every other surface keys off.
+      expect(updated).toMatchObject({
+        name: renamed,
+        slug: fixture.project.slug,
+      });
+
+      await page.reload();
+      await openWorkItem(page, names.blocker);
+      await expect(crumb).toHaveText(renamed);
+    } finally {
+      await graphql(request, UpdateWorkTrackerProjectDocument, {
+        id: fixture.project.id,
+        name: fixture.project.name,
+      });
+    }
+
+    await page.reload();
+    await openWorkItem(page, names.blocker);
+    await expect(crumb).toHaveText(fixture.project.name);
   });
 
   test("opens and cancels every keyboard launch entry without starting a run", async ({

@@ -6,6 +6,10 @@ import path from "node:path";
 
 import { inspectReleaseBundle } from "./release-bundle-inspection.mjs";
 
+// The update feed manifest keeps its own module; this re-export keeps one
+// release-script entry point for callers.
+export { UpdateManifestError, validateLatestJson } from "./release-update-manifest.mjs";
+
 const studioRoot = fileURLToPath(new URL("..", import.meta.url));
 const manifestPath = path.join(studioRoot, "release", "manifest.v1.json");
 

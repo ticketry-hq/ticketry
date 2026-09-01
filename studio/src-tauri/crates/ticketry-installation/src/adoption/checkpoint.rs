@@ -22,7 +22,7 @@ use super::phase::Phase;
 /// read each column would checkpoint again, and a second attempt that happened
 /// to succeed would erase the evidence that the first one found a busy
 /// installation.
-pub async fn checkpoint(database: &DatabaseConnection) -> Result<(), AdoptionFailure> {
+pub(crate) async fn checkpoint(database: &DatabaseConnection) -> Result<(), AdoptionFailure> {
     let row = database
         .query_one_raw(Statement::from_string(
             DbBackend::Sqlite,

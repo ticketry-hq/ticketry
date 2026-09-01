@@ -17,7 +17,7 @@ use axum::{
 use sea_orm::DatabaseConnection;
 use serde_json::{json, Value};
 
-use ticketry_launch::paths::{LaunchPathsRequest, LaunchPathsService};
+use ticketry_launch::{LaunchPathsRequest, LaunchPathsService};
 
 #[derive(Clone)]
 pub(super) struct LaunchPathsIngressState {

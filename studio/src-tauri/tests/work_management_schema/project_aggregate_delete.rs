@@ -1,7 +1,7 @@
 use sea_orm::{ConnectOptions, ConnectionTrait, Database, DatabaseBackend, Statement};
 use seaography::async_graphql::Value;
 
-use ticketry_work_management::work_management::commands::CommandDatabase;
+use ticketry_work_management::commands::CommandDatabase;
 
 const PROJECT: &str = "10000000000000000000000000000000";
 
@@ -63,7 +63,7 @@ async fn row_count(database: &sea_orm::DatabaseConnection, table: &str) -> i64 {
 }
 
 fn schema(database: sea_orm::DatabaseConnection) -> seaography::async_graphql::dynamic::Schema {
-    ticketry_graphql_schema::query_root::foundation_schema(
+    ticketry_graphql_schema::foundation_schema(
         database.clone(),
         Some(database.clone()),
         Some(CommandDatabase(database)),

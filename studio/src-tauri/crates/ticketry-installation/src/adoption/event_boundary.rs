@@ -22,17 +22,17 @@ use super::outcome::EventBoundary;
 use super::phase::Phase;
 
 /// The event kind a boundary row carries. Studio treats it as a marker.
-pub const BOUNDARY_EVENT_KIND: &str = "installation.adopted";
+pub(crate) const BOUNDARY_EVENT_KIND: &str = "installation.adopted";
 
 /// The subject kind. The subject of a boundary is the installation itself.
-pub const BOUNDARY_SUBJECT_KIND: &str = "installation";
+pub(crate) const BOUNDARY_SUBJECT_KIND: &str = "installation";
 
 /// Publish one boundary event per project, after postflight and before writes.
 ///
 /// Idempotent by construction: a project that already carries a boundary for
 /// this adoption is skipped, so a restart that reruns validation cannot stack
 /// a second marker on a stream that already converged past the first.
-pub async fn publish(
+pub(crate) async fn publish(
     database: &DatabaseConnection,
     application_version: &str,
     adoption_id: &str,

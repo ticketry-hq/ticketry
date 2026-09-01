@@ -15,7 +15,7 @@ use sea_orm::DatabaseTransaction;
 use serde_json::json;
 
 use super::CommandError;
-use ticketry_runs::persistence::{NewStatusEvent, StatusEventRepository};
+use ticketry_runs::{NewStatusEvent, StatusEventRepository};
 
 /// The payload schema these facts are written at. A consumer that does not
 /// understand a higher version skips the row rather than guessing at it.
@@ -114,7 +114,7 @@ pub struct WorkItemIdentity {
 }
 
 impl WorkItemIdentity {
-    pub fn of(row: &ticketry_entities::work_management::issue::Model) -> Self {
+    pub fn of(row: &ticketry_entities::issue::Model) -> Self {
         Self {
             project_id: row.project_id.clone(),
             work_item_id: row.id.clone(),

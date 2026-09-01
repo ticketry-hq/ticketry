@@ -23,6 +23,8 @@ mod runs_lifecycle;
 mod scope;
 mod service;
 mod terminal_launch_ingress;
+#[cfg(any(test, feature = "test-support"))]
+mod test_support;
 mod workflow_tools;
 
 use std::{io, net::SocketAddr, path::PathBuf};
@@ -40,13 +42,19 @@ use rmcp::transport::streamable_http_server::{
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
-use ticketry_work_management::work_management::{
+use ticketry_work_management::{
     commands::attachments::AttachmentStorage, open_for_commands,
 };
 
 pub use registry::allowed_provider_operations;
 use service::WorktrackerMcpService;
-pub use ticketry_runs::authority::{RunAuthority, RunPrincipal};
+pub use ticketry_runs::{RunAuthority, RunPrincipal};
+
+// `test_support` is intentionally not a public module. Its fixture helpers
+// are part of the explicit test-support facade so integration consumers can
+// opt into them without exposing the MCP implementation tree.
+#[cfg(any(test, feature = "test-support"))]
+pub use test_support::{post, start_authorizer, PROJECT};
 
 #[derive(Clone, Debug)]
 pub struct McpConfiguration {
@@ -67,7 +75,7 @@ impl McpRuntime {
     pub async fn start(configuration: McpConfiguration) -> Result<Self, String> {
         Self::start_with_services(
             configuration,
-            std::sync::Arc::new(ticketry_terminal::terminal::cleanup::TmuxCleanupRuntime),
+            std::sync::Arc::new(ticketry_terminal::TmuxCleanupRuntime),
             None,
         )
         .await
@@ -75,11 +83,11 @@ impl McpRuntime {
 
     pub async fn start_with_terminal_launch(
         configuration: McpConfiguration,
-        terminal_launch: ticketry_terminal::terminal::launch::TerminalLaunchService,
+        terminal_launch: ticketry_terminal::TerminalLaunchService,
     ) -> Result<Self, String> {
         Self::start_with_services(
             configuration,
-            std::sync::Arc::new(ticketry_terminal::terminal::cleanup::TmuxCleanupRuntime),
+            std::sync::Arc::new(ticketry_terminal::TmuxCleanupRuntime),
             Some(terminal_launch),
         )
         .await
@@ -92,7 +100,7 @@ impl McpRuntime {
     pub async fn start_for_test(
         configuration: McpConfiguration,
         cleanup_runtime: std::sync::Arc<
-            dyn ticketry_terminal::terminal::cleanup::TerminalCleanupRuntime,
+            dyn ticketry_terminal::TerminalCleanupRuntime,
         >,
     ) -> Result<Self, String> {
         Self::start_with_services(configuration, cleanup_runtime, None).await
@@ -101,9 +109,9 @@ impl McpRuntime {
     async fn start_with_services(
         configuration: McpConfiguration,
         cleanup_runtime: std::sync::Arc<
-            dyn ticketry_terminal::terminal::cleanup::TerminalCleanupRuntime,
+            dyn ticketry_terminal::TerminalCleanupRuntime,
         >,
-        terminal_launch: Option<ticketry_terminal::terminal::launch::TerminalLaunchService>,
+        terminal_launch: Option<ticketry_terminal::TerminalLaunchService>,
     ) -> Result<Self, String> {
         if !configuration.address.ip().is_loopback() {
             return Err("WorkTracker MCP must bind to a loopback address.".to_owned());
@@ -131,11 +139,11 @@ impl McpRuntime {
             ingress_credential.clone(),
         );
         let launch_policy =
-            ticketry_work_management::work_management::launch_policy::LaunchPolicyResolver::new(
+            ticketry_work_management::launch_policy::LaunchPolicyResolver::new(
                 database.clone(),
             );
         let graph_runs = terminal_launch.clone().map(|terminal_launch| {
-            ticketry_agent_execution::graph_run_service::GraphRunService::production(
+            ticketry_agent_execution::GraphRunService::production(
                 database.clone(),
                 launch_policy.clone(),
                 terminal_launch,
@@ -147,7 +155,7 @@ impl McpRuntime {
             authority.clone(),
             launch_policy,
             graph_runs,
-            ticketry_terminal::terminal::cleanup::TerminalCleanupService::new(
+            ticketry_terminal::TerminalCleanupService::new(
                 database,
                 cleanup_runtime,
             ),
@@ -252,7 +260,7 @@ impl McpRuntime {
         token: &str,
         allowed_tools: impl IntoIterator<Item = String>,
         expired: bool,
-    ) -> Result<String, ticketry_runs::authority::AuthorizationFailure> {
+    ) -> Result<String, ticketry_runs::AuthorizationFailure> {
         self.authority
             .grant_for_test(agent_run_id, token, allowed_tools, expired)
             .await
@@ -306,9 +314,5 @@ pub fn loopback(port: u16) -> Result<SocketAddr, io::Error> {
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))
 }
 
-/// Fixture MCP authorizer shared with the root package's `mcp_acceptance`
-/// integration binary; see the module's own documentation.
-#[cfg(any(test, feature = "test-support"))]
-pub mod test_support;
 #[cfg(test)]
 mod tests;

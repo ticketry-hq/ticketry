@@ -9,7 +9,7 @@ use crate::work_management::{
     commands::workflow,
     graphql::{self, GraphqlPatchBool, GraphqlPatchString, GraphqlPatchStringList},
 };
-use ticketry_entities::work_management::launch_binding;
+use ticketry_entities::launch_binding;
 
 struct UpsertIssueTypeLaunchBinding;
 

@@ -11,11 +11,11 @@
 //! ask whether a session is alive: reconciliation decides what is live, and it
 //! runs long after adoption commits.
 
-use ticketry_terminal::tmux_adapter::PersistedSessionName;
+use ticketry_terminal::PersistedSessionName;
 
 /// Why one recorded runtime name is not one Ticketry may reuse.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum NameDefect {
+pub(crate) enum NameDefect {
     /// The tmux session name is not a name Ticketry's adapter derives.
     UnsafeSessionName,
     /// The tmux session name does not belong to its own Agent Run.
@@ -59,7 +59,7 @@ impl NameDefect {
 /// bare run identifier a pre-prefix installation recorded. Anything else would
 /// have Ticketry address a session it did not create.
 #[must_use]
-pub fn session_name(agent_run_id: &str, recorded: &str) -> Option<NameDefect> {
+pub(crate) fn session_name(agent_run_id: &str, recorded: &str) -> Option<NameDefect> {
     if !safe_identifier(agent_run_id) || !safe_session_name(recorded) {
         return Some(NameDefect::UnsafeSessionName);
     }
@@ -69,7 +69,7 @@ pub fn session_name(agent_run_id: &str, recorded: &str) -> Option<NameDefect> {
 
 /// Check a recorded runtime namespace.
 #[must_use]
-pub fn runtime_namespace(recorded: &str) -> Option<NameDefect> {
+pub(crate) fn runtime_namespace(recorded: &str) -> Option<NameDefect> {
     (!safe_identifier(recorded)).then_some(NameDefect::UnsafeRuntimeNamespace)
 }
 
@@ -81,7 +81,7 @@ pub fn runtime_namespace(recorded: &str) -> Option<NameDefect> {
 /// an argument.
 fn safe_session_name(recorded: &str) -> bool {
     recorded
-        .strip_prefix(ticketry_terminal::tmux_adapter::SESSION_PREFIX)
+        .strip_prefix(ticketry_terminal::SESSION_PREFIX)
         .map_or_else(|| safe_identifier(recorded), safe_identifier)
 }
 
@@ -102,7 +102,7 @@ fn safe_identifier(value: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{runtime_namespace, session_name, NameDefect};
-    use ticketry_terminal::tmux_adapter::PersistedSessionName;
+    use ticketry_terminal::PersistedSessionName;
 
     #[test]
     fn the_adapters_own_derived_name_is_accepted() {

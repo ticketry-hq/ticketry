@@ -5,7 +5,9 @@
 //! absent, so ordinary builds never contact a developer's database.
 
 use sea_orm::{ConnectionTrait, Database, DbBackend, Statement};
-use ticketry_installation::adoption::{self, AdoptionPath, AdoptionPlan, Phase, Readiness};
+use ticketry_installation::{
+    adopt, adopt_with, open_readiness, AdoptionPath, AdoptionPlan, Phase, Readiness,
+};
 
 #[tokio::test]
 async fn imports_a_current_postgres_snapshot_and_switches_once() {
@@ -18,7 +20,7 @@ async fn imports_a_current_postgres_snapshot_and_switches_once() {
         .expect("enable disposable PostgreSQL source");
 
     let source_before = source_counts(&dsn).await;
-    let interrupted = adoption::adopt_with(
+    let interrupted = adopt_with(
         directory.path(),
         &AdoptionPlan::failing_after(Phase::BridgeWork),
     )
@@ -36,7 +38,7 @@ async fn imports_a_current_postgres_snapshot_and_switches_once() {
             .starts_with(".postgres-import.")));
     assert_eq!(source_counts(&dsn).await, source_before);
 
-    let postflight = adoption::adopt_with(
+    let postflight = adopt_with(
         directory.path(),
         &AdoptionPlan::failing_after(Phase::Postflight),
     )
@@ -57,7 +59,7 @@ async fn imports_a_current_postgres_snapshot_and_switches_once() {
     );
     assert_eq!(source_counts(&dsn).await, source_before);
 
-    let imported = adoption::adopt(directory.path())
+    let imported = adopt(directory.path())
         .await
         .expect("import current PostgreSQL");
     assert_eq!(imported.path, AdoptionPath::Imported);
@@ -75,7 +77,7 @@ async fn imports_a_current_postgres_snapshot_and_switches_once() {
     ))
     .await
     .expect("open imported target for final-schema migrations");
-    ticketry_installation::final_schema_migrations::install(&imported_database)
+    ticketry_installation::install_final_schema_migrations(&imported_database)
         .await
         .expect("run the ordinary final-schema chain over the PostgreSQL import");
     let spark = imported_database
@@ -97,12 +99,12 @@ async fn imports_a_current_postgres_snapshot_and_switches_once() {
         .await
         .expect("close imported target");
 
-    let ready = adoption::open_readiness(directory.path(), imported)
+    let ready = open_readiness(directory.path(), imported)
         .await
         .expect("open imported readiness");
     assert_eq!(ready.readiness, Readiness::Open);
 
-    let reopened = adoption::adopt(directory.path())
+    let reopened = adopt(directory.path())
         .await
         .expect("reopen imported SQLite");
     assert_eq!(reopened.path, AdoptionPath::Reopened);
@@ -121,7 +123,7 @@ async fn imports_a_supported_historical_postgres_generation() {
         .expect("enable disposable historical source");
 
     let source_before = source_counts(&dsn).await;
-    let imported = adoption::adopt(directory.path())
+    let imported = adopt(directory.path())
         .await
         .expect("import historical PostgreSQL");
     assert_eq!(imported.path, AdoptionPath::Imported);

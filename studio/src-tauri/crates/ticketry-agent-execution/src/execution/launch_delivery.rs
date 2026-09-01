@@ -6,14 +6,12 @@
 
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 
-use ticketry_entities::runs::automation_attempt;
-use ticketry_launch::authority::{compose_task_prompt, TaskPromptSource};
-use ticketry_launch::terminal_session::{CreateTerminalSession, TerminalLaunchKind};
-use ticketry_terminal::terminal::launch::TerminalLaunchService;
+use ticketry_entities::automation_attempt;
+use ticketry_launch::{compose_task_prompt, TaskPromptSource};
+use ticketry_launch::{CreateTerminalSession, TerminalLaunchKind};
+use ticketry_terminal::TerminalLaunchService;
 
-use ticketry_work_management::work_management::launch_policy::{
-    mark_delivered, CallerScope, LaunchPolicyDecision,
-};
+use ticketry_work_management::launch_policy::{mark_delivered, CallerScope, LaunchPolicyDecision};
 
 /// Prepare one durable policy decision through the Rust Terminal owner, then
 /// mark it delivered before attempting the recoverable external effect.
@@ -21,8 +19,8 @@ pub async fn execute(
     database: &DatabaseConnection,
     service: &TerminalLaunchService,
     decision: &LaunchPolicyDecision,
-) -> Result<ticketry_entities::terminals::session::Model, String> {
-    ticketry_diagnostics::launch_trace::requested_by(
+) -> Result<ticketry_entities::session::Model, String> {
+    ticketry_diagnostics::requested_by(
         decision.caller_scope.into(),
         execute_traced(database, service, decision),
     )
@@ -33,16 +31,16 @@ async fn execute_traced(
     database: &DatabaseConnection,
     service: &TerminalLaunchService,
     decision: &LaunchPolicyDecision,
-) -> Result<ticketry_entities::terminals::session::Model, String> {
-    if let Some(attempt) = ticketry_diagnostics::launch_trace::current() {
+) -> Result<ticketry_entities::session::Model, String> {
+    if let Some(attempt) = ticketry_diagnostics::current() {
         attempt.note(|facts| {
             facts.work_item_id = Some(decision.task_id.clone());
             facts.provider = Some(decision.provider.clone());
             facts.scope = Some(decision.caller_scope.as_str().to_owned());
         });
     }
-    ticketry_diagnostics::launch_trace::admitted(
-        ticketry_diagnostics::launch_trace::stages::POLICY_EVALUATED,
+    ticketry_diagnostics::admitted(
+        ticketry_diagnostics::POLICY_EVALUATED,
     )
     .with("decisionId", decision.decision_id.clone())
     .record();
@@ -142,7 +140,7 @@ fn request(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ticketry_work_management::work_management::launch_policy::ModuleLinkInput;
+    use ticketry_work_management::launch_policy::ModuleLinkInput;
 
     fn decision(decision_id: &str) -> LaunchPolicyDecision {
         LaunchPolicyDecision {

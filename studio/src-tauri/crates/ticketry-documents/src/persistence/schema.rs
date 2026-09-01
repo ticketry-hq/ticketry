@@ -22,7 +22,7 @@ pub const AUTHORED_TABLES: &[&str] = &["design_documents"];
 
 /// The columns Django created, in migration order. Their values are preserved
 /// byte for byte and they are the columns the stable digest covers.
-pub const DJANGO_COLUMNS: &[&str] = &[
+pub(crate) const DJANGO_COLUMNS: &[&str] = &[
     "id",
     "module_id",
     "task_id",
@@ -36,16 +36,16 @@ pub const DJANGO_COLUMNS: &[&str] = &[
 
 /// The one column this slice adds. Nullable, server-owned, and never copied
 /// from a file body.
-pub const ADOPTED_COLUMN: &str = "content_digest";
+pub(crate) const ADOPTED_COLUMN: &str = "content_digest";
 
 /// Document scopes a row may carry. The first four are the Agent Run scopes a
 /// watcher records; `task` and `plan` are also what an authorized rescan
 /// records for the task and module-scratch buckets.
-pub const DOCUMENT_SCOPES: &[&str] = &["task", "plan", "instant", "docchat"];
+pub(crate) const DOCUMENT_SCOPES: &[&str] = &["task", "plan", "instant", "docchat"];
 
-pub const DJANGO_MIGRATIONS: [&str; 1] = [CURRENT_DJANGO_LEAF];
+pub(crate) const DJANGO_MIGRATIONS: [&str; 1] = [CURRENT_DJANGO_LEAF];
 
-pub async fn install(
+pub(crate) async fn install(
     database: &sea_orm::DatabaseConnection,
     stable_digest: &str,
 ) -> Result<(), DocumentsPersistenceError> {
@@ -75,7 +75,7 @@ pub async fn install(
     Ok(())
 }
 
-pub async fn columns(
+pub(crate) async fn columns(
     database: &impl ConnectionTrait,
     table: &str,
 ) -> Result<BTreeSet<String>, DocumentsPersistenceError> {

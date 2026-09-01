@@ -31,8 +31,8 @@ use crate::workspace::operations::{
     WorkspaceOperationOutcome,
 };
 use crate::worktree::status::{GitPort, RepositoryLocks};
-use ticketry_entities::worktrees::worktree;
-use ticketry_runs::persistence::StatusEventRepository;
+use ticketry_entities::worktree;
+use ticketry_runs::StatusEventRepository;
 
 use super::cleanup::{self, CleanupExpectation};
 use super::error::WorktreeDiscardError;

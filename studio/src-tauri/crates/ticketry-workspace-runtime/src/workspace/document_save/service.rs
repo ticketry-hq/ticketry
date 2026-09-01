@@ -24,8 +24,8 @@ use crate::workspace::operations::{
     WorkspaceOperationJournal, WorkspaceOperationOutcome, WorkspaceOperationReconciler,
     WorkspaceOperationRecord,
 };
-use ticketry_documents::asset_access;
-use ticketry_documents::registry_facts::DocumentFactRecorder;
+use ticketry_documents as asset_access;
+use ticketry_documents::DocumentFactRecorder;
 
 use super::error::{DocumentSaveError, DocumentSaveErrorCode};
 use super::executor::{SaveExecutor, STALE_CODE};

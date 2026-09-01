@@ -5,14 +5,14 @@
 //! the native surface is only a transient viewer. Other builds expose the same
 //! command surface as an unavailable implementation.
 
-pub mod chords;
-pub mod focus_trace;
-pub mod frames;
+mod chords;
+pub(crate) mod focus_trace;
+pub(crate) mod frames;
 mod preparation;
-pub mod scroll;
+pub(crate) mod scroll;
 #[cfg(any(test, all(target_os = "macos", feature = "native-libghostty")))]
 mod visibility;
-pub mod worker;
+pub(crate) mod worker;
 
 pub use frames::NativeTerminalFrame;
 

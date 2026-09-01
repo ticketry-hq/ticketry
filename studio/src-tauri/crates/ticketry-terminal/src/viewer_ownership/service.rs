@@ -13,9 +13,9 @@ use tokio::sync::Mutex as AsyncMutex;
 use uuid::Uuid;
 
 use ticketry_entities::{
-    runs::agent_run,
-    terminals::{session, viewer_lease},
-    work_management::project,
+    agent_run,
+    {session, viewer_lease},
+    project,
 };
 
 use super::{write_model::persist_prepared, ViewerOwnershipError, ViewerOwnershipErrorCode};

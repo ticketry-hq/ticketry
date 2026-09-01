@@ -102,7 +102,10 @@ pub struct LedgerRow {
 /// inside it leaves no row at all, which is the "not started" answer a retry
 /// needs; a crash after it leaves `committed`, which is the "validate me"
 /// answer a restart needs.
-pub async fn commit(database: &DatabaseConnection, row: &LedgerRow) -> Result<(), AdoptionFailure> {
+pub(crate) async fn commit(
+    database: &DatabaseConnection,
+    row: &LedgerRow,
+) -> Result<(), AdoptionFailure> {
     let transaction = database.begin().await.map_err(failed)?;
     let outcome = write(&transaction, row).await;
     match outcome {
@@ -222,7 +225,7 @@ pub(super) async fn replace(
 }
 
 /// Record that validation finished and the boundary was published.
-pub async fn mark_ready(database: &DatabaseConnection) -> Result<(), AdoptionFailure> {
+pub(crate) async fn mark_ready(database: &DatabaseConnection) -> Result<(), AdoptionFailure> {
     database
         .execute_raw(Statement::from_string(
             DbBackend::Sqlite,

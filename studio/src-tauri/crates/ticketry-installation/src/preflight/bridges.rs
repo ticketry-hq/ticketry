@@ -22,7 +22,7 @@ use super::report::Defect;
 
 /// One reviewed admission: a defect a named bridge is known to repair.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct Bridge {
+pub(crate) struct Bridge {
     /// The rule whose defect this bridge admits.
     pub defect_code: &'static str,
     /// The bridge's name, as recorded in the migration ledger.
@@ -47,7 +47,7 @@ impl Bridge {
 }
 
 /// Every reviewed admission this release ships.
-pub const REGISTRY: &[Bridge] = &[Bridge {
+pub(crate) const REGISTRY: &[Bridge] = &[Bridge {
     defect_code: "document-work-item-missing",
     name: "remove-orphaned-design-document-metadata",
     version: 1,
@@ -59,7 +59,7 @@ pub const REGISTRY: &[Bridge] = &[Bridge {
 /// Admission is per generation: a defect a bridge repairs in one historical
 /// schema is not thereby repairable in another, because the bridge was tested
 /// against the schema it was written for.
-pub fn admit(defects: &mut [Defect], generation: &str, registry: &[Bridge]) {
+pub(crate) fn admit(defects: &mut [Defect], generation: &str, registry: &[Bridge]) {
     for defect in defects {
         defect.admitted_by = registry
             .iter()

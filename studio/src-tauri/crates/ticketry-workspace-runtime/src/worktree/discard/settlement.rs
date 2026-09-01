@@ -12,8 +12,8 @@ use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter};
 use serde_json::json;
 
 use crate::worktree::facts::{self, WorktreeChange, WorktreeFact, WorktreeFactScope};
-use ticketry_entities::worktrees::worktree;
-use ticketry_runs::persistence::StatusEventRepository;
+use ticketry_entities::worktree;
+use ticketry_runs::StatusEventRepository;
 
 use super::error::{WorktreeDiscardError, WorktreeDiscardErrorCode};
 use super::plan::DiscardPlan;

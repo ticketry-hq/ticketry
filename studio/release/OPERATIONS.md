@@ -95,6 +95,61 @@ startup reports a packaged-skill collision, preserve the named path. Use a new
 account for clean-install acceptance, or back up and rename the conflicting
 directory before retrying.
 
+## Packaged update acceptance
+
+Before a release goes to the public feed, prove the update itself on packaged
+macOS arm64 artifacts: a packaged version A must discover a newer signed
+version B, install it on user confirmation, and relaunch as B with its data and
+selected workspace intact — and refuse a tampered archive, a wrong-key
+signature, and an unreachable feed.
+
+Run it alongside installed-artifact acceptance:
+
+```bash
+npm run release:acceptance:update --workspace @worktracker/studio -- \
+  --from release-output/0.2.0/macos-aarch64/Ticketry.app \
+  --to release-output/0.3.0/macos-aarch64 \
+  --to-version 0.3.0
+```
+
+Two things need preparing first, and never the production updater key:
+
+1. **Two throwaway updater keys.** Generate them with
+   `npm run tauri -- signer generate`, build version B with the first key's
+   public key packaged, and sign the same archive with the second key to
+   produce the wrong-key fixture. Pass that second signature as
+   `TICKETRY_UPDATE_ACCEPTANCE_WRONG_KEY_SIGNATURE`. The updater signature is
+   the contract under test and is never skipped or weakened.
+2. **Loopback trust.** The script generates a one-day certificate for the local
+   HTTPS feed and trusts it in the login keychain for the duration of the run,
+   removing that trust afterwards; macOS may prompt for authorization. Release
+   builds refuse a plain-HTTP updater endpoint, so the acceptance feed is real
+   HTTPS served from `127.0.0.1`.
+
+The driver needs nothing prepared. `scripts/update-acceptance-driver` ships with
+the harness and is used by default; `--driver` or
+`TICKETRY_UPDATE_ACCEPTANCE_DRIVER` replaces it. It gives version A one bounded
+launch so there is data to preserve, seeds that data, launches the update run,
+and afterwards checks that the data survived and that no process still holds the
+run's sandbox. Inside the app, the run performs the same check, install,
+signature verification, and restart teardown the Settings section performs — it
+is enabled only by `TICKETRY_UPDATE_ACCEPTANCE_RESULT`, so no ordinary launch
+does anything.
+
+The feed the script serves mirrors the production layout —
+`releases/latest/download/latest.json` plus the archive and its `.sig` — so a
+passing run has also validated the URL contract the app ships with.
+`TICKETRY_UPDATE_FEED_URL` replaces the packaged endpoint; nothing else about
+the update path changes.
+
+The merged result must show discovery, installation, relaunch into the new
+version, preserved WorkTracker data, restored selected workspace, preserved
+approved executable paths and preferences, a data-directory lock released and
+reacquired cleanly, no stranded sidecar or terminal processes, all three
+refusals, and version A still healthy after each refusal. Apple notarization may
+be skipped for a loopback acceptance build when Gatekeeper is not in the path;
+record whichever posture the run used with its evidence.
+
 ## In-app update and rollback
 
 Ticketry reads the stable feed without a GitHub credential. It may check for an

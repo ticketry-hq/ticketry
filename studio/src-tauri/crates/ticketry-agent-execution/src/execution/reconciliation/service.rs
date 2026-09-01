@@ -5,12 +5,12 @@ use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOr
 use crate::execution::graph::{relevant_armed_roots, GraphAccess};
 use crate::graph_run_service::GraphRunService;
 use ticketry_entities::{
-    execution::{graph_run, launch_claim},
-    runs::status_event,
-    work_management::transition_occurrence,
+    {graph_run, launch_claim},
+    status_event,
+    transition_occurrence,
 };
-use ticketry_terminal::terminal::launch::TerminalLaunchService;
-use ticketry_work_management::work_management::launch_policy::{self, LaunchPolicyResolver};
+use ticketry_terminal::TerminalLaunchService;
+use ticketry_work_management::launch_policy::{self, LaunchPolicyResolver};
 
 use super::{ExecutionReconciliationReport, RootReconciliation};
 

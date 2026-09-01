@@ -10,7 +10,7 @@ use sea_orm::{
     QuerySelect,
 };
 
-use ticketry_entities::terminals::session;
+use ticketry_entities::session;
 
 use super::TerminalReconciliationError;
 

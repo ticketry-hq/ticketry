@@ -334,7 +334,7 @@ async fn adoption_refuses_malformed_json_before_snapshot_or_ledger() {
 
 #[tokio::test]
 async fn settings_storage_has_no_generated_crud_surface() {
-    let sdl = ticketry_graphql_schema::graphql_foundation::generated_schema_sdl()
+    let sdl = ticketry_graphql_schema::generated_schema_sdl()
         .await
         .unwrap();
     assert!(!sdl.contains("appSetting"));
@@ -358,9 +358,9 @@ fn the_legacy_profile_file_is_read_only_history() {
         }"#;
     fs::write(&path, original).unwrap();
 
-    let source = ticketry_work_management::module_links::legacy_source::locate(directory.path())
+    let source = ticketry_work_management::legacy_source::locate(directory.path())
         .expect("the live profile file is a supported legacy source");
-    let catalog = ticketry_work_management::module_links::legacy_source::read(&source).unwrap();
+    let catalog = ticketry_work_management::legacy_source::read(&source).unwrap();
 
     assert_eq!(
         catalog.profiles[0].module_links,
@@ -381,9 +381,9 @@ fn a_malformed_legacy_profile_file_is_refused_and_left_intact() {
     let path = directory.path().join("profiles.json");
     fs::write(&path, b"{broken").unwrap();
 
-    let source = ticketry_work_management::module_links::legacy_source::locate(directory.path())
+    let source = ticketry_work_management::legacy_source::locate(directory.path())
         .expect("located");
-    let error = ticketry_work_management::module_links::legacy_source::read(&source)
+    let error = ticketry_work_management::legacy_source::read(&source)
         .expect_err("a malformed profile file cannot be adopted");
 
     assert_eq!(

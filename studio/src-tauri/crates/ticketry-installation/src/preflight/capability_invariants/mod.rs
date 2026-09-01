@@ -14,27 +14,27 @@
 //! The list is split by capability, so the file tree names which capabilities
 //! preflight covers before anyone opens a query.
 
-pub mod documents;
-pub mod effect_journals;
-pub mod graph_execution;
-pub mod module_links;
-pub mod runs;
-pub mod settings;
-pub mod status_events;
-pub mod terminals;
-pub mod worktrees;
+mod documents;
+mod effect_journals;
+mod graph_execution;
+mod module_links;
+mod runs;
+mod settings;
+mod status_events;
+mod terminals;
+mod worktrees;
 
 use super::invariant::Invariant;
 
 /// The durable scopes a terminal session or launch request may be recorded in.
-pub const SCOPES: &str = "('task', 'plan', 'instant', 'docchat', 'shell')";
+pub(crate) const SCOPES: &str = "('task', 'plan', 'instant', 'docchat', 'shell')";
 /// The settled states an effect journal row may hold.
-pub const EFFECT_STATES: &str =
+pub(crate) const EFFECT_STATES: &str =
     "('prepared', 'leased', 'applied', 'failed', 'conflict', 'conflicted', 'cleanup_pending')";
 
 /// Every capability and effect-history rule, in reported order.
 #[must_use]
-pub fn invariants() -> Vec<Invariant> {
+pub(crate) fn invariants() -> Vec<Invariant> {
     let mut all = settings::invariants();
     all.extend(runs::invariants());
     all.extend(status_events::invariants());

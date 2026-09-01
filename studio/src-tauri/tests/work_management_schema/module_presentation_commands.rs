@@ -1,8 +1,8 @@
 use sea_orm::{ActiveModelTrait, ActiveValue::Set, ConnectionTrait, Database, EntityTrait};
 
-use ticketry_entities::work_management::{issue, module_presentation as presentation};
-use ticketry_work_management::work_management::commands::{reorder, work_items};
-use ticketry_work_management::work_management::{open_for_commands, read_queries};
+use ticketry_entities::{issue, module_presentation as presentation};
+use ticketry_work_management::commands::{reorder, work_items};
+use ticketry_work_management::{open_for_commands, read_queries};
 
 const PROJECT: &str = "10000000000000000000000000000000";
 const MODULE_TYPE: &str = "20000000000000000000000000000000";
@@ -124,7 +124,7 @@ async fn update_visibility(
     tab_hidden: bool,
 ) -> presentation::Model {
     let schema =
-        ticketry_graphql_schema::query_root::generated_contract_schema(database.clone()).unwrap();
+        ticketry_graphql_schema::generated_contract_schema(database.clone()).unwrap();
     let response = schema
         .execute(format!(
             r#"mutation {{
@@ -227,7 +227,7 @@ async fn visibility_preserves_rank_and_an_empty_rank_does_not_enable_manual_orde
 async fn visibility_requires_a_valid_module_identity() {
     let (_directory, database) = fixture().await;
     let schema =
-        ticketry_graphql_schema::query_root::generated_contract_schema(database.clone()).unwrap();
+        ticketry_graphql_schema::generated_contract_schema(database.clone()).unwrap();
 
     let invalid = schema
         .execute(
@@ -363,7 +363,7 @@ async fn concurrent_first_drags_serialize_and_seed_one_complete_order() {
 
 #[tokio::test]
 async fn graphql_contract_allowlists_visibility_and_records_reorder() {
-    let sdl = ticketry_graphql_schema::graphql_foundation::generated_schema_sdl()
+    let sdl = ticketry_graphql_schema::generated_schema_sdl()
         .await
         .unwrap();
     let mutation = sdl

@@ -7,8 +7,8 @@ use crate::planning::{
     DocumentChatPrompt, InstantPrompt, PlanningPrompt, Provider,
 };
 use crate::terminal_session::{CreateTerminalSession, TerminalLaunchKind};
-use ticketry_entities::runs::agent_run;
-use ticketry_work_management::work_management::launch_policy::{
+use ticketry_entities::agent_run;
+use ticketry_work_management::launch_policy::{
     CallerScope, LaunchPolicyRequest, LaunchPolicyResolver,
 };
 
@@ -165,7 +165,7 @@ impl LaunchAuthorityService {
             Provider::try_from(provider.as_str())
                 .map_err(|error| LaunchAuthorityError::unresolvable(error.to_string()))?,
         );
-        let settings = ticketry_settings::instant_launch::load(&self.database).await?;
+        let settings = ticketry_settings::load_instant_launch_settings(&self.database).await?;
         let prompt = build_instant_prompt(&InstantPrompt {
             module,
             user_input,

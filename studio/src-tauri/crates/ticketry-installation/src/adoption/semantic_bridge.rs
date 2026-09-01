@@ -16,14 +16,15 @@ use super::error::{AdoptionFailure, Refusal};
 use super::inventory::{self, Inventory};
 use super::phase::Phase;
 
-pub const REMOVE_ORPHANED_DOCUMENT_METADATA: &str = "remove-orphaned-design-document-metadata.v1";
+pub(crate) const REMOVE_ORPHANED_DOCUMENT_METADATA: &str =
+    "remove-orphaned-design-document-metadata.v1";
 
 const ORPHAN_PREDICATE: &str = "NOT EXISTS (SELECT 1 FROM worktracker_issue module
                  WHERE module.id = design_documents.module_id)
      OR NOT EXISTS (SELECT 1 FROM worktracker_issue task
                     WHERE task.id = design_documents.task_id)";
 
-pub async fn apply(
+pub(crate) async fn apply(
     transaction: &DatabaseTransaction,
     ordered: &[String],
 ) -> Result<Inventory, AdoptionFailure> {

@@ -1,7 +1,7 @@
 use sea_orm::DatabaseConnection;
 use serde_json::{json, Map, Value};
 
-use ticketry_work_management::work_management::commands::{blockers, hierarchy, CommandError};
+use ticketry_work_management::commands::{blockers, hierarchy, CommandError};
 
 use super::{dispatch::DispatchOutput, projection, scope, workflow_tools::string, RunPrincipal};
 

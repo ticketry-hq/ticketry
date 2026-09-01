@@ -15,7 +15,7 @@ use super::error::{PreflightError, PreflightFailure};
 
 /// The tables and columns present in one installation.
 #[derive(Debug, Default)]
-pub struct Schema {
+pub(crate) struct Schema {
     tables: BTreeMap<String, BTreeSet<String>>,
 }
 

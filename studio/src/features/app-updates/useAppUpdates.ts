@@ -1,26 +1,30 @@
 import { studioRuntime } from "../../runtime";
-import { useAppUpdateCheckState } from "./internal/checkState";
+import { useAppUpdateState } from "./internal/updateState";
+import type { UpdateState } from "./internal/updateMachine";
 
-export function useAppUpdates() {
+export interface AppUpdatesView {
+  /** Whether this platform installs its own updates at all. */
+  readonly available: boolean;
+  readonly installedVersion: string;
+  readonly update: UpdateState;
+  readonly check: () => Promise<void>;
+  readonly installAndRestart: () => Promise<void>;
+}
+
+export function useAppUpdates(): AppUpdatesView {
   const runtime = studioRuntime();
-  const status = useAppUpdateCheckState((state) => state.status);
-  const installedVersion = useAppUpdateCheckState(
-    (state) => state.installedVersion,
+  const installedVersion = useAppUpdateState((state) => state.installedVersion);
+  const update = useAppUpdateState((state) => state.update);
+  const check = useAppUpdateState((state) => state.check);
+  const installAndRestart = useAppUpdateState(
+    (state) => state.installAndRestart,
   );
-  const availableVersion = useAppUpdateCheckState(
-    (state) => state.availableVersion,
-  );
-  const notes = useAppUpdateCheckState((state) => state.notes);
-  const errorMessage = useAppUpdateCheckState((state) => state.errorMessage);
-  const check = useAppUpdateCheckState((state) => state.check);
 
   return {
     available: runtime.capabilities.appUpdates,
-    availableVersion,
     check,
-    errorMessage,
+    installAndRestart,
     installedVersion,
-    notes,
-    status,
+    update,
   };
 }

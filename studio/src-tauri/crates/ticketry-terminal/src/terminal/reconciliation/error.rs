@@ -48,14 +48,14 @@ impl From<sea_orm::DbErr> for TerminalReconciliationError {
     }
 }
 
-impl From<ticketry_runs::persistence::RunsPersistenceError> for TerminalReconciliationError {
-    fn from(error: ticketry_runs::persistence::RunsPersistenceError) -> Self {
+impl From<ticketry_runs::RunsPersistenceError> for TerminalReconciliationError {
+    fn from(error: ticketry_runs::RunsPersistenceError) -> Self {
         Self::new(TerminalReconciliationErrorCode::Storage, error.to_string())
     }
 }
 
-impl From<ticketry_launch::terminal_session::TerminalLaunchError> for TerminalReconciliationError {
-    fn from(error: ticketry_launch::terminal_session::TerminalLaunchError) -> Self {
+impl From<ticketry_launch::TerminalLaunchError> for TerminalReconciliationError {
+    fn from(error: ticketry_launch::TerminalLaunchError) -> Self {
         Self::new(TerminalReconciliationErrorCode::Launch, error.to_string())
     }
 }

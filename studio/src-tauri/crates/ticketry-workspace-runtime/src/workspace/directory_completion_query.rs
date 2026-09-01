@@ -11,9 +11,9 @@ use seaography::{
     CustomFields,
 };
 
-use ticketry_entities::graphql_scalars::StringList;
+use ticketry_entities::StringList;
 
-use ticketry_documents::directory_completion::complete_directories;
+use ticketry_documents::complete_directories;
 
 pub struct DirectoryCompletionQueries;
 

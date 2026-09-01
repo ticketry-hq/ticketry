@@ -1,15 +1,15 @@
 use sea_orm::EntityTrait;
 use serde_json::json;
 
-use ticketry_entities::terminals::{launch_material, session};
-use ticketry_runs::persistence::{ClaimedLaunch, LaunchOutcome};
+use ticketry_entities::{launch_material, session};
+use ticketry_runs::{ClaimedLaunch, LaunchOutcome};
 
 use super::settlement::SessionSettlement;
 use super::{
     TerminalLaunchBoundary, TerminalLaunchCheckpoint, TerminalLaunchService,
     TerminalRuntimeObservation, VerifiedTerminalRuntime,
 };
-use ticketry_launch::terminal_session::{TerminalLaunchError, TerminalLaunchErrorCode};
+use ticketry_launch::{TerminalLaunchError, TerminalLaunchErrorCode};
 
 const LEASE_SECONDS: i64 = 120;
 const RECOVERY_BATCH: u64 = 200;

@@ -7,7 +7,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use ticketry_terminal::tmux_adapter::{
+use ticketry_terminal::{
     OwnedSession, PersistedSessionName, RuntimeIdentity, SESSION_PREFIX,
 };
 

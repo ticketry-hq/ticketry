@@ -22,6 +22,8 @@ fn main() {
             "desktop_approve_executable_path",
             "desktop_launch_default_coding_agent",
             "desktop_update_check",
+            "desktop_update_download_and_install",
+            "desktop_update_restart",
             "desktop_latest_crash_collection_outcome",
             "desktop_reveal_crash_report_folder",
             "viewer_attach",

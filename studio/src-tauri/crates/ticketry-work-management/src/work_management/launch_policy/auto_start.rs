@@ -6,10 +6,10 @@ use super::{
     record, rejections, CallerScope, LaunchPolicyDecision, LaunchPolicyError, LaunchPolicyRequest,
     LaunchPolicyResolver,
 };
-use ticketry_entities::work_management::{
+use ticketry_entities::{
     launch_policy_decision, launch_policy_rejection, transition_occurrence,
 };
-use ticketry_runs::persistence::{RunsServices, TransitionOccurrence};
+use ticketry_runs::{RunsServices, TransitionOccurrence};
 
 /// Resolve pending auto-start occurrences into decisions or into a rejection
 /// explaining what still blocks them.

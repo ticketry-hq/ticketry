@@ -8,7 +8,7 @@ use std::time::Duration;
 
 use futures_util::{Stream, StreamExt};
 use sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, Statement};
-use ticketry_runs::persistence::{
+use ticketry_runs::{
     failure_code, open_status_stream, reset_reason, LifecycleFact, RunStatusFrame, RunsServices,
     StatusStreamRequest, TerminalFact, TerminalOutcome,
 };
@@ -68,9 +68,9 @@ fn kinds(frames: &[RunStatusFrame]) -> Vec<&str> {
 }
 
 fn holding<'a>(
-    rows: &'a [ticketry_runs::persistence::AgentRunHolding],
+    rows: &'a [ticketry_runs::AgentRunHolding],
     id: &str,
-) -> &'a ticketry_runs::persistence::AgentRunHolding {
+) -> &'a ticketry_runs::AgentRunHolding {
     rows.iter().find(|run| run.agent_run_id == id).unwrap()
 }
 

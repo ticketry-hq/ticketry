@@ -2,7 +2,7 @@ use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 
 use super::rows::BindingRow;
 use super::LaunchPolicyError;
-use ticketry_entities::work_management::{
+use ticketry_entities::{
     agent_model, agent_model_reasoning_level, provider, reasoning_level,
 };
 use ticketry_settings::{read_global_launch_default, GlobalLaunchDefault};

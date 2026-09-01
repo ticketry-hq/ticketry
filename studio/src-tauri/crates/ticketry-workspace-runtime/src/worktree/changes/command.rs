@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 
 use crate::worktree::status::{self, repository::RepositoryResolution};
-use ticketry_entities::worktrees::worktree;
+use ticketry_entities::worktree;
 
 use super::{
     command_git, module_baseline, repository, RepositoryCommandResult, WorktreeChangesError,

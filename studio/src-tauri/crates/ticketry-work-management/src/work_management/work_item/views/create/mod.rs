@@ -22,7 +22,7 @@ impl CreateWorkItemMutation {
         description: Option<String>,
         state_id: Option<String>,
         parent_id: Option<String>,
-    ) -> Result<ticketry_entities::work_management::issue::Model> {
+    ) -> Result<ticketry_entities::issue::Model> {
         let database = command_database(ctx)?;
         let id = work_items::create(
             database,

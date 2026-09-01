@@ -1,14 +1,14 @@
 use sea_orm::{
     ActiveModelTrait, ConnectionTrait, Database, DatabaseConnection, EntityTrait, NotSet, Set,
 };
-use ticketry_agent_execution::execution::graph::{
+use ticketry_agent_execution::graph::{
     dependency_graph, relevant_armed_roots, scheduling_facts, GraphAccess, GraphFactsErrorCode,
 };
 use ticketry_entities::{
-    execution::{graph_run, launch_claim},
-    runs::agent_run,
-    terminals::session as terminal_session,
-    work_management::{issue, issue_blocker, state},
+    {graph_run, launch_claim},
+    agent_run,
+    session as terminal_session,
+    {issue, issue_blocker, state},
 };
 
 const PROJECT: &str = "project-a";

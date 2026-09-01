@@ -11,11 +11,11 @@ use crate::execution::graph::{
     GraphAccess,
 };
 use ticketry_entities::{
-    execution::{graph_run, launch_claim},
-    runs::{agent_run, launch_effect},
-    terminals::session,
+    {graph_run, launch_claim},
+    {agent_run, launch_effect},
+    session,
 };
-use ticketry_runs::persistence::{
+use ticketry_runs::{
     LaunchIntent, LaunchPreparationParticipant, RunsPersistenceError, RunsPersistenceErrorCode,
 };
 

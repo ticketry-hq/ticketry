@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter};
 use seaolim::{Serializer, WriteSetEntry};
 
-use ticketry_entities::work_management::issue_type;
+use ticketry_entities::issue_type;
 
 /// Rechecks the complete Issue Type set before Seaolim persists any rank.
 #[derive(Clone, Copy, Debug, Default)]

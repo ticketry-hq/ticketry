@@ -17,8 +17,8 @@ use chrono::{SecondsFormat, Utc};
 use sea_orm::{sea_query::Expr, ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter};
 use serde_json::{json, Value};
 
-use ticketry_documents::registry_facts::{self, DocumentChange, DocumentFactRecorder};
-use ticketry_entities::documents::design_document;
+use ticketry_documents::{record_document_change, DocumentChange, DocumentFactRecorder};
+use ticketry_entities::design_document;
 
 use super::error::{DocumentSaveError, DocumentSaveErrorCode};
 use super::identity::SaveIntent;
@@ -70,12 +70,7 @@ pub async fn commit(
         updated_at: now,
         ..target.row.clone()
     };
-    // A document whose owning Work Item or module cannot be resolved publishes
-    // nothing rather than a fact aimed at a guessed project.
-    let Some(owner) = registry_facts::resolve_owner(transaction, &row).await? else {
-        return Ok(false);
-    };
-    registry_facts::record_document(facts, transaction, &owner, &row, DocumentChange::Changed)
-        .await?;
-    Ok(true)
+    record_document_change(facts, transaction, &row, DocumentChange::Changed)
+        .await
+        .map_err(Into::into)
 }

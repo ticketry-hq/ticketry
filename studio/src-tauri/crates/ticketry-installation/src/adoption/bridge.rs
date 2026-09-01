@@ -73,7 +73,7 @@ pub fn select(generation: &str, fingerprint: &str) -> Result<&'static Bridge, Ad
     Ok(bridge)
 }
 
-pub async fn set_foreign_keys(
+pub(crate) async fn set_foreign_keys(
     database: &DatabaseConnection,
     enabled: bool,
 ) -> Result<(), AdoptionFailure> {
@@ -173,11 +173,10 @@ mod tests {
     use super::{apply, catalog, Bridge};
     use crate::adoption::Refusal;
     use crate::adoption::RUST_LEAF;
-    use crate::classification::manifest;
 
     #[test]
     fn every_historical_fingerprint_has_one_stable_bridge() {
-        let expected = manifest()
+        let expected = crate::manifest()
             .generations
             .iter()
             .filter(|generation| generation.expected == "bridge")

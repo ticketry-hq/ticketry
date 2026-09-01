@@ -13,13 +13,13 @@ use sea_orm::{ConnectOptions, Database, DatabaseConnection};
 use super::outcome::{ClassificationError, PostgresSource, Refusal};
 
 /// The state database inside an installation's data directory.
-pub const STATE_DATABASE: &str = "state.db";
+pub(crate) const STATE_DATABASE: &str = "state.db";
 /// The marker naming an alternate database, and the gate that enables it.
 const DATABASE_URL_MARKER: &str = "database-url";
 const DATABASE_URL_GATE: &str = "database-url.enabled";
 
 /// What the data directory holds, before any schema is read.
-pub enum Source {
+pub(crate) enum Source {
     /// A SQLite state database at this path.
     Sqlite(PathBuf),
     /// A PostgreSQL installation, identified from its marker alone.
@@ -29,7 +29,7 @@ pub enum Source {
 }
 
 /// Identify the source in `data_directory` without opening or writing to it.
-pub fn detect(data_directory: &Path) -> Result<Source, ClassificationError> {
+pub(crate) fn detect(data_directory: &Path) -> Result<Source, ClassificationError> {
     reject_symlink(data_directory, "data directory")?;
     if let Some(source) = postgres_source(data_directory)? {
         return Ok(Source::Postgres(source));
@@ -116,7 +116,9 @@ fn reject_symlink(path: &Path, described: &str) -> Result<(), ClassificationErro
 /// read-only connection cannot commit a frame to the log. Removing them under a
 /// live connection is what actually corrupts an installation, so classification
 /// leaves them where SQLite put them.
-pub async fn open_read_only(database: &Path) -> Result<DatabaseConnection, ClassificationError> {
+pub(crate) async fn open_read_only(
+    database: &Path,
+) -> Result<DatabaseConnection, ClassificationError> {
     let owned = database.to_owned();
     let mut options = ConnectOptions::new("sqlite:state.db?mode=ro");
     options

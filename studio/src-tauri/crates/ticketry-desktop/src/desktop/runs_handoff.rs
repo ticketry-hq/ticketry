@@ -17,12 +17,12 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use sea_orm::DatabaseConnection;
 use tauri_graphql::TransportApi;
 
-use ticketry_runs::persistence::{self, CompactionSchedule, RunsPersistenceError, Slice3Readiness};
+use ticketry_runs::{self, CompactionSchedule, RunsPersistenceError, Slice3Readiness};
 
 /// Publish the closed gate. Called at startup, at every backend launch, and at
 /// shutdown, so a stale `ready: true` record can never outlive its runtime.
 pub fn close_gate(data_directory: &Path) -> Result<(), RunsPersistenceError> {
-    persistence::publish_readiness(data_directory, &Slice3Readiness::unavailable())
+    ticketry_runs::publish_readiness(data_directory, &Slice3Readiness::unavailable())
 }
 
 /// Reopen the gate after the supervised pair recovered. Every step is
@@ -33,7 +33,7 @@ pub async fn reopen_gate(
     database: &DatabaseConnection,
 ) -> Result<(), String> {
     compact(database).await;
-    persistence::publish_readiness(data_directory, &Slice3Readiness::complete())
+    ticketry_runs::publish_readiness(data_directory, &Slice3Readiness::complete())
         .map_err(|error| format!("could not publish Slice 3 readiness: {error}"))
 }
 
@@ -73,7 +73,7 @@ pub async fn open_gate(
     compact(database).await;
     verify_status_surface(api).await?;
 
-    persistence::publish_readiness(data_directory, &Slice3Readiness::complete())
+    ticketry_runs::publish_readiness(data_directory, &Slice3Readiness::complete())
         .map_err(|error| format!("could not publish Slice 3 readiness: {error}"))
 }
 

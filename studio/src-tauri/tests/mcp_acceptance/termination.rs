@@ -9,10 +9,10 @@ use tokio::sync::Notify;
 use tokio::time::{timeout, Duration};
 
 use super::{prepare_command_database, wait_for_terminal_record, MissingTerminalRuntime};
-use ticketry_entities::terminals::session;
-use ticketry_mcp::test_support::post;
+use ticketry_entities::session;
+use ticketry_mcp::post;
 use ticketry_mcp::{allowed_provider_operations, loopback, McpConfiguration, McpRuntime};
-use ticketry_terminal::terminal::cleanup::{
+use ticketry_terminal::{
     CleanupKillResult, CleanupRuntimeObservation, TerminalCleanupRuntime,
 };
 

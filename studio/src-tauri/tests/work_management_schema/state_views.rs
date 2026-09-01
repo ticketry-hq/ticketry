@@ -3,9 +3,9 @@ use sea_orm::{
     QueryFilter, QueryOrder,
 };
 
-use ticketry_entities::{runs::status_event, work_management::state};
-use ticketry_runs::persistence::RunsServices;
-use ticketry_work_management::work_management::commands::{
+use ticketry_entities::{status_event, state};
+use ticketry_runs::RunsServices;
+use ticketry_work_management::commands::{
     status_facts::WorkFactRecorder, CommandDatabase,
 };
 
@@ -93,7 +93,7 @@ fn schema(database: DatabaseConnection) -> seaography::async_graphql::dynamic::S
             .events()
             .clone(),
     );
-    ticketry_graphql_schema::query_root::foundation_schema(
+    ticketry_graphql_schema::foundation_schema(
         database.clone(),
         Some(database.clone()),
         Some(CommandDatabase(database)),
@@ -109,7 +109,7 @@ fn schema(database: DatabaseConnection) -> seaography::async_graphql::dynamic::S
 
 #[tokio::test]
 async fn keeps_all_four_state_contracts_unchanged() {
-    let sdl = ticketry_graphql_schema::graphql_foundation::generated_schema_sdl()
+    let sdl = ticketry_graphql_schema::generated_schema_sdl()
         .await
         .expect("build generated contract");
     for field in [

@@ -41,7 +41,7 @@ use super::phase::Phase;
 const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Refuse when a live process other than this one holds the lease.
-pub fn hold_lease(data_directory: &Path) -> Result<(), AdoptionFailure> {
+pub(crate) fn hold_lease(data_directory: &Path) -> Result<(), AdoptionFailure> {
     if let Some(owner) = ticketry_data_directory::live_lease_owner(data_directory) {
         if owner.pid != std::process::id() {
             return Err(AdoptionFailure::new(
@@ -58,7 +58,9 @@ pub fn hold_lease(data_directory: &Path) -> Result<(), AdoptionFailure> {
 }
 
 /// Open the installation as its only writer, or refuse it as busy.
-pub async fn open_exclusive(database_path: &Path) -> Result<DatabaseConnection, AdoptionFailure> {
+pub(crate) async fn open_exclusive(
+    database_path: &Path,
+) -> Result<DatabaseConnection, AdoptionFailure> {
     let database = connect(database_path, false).await?;
     // An empty write transaction. It is the cheapest thing that must take the
     // database's write lock, which is precisely what a competing writer denies.
@@ -77,12 +79,16 @@ pub async fn open_exclusive(database_path: &Path) -> Result<DatabaseConnection, 
 /// file, not a live installation, so it is opened read-only: a writable open
 /// would leave a write-ahead log and shared-memory index beside a recovery
 /// point that is supposed to be exactly the bytes that were hashed.
-pub async fn open_readable(database_path: &Path) -> Result<DatabaseConnection, AdoptionFailure> {
+pub(crate) async fn open_readable(
+    database_path: &Path,
+) -> Result<DatabaseConnection, AdoptionFailure> {
     connect(database_path, true).await
 }
 
 /// Open the installation for reading and writing, sharing it with readers.
-pub async fn open_shared(database_path: &Path) -> Result<DatabaseConnection, AdoptionFailure> {
+pub(crate) async fn open_shared(
+    database_path: &Path,
+) -> Result<DatabaseConnection, AdoptionFailure> {
     connect(database_path, false).await
 }
 
@@ -114,7 +120,7 @@ async fn connect(
 }
 
 /// Read one integer PRAGMA or scalar, for the phases that verify their work.
-pub async fn scalar(
+pub(crate) async fn scalar(
     database: &DatabaseConnection,
     query: &str,
     column: usize,

@@ -17,7 +17,7 @@ use std::path::{Component, Path};
 
 /// Why one recorded path is not one Ticketry may act on.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum PathDefect {
+pub(crate) enum PathDefect {
     /// The path is empty, or holds a byte a path cannot carry.
     Malformed,
     /// A relative path was expected and an absolute one was recorded.
@@ -70,7 +70,7 @@ impl PathDefect {
 /// the recorded value can name anything outside it at all. That keeps the rule
 /// meaningful for a root that has since been removed or moved.
 #[must_use]
-pub fn contained_relative(recorded: &str) -> Option<PathDefect> {
+pub(crate) fn contained_relative(recorded: &str) -> Option<PathDefect> {
     if let Some(defect) = malformed(recorded) {
         return Some(defect);
     }
@@ -95,7 +95,7 @@ pub fn contained_relative(recorded: &str) -> Option<PathDefect> {
 /// lives. So the rule is about the recorded value's authority — absolute and
 /// traversal-free — and not about where on the machine it points.
 #[must_use]
-pub fn external_root(recorded: &str) -> Option<PathDefect> {
+pub(crate) fn external_root(recorded: &str) -> Option<PathDefect> {
     if let Some(defect) = malformed(recorded) {
         return Some(defect);
     }
@@ -110,7 +110,7 @@ pub fn external_root(recorded: &str) -> Option<PathDefect> {
 
 /// What kind of entry an owned path holds when it exists.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum Owned {
+pub(crate) enum Owned {
     /// A directory Ticketry reads or writes inside.
     Directory,
     /// A single configuration or log file.
@@ -125,7 +125,7 @@ pub enum Owned {
 /// has never launched a provider has no spool, and a data directory with no
 /// attachments has no media root.
 #[must_use]
-pub fn owned_path(allowed: &Path, candidate: &Path, expected: Owned) -> Option<PathDefect> {
+pub(crate) fn owned_path(allowed: &Path, candidate: &Path, expected: Owned) -> Option<PathDefect> {
     let Ok(boundary) = allowed.canonicalize() else {
         // An unreadable allowed root is not this rule's finding: the read view
         // proved the installation itself is readable, and every other path rule

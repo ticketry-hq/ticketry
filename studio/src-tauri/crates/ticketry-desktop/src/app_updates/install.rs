@@ -93,7 +93,7 @@ pub async fn desktop_update_download_and_install(
 pub fn restart_into_update(app: &tauri::AppHandle) {
     let handle = app.clone();
     if let Err(error) = app.run_on_main_thread(move || {
-        crate::desktop::lifecycle::tear_down_before_exit(&handle);
+        crate::tear_down_before_exit(&handle);
         handle.restart();
     }) {
         eprintln!("Ticketry could not restart into the installed update: {error}");

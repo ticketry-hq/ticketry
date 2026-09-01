@@ -1,0 +1,2 @@
+# One `crate|exported_name` approval per public library-root item.
+# Keep entries sorted first by crate, then by exported name.

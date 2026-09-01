@@ -75,21 +75,21 @@ fn private_copy_argument() -> PathBuf {
 async fn adopt(
     data_directory: &Path,
     pass: &str,
-) -> ticketry_terminal::terminal::persistence::AdoptionEvidence {
-    ticketry_runs::persistence::preflight(data_directory)
+) -> ticketry_terminal::AdoptionEvidence {
+    ticketry_runs::preflight(data_directory)
         .await
         .unwrap_or_else(|error| fail(&format!("{pass} Runs adoption preflight failed: {error}")));
-    ticketry_runs::persistence::adopt(data_directory)
+    ticketry_runs::adopt(data_directory)
         .await
         .unwrap_or_else(|error| fail(&format!("{pass} Runs adoption failed: {error}")));
-    ticketry_terminal::terminal::persistence::preflight(data_directory)
+    ticketry_terminal::preflight_terminal_persistence(data_directory)
         .await
         .unwrap_or_else(|error| {
             fail(&format!(
                 "{pass} Terminal adoption preflight failed: {error}"
             ))
         });
-    ticketry_terminal::terminal::persistence::adopt(data_directory)
+    ticketry_terminal::adopt_terminal_persistence(data_directory)
         .await
         .unwrap_or_else(|error| {
             fail(&format!(

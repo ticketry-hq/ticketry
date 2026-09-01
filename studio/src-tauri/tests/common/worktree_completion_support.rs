@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use sea_orm::{ConnectionTrait, Database, DbBackend, Statement};
 use tauri_graphql::{TransportApi, TransportApiImpl};
-use ticketry_graphql_schema::graphql_foundation::initialize_with_worktracker_commands_and_install;
+use ticketry_graphql_schema::initialize_with_worktracker_commands_and_install;
 
 use super::git_fixture::{GitFixture, RepositorySnapshot, Scenario, BRANCH};
 
@@ -213,10 +213,10 @@ pub async fn fixture(scenario: Scenario) -> Fixture {
         ))
         .await
         .expect("create completion fixture schema");
-    ticketry_work_management::module_links::schema::install(&writer)
+    ticketry_work_management::schema::install(&writer)
         .await
         .expect("install Module Link schema");
-    ticketry_work_management::module_links::ModuleLinkStore::new(writer.clone())
+    ticketry_work_management::ModuleLinkStore::new(writer.clone())
         .set(MODULE, &git.repository().display().to_string())
         .await
         .expect("link module to repository");

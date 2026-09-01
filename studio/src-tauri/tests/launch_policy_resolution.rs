@@ -1,5 +1,5 @@
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection};
-use ticketry_work_management::work_management::{
+use ticketry_work_management::{
     launch_policy::{self, CallerScope, LaunchPolicyRequest, LaunchPolicyResolver},
     open_for_commands,
 };
@@ -156,7 +156,7 @@ async fn fixture() -> (tempfile::TempDir, DatabaseConnection, LaunchPolicyResolv
     let database = open_for_commands(&path).await.unwrap();
     // The folder a launch runs in is the Module's typed link, and it is the
     // only thing that decides where a launch may run.
-    ticketry_work_management::module_links::schema::install(&database)
+    ticketry_work_management::schema::install(&database)
         .await
         .unwrap();
     link(&database, &directory.path().display().to_string()).await;
@@ -166,7 +166,7 @@ async fn fixture() -> (tempfile::TempDir, DatabaseConnection, LaunchPolicyResolv
 
 /// Point the fixture module at one local folder.
 async fn link(database: &sea_orm::DatabaseConnection, path: &str) {
-    ticketry_work_management::module_links::ModuleLinkStore::new(database.clone())
+    ticketry_work_management::ModuleLinkStore::new(database.clone())
         .set(MODULE, path)
         .await
         .expect("link the fixture module");
@@ -286,7 +286,7 @@ async fn resolution_rejects_every_unusable_linked_module_folder() {
         let (directory, database, resolver) = fixture().await;
         match case {
             "unlinked" => {
-                ticketry_work_management::module_links::ModuleLinkStore::new(database.clone())
+                ticketry_work_management::ModuleLinkStore::new(database.clone())
                     .clear(MODULE)
                     .await
                     .unwrap();
@@ -319,7 +319,7 @@ async fn resolution_rejects_every_unusable_linked_module_folder() {
 #[tokio::test]
 async fn a_module_folder_no_row_may_hold_is_refused_at_the_write_boundary() {
     let (_directory, database, _resolver) = fixture().await;
-    let store = ticketry_work_management::module_links::ModuleLinkStore::new(database.clone());
+    let store = ticketry_work_management::ModuleLinkStore::new(database.clone());
 
     for path in ["", "   ", "relative/repository"] {
         let error = store
@@ -328,7 +328,7 @@ async fn a_module_folder_no_row_may_hold_is_refused_at_the_write_boundary() {
             .expect_err("the store refuses a path no folder could be");
         assert_eq!(
             error.code(),
-            ticketry_work_management::module_links::ModuleLinkErrorCode::InvalidPath
+            ticketry_work_management::ModuleLinkErrorCode::InvalidPath
         );
     }
 }
@@ -338,7 +338,7 @@ async fn a_module_folder_no_row_may_hold_is_refused_at_the_write_boundary() {
 #[tokio::test]
 async fn resolution_rejects_a_module_with_no_typed_link() {
     let (_directory, database, resolver) = fixture().await;
-    ticketry_work_management::module_links::ModuleLinkStore::new(database.clone())
+    ticketry_work_management::ModuleLinkStore::new(database.clone())
         .clear(MODULE)
         .await
         .expect("unlink the fixture module");

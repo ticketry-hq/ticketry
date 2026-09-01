@@ -6,7 +6,7 @@ use sea_orm_migration::MigratorTrait;
 use super::error::{FoundationInitializationError, FoundationInitializationErrorCode};
 use super::migrations::Migrator;
 
-pub async fn open(path: &Path) -> Result<DatabaseConnection, FoundationInitializationError> {
+pub(crate) async fn open(path: &Path) -> Result<DatabaseConnection, FoundationInitializationError> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|error| {
             FoundationInitializationError::new(
@@ -53,7 +53,7 @@ pub async fn open(path: &Path) -> Result<DatabaseConnection, FoundationInitializ
     Ok(database)
 }
 
-pub async fn in_memory() -> Result<DatabaseConnection, FoundationInitializationError> {
+pub(crate) async fn in_memory() -> Result<DatabaseConnection, FoundationInitializationError> {
     let database = Database::connect("sqlite::memory:")
         .await
         .map_err(|error| {

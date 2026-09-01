@@ -6,9 +6,9 @@
 use async_trait::async_trait;
 use sea_orm::DatabaseConnection;
 
-use ticketry_terminal::terminal::launch::TerminalLaunchService;
-use ticketry_work_management::work_management::launch_policy::{self, LaunchPolicyDecision};
-use ticketry_workspace_runtime::worktree::changes::{
+use ticketry_terminal::TerminalLaunchService;
+use ticketry_work_management::launch_policy::{self, LaunchPolicyDecision};
+use ticketry_workspace_runtime::changes::{
     LaunchedAgent, MergePreparationError, MergePreparationLauncher,
 };
 

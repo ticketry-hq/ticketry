@@ -5,7 +5,7 @@
 //! Runs transaction acknowledges it, and moves permanently invalid input out
 //! of the scan path.
 
-pub mod directory_layout;
+mod directory_layout;
 mod mapping;
 
 #[cfg(test)]

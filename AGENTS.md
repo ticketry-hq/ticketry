@@ -17,6 +17,11 @@ and single-purpose, place frontend code in `studio/src/features/<domain>/`
 give each Rust backend capability its own focused module under
 `studio/src-tauri/src/`, with database-backed GraphQL composed through
 SeaORM and Seaography.
+Each Rust crate exposes its external contract only from `src/lib.rs`:
+implementation modules are private, crate-internal seams use `pub(crate)`, and
+the crate root explicitly re-exports approved public items. Do not expose
+nested module paths. Update the public API boundary contract test for every
+deliberate export.
 When a file outgrows one concern, split it rather than extend it. The full
 rules live in [`CLAUDE.md`](CLAUDE.md) under "Code structure — governing
 rules"; keep the two documents consistent.

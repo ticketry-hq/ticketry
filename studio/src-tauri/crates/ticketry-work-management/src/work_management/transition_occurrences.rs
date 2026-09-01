@@ -4,7 +4,7 @@ use sea_orm::{
 };
 
 use crate::work_management::commands::CommandError;
-use ticketry_entities::work_management::transition_occurrence;
+use ticketry_entities::transition_occurrence;
 
 pub async fn ensure_schema(database: &impl ConnectionTrait) -> Result<(), sea_orm::DbErr> {
     let table = Table::create()

@@ -1,9 +1,9 @@
 use async_trait::async_trait;
 
-use ticketry_entities::terminals::launch_material;
+use ticketry_entities::launch_material;
 
 use super::TerminalLaunchCheckpoint;
-use ticketry_launch::terminal_session::{CreateTerminalSession, TerminalLaunchError};
+use ticketry_launch::{CreateTerminalSession, TerminalLaunchError};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct VerifiedTerminalRuntime {

@@ -74,9 +74,9 @@ pub async fn discover(
 /// disagree about which folder a Module is checked out into.
 ///
 /// Shared with the launch slice's path resolution through
-/// [`ticketry_work_management::module_links::resolution`].
+/// [`ticketry_work_management::resolution`].
 pub async fn module_folder(database: &DatabaseConnection, module_id: &str) -> Option<PathBuf> {
-    ticketry_work_management::module_links::resolution::linked_folder(database, module_id)
+    ticketry_work_management::resolution::linked_folder(database, module_id)
         .await
         .ok()
         .flatten()
@@ -86,7 +86,7 @@ pub async fn module_folder(database: &DatabaseConnection, module_id: &str) -> Op
 mod tests {
     use sea_orm::Database;
 
-    use ticketry_work_management::module_links::test_support;
+    use ticketry_work_management::test_support;
 
     use super::*;
 

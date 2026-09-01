@@ -13,8 +13,8 @@ use std::path::PathBuf;
 
 use sea_orm::{DatabaseConnection, EntityTrait};
 
-use ticketry_documents::asset_access::{self, MARKDOWN_MEDIA_TYPE};
-use ticketry_entities::documents::design_document;
+use ticketry_documents::{self as asset_access, MARKDOWN_MEDIA_TYPE};
+use ticketry_entities::design_document;
 
 use super::error::DocumentSaveError;
 use super::identity::root_digest;

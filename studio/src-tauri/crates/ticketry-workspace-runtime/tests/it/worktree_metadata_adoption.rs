@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use sea_orm::{ConnectionTrait, Database, DbBackend, Statement};
-use ticketry_workspace_runtime::worktree::persistence::{
+use ticketry_workspace_runtime::persistence::{
     adopt, preflight, worktrees_adopted, SourceClassification, WorktreePersistenceErrorCode,
     LEDGER_TABLE,
 };

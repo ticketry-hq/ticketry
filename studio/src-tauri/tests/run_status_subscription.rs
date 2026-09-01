@@ -6,7 +6,7 @@ use std::time::Duration;
 use sea_orm::DatabaseConnection;
 use tauri::ipc::{Channel, InvokeResponseBody};
 use tauri_graphql::{GraphQlEndpoint, TransportApi, TransportApiImpl};
-use ticketry_runs::persistence::{failure_code, LifecycleFact, RunsServices};
+use ticketry_runs::{failure_code, LifecycleFact, RunsServices};
 
 mod common;
 use common::runs_status_fixture::{insert_run, PUBLIC_PROJECT, TASK};
@@ -26,7 +26,7 @@ subscription RunStatusStream($projectId: String!, $afterCursor: Int) {
 
 async fn installed() -> (tempfile::TempDir, DatabaseConnection, TransportApiImpl) {
     let (directory, database) = common::runs_status_fixture::open().await;
-    let schema = ticketry_graphql_schema::query_root::foundation_schema(
+    let schema = ticketry_graphql_schema::foundation_schema(
         database.clone(),
         Some(database.clone()),
         None,
@@ -253,7 +253,7 @@ async fn a_status_stream_without_installed_runs_services_reports_unavailable() {
     let (_directory, database) = common::runs_status_fixture::open().await;
     // The probe schema installs no Runs services, which is how Studio can
     // reach the transport before adoption completes.
-    let schema = ticketry_graphql_schema::query_root::foundation_schema(
+    let schema = ticketry_graphql_schema::foundation_schema(
         database, None, None, None, None, None, None, None, None,
     )
     .expect("build the schema without Runs services");

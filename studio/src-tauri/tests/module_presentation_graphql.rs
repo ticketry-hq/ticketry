@@ -2,7 +2,7 @@ use sea_orm::{
     ActiveModelTrait, ActiveValue::Set, ConnectOptions, ConnectionTrait, Database,
     DatabaseConnection, EntityTrait,
 };
-use ticketry_entities::work_management::{issue, module_presentation};
+use ticketry_entities::{issue, module_presentation};
 
 const PROJECT: &str = "10000000000000000000000000000000";
 const MODULE_TYPE: &str = "20000000000000000000000000000000";
@@ -43,7 +43,7 @@ async fn fixture() -> DatabaseConnection {
 }
 
 fn schema(database: DatabaseConnection) -> seaography::async_graphql::dynamic::Schema {
-    ticketry_graphql_schema::query_root::foundation_schema(
+    ticketry_graphql_schema::foundation_schema(
         database.clone(),
         Some(database),
         None,

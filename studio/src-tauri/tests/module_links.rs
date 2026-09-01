@@ -11,12 +11,12 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection, DbBackend, Statement};
-use ticketry_work_management::module_links::{
+use ticketry_work_management::{
     self, legacy_source, receipt::ImportReceipt, ImportOutcome, LinkStatus, LocalModulePath,
     ModuleLinkErrorCode, ModuleLinkStore, SkipReason,
 };
-use ticketry_work_management::module_links::{identity, ownership_manifest, schema};
-use ticketry_work_management::work_management::open_for_commands;
+use ticketry_work_management::{identity, ownership_manifest, schema};
+use ticketry_work_management::open_for_commands;
 
 const PROJECT: &str = "10000000000000000000000000000000";
 const MODULE_TYPE: &str = "30000000000000000000000000000003";
@@ -627,7 +627,7 @@ fn no_supported_django_generation_or_postgresql_staging_schema_carries_these_tab
 
     for table in ownership_manifest::owned_tables() {
         assert!(
-            !classification.current_tables.contains_key(table),
+            !classification.has_current_table(table),
             "{table} is recorded as a Django-owned product table"
         );
         assert!(
@@ -712,7 +712,7 @@ async fn contract_sdl() -> String {
         async_graphql::dynamic::{Object, Schema},
         Builder, BuilderContext,
     };
-    use ticketry_entities::runs::agent_run;
+    use ticketry_entities::agent_run;
 
     let database = Database::connect("sqlite::memory:")
         .await
@@ -721,11 +721,11 @@ async fn contract_sdl() -> String {
     let mut builder = Builder::new(context, database);
     builder.mutation = Object::new("Mutation");
     builder.schema = Schema::build("Query", Some("Mutation"), None);
-    let mut builder = ticketry_entities::work_management::register_entity_modules(builder);
+    let mut builder = ticketry_entities::register_entity_modules(builder);
     // The Work Item graph names Agent Runs, so the read graph only closes once
     // that entity is registered alongside it.
     seaography::register_entity!(builder, agent_run, mutation: false);
-    ticketry_work_management::module_links::register_graphql(builder)
+    ticketry_work_management::register_graphql(builder)
         .schema_builder()
         .finish()
         .expect("build the Module Link contract")
@@ -740,19 +740,19 @@ async fn executable_contract(
         async_graphql::dynamic::{Object, Schema},
         Builder, BuilderContext,
     };
-    use ticketry_entities::runs::agent_run;
+    use ticketry_entities::agent_run;
 
     let context = Box::leak(Box::new(BuilderContext::default()));
     let mut builder = Builder::new(context, database.clone());
     builder.mutation = Object::new("Mutation");
     builder.schema = Schema::build("Query", Some("Mutation"), None);
-    let mut builder = ticketry_entities::work_management::register_entity_modules(builder);
+    let mut builder = ticketry_entities::register_entity_modules(builder);
     seaography::register_entity!(builder, agent_run, mutation: false);
-    let builder = ticketry_work_management::module_links::register_graphql(builder);
+    let builder = ticketry_work_management::register_graphql(builder);
     let mut schema = builder.schema_builder().data(database.clone());
     if writable {
         schema = schema
-            .data(ticketry_work_management::work_management::commands::CommandDatabase(database));
+            .data(ticketry_work_management::commands::CommandDatabase(database));
     }
     schema
         .finish()

@@ -3,7 +3,7 @@ use seaography::async_graphql::{dynamic::ResolverContext, Result};
 use seaolim::{PreparedModelWrite, RestrictedModelMutation};
 
 use crate::viewer_ownership::DeleteViewerLease;
-use ticketry_entities::terminals::viewer_lease;
+use ticketry_entities::viewer_lease;
 
 use super::super::support;
 

@@ -10,7 +10,7 @@ use seaography::{
 };
 
 use super::commands::workflow;
-use ticketry_entities::graphql_scalars::StringList;
+use ticketry_entities::StringList;
 
 pub struct GraphqlPatchString(pub workflow::PatchValue<String>);
 pub struct GraphqlPatchBool(pub workflow::PatchValue<bool>);

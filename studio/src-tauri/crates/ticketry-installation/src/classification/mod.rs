@@ -16,22 +16,17 @@
 //! migrations by `scripts/installation_corpus.py`. That manifest, not this
 //! code, is the record of Ticketry's support policy.
 
-pub mod django_ledger;
-pub mod engine;
-pub mod manifest;
-pub mod outcome;
-pub mod rust_ledger;
-pub mod schema_facts;
+mod django_ledger;
+pub(crate) mod engine;
+pub(crate) mod manifest;
+pub(crate) mod outcome;
+pub(crate) mod rust_ledger;
+pub(crate) mod schema_facts;
 
 use std::path::Path;
 
-pub use manifest::{manifest, Manifest};
-pub use outcome::{
-    ClassificationError, Engine, Installation, PostgresSource, Refusal, RustOwnership,
-    SqliteGeneration,
-};
-
-use manifest::Generation;
+use manifest::{manifest, Generation};
+use outcome::{ClassificationError, Installation, Refusal, SqliteGeneration};
 use schema_facts::ProductSchema;
 
 /// Classify the installation in `data_directory` without changing it.

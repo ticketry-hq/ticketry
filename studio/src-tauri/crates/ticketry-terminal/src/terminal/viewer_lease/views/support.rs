@@ -5,7 +5,7 @@ use crate::viewer_ownership::{
     PreparedViewerLeaseWrite, ViewerLeaseModelWrite, ViewerLeaseWritePermit, ViewerOwnershipError,
     ViewerOwnershipService,
 };
-use ticketry_entities::terminals::viewer_lease;
+use ticketry_entities::viewer_lease;
 
 pub(super) fn service<'a>(ctx: &'a ResolverContext<'_>) -> Result<&'a ViewerOwnershipService> {
     ctx.data::<ViewerOwnershipService>().map_err(|_| {

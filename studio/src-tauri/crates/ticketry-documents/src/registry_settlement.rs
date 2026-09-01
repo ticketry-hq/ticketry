@@ -17,7 +17,7 @@ use sea_orm::sea_query::OnConflict;
 use sea_orm::ActiveValue::Set;
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, TransactionTrait};
 
-use ticketry_entities::documents::design_document;
+use ticketry_entities::design_document;
 
 use super::error::DocumentsError;
 use super::registry_facts::{self, DocumentChange, DocumentFactRecorder};

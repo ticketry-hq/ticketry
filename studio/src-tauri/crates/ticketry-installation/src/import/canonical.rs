@@ -4,7 +4,7 @@ use sha2::{Digest, Sha256};
 
 /// The conversion rule selected from the PostgreSQL column type.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum Kind {
+pub(crate) enum Kind {
     Uuid,
     Boolean,
     DateTime,
@@ -38,7 +38,7 @@ impl Kind {
 
 /// One value after its engine-specific representation has been removed.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub enum Cell {
+pub(crate) enum Cell {
     Null,
     Text(String),
     Binary(Vec<u8>),
@@ -94,7 +94,7 @@ impl Cell {
 
 /// Hash rows independent of engine storage syntax and row order.
 #[must_use]
-pub fn digest(rows: &[Vec<Cell>]) -> String {
+pub(crate) fn digest(rows: &[Vec<Cell>]) -> String {
     let mut encoded = rows
         .iter()
         .map(|row| {

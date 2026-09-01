@@ -11,7 +11,7 @@ use std::path::Path;
 use std::time::Duration;
 
 use sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, FromQueryResult, Statement};
-use ticketry_runs::persistence::{
+use ticketry_runs::{
     CompactionPolicy, CompactionSchedule, RunsServices, COMPACTION_INTERVAL, RETAINED_EVENTS,
     RETENTION_DAYS,
 };

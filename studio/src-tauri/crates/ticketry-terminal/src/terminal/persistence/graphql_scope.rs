@@ -4,9 +4,9 @@ use seaography::{
 };
 
 use ticketry_entities::{
-    runs::agent_run,
-    terminals::{session, viewer_lease},
-    work_management::{issue, project},
+    agent_run,
+    {session, viewer_lease},
+    {issue, project},
 };
 
 const TERMINAL_SESSIONS: &str = "AgentTerminalSessions";

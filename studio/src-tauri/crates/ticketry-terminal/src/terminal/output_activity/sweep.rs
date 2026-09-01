@@ -5,7 +5,7 @@ use tauri::async_runtime::JoinHandle;
 use tokio::time::timeout;
 use tokio_util::sync::CancellationToken;
 
-use ticketry_entities::{runs::agent_run, terminals::session};
+use ticketry_entities::{agent_run, session};
 
 use super::TerminalOutputActivityService;
 

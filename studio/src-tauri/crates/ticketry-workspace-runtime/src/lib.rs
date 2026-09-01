@@ -15,5 +15,18 @@
 //! the workspace handoff manifest reads the worktree persistence tables it is
 //! accounting for. They are one bounded context, so they are one crate.
 
-pub mod workspace;
-pub mod worktree;
+mod workspace;
+mod worktree;
+
+// The two implementation roots stay private. These re-exports are the
+// supported facade: callers depend on a capability (document save, handoff,
+// worktree status, persistence, and so on), not on the source-tree nesting.
+// The GraphQL registration functions remain available here intentionally;
+// they are the generated/authored schema seams assembled by the root schema.
+pub use workspace::{
+    design_document, directory_completion_query, document_save, handoff,
+    operations as workspace_operations, worktree as workspace_graphql_worktree,
+};
+pub use worktree::{
+    changes, create, discard, facts, operations as worktree_operations, persistence, status,
+};

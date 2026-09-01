@@ -17,7 +17,7 @@ use serde::Serialize;
 
 use super::rows::{canonical_uuid, compact_uuid};
 use super::LaunchPolicyError;
-use ticketry_entities::work_management::{launch_policy_rejection, transition_occurrence};
+use ticketry_entities::{launch_policy_rejection, transition_occurrence};
 
 /// Codes describing a fixable configuration state. Reactivating the provider,
 /// linking the Module's folder, or repairing the binding must let the pending

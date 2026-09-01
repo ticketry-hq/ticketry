@@ -8,7 +8,7 @@ use super::status_facts::{
     record_workflow_state, stamp, WorkFactRecorder, WorkflowStateChange, WorkflowStateFact,
 };
 use super::CommandError;
-use ticketry_entities::work_management::{
+use ticketry_entities::{
     issue, issue_type, issue_type_transition, launch_binding, project, state,
 };
 

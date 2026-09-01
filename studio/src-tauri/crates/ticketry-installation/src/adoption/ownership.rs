@@ -93,7 +93,7 @@ pub(super) async fn settle(
 }
 
 /// Commit and postflight a staged PostgreSQL import before its activation.
-pub async fn settle_import(
+pub(crate) async fn settle_import(
     data_directory: &Path,
     generation: String,
     bridges: &[String],

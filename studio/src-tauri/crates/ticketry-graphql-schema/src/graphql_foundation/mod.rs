@@ -1,18 +1,19 @@
-mod composed_commands;
-mod composition;
+pub(crate) mod composed_commands;
+pub(crate) mod composition;
 mod database;
-pub mod entity_registration;
-pub use ticketry_entities::foundation as entities;
-pub mod error;
+mod entity_registration;
+pub(crate) use ticketry_entities as entities;
+pub(crate) mod error;
 mod migration_probe;
-pub mod migrations;
-pub mod readiness_gate;
+pub(crate) mod migrations;
+mod readiness_gate;
 
 use std::path::Path;
 
-pub use composed_commands::{AdoptedWorktracker, ComposedCommandRuntime};
-pub use composition::{combine_with_native_handler, transport_api};
-pub use error::{FoundationInitializationError, FoundationInitializationErrorCode};
+use self::composed_commands::{AdoptedWorktracker, ComposedCommandRuntime};
+use self::error::{FoundationInitializationError, FoundationInitializationErrorCode};
+pub(crate) use entity_registration::register_entity_modules;
+pub(crate) use readiness_gate::Slice2CommandGate;
 use tauri_graphql::{GraphQlEndpoint, TransportApi};
 
 /// Whether this process owns the installation it is about to serve.
@@ -53,7 +54,7 @@ pub async fn initialize_with_worktracker_and_install(
 ) -> Result<(), FoundationInitializationError> {
     let foundation_database = database::open(foundation_database_path).await?;
     let worktracker_database =
-        ticketry_work_management::work_management::open(worktracker_database_path)
+        ticketry_work_management::open(worktracker_database_path)
             .await
             .map_err(|error| {
                 FoundationInitializationError::new(
@@ -154,7 +155,7 @@ async fn initialize_with_worktracker_commands_and_install_inner(
 ) -> Result<composed_commands::ComposedWorktracker, FoundationInitializationError> {
     let foundation_database = database::open(foundation_database_path).await?;
     let worktracker_database =
-        ticketry_work_management::work_management::open_for_commands(worktracker_database_path)
+        ticketry_work_management::open_for_commands(worktracker_database_path)
             .await
             .map_err(|error| {
                 FoundationInitializationError::new(
@@ -162,7 +163,7 @@ async fn initialize_with_worktracker_commands_and_install_inner(
                     error.to_string(),
                 )
             })?;
-    ticketry_installation::final_schema_migrations::install(&worktracker_database)
+    ticketry_installation::install_final_schema_migrations(&worktracker_database)
         .await
         .map_err(|error| {
             FoundationInitializationError::new(
@@ -183,11 +184,11 @@ async fn initialize_with_worktracker_commands_and_install_inner(
     // through it. Before adoption the same commands run unchanged and publish
     // nothing, so composing this schema can never make a write depend on a
     // table that does not exist yet.
-    let work_facts = ticketry_runs::persistence::outbox_adopted(&worktracker_database)
+    let work_facts = ticketry_runs::outbox_adopted(&worktracker_database)
         .await
         .then(|| {
-            ticketry_work_management::work_management::commands::status_facts::WorkFactRecorder::new(
-                ticketry_runs::persistence::RunsServices::new(worktracker_database.clone())
+            ticketry_work_management::commands::status_facts::WorkFactRecorder::new(
+                ticketry_runs::RunsServices::new(worktracker_database.clone())
                     .outbox()
                     .events()
                     .clone(),
@@ -217,32 +218,32 @@ async fn initialize_with_worktracker_commands_and_install_inner(
     let documents = ticketry_documents::DocumentsService::new(worktracker_database.clone())
         .publishing(document_facts(&worktracker_database).await);
     let document_watch = compose_document_watch(&documents).await;
-    let viewer_ownership = ticketry_terminal::viewer_ownership::ViewerOwnershipService::new(
+    let viewer_ownership = ticketry_terminal::ViewerOwnershipService::new(
         worktracker_database.clone(),
     );
     let terminal_runtime =
-        ticketry_terminal::terminal::lifecycle::InteractiveTerminalLaunchRuntime::new();
+        ticketry_terminal::InteractiveTerminalLaunchRuntime::new();
     let terminal_services = Some(crate::query_root::TerminalServices {
-        launch: ticketry_terminal::terminal::launch::TerminalLaunchService::new(
+        launch: ticketry_terminal::TerminalLaunchService::new(
             worktracker_database.clone(),
             std::sync::Arc::new(terminal_runtime.clone()),
         )
         .with_authority(std::sync::Arc::new(
-            ticketry_launch::authority::LaunchAuthorityService::new(worktracker_database.clone()),
+            ticketry_launch::LaunchAuthorityService::new(worktracker_database.clone()),
         )),
         viewers: viewer_ownership.clone(),
         output_activity:
-            ticketry_terminal::terminal::output_activity::TerminalOutputActivityService::production(
+            ticketry_terminal::TerminalOutputActivityService::production(
                 worktracker_database.clone(),
             ),
     });
     let schema = crate::query_root::foundation_schema_with_terminal_services(
         foundation_database,
         Some(worktracker_database.clone()),
-        Some(ticketry_work_management::work_management::commands::CommandDatabase(
+        Some(ticketry_work_management::commands::CommandDatabase(
             worktracker_database.clone(),
         )),
-        Some(ticketry_work_management::work_management::commands::attachments::AttachmentStorage::new(media_root)),
+        Some(ticketry_work_management::commands::attachments::AttachmentStorage::new(media_root)),
         Some(settings_repository),
         readiness_data_directory.map(Path::to_path_buf),
         work_facts,
@@ -280,11 +281,11 @@ async fn initialize_with_worktracker_commands_and_install_inner(
 async fn document_facts(
     worktracker_database: &sea_orm::DatabaseConnection,
 ) -> Option<ticketry_documents::DocumentFactRecorder> {
-    ticketry_runs::persistence::outbox_adopted(worktracker_database)
+    ticketry_runs::outbox_adopted(worktracker_database)
         .await
         .then(|| {
             ticketry_documents::DocumentFactRecorder::new(
-                ticketry_runs::persistence::RunsServices::new(worktracker_database.clone())
+                ticketry_runs::RunsServices::new(worktracker_database.clone())
                     .outbox()
                     .events()
                     .clone(),
@@ -300,8 +301,8 @@ async fn document_facts(
 /// Supervision then continues in the background.
 async fn compose_document_watch(
     documents: &ticketry_documents::DocumentsService,
-) -> Option<ticketry_documents::watch::DocumentWatchSupervisor> {
-    let supervisor = ticketry_documents::watch::DocumentWatchSupervisor::new(documents);
+) -> Option<ticketry_documents::DocumentWatchSupervisor> {
+    let supervisor = ticketry_documents::DocumentWatchSupervisor::new(documents);
     if let Err(error) = supervisor.reconcile().await {
         // Live discovery is an optimization over rescanning, so failing to
         // start it degrades promptness rather than the capability.
@@ -328,7 +329,7 @@ async fn compose_worktree_operations(
     outbox_adopted: bool,
 ) -> ComposedWorktreeOperations {
     if let Err(error) =
-        ticketry_workspace_runtime::workspace::operations::schema::install(worktracker_database)
+        ticketry_workspace_runtime::workspace_operations::schema::install(worktracker_database)
             .await
     {
         eprintln!("Ticketry could not install the Workspace Operation journal: {error}");
@@ -339,16 +340,16 @@ async fn compose_worktree_operations(
     }
     let mut reconciled = true;
     let events = outbox_adopted.then(|| {
-        ticketry_runs::persistence::RunsServices::new(worktracker_database.clone())
+        ticketry_runs::RunsServices::new(worktracker_database.clone())
             .outbox()
             .events()
             .clone()
     });
-    let journal = ticketry_workspace_runtime::workspace::operations::WorkspaceOperationJournal::new(
+    let journal = ticketry_workspace_runtime::workspace_operations::WorkspaceOperationJournal::new(
         worktracker_database.clone(),
     );
-    let locks = ticketry_workspace_runtime::worktree::status::RepositoryLocks::shared();
-    let create = ticketry_workspace_runtime::worktree::create::WorktreeCreateService::new(
+    let locks = ticketry_workspace_runtime::status::RepositoryLocks::shared();
+    let create = ticketry_workspace_runtime::create::WorktreeCreateService::new(
         worktracker_database.clone(),
         journal.clone(),
         events.clone(),
@@ -358,7 +359,7 @@ async fn compose_worktree_operations(
         eprintln!("Ticketry could not reconcile abandoned worktree operations: {error}");
         reconciled = false;
     }
-    let discard = ticketry_workspace_runtime::worktree::discard::WorktreeDiscardService::new(
+    let discard = ticketry_workspace_runtime::discard::WorktreeDiscardService::new(
         worktracker_database.clone(),
         journal.clone(),
         events.clone(),
@@ -373,7 +374,7 @@ async fn compose_worktree_operations(
     }
     ComposedWorktreeOperations {
         operations: Some(
-            ticketry_workspace_runtime::worktree::operations::WorktreeOperations::new(
+        ticketry_workspace_runtime::worktree_operations::WorktreeOperations::new(
                 create, discard,
             ),
         ),
@@ -386,7 +387,7 @@ async fn compose_worktree_operations(
 /// needs both: a composed capability whose backlog was never drained is not one
 /// a window may be pointed at yet.
 struct ComposedWorktreeOperations {
-    operations: Option<ticketry_workspace_runtime::worktree::operations::WorktreeOperations>,
+    operations: Option<ticketry_workspace_runtime::worktree_operations::WorktreeOperations>,
     reconciled: bool,
 }
 
@@ -403,7 +404,7 @@ async fn compose_document_saves(
     outbox_adopted: bool,
 ) -> bool {
     if let Err(error) =
-        ticketry_workspace_runtime::workspace::operations::schema::install(worktracker_database)
+        ticketry_workspace_runtime::workspace_operations::schema::install(worktracker_database)
             .await
     {
         eprintln!("Ticketry could not install the Workspace Operation journal: {error}");
@@ -411,15 +412,15 @@ async fn compose_document_saves(
     }
     let facts = outbox_adopted.then(|| {
         ticketry_documents::DocumentFactRecorder::new(
-            ticketry_runs::persistence::RunsServices::new(worktracker_database.clone())
+            ticketry_runs::RunsServices::new(worktracker_database.clone())
                 .outbox()
                 .events()
                 .clone(),
         )
     });
-    let service = ticketry_workspace_runtime::workspace::document_save::DocumentSaveService::new(
+    let service = ticketry_workspace_runtime::document_save::DocumentSaveService::new(
         worktracker_database.clone(),
-        ticketry_workspace_runtime::workspace::operations::WorkspaceOperationJournal::new(
+        ticketry_workspace_runtime::workspace_operations::WorkspaceOperationJournal::new(
             worktracker_database.clone(),
         ),
         facts,
@@ -437,7 +438,7 @@ async fn compose_document_saves(
 /// state database. It never resolves the established data directory itself, so
 /// an import cannot reach an installation the caller did not name.
 async fn import_module_links(data_directory: &Path) -> Result<(), FoundationInitializationError> {
-    let database = ticketry_work_management::work_management::open_for_commands(
+    let database = ticketry_work_management::open_for_commands(
         &data_directory.join("state.db"),
     )
     .await
@@ -447,7 +448,7 @@ async fn import_module_links(data_directory: &Path) -> Result<(), FoundationInit
             error.to_string(),
         )
     })?;
-    let outcome = ticketry_work_management::module_links::import(&database, data_directory)
+    let outcome = ticketry_work_management::import(&database, data_directory)
         .await
         .map_err(|error| {
             FoundationInitializationError::new(
@@ -473,7 +474,7 @@ pub async fn adopt_worktracker_and_install(
     //
     let installation = match ownership {
         InstallationOwnership::Owned => Some(
-            ticketry_installation::adoption::adopt(data_directory)
+            ticketry_installation::adopt(data_directory)
                 .await
                 .map_err(installation_adoption_error)?,
         ),
@@ -486,7 +487,7 @@ pub async fn adopt_worktracker_and_install(
                 error.to_string(),
             )
         })?;
-    ticketry_work_management::work_management::adoption::adopt(data_directory)
+    ticketry_work_management::adoption::adopt(data_directory)
         .await
         .map_err(|error| {
             FoundationInitializationError::new(
@@ -494,7 +495,7 @@ pub async fn adopt_worktracker_and_install(
                 error.to_string(),
             )
         })?;
-    let provider_database = ticketry_work_management::work_management::open_for_commands(
+    let provider_database = ticketry_work_management::open_for_commands(
         &data_directory.join("state.db"),
     )
     .await
@@ -528,28 +529,28 @@ pub async fn adopt_worktracker_and_install(
     // The Runs write lease changes hands here, before any Rust Runs command is
     // reachable. An unknown or corrupt Runs schema refuses adoption and leaves
     // the pre-cutover snapshot restorable.
-    ticketry_runs::persistence::preflight(data_directory)
+    ticketry_runs::preflight(data_directory)
         .await
         .map_err(runs_adoption_error)?;
-    ticketry_runs::persistence::adopt(data_directory)
+    ticketry_runs::adopt(data_directory)
         .await
         .map_err(runs_adoption_error)?;
     // Terminal persistence depends on the adopted Agent Run and Launch Effect
     // identities. Refuse an unknown Terminal leaf before the product schema or
     // any Rust terminal writer becomes reachable.
-    ticketry_terminal::terminal::persistence::preflight(data_directory)
+    ticketry_terminal::preflight_terminal_persistence(data_directory)
         .await
         .map_err(terminal_adoption_error)?;
-    ticketry_terminal::terminal::persistence::adopt(data_directory)
+    ticketry_terminal::adopt_terminal_persistence(data_directory)
         .await
         .map_err(terminal_adoption_error)?;
     // Execution campaigns depend on adopted Work Management, Runs, and
     // Terminal identities. Classify and validate them only after those three
     // stores are ready, and before any future Graph Run command is composed.
-    ticketry_agent_execution::execution::persistence::preflight(data_directory)
+    ticketry_agent_execution::persistence::preflight(data_directory)
         .await
         .map_err(execution_adoption_error)?;
-    ticketry_agent_execution::execution::persistence::adopt(data_directory)
+    ticketry_agent_execution::persistence::adopt(data_directory)
         .await
         .map_err(execution_adoption_error)?;
     // The Documents and Worktrees write leases change hands here, after Runs
@@ -557,7 +558,7 @@ pub async fn adopt_worktracker_and_install(
     // before any workspace command is composed. An unknown or malformed
     // Documents, Worktree, or journal schema refuses the handoff and leaves the
     // pre-cutover snapshots restorable.
-    ticketry_workspace_runtime::workspace::handoff::adopt(data_directory)
+        ticketry_workspace_runtime::handoff::adopt(data_directory)
         .await
         .map_err(workspace_adoption_error)?;
     // Every capability has handed over, so the durable status-event ledger the
@@ -565,7 +566,7 @@ pub async fn adopt_worktracker_and_install(
     // last handoff and before the endpoint is installed, because the endpoint
     // is what makes a mutation reachable.
     if let Some(installation) = installation {
-        ticketry_installation::adoption::open_readiness(data_directory, installation)
+        ticketry_installation::open_readiness(data_directory, installation)
             .await
             .map_err(installation_adoption_error)?;
     }
@@ -584,7 +585,7 @@ pub async fn adopt_worktracker_and_install(
 }
 
 fn installation_adoption_error(
-    error: ticketry_installation::adoption::AdoptionFailure,
+    error: ticketry_installation::AdoptionFailure,
 ) -> FoundationInitializationError {
     FoundationInitializationError::new(
         FoundationInitializationErrorCode::WorktrackerDatabaseOpen,
@@ -593,7 +594,7 @@ fn installation_adoption_error(
 }
 
 fn workspace_adoption_error(
-    error: ticketry_workspace_runtime::workspace::handoff::WorkspaceHandoffError,
+    error: ticketry_workspace_runtime::handoff::WorkspaceHandoffError,
 ) -> FoundationInitializationError {
     FoundationInitializationError::new(
         FoundationInitializationErrorCode::WorktrackerDatabaseOpen,
@@ -605,7 +606,7 @@ fn workspace_adoption_error(
 }
 
 fn runs_adoption_error(
-    error: ticketry_runs::persistence::RunsPersistenceError,
+    error: ticketry_runs::RunsPersistenceError,
 ) -> FoundationInitializationError {
     FoundationInitializationError::new(
         FoundationInitializationErrorCode::WorktrackerDatabaseOpen,
@@ -614,7 +615,7 @@ fn runs_adoption_error(
 }
 
 fn terminal_adoption_error(
-    error: ticketry_terminal::terminal::persistence::TerminalPersistenceError,
+    error: ticketry_terminal::TerminalPersistenceError,
 ) -> FoundationInitializationError {
     FoundationInitializationError::new(
         FoundationInitializationErrorCode::WorktrackerDatabaseOpen,
@@ -623,7 +624,7 @@ fn terminal_adoption_error(
 }
 
 fn execution_adoption_error(
-    error: ticketry_agent_execution::execution::persistence::ExecutionPersistenceError,
+    error: ticketry_agent_execution::persistence::ExecutionPersistenceError,
 ) -> FoundationInitializationError {
     FoundationInitializationError::new(
         FoundationInitializationErrorCode::WorktrackerDatabaseOpen,

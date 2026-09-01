@@ -19,7 +19,7 @@ use super::representative_reads;
 
 /// What postflight established, for the adoption evidence record.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct Postflight {
+pub(crate) struct Postflight {
     /// The inventory of the adopted database.
     pub adopted: Inventory,
     /// Semantic rules rerun against the adopted database.
@@ -29,7 +29,7 @@ pub struct Postflight {
 }
 
 /// Compare, recheck, and prove. Any failure keeps readiness closed.
-pub async fn check(
+pub(crate) async fn check(
     data_directory: &std::path::Path,
     database: &DatabaseConnection,
     source: &Inventory,
@@ -68,7 +68,7 @@ pub async fn check(
                 "the adopted database could not be rechecked: {error}"
             ))
         })?;
-    if report.verdict() == crate::preflight::Verdict::Refused {
+    if report.verdict() == crate::Verdict::Refused {
         return Err(refused(format!(
             "the adopted database broke {} semantic rule(s): {}",
             report.defects.len(),

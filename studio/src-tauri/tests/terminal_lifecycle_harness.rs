@@ -2,7 +2,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use sea_orm::{ConnectionTrait, DbBackend, Statement};
-use ticketry_terminal::terminal::viewer::attachment::{
+use ticketry_terminal::{
     AttachmentOutcome, TerminalAttachment, TerminalAttachmentError,
 };
 

@@ -11,7 +11,7 @@
 
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 
-use ticketry_entities::work_management::issue;
+use ticketry_entities::issue;
 
 use super::error::WorktreeStatusError;
 use super::identity::{canonical_uuid, compact_uuid};

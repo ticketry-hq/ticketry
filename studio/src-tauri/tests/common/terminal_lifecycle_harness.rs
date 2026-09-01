@@ -13,10 +13,10 @@ use std::sync::MutexGuard;
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection, DbBackend, Statement};
 use serde_json::Value;
 use tauri_graphql::{TransportApi, TransportApiImpl};
-use ticketry_graphql_schema::graphql_foundation::{
+use ticketry_graphql_schema::{
     adopt_worktracker_and_install, ComposedCommandRuntime, InstallationOwnership,
 };
-use ticketry_runs::persistence::{publish_readiness, Slice3Readiness};
+use ticketry_runs::{publish_readiness, Slice3Readiness};
 use ticketry_tool_discovery::{approve_executable_path, SupportedTool, ToolHealth};
 
 use super::isolated_tmux::{IsolatedTmux, TmuxEnvironmentOverride, TMUX_ENV_LOCK};
@@ -179,7 +179,7 @@ async fn compose(data_directory: &Path) -> (TransportApiImpl, ComposedCommandRun
 }
 
 async fn provision(data_directory: &Path) -> String {
-    ticketry_installation::adoption::provisioning::provision(data_directory)
+    ticketry_installation::provision(data_directory)
         .await
         .expect("provision the current Rust schema");
     let database = Database::connect(format!(
@@ -188,7 +188,7 @@ async fn provision(data_directory: &Path) -> String {
     ))
     .await
     .expect("open the Rust terminal fixture");
-    let runtime_namespace = ticketry_terminal::tmux_adapter::current_runtime_namespace()
+    let runtime_namespace = ticketry_terminal::current_runtime_namespace()
         .expect("derive the isolated tmux namespace");
     database
         .execute_unprepared(&format!(

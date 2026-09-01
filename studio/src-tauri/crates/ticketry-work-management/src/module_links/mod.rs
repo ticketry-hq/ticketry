@@ -48,7 +48,7 @@ mod module_link;
 #[cfg(feature = "test-support")]
 pub mod test_support;
 
-pub use ticketry_entities::settings as entities;
+pub use ticketry_entities as entities;
 
 mod error;
 

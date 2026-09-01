@@ -31,6 +31,11 @@ opening any code. To keep that true:
 - **Rust service layout** (`studio/src-tauri/src/`): keep each capability in a
   focused module. Database-backed GraphQL starts with migrations, SeaORM
   entities, and Seaography registration. Native host commands stay narrow.
+  Each Rust crate exposes its external contract only from `src/lib.rs`.
+  Implementation modules use private `mod` declarations, crate-internal seams
+  use `pub(crate)`, and `lib.rs` re-exports each approved public item. Do not
+  make nested module paths part of a crate's API. Keep the public API boundary
+  contract test equal to every deliberate export.
 - **Name by purpose.** File and folder names must say what the code does
   (`ranking.rs`, `desktopRuntime.ts`), not generic buckets (`utils2.ts`,
   `helpers.rs`, `misc/`).

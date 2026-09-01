@@ -11,7 +11,7 @@ use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 use sea_orm::{ConnectionTrait, Database, DbBackend, Statement};
-use ticketry_runs::persistence::{
+use ticketry_runs::{
     adopt, ClaimedLaunch, LaunchExecutor, LaunchExecutorFailure, LaunchIntent, LaunchOutcome,
     LaunchRuntimeEvidence, PrepareLaunchRequest, RunSnapshot, RunsPersistenceErrorCode,
     RunsServices, TransitionOccurrence,

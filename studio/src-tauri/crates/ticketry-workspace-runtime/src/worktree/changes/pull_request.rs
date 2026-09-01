@@ -6,8 +6,8 @@ use seaography::CustomOutputType;
 use serde::Serialize;
 
 use crate::worktree::status;
-use ticketry_entities::work_management::issue;
-use ticketry_entities::worktrees::worktree;
+use ticketry_entities::issue;
+use ticketry_entities::worktree;
 
 use super::{
     command_git, module_baseline, repository, PullRequestStatusView, WorktreeChangesError,

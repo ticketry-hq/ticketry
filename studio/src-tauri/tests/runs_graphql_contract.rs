@@ -1,6 +1,6 @@
 #[tokio::test]
 async fn nested_runs_views_keep_the_published_graphql_contract() {
-    let sdl = ticketry_graphql_schema::graphql_foundation::generated_schema_sdl()
+    let sdl = ticketry_graphql_schema::generated_schema_sdl()
         .await
         .expect("build the GraphQL schema");
 

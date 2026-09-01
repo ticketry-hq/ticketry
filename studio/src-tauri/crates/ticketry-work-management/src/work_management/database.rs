@@ -122,7 +122,7 @@ mod tests {
     };
 
     use super::{open, open_for_commands};
-    use ticketry_entities::work_management::project;
+    use ticketry_entities::project;
 
     #[tokio::test]
     async fn connection_reads_wal_and_rejects_writes() {

@@ -7,7 +7,7 @@
 use tauri::ipc::Channel;
 
 use crate::desktop::launch_runtime::DesktopLaunchRuntime;
-use ticketry_terminal::terminal::viewer::webview_commands::{
+use ticketry_terminal::{
     self, ViewerChannelEvent, ViewerCommandError, ViewerCommandState, ViewerScrollDirection,
     ViewerStatus,
 };
@@ -26,7 +26,7 @@ pub fn viewer_attach(
     let ownership = launch
         .viewer_ownership()
         .map_err(|message| ViewerCommandError::Pty { message })?;
-    webview_commands::viewer_attach(
+    ticketry_terminal::viewer_attach(
         &state,
         launch.output_activity().ok(),
         ownership,
@@ -44,7 +44,7 @@ pub fn viewer_input(
     viewer_handle: String,
     data: Vec<u8>,
 ) -> Result<(), ViewerCommandError> {
-    webview_commands::viewer_input(&state, viewer_handle, data)
+    ticketry_terminal::viewer_input(&state, viewer_handle, data)
 }
 
 #[tauri::command]
@@ -54,7 +54,7 @@ pub fn viewer_resize(
     columns: u16,
     rows: u16,
 ) -> Result<(), ViewerCommandError> {
-    webview_commands::viewer_resize(&state, viewer_handle, columns, rows)
+    ticketry_terminal::viewer_resize(&state, viewer_handle, columns, rows)
 }
 
 #[tauri::command]
@@ -64,7 +64,7 @@ pub fn viewer_scroll(
     direction: ViewerScrollDirection,
     lines: u16,
 ) -> Result<(), ViewerCommandError> {
-    webview_commands::viewer_scroll(&state, viewer_handle, direction, lines)
+    ticketry_terminal::viewer_scroll(&state, viewer_handle, direction, lines)
 }
 
 #[tauri::command]
@@ -72,7 +72,7 @@ pub fn viewer_detach(
     state: tauri::State<'_, ViewerCommandState>,
     viewer_handle: String,
 ) -> Result<ViewerStatus, ViewerCommandError> {
-    webview_commands::viewer_detach(&state, viewer_handle)
+    ticketry_terminal::viewer_detach(&state, viewer_handle)
 }
 
 #[tauri::command]
@@ -80,5 +80,5 @@ pub fn viewer_status(
     state: tauri::State<'_, ViewerCommandState>,
     viewer_handle: String,
 ) -> Result<ViewerStatus, ViewerCommandError> {
-    webview_commands::viewer_status(&state, viewer_handle)
+    ticketry_terminal::viewer_status(&state, viewer_handle)
 }

@@ -4,8 +4,8 @@ use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter};
 
 use crate::execution::graph::{types::compact_id, GraphAccess, GraphFactsError};
 use ticketry_entities::{
-    execution::graph_run,
-    work_management::{issue, issue_blocker},
+    graph_run,
+    {issue, issue_blocker},
 };
 
 use super::work_item_facts::public_id;

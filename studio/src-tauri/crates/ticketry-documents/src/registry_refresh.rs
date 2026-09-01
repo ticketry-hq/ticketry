@@ -17,7 +17,7 @@ use std::collections::BTreeSet;
 
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder};
 
-use ticketry_entities::documents::design_document;
+use ticketry_entities::design_document;
 
 use super::authorized_roots;
 use super::error::DocumentsError;

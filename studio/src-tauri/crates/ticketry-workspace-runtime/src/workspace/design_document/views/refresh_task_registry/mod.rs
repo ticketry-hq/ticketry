@@ -6,7 +6,7 @@ use seaography::{
 };
 
 use ticketry_documents::TaskRegistryScope;
-use ticketry_entities::documents::design_document;
+use ticketry_entities::design_document;
 
 use super::support::{documents_error, service};
 

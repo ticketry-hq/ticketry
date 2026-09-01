@@ -1,7 +1,7 @@
 //! A launch authority that resolves to exactly what the caller submitted.
 //!
 //! Production composes the real
-//! [`ticketry_launch::authority::LaunchAuthorityService`], which is
+//! [`ticketry_launch::LaunchAuthorityService`], which is
 //! proved in `interactive_launch_authority`. Tests that exercise preparation,
 //! effect journalling, runtime settlement, and recovery care about the launch
 //! machinery rather than about policy, so they install this instead and keep
@@ -13,11 +13,11 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use sea_orm::DatabaseConnection;
-use ticketry_launch::authority::{
+use ticketry_launch::{
     InteractiveLaunchAuthority, LaunchAuthorityError, ResolvedLaunchMaterial,
 };
-use ticketry_launch::terminal_session::CreateTerminalSession;
-use ticketry_terminal::terminal::launch::{TerminalLaunchRuntime, TerminalLaunchService};
+use ticketry_launch::CreateTerminalSession;
+use ticketry_terminal::{TerminalLaunchRuntime, TerminalLaunchService};
 
 pub struct SubmittedLaunchAuthority;
 

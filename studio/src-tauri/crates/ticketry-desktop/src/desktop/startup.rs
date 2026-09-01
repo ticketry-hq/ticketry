@@ -67,11 +67,11 @@ pub fn initialize_services(
     if startup_error.is_none() {
         let foundation_database = ownership.data_directory.join("rust-core.sqlite3");
         match tauri::async_runtime::block_on(
-            ticketry_graphql_schema::graphql_foundation::adopt_worktracker_and_install(
+            ticketry_graphql_schema::adopt_worktracker_and_install(
                 &foundation_database,
                 &ownership.data_directory,
                 graphql_api,
-                ticketry_graphql_schema::graphql_foundation::InstallationOwnership::Owned,
+                ticketry_graphql_schema::InstallationOwnership::Owned,
             ),
         ) {
             Ok(adopted) => application

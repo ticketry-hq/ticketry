@@ -1,7 +1,7 @@
 use common::terminal_lifecycle_harness::TerminalLifecycleHarness;
 use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
-use ticketry_terminal::tmux_adapter::{
+use ticketry_terminal::{
     ApprovedArgv, CreateOutcome, CreateSession, InventoryConflictKind, InventoryEntry, KillOutcome,
     RuntimeIdentity, RuntimeObservation, TerminalGeometry, TmuxAdapter,
 };

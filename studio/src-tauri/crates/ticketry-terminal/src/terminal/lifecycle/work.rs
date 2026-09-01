@@ -19,10 +19,9 @@ use crate::tmux_adapter::{
     RuntimeObservation, TerminalGeometry, TmuxAdapter,
 };
 use crate::viewer_ownership::ViewerOwnershipService;
-use ticketry_diagnostics::launch_trace as trace;
-use ticketry_launch::terminal_session::{TerminalLaunchError, TerminalLaunchErrorCode};
-use ticketry_runs::hook_spool::{DrainReport, HookSpool};
-use ticketry_runs::persistence::LifecycleService;
+use ticketry_diagnostics as trace;
+use ticketry_launch::{TerminalLaunchError, TerminalLaunchErrorCode};
+use ticketry_runs::{DrainReport, HookSpool, LifecycleService, RunAuthority};
 
 #[async_trait]
 pub trait TerminalLifecycleWork: Send + Sync + 'static {
@@ -156,7 +155,7 @@ impl TerminalLaunchRuntime for RecoveryTerminalLaunchRuntime {
 
     async fn materialize_and_create(
         &self,
-        _material: &ticketry_entities::terminals::launch_material::Model,
+        _material: &ticketry_entities::launch_material::Model,
         _checkpoint: &dyn TerminalLaunchCheckpoint,
     ) -> Result<(), TerminalLaunchError> {
         Err(TerminalLaunchError::new(
@@ -169,11 +168,11 @@ impl TerminalLaunchRuntime for RecoveryTerminalLaunchRuntime {
 #[derive(Clone)]
 pub struct TerminalRuntimeAuthority {
     pub database: DatabaseConnection,
-    pub paths: ticketry_launch::paths::LaunchPathsService,
+    pub paths: ticketry_launch::LaunchPathsService,
     pub hook_runner: PathBuf,
     pub hook_spool_directory: PathBuf,
     pub mcp_url: String,
-    pub run_authority: ticketry_runs::authority::RunAuthority,
+    pub run_authority: RunAuthority,
     /// The operations a launched run's grant may name. The composer supplies
     /// them, so terminal never reads the MCP tool registry above it.
     pub granted_operations: Vec<String>,
@@ -214,7 +213,7 @@ impl InteractiveTerminalLaunchRuntime {
     pub fn replace_mcp_authority(
         &self,
         mcp_url: String,
-        run_authority: ticketry_runs::authority::RunAuthority,
+        run_authority: RunAuthority,
     ) -> Result<(), String> {
         let mut authority = self
             .authority
@@ -239,7 +238,7 @@ impl Default for InteractiveTerminalLaunchRuntime {
 impl TerminalLaunchRuntime for InteractiveTerminalLaunchRuntime {
     async fn preflight(
         &self,
-        request: &ticketry_launch::terminal_session::CreateTerminalSession,
+        request: &ticketry_launch::CreateTerminalSession,
     ) -> Result<(), TerminalLaunchError> {
         let authority = self
             .authority
@@ -269,7 +268,7 @@ impl TerminalLaunchRuntime for InteractiveTerminalLaunchRuntime {
 
     async fn materialize_and_create(
         &self,
-        material: &ticketry_entities::terminals::launch_material::Model,
+        material: &ticketry_entities::launch_material::Model,
         checkpoint: &dyn TerminalLaunchCheckpoint,
     ) -> Result<(), TerminalLaunchError> {
         let authority = self
@@ -303,14 +302,14 @@ impl TerminalLaunchRuntime for InteractiveTerminalLaunchRuntime {
                 .await
             {
                 Ok(directory) => {
-                    trace::admitted(trace::stages::DIRECTORY_PREFLIGHTED)
+                    trace::admitted(trace::DIRECTORY_PREFLIGHTED)
                         .with("launchForm", "shell")
                         .record();
                     directory
                 }
                 Err(refusal) => {
                     trace::refused(
-                        trace::stages::DIRECTORY_PREFLIGHTED,
+                        trace::DIRECTORY_PREFLIGHTED,
                         "module_folder_unusable",
                     )
                     .with("launchForm", "shell")
@@ -322,31 +321,30 @@ impl TerminalLaunchRuntime for InteractiveTerminalLaunchRuntime {
                 }
             };
             let command =
-                crate::terminal::launch::login_shell::approved_login_shell(working_directory)?;
+                crate::terminal::launch::approved_login_shell(working_directory)?;
             return create_tmux_runtime(material, checkpoint, command).await;
         }
-        let provider = ticketry_launch::planning::Provider::try_from(
-            material.provider.as_deref().unwrap_or_default(),
-        )
-        .map_err(planning_error)?;
+        let provider =
+            ticketry_launch::Provider::try_from(material.provider.as_deref().unwrap_or_default())
+                .map_err(planning_error)?;
         let scope = match material.scope.as_str() {
-            "task" => ticketry_launch::paths::LaunchScope::Task,
-            "plan" => ticketry_launch::paths::LaunchScope::Plan,
-            "instant" => ticketry_launch::paths::LaunchScope::Instant,
-            "docchat" => ticketry_launch::paths::LaunchScope::Docchat,
+            "task" => ticketry_launch::LaunchScope::Task,
+            "plan" => ticketry_launch::LaunchScope::Plan,
+            "instant" => ticketry_launch::LaunchScope::Instant,
+            "docchat" => ticketry_launch::LaunchScope::Docchat,
             _ => return Err(invalid_launch("The terminal launch scope is unsupported.")),
         };
         let paths = authority
             .paths
-            .resolve(ticketry_launch::paths::LaunchPathsRequest {
+            .resolve(ticketry_launch::LaunchPathsRequest {
                 version: 1,
                 scope,
                 agent_run_id: material.agent_run_id.clone(),
                 project_id: material.project_id.clone(),
                 module_id: Some(material.module_id.clone()),
-                task_id: matches!(scope, ticketry_launch::paths::LaunchScope::Task)
+                task_id: matches!(scope, ticketry_launch::LaunchScope::Task)
                     .then(|| material.issue_id.clone()),
-                document_id: matches!(scope, ticketry_launch::paths::LaunchScope::Docchat)
+                document_id: matches!(scope, ticketry_launch::LaunchScope::Docchat)
                     .then(|| material.task_id.clone()),
             })
             .await
@@ -361,7 +359,7 @@ impl TerminalLaunchRuntime for InteractiveTerminalLaunchRuntime {
             .await
         {
             trace::refused(
-                trace::stages::DIRECTORY_PREFLIGHTED,
+                trace::DIRECTORY_PREFLIGHTED,
                 "module_folder_unusable",
             )
             .with("launchForm", "agent")
@@ -371,11 +369,11 @@ impl TerminalLaunchRuntime for InteractiveTerminalLaunchRuntime {
                 refusal.message(),
             ));
         }
-        trace::admitted(trace::stages::DIRECTORY_PREFLIGHTED)
+        trace::admitted(trace::DIRECTORY_PREFLIGHTED)
             .with("launchForm", "agent")
             .record();
         let resume = if let Some(source_id) = material.resume_from_agent_run_id.as_deref() {
-            let source = ticketry_entities::runs::agent_run::Entity::find_by_id(source_id)
+            let source = ticketry_entities::agent_run::Entity::find_by_id(source_id)
                 .one(&authority.database)
                 .await
                 .map_err(|_| invalid_launch("The resume source is unavailable."))?
@@ -383,43 +381,43 @@ impl TerminalLaunchRuntime for InteractiveTerminalLaunchRuntime {
             let provider_session_id = source.provider_session_id.ok_or_else(|| {
                 invalid_launch("The resume source has no provider conversation identity.")
             })?;
-            Some(ticketry_launch::planning::LaunchKind::Resume {
+            Some(ticketry_launch::LaunchKind::Resume {
                 provider_session_id,
             })
         } else {
             None
         };
         let kind = resume.unwrap_or(match material.scope.as_str() {
-            "task" => ticketry_launch::planning::LaunchKind::Task,
-            "plan" => ticketry_launch::planning::LaunchKind::Planning,
-            "instant" => ticketry_launch::planning::LaunchKind::Instant,
-            "docchat" => ticketry_launch::planning::LaunchKind::DocumentChat,
-            _ => ticketry_launch::planning::LaunchKind::Automation,
+            "task" => ticketry_launch::LaunchKind::Task,
+            "plan" => ticketry_launch::LaunchKind::Planning,
+            "instant" => ticketry_launch::LaunchKind::Instant,
+            "docchat" => ticketry_launch::LaunchKind::DocumentChat,
+            _ => ticketry_launch::LaunchKind::Automation,
         });
         let workspace = match material.scope.as_str() {
-            "plan" | "instant" => ticketry_launch::planning::WorkspaceIdentity::Scratch {
+            "plan" | "instant" => ticketry_launch::WorkspaceIdentity::Scratch {
                 project_id: material.project_id.clone(),
                 module_id: material.module_id.clone(),
                 agent_run_id: material.agent_run_id.clone(),
             },
-            "docchat" => ticketry_launch::planning::WorkspaceIdentity::Document {
+            "docchat" => ticketry_launch::WorkspaceIdentity::Document {
                 project_id: material.project_id.clone(),
                 module_id: material.module_id.clone(),
                 document_id: material.design_directory_identity.clone().ok_or_else(|| {
                     invalid_launch("The document launch identity is unavailable.")
                 })?,
             },
-            _ => ticketry_launch::planning::WorkspaceIdentity::Task {
+            _ => ticketry_launch::WorkspaceIdentity::Task {
                 project_id: material.project_id.clone(),
                 module_id: material.module_id.clone(),
                 task_id: material.task_id.clone(),
             },
         };
-        let durable = ticketry_launch::planning::DurableLaunchMaterial::new(
+        let durable = ticketry_launch::DurableLaunchMaterial::new(
             material.agent_run_id.clone(),
             kind,
             provider,
-            ticketry_launch::planning::ProviderOptions {
+            ticketry_launch::ProviderOptions {
                 model: material.model.clone(),
                 reasoning: material.reasoning.clone(),
             },
@@ -433,7 +431,7 @@ impl TerminalLaunchRuntime for InteractiveTerminalLaunchRuntime {
         let tool = provider_tool(provider);
         let executable = crate::tmux_adapter::approved_tool_path(tool)
             .map_err(|_| invalid_launch("The approved provider executable is unavailable."))?;
-        let execution = ticketry_launch::planning::ExecutionAuthority::new(
+        let execution = ticketry_launch::ExecutionAuthority::new(
             executable,
             working_directory,
             authority.hook_runner.clone(),
@@ -443,7 +441,7 @@ impl TerminalLaunchRuntime for InteractiveTerminalLaunchRuntime {
             available_skills(),
         );
         let mut launch =
-            ticketry_launch::planning::materialize(&durable, &execution).map_err(planning_error)?;
+            ticketry_launch::materialize(&durable, &execution).map_err(planning_error)?;
         if let Some(settings) = launch.settings.take() {
             let path = authority
                 .hook_spool_directory
@@ -471,10 +469,10 @@ impl TerminalLaunchRuntime for InteractiveTerminalLaunchRuntime {
 }
 
 fn require_provider_control(
-    kind: ticketry_launch::terminal_session::TerminalLaunchKind,
+    kind: ticketry_launch::TerminalLaunchKind,
     mcp_url: &str,
 ) -> Result<(), TerminalLaunchError> {
-    if kind != ticketry_launch::terminal_session::TerminalLaunchKind::Shell && mcp_url.is_empty() {
+    if kind != ticketry_launch::TerminalLaunchKind::Shell && mcp_url.is_empty() {
         return Err(TerminalLaunchError::new(
             TerminalLaunchErrorCode::RuntimeUnavailable,
             "WorkTracker MCP is unavailable. Provider launch is blocked.",
@@ -486,7 +484,7 @@ fn require_provider_control(
 #[cfg(test)]
 mod provider_control_tests {
     use super::require_provider_control;
-    use ticketry_launch::terminal_session::{TerminalLaunchErrorCode, TerminalLaunchKind};
+    use ticketry_launch::{TerminalLaunchErrorCode, TerminalLaunchKind};
 
     #[test]
     fn missing_listener_blocks_provider_launch_with_an_empty_url() {
@@ -516,13 +514,13 @@ mod provider_control_tests {
 }
 
 async fn create_tmux_runtime(
-    material: &ticketry_entities::terminals::launch_material::Model,
+    material: &ticketry_entities::launch_material::Model,
     checkpoint: &dyn TerminalLaunchCheckpoint,
     command: ApprovedArgv,
 ) -> Result<(), TerminalLaunchError> {
     let outcome = spawn_tmux_runtime(material, checkpoint, command).await;
     if let Err(error) = &outcome {
-        trace::refused(trace::stages::RUNTIME_SPAWNED, error.code_str()).record();
+        trace::refused(trace::RUNTIME_SPAWNED, error.code_str()).record();
     }
     outcome
 }
@@ -530,7 +528,7 @@ async fn create_tmux_runtime(
 /// A runtime that never came up must be separable from a provider that never
 /// started, so the spawn is recorded as its own stage.
 async fn spawn_tmux_runtime(
-    material: &ticketry_entities::terminals::launch_material::Model,
+    material: &ticketry_entities::launch_material::Model,
     checkpoint: &dyn TerminalLaunchCheckpoint,
     command: ApprovedArgv,
 ) -> Result<(), TerminalLaunchError> {
@@ -563,12 +561,12 @@ async fn spawn_tmux_runtime(
             )
         })? {
         CreateOutcome::Created => {
-            trace::admitted(trace::stages::RUNTIME_SPAWNED)
+            trace::admitted(trace::RUNTIME_SPAWNED)
                 .with("runtimeOutcome", "created")
                 .record();
         }
         CreateOutcome::Existing(RuntimeObservation::Running) => {
-            trace::admitted(trace::stages::RUNTIME_SPAWNED)
+            trace::admitted(trace::RUNTIME_SPAWNED)
                 .with("runtimeOutcome", "existing_running")
                 .record();
         }
@@ -588,12 +586,12 @@ async fn spawn_tmux_runtime(
 fn record_prompt_delivery(prompt: Option<&str>, spawned: &Result<(), TerminalLaunchError>) {
     let carried = prompt.is_some_and(|prompt| !prompt.trim().is_empty());
     match spawned {
-        Ok(()) => trace::admitted(trace::stages::PROMPT_DELIVERED)
+        Ok(()) => trace::admitted(trace::PROMPT_DELIVERED)
             .with("promptCarrier", "argv")
             .with("promptCarried", carried)
             .with("promptCharacters", prompt.map_or(0, str::len))
             .record(),
-        Err(error) => trace::refused(trace::stages::PROMPT_DELIVERED, "runtime_never_spawned")
+        Err(error) => trace::refused(trace::PROMPT_DELIVERED, "runtime_never_spawned")
             .with("promptCarrier", "argv")
             .with("promptCarried", carried)
             .with("runtimeRefusal", error.code_str())
@@ -605,7 +603,7 @@ fn invalid_launch(message: &'static str) -> TerminalLaunchError {
     TerminalLaunchError::new(TerminalLaunchErrorCode::InvalidRequest, message)
 }
 
-fn planning_error(error: ticketry_launch::planning::LaunchPlanningError) -> TerminalLaunchError {
+fn planning_error(error: ticketry_launch::LaunchPlanningError) -> TerminalLaunchError {
     TerminalLaunchError::new(TerminalLaunchErrorCode::InvalidRequest, error.to_string())
 }
 
@@ -625,18 +623,12 @@ fn write_private(path: &Path, contents: &[u8]) -> Result<(), TerminalLaunchError
         .map_err(|_| invalid_launch("Provider settings could not be prepared."))
 }
 
-fn provider_tool(
-    provider: ticketry_launch::planning::Provider,
-) -> ticketry_tool_discovery::SupportedTool {
+fn provider_tool(provider: ticketry_launch::Provider) -> ticketry_tool_discovery::SupportedTool {
     match provider {
-        ticketry_launch::planning::Provider::Claude => {
-            ticketry_tool_discovery::SupportedTool::Claude
-        }
-        ticketry_launch::planning::Provider::Codex => ticketry_tool_discovery::SupportedTool::Codex,
-        ticketry_launch::planning::Provider::Gemini => {
-            ticketry_tool_discovery::SupportedTool::Gemini
-        }
-        ticketry_launch::planning::Provider::Agy => ticketry_tool_discovery::SupportedTool::Agy,
+        ticketry_launch::Provider::Claude => ticketry_tool_discovery::SupportedTool::Claude,
+        ticketry_launch::Provider::Codex => ticketry_tool_discovery::SupportedTool::Codex,
+        ticketry_launch::Provider::Gemini => ticketry_tool_discovery::SupportedTool::Gemini,
+        ticketry_launch::Provider::Agy => ticketry_tool_discovery::SupportedTool::Agy,
     }
 }
 

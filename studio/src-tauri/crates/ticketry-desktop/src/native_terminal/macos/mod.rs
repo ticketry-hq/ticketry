@@ -17,7 +17,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 use tauri::Emitter;
-use ticketry_terminal::terminal::viewer::attachment::{
+use ticketry_terminal::{
     TerminalCommandAttachment, TerminalCommandAttachmentControl,
 };
 

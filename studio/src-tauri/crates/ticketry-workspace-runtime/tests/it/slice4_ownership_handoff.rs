@@ -11,8 +11,9 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use sea_orm::{ConnectionTrait, Database, DbBackend, Statement};
-use ticketry_workspace_runtime::workspace::handoff::{
-    self, manifest, publish_readiness, published_readiness_is_complete, Slice4Readiness,
+use ticketry_workspace_runtime::handoff;
+use ticketry_workspace_runtime::handoff::{
+    manifest, publish_readiness, published_readiness_is_complete, Slice4Readiness,
     WorkspaceReadinessGate,
 };
 

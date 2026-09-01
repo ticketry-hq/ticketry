@@ -1,6 +1,6 @@
 use sea_orm::{ConnectionTrait, Database, EntityTrait, PaginatorTrait};
-use ticketry_entities::work_management::{issue_type, launch_binding};
-use ticketry_work_management::work_management::{
+use ticketry_entities::{issue_type, launch_binding};
+use ticketry_work_management::{
     commands::workflow, open_for_commands, read_queries,
 };
 

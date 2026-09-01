@@ -21,7 +21,7 @@ struct DeferredTable {
     rows: Vec<Vec<Cell>>,
 }
 
-pub async fn copy_snapshot(
+pub(crate) async fn copy_snapshot(
     directory: &Path,
     source: &Snapshot,
     source_generation: &str,
@@ -245,7 +245,7 @@ async fn bridge_to_current(
     source_generation: &str,
     source_fingerprint: &str,
 ) -> Result<Vec<String>, AdoptionFailure> {
-    if source_generation == crate::classification::manifest().current_generation {
+    if source_generation == crate::manifest().current_generation {
         return Ok(Vec::new());
     }
     let bridge = crate::adoption::bridge::select(source_generation, source_fingerprint)?;
@@ -298,7 +298,7 @@ async fn promote_migration_ledger(
     database: &DatabaseConnection,
     source_generation: &str,
 ) -> Result<(), AdoptionFailure> {
-    let manifest = crate::classification::manifest();
+    let manifest = crate::manifest();
     if source_generation == manifest.current_generation {
         return Ok(());
     }
@@ -459,7 +459,7 @@ async fn validate(directory: &Path, imported: &Inventory) -> Result<(), Adoption
                 "the staged target could not be preflighted: {error}"
             ))
         })?;
-    if report.verdict() == crate::preflight::Verdict::Refused {
+    if report.verdict() == crate::Verdict::Refused {
         return Err(target_error(format!(
             "the staged target failed {} semantic check(s): {}",
             report.defects.len(),

@@ -1,7 +1,7 @@
 use sea_orm::{ConnectOptions, Database};
 use sea_orm_migration::MigratorTrait;
 
-use ticketry_graphql_schema::graphql_foundation::migrations::Migrator;
+use ticketry_graphql_schema::Migrator;
 
 #[tokio::main]
 async fn main() {

@@ -24,27 +24,24 @@
 //! * **No implicit repair.** A defect is reported, never fixed. Only a named,
 //!   versioned bridge in [`bridges`] may admit one; an unknown defect refuses.
 
-pub mod bridges;
-pub mod capability_invariants;
-pub mod error;
-pub mod filesystem;
-pub mod invariant;
-pub mod path_authority;
-pub mod read_view;
-pub mod report;
-pub mod runtime;
-pub mod runtime_names;
-pub mod schema;
-pub mod seaography_override;
-pub mod structural;
-pub mod work_management_invariants;
+mod bridges;
+mod capability_invariants;
+pub(crate) mod error;
+mod filesystem;
+mod invariant;
+mod path_authority;
+mod read_view;
+pub(crate) mod report;
+mod runtime;
+mod runtime_names;
+mod schema;
+mod seaography_override;
+mod structural;
+mod work_management_invariants;
 
 use std::path::Path;
 
-pub use error::{PreflightError, PreflightFailure};
-pub use report::{Area, Defect, PreflightReport, Skipped, Verdict};
-
-use crate::classification::Installation;
+use crate::{Installation, PreflightError, PreflightFailure, PreflightReport};
 use invariant::Findings;
 use read_view::ReadView;
 use schema::Schema;

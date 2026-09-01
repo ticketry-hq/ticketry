@@ -13,7 +13,7 @@
 use sea_orm::DatabaseTransaction;
 use serde_json::json;
 
-use ticketry_runs::persistence::{NewStatusEvent, RunsPersistenceError, StatusEventRepository};
+use ticketry_runs::{NewStatusEvent, RunsPersistenceError, StatusEventRepository};
 
 use super::scope::WorktreeFactScope;
 

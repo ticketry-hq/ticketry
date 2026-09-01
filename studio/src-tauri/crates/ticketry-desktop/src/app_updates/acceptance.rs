@@ -210,7 +210,7 @@ pub fn record_evidence(result_path: &Path, evidence: Map<String, Value>) -> std:
 fn data_directory_owned(app: &tauri::AppHandle) -> bool {
     use tauri::Manager;
 
-    let ownership = app.state::<crate::desktop::data_directory::DesktopDataDirectoryOwnership>();
+    let ownership = app.state::<crate::DesktopDataDirectoryOwnership>();
     ownership.startup_error.is_none()
         && ownership
             .guard

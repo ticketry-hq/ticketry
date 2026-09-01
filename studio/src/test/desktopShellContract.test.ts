@@ -77,6 +77,8 @@ describe("desktop shell security contract", () => {
         "allow-desktop-approve-executable-path",
         "allow-desktop-launch-default-coding-agent",
         "allow-desktop-update-check",
+        "allow-desktop-update-download-and-install",
+        "allow-desktop-update-restart",
         "allow-desktop-latest-crash-collection-outcome",
         "allow-desktop-reveal-crash-report-folder",
         "allow-TauRPC--graphql-execute",
@@ -136,6 +138,56 @@ describe("desktop shell security contract", () => {
     });
     expect((configuration.bundle as Record<string, unknown>).createUpdaterArtifacts)
       .toBeUndefined();
+  });
+
+  it("installs and restarts through the same permissioned update seam", async () => {
+    const build = await text("../../src-tauri/build.rs");
+    const run = await text("../../src-tauri/src/desktop/run.rs");
+    const appUpdates = await text("../../src-tauri/src/app_updates/mod.rs");
+    const install = await text("../../src-tauri/src/app_updates/install.rs");
+    const lifecycle = await text("../../src-tauri/src/desktop/lifecycle.rs");
+
+    for (const command of [
+      "desktop_update_download_and_install",
+      "desktop_update_restart",
+    ]) {
+      expect(build).toContain(`"${command}"`);
+      expect(run).toContain(`app_updates::install::${command}`);
+      expect(install).toContain(command);
+    }
+
+    // Both operations route through the one endpoint-overridable updater the
+    // check already uses, so an acceptance feed cannot be reached by install
+    // alone.
+    expect(appUpdates).toContain("fn stable_channel_updater");
+    expect(install).toContain("super::stable_channel_updater(&app)");
+
+    // Restarting into an update performs the same teardown as a normal exit.
+    expect(lifecycle).toContain("pub(crate) fn tear_down_before_exit");
+    expect(lifecycle).toContain("release_data_directory_ownership(application)");
+    expect(install).toContain(
+      "crate::desktop::lifecycle::tear_down_before_exit(&handle)",
+    );
+    expect(run).toContain("tear_down_before_exit(application)");
+
+    expect(install).toContain('"desktop-update-progress"');
+  });
+
+  it("runs the packaged update acceptance through the shipped update path", async () => {
+    const run = await text("../../src-tauri/src/desktop/run.rs");
+    const acceptance = await text("../../src-tauri/src/app_updates/acceptance.rs");
+
+    // The harness only ever gets the real check, install, and restart.
+    expect(acceptance).toContain("super::desktop_update_check(app.clone())");
+    expect(acceptance).toContain(
+      "super::install::desktop_update_download_and_install(app.clone())",
+    );
+    expect(acceptance).toContain("super::install::restart_into_update(&app)");
+    // No launch without the harness environment performs an acceptance run.
+    expect(acceptance).toContain('"TICKETRY_UPDATE_ACCEPTANCE_RESULT"');
+    expect(acceptance).toContain("AcceptanceRun::from_environment");
+    expect(run).toContain("app_updates::acceptance::run_if_requested");
+    expect(acceptance).not.toContain("dangerous");
   });
 
   it("exposes only fixed Crash Report outcome and reveal commands", async () => {
@@ -336,7 +388,9 @@ describe("desktop shell security contract", () => {
       "desktop:deploy": "node scripts/desktop-deploy.mjs",
       "release:build": "node scripts/release-build.mjs",
       "release:validate": "node scripts/release-build.mjs --validate",
-      "release:test": "node --test scripts/release-build.test.mjs scripts/desktop-deploy.test.mjs scripts/installed-artifact-acceptance.test.mjs scripts/installed-artifact-acceptance-driver.test.mjs scripts/release-publish.test.mjs",
+      "release:test": "node --test scripts/release-build.test.mjs scripts/desktop-deploy.test.mjs scripts/installed-artifact-acceptance.test.mjs scripts/installed-artifact-acceptance-driver.test.mjs scripts/release-publish.test.mjs scripts/public-update-publisher.test.mjs scripts/update-acceptance.test.mjs scripts/update-acceptance-driver.test.mjs",
+      "release:acceptance": "node scripts/installed-artifact-acceptance.mjs",
+      "release:acceptance:update": "node scripts/update-acceptance.mjs",
       "desktop:smoke": "vitest run src/test/desktopShellContract.test.ts && node --test scripts/desktop-concurrent-smoke.test.mjs && node scripts/desktop-smoke.mjs && cargo test --manifest-path src-tauri/Cargo.toml",
       "desktop:smoke:dev": "node scripts/desktop-smoke.mjs dev",
       "desktop:smoke:packaged": "node scripts/desktop-smoke.mjs packaged",

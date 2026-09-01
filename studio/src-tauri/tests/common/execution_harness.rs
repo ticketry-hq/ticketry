@@ -26,20 +26,20 @@ use std::time::Duration;
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection};
 use serde_json::{json, Value};
 use tauri_graphql::{TransportApi, TransportApiImpl};
-use ticketry_agent_execution::execution::reconciliation::{
+use ticketry_agent_execution::reconciliation::{
     ExecutionReconciliationConfig, ExecutionReconciliationRuntime, ExecutionReconciliationService,
 };
-use ticketry_graphql_schema::graphql_foundation::{
+use ticketry_graphql_schema::{
     adopt_worktracker_and_install, ComposedCommandRuntime, InstallationOwnership,
 };
 use ticketry_mcp::{McpConfiguration, McpRuntime};
-use ticketry_runs::persistence::{publish_readiness, Slice3Readiness};
-use ticketry_terminal::terminal::launch::{TerminalLaunchBoundary, TerminalLaunchService};
-use ticketry_terminal::terminal::lifecycle::{
+use ticketry_runs::{publish_readiness, Slice3Readiness};
+use ticketry_terminal::{TerminalLaunchBoundary, TerminalLaunchService};
+use ticketry_terminal::{
     ProductionTerminalLifecycleWork, TerminalLifecycleConfig, TerminalLifecycleRuntime,
     TerminalRuntimeAuthority,
 };
-use ticketry_work_management::work_management::launch_policy::LaunchPolicyResolver;
+use ticketry_work_management::launch_policy::LaunchPolicyResolver;
 
 use super::execution_authorization::{Authorization, AUTHORIZATION_CREDENTIAL};
 use super::execution_fixture as fixture;
@@ -214,9 +214,9 @@ impl ExecutionHarness {
         .expect("open the local settings gate");
         publish_readiness(&data_directory, &Slice3Readiness::complete())
             .expect("open the Runs GraphQL gate");
-        ticketry_workspace_runtime::workspace::handoff::publish_readiness(
+        ticketry_workspace_runtime::handoff::publish_readiness(
             &data_directory,
-            &ticketry_workspace_runtime::workspace::handoff::Slice4Readiness::complete(),
+            &ticketry_workspace_runtime::handoff::Slice4Readiness::complete(),
         )
         .expect("open the workspace gate");
         let composed = adopted.runtime;
@@ -228,7 +228,7 @@ impl ExecutionHarness {
         // Modules themselves exist rather than written into a profile file.
         link_modules(&commands, &data_directory).await;
         let spool_directory =
-            ticketry_runs::hook_spool::ensure_hook_spool_directory(&data_directory)
+            ticketry_runs::ensure_hook_spool_directory(&data_directory)
                 .expect("create the provider hook spool directory");
 
         // The interactive runtime is shared with the GraphQL composition, so
@@ -236,7 +236,7 @@ impl ExecutionHarness {
         let launch_runtime = Arc::new(composed.terminal_runtime().clone());
         let mut launch = TerminalLaunchService::new(commands.clone(), launch_runtime.clone())
             .with_authority(Arc::new(
-                ticketry_launch::authority::LaunchAuthorityService::new(commands.clone()),
+                ticketry_launch::LaunchAuthorityService::new(commands.clone()),
             ));
         if let Some(boundary) = self.options.stop_once_at {
             launch = launch.stopping_once_at(boundary);
@@ -263,7 +263,7 @@ impl ExecutionHarness {
             .terminal_runtime()
             .configure(TerminalRuntimeAuthority {
                 database: commands.clone(),
-                paths: ticketry_launch::paths::LaunchPathsService::new(commands.clone()),
+                paths: ticketry_launch::LaunchPathsService::new(commands.clone()),
                 hook_runner: provider_directory(&data_directory).join("ticketry-hook-runner"),
                 hook_spool_directory: spool_directory.clone(),
                 mcp_url: format!("http://{}/mcp", mcp.address()),
@@ -271,19 +271,19 @@ impl ExecutionHarness {
                 granted_operations: ticketry_mcp::allowed_provider_operations(),
             });
 
-        let spool = ticketry_runs::hook_spool::HookSpool::new(
+        let spool = ticketry_runs::HookSpool::new(
             spool_directory,
-            ticketry_runs::persistence::RunsServices::new(commands.clone())
+            ticketry_runs::RunsServices::new(commands.clone())
                 .lifecycle()
                 .clone(),
-            ticketry_runs::hook_spool::DEFAULT_BATCH_SIZE,
+            ticketry_runs::DEFAULT_BATCH_SIZE,
         )
         .expect("open the provider hook spool");
         let reconciliation =
-            ticketry_terminal::terminal::reconciliation::TerminalReconciliationService::new(
+            ticketry_terminal::TerminalReconciliationService::new(
                 commands.clone(),
                 launch_runtime,
-                Arc::new(ticketry_terminal::terminal::cleanup::TmuxCleanupRuntime),
+                Arc::new(ticketry_terminal::TmuxCleanupRuntime),
             );
         let terminal = Arc::new(
             TerminalLifecycleRuntime::start(
@@ -519,7 +519,7 @@ fn approve_module_link(data_directory: &Path) {
 /// has a real usable folder to resolve. A Module that is not seeded in this
 /// campaign simply has no link, which is ordinary data.
 async fn link_modules(commands: &sea_orm::DatabaseConnection, data_directory: &Path) {
-    let store = ticketry_work_management::module_links::ModuleLinkStore::new(commands.clone());
+    let store = ticketry_work_management::ModuleLinkStore::new(commands.clone());
     let folder = data_directory.display().to_string();
     for module in [fixture::CAMPAIGN_MODULE, fixture::FOREIGN_MODULE] {
         let _ = store.set(module, &folder).await;

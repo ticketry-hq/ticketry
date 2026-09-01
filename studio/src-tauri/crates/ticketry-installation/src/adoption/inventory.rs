@@ -97,7 +97,9 @@ pub async fn read<C: ConnectionTrait>(database: &C) -> Result<Inventory, String>
 /// Ledger tables are deliberately outside the comparison: adoption is expected
 /// to add them, and a table whose appearance is the point cannot also be the
 /// evidence that nothing appeared.
-pub async fn product_tables<C: ConnectionTrait>(database: &C) -> Result<Vec<String>, String> {
+pub(crate) async fn product_tables<C: ConnectionTrait>(
+    database: &C,
+) -> Result<Vec<String>, String> {
     Ok(schema_facts::table_names(database)
         .await
         .map_err(|error| error.to_string())?

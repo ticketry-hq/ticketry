@@ -11,7 +11,7 @@
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 
 use crate::{DocumentsError, RegistrationIdentity, SCRATCH_TASK_ID};
-use ticketry_entities::runs::agent_run;
+use ticketry_entities::agent_run;
 
 /// The statuses that end a run. Everything else is still live: a status this
 /// build does not recognize keeps its watcher rather than silently losing live
@@ -24,7 +24,7 @@ const SCRATCH_SCOPES: &[&str] = &["plan", "instant"];
 
 /// One run a watcher may be started for.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct WatchTarget {
+pub(crate) struct WatchTarget {
     pub agent_run_id: String,
     /// The already-authorized design directory recorded on the run. It is
     /// never taken from a caller, and never composed here.
@@ -33,7 +33,7 @@ pub struct WatchTarget {
 }
 
 /// Every active durable run with an existing authorized design directory.
-pub async fn eligible_targets(
+pub(crate) async fn eligible_targets(
     database: &DatabaseConnection,
 ) -> Result<Vec<WatchTarget>, DocumentsError> {
     let rows = agent_run::Entity::find()
@@ -78,7 +78,7 @@ async fn registration_identity(
     database: &DatabaseConnection,
     run: &agent_run::Model,
 ) -> Result<Option<RegistrationIdentity>, DocumentsError> {
-    use ticketry_entities::work_management::issue;
+    use ticketry_entities::issue;
 
     let Some(owner) = issue::Entity::find_by_id(run.issue_id.clone())
         .one(database)

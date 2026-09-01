@@ -13,7 +13,7 @@ use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 use sea_orm::{ConnectionTrait, Database, DbBackend, Statement};
-use ticketry_runs::persistence::{
+use ticketry_runs::{
     adopt, ClaimedLaunch, LaunchExecutor, LaunchExecutorFailure, LaunchIntent,
     LaunchRuntimeEvidence, LaunchRuntimeProbe, PrepareLaunchRequest, ReconciliationDecision,
     RunSnapshot, RunsServices, RuntimeIdentity, RuntimeObservation, TransitionOccurrence,
@@ -63,7 +63,7 @@ async fn adopted() -> (tempfile::TempDir, sea_orm::DatabaseConnection, RunsServi
     let path = directory.path().join("state.db");
     fixture(&path);
     adopt(directory.path()).await.unwrap();
-    ticketry_terminal::terminal::persistence::adopt(directory.path())
+    ticketry_terminal::adopt_terminal_persistence(directory.path())
         .await
         .unwrap();
     let database = Database::connect(format!("sqlite:{}?mode=rw", path.display()))

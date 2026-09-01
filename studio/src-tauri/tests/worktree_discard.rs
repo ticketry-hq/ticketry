@@ -17,7 +17,7 @@ use std::process::Command;
 
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection, DbBackend, Statement};
 use tauri_graphql::{TransportApi, TransportApiImpl};
-use ticketry_graphql_schema::graphql_foundation::initialize_with_worktracker_commands_and_install;
+use ticketry_graphql_schema::initialize_with_worktracker_commands_and_install;
 
 const WORKSPACE: &str = "90000000000000000000000000000000";
 const PROJECT: &str = "10000000000000000000000000000000";
@@ -305,10 +305,10 @@ impl Fixture {
 
 /// Point one module at one local repository, through the one write seam.
 async fn link_module(database: &DatabaseConnection, module_id: &str, repository: &Path) {
-    ticketry_work_management::module_links::schema::install(database)
+    ticketry_work_management::schema::install(database)
         .await
         .expect("install the Module Link schema");
-    ticketry_work_management::module_links::ModuleLinkStore::new(database.clone())
+    ticketry_work_management::ModuleLinkStore::new(database.clone())
         .set(module_id, &repository.display().to_string())
         .await
         .expect("link the fixture module");
@@ -1098,7 +1098,7 @@ fn public(compact: &str) -> String {
 
 #[tokio::test]
 async fn the_only_public_worktree_delete_is_the_restricted_discard() {
-    let sdl = ticketry_graphql_schema::graphql_foundation::generated_schema_sdl()
+    let sdl = ticketry_graphql_schema::generated_schema_sdl()
         .await
         .expect("build the shipping schema");
 

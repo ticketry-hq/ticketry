@@ -8,7 +8,7 @@ use seaography::{
     async_graphql::dynamic::{Object, Schema},
     Builder, BuilderContext,
 };
-use ticketry_entities::work_management::{
+use ticketry_entities::{
     agent_model, agent_model_reasoning_level, attachment, issue, issue_blocker, issue_type,
     issue_type_transition, launch_binding, module_presentation, project, provider, reasoning_level,
     state,
@@ -24,7 +24,7 @@ async fn generated_crud_schema() -> Schema {
     builder.mutation = Object::new("Mutation");
     builder.schema = Schema::build("Query", Some("Mutation"), None);
 
-    let mut builder = ticketry_terminal::terminal::persistence::register_graphql(builder);
+    let mut builder = ticketry_terminal::register_persistence_graphql(builder);
     seaography::register_entity!(builder, project);
     seaography::register_entity!(builder, state);
     seaography::register_entity!(builder, issue_type);

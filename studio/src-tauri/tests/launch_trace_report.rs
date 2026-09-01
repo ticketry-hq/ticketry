@@ -10,8 +10,10 @@
 //! separately.
 
 use ticketry_diagnostics::configure_process_file_log;
-use ticketry_diagnostics::launch_trace::{
-    self as trace, records_from_log, render, report_for_launch_attempt, LaunchSurface, TraceVerdict,
+use ticketry_diagnostics::{
+    self as trace, launch_trace_for_launch_attempt as report_for_launch_attempt,
+    launch_trace_records_from_log as records_from_log, render_launch_trace as render,
+    LaunchSurface, TraceVerdict,
 };
 
 /// Drives every stage of one launch, refusing at `refuse_at` when given.
@@ -26,9 +28,9 @@ async fn drive_launch(agent_run_id: &str, refuse_at: Option<&'static str>) -> St
             facts.scope = Some("task".to_owned());
         });
         for stage in [
-            trace::stages::REQUESTED,
-            trace::stages::POLICY_EVALUATED,
-            trace::stages::AUTHORITY_RESOLVED,
+            trace::REQUESTED,
+            trace::POLICY_EVALUATED,
+            trace::AUTHORITY_RESOLVED,
         ] {
             if refuse_at == Some(stage) {
                 trace::refused(stage, "refused_for_this_test").record();
@@ -38,12 +40,12 @@ async fn drive_launch(agent_run_id: &str, refuse_at: Option<&'static str>) -> St
         }
         trace::attempt_committed(agent_run_id);
         for stage in [
-            trace::stages::DIRECTORY_PREFLIGHTED,
-            trace::stages::EXECUTABLE_RESOLVED,
-            trace::stages::PROVIDER_VALIDATED,
-            trace::stages::ARGV_MATERIALISED,
-            trace::stages::RUNTIME_SPAWNED,
-            trace::stages::PROMPT_DELIVERED,
+            trace::DIRECTORY_PREFLIGHTED,
+            trace::EXECUTABLE_RESOLVED,
+            trace::PROVIDER_VALIDATED,
+            trace::ARGV_MATERIALISED,
+            trace::RUNTIME_SPAWNED,
+            trace::PROMPT_DELIVERED,
         ] {
             if refuse_at == Some(stage) {
                 trace::refused(stage, "refused_for_this_test").record();
@@ -66,7 +68,7 @@ async fn one_development_launch_produces_one_ordered_timed_report() {
     );
 
     let completed = drive_launch("run-completed", None).await;
-    let refused = drive_launch("run-refused", Some(trace::stages::EXECUTABLE_RESOLVED)).await;
+    let refused = drive_launch("run-refused", Some(trace::EXECUTABLE_RESOLVED)).await;
 
     let text = std::fs::read_to_string(log.path().expect("a log path")).expect("read the log");
     let records = records_from_log(&text);
@@ -81,7 +83,7 @@ async fn one_development_launch_produces_one_ordered_timed_report() {
     assert_eq!(report.provider.as_deref(), Some("claude"));
     assert_eq!(
         report.last_stage_reached.as_deref(),
-        Some(trace::stages::PROMPT_DELIVERED),
+        Some(trace::PROMPT_DELIVERED),
         "the report must name the last stage reached: {}",
         render(&report)
     );
@@ -92,7 +94,7 @@ async fn one_development_launch_produces_one_ordered_timed_report() {
     );
     assert_eq!(
         report.stages.first().map(|stage| stage.event.as_str()),
-        Some(trace::stages::REQUESTED)
+        Some(trace::REQUESTED)
     );
     assert!(
         report
@@ -112,7 +114,7 @@ async fn one_development_launch_produces_one_ordered_timed_report() {
     assert_eq!(
         refused_report.verdict,
         TraceVerdict::Refused {
-            stage: trace::stages::EXECUTABLE_RESOLVED.to_owned(),
+            stage: trace::EXECUTABLE_RESOLVED.to_owned(),
             reason: Some("refused_for_this_test".to_owned()),
         },
         "{}",
@@ -120,13 +122,13 @@ async fn one_development_launch_produces_one_ordered_timed_report() {
     );
     assert_eq!(
         refused_report.last_stage_reached.as_deref(),
-        Some(trace::stages::EXECUTABLE_RESOLVED)
+        Some(trace::EXECUTABLE_RESOLVED)
     );
     assert!(
         refused_report
             .stages
             .iter()
-            .any(|stage| stage.event == trace::stages::ARGV_MATERIALISED)
+            .any(|stage| stage.event == trace::ARGV_MATERIALISED)
             .eq(&false),
         "a refused launch must not report stages it never reached"
     );

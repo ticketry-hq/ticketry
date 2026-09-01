@@ -12,7 +12,7 @@ use sea_orm::{
     DatabaseTransaction, EntityTrait, PaginatorTrait, QueryFilter, Set, TransactionTrait,
     TryIntoModel,
 };
-use ticketry_entities::work_management::{issue, issue_type, project, state};
+use ticketry_entities::{issue, issue_type, project, state};
 
 const GROUPS: &[&str] = &["backlog", "unstarted", "started", "completed", "cancelled"];
 const PALETTE: &[&str] = &[
@@ -373,8 +373,8 @@ pub async fn delete_issue_type(
         .one(&transaction)
         .await?
         .ok_or_else(|| CommandError::NotFound("Issue type not found.".to_owned()))?;
-    let in_use = ticketry_entities::work_management::issue::Entity::find()
-        .filter(ticketry_entities::work_management::issue::Column::IssueTypeId.eq(&id))
+    let in_use = ticketry_entities::issue::Entity::find()
+        .filter(ticketry_entities::issue::Column::IssueTypeId.eq(&id))
         .count(&transaction)
         .await?;
     if in_use != 0 && reassign_to.is_none() {

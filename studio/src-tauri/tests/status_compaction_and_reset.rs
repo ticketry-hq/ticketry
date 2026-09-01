@@ -9,7 +9,7 @@ use std::time::Duration;
 
 use futures_util::{Stream, StreamExt};
 use sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, FromQueryResult, Statement};
-use ticketry_runs::persistence::{
+use ticketry_runs::{
     open_status_stream, reset_reason, CompactionPolicy, RunStatusFrame, RunsServices,
     StatusStreamRequest, MAX_REPLAY_EVENTS, RETAINED_EVENTS, RETENTION_DAYS,
 };

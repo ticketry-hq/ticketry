@@ -10,7 +10,7 @@
 
 use sea_orm::DbErr;
 
-use ticketry_workspace_runtime::worktree::status::{WorktreeStatusError, WorktreeStatusErrorCode};
+use ticketry_workspace_runtime::status::{WorktreeStatusError, WorktreeStatusErrorCode};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[non_exhaustive]

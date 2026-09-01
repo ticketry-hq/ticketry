@@ -4,7 +4,7 @@ use super::{payload::GraphRunMutationPayload, support::graphql_error};
 use crate::graph_run_service::{
     GraphRunResult, GraphRunServiceError, GraphRunServiceErrorCode, LaunchedChild,
 };
-use ticketry_entities::execution::graph_run;
+use ticketry_entities::graph_run;
 
 fn model() -> graph_run::Model {
     graph_run::Model {

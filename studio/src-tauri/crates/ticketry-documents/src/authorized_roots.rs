@@ -11,8 +11,7 @@ use std::path::Path;
 
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, ExprTrait, QueryFilter};
 
-use ticketry_entities::runs::agent_run;
-use ticketry_entities::work_management::issue;
+use ticketry_entities::{agent_run, issue};
 
 use super::design_directory::{self, ModuleIdentity, TaskIdentity};
 use super::error::DocumentsError;
@@ -86,7 +85,7 @@ pub(super) async fn canonical_task_root(
     task_id: &str,
 ) -> Option<String> {
     let folder =
-        ticketry_work_management::module_links::resolution::resolved_folder(database, module_id)
+        ticketry_work_management::resolution::resolved_folder(database, module_id)
             .await?;
     // Both rows are read through the generated entity, and both must belong to
     // the project the caller named. A module or Work Item from another project

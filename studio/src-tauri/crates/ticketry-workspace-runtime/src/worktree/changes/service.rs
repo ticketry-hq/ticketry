@@ -2,8 +2,8 @@ use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use std::path::Path;
 
 use crate::worktree::status::{self, WorktreeStatusService};
-use ticketry_entities::worktrees::worktree;
-use ticketry_work_management::work_management::commands::status_facts::WorkFactRecorder;
+use ticketry_entities::worktree;
+use ticketry_work_management::commands::status_facts::WorkFactRecorder;
 
 use super::{git, repository, GithubPort};
 use super::{PullRequestStatusView, WorktreeChangesError, WorktreeChangesView};

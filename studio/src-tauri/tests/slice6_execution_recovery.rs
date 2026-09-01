@@ -12,7 +12,7 @@ use common::execution_harness::{public_id, ExecutionHarness, HarnessOptions};
 use common::execution_legacy_fixture as legacy_fixture;
 use sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, Statement};
 use serde_json::{json, Value};
-use ticketry_terminal::terminal::launch::TerminalLaunchBoundary;
+use ticketry_terminal::TerminalLaunchBoundary;
 
 #[tokio::test]
 async fn a_crash_before_the_response_leaves_one_claim_and_one_runtime_after_restart() {

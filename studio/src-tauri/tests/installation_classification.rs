@@ -7,8 +7,8 @@
 mod common;
 
 use common::installation_corpus as corpus;
-use ticketry_installation::classification::{
-    self as classification, manifest, Installation, Refusal,
+use ticketry_installation::{
+    self as classification, manifest, ClassificationRefusal as Refusal, Installation,
 };
 
 #[tokio::test]
@@ -169,7 +169,7 @@ async fn an_empty_installation_classifies_idempotently() {
 #[tokio::test]
 async fn an_already_rust_owned_installation_classifies_idempotently() {
     let installation = corpus::install("django-current");
-    ticketry_work_management::work_management::adoption::adopt(installation.path())
+    ticketry_work_management::adoption::adopt(installation.path())
         .await
         .expect("adopt Work Management, so Rust owns the installation");
 
@@ -310,7 +310,7 @@ async fn a_future_django_generation_is_refused() {
 #[tokio::test]
 async fn a_future_rust_ownership_version_is_refused() {
     let installation = corpus::install("django-current");
-    ticketry_work_management::work_management::adoption::adopt(installation.path())
+    ticketry_work_management::adoption::adopt(installation.path())
         .await
         .expect("adopt Work Management first");
     corpus::execute(

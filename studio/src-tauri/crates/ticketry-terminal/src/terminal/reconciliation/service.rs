@@ -10,10 +10,8 @@ use crate::terminal::cleanup::{
     CleanupCause, CleanupRuntimeObservation, TerminalCleanupRuntime, TerminalCleanupService,
 };
 use crate::terminal::launch::{TerminalLaunchRuntime, TerminalLaunchService};
-use ticketry_entities::{runs::agent_run, terminals::session};
-use ticketry_runs::persistence::{
-    EndOfLifeOrigin, NewStatusEvent, RunsServices, TerminalFact, TerminalOutcome,
-};
+use ticketry_entities::{agent_run, session};
+use ticketry_runs::{EndOfLifeOrigin, NewStatusEvent, RunsServices, TerminalFact, TerminalOutcome};
 
 use super::batch::{recorded_session_batch, RecordedSessionCursors};
 use super::{
@@ -319,10 +317,10 @@ fn checkpoint(
     checkpoints: &Arc<dyn ReconciliationCheckpoints>,
     agent_run_id: &str,
     point: ReconciliationCheckpoint,
-) -> Result<(), ticketry_runs::persistence::RunsPersistenceError> {
+) -> Result<(), ticketry_runs::RunsPersistenceError> {
     checkpoints.reached(agent_run_id, point).map_err(|error| {
-        ticketry_runs::persistence::RunsPersistenceError::new(
-            ticketry_runs::persistence::RunsPersistenceErrorCode::Storage,
+        ticketry_runs::RunsPersistenceError::new(
+            ticketry_runs::RunsPersistenceErrorCode::Storage,
             error.to_string(),
         )
     })
@@ -346,7 +344,7 @@ fn record_sweep(sessions: &[ReconciledSession]) {
     if ended == 0 {
         return;
     }
-    ticketry_runs::persistence::record_sweep_ended("runtime_liveness_reconciliation", ended);
+    ticketry_runs::record_sweep_ended("runtime_liveness_reconciliation", ended);
 }
 
 #[cfg(test)]

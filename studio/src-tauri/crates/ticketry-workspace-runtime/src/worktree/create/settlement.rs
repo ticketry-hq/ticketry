@@ -11,8 +11,8 @@ use sea_orm::{ActiveModelTrait, ActiveValue::Set, DatabaseTransaction};
 use serde_json::json;
 
 use crate::worktree::facts::{record_worktree, WorktreeChange, WorktreeFact, WorktreeFactScope};
-use ticketry_entities::worktrees::worktree;
-use ticketry_runs::persistence::StatusEventRepository;
+use ticketry_entities::worktree;
+use ticketry_runs::StatusEventRepository;
 
 use super::error::{WorktreeCreateError, WorktreeCreateErrorCode};
 use super::plan::CreatePlan;

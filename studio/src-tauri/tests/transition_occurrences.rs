@@ -1,6 +1,6 @@
 use sea_orm::{ConnectionTrait, Database, DbBackend, EntityTrait, Statement};
-use ticketry_entities::work_management::issue;
-use ticketry_work_management::work_management::{
+use ticketry_entities::issue;
+use ticketry_work_management::{
     commands::workflow::{self, TransitionOrigin, TransitionWorkItem},
     open_for_commands,
 };

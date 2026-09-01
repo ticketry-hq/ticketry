@@ -1,4 +1,4 @@
-use ticketry_entities::worktrees::worktree;
+use ticketry_entities::worktree;
 
 use super::super::PullRequestStatusView;
 

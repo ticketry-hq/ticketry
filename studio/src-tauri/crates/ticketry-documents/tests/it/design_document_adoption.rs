@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use sea_orm::{ConnectionTrait, Database, DbBackend, Statement};
-use ticketry_documents::persistence::{
+use ticketry_documents::{
     adopt, documents_adopted, preflight, DocumentsPersistenceErrorCode, SourceClassification,
     LEDGER_TABLE,
 };

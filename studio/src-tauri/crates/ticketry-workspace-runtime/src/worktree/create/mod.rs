@@ -44,7 +44,7 @@ pub mod test_support;
 
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 
-use ticketry_entities::worktrees::worktree;
+use ticketry_entities::worktree;
 
 pub use error::{WorktreeCreateError, WorktreeCreateErrorCode};
 pub use service::WorktreeCreateService;

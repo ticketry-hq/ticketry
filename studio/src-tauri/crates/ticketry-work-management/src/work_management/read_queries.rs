@@ -1,5 +1,5 @@
 use std::collections::{HashMap, HashSet};
-use ticketry_entities::graphql_scalars::StringList;
+use ticketry_entities::StringList;
 
 use sea_orm::{
     ColumnTrait, DatabaseConnection, DbErr, EntityTrait, JoinType, QueryFilter, QueryOrder,
@@ -7,7 +7,7 @@ use sea_orm::{
 };
 
 use super::read_types as output;
-use ticketry_entities::work_management::{issue, issue_blocker, module_presentation, project};
+use ticketry_entities::{issue, issue_blocker, module_presentation, project};
 
 mod catalog;
 mod workflow_configuration;

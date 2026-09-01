@@ -28,7 +28,7 @@ use super::inventory::{self, Inventory};
 use super::phase::Phase;
 
 /// How many rotating snapshot generations are retained.
-pub const RETAINED_GENERATIONS: usize = 3;
+pub(crate) const RETAINED_GENERATIONS: usize = 3;
 
 /// The name of the pinned final cutover snapshot.
 ///
@@ -62,7 +62,10 @@ pub struct SnapshotRecord {
 /// The copy is staged under a private temporary name and renamed into place, so
 /// a crash mid-copy leaves the previous generations intact rather than a
 /// half-written file wearing a recovery point's name.
-pub fn create(data_directory: &Path, database_path: &Path) -> Result<PathBuf, AdoptionFailure> {
+pub(crate) fn create(
+    data_directory: &Path,
+    database_path: &Path,
+) -> Result<PathBuf, AdoptionFailure> {
     let staged = data_directory.join(format!(".{ROTATING_STEM}.{}.tmp", uuid::Uuid::new_v4()));
     let outcome = copy_into(database_path, &staged).and_then(|()| rotate(data_directory, &staged));
     if outcome.is_err() {
@@ -77,7 +80,10 @@ pub fn create(data_directory: &Path, database_path: &Path) -> Result<PathBuf, Ad
 /// snapshot an installation ever produced is the one worth keeping, and a later
 /// run has a Rust-owned source rather than the Python-era one. `None` means the
 /// original pin already exists and must retain its original verification record.
-pub fn pin(data_directory: &Path, snapshot: &Path) -> Result<Option<PathBuf>, AdoptionFailure> {
+pub(crate) fn pin(
+    data_directory: &Path,
+    snapshot: &Path,
+) -> Result<Option<PathBuf>, AdoptionFailure> {
     let pinned = data_directory.join(PINNED_SNAPSHOT);
     if pinned.exists() {
         return Ok(None);
@@ -176,7 +182,7 @@ async fn check_reopened(
 ///
 /// Recovery discovery reads this. It reports file names, sizes, and hashes —
 /// never the content of the installation they hold.
-pub fn retained(data_directory: &Path) -> Vec<PathBuf> {
+pub(crate) fn retained(data_directory: &Path) -> Vec<PathBuf> {
     let mut found = (1..=RETAINED_GENERATIONS)
         .map(|generation| generation_path(data_directory, generation))
         .filter(|path| path.is_file())
@@ -314,7 +320,7 @@ fn file_name(path: &Path) -> String {
         .unwrap_or_default()
 }
 
-pub fn sha256(path: &Path) -> Result<String, AdoptionFailure> {
+pub(crate) fn sha256(path: &Path) -> Result<String, AdoptionFailure> {
     let mut file = File::open(path).map_err(|error| {
         failed(
             Phase::HashVerification,

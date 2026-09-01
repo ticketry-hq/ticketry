@@ -82,8 +82,8 @@ impl From<DbErr> for TerminalCleanupError {
     }
 }
 
-impl From<ticketry_runs::persistence::RunsPersistenceError> for TerminalCleanupError {
-    fn from(_: ticketry_runs::persistence::RunsPersistenceError) -> Self {
+impl From<ticketry_runs::RunsPersistenceError> for TerminalCleanupError {
+    fn from(_: ticketry_runs::RunsPersistenceError) -> Self {
         Self::new(
             TerminalCleanupErrorCode::Storage,
             "Terminal cleanup could not settle its Agent Run.",

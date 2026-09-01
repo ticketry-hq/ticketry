@@ -11,7 +11,7 @@ use sea_orm::{
 };
 
 use super::super::CommandError;
-use ticketry_entities::work_management::{
+use ticketry_entities::{
     issue_type, issue_type_transition, launch_binding, state,
 };
 

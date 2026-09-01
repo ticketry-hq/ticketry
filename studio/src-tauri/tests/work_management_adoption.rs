@@ -2,8 +2,8 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use sea_orm::{ConnectionTrait, Database, DbBackend, Statement};
-use ticketry_work_management::work_management::adoption::{adopt, SourceClassification};
-use ticketry_work_management::work_management::launch_binding_entry_skill_migration;
+use ticketry_work_management::adoption::{adopt, SourceClassification};
+use ticketry_work_management::launch_binding_entry_skill_migration;
 
 fn repository_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))

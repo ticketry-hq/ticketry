@@ -9,7 +9,7 @@ use tokio::task::JoinHandle;
 use tokio::time::timeout;
 use tokio_util::sync::CancellationToken;
 
-use ticketry_terminal::terminal::lifecycle::TerminalLifecycleRuntime;
+use ticketry_terminal::TerminalLifecycleRuntime;
 
 use super::{service::DEFAULT_BATCH_SIZE, ExecutionReconciliationService};
 

@@ -6,7 +6,7 @@
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, QuerySelect};
 
 use crate::planning::{ModulePromptFacts, TaskPromptFacts, TaskSummary};
-use ticketry_entities::work_management::{issue, issue_type, project, state};
+use ticketry_entities::{issue, issue_type, project, state};
 
 use super::error::LaunchAuthorityError;
 

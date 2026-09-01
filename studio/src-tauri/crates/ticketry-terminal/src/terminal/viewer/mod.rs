@@ -6,6 +6,16 @@
 //! transient PTY client and stays private so no caller outside this module can
 //! reach tmux directly.
 
-pub mod attachment;
+mod attachment;
 mod tmux_client;
-pub mod webview_commands;
+mod webview_commands;
+
+pub use attachment::{
+    AttachmentOutcome, TerminalAttachment, TerminalAttachmentControl, TerminalAttachmentError,
+    TerminalCommandAttachment, TerminalCommandAttachmentControl, TerminalScrollDirection,
+};
+pub use webview_commands::{
+    viewer_attach, viewer_detach, viewer_input, viewer_resize, viewer_scroll, viewer_status,
+    ViewerChannelEvent, ViewerCloseReason, ViewerCommandError, ViewerCommandState,
+    ViewerFailureCode, ViewerFailureLayer, ViewerLifecycle, ViewerScrollDirection, ViewerStatus,
+};

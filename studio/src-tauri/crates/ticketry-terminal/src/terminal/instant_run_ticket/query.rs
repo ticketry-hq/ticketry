@@ -1,6 +1,6 @@
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, QuerySelect};
 
-use ticketry_entities::{runs::agent_run, terminals::launch_material};
+use ticketry_entities::{agent_run, launch_material};
 
 use super::{title, InstantRunTicket};
 

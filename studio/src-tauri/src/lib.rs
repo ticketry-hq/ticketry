@@ -16,7 +16,7 @@ pub fn run() {
 /// so the context is built once at the root and passed down. Expanding the
 /// macro a second time would redefine `_EMBED_INFO_PLIST`.
 pub fn run_with_file_logging(requested: bool) {
-    ticketry_desktop::desktop::run(tauri::generate_context!(), requested);
+    ticketry_desktop::run(tauri::generate_context!(), requested);
 }
 
 pub fn file_logging_requested(arguments: &[std::ffi::OsString]) -> bool {

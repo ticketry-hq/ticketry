@@ -298,7 +298,7 @@ mod tests {
                 assert!(!columns.is_empty());
             }
         }
-        let slice2_tables = ticketry_settings::ownership_manifest::OWNED_TABLES
+        let slice2_tables = ticketry_settings::OWNED_TABLES
             .iter()
             .map(|(table, _)| *table)
             .collect::<std::collections::BTreeSet<_>>();

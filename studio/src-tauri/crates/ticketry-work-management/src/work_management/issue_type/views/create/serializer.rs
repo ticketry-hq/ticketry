@@ -1,6 +1,6 @@
 use seaolim::Serializer;
 
-use ticketry_entities::work_management::issue_type;
+use ticketry_entities::issue_type;
 
 /// Selects Issue Type create rules for this view only.
 ///

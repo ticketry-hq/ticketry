@@ -3,10 +3,7 @@ use seaography::{
     async_graphql::dynamic::ResolverContext, GuardAction, LifecycleHooksInterface, OperationType,
 };
 
-use ticketry_entities::{
-    execution::graph_run,
-    work_management::{issue, project},
-};
+use ticketry_entities::{graph_run, issue, project};
 
 const GRAPH_RUNS: &str = "GraphRuns";
 
@@ -86,12 +83,12 @@ mod tests {
         let mut context = BuilderContext::default();
         context.hooks = LifecycleHooks::new(super::GraphRunReadScope);
         let context = Box::leak(Box::new(context));
-        let builder = ticketry_entities::work_management::register_entity_modules(Builder::new(
+        let builder = ticketry_entities::register_work_management_entities(Builder::new(
             context,
             database.clone(),
         ));
-        let builder = ticketry_terminal::terminal::persistence::register_graphql(builder);
-        let schema = ticketry_entities::execution::register_entity_modules(builder)
+        let builder = ticketry_terminal::register_persistence_graphql(builder);
+        let schema = ticketry_entities::register_execution_entities(builder)
             .schema_builder()
             .data(database)
             .finish()

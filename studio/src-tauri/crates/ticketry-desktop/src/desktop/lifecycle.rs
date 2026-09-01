@@ -9,7 +9,7 @@ use crate::desktop::data_directory::{
 };
 use crate::desktop::service_state::DesktopServiceState;
 use crate::native_terminal;
-use ticketry_terminal::terminal::viewer::webview_commands;
+use ticketry_terminal::ViewerCommandState;
 
 pub const MAIN_WINDOW_LABEL: &str = "main";
 
@@ -43,7 +43,7 @@ pub fn detach_transient_viewers(application: &tauri::AppHandle) {
     // freshly loaded Studio layout without signalling or killing durable tmux
     // sessions.
     application
-        .state::<webview_commands::ViewerCommandState>()
+        .state::<ViewerCommandState>()
         .detach_all();
     application
         .state::<native_terminal::NativeTerminalState>()

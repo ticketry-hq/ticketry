@@ -21,7 +21,7 @@ use super::schema::Schema;
 ///
 /// Returns [`PreflightFailure::UnreadableInstallation`] when the terminal
 /// session rows cannot be read.
-pub async fn check<C: ConnectionTrait>(
+pub(crate) async fn check<C: ConnectionTrait>(
     view: &C,
     schema: &Schema,
     findings: &mut Findings,

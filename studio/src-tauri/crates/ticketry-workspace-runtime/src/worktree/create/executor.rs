@@ -37,8 +37,8 @@ use crate::worktree::status::registry::same_path;
 use crate::worktree::status::{
     owner, repository as repository_resolution, GitPort, RepositoryLocks,
 };
-use ticketry_entities::worktrees::worktree;
-use ticketry_runs::persistence::StatusEventRepository;
+use ticketry_entities::worktree;
+use ticketry_runs::StatusEventRepository;
 
 use super::error::WorktreeCreateError;
 use super::git_effects::{self, CheckoutObservation};

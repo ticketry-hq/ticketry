@@ -4,9 +4,7 @@ use std::collections::BTreeMap;
 
 use sea_orm::{ActiveValue::NotSet, DatabaseConnection, DbErr, EntityTrait, Set, TransactionTrait};
 
-use ticketry_entities::work_management::{
-    agent_model, agent_model_reasoning_level, provider, reasoning_level,
-};
+use ticketry_entities::{agent_model, agent_model_reasoning_level, provider, reasoning_level};
 
 const CLAUDE_REASONING: &[&str] = &["low", "medium", "high", "xhigh", "max"];
 const CODEX_REASONING: &[&str] = &["minimal", "low", "medium", "high", "xhigh"];

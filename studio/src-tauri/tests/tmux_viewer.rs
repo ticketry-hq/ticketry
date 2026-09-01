@@ -3,7 +3,7 @@ use std::io::Read;
 use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
-use ticketry_terminal::terminal::viewer::attachment::{
+use ticketry_terminal::{
     AttachmentOutcome, TerminalAttachment, TerminalAttachmentError, TerminalScrollDirection,
 };
 
@@ -96,7 +96,7 @@ fn rejects_unbounded_input_without_ending_the_session() {
     assert!(matches!(
         viewer.write_all(&vec![
             0_u8;
-            ticketry_terminal::tmux_adapter::MAX_INPUT_BYTES + 1
+            ticketry_terminal::MAX_INPUT_BYTES + 1
         ]),
         Err(TerminalAttachmentError::InputTooLarge { .. })
     ));

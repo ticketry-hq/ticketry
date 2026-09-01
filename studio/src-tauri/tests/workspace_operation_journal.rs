@@ -918,7 +918,7 @@ async fn the_journal_intent_is_immutable_once_durable() {
 #[tokio::test]
 async fn the_journal_is_absent_from_the_public_graphql_surface() {
     let (_directory, database, _journal) = journal().await;
-    let schema = ticketry_graphql_schema::query_root::foundation_schema(
+    let schema = ticketry_graphql_schema::foundation_schema(
         database, None, None, None, None, None, None, None, None,
     )
     .unwrap();

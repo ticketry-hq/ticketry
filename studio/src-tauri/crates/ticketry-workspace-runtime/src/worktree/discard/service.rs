@@ -28,8 +28,8 @@ use crate::workspace::operations::{
     WorkspaceOperationJournal, WorkspaceOperationOutcome, WorkspaceOperationReconciler,
 };
 use crate::worktree::status::{owner, RepositoryLocks, WorktreeStatusService, WorktreeStatusView};
-use ticketry_entities::worktrees::worktree;
-use ticketry_runs::persistence::StatusEventRepository;
+use ticketry_entities::worktree;
+use ticketry_runs::StatusEventRepository;
 
 use super::error::{WorktreeDiscardError, WorktreeDiscardErrorCode};
 use super::executor::DiscardExecutor;

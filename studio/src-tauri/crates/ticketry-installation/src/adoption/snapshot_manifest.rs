@@ -24,7 +24,7 @@ use super::phase::Phase;
 use super::snapshot::SnapshotRecord;
 
 /// The manifest format version, so a future reader can refuse an older shape.
-pub const MANIFEST_VERSION: u32 = 1;
+pub(crate) const MANIFEST_VERSION: u32 = 1;
 
 /// An external authority the installation refers to but the snapshot omits.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -121,7 +121,7 @@ impl SnapshotManifest {
 ///
 /// They are listed by fixed name rather than discovered, so a manifest cannot
 /// grow an entry naming something inside the user's work.
-pub fn external_roots(data_directory: &Path) -> Vec<ExternalRoot> {
+pub(crate) fn external_roots(data_directory: &Path) -> Vec<ExternalRoot> {
     let local = |kind: &str, name: &str| ExternalRoot {
         kind: kind.to_owned(),
         name: name.to_owned(),
@@ -142,7 +142,7 @@ pub fn external_roots(data_directory: &Path) -> Vec<ExternalRoot> {
         ExternalRoot {
             kind: "hook-spool".to_owned(),
             name: "ticketry-hook-spool".to_owned(),
-            present: ticketry_runs::hook_spool::hook_spool_directory(data_directory).exists(),
+            present: ticketry_runs::hook_spool_directory(data_directory).exists(),
         },
         local("profiles", "profiles.json"),
         local("features", "features.json"),
@@ -157,7 +157,7 @@ pub fn external_roots(data_directory: &Path) -> Vec<ExternalRoot> {
 
 /// Mark every retained recovery point after the durable readiness commit.
 /// Repeating this on restart repairs a crash between those two file writes.
-pub fn mark_retained_completed(data_directory: &Path) -> Result<(), AdoptionFailure> {
+pub(crate) fn mark_retained_completed(data_directory: &Path) -> Result<(), AdoptionFailure> {
     for snapshot in super::snapshot::retained(data_directory) {
         let path = snapshot.with_file_name(format!(
             "{}.manifest.json",

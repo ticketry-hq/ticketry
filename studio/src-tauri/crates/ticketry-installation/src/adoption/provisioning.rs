@@ -27,7 +27,7 @@ use sea_orm::{
 
 use super::error::{AdoptionFailure, Refusal};
 use super::phase::Phase;
-use crate::classification::{manifest, schema_facts};
+use crate::{classification::schema_facts, manifest};
 
 /// The recorded schema a first launch is provisioned into.
 const RECORDED_SCHEMA: &str = include_str!("provisioning.v1.sql");
@@ -114,7 +114,7 @@ async fn install(database: &DatabaseConnection) -> Result<(), AdoptionFailure> {
                 "the provisioned schema could not reach the Rust leaf: {error}"
             ))
         })?;
-    ticketry_work_management::work_management::commands::default_project_catalog::seed(
+    ticketry_work_management::commands::default_project_catalog::seed(
         database,
         &project_id,
     )
@@ -237,7 +237,7 @@ fn failed(detail: String) -> AdoptionFailure {
 mod tests {
     use super::{manifest, RECORDED_SCHEMA};
     use sea_orm::{DatabaseConnection, EntityTrait};
-    use ticketry_entities::work_management::{issue_type, state};
+    use ticketry_entities::{issue_type, state};
 
     #[test]
     fn the_recorded_schema_names_the_generation_it_reproduces() {

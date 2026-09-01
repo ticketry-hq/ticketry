@@ -9,11 +9,11 @@ use common::terminal_lifecycle_harness::{
     TerminalLifecycleHarness, MODULE_ID, PROJECT_ID, TASK_ID,
 };
 use sea_orm::{ConnectionTrait, EntityTrait};
-use ticketry_entities::terminals::{launch_material, session};
-use ticketry_launch::terminal_session::{
+use ticketry_entities::{launch_material, session};
+use ticketry_launch::{
     CreateTerminalSession, TerminalLaunchError, TerminalLaunchKind,
 };
-use ticketry_terminal::terminal::launch::{
+use ticketry_terminal::{
     TerminalLaunchCheckpoint, TerminalLaunchRuntime, TerminalRuntimeObservation,
     VerifiedTerminalRuntime,
 };
@@ -28,7 +28,7 @@ impl TerminalLaunchRuntime for ResumeRuntime {
         if self.created.lock().unwrap().contains(agent_run_id) {
             TerminalRuntimeObservation::Running(VerifiedTerminalRuntime {
                 tmux_session_name: format!("pt-{agent_run_id}"),
-                runtime_namespace: ticketry_terminal::tmux_adapter::current_runtime_namespace()
+                runtime_namespace: ticketry_terminal::current_runtime_namespace()
                     .unwrap(),
             })
         } else {
@@ -77,7 +77,7 @@ async fn resume_creates_new_history_and_retries_idempotently() {
         .await
         .unwrap()
         .unwrap();
-    let original_run = ticketry_entities::runs::agent_run::Entity::find_by_id("resume-source")
+    let original_run = ticketry_entities::agent_run::Entity::find_by_id("resume-source")
         .one(&database)
         .await
         .unwrap()
@@ -103,13 +103,13 @@ async fn resume_creates_new_history_and_retries_idempotently() {
         Some(original)
     );
     assert_eq!(
-        ticketry_entities::runs::agent_run::Entity::find_by_id("resume-source")
+        ticketry_entities::agent_run::Entity::find_by_id("resume-source")
             .one(&database)
             .await
             .unwrap(),
         Some(original_run)
     );
-    let successor = ticketry_entities::runs::agent_run::Entity::find_by_id(&created.agent_run_id)
+    let successor = ticketry_entities::agent_run::Entity::find_by_id(&created.agent_run_id)
         .one(&database)
         .await
         .unwrap()
@@ -273,7 +273,7 @@ async fn insert_source(
     provider_session: Option<&str>,
     ended: bool,
 ) {
-    let namespace = ticketry_terminal::tmux_adapter::current_runtime_namespace().unwrap();
+    let namespace = ticketry_terminal::current_runtime_namespace().unwrap();
     let provider = provider_session
         .map(|value| format!("'{value}'"))
         .unwrap_or_else(|| "NULL".to_owned());
@@ -300,7 +300,7 @@ async fn insert_live_successor(database: &sea_orm::DatabaseConnection, source: &
 }
 
 async fn insert_agentless_shell(database: &sea_orm::DatabaseConnection, run_id: &str) {
-    let namespace = ticketry_terminal::tmux_adapter::current_runtime_namespace().unwrap();
+    let namespace = ticketry_terminal::current_runtime_namespace().unwrap();
     database
         .execute_unprepared(&format!(
             "INSERT INTO agent_runs (id, issue_id, agent, status, started_at, ended_at, provider_session_id, lifecycle_state, lifecycle_updated_at, scope) \
@@ -317,7 +317,7 @@ async fn insert_agentless_shell(database: &sea_orm::DatabaseConnection, run_id: 
 }
 
 async fn insert_scratch_source(database: &sea_orm::DatabaseConnection, run_id: &str) {
-    let namespace = ticketry_terminal::tmux_adapter::current_runtime_namespace().unwrap();
+    let namespace = ticketry_terminal::current_runtime_namespace().unwrap();
     database
         .execute_unprepared(&format!(
             "INSERT INTO agent_runs (id, issue_id, agent, status, started_at, ended_at, provider_session_id, lifecycle_state, lifecycle_updated_at, scope) \

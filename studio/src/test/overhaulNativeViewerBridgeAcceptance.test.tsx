@@ -218,8 +218,13 @@ describe("native viewer attachment acceptance", () => {
     expect(shellSource).toMatch(
       /fn detach_transient_viewers[\s\S]{0,500}ViewerCommandState[\s\S]{0,500}NativeTerminalState/,
     );
+    // Exit and an update relaunch share one teardown, and it is what detaches
+    // the native surfaces.
     expect(shellSource).toMatch(
-      /RunEvent::Exit[\s\S]{0,120}detach_transient_viewers\(application\)/,
+      /RunEvent::Exit[\s\S]{0,120}tear_down_before_exit\(application\)/,
+    );
+    expect(shellSource).toMatch(
+      /fn tear_down_before_exit[\s\S]{0,300}detach_transient_viewers\(application\)/,
     );
     expect(nativeTerminalSource).toMatch(
       /fn cancel_all[\s\S]{0,180}generation[\s\S]{0,180}phase\.store\(FAILED/,

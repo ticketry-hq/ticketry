@@ -3,15 +3,17 @@ use std::path::Path;
 use sea_orm::DatabaseConnection;
 use serde_json::{json, Map, Value};
 
-use ticketry_agent_execution::execution::graph::GraphAccess;
-use ticketry_agent_execution::execution::run_now::{RunNowCaller, RunNowRequest, RunNowService};
-use ticketry_agent_execution::graph_run_service::{GraphRunRequest, GraphRunService};
-use ticketry_terminal::terminal::cleanup::TerminalCleanupService;
-use ticketry_terminal::terminal::launch::TerminalLaunchService;
-use ticketry_work_management::work_management::commands::{
+use ticketry_agent_execution::graph::GraphAccess;
+use ticketry_agent_execution::run_now::{RunNowCaller, RunNowRequest, RunNowService};
+use ticketry_agent_execution::{
+    GraphRunRequest, GraphRunResult, GraphRunService, GraphRunServiceError,
+};
+use ticketry_terminal::TerminalCleanupService;
+use ticketry_terminal::TerminalLaunchService;
+use ticketry_work_management::commands::{
     attachments, status_facts::WorkFactRecorder, work_items, workflow, CommandError,
 };
-use ticketry_work_management::work_management::launch_policy::{
+use ticketry_work_management::launch_policy::{
     self, CallerScope, LaunchPolicyRequest, LaunchPolicyResolver,
 };
 
@@ -27,11 +29,11 @@ use super::{
 /// other publisher's subscribers delays delivery to the next reread rather than
 /// losing the fact.
 pub(super) async fn work_facts(database: &DatabaseConnection) -> Option<WorkFactRecorder> {
-    ticketry_runs::persistence::outbox_adopted(database)
+    ticketry_runs::outbox_adopted(database)
         .await
         .then(|| {
             WorkFactRecorder::new(
-                ticketry_runs::persistence::RunsServices::new(database.clone())
+                ticketry_runs::RunsServices::new(database.clone())
                     .outbox()
                     .events()
                     .clone(),
@@ -162,7 +164,7 @@ async fn dispatch_checked(
             // edges inside it are returned; MCP must not restate it.
             let access = GraphAccess::caller_roots(&task.project_id, [&task.id]);
             Ok(DispatchOutput::direct(
-                match ticketry_agent_execution::execution::graph::dependency_graph(
+                match ticketry_agent_execution::graph::dependency_graph(
                     database, &task.id, &access,
                 )
                 .await
@@ -583,7 +585,7 @@ fn reset_requested(arguments: &Map<String, Value>) -> bool {
 
 fn graph_run_success(
     root_id: &str,
-    result: ticketry_agent_execution::graph_run_service::GraphRunResult,
+    result: GraphRunResult,
 ) -> Value {
     json!({
         "root_id": root_id,
@@ -597,7 +599,7 @@ fn graph_run_success(
 
 fn graph_run_error(
     root_id: &str,
-    error: &ticketry_agent_execution::graph_run_service::GraphRunServiceError,
+    error: &GraphRunServiceError,
 ) -> Value {
     json!({"root_id": root_id, "error": error.code_str()})
 }
@@ -607,8 +609,8 @@ mod graph_run_contract_tests {
     use chrono::NaiveDateTime;
 
     use super::*;
-    use ticketry_agent_execution::graph_run_service::{GraphRunResult, LaunchedChild};
-    use ticketry_entities::execution::graph_run;
+    use ticketry_agent_execution::LaunchedChild;
+    use ticketry_entities::graph_run;
 
     #[test]
     fn execution_request_keeps_parallel_default_provider_override_and_reset_meaning() {

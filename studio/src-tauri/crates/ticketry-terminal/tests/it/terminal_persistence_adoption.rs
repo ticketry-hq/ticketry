@@ -20,22 +20,18 @@ const LEAVES: &[&str] = &[
 async fn fresh_database_without_terminal_history_installs_rust_schema_idempotently() {
     let directory = tempfile::tempdir().expect("create fresh Terminal fixture");
     provision_without_terminal_history(directory.path());
-    ticketry_runs::persistence::adopt(directory.path())
-        .await
-        .unwrap();
+    ticketry_runs::adopt(directory.path()).await.unwrap();
 
     assert_eq!(
-        ticketry_terminal::terminal::persistence::preflight(directory.path())
+        ticketry_terminal::preflight_terminal_persistence(directory.path())
             .await
             .unwrap(),
-        ticketry_terminal::terminal::persistence::SourceClassification::Django(
-            "0000_no_terminal_history"
-        ),
+        ticketry_terminal::TerminalSourceClassification::Django("0000_no_terminal_history"),
     );
-    let first = ticketry_terminal::terminal::persistence::adopt(directory.path())
+    let first = ticketry_terminal::adopt_terminal_persistence(directory.path())
         .await
         .unwrap();
-    let second = ticketry_terminal::terminal::persistence::adopt(directory.path())
+    let second = ticketry_terminal::adopt_terminal_persistence(directory.path())
         .await
         .unwrap();
 
@@ -51,10 +47,10 @@ async fn every_supported_django_leaf_has_an_exact_classifier() {
         let directory = tempfile::tempdir().expect("create Terminal leaf fixture");
         migrate(directory.path(), leaf);
         assert_eq!(
-            ticketry_terminal::terminal::persistence::preflight(directory.path())
+            ticketry_terminal::preflight_terminal_persistence(directory.path())
                 .await
                 .unwrap_or_else(|error| panic!("{leaf} must classify: {error}")),
-            ticketry_terminal::terminal::persistence::SourceClassification::Django(leaf),
+            ticketry_terminal::TerminalSourceClassification::Django(leaf),
         );
     }
 }
@@ -63,14 +59,10 @@ async fn every_supported_django_leaf_has_an_exact_classifier() {
 async fn adoption_preserves_history_expires_leases_and_is_idempotent() {
     let directory = tempfile::tempdir().expect("create Terminal adoption fixture");
     provision_current(directory.path());
-    ticketry_runs::persistence::preflight(directory.path())
-        .await
-        .unwrap();
-    ticketry_runs::persistence::adopt(directory.path())
-        .await
-        .unwrap();
+    ticketry_runs::preflight(directory.path()).await.unwrap();
+    ticketry_runs::adopt(directory.path()).await.unwrap();
 
-    let first = ticketry_terminal::terminal::persistence::adopt(directory.path())
+    let first = ticketry_terminal::adopt_terminal_persistence(directory.path())
         .await
         .unwrap();
     assert_eq!(first.stale_viewer_leases_expired, 2);
@@ -79,10 +71,10 @@ async fn adoption_preserves_history_expires_leases_and_is_idempotent() {
     assert_eq!(first.tables["terminal_launch_material"].row_count, 0);
     assert_eq!(first.tables["terminal_cleanup_effects"].row_count, 0);
 
-    let second = ticketry_terminal::terminal::persistence::adopt(directory.path())
+    let second = ticketry_terminal::adopt_terminal_persistence(directory.path())
         .await
         .unwrap();
-    let third = ticketry_terminal::terminal::persistence::adopt(directory.path())
+    let third = ticketry_terminal::adopt_terminal_persistence(directory.path())
         .await
         .unwrap();
     assert_eq!(second.tables, third.tables);
@@ -154,17 +146,15 @@ async fn live_index_rename_lineage_adopts_without_inventing_legacy_launch_reques
     );
 
     assert_eq!(
-        ticketry_terminal::terminal::persistence::preflight(directory.path())
+        ticketry_terminal::preflight_terminal_persistence(directory.path())
             .await
             .unwrap(),
-        ticketry_terminal::terminal::persistence::SourceClassification::Django(
-            "0008_rename_terminal_task_index"
-        ),
+        ticketry_terminal::TerminalSourceClassification::Django("0008_rename_terminal_task_index"),
     );
-    let first = ticketry_terminal::terminal::persistence::adopt(directory.path())
+    let first = ticketry_terminal::adopt_terminal_persistence(directory.path())
         .await
         .unwrap();
-    let second = ticketry_terminal::terminal::persistence::adopt(directory.path())
+    let second = ticketry_terminal::adopt_terminal_persistence(directory.path())
         .await
         .unwrap();
     assert_eq!(first.tables["agent_terminal_sessions"].row_count, 2);
@@ -189,13 +179,13 @@ async fn preflight_refuses_schema_and_semantic_drift_before_mutation() {
         let directory = tempfile::tempdir().expect("create rejected Terminal fixture");
         provision_current(directory.path());
         mutate(directory.path(), mutation);
-        let error = ticketry_terminal::terminal::persistence::preflight(directory.path())
+        let error = ticketry_terminal::preflight_terminal_persistence(directory.path())
             .await
             .expect_err(label);
         assert!(matches!(
             error.code(),
-            ticketry_terminal::terminal::persistence::TerminalPersistenceErrorCode::IncompatibleSchema
-                | ticketry_terminal::terminal::persistence::TerminalPersistenceErrorCode::InvalidMetadata
+            ticketry_terminal::TerminalPersistenceErrorCode::IncompatibleSchema
+                | ticketry_terminal::TerminalPersistenceErrorCode::InvalidMetadata
         ));
         assert!(!directory.path().join("terminal-adoption.json").exists());
     }

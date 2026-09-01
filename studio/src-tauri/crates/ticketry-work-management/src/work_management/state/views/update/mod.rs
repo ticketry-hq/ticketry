@@ -18,7 +18,7 @@ use crate::work_management::{
     commands::catalog,
     graphql::{command_error, require_command_database},
 };
-use ticketry_entities::work_management::state;
+use ticketry_entities::state;
 
 struct UpdateState;
 

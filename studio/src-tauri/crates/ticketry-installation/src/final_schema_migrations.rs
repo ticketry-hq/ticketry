@@ -5,25 +5,27 @@
 
 use sea_orm::{DatabaseConnection, DbErr};
 
-use ticketry_settings::provider_catalog_migrations;
-use ticketry_work_management::work_management::{
+use ticketry_settings::{
+    install_codex_5_6, install_codex_spark, CODEX_5_6_MIGRATION_ID, CODEX_SPARK_MIGRATION_ID,
+};
+use ticketry_work_management::{
     launch_binding_entry_skill_migration, module_presentation_migration,
     project_onboarding_migration, workflow_color_migration, workspace_tab_order_migration,
 };
 
 pub const ORDERED_MIGRATION_IDS: &[&str] = &[
-    provider_catalog_migrations::CODEX_5_6_MIGRATION_ID,
+    CODEX_5_6_MIGRATION_ID,
     project_onboarding_migration::MIGRATION_ID,
     launch_binding_entry_skill_migration::MIGRATION_ID,
     workflow_color_migration::MIGRATION_ID,
     workspace_tab_order_migration::MIGRATION_ID,
     module_presentation_migration::MIGRATION_ID,
-    provider_catalog_migrations::CODEX_SPARK_MIGRATION_ID,
-    ticketry_workspace_runtime::worktree::persistence::pull_request_url_migration::MIGRATION_ID,
+    CODEX_SPARK_MIGRATION_ID,
+    ticketry_workspace_runtime::persistence::pull_request_url_migration::MIGRATION_ID,
 ];
 
 pub async fn install(database: &DatabaseConnection) -> Result<(), DbErr> {
-    provider_catalog_migrations::install_codex_5_6(database)
+    install_codex_5_6(database)
         .await
         .map_err(|error| step_error("0044", error))?;
     project_onboarding_migration::install(database)
@@ -41,10 +43,10 @@ pub async fn install(database: &DatabaseConnection) -> Result<(), DbErr> {
     module_presentation_migration::install(database)
         .await
         .map_err(|error| step_error("0050", error))?;
-    provider_catalog_migrations::install_codex_spark(database)
+    install_codex_spark(database)
         .await
         .map_err(|error| step_error("0051", error))?;
-    ticketry_workspace_runtime::worktree::persistence::pull_request_url_migration::install(database)
+    ticketry_workspace_runtime::persistence::pull_request_url_migration::install(database)
         .await
         .map_err(|error| step_error("0052", error))
 }

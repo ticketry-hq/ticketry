@@ -1,0 +1,6 @@
+#!/bin/sh
+set -eu
+
+runtime=${MUXED_DESKTOP_ACCEPTANCE_NODE:?MUXED_DESKTOP_ACCEPTANCE_NODE is required}
+driver_dir=$(/usr/bin/dirname "$0")
+exec "$runtime" "$driver_dir/update-acceptance-driver.mjs" "$@"

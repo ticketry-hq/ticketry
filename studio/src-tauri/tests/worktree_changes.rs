@@ -5,7 +5,7 @@ use std::process::Command;
 
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection};
 use tauri_graphql::{TransportApi, TransportApiImpl};
-use ticketry_graphql_schema::graphql_foundation::initialize_with_worktracker_commands_and_install;
+use ticketry_graphql_schema::initialize_with_worktracker_commands_and_install;
 
 const PROJECT: &str = "10000000000000000000000000000000";
 const TASK_TYPE: &str = "30000000000000000000000000000001";
@@ -99,10 +99,10 @@ fn repository(root: &Path) -> String {
 }
 
 async fn link_module(database: &DatabaseConnection, folder: &Path) {
-    ticketry_work_management::module_links::schema::install(database)
+    ticketry_work_management::schema::install(database)
         .await
         .expect("install the Module Link schema");
-    ticketry_work_management::module_links::ModuleLinkStore::new(database.clone())
+    ticketry_work_management::ModuleLinkStore::new(database.clone())
         .set(MODULE, &folder.display().to_string())
         .await
         .expect("link the fixture module");

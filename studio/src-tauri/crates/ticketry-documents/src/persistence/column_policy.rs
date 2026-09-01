@@ -20,7 +20,7 @@
 use sea_orm::{EntityName, IdenStatic, Iterable};
 use seaography::BuilderContext;
 
-use ticketry_entities::documents::design_document;
+use ticketry_entities::design_document;
 
 use super::ownership_manifest::PROTECTED_COLUMNS;
 
@@ -34,7 +34,7 @@ pub fn apply(context: &mut BuilderContext) {
 }
 
 /// `"<TypeName>.<fieldName>"` for every protected column.
-pub fn protected_input_names(context: &BuilderContext) -> Vec<String> {
+pub(crate) fn protected_input_names(context: &BuilderContext) -> Vec<String> {
     let type_name = (context.entity_object.type_name)(design_document::Entity.table_name());
     design_document::Column::iter()
         .filter(|column| PROTECTED_COLUMNS.contains(&column.as_str()))
@@ -76,7 +76,7 @@ mod tests {
         let context = BuilderContext::default();
         assert_eq!(
             (context.entity_object.type_name)(design_document::Entity.table_name()),
-            ticketry_entities::documents::DESIGN_DOCUMENT_OBJECT
+            ticketry_entities::DESIGN_DOCUMENT_OBJECT
         );
     }
 }

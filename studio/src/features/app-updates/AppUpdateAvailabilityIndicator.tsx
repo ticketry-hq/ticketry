@@ -1,8 +1,8 @@
 import { studioRuntime } from "../../runtime";
-import { useAppUpdateCheckState } from "./internal/checkState";
+import { useAppUpdateState } from "./internal/updateState";
 
 export function useAppUpdateAvailable(): boolean {
-  const status = useAppUpdateCheckState((state) => state.status);
+  const status = useAppUpdateState((state) => state.update.status);
   return studioRuntime().capabilities.appUpdates && status === "available";
 }
 
@@ -22,7 +22,7 @@ export function AppUpdateAvailabilityIndicator({
       <span
         aria-hidden="true"
         title="Update available"
-        className="size-1.5 rounded-full bg-lifecycle-attention"
+        className="size-1.5 bg-lifecycle-attention"
       />
     </>
   );

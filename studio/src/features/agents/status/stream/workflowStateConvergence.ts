@@ -7,6 +7,7 @@
  * in step here rather than owning a second copy.
  */
 import type { State } from "../../../../shared/api/types";
+import { publicWorktrackerId } from "../../../../shared/api/generatedWorktracker";
 import {
   getStatesSnapshot,
   removeState,
@@ -28,14 +29,19 @@ export function applyWorkflowStateFact(
   removed: boolean,
   row: WorkflowStateRow | null,
 ): void {
+  // Facts carry the stored hyphen-less identity while the cached catalog keys
+  // states by their public form, so normalise before matching a cached row.
   if (removed) {
-    removeState(projectId, stateId);
+    removeState(projectId, publicWorktrackerId(stateId));
     advanceStateCatalogRevision(projectId);
     syncEditor(projectId, getStatesSnapshot(projectId));
     return;
   }
   if (!row) return;
-  const authoritative = row as unknown as State;
+  const authoritative = {
+    ...(row as unknown as State),
+    id: publicWorktrackerId(row.id),
+  };
   advanceStateCatalogRevision(projectId, authoritative);
   syncEditor(projectId, upsertState(projectId, authoritative));
 }

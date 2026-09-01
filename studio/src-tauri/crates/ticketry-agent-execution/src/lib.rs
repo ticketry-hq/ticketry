@@ -15,5 +15,20 @@
 //! delete, plus the read scope the assembled GraphQL schema installs so callers
 //! see only the campaigns they own.
 
-pub mod execution;
-pub mod graph_run_service;
+mod execution;
+mod graph_run_service;
+
+// `execution` is the private implementation root. The capability modules
+// below are the stable facade used by desktop, MCP, GraphQL, and integration
+// tests. In particular, `graph_run` and `run_now` retain their authored
+// GraphQL registration seams, while `persistence` retains its feature-free
+// adoption seam for installation tests.
+pub use execution::{
+    graph, graph_run, launch_delivery, merge_preparation_launcher, persistence, reconciliation,
+    run_now,
+};
+pub use graph_run_service::{
+    DeletedGraphRunResult, GraphRunAdvanceResult, GraphRunCaller, GraphRunReadScope,
+    GraphRunRequest, GraphRunResult, GraphRunService, GraphRunServiceError,
+    GraphRunServiceErrorCode, LaunchedChild, ResetGraphRunResult,
+};

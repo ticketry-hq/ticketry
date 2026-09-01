@@ -5,8 +5,8 @@ use std::sync::{
     Arc, Mutex,
 };
 use std::time::Duration;
-use ticketry_runs::persistence::{RunsServices, TerminalFact, TerminalOutcome};
-use ticketry_terminal::terminal::output_activity::{
+use ticketry_runs::{RunsServices, TerminalFact, TerminalOutcome};
+use ticketry_terminal::{
     LiveOutputSweepRuntime, TerminalOutputActivityError, TerminalOutputActivityService,
     TerminalScreenCapture,
 };
@@ -207,7 +207,7 @@ async fn insert_sweep_session(
 #[tokio::test]
 async fn sweep_filters_and_orders_live_sessions_and_isolates_capture_failures() {
     let (_directory, database, _) = fixture().await;
-    let namespace = ticketry_terminal::tmux_adapter::current_runtime_namespace().unwrap();
+    let namespace = ticketry_terminal::current_runtime_namespace().unwrap();
     for (id, created, owned, ended, terminated, cleanup) in [
         (
             "run-failing",
@@ -277,7 +277,7 @@ async fn sweep_filters_and_orders_live_sessions_and_isolates_capture_failures() 
     let service = TerminalOutputActivityService::new(database.clone(), capture.clone());
 
     assert_eq!(
-        ticketry_terminal::terminal::output_activity::observe_live_sessions(&service).await,
+        ticketry_terminal::observe_live_sessions(&service).await,
         1
     );
     assert_eq!(
@@ -298,7 +298,7 @@ async fn sweep_filters_and_orders_live_sessions_and_isolates_capture_failures() 
 #[tokio::test]
 async fn enumeration_failure_ends_only_that_pass() {
     let (_directory, database, _) = fixture().await;
-    let namespace = ticketry_terminal::tmux_adapter::current_runtime_namespace().unwrap();
+    let namespace = ticketry_terminal::current_runtime_namespace().unwrap();
     database
         .execute_unprepared("ALTER TABLE agent_terminal_sessions RENAME TO hidden_sessions")
         .await
@@ -311,7 +311,7 @@ async fn enumeration_failure_ends_only_that_pass() {
     let service = TerminalOutputActivityService::new(database.clone(), capture.clone());
 
     assert_eq!(
-        ticketry_terminal::terminal::output_activity::observe_live_sessions(&service).await,
+        ticketry_terminal::observe_live_sessions(&service).await,
         0
     );
     assert!(capture.calls.lock().unwrap().is_empty());
@@ -330,7 +330,7 @@ async fn enumeration_failure_ends_only_that_pass() {
         .unwrap();
 
     assert_eq!(
-        ticketry_terminal::terminal::output_activity::observe_live_sessions(&service).await,
+        ticketry_terminal::observe_live_sessions(&service).await,
         1
     );
     assert_eq!(capture.calls.lock().unwrap().as_slice(), ["run-a"]);
@@ -339,7 +339,7 @@ async fn enumeration_failure_ends_only_that_pass() {
 #[tokio::test]
 async fn periodic_sweep_repeats_and_shutdown_cancels_future_passes() {
     let (_directory, database, _) = fixture().await;
-    let namespace = ticketry_terminal::tmux_adapter::current_runtime_namespace().unwrap();
+    let namespace = ticketry_terminal::current_runtime_namespace().unwrap();
     database
         .execute_raw(Statement::from_sql_and_values(
             DbBackend::Sqlite,
@@ -468,7 +468,7 @@ async fn shell_output_events_reference_the_module_instead_of_the_scratch_task() 
 #[tokio::test]
 async fn the_first_report_is_immediate_and_further_reports_are_coalesced_for_500ms() {
     let (_directory, database, _) = fixture().await;
-    let namespace = ticketry_terminal::tmux_adapter::current_runtime_namespace().unwrap();
+    let namespace = ticketry_terminal::current_runtime_namespace().unwrap();
     database
         .execute_raw(Statement::from_sql_and_values(
             DbBackend::Sqlite,
@@ -627,7 +627,7 @@ async fn event_and_snapshot_publish_the_same_run_projection() {
 async fn graphql_report_accepts_only_the_terminal_session_identity() {
     let foundation = Database::connect("sqlite::memory:").await.unwrap();
     let worktracker = Database::connect("sqlite::memory:").await.unwrap();
-    let schema = ticketry_graphql_schema::query_root::foundation_schema(
+    let schema = ticketry_graphql_schema::foundation_schema(
         foundation,
         Some(worktracker),
         None,

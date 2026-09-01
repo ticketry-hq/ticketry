@@ -13,7 +13,7 @@ use crate::desktop::service_health::ServiceHealth;
 use crate::desktop::service_state::DesktopServiceState;
 use crate::desktop::{runs_handoff, workspace_handoff};
 use ticketry_data_directory::established_data_directory;
-use ticketry_terminal::terminal::lifecycle::{
+use ticketry_terminal::{
     ProductionTerminalLifecycleWork, TerminalLifecycleConfig, TerminalLifecycleRuntime,
 };
 
@@ -30,23 +30,23 @@ pub fn launch_rust_runtime(
     let launch_runtime = application.state::<DesktopLaunchRuntime>();
     let composed = launch_runtime.composed_runtime()?.clone();
     let database = composed.commands().clone();
-    let spool_directory = ticketry_runs::hook_spool::ensure_hook_spool_directory(&data_directory)?;
+    let spool_directory = ticketry_runs::ensure_hook_spool_directory(&data_directory)?;
 
-    let terminal_launch = ticketry_terminal::terminal::launch::TerminalLaunchService::new(
+    let terminal_launch = ticketry_terminal::TerminalLaunchService::new(
         database.clone(),
         Arc::new(composed.terminal_runtime().clone()),
     )
     .with_authority(Arc::new(
-        ticketry_launch::authority::LaunchAuthorityService::new(database.clone()),
+        ticketry_launch::LaunchAuthorityService::new(database.clone()),
     ));
     launch_runtime.configure_terminal_authority(
-        ticketry_terminal::terminal::lifecycle::TerminalRuntimeAuthority {
+        ticketry_terminal::TerminalRuntimeAuthority {
             database: database.clone(),
-            paths: ticketry_launch::paths::LaunchPathsService::new(database.clone()),
+            paths: ticketry_launch::LaunchPathsService::new(database.clone()),
             hook_runner,
             hook_spool_directory: spool_directory.clone(),
             mcp_url: String::new(),
-            run_authority: ticketry_runs::authority::RunAuthority::new(database.clone()),
+            run_authority: ticketry_runs::RunAuthority::new(database.clone()),
             granted_operations: ticketry_mcp::allowed_provider_operations(),
         },
     )?;
@@ -78,19 +78,19 @@ pub fn launch_rust_runtime(
         &database,
         graphql_api,
     ))?;
-    let spool = ticketry_runs::hook_spool::HookSpool::new(
+    let spool = ticketry_runs::HookSpool::new(
         spool_directory,
-        ticketry_runs::persistence::RunsServices::new(database.clone())
+        ticketry_runs::RunsServices::new(database.clone())
             .lifecycle()
             .clone(),
-        ticketry_runs::hook_spool::DEFAULT_BATCH_SIZE,
+        ticketry_runs::DEFAULT_BATCH_SIZE,
     )
     .map_err(|error| format!("terminal lifecycle startup failed: {error}"))?;
     let reconciliation =
-        ticketry_terminal::terminal::reconciliation::TerminalReconciliationService::new(
+        ticketry_terminal::TerminalReconciliationService::new(
             database.clone(),
             Arc::new(composed.terminal_runtime().clone()),
-            Arc::new(ticketry_terminal::terminal::cleanup::TmuxCleanupRuntime::default()),
+            Arc::new(ticketry_terminal::TmuxCleanupRuntime::default()),
         );
     let periodic_spool = spool.clone();
     let terminal_runtime = Arc::new(
@@ -112,18 +112,18 @@ pub fn launch_rust_runtime(
         tauri::async_runtime::block_on(periodic_spool.start(provider_hook_sweep_interval()))
             .map_err(|error| format!("provider hook ingestion startup failed: {error}"))?;
     let execution_service =
-        ticketry_agent_execution::execution::reconciliation::ExecutionReconciliationService::new(
+        ticketry_agent_execution::reconciliation::ExecutionReconciliationService::new(
             database.clone(),
-            ticketry_work_management::work_management::launch_policy::LaunchPolicyResolver::new(
+            ticketry_work_management::launch_policy::LaunchPolicyResolver::new(
                 database.clone(),
             ),
             terminal_launch.clone(),
         );
     let execution_runtime = tauri::async_runtime::block_on(
-        ticketry_agent_execution::execution::reconciliation::ExecutionReconciliationRuntime::start(
+        ticketry_agent_execution::reconciliation::ExecutionReconciliationRuntime::start(
             execution_service,
             Arc::clone(&terminal_runtime),
-            ticketry_agent_execution::execution::reconciliation::ExecutionReconciliationConfig::default(),
+            ticketry_agent_execution::reconciliation::ExecutionReconciliationConfig::default(),
         ),
     )
     .map_err(|error| format!("execution reconciliation startup failed: {error}"))?;
@@ -164,9 +164,9 @@ pub fn launch_rust_runtime(
         .output_sweep
         .lock()
         .expect("output sweep lock poisoned") = Some(
-        ticketry_terminal::terminal::output_activity::LiveOutputSweepRuntime::start(
+        ticketry_terminal::LiveOutputSweepRuntime::start(
             composed.output_activity().clone(),
-            ticketry_terminal::terminal::output_activity::configured_sweep_interval(),
+            ticketry_terminal::configured_sweep_interval(),
         ),
     );
     state.publish(application.handle(), ServiceHealth::ready());

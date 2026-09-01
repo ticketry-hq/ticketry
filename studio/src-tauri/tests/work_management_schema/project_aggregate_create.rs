@@ -1,6 +1,6 @@
 use sea_orm::{ConnectOptions, ConnectionTrait, Database, DatabaseBackend, Statement};
 
-use ticketry_work_management::work_management::commands::CommandDatabase;
+use ticketry_work_management::commands::CommandDatabase;
 
 async fn fixture() -> sea_orm::DatabaseConnection {
     let mut options = ConnectOptions::new("sqlite::memory:");
@@ -63,7 +63,7 @@ async fn row_count(database: &sea_orm::DatabaseConnection, table: &str) -> i64 {
 #[tokio::test]
 async fn project_create_returns_the_aggregate_after_seeding_reviewed_defaults() {
     let database = fixture().await;
-    let schema = ticketry_graphql_schema::query_root::foundation_schema(
+    let schema = ticketry_graphql_schema::foundation_schema(
         database.clone(),
         Some(database.clone()),
         Some(CommandDatabase(database.clone())),

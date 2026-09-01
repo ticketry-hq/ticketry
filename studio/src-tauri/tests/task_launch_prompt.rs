@@ -9,13 +9,13 @@ use common::terminal_lifecycle_harness::{TerminalLifecycleHarness, MODULE_ID, TA
 use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter};
 use ticketry_agent_execution::execution::reconciliation::ExecutionReconciliationService;
 use ticketry_agent_execution::execution::run_now::{RunNowCaller, RunNowRequest, RunNowService};
-use ticketry_entities::terminals::launch_material;
-use ticketry_launch::terminal_session::TerminalLaunchError;
-use ticketry_terminal::terminal::launch::{
+use ticketry_entities::launch_material;
+use ticketry_launch::TerminalLaunchError;
+use ticketry_terminal::{
     TerminalLaunchBoundary, TerminalLaunchCheckpoint, TerminalLaunchRuntime,
     TerminalRuntimeObservation, VerifiedTerminalRuntime,
 };
-use ticketry_work_management::work_management::launch_policy::{
+use ticketry_work_management::launch_policy::{
     self, CallerScope, LaunchPolicyRequest, LaunchPolicyResolver,
 };
 
@@ -200,10 +200,10 @@ async fn seed(database: &sea_orm::DatabaseConnection, directory: &std::path::Pat
     .unwrap();
     // The folder the prompt names is the Module's typed link. The profile above
     // still decides which workspace may launch at all.
-    ticketry_work_management::module_links::schema::install(database)
+    ticketry_work_management::schema::install(database)
         .await
         .unwrap();
-    ticketry_work_management::module_links::ModuleLinkStore::new(database.clone())
+    ticketry_work_management::ModuleLinkStore::new(database.clone())
         .set(&compact(MODULE_ID), &directory.display().to_string())
         .await
         .expect("link the harness module");

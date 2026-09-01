@@ -8,7 +8,7 @@ use seaography::async_graphql::{
 
 /// Rejects GraphQL mutations until the complete Slice 2 readiness result has
 /// been published. Queries remain available for the startup health probe.
-pub struct Slice2CommandGate {
+pub(crate) struct Slice2CommandGate {
     data_directory: PathBuf,
 }
 

@@ -9,7 +9,7 @@ use std::path::PathBuf;
 
 use sea_orm::{DatabaseConnection, EntityTrait};
 
-use ticketry_entities::documents::design_document;
+use ticketry_entities::design_document;
 
 use super::asset_access::{self, DocumentAsset};
 use super::error::DocumentsError;

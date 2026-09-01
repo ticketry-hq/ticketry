@@ -14,7 +14,7 @@ use crate::work_management::{
     commands::catalog,
     graphql::{command_error, require_command_database},
 };
-use ticketry_entities::work_management::project;
+use ticketry_entities::project;
 
 struct AcknowledgeOnboarding;
 

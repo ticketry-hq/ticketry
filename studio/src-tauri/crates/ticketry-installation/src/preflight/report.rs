@@ -16,7 +16,7 @@ use std::fmt::Write as _;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 
-use crate::classification::Engine;
+use crate::Engine;
 
 /// How many affected identities one defect reports before it truncates.
 ///

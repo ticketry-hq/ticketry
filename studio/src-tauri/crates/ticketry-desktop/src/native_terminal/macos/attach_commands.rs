@@ -287,7 +287,7 @@ pub fn native_terminal_attach(
     // published preparation geometry.
     state.pending_frames.discard(&run_id);
     let ownership = launch.viewer_ownership()?;
-    let lease = ticketry_terminal::viewer_ownership::CreateViewerLease {
+    let lease = ticketry_terminal::CreateViewerLease {
         agent_run_id: run_id.clone(),
         viewer_id,
         transport: "native".to_owned(),

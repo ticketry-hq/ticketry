@@ -13,16 +13,16 @@ use super::manifest::{manifest, Generation};
 use super::outcome::{ClassificationError, Refusal};
 
 /// The Django migration ledger every supported Django installation carries.
-pub const DJANGO_LEDGER: &str = "django_migrations";
+pub(crate) const DJANGO_LEDGER: &str = "django_migrations";
 /// The ledger a pre-Django Alembic installation carries instead.
-pub const ALEMBIC_LEDGER: &str = "alembic_version";
+pub(crate) const ALEMBIC_LEDGER: &str = "alembic_version";
 /// The one Alembic revision Ticketry still supports adopting.
 const ALEMBIC_REVISION: &str = "0006_design_documents";
 /// The generation that revision produces.
 const ALEMBIC_GENERATION: &str = "alembic-0006_design_documents";
 
 /// Match the Django ledger against exactly one recorded generation.
-pub async fn classify(
+pub(crate) async fn classify(
     database: &DatabaseConnection,
 ) -> Result<&'static Generation, ClassificationError> {
     let manifest = manifest();
@@ -86,7 +86,7 @@ pub async fn classify(
 }
 
 /// Match an Alembic ledger against the one supported pre-Django generation.
-pub async fn classify_alembic(
+pub(crate) async fn classify_alembic(
     database: &DatabaseConnection,
 ) -> Result<&'static Generation, ClassificationError> {
     let revisions = database

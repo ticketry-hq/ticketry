@@ -13,17 +13,26 @@
 //! the reasons recorded in [`generated_mutation_audit`].
 
 mod adoption;
-pub mod column_policy;
+mod column_policy;
 mod error;
-pub mod generated_mutation_audit;
-pub mod ownership_manifest;
+mod generated_mutation_audit;
+mod ownership_manifest;
 mod schema;
 
 pub use adoption::{adopt, documents_adopted, preflight, AdoptionEvidence, SourceClassification};
+pub use column_policy::apply as apply_column_policy;
 pub use error::{DocumentsPersistenceError, DocumentsPersistenceErrorCode};
-pub use schema::{AUTHORED_TABLES, CURRENT_DJANGO_LEAF, LEDGER_TABLE, VERSION};
+pub use generated_mutation_audit::FINDINGS as GENERATED_MUTATION_FINDINGS;
+pub use ownership_manifest::owned_tables as document_owned_tables;
+pub use ownership_manifest::{
+    ADOPTED_TABLES as DOCUMENT_OWNED_TABLES, DESIGN_DOCUMENT_COLUMNS as DOCUMENT_DESIGN_COLUMNS,
+    INTERNAL_ONLY_COLUMNS as DOCUMENT_INTERNAL_ONLY_COLUMNS,
+    PROTECTED_COLUMNS as DOCUMENT_PROTECTED_COLUMNS, VERSION as DOCUMENT_OWNERSHIP_VERSION,
+};
+pub use schema::VERSION as DOCUMENT_SCHEMA_VERSION;
+pub use schema::{AUTHORED_TABLES, CURRENT_DJANGO_LEAF, LEDGER_TABLE};
 
 /// Register the generated Design Document read contract on the composed schema.
 pub fn register_graphql(builder: seaography::Builder) -> seaography::Builder {
-    ticketry_entities::documents::register_entity_modules(builder)
+    ticketry_entities::register_document_entities(builder)
 }

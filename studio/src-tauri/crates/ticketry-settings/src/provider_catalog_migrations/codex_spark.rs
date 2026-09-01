@@ -1,8 +1,8 @@
 use sea_orm::{ColumnTrait, DatabaseTransaction, DbErr, EntityTrait, QueryFilter, Set};
 
-use ticketry_entities::work_management::{agent_model, agent_model_reasoning_level, provider};
+use ticketry_entities::{agent_model, agent_model_reasoning_level, provider};
 
-pub const MODEL_NAME: &str = "gpt-5.3-codex-spark";
+pub(crate) const MODEL_NAME: &str = "gpt-5.3-codex-spark";
 
 pub(super) async fn apply(transaction: &DatabaseTransaction) -> Result<(), DbErr> {
     let Some(codex) = provider::Entity::find()

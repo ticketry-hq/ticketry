@@ -7,7 +7,7 @@ use super::super::identifiers::database_uuid;
 use super::super::CommandError;
 use super::launch_policy_validation::{validate_launch_binding, LaunchBindingCandidate};
 use super::revision_guard::{claim_workflow_revision, require_project_state, RevisionedState};
-use ticketry_entities::work_management::{issue_type, launch_binding};
+use ticketry_entities::{issue_type, launch_binding};
 
 /// Tri-state presence for one field of a restricted patch.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -75,7 +75,7 @@ pub async fn patch_launch_binding(
         .exec_with_returning(&transaction)
         .await?;
     let Some(claimed) = claimed.into_iter().next() else {
-        if ticketry_entities::work_management::issue_type::Entity::find_by_id(&type_id)
+        if ticketry_entities::issue_type::Entity::find_by_id(&type_id)
             .one(&transaction)
             .await?
             .is_none()

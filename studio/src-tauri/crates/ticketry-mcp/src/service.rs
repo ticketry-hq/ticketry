@@ -11,9 +11,9 @@ use rmcp::{
 use sea_orm::DatabaseConnection;
 use serde_json::{json, Map, Value};
 
-use ticketry_terminal::terminal::cleanup::TerminalCleanupService;
-use ticketry_work_management::work_management::commands::attachments::AttachmentStorage;
-use ticketry_work_management::work_management::launch_policy::LaunchPolicyResolver;
+use ticketry_terminal::TerminalCleanupService;
+use ticketry_work_management::commands::attachments::AttachmentStorage;
+use ticketry_work_management::launch_policy::LaunchPolicyResolver;
 
 use super::{dispatch, registry, RunAuthority};
 
@@ -23,9 +23,9 @@ pub struct WorktrackerMcpService {
     storage: AttachmentStorage,
     authority: RunAuthority,
     launch_policy: LaunchPolicyResolver,
-    graph_runs: Option<ticketry_agent_execution::graph_run_service::GraphRunService>,
+    graph_runs: Option<ticketry_agent_execution::GraphRunService>,
     terminal_cleanup: TerminalCleanupService,
-    terminal_launch: Option<ticketry_terminal::terminal::launch::TerminalLaunchService>,
+    terminal_launch: Option<ticketry_terminal::TerminalLaunchService>,
     readiness_data_directory: PathBuf,
     tools: Arc<Vec<Tool>>,
 }
@@ -36,9 +36,9 @@ impl WorktrackerMcpService {
         storage: AttachmentStorage,
         authority: RunAuthority,
         launch_policy: LaunchPolicyResolver,
-        graph_runs: Option<ticketry_agent_execution::graph_run_service::GraphRunService>,
+        graph_runs: Option<ticketry_agent_execution::GraphRunService>,
         terminal_cleanup: TerminalCleanupService,
-        terminal_launch: Option<ticketry_terminal::terminal::launch::TerminalLaunchService>,
+        terminal_launch: Option<ticketry_terminal::TerminalLaunchService>,
         readiness_data_directory: PathBuf,
     ) -> Self {
         Self {
@@ -66,13 +66,13 @@ impl WorktrackerMcpService {
 
 pub(super) async fn execute_launch_decision(
     database: &DatabaseConnection,
-    service: Option<&ticketry_terminal::terminal::launch::TerminalLaunchService>,
-    decision: &ticketry_work_management::work_management::launch_policy::LaunchPolicyDecision,
-) -> Result<ticketry_entities::terminals::session::Model, ()> {
+    service: Option<&ticketry_terminal::TerminalLaunchService>,
+    decision: &ticketry_work_management::launch_policy::LaunchPolicyDecision,
+) -> Result<ticketry_entities::session::Model, ()> {
     let Some(service) = service else {
         return Err(());
     };
-    ticketry_agent_execution::execution::launch_delivery::execute(database, service, decision)
+    ticketry_agent_execution::launch_delivery::execute(database, service, decision)
         .await
         .map_err(|error| {
             eprintln!(

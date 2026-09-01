@@ -79,8 +79,8 @@ struct NativePreparedViewerMechanics {
     handle: String,
 }
 
-impl ticketry_terminal::viewer_ownership::PreparedViewerMechanics for NativePreparedViewerMechanics {
-    fn detach(&self, _reason: ticketry_terminal::viewer_ownership::ViewerDetachReason) {
+impl ticketry_terminal::PreparedViewerMechanics for NativePreparedViewerMechanics {
+    fn detach(&self, _reason: ticketry_terminal::ViewerDetachReason) {
         let _ = detach_native_handle(&self.window, &self.entries, &self.handle);
     }
 }

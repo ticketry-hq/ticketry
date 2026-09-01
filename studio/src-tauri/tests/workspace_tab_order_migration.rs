@@ -1,5 +1,5 @@
 use sea_orm::{ConnectionTrait, Database, DbBackend, Statement};
-use ticketry_work_management::work_management::{
+use ticketry_work_management::{
     module_presentation_migration, workflow_color_migration,
     workspace_tab_order_migration::{self, LEDGER_TABLE, MIGRATION_ID, SOURCE_COMMIT},
 };
@@ -141,7 +141,7 @@ async fn failed_ledger_creation_rolls_back_the_issue_column() {
 
 #[test]
 fn workspace_tab_checkpoint_is_between_colors_and_module_presentation() {
-    let ledgers = ticketry_installation::classification::rust_ledger::owned_ledgers();
+    let ledgers = ticketry_installation::owned_ledgers();
     let colors = ledgers
         .iter()
         .position(|(table, _)| *table == workflow_color_migration::LEDGER_TABLE)

@@ -3,8 +3,8 @@ use std::sync::Arc;
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 
 use crate::worktree::status;
-use ticketry_entities::worktrees::worktree;
-use ticketry_work_management::work_management::launch_policy::{
+use ticketry_entities::worktree;
+use ticketry_work_management::launch_policy::{
     CallerScope, LaunchPolicyRequest, LaunchPolicyResolver,
 };
 

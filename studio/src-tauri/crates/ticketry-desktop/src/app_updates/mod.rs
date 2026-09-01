@@ -1,9 +1,9 @@
 //! Stable-channel updates: the check, the user-requested install, and the
 //! restart into the installed version, each a narrow desktop command.
 
-pub mod acceptance;
+pub(crate) mod acceptance;
 mod contract;
-pub mod install;
+pub(crate) mod install;
 mod operation;
 
 use std::env;

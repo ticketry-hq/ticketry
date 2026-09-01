@@ -6,7 +6,7 @@ mod tests {
     use crate::native_terminal::scroll::{
         MAX_NATIVE_SCROLL_LINES, SCROLL_DIRECTION_DOWN, SCROLL_DIRECTION_NONE, SCROLL_DIRECTION_UP,
     };
-    use ticketry_terminal::terminal::viewer::attachment::TerminalScrollDirection;
+    use ticketry_terminal::TerminalScrollDirection;
 
     fn normalize(vertical_delta: f64, precise: bool) -> (u8, u16) {
         let intent = unsafe { muxed_ghostty_normalize_scroll(vertical_delta, precise) };

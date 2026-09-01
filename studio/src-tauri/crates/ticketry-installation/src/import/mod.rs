@@ -8,21 +8,18 @@
 //! single rename of that marker is the activation boundary.
 
 mod canonical;
-mod cutover;
+pub(crate) mod cutover;
 mod inventory;
 mod schema_catalog;
 mod source;
 mod target;
 
-pub mod seaography_override;
+mod seaography_override;
 
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::adoption::{AdoptionFailure, AdoptionPlan, Phase, Refusal};
-use crate::classification::PostgresSource;
-
-pub use cutover::activate;
+use crate::{AdoptionFailure, AdoptionPlan, Phase, PostgresSource, Refusal};
 
 /// A validated SQLite target that is not active yet.
 pub struct StagedImport {
@@ -115,6 +112,6 @@ pub async fn stage(
     })
 }
 
-pub fn failed(phase: Phase, refusal: Refusal, detail: impl Into<String>) -> AdoptionFailure {
+pub(crate) fn failed(phase: Phase, refusal: Refusal, detail: impl Into<String>) -> AdoptionFailure {
     AdoptionFailure::new(phase, refusal, detail)
 }

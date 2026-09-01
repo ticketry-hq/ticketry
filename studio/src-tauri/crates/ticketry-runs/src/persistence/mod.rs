@@ -14,7 +14,7 @@
 mod adoption;
 mod attempt_commands;
 mod attempt_queries;
-use ticketry_entities::runs as entities;
+use ticketry_entities as entities;
 mod end_of_life;
 mod error;
 mod intent;
@@ -30,7 +30,7 @@ mod launch_reconciliation;
 mod launch_scan;
 mod lifecycle;
 mod lifecycle_types;
-pub mod ownership_manifest;
+mod ownership_manifest;
 mod queries;
 mod readiness;
 mod readiness_gate;
@@ -44,7 +44,7 @@ mod status_frames;
 mod status_stream;
 mod status_subscription;
 mod status_wakeup;
-pub mod timestamp;
+pub(crate) mod timestamp;
 mod work_item_scope;
 
 pub use adoption::{
@@ -67,6 +67,10 @@ pub use launch_reconciliation::{
 };
 pub use lifecycle_types::{
     LifecycleAcceptance, LifecycleFact, TerminalAcceptance, TerminalFact, TerminalOutcome,
+};
+pub use ownership_manifest::{
+    owned_tables as owned_run_tables, ADOPTED_TABLES, ATTEMPT_COLUMNS,
+    AUTHORED_TABLES as RUN_OWNED_AUTHORED_TABLES, DJANGO_COMPATIBILITY_PORTS, DJANGO_OWNER_ENV,
 };
 pub use queries::run_holding_in;
 pub use readiness::{

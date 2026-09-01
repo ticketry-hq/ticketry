@@ -1,5 +1,25 @@
+/**
+ * Every state the App updates section can be in, and the only transitions
+ * between them.
+ *
+ * The states follow the runtime contract rather than an idealised installer:
+ * `downloadAndInstall` is one operation reporting byte progress, so the flow is
+ * available → downloading → restart-requested, with no separately observable
+ * "downloaded but not installed" step. Guarding transitions here is what keeps
+ * a late progress event from reviving a failed install, and what keeps restart
+ * unreachable until installation actually completed.
+ */
+
+export interface IdleUpdateState {
+  readonly status: "idle";
+}
+
 export interface CheckingUpdateState {
   readonly status: "checking";
+}
+
+export interface CurrentUpdateState {
+  readonly status: "current";
 }
 
 export interface AvailableRelease {
@@ -22,14 +42,6 @@ export interface DownloadingUpdateState extends AvailableRelease {
   readonly progress: DownloadProgress;
 }
 
-export interface ReadyToInstallUpdateState extends AvailableRelease {
-  readonly status: "ready-to-install";
-}
-
-export interface InstallingUpdateState extends AvailableRelease {
-  readonly status: "installing";
-}
-
 export interface RestartRequestedUpdateState extends AvailableRelease {
   readonly status: "restart-requested";
 }
@@ -41,11 +53,11 @@ export interface SignatureRejectedUpdateState {
   readonly retryTarget: "check";
 }
 
-export interface TransientDownloadFailureState extends AvailableRelease {
+export interface TransientInstallFailureState extends AvailableRelease {
   readonly status: "failed";
   readonly failureKind: "transient";
   readonly message: string;
-  readonly retryTarget: "download";
+  readonly retryTarget: "install";
 }
 
 export interface TransientCheckFailureState {
@@ -57,17 +69,25 @@ export interface TransientCheckFailureState {
 
 export type FailedUpdateState =
   | SignatureRejectedUpdateState
-  | TransientDownloadFailureState
+  | TransientInstallFailureState
   | TransientCheckFailureState;
 
 export type UpdateState =
+  | IdleUpdateState
   | CheckingUpdateState
+  | CurrentUpdateState
   | AvailableUpdateState
   | DownloadingUpdateState
-  | ReadyToInstallUpdateState
-  | InstallingUpdateState
   | RestartRequestedUpdateState
   | FailedUpdateState;
+
+export interface CheckStartedEvent {
+  readonly type: "check-started";
+}
+
+export interface UpdateCurrentEvent {
+  readonly type: "update-current";
+}
 
 export interface UpdateAvailableEvent {
   readonly type: "update-available";
@@ -75,8 +95,8 @@ export interface UpdateAvailableEvent {
   readonly notes?: string;
 }
 
-export interface DownloadStartedEvent {
-  readonly type: "download-started";
+export interface InstallConfirmedEvent {
+  readonly type: "install-confirmed";
 }
 
 export interface DownloadProgressEvent {
@@ -85,20 +105,13 @@ export interface DownloadProgressEvent {
   readonly totalBytes?: number;
 }
 
-export interface DownloadCompletedEvent {
-  readonly type: "download-completed";
-}
-
-export interface InstallConfirmedEvent {
-  readonly type: "install-confirmed";
-}
-
 export interface InstallationCompletedEvent {
   readonly type: "installation-completed";
 }
 
 export interface SignatureRejectedEvent {
   readonly type: "signature-rejected";
+  readonly message: string;
 }
 
 export interface TransientFailureEvent {
@@ -106,28 +119,54 @@ export interface TransientFailureEvent {
   readonly message: string;
 }
 
-export interface RetryEvent {
-  readonly type: "retry";
-}
-
 export type UpdateEvent =
+  | CheckStartedEvent
+  | UpdateCurrentEvent
   | UpdateAvailableEvent
-  | DownloadStartedEvent
-  | DownloadProgressEvent
-  | DownloadCompletedEvent
   | InstallConfirmedEvent
+  | DownloadProgressEvent
   | InstallationCompletedEvent
   | SignatureRejectedEvent
-  | TransientFailureEvent
-  | RetryEvent;
+  | TransientFailureEvent;
 
-export const initialUpdateState: UpdateState = { status: "checking" };
+export const initialUpdateState: UpdateState = { status: "idle" };
+
+const NO_PROGRESS: DownloadProgress = {
+  receivedBytes: 0,
+  totalBytes: null,
+  percent: null,
+};
+
+function release(state: AvailableRelease): AvailableRelease {
+  return {
+    availableVersion: state.availableVersion,
+    ...(state.notes === undefined ? {} : { notes: state.notes }),
+  };
+}
+
+/** Whether the update is downloading or installing, so progress is expected. */
+export function isApplyingUpdate(state: UpdateState): boolean {
+  return state.status === "downloading";
+}
 
 export function transitionUpdate(
   state: UpdateState,
   event: UpdateEvent,
 ): UpdateState {
-  if (event.type === "update-available") {
+  // A check may be requested from any resting state, including after a failure
+  // the user chose to retry.
+  if (event.type === "check-started") {
+    return state.status === "downloading" ||
+      state.status === "restart-requested"
+      ? state
+      : { status: "checking" };
+  }
+
+  if (event.type === "update-current" && state.status === "checking") {
+    return { status: "current" };
+  }
+
+  if (event.type === "update-available" && state.status === "checking") {
     return {
       status: "available",
       availableVersion: event.availableVersion,
@@ -135,11 +174,15 @@ export function transitionUpdate(
     };
   }
 
-  if (event.type === "download-started" && state.status === "available") {
+  if (
+    event.type === "install-confirmed" &&
+    (state.status === "available" ||
+      (state.status === "failed" && state.retryTarget === "install"))
+  ) {
     return {
-      ...state,
       status: "downloading",
-      progress: { receivedBytes: 0, totalBytes: null, percent: null },
+      ...release(state),
+      progress: NO_PROGRESS,
     };
   }
 
@@ -151,7 +194,7 @@ export function transitionUpdate(
         receivedBytes: event.receivedBytes,
         totalBytes,
         percent:
-          totalBytes === null
+          totalBytes === null || totalBytes === 0
             ? null
             : Math.min(
                 100,
@@ -161,27 +204,18 @@ export function transitionUpdate(
     };
   }
 
-  if (event.type === "download-completed" && state.status === "downloading") {
-    return {
-      status: "ready-to-install",
-      availableVersion: state.availableVersion,
-      ...(state.notes === undefined ? {} : { notes: state.notes }),
-    };
+  if (
+    event.type === "installation-completed" &&
+    state.status === "downloading"
+  ) {
+    return { status: "restart-requested", ...release(state) };
   }
 
-  if (event.type === "install-confirmed" && state.status === "ready-to-install") {
-    return { ...state, status: "installing" };
-  }
-
-  if (event.type === "installation-completed" && state.status === "installing") {
-    return { ...state, status: "restart-requested" };
-  }
-
-  if (event.type === "signature-rejected" && state.status === "installing") {
+  if (event.type === "signature-rejected" && state.status === "downloading") {
     return {
       status: "failed",
       failureKind: "signature-rejected",
-      message: "Update rejected: invalid signature.",
+      message: event.message,
       retryTarget: "check",
     };
   }
@@ -189,11 +223,10 @@ export function transitionUpdate(
   if (event.type === "transient-failure" && state.status === "downloading") {
     return {
       status: "failed",
-      availableVersion: state.availableVersion,
-      ...(state.notes === undefined ? {} : { notes: state.notes }),
+      ...release(state),
       failureKind: "transient",
       message: event.message,
-      retryTarget: "download",
+      retryTarget: "install",
     };
   }
 
@@ -203,27 +236,6 @@ export function transitionUpdate(
       failureKind: "transient",
       message: event.message,
       retryTarget: "check",
-    };
-  }
-
-  if (
-    event.type === "retry" &&
-    state.status === "failed" &&
-    state.retryTarget === "check"
-  ) {
-    return initialUpdateState;
-  }
-
-  if (
-    event.type === "retry" &&
-    state.status === "failed" &&
-    state.retryTarget === "download"
-  ) {
-    return {
-      status: "downloading",
-      availableVersion: state.availableVersion,
-      ...(state.notes === undefined ? {} : { notes: state.notes }),
-      progress: { receivedBytes: 0, totalBytes: null, percent: null },
     };
   }
 

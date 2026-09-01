@@ -4,10 +4,9 @@
 
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection};
 use ticketry_launch::{
-    authority::{InteractiveLaunchAuthority, LaunchAuthorityService},
-    terminal_session::{CreateTerminalSession, TerminalLaunchKind},
+    CreateTerminalSession, InteractiveLaunchAuthority, LaunchAuthorityService, TerminalLaunchKind,
 };
-use ticketry_work_management::work_management::open_for_commands;
+use ticketry_work_management::open_for_commands;
 
 const WORKSPACE: &str = "10000000000000000000000000000000";
 const PROJECT: &str = "20000000000000000000000000000000";
@@ -164,10 +163,10 @@ async fn fixture() -> Fixture {
     let database = open_for_commands(&path).await.unwrap();
     // The folder a launch runs in is the module's typed link, not a profile
     // entry, so the prompt facts and the design directory resolve from here.
-    ticketry_work_management::module_links::schema::install(&database)
+    ticketry_work_management::schema::install(&database)
         .await
         .unwrap();
-    ticketry_work_management::module_links::ModuleLinkStore::new(database.clone())
+    ticketry_work_management::ModuleLinkStore::new(database.clone())
         .set(MODULE, &folder)
         .await
         .expect("link the fixture module");

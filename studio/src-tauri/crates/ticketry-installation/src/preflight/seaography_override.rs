@@ -19,7 +19,7 @@
 //! [`tests::every_raw_statement_is_recorded`].
 
 /// One recorded raw-SQL seam in this module.
-pub struct ReadSeam {
+pub(crate) struct ReadSeam {
     /// The file holding it.
     pub file: &'static str,
     /// What it reads.
@@ -33,7 +33,7 @@ pub struct ReadSeam {
 /// All six are reads. None writes, none is reachable from GraphQL, none returns
 /// model data — an invariant query returns one `identity` column and nothing
 /// else — and none outlives the rollback-only read transaction they run in.
-pub const READ_SEAMS: &[ReadSeam] = &[
+pub(crate) const READ_SEAMS: &[ReadSeam] = &[
     ReadSeam {
         file: "read_view.rs",
         reads: "PRAGMA query_only, to make the view refuse writes at the connection",

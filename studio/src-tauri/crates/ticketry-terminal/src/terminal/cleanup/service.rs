@@ -5,8 +5,8 @@ use sea_orm::{
 };
 use serde_json::json;
 
-use ticketry_entities::{runs::agent_run, terminals::session};
-use ticketry_runs::persistence::RunsServices;
+use ticketry_entities::{agent_run, session};
+use ticketry_runs::RunsServices;
 
 use super::{
     checkpoint::NoCleanupCheckpoints, CleanupCause, CleanupCheckpoint, CleanupCheckpoints,
@@ -166,28 +166,28 @@ impl TerminalCleanupService {
     /// authority; recovery never manufactures a replacement request.
     pub async fn reconcile(&self) -> Result<TerminalCleanupRecoveryReport, TerminalCleanupError> {
         let now = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Micros, true);
-        let due = ticketry_entities::terminals::cleanup_effect::Entity::find()
+        let due = ticketry_entities::cleanup_effect::Entity::find()
             .filter(
                 Condition::any()
-                    .add(ticketry_entities::terminals::cleanup_effect::Column::State.eq("prepared"))
+                    .add(ticketry_entities::cleanup_effect::Column::State.eq("prepared"))
                     .add(
-                        ticketry_entities::terminals::cleanup_effect::Column::State
+                        ticketry_entities::cleanup_effect::Column::State
                             .eq("cleanup_pending"),
                     )
                     .add(
                         Condition::all()
                             .add(
-                                ticketry_entities::terminals::cleanup_effect::Column::State
+                                ticketry_entities::cleanup_effect::Column::State
                                     .eq("leased"),
                             )
                             .add(
-                                ticketry_entities::terminals::cleanup_effect::Column::LeaseExpiresAt
+                                ticketry_entities::cleanup_effect::Column::LeaseExpiresAt
                                     .lt(now),
                             ),
                     ),
             )
-            .order_by_asc(ticketry_entities::terminals::cleanup_effect::Column::CreatedAt)
-            .order_by_asc(ticketry_entities::terminals::cleanup_effect::Column::EffectId)
+            .order_by_asc(ticketry_entities::cleanup_effect::Column::CreatedAt)
+            .order_by_asc(ticketry_entities::cleanup_effect::Column::EffectId)
             .limit(RECOVERY_BATCH)
             .all(&self.database)
             .await?;
@@ -214,7 +214,7 @@ impl TerminalCleanupService {
 
     async fn execute_effect(
         &self,
-        effect: ticketry_entities::terminals::cleanup_effect::Model,
+        effect: ticketry_entities::cleanup_effect::Model,
         terminal: session::Model,
     ) -> Result<session::Model, TerminalCleanupError> {
         if effect.state == "applied" {
@@ -343,10 +343,10 @@ fn kill_name(value: CleanupKillResult) -> &'static str {
 /// The cleanup that follows cannot tell an agent's request from a person's, so
 /// the surface that can records it here, when it is asked.
 fn record_agent_self_termination(agent_run_id: &str) {
-    ticketry_runs::persistence::record_run_ended(
+    ticketry_runs::record_run_ended(
         agent_run_id,
         None,
-        ticketry_runs::persistence::EndOfLifeOrigin::AgentSelfTermination,
+        ticketry_runs::EndOfLifeOrigin::AgentSelfTermination,
         "termination_requested",
         None,
     );

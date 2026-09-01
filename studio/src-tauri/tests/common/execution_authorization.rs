@@ -10,8 +10,8 @@
 use std::sync::Mutex;
 
 use sea_orm::{ActiveModelTrait, DatabaseConnection, EntityTrait, IntoActiveModel, Set};
-use ticketry_entities::runs::agent_run;
-use ticketry_entities::work_management::issue;
+use ticketry_entities::agent_run;
+use ticketry_entities::issue;
 use ticketry_mcp::RunAuthority;
 
 use super::execution_fixture as fixture;

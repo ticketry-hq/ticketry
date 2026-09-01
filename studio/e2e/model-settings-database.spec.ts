@@ -83,7 +83,7 @@ test("persists a Models settings change into the state database", async ({
 
   const persisted = readPersistedModelSettings({
     provider: CHANGED_PROVIDER,
-    model: "sonnet",
+    model: CHANGED_MODEL,
     reasoning: CHANGED_REASONING,
   });
   expect(persisted.mismatches).toEqual([]);

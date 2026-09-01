@@ -16,7 +16,7 @@
 use sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, Statement};
 
 /// One relationship Studio depends on, and the join that proves it resolves.
-pub struct Read {
+pub(crate) struct Read {
     /// What the read demonstrates, for the failure message.
     pub subject: &'static str,
     /// Every table the query touches, so a generation lacking one skips it.
@@ -27,7 +27,7 @@ pub struct Read {
 
 /// The reads that must answer before the first Rust mutation.
 #[must_use]
-pub fn reads() -> Vec<Read> {
+pub(crate) fn reads() -> Vec<Read> {
     vec![
         Read {
             subject: "the project tree and its work items",
@@ -106,7 +106,7 @@ pub fn reads() -> Vec<Read> {
 }
 
 /// Run every applicable read, returning the subjects that could not answer.
-pub async fn prove(
+pub(crate) async fn prove(
     database: &DatabaseConnection,
     present_tables: &[String],
 ) -> Result<Vec<String>, String> {

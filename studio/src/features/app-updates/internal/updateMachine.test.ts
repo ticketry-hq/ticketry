@@ -1,36 +1,72 @@
 import { describe, expect, it } from "vitest";
 import {
   initialUpdateState,
+  isApplyingUpdate,
   transitionUpdate,
+  type UpdateState,
 } from "./updateMachine";
 
+const CHECKING = transitionUpdate(initialUpdateState, {
+  type: "check-started",
+});
+
+function available(notes?: string): UpdateState {
+  return transitionUpdate(CHECKING, {
+    type: "update-available",
+    availableVersion: "0.3.0",
+    ...(notes === undefined ? {} : { notes }),
+  });
+}
+
+function downloading(notes?: string): UpdateState {
+  return transitionUpdate(available(notes), { type: "install-confirmed" });
+}
+
 describe("update state machine", () => {
-  it("records an available update returned by the check", () => {
-    expect(
-      transitionUpdate(initialUpdateState, {
-        type: "update-available",
-        availableVersion: "0.3.0",
-        notes: "Faster startup.",
-      }),
-    ).toEqual({
+  it("starts idle and reports the check result", () => {
+    expect(initialUpdateState).toEqual({ status: "idle" });
+    expect(CHECKING).toEqual({ status: "checking" });
+    expect(transitionUpdate(CHECKING, { type: "update-current" })).toEqual({
+      status: "current",
+    });
+    expect(available("Faster startup.")).toEqual({
       status: "available",
       availableVersion: "0.3.0",
       notes: "Faster startup.",
     });
   });
 
-  it("tracks download bytes and percent when the total is known", () => {
-    const available = transitionUpdate(initialUpdateState, {
-      type: "update-available",
+  it("ignores a check result that no longer belongs to a running check", () => {
+    const current: UpdateState = { status: "current" };
+
+    expect(transitionUpdate(current, { type: "update-current" })).toBe(current);
+    expect(
+      transitionUpdate(current, {
+        type: "update-available",
+        availableVersion: "0.3.0",
+      }),
+    ).toBe(current);
+  });
+
+  it("downloads only after the user confirms the install", () => {
+    expect(
+      transitionUpdate(available("Faster startup."), {
+        type: "download-progress",
+        receivedBytes: 256,
+        totalBytes: 1_024,
+      }),
+    ).toEqual(available("Faster startup."));
+    expect(downloading("Faster startup.")).toEqual({
+      status: "downloading",
       availableVersion: "0.3.0",
       notes: "Faster startup.",
+      progress: { receivedBytes: 0, totalBytes: null, percent: null },
     });
-    const downloading = transitionUpdate(available, {
-      type: "download-started",
-    });
+  });
 
+  it("tracks download bytes and percent when the total is known", () => {
     expect(
-      transitionUpdate(downloading, {
+      transitionUpdate(downloading("Faster startup."), {
         type: "download-progress",
         receivedBytes: 256,
         totalBytes: 1_024,
@@ -39,132 +75,94 @@ describe("update state machine", () => {
       status: "downloading",
       availableVersion: "0.3.0",
       notes: "Faster startup.",
-      progress: {
-        receivedBytes: 256,
-        totalBytes: 1_024,
-        percent: 25,
-      },
+      progress: { receivedBytes: 256, totalBytes: 1_024, percent: 25 },
     });
   });
 
   it("keeps download progress indeterminate when the total is unknown", () => {
-    const available = transitionUpdate(initialUpdateState, {
-      type: "update-available",
-      availableVersion: "0.3.0",
-    });
-    const downloading = transitionUpdate(available, {
-      type: "download-started",
-    });
-
     expect(
-      transitionUpdate(downloading, {
+      transitionUpdate(downloading(), {
         type: "download-progress",
         receivedBytes: 384,
       }),
     ).toEqual({
       status: "downloading",
       availableVersion: "0.3.0",
-      progress: {
-        receivedBytes: 384,
-        totalBytes: null,
-        percent: null,
-      },
+      progress: { receivedBytes: 384, totalBytes: null, percent: null },
+    });
+    expect(
+      transitionUpdate(downloading(), {
+        type: "download-progress",
+        receivedBytes: 0,
+        totalBytes: 0,
+      }),
+    ).toMatchObject({
+      progress: { receivedBytes: 0, totalBytes: 0, percent: null },
     });
   });
 
-  it("requires confirmation after the download finishes", () => {
-    const available = transitionUpdate(initialUpdateState, {
-      type: "update-available",
-      availableVersion: "0.3.0",
-      notes: "Faster startup.",
-    });
-    const downloading = transitionUpdate(available, {
-      type: "download-started",
-    });
-
+  it("requests a restart only once installation completed", () => {
     expect(
-      transitionUpdate(downloading, { type: "download-completed" }),
-    ).toEqual({
-      status: "ready-to-install",
-      availableVersion: "0.3.0",
-      notes: "Faster startup.",
-    });
-  });
-
-  it("starts installation only after the user confirms", () => {
+      transitionUpdate(available(), { type: "installation-completed" }),
+    ).toEqual(available());
     expect(
-      transitionUpdate(
-        {
-          status: "ready-to-install",
-          availableVersion: "0.3.0",
-          notes: "Faster startup.",
-        },
-        { type: "install-confirmed" },
-      ),
-    ).toEqual({
-      status: "installing",
-      availableVersion: "0.3.0",
-      notes: "Faster startup.",
-    });
-  });
-
-  it("requests restart after installation completes", () => {
-    expect(
-      transitionUpdate(
-        { status: "installing", availableVersion: "0.3.0" },
-        { type: "installation-completed" },
-      ),
+      transitionUpdate(downloading("Faster startup."), {
+        type: "installation-completed",
+      }),
     ).toEqual({
       status: "restart-requested",
       availableVersion: "0.3.0",
+      notes: "Faster startup.",
     });
   });
 
-  it("reports signature rejection as a distinct failure", () => {
-    expect(
-      transitionUpdate(
-        { status: "installing", availableVersion: "0.3.0" },
-        { type: "signature-rejected" },
-      ),
-    ).toEqual({
+  it("refuses a rejected signature terminally, sending the user back to a check", () => {
+    const rejected = transitionUpdate(downloading("Faster startup."), {
+      type: "signature-rejected",
+      message: "Update rejected: invalid signature.",
+    });
+
+    expect(rejected).toEqual({
       status: "failed",
       failureKind: "signature-rejected",
       message: "Update rejected: invalid signature.",
       retryTarget: "check",
     });
+    // The archive is discarded rather than reinstalled, so confirming an
+    // install again cannot resume it.
+    expect(transitionUpdate(rejected, { type: "install-confirmed" })).toBe(
+      rejected,
+    );
+    expect(transitionUpdate(rejected, { type: "check-started" })).toEqual({
+      status: "checking",
+    });
   });
 
-  it("makes an interrupted download retryable from download", () => {
-    expect(
-      transitionUpdate(
-        {
-          status: "downloading",
-          availableVersion: "0.3.0",
-          notes: "Faster startup.",
-          progress: {
-            receivedBytes: 384,
-            totalBytes: 1_024,
-            percent: 37.5,
-          },
-        },
-        {
-          type: "transient-failure",
-          message: "The download was interrupted.",
-        },
-      ),
-    ).toEqual({
+  it("keeps a transient install failure retryable against the same release", () => {
+    const failed = transitionUpdate(downloading("Faster startup."), {
+      type: "transient-failure",
+      message: "The update download did not finish.",
+    });
+
+    expect(failed).toEqual({
       status: "failed",
       availableVersion: "0.3.0",
       notes: "Faster startup.",
       failureKind: "transient",
-      message: "The download was interrupted.",
-      retryTarget: "download",
+      message: "The update download did not finish.",
+      retryTarget: "install",
+    });
+    expect(transitionUpdate(failed, { type: "install-confirmed" })).toEqual({
+      status: "downloading",
+      availableVersion: "0.3.0",
+      notes: "Faster startup.",
+      progress: { receivedBytes: 0, totalBytes: null, percent: null },
     });
   });
 
-  it("makes an unreachable feed retryable from check", () => {
+  it("keeps a failed check retryable as a check", () => {
     expect(
-      transitionUpdate(initialUpdateState, {
+      transitionUpdate(CHECKING, {
         type: "transient-failure",
         message: "The update feed could not be reached.",
       }),
@@ -176,42 +174,32 @@ describe("update state machine", () => {
     });
   });
 
-  it("retries a signature rejection from check", () => {
+  it("ignores progress that arrives after the install already failed", () => {
+    const failed = transitionUpdate(downloading(), {
+      type: "transient-failure",
+      message: "The update download did not finish.",
+    });
+
     expect(
-      transitionUpdate(
-        {
-          status: "failed",
-          failureKind: "signature-rejected",
-          message: "Update rejected: invalid signature.",
-          retryTarget: "check",
-        },
-        { type: "retry" },
-      ),
-    ).toEqual({ status: "checking" });
+      transitionUpdate(failed, {
+        type: "download-progress",
+        receivedBytes: 4_096,
+        totalBytes: 4_096,
+      }),
+    ).toBe(failed);
   });
 
-  it("retries an interrupted download from the beginning", () => {
-    expect(
-      transitionUpdate(
-        {
-          status: "failed",
-          availableVersion: "0.3.0",
-          notes: "Faster startup.",
-          failureKind: "transient",
-          message: "The download was interrupted.",
-          retryTarget: "download",
-        },
-        { type: "retry" },
-      ),
-    ).toEqual({
-      status: "downloading",
-      availableVersion: "0.3.0",
-      notes: "Faster startup.",
-      progress: {
-        receivedBytes: 0,
-        totalBytes: null,
-        percent: null,
-      },
+  it("never restarts a check while an update is being applied or awaiting restart", () => {
+    const applying = downloading();
+    const restartRequested = transitionUpdate(applying, {
+      type: "installation-completed",
     });
+
+    expect(transitionUpdate(applying, { type: "check-started" })).toBe(applying);
+    expect(transitionUpdate(restartRequested, { type: "check-started" })).toBe(
+      restartRequested,
+    );
+    expect(isApplyingUpdate(applying)).toBe(true);
+    expect(isApplyingUpdate(restartRequested)).toBe(false);
   });
 });

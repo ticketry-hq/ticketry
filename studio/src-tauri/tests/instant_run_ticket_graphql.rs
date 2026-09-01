@@ -47,7 +47,7 @@ async fn schema() -> (GraphQlEndpoint, String) {
     database.execute_unprepared(&insert).await.unwrap();
 
     let foundation = Database::connect("sqlite::memory:").await.unwrap();
-    let schema = ticketry_graphql_schema::query_root::foundation_schema(
+    let schema = ticketry_graphql_schema::foundation_schema(
         foundation,
         Some(database),
         None,
@@ -104,7 +104,7 @@ async fn launch_material_stays_out_of_the_public_contract() {
 #[tokio::test]
 async fn instant_ticket_projection_is_bounded() {
     assert_eq!(
-        ticketry_terminal::terminal::instant_run_ticket::INSTANT_RUN_TICKET_LIMIT,
+        ticketry_terminal::INSTANT_RUN_TICKET_LIMIT,
         100
     );
 }

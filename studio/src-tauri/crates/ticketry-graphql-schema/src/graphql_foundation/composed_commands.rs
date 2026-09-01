@@ -8,7 +8,7 @@
 
 use sea_orm::DatabaseConnection;
 
-use ticketry_documents::watch::DocumentWatchSupervisor;
+use ticketry_documents::DocumentWatchSupervisor;
 use ticketry_documents::DocumentsService;
 
 /// The handles a completed one-writer handoff leaves for the desktop shell.
@@ -31,10 +31,10 @@ pub struct ComposedWorktracker {
     /// Deliberately not "the backlog is empty": an ambiguous document or
     /// repository is meant to stay deferred without disabling unrelated ones.
     pub workspace_reconciled: bool,
-    pub viewer_ownership: ticketry_terminal::viewer_ownership::ViewerOwnershipService,
-    pub terminal_runtime: ticketry_terminal::terminal::lifecycle::InteractiveTerminalLaunchRuntime,
+    pub viewer_ownership: ticketry_terminal::ViewerOwnershipService,
+    pub terminal_runtime: ticketry_terminal::InteractiveTerminalLaunchRuntime,
     pub output_activity:
-        ticketry_terminal::terminal::output_activity::TerminalOutputActivityService,
+        ticketry_terminal::TerminalOutputActivityService,
 }
 
 /// The live command connection and workspace services held by the installed
@@ -45,9 +45,9 @@ pub struct ComposedCommandRuntime {
     documents: DocumentsService,
     document_watch: Option<DocumentWatchSupervisor>,
     workspace_reconciled: bool,
-    viewer_ownership: ticketry_terminal::viewer_ownership::ViewerOwnershipService,
-    terminal_runtime: ticketry_terminal::terminal::lifecycle::InteractiveTerminalLaunchRuntime,
-    output_activity: ticketry_terminal::terminal::output_activity::TerminalOutputActivityService,
+    viewer_ownership: ticketry_terminal::ViewerOwnershipService,
+    terminal_runtime: ticketry_terminal::InteractiveTerminalLaunchRuntime,
+    output_activity: ticketry_terminal::TerminalOutputActivityService,
 }
 
 impl ComposedCommandRuntime {
@@ -85,19 +85,19 @@ impl ComposedCommandRuntime {
         &self.commands
     }
 
-    pub fn viewer_ownership(&self) -> &ticketry_terminal::viewer_ownership::ViewerOwnershipService {
+    pub fn viewer_ownership(&self) -> &ticketry_terminal::ViewerOwnershipService {
         &self.viewer_ownership
     }
 
     pub fn terminal_runtime(
         &self,
-    ) -> &ticketry_terminal::terminal::lifecycle::InteractiveTerminalLaunchRuntime {
+    ) -> &ticketry_terminal::InteractiveTerminalLaunchRuntime {
         &self.terminal_runtime
     }
 
     pub fn output_activity(
         &self,
-    ) -> &ticketry_terminal::terminal::output_activity::TerminalOutputActivityService {
+    ) -> &ticketry_terminal::TerminalOutputActivityService {
         &self.output_activity
     }
 }

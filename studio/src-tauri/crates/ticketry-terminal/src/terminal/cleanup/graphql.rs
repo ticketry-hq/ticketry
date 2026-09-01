@@ -8,7 +8,7 @@ use seaography::{
     BuilderContext, CustomFields, CustomInputType, SeaResult,
 };
 
-use ticketry_entities::terminals::session;
+use ticketry_entities::session;
 
 use super::{TerminalCleanupError, TerminalCleanupService, TerminationPatch};
 

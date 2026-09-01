@@ -1,7 +1,7 @@
 use sea_orm::{DatabaseConnection, EntityTrait};
 
-use ticketry_entities::work_management::issue;
-use ticketry_work_management::work_management::{
+use ticketry_entities::issue;
+use ticketry_work_management::{
     commands::CommandError, read_queries, read_types::WorkItem,
 };
 

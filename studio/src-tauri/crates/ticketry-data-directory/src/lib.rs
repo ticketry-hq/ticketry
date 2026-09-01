@@ -5,12 +5,15 @@
 //! makes a conflicting owner actionable, while the lock is automatically
 //! released when a process is forcibly quit.
 
-pub mod advisory_lock;
-pub mod error;
-pub mod guard;
-pub mod location;
-pub mod owner_record;
+mod advisory_lock;
+mod error;
+mod guard;
+mod location;
+mod owner_record;
 
+// Keep the implementation modules private. These are the complete supported
+// cross-crate ownership seams; callers should not depend on storage, lock, or
+// path-resolution module names.
 pub use error::OwnershipError;
 pub use guard::{live_lease_owner, DataDirectoryGuard};
 pub use location::established_data_directory;

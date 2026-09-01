@@ -17,9 +17,12 @@
 
 mod debounce;
 mod eligibility;
-pub mod filesystem_events;
+mod filesystem_events;
 mod observed_paths;
 mod supervisor;
 mod watch_loop;
 
+pub use filesystem_events::{
+    DirectoryWatch, FilesystemEvent, FilesystemWatcher, NotifyWatcher, WatchUnavailable,
+};
 pub use supervisor::DocumentWatchSupervisor;

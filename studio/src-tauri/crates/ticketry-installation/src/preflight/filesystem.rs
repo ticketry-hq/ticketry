@@ -118,7 +118,7 @@ const OWNED_ENTRIES: &[(&str, Owned)] = &[
     ("profiles.json", Owned::File),
     ("features.json", Owned::File),
     (
-        ticketry_work_management::module_links::receipt::RECEIPT_FILE,
+        ticketry_work_management::receipt::RECEIPT_FILE,
         Owned::File,
     ),
     ("sidecar.log", Owned::File),
@@ -130,7 +130,7 @@ const OWNED_ENTRIES: &[(&str, Owned)] = &[
 ///
 /// Returns [`PreflightFailure::UnreadableInstallation`] when a path column
 /// cannot be read.
-pub async fn check<C: ConnectionTrait>(
+pub(crate) async fn check<C: ConnectionTrait>(
     view: &C,
     schema: &Schema,
     data_directory: &Path,
@@ -166,7 +166,7 @@ pub async fn check<C: ConnectionTrait>(
     }
 
     findings.checked += 1;
-    let spool = ticketry_runs::hook_spool::hook_spool_directory(data_directory);
+    let spool = ticketry_runs::hook_spool_directory(data_directory);
     // The spool root deliberately lives beside the temporary directory rather
     // than inside the data directory, so its allowed root is that parent. A
     // missing spool is normal: nothing has launched a provider yet.

@@ -25,59 +25,59 @@ pub fn owned_ledgers() -> Vec<(&'static str, i32)> {
         ),
         (
             "ticketry_worktracker_adoption",
-            ticketry_work_management::work_management::ownership_manifest::VERSION,
+            ticketry_work_management::work_management_ownership_manifest::VERSION,
         ),
         (
-            ticketry_settings::provider_catalog_migrations::CODEX_5_6_LEDGER,
-            ticketry_settings::provider_catalog_migrations::VERSION,
+            ticketry_settings::CODEX_5_6_LEDGER,
+            ticketry_settings::PROVIDER_CATALOG_MIGRATIONS_VERSION,
         ),
         (
-            ticketry_work_management::work_management::project_onboarding_migration::LEDGER_TABLE,
-            ticketry_work_management::work_management::project_onboarding_migration::VERSION,
+            ticketry_work_management::project_onboarding_migration::LEDGER_TABLE,
+            ticketry_work_management::project_onboarding_migration::VERSION,
         ),
         (
-            ticketry_work_management::work_management::launch_binding_entry_skill_migration::LEDGER_TABLE,
-            ticketry_work_management::work_management::launch_binding_entry_skill_migration::VERSION,
+            ticketry_work_management::launch_binding_entry_skill_migration::LEDGER_TABLE,
+            ticketry_work_management::launch_binding_entry_skill_migration::VERSION,
         ),
         (
-            ticketry_work_management::work_management::workflow_color_migration::LEDGER_TABLE,
-            ticketry_work_management::work_management::workflow_color_migration::VERSION,
+            ticketry_work_management::workflow_color_migration::LEDGER_TABLE,
+            ticketry_work_management::workflow_color_migration::VERSION,
         ),
         (
-            ticketry_work_management::work_management::workspace_tab_order_migration::LEDGER_TABLE,
-            ticketry_work_management::work_management::workspace_tab_order_migration::VERSION,
+            ticketry_work_management::workspace_tab_order_migration::LEDGER_TABLE,
+            ticketry_work_management::workspace_tab_order_migration::VERSION,
         ),
         (
-            ticketry_work_management::work_management::module_presentation_migration::LEDGER_TABLE,
-            ticketry_work_management::work_management::module_presentation_migration::VERSION,
+            ticketry_work_management::module_presentation_migration::LEDGER_TABLE,
+            ticketry_work_management::module_presentation_migration::VERSION,
         ),
         (
-            ticketry_settings::provider_catalog_migrations::CODEX_SPARK_LEDGER,
-            ticketry_settings::provider_catalog_migrations::VERSION,
+            ticketry_settings::CODEX_SPARK_LEDGER,
+            ticketry_settings::PROVIDER_CATALOG_MIGRATIONS_VERSION,
         ),
         (
             "ticketry_settings_adoption",
-            ticketry_settings::ownership_manifest::VERSION,
+            ticketry_settings::OWNERSHIP_MANIFEST_VERSION,
         ),
         (
             "ticketry_runs_adoption",
-            ticketry_runs::persistence::VERSION,
+            ticketry_runs::VERSION,
         ),
         (
-            ticketry_terminal::terminal::persistence::LEDGER_TABLE,
-            ticketry_terminal::terminal::persistence::VERSION,
+            ticketry_terminal::LEDGER_TABLE,
+            ticketry_terminal::TERMINAL_PERSISTENCE_VERSION,
         ),
         (
             "ticketry_execution_adoption",
-            ticketry_agent_execution::execution::persistence::VERSION,
+            ticketry_agent_execution::persistence::VERSION,
         ),
         (
-            ticketry_documents::persistence::LEDGER_TABLE,
-            ticketry_documents::persistence::VERSION,
+            ticketry_documents::LEDGER_TABLE,
+            ticketry_documents::DOCUMENT_SCHEMA_VERSION,
         ),
         (
-            ticketry_workspace_runtime::worktree::persistence::LEDGER_TABLE,
-            ticketry_workspace_runtime::worktree::persistence::VERSION,
+            ticketry_workspace_runtime::persistence::LEDGER_TABLE,
+            ticketry_workspace_runtime::persistence::VERSION,
         ),
     ]
 }
@@ -86,7 +86,7 @@ pub fn owned_ledgers() -> Vec<(&'static str, i32)> {
 ///
 /// Returns `None` when no ledger exists, which leaves the installation to the
 /// Django and Alembic classifiers.
-pub async fn inspect(
+pub(crate) async fn inspect(
     database: &DatabaseConnection,
     present_tables: &[String],
 ) -> Result<Option<RustOwnership>, ClassificationError> {

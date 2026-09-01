@@ -5,7 +5,7 @@
 //! mouse input stay entirely inside libghostty's PTY.
 
 use std::sync::mpsc::Receiver;
-use ticketry_terminal::terminal::viewer::attachment::{
+use ticketry_terminal::{
     AttachmentOutcome, TerminalAttachmentError, TerminalCommandAttachmentControl,
     TerminalScrollDirection,
 };

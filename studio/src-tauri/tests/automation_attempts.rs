@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use sea_orm::{ConnectionTrait, Database, DbBackend, Statement};
-use ticketry_runs::persistence::{
+use ticketry_runs::{
     adopt, AttemptOutcome, RunsPersistenceErrorCode, RunsServices, TransitionOccurrence,
 };
 

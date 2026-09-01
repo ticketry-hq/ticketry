@@ -32,7 +32,7 @@ const INTEGRITY_LIMIT: usize = 100;
 ///
 /// Returns [`PreflightFailure::UnreadableInstallation`] when a check cannot
 /// run. A check that runs and reports problems is a defect, not an error.
-pub async fn check<C: ConnectionTrait>(
+pub(crate) async fn check<C: ConnectionTrait>(
     view: &C,
     findings: &mut Findings,
 ) -> Result<(), PreflightError> {

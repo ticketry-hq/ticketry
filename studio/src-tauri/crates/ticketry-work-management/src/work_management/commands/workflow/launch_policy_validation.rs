@@ -2,7 +2,7 @@ use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter};
 use serde::Deserialize;
 
 use super::super::CommandError;
-use ticketry_entities::work_management::{agent_model, agent_model_reasoning_level, provider};
+use ticketry_entities::{agent_model, agent_model_reasoning_level, provider};
 use ticketry_settings::read_global_launch_default;
 
 const REQUIRED_SKILL_LOCK: &str =

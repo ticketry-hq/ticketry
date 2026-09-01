@@ -2,7 +2,7 @@
 //! own authority: the main window only, no caller-supplied program, path,
 //! port, or environment value.
 
-pub mod terminal_viewer;
+pub(crate) mod terminal_viewer;
 
 use std::path::PathBuf;
 use tauri_plugin_dialog::DialogExt;
@@ -39,21 +39,21 @@ pub async fn desktop_launch_default_coding_agent(
     // `state.db` several writers are already sharing.
     let database = launch.commands()?;
     let resolver =
-        ticketry_work_management::work_management::launch_policy::LaunchPolicyResolver::new(
+        ticketry_work_management::launch_policy::LaunchPolicyResolver::new(
             database.clone(),
         );
     let decision = resolver
-        .resolve(ticketry_work_management::work_management::launch_policy::LaunchPolicyRequest {
+        .resolve(ticketry_work_management::launch_policy::LaunchPolicyRequest {
             task_id: issue_id,
             destination_state_id: None,
             provider_override: None,
-            caller_scope: ticketry_work_management::work_management::launch_policy::CallerScope::Interactive,
+            caller_scope: ticketry_work_management::launch_policy::CallerScope::Interactive,
             idempotency_key: uuid::Uuid::new_v4().simple().to_string(),
         })
         .await
         .map_err(|error| error.code().to_owned())?;
     let decision =
-        ticketry_work_management::work_management::launch_policy::record(database, &decision)
+        ticketry_work_management::launch_policy::record(database, &decision)
             .await
             .map_err(|error| error.code().to_owned())?;
     let terminal_launch = services
@@ -62,7 +62,7 @@ pub async fn desktop_launch_default_coding_agent(
         .expect("terminal launch lock poisoned")
         .clone()
         .ok_or_else(|| "terminal launch is unavailable".to_owned())?;
-    let session = ticketry_agent_execution::execution::launch_delivery::execute(
+    let session = ticketry_agent_execution::launch_delivery::execute(
         database,
         &terminal_launch,
         &decision,
@@ -136,7 +136,7 @@ pub struct ModuleFolderValidation {
 /// command to the webview.
 #[tauri::command]
 pub fn desktop_validate_module_folder(path: String) -> ModuleFolderValidation {
-    match ticketry_work_management::module_links::folder_preflight::validate_configured(Some(&path))
+    match ticketry_work_management::folder_preflight::validate_configured(Some(&path))
     {
         Ok(_) => ModuleFolderValidation {
             valid: true,
@@ -144,15 +144,15 @@ pub fn desktop_validate_module_folder(path: String) -> ModuleFolderValidation {
         },
         Err(error) => {
             let reason = match error {
-                ticketry_work_management::module_links::folder_preflight::ModuleFolderFailure::Relative
-                | ticketry_work_management::module_links::folder_preflight::ModuleFolderFailure::Unset => {
+                ticketry_work_management::folder_preflight::ModuleFolderFailure::Relative
+                | ticketry_work_management::folder_preflight::ModuleFolderFailure::Unset => {
                     "module_folder_not_absolute"
                 }
-                ticketry_work_management::module_links::folder_preflight::ModuleFolderFailure::Missing
-                | ticketry_work_management::module_links::folder_preflight::ModuleFolderFailure::Inaccessible => {
+                ticketry_work_management::folder_preflight::ModuleFolderFailure::Missing
+                | ticketry_work_management::folder_preflight::ModuleFolderFailure::Inaccessible => {
                     "module_folder_missing"
                 }
-                ticketry_work_management::module_links::folder_preflight::ModuleFolderFailure::NotDirectory => {
+                ticketry_work_management::folder_preflight::ModuleFolderFailure::NotDirectory => {
                     "module_folder_not_a_directory"
                 }
             };

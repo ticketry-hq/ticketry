@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use super::canonical::{digest, Cell};
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct Inventory {
+pub(crate) struct Inventory {
     pub counts: BTreeMap<String, u64>,
     pub digests: BTreeMap<String, String>,
 }

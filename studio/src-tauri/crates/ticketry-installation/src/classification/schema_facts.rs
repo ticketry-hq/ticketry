@@ -12,17 +12,17 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 /// `[name, affinity, not_null, default, primary_key_position, hidden]`.
-pub type ColumnFact = (String, String, bool, Option<String>, i64, i64);
+pub(crate) type ColumnFact = (String, String, bool, Option<String>, i64, i64);
 /// `[from, table, to, on_update, on_delete, match, deferred]`.
-pub type ForeignKeyFact = (String, String, Option<String>, String, String, String, bool);
+pub(crate) type ForeignKeyFact = (String, String, Option<String>, String, String, String, bool);
 /// `[column, descending, collation]`.
-pub type IndexMemberFact = (Option<String>, bool, Option<String>);
+pub(crate) type IndexMemberFact = (Option<String>, bool, Option<String>);
 /// `[name, unique, origin, partial_predicate, members]`.
-pub type IndexFact = (String, bool, String, Option<String>, Vec<IndexMemberFact>);
+pub(crate) type IndexFact = (String, bool, String, Option<String>, Vec<IndexMemberFact>);
 
 /// The reviewed semantic facts of one product table.
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
-pub struct TableFacts {
+pub(crate) struct TableFacts {
     /// Normalized table-level CHECK expressions, sorted.
     pub checks: Vec<String>,
     /// Column facts in ordinal order.
@@ -34,7 +34,7 @@ pub struct TableFacts {
 }
 
 /// Product tables keyed by name, which is what a fingerprint is taken over.
-pub type ProductSchema = BTreeMap<String, TableFacts>;
+pub(crate) type ProductSchema = BTreeMap<String, TableFacts>;
 
 /// Framework bookkeeping Ticketry keeps but does not own.
 const FRAMEWORK_PREFIXES: [&str; 3] = ["django_", "auth_", "sqlite_"];
@@ -45,7 +45,7 @@ const LEDGER_TABLES: [&str; 1] = ["alembic_version"];
 
 /// Whether a table holds product state rather than bookkeeping.
 #[must_use]
-pub fn is_product_table(name: &str) -> bool {
+pub(crate) fn is_product_table(name: &str) -> bool {
     !(FRAMEWORK_PREFIXES
         .iter()
         .any(|prefix| name.starts_with(prefix))
@@ -54,7 +54,7 @@ pub fn is_product_table(name: &str) -> bool {
 }
 
 /// Read every product table's semantic facts from a read-only connection.
-pub async fn read<C: ConnectionTrait>(database: &C) -> Result<ProductSchema, DbErr> {
+pub(crate) async fn read<C: ConnectionTrait>(database: &C) -> Result<ProductSchema, DbErr> {
     let mut schema = ProductSchema::new();
     for (name, sql) in table_definitions(database).await? {
         if !is_product_table(&name) {
@@ -67,7 +67,7 @@ pub async fn read<C: ConnectionTrait>(database: &C) -> Result<ProductSchema, DbE
 }
 
 /// Every table name present, product or not.
-pub async fn table_names<C: ConnectionTrait>(database: &C) -> Result<Vec<String>, DbErr> {
+pub(crate) async fn table_names<C: ConnectionTrait>(database: &C) -> Result<Vec<String>, DbErr> {
     Ok(table_definitions(database)
         .await?
         .into_iter()
@@ -290,7 +290,7 @@ fn extract_checks(sql: &str) -> Vec<String> {
 /// comparable. [`canonical`] fixes that form: compact JSON with sorted object
 /// keys.
 #[must_use]
-pub fn fingerprint(schema: &ProductSchema) -> String {
+pub(crate) fn fingerprint(schema: &ProductSchema) -> String {
     let value = serde_json::json!({ "tables": schema });
     let mut hasher = Sha256::new();
     hasher.update(canonical(&value).as_bytes());
@@ -326,7 +326,7 @@ fn canonical(value: &serde_json::Value) -> String {
 
 /// Name the first semantic difference between two tables, for a safe refusal.
 #[must_use]
-pub fn difference(expected: &TableFacts, observed: &TableFacts) -> &'static str {
+pub(crate) fn difference(expected: &TableFacts, observed: &TableFacts) -> &'static str {
     if expected.columns != observed.columns {
         "column affinity, nullability, default, or primary-key facts changed"
     } else if expected.foreign_keys != observed.foreign_keys {

@@ -1,9 +1,10 @@
 import { useEffect } from "react";
-import { useAppUpdateCheckState } from "./internal/checkState";
+import { useAppUpdateState } from "./internal/updateState";
 
+/** Performs this app process's one automatic update check after startup. */
 export function AppUpdatesLaunchCheck() {
   useEffect(() => {
-    void useAppUpdateCheckState.getState().checkOnceOnLaunch();
+    void useAppUpdateState.getState().checkOnceOnLaunch();
   }, []);
 
   return null;

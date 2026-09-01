@@ -1,6 +1,6 @@
 use sea_orm::{ConnectionTrait, Database};
 use tauri_graphql::{TransportApi, TransportApiImpl};
-use ticketry_graphql_schema::graphql_foundation::initialize_with_keybinding_settings_and_install;
+use ticketry_graphql_schema::initialize_with_keybinding_settings_and_install;
 use ticketry_settings::{AppSetting, AppSettingRepository, SettingKey, SettingScope};
 
 fn request(query: &str, variables: serde_json::Value) -> String {
@@ -182,7 +182,7 @@ async fn valid_keybindings_round_trip_with_bound_identity_timestamp_and_restart(
 
 #[tokio::test]
 async fn mutation_contract_exposes_only_the_json_value_for_the_fixed_setting() {
-    let sdl = ticketry_graphql_schema::graphql_foundation::generated_schema_sdl()
+    let sdl = ticketry_graphql_schema::generated_schema_sdl()
         .await
         .expect("build GraphQL contract");
 

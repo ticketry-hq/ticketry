@@ -6,11 +6,11 @@ use std::sync::{
 
 use async_trait::async_trait;
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection, EntityTrait, PaginatorTrait};
-use ticketry_agent_execution::execution::run_now::{
+use ticketry_agent_execution::run_now::{
     RunNowCaller, RunNowLauncher, RunNowRequest, RunNowRun, RunNowService,
 };
-use ticketry_entities::work_management::{issue, launch_policy_decision, transition_occurrence};
-use ticketry_work_management::work_management::{
+use ticketry_entities::{issue, launch_policy_decision, transition_occurrence};
+use ticketry_work_management::{
     launch_policy::{LaunchPolicyDecision, LaunchPolicyResolver},
     open_for_commands,
 };
@@ -238,10 +238,10 @@ async fn fixture(failure: Option<&str>) -> Fixture {
 
 /// Point the fixture module at one local folder, through the one write seam.
 async fn link_module(database: &DatabaseConnection, folder: &str) {
-    ticketry_work_management::module_links::schema::install(database)
+    ticketry_work_management::schema::install(database)
         .await
         .expect("install the Module Link schema");
-    ticketry_work_management::module_links::ModuleLinkStore::new(database.clone())
+    ticketry_work_management::ModuleLinkStore::new(database.clone())
         .set(MODULE, folder)
         .await
         .expect("link the fixture module");
@@ -369,7 +369,7 @@ async fn retry_resumes_a_claimed_failure_but_a_fresh_identity_cannot_adopt_imple
         None
     );
     assert_eq!(
-        ticketry_work_management::work_management::launch_policy::pending(&fixture.database, 10)
+        ticketry_work_management::launch_policy::pending(&fixture.database, 10)
             .await
             .unwrap()
             .len(),
@@ -577,13 +577,10 @@ async fn transition_failure_rolls_back_and_late_launch_failure_reports_the_commi
         0
     );
     assert!(
-        ticketry_work_management::work_management::launch_policy::pending(
-            &rejected_transition.database,
-            10,
-        )
-        .await
-        .unwrap()
-        .is_empty(),
+        ticketry_work_management::launch_policy::pending(&rejected_transition.database, 10,)
+            .await
+            .unwrap()
+            .is_empty(),
         "an unclaimed Run Now policy decision must not execute during startup reconciliation"
     );
 

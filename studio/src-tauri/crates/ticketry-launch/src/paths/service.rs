@@ -21,13 +21,13 @@ use std::path::{Path, PathBuf};
 
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 
-use ticketry_documents::design_directory::{self, ModuleIdentity, TaskIdentity, SPEC_ROOT};
-use ticketry_entities::documents::design_document;
-use ticketry_entities::work_management::issue;
-use ticketry_entities::worktrees::worktree;
-use ticketry_work_management::module_links::resolution;
-use ticketry_workspace_runtime::worktree::status::identity::{canonical_uuid, compact_uuid};
-use ticketry_workspace_runtime::worktree::status::owner::{self, WorktreeOwner};
+use ticketry_documents::{self as design_directory, ModuleIdentity, TaskIdentity, SPEC_ROOT};
+use ticketry_entities::design_document;
+use ticketry_entities::issue;
+use ticketry_entities::worktree;
+use ticketry_work_management::resolution;
+use ticketry_workspace_runtime::status::identity::{canonical_uuid, compact_uuid};
+use ticketry_workspace_runtime::status::owner::{self, WorktreeOwner};
 
 use super::error::{LaunchPathsError, LaunchPathsErrorCode};
 use super::request::{LaunchPathsRequest, LaunchScope, SUPPORTED_VERSION};
@@ -295,7 +295,7 @@ fn display(path: PathBuf) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ticketry_documents::design_directory::PLANNING_SUBDIR;
+    use ticketry_documents::PLANNING_SUBDIR;
 
     #[test]
     fn a_scratch_directory_is_created_under_the_canonical_layout() {

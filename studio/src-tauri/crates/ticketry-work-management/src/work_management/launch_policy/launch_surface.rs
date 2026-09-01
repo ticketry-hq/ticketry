@@ -5,7 +5,7 @@
 //! the `CallerScope` it reads, because the trace sits below launch policy and
 //! must not know what a caller scope is.
 
-use ticketry_diagnostics::launch_trace::LaunchSurface;
+use ticketry_diagnostics::LaunchSurface;
 
 use super::CallerScope;
 

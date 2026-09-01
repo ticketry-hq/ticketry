@@ -8,7 +8,7 @@
 use chrono::Utc;
 use sea_orm::{ActiveModelTrait, ActiveValue::Set, EntityTrait};
 
-use ticketry_entities::terminals::viewer_lease;
+use ticketry_entities::viewer_lease;
 
 use super::service::{parse_timestamp, timestamp, ActiveViewer, ViewerOwnershipService};
 use super::{ViewerDetachReason, ViewerOwnershipError};

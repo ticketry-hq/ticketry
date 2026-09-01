@@ -67,10 +67,10 @@ pub const OWNED_TABLES: &[(&str, ProductionWriter, &[&str])] = &[
     (
         "design_documents",
         ProductionWriter::Documents,
-        ticketry_documents::persistence::ownership_manifest::DESIGN_DOCUMENT_COLUMNS,
+        ticketry_documents::DOCUMENT_DESIGN_COLUMNS,
     ),
     (
-        ticketry_documents::persistence::LEDGER_TABLE,
+        ticketry_documents::LEDGER_TABLE,
         ProductionWriter::Documents,
         ADOPTION_LEDGER_COLUMNS,
     ),
@@ -225,7 +225,7 @@ mod tests {
 
     #[test]
     fn the_composition_covers_every_capability_manifest() {
-        for table in ticketry_documents::persistence::ownership_manifest::owned_tables() {
+        for table in ticketry_documents::document_owned_tables() {
             assert_eq!(production_writer(table), Some(ProductionWriter::Documents));
         }
         for table in crate::worktree::persistence::ownership_manifest::owned_tables() {
@@ -242,7 +242,7 @@ mod tests {
     #[test]
     fn both_adoption_ledgers_are_owned_alongside_their_table() {
         assert_eq!(
-            production_writer(ticketry_documents::persistence::LEDGER_TABLE),
+            production_writer(ticketry_documents::LEDGER_TABLE),
             Some(ProductionWriter::Documents)
         );
         assert_eq!(

@@ -5,13 +5,11 @@ use seaography::{
     CustomFields,
 };
 
-use ticketry_entities::graphql_scalars::StringList;
-use ticketry_entities::terminals::session;
+use ticketry_entities::StringList;
+use ticketry_entities::session;
 
 use super::TerminalLaunchService;
-use ticketry_launch::terminal_session::{
-    CreateTerminalSession, TerminalLaunchError, TerminalLaunchKind,
-};
+use ticketry_launch::{CreateTerminalSession, TerminalLaunchError, TerminalLaunchKind};
 
 pub struct TerminalSessionMutations;
 
@@ -70,19 +68,19 @@ impl TerminalSessionMutations {
                     "Shell creation accepts only request identity, module identity, and geometry.",
                 ));
             }
-            return ticketry_diagnostics::launch_trace::requested_by(
-                ticketry_diagnostics::launch_trace::LaunchSurface::LaunchPicker,
+            return ticketry_diagnostics::requested_by(
+                ticketry_diagnostics::LaunchSurface::LaunchPicker,
                 service.create_module_shell(client_request_id, module_id, columns, rows),
             )
             .await
             .map_err(graphql_error);
         }
         let surface = if resume_from_agent_run_id.is_some() {
-            ticketry_diagnostics::launch_trace::LaunchSurface::Resume
+            ticketry_diagnostics::LaunchSurface::Resume
         } else {
-            ticketry_diagnostics::launch_trace::LaunchSurface::LaunchPicker
+            ticketry_diagnostics::LaunchSurface::LaunchPicker
         };
-        ticketry_diagnostics::launch_trace::requested_by(
+        ticketry_diagnostics::requested_by(
             surface,
             service.create(CreateTerminalSession {
                 client_request_id,

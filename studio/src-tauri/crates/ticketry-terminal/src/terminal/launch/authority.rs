@@ -5,13 +5,11 @@
 //! skills, and document identity — is discarded here and rebuilt from
 //! authority, so nothing caller-shaped reaches durable launch material.
 
-use ticketry_diagnostics::launch_trace as trace;
-use ticketry_launch::authority::{LaunchAuthorityError, LaunchAuthorityErrorCode};
-
-use ticketry_launch::trace_reasons;
+use ticketry_diagnostics as trace;
+use ticketry_launch::{LaunchAuthorityError, LaunchAuthorityErrorCode};
 
 use super::TerminalLaunchService;
-use ticketry_launch::terminal_session::{
+use ticketry_launch::{
     CreateTerminalSession, TerminalLaunchError, TerminalLaunchErrorCode, TerminalLaunchKind,
 };
 
@@ -27,14 +25,14 @@ impl TerminalLaunchService {
         mut request: CreateTerminalSession,
     ) -> Result<CreateTerminalSession, TerminalLaunchError> {
         if request.kind == TerminalLaunchKind::Shell {
-            trace::admitted(trace::stages::AUTHORITY_RESOLVED)
+            trace::admitted(trace::AUTHORITY_RESOLVED)
                 .with("authorityRequired", false)
                 .with("promptConstructed", false)
                 .record();
             return Ok(request);
         }
         let Some(authority) = self.authority.as_ref() else {
-            trace::refused(trace::stages::AUTHORITY_RESOLVED, "authority_not_composed")
+            trace::refused(trace::AUTHORITY_RESOLVED, "authority_not_composed")
                 .with("authorityRequired", true)
                 .record();
             return Err(TerminalLaunchError::new(
@@ -46,8 +44,8 @@ impl TerminalLaunchService {
             Ok(material) => material.apply(&mut request),
             Err(error) => {
                 trace::refused(
-                    trace::stages::AUTHORITY_RESOLVED,
-                    trace_reasons::authority_reason(error.code),
+                    trace::AUTHORITY_RESOLVED,
+                    ticketry_launch::authority_reason(error.code),
                 )
                 .with("authorityRequired", true)
                 .record();
@@ -56,13 +54,13 @@ impl TerminalLaunchService {
         }
         note_resolved_material(&request);
         if let Err(error) = request.validate() {
-            trace::refused(trace::stages::AUTHORITY_RESOLVED, error.code_str())
+            trace::refused(trace::AUTHORITY_RESOLVED, error.code_str())
                 .with("authorityRequired", true)
                 .with("promptConstructed", request.prompt.is_some())
                 .record();
             return Err(error);
         }
-        trace::admitted(trace::stages::AUTHORITY_RESOLVED)
+        trace::admitted(trace::AUTHORITY_RESOLVED)
             .with("authorityRequired", true)
             .with("promptConstructed", request.prompt.is_some())
             .with(

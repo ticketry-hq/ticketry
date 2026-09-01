@@ -9,7 +9,7 @@ use sea_orm::{
 use super::rejections;
 use super::LaunchPolicyError;
 use crate::work_management::open_for_commands;
-use ticketry_entities::work_management::{launch_policy_rejection, transition_occurrence};
+use ticketry_entities::{launch_policy_rejection, transition_occurrence};
 
 const WORK_ITEM: &str = "50000000000000000000000000000001";
 const STATE: &str = "40000000000000000000000000000002";

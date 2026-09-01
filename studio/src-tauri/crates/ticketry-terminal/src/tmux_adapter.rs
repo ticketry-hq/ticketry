@@ -443,8 +443,8 @@ fn launch_trace_discovery_facts(tool: SupportedTool, duration_ms: u128) -> Disco
 
 impl DiscoveryFacts {
     fn record(self, refusal: Option<&'static str>, path: Option<&str>, version: Option<&str>) {
-        ticketry_diagnostics::launch_trace::stage(
-            ticketry_diagnostics::launch_trace::stages::EXECUTABLE_RESOLVED,
+        ticketry_diagnostics::stage(
+            ticketry_diagnostics::EXECUTABLE_RESOLVED,
             refusal,
         )
         .with("executableName", self.tool_name)

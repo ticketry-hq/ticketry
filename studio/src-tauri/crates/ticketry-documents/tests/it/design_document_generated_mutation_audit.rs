@@ -14,8 +14,8 @@ use seaography::{
     async_graphql::dynamic::{Object, Schema},
     Builder, BuilderContext,
 };
-use ticketry_documents::persistence::generated_mutation_audit::FINDINGS;
-use ticketry_entities::documents::design_document;
+use ticketry_documents::GENERATED_MUTATION_FINDINGS as FINDINGS;
+use ticketry_entities::design_document;
 
 static AUDIT_CONTEXT: LazyLock<BuilderContext> = LazyLock::new(BuilderContext::default);
 

@@ -1,6 +1,6 @@
 use sea_orm::{ConnectionTrait, Database};
 use tauri_graphql::{TransportApi, TransportApiImpl};
-use ticketry_graphql_schema::graphql_foundation::initialize_with_worktracker_and_install;
+use ticketry_graphql_schema::initialize_with_worktracker_and_install;
 
 fn request(query: &str, variables: serde_json::Value) -> String {
     serde_json::json!({ "query": query, "variables": variables }).to_string()

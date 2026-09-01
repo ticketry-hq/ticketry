@@ -80,10 +80,16 @@ pub struct Manifest {
     /// Every fixture the corpus materializes.
     pub corpus: Vec<CorpusFixture>,
     /// Semantic facts of the current generation, for named refusals.
-    pub current_tables: BTreeMap<String, TableFacts>,
+    current_tables: BTreeMap<String, TableFacts>,
 }
 
 impl Manifest {
+    /// Whether the current generation owns a named product table.
+    #[must_use]
+    pub fn has_current_table(&self, name: &str) -> bool {
+        self.current_tables.contains_key(name)
+    }
+
     /// The generation a directly adoptable installation reproduces.
     #[must_use]
     pub fn current(&self) -> &Generation {
@@ -157,7 +163,7 @@ impl Manifest {
 
     /// Name the first current-generation table that disagrees with `observed`.
     #[must_use]
-    pub fn current_mismatch(&self, observed: &ProductSchema) -> Option<String> {
+    pub(crate) fn current_mismatch(&self, observed: &ProductSchema) -> Option<String> {
         for (name, expected) in &self.current_tables {
             match observed.get(name) {
                 None => return Some(format!("{name}: required table is missing")),

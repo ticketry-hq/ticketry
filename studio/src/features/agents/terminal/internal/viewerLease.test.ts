@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { initializeStudioRuntime, type StudioRuntime } from "../../../../runtime";
 import { documentOperationName } from "../../../../graphql-foundation/typedDocument";
 import { desktopViewerLease } from "./viewerLease";
+import { quietAppUpdatesRuntime } from "../../../../test/appUpdatesRuntimeFixture";
 
 function desktopRuntime(
   writeWorkTracker: StudioRuntime["writeWorkTracker"],
@@ -18,9 +19,7 @@ function desktopRuntime(
       nativeFolderPicker: true,
       appUpdates: true,
     },
-    appUpdates: {
-      check: async () => ({ installedVersion: "0.0.0", status: "current" }),
-    },
+    appUpdates: quietAppUpdatesRuntime(),
     readWorkTracker: writeWorkTracker,
     writeWorkTracker,
     readSettings: writeWorkTracker,

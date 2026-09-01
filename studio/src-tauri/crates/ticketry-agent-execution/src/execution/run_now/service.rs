@@ -3,21 +3,21 @@ use std::sync::Arc;
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 
 use crate::execution::graph::has_live_work;
-use ticketry_entities::work_management::{
+use ticketry_entities::{
     issue, issue_type, issue_type_transition, state, transition_occurrence,
 };
-use ticketry_terminal::terminal::launch::TerminalLaunchService;
-use ticketry_work_management::work_management::commands::{
+use ticketry_terminal::TerminalLaunchService;
+use ticketry_work_management::commands::{
     status_facts::WorkFactRecorder,
     workflow::{
         self, TransitionCausation, TransitionExpectation, TransitionOrigin, TransitionWorkItem,
     },
     CommandError,
 };
-use ticketry_work_management::work_management::launch_policy::{
+use ticketry_work_management::launch_policy::{
     self, CallerScope, LaunchPolicyError, LaunchPolicyRequest, LaunchPolicyResolver,
 };
-use ticketry_work_management::work_management::read_queries;
+use ticketry_work_management::read_queries;
 
 use super::launcher::{RunNowLauncher, TerminalRunNowLauncher};
 use super::{RunNowCaller, RunNowRefusal, RunNowRequest, RunNowState, RunNowSuccess};

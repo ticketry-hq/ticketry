@@ -59,6 +59,9 @@ retired `/api/work-tracker` surface.
   workflow contract, including Rust-catalog unsupported-model refusal before a
   write and without persisted drift, plus Models settings with save, discard,
   live picker convergence, and reload behavior;
+- a Models settings save verified directly against the SQLite `app_settings`
+  row through `scripts/read-persisted-model-settings.mjs`, proving the stored
+  global launch default rather than the response the UI displayed;
 - canonical Markdown document discovery, live Rust-watcher creation and deletion,
   editing, cancelled edits, unsaved tab switches, saving,
   per-work-item-isolated workspace-tab reordering and keyboard cycling,

@@ -6,7 +6,7 @@ use seaography::{
 };
 
 use crate::work_management::{commands::workflow, graphql};
-use ticketry_entities::work_management::issue_type_transition;
+use ticketry_entities::issue_type_transition;
 
 struct CreateIssueTypeTransition;
 

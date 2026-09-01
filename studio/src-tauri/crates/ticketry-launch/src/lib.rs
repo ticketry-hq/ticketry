@@ -15,9 +15,34 @@
 //! crate's refusal codes as the stable names the launch trace in
 //! `ticketry-diagnostics` reports; the trace emitter itself lives there so
 //! nothing below launch has to read back up into it.
+//!
+//! The module tree is implementation detail. These explicit exports are the
+//! caller-owned launch, authority, planning, path, and trace seams. In
+//! particular, the terminal and Graph Run integrations use the request and
+//! planning types here without reaching into implementation modules.
 
-pub mod authority;
-pub mod paths;
-pub mod planning;
-pub mod terminal_session;
-pub mod trace_reasons;
+mod authority;
+mod paths;
+mod planning;
+mod terminal_session;
+mod trace_reasons;
+
+pub use authority::{
+    compose_task_prompt, InteractiveLaunchAuthority, LaunchAuthorityError,
+    LaunchAuthorityErrorCode, LaunchAuthorityService, ResolvedLaunchMaterial, TaskPromptSource,
+};
+pub use paths::{
+    LaunchPathsError, LaunchPathsErrorCode, LaunchPathsRequest, LaunchPathsService,
+    LaunchPathsView, LaunchScope, WorktreeUse,
+};
+pub use planning::{
+    build_document_chat_prompt, build_instant_prompt, build_planning_prompt, build_task_prompt,
+    materialize, provider_contract, DocumentChatPrompt, DurableLaunchMaterial, ExecutionAuthority,
+    InstantPrompt, LaunchKind, LaunchPlanningError, LaunchPlanningErrorCode, MaterializedLaunch,
+    ModulePromptFacts, PlanningPrompt, Provider, ProviderContract, ProviderOptions,
+    RuntimeSettings, TaskPromptFacts, TaskPromptInput, TaskSummary, TimeoutUnit, WorkspaceIdentity,
+};
+pub use terminal_session::{
+    CreateTerminalSession, TerminalLaunchError, TerminalLaunchErrorCode, TerminalLaunchKind,
+};
+pub use trace_reasons::{authority_reason, planning_reason};

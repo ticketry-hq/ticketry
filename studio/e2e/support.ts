@@ -84,6 +84,33 @@ export async function graphql<TResult, TVariables>(
   return envelope.data!;
 }
 
+/**
+ * Post one operation that Rust is expected to refuse and return its first
+ * error. `graphql` asserts success, so a guard test needs this seam instead.
+ */
+export async function graphqlRefusal<TResult, TVariables>(
+  request: APIRequestContext,
+  document: TypedDocumentNode<TResult, TVariables>,
+  variables: TVariables,
+): Promise<{ message: string; extensions?: Record<string, unknown> }> {
+  const operationName = documentOperationName(document);
+  const response = await request.post("/graphql", {
+    data: {
+      operationName,
+      query: documentSource(document),
+      variables,
+    },
+  });
+  const text = await response.text();
+  const envelope = JSON.parse(text) as GraphqlEnvelope<TResult>;
+  const refusal = envelope.errors?.[0];
+  expect(
+    refusal,
+    `${operationName} was expected to be refused, got ${text}`,
+  ).toBeTruthy();
+  return refusal!;
+}
+
 function workItemRow(row: GeneratedWorkTrackerWorkItemFieldsFragment): WorkItemRow {
   return { ...row, key: `T-${row.sequence_id}` };
 }

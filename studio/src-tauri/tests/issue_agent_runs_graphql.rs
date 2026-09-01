@@ -82,7 +82,7 @@ async fn schema() -> GraphQlEndpoint {
         )
         .await
         .unwrap();
-    let namespace = ticketry_terminal::tmux_adapter::current_runtime_namespace().unwrap();
+    let namespace = ticketry_terminal::current_runtime_namespace().unwrap();
     database
         .execute_unprepared(&format!(
             "INSERT INTO agent_terminal_sessions VALUES
@@ -100,7 +100,7 @@ async fn schema() -> GraphQlEndpoint {
         .unwrap();
 
     let foundation = Database::connect("sqlite::memory:").await.unwrap();
-    let schema = ticketry_graphql_schema::query_root::foundation_schema(
+    let schema = ticketry_graphql_schema::foundation_schema(
         foundation,
         Some(database),
         None,

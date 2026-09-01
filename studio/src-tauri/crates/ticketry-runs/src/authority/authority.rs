@@ -8,8 +8,7 @@ use sea_orm::EntityTrait;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 
-use ticketry_entities::runs::agent_run;
-use ticketry_entities::work_management::issue;
+use ticketry_entities::{agent_run, issue};
 
 use crate::authority::grant_store::{GrantStore, StoredGrant};
 

@@ -9,10 +9,10 @@ use sea_orm::{
     sea_query::Expr, ColumnTrait, DatabaseConnection, EntityTrait, PaginatorTrait, QueryFilter,
 };
 use ticketry_entities::{
-    runs::{agent_run, status_event},
-    terminals::{cleanup_effect, session},
+    {agent_run, status_event},
+    {cleanup_effect, session},
 };
-use ticketry_terminal::terminal::cleanup::{
+use ticketry_terminal::{
     CleanupCause, CleanupCheckpoint, CleanupCheckpoints, CleanupKillResult,
     CleanupRuntimeObservation, TerminalCleanupError, TerminalCleanupRuntime,
     TerminalCleanupService,
@@ -75,7 +75,7 @@ async fn action_candidate_preserves_tri_state_input_sdl_and_entity_result() {
     )
     .unwrap();
 
-    let actual = ticketry_graphql_schema::graphql_foundation::generated_schema_sdl()
+    let actual = ticketry_graphql_schema::generated_schema_sdl()
         .await
         .expect("build shipping schema");
     let checked_in = include_str!("../../src/graphql-foundation/generated/schema.graphql");

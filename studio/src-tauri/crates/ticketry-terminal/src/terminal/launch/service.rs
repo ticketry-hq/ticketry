@@ -2,18 +2,15 @@ use std::sync::Arc;
 
 use sea_orm::{DatabaseConnection, EntityTrait};
 
-use ticketry_diagnostics::launch_trace as trace;
-use ticketry_entities::{terminals::session, work_management::issue};
-use ticketry_launch::authority::InteractiveLaunchAuthority;
-use ticketry_runs::persistence::LaunchPreparationParticipant;
-use ticketry_runs::persistence::RunsServices;
+use ticketry_diagnostics as trace;
+use ticketry_entities::{session, issue};
+use ticketry_launch::InteractiveLaunchAuthority;
+use ticketry_runs::{LaunchPreparationParticipant, RunsServices};
 
 use super::checkpoint::LaunchCheckpoints;
 use super::material::PreparedMaterial;
 use super::{TerminalLaunchBoundary, TerminalLaunchCheckpoint, TerminalLaunchRuntime};
-use ticketry_launch::terminal_session::{
-    CreateTerminalSession, TerminalLaunchError, TerminalLaunchErrorCode,
-};
+use ticketry_launch::{CreateTerminalSession, TerminalLaunchError, TerminalLaunchErrorCode};
 
 pub struct AcceptedTerminalLaunch {
     material: PreparedMaterial,
@@ -99,7 +96,7 @@ impl TerminalLaunchService {
             issue_id: module.id.clone(),
             module_id: module.id.clone(),
             target_id: module.id.clone(),
-            kind: ticketry_launch::terminal_session::TerminalLaunchKind::Shell,
+            kind: ticketry_launch::TerminalLaunchKind::Shell,
             provider: None,
             model: None,
             reasoning: None,
@@ -187,10 +184,10 @@ impl TerminalLaunchService {
     ) -> Result<AcceptedTerminalLaunch, TerminalLaunchError> {
         note_requested_launch(&request);
         if let Err(error) = request.validate_identity_and_geometry() {
-            trace::refused(trace::stages::REQUESTED, error.code_str()).record();
+            trace::refused(trace::REQUESTED, error.code_str()).record();
             return Err(error);
         }
-        trace::admitted(trace::stages::REQUESTED).record();
+        trace::admitted(trace::REQUESTED).record();
         crate::terminal::resume::validate_resume_request(&self.database, &request).await?;
         self.validate_scope(&request).await?;
         self.runtime.preflight(&request).await?;
@@ -250,8 +247,8 @@ impl TerminalLaunchService {
     ) -> Result<Option<String>, TerminalLaunchError> {
         if !matches!(
             request.kind,
-            ticketry_launch::terminal_session::TerminalLaunchKind::Task
-                | ticketry_launch::terminal_session::TerminalLaunchKind::Automation
+            ticketry_launch::TerminalLaunchKind::Task
+                | ticketry_launch::TerminalLaunchKind::Automation
         ) {
             return Ok(None);
         }
@@ -268,7 +265,7 @@ impl TerminalLaunchService {
         let Some(state_id) = row.state_id else {
             return Ok(None);
         };
-        ticketry_entities::work_management::state::Entity::find_by_id(state_id)
+        ticketry_entities::state::Entity::find_by_id(state_id)
             .one(&self.database)
             .await
             .map_err(storage)
@@ -280,9 +277,9 @@ impl TerminalLaunchService {
         request: &CreateTerminalSession,
     ) -> Result<(), TerminalLaunchError> {
         match request.kind {
-            ticketry_launch::terminal_session::TerminalLaunchKind::Planning
-            | ticketry_launch::terminal_session::TerminalLaunchKind::Instant
-            | ticketry_launch::terminal_session::TerminalLaunchKind::Shell => {
+            ticketry_launch::TerminalLaunchKind::Planning
+            | ticketry_launch::TerminalLaunchKind::Instant
+            | ticketry_launch::TerminalLaunchKind::Shell => {
                 let submitted = issue::Entity::find_by_id(compact(&request.issue_id))
                     .one(&self.database)
                     .await
@@ -296,7 +293,7 @@ impl TerminalLaunchService {
                 let module_id = if !submitted.is_archived && submitted.r#type == "module" {
                     submitted.id.clone()
                 } else {
-                    ticketry_workspace_runtime::worktree::status::owner::resolve(
+                    ticketry_workspace_runtime::status::owner::resolve(
                         &self.database,
                         &request.issue_id,
                     )
@@ -324,10 +321,10 @@ impl TerminalLaunchService {
                     ));
                 }
             }
-            ticketry_launch::terminal_session::TerminalLaunchKind::Task
-            | ticketry_launch::terminal_session::TerminalLaunchKind::DocumentChat
-            | ticketry_launch::terminal_session::TerminalLaunchKind::Automation => {
-                let owner = ticketry_workspace_runtime::worktree::status::owner::resolve(
+            ticketry_launch::TerminalLaunchKind::Task
+            | ticketry_launch::TerminalLaunchKind::DocumentChat
+            | ticketry_launch::TerminalLaunchKind::Automation => {
+                let owner = ticketry_workspace_runtime::status::owner::resolve(
                     &self.database,
                     &request.issue_id,
                 )
@@ -349,18 +346,12 @@ impl TerminalLaunchService {
             }
         }
         let expected_target = match request.kind {
-            ticketry_launch::terminal_session::TerminalLaunchKind::Task
-            | ticketry_launch::terminal_session::TerminalLaunchKind::Automation => {
-                compact(&request.issue_id)
-            }
-            ticketry_launch::terminal_session::TerminalLaunchKind::Planning
-            | ticketry_launch::terminal_session::TerminalLaunchKind::Instant
-            | ticketry_launch::terminal_session::TerminalLaunchKind::Shell => {
-                compact(&request.module_id)
-            }
-            ticketry_launch::terminal_session::TerminalLaunchKind::DocumentChat => {
-                compact(&request.target_id)
-            }
+            ticketry_launch::TerminalLaunchKind::Task
+            | ticketry_launch::TerminalLaunchKind::Automation => compact(&request.issue_id),
+            ticketry_launch::TerminalLaunchKind::Planning
+            | ticketry_launch::TerminalLaunchKind::Instant
+            | ticketry_launch::TerminalLaunchKind::Shell => compact(&request.module_id),
+            ticketry_launch::TerminalLaunchKind::DocumentChat => compact(&request.target_id),
         };
         if compact(&request.target_id) != expected_target {
             return Err(TerminalLaunchError::new(
@@ -369,16 +360,16 @@ impl TerminalLaunchService {
             ));
         }
         let expected_workspace = match request.kind {
-            ticketry_launch::terminal_session::TerminalLaunchKind::Task
-            | ticketry_launch::terminal_session::TerminalLaunchKind::Automation => {
+            ticketry_launch::TerminalLaunchKind::Task
+            | ticketry_launch::TerminalLaunchKind::Automation => {
                 format!("task:{}", compact(&request.issue_id))
             }
-            ticketry_launch::terminal_session::TerminalLaunchKind::Planning
-            | ticketry_launch::terminal_session::TerminalLaunchKind::Instant
-            | ticketry_launch::terminal_session::TerminalLaunchKind::Shell => {
+            ticketry_launch::TerminalLaunchKind::Planning
+            | ticketry_launch::TerminalLaunchKind::Instant
+            | ticketry_launch::TerminalLaunchKind::Shell => {
                 format!("module:{}", compact(&request.module_id))
             }
-            ticketry_launch::terminal_session::TerminalLaunchKind::DocumentChat => {
+            ticketry_launch::TerminalLaunchKind::DocumentChat => {
                 format!("document:{}", compact(&request.target_id))
             }
         };

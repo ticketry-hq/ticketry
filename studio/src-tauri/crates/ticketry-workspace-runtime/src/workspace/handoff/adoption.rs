@@ -48,7 +48,7 @@ pub async fn adopt(data_directory: &Path) -> Result<HandoffEvidence, WorkspaceHa
         })?;
     database.close().await.map_err(storage)?;
 
-    ticketry_documents::persistence::preflight(data_directory)
+    ticketry_documents::preflight(data_directory)
         .await
         .map_err(|error| {
             unknown(format!(
@@ -56,7 +56,7 @@ pub async fn adopt(data_directory: &Path) -> Result<HandoffEvidence, WorkspaceHa
                 error.code_str()
             ))
         })?;
-    let documents = ticketry_documents::persistence::adopt(data_directory)
+    let documents = ticketry_documents::adopt(data_directory)
         .await
         .map_err(|error| {
             unknown(format!(
@@ -96,7 +96,7 @@ pub async fn adopt(data_directory: &Path) -> Result<HandoffEvidence, WorkspaceHa
 }
 
 async fn open(data_directory: &Path) -> Result<sea_orm::DatabaseConnection, WorkspaceHandoffError> {
-    ticketry_work_management::work_management::open_for_commands(&data_directory.join("state.db"))
+    ticketry_work_management::open_for_commands(&data_directory.join("state.db"))
         .await
         .map_err(|error| {
             WorkspaceHandoffError::new(

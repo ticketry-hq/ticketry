@@ -10,7 +10,7 @@ use sea_orm::{
     ActiveModelTrait, ActiveValue::NotSet, ColumnTrait, DatabaseConnection, EntityTrait,
     QueryFilter, Set, TransactionTrait,
 };
-use ticketry_entities::work_management::{
+use ticketry_entities::{
     agent_model, issue, issue_blocker, issue_type, issue_type_transition, launch_binding, project,
     provider, state,
 };

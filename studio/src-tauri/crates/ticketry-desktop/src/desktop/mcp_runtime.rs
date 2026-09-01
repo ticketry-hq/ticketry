@@ -55,7 +55,7 @@ pub async fn start_in_process_mcp(
     data_directory: &Path,
     ingress_credential: &str,
     mcp_port: u16,
-    terminal_launch: Option<ticketry_terminal::terminal::launch::TerminalLaunchService>,
+    terminal_launch: Option<ticketry_terminal::TerminalLaunchService>,
 ) -> Result<ticketry_mcp::McpRuntime, String> {
     let configuration = ticketry_mcp::McpConfiguration {
         address: ticketry_mcp::loopback(mcp_port).map_err(|error| error.to_string())?,

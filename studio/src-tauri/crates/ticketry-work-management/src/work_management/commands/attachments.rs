@@ -8,7 +8,7 @@ use sea_orm::{
 
 use super::identifiers::{database_uuid, new_database_uuid};
 use super::CommandError;
-use ticketry_entities::work_management::{attachment, issue};
+use ticketry_entities::{attachment, issue};
 
 const RELATIVE_DIRECTORY: &str = "worktracker/attachments";
 

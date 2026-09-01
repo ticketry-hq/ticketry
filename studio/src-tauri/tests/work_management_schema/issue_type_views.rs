@@ -1,6 +1,6 @@
 use sea_orm::{ConnectOptions, ConnectionTrait, Database, DatabaseConnection, EntityTrait};
 
-use ticketry_entities::work_management::{issue_type, issue_type_transition, launch_binding};
+use ticketry_entities::{issue_type, issue_type_transition, launch_binding};
 
 const PROJECT: &str = "10000000000000000000000000000000";
 const FOREIGN_PROJECT: &str = "10000000000000000000000000000009";
@@ -74,12 +74,12 @@ async fn fixture() -> DatabaseConnection {
 }
 
 fn schema(database: DatabaseConnection) -> seaography::async_graphql::dynamic::Schema {
-    ticketry_graphql_schema::query_root::generated_contract_schema(database).unwrap()
+    ticketry_graphql_schema::generated_contract_schema(database).unwrap()
 }
 
 #[tokio::test]
 async fn preserves_the_update_delete_and_reorder_sdl() {
-    let sdl = ticketry_graphql_schema::graphql_foundation::generated_schema_sdl()
+    let sdl = ticketry_graphql_schema::generated_schema_sdl()
         .await
         .expect("build generated contract");
     assert!(sdl.contains(

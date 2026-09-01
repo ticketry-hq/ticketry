@@ -24,7 +24,7 @@ impl CreateProjectView {
         name: String,
         slug: String,
         description: Option<String>,
-    ) -> Result<ticketry_entities::work_management::project::Model> {
+    ) -> Result<ticketry_entities::project::Model> {
         let database = command_database(ctx)?;
         let id = catalog::create_project(
             database,

@@ -1,10 +1,8 @@
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 
-use ticketry_entities::{runs::agent_run, terminals::session};
-use ticketry_launch::planning::{provider_contract, Provider};
-use ticketry_launch::terminal_session::{
-    CreateTerminalSession, TerminalLaunchError, TerminalLaunchErrorCode,
-};
+use ticketry_entities::{agent_run, session};
+use ticketry_launch::{provider_contract, Provider};
+use ticketry_launch::{CreateTerminalSession, TerminalLaunchError, TerminalLaunchErrorCode};
 
 use super::scope::{compact, ResumeScope};
 

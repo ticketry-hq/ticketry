@@ -302,7 +302,7 @@ async fn generated_graphql_query_and_restricted_mutation_use_the_catalog_service
     let (directory, database) = fixture(None).await;
     database.close().await.unwrap();
     let api = TransportApiImpl::new();
-    ticketry_graphql_schema::graphql_foundation::initialize_with_worktracker_commands_and_install(
+    ticketry_graphql_schema::initialize_with_worktracker_commands_and_install(
         &directory.path().join("rust-core.sqlite3"),
         &directory.path().join("state.db"),
         &directory.path().join("media"),

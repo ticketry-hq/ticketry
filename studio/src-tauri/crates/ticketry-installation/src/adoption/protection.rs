@@ -70,7 +70,7 @@ pub(super) async fn protect(
         None => None,
     };
     fault(plan, Phase::HashVerification)?;
-    let selected_bridge = crate::classification::manifest()
+    let selected_bridge = crate::manifest()
         .generation(generation)
         .filter(|recorded| recorded.expected == "bridge")
         .map(|_| bridge::select(generation, &fingerprint))

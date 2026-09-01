@@ -17,10 +17,10 @@ use axum::extract::ws::{Message, WebSocket};
 use serde::Deserialize;
 use tokio::sync::mpsc;
 
-use ticketry_terminal::terminal::viewer::attachment::{
+use ticketry_terminal::{
     AttachmentOutcome, TerminalAttachment, TerminalAttachmentControl, TerminalScrollDirection,
 };
-use ticketry_terminal::viewer_ownership::{
+use ticketry_terminal::{
     CreateViewerLease, DeleteViewerLease, PreparedViewerMechanics, UpdateViewerLease,
     ViewerDetachReason, ViewerOwnershipError, ViewerOwnershipService,
 };

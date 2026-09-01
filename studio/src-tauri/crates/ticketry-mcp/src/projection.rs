@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use sea_orm::DatabaseConnection;
 use serde_json::{json, Value};
 
-use ticketry_work_management::work_management::{
+use ticketry_work_management::{
     commands::attachments,
     launch_policy, read_queries,
     read_types::{IssueType, IssueTypeTransition, State, WorkItem},
@@ -64,7 +64,7 @@ pub async fn resolve_state(
 pub async fn list_projects(database: &DatabaseConnection) -> Value {
     let mut rows = read_queries::projects(database).await.unwrap_or_default();
     if let Ok(Some(installation)) =
-        ticketry_work_management::work_management::project_onboarding_migration::installation_project_id(database)
+        ticketry_work_management::project_onboarding_migration::installation_project_id(database)
             .await
     {
         if let Some(position) = rows.iter().position(|row| same_id(&row.id, &installation)) {

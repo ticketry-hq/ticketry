@@ -4,7 +4,7 @@ use common::terminal_lifecycle_harness::{
     TerminalLifecycleHarness, MODULE_ID, PROJECT_ID, TASK_ID,
 };
 use sea_orm::{ConnectionTrait, DbBackend, Statement};
-use ticketry_terminal::terminal::resume::{
+use ticketry_terminal::{
     ResumableConversationService, RESUMABLE_LIMIT, RESUMABLE_STATEMENT_LIMIT,
 };
 
@@ -177,7 +177,7 @@ async fn insert_ended_task_run(
     ended_at: &str,
     agent: &str,
 ) {
-    let namespace = ticketry_terminal::tmux_adapter::current_runtime_namespace().unwrap();
+    let namespace = ticketry_terminal::current_runtime_namespace().unwrap();
     let sql = format!(
         "INSERT INTO agent_runs (id, issue_id, agent, status, started_at, ended_at, provider_session_id, lifecycle_state, lifecycle_updated_at, scope) \
          VALUES ('{run_id}', '{}', '{agent}', 'completed', '2026-08-19T10:00:00Z', '{ended_at}', '{provider_session_id}', 'exited', '{ended_at}', 'task'); \
@@ -222,7 +222,7 @@ async fn insert_ended_scratch_run(
     provider_session_id: &str,
     scope: &str,
 ) {
-    let namespace = ticketry_terminal::tmux_adapter::current_runtime_namespace().unwrap();
+    let namespace = ticketry_terminal::current_runtime_namespace().unwrap();
     let sql = format!(
         "INSERT INTO agent_runs (id, issue_id, agent, status, started_at, ended_at, provider_session_id, lifecycle_state, lifecycle_updated_at, scope) \
          VALUES ('{run_id}', '{}', 'codex', 'completed', '2026-08-19T10:00:00Z', '2026-08-19T14:00:00Z', '{provider_session_id}', 'exited', '2026-08-19T14:00:00Z', '{scope}'); \

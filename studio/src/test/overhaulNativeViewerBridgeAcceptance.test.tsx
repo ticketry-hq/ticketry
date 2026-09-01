@@ -238,6 +238,15 @@ describe("native viewer attachment acceptance", () => {
     expect(nativeTerminalSource).toMatch(
       /fn detach_every_viewer[\s\S]{0,500}attaching\.cancel_all\(\)[\s\S]{0,500}registry\.drain/,
     );
+    // Tauri handles a main-thread dispatch inline when page-load teardown is
+    // already on AppKit's thread. Cross a worker first so native frees run on
+    // the next event-loop turn, after WebKit finishes committing navigation.
+    expect(nativeTerminalSource).toMatch(
+      /fn defer_native_frees[\s\S]{0,900}run_on_main_thread[\s\S]{0,300}dispatch_from_fresh_thread/,
+    );
+    expect(nativeTerminalSource).toMatch(
+      /fn dispatch_from_fresh_thread[\s\S]{0,300}std::thread::Builder::new\(\)[\s\S]{0,300}\.spawn/,
+    );
     expect(nativeTerminalSource).toMatch(
       /fn insert_entry[\s\S]{0,500}self\.is_current\(&registry\)/,
     );

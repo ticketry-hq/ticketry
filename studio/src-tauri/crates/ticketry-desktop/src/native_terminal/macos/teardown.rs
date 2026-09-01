@@ -6,7 +6,7 @@ type NativeFree = Box<dyn FnOnce() + Send>;
 
 /// When the native frees for a teardown are allowed to run.
 enum NativeTeardownTiming<'a> {
-    /// Frees are handed to a scheduler that runs them on a later main-thread
+    /// Frees are collected and dispatched together on a later main-thread
     /// turn. Page reload teardown runs inside WebKit's `didCommitNavigation`
     /// callback, where WebKit is still committing the new document's frame and
     /// layer tree. Freeing a Ghostty surface there tears a Metal layer and an
@@ -14,7 +14,7 @@ enum NativeTeardownTiming<'a> {
     /// the process with an `EXC_BAD_ACCESS` no Rust panic could attribute
     /// (CODING-1368 investigation). Deferring puts the frees on the same seam
     /// every other detach path already uses.
-    Deferred(&'a dyn Fn(NativeFree)),
+    Deferred(&'a mut Vec<NativeFree>),
     /// Frees complete before the call returns. Application shutdown has no
     /// later main-thread turn to defer to: the process leaves through it.
     Immediate,
@@ -46,19 +46,12 @@ impl NativeTerminalState {
     /// every viewer stops accepting events before this returns; only the
     /// native frees wait for the navigation callback to unwind.
     pub fn detach_all_for_page_load(&self, application: &tauri::AppHandle) {
-        let schedule = |free: NativeFree| {
-            // A rejected dispatch means the event loop is already gone. The
-            // allocation is then left in place: leaking a view for the
-            // remainder of a process that is ending is safer than freeing an
-            // AppKit object off the main thread.
-            if let Err(error) = application.run_on_main_thread(move || free()) {
-                eprintln!("Ticketry could not schedule native viewer teardown: {error}");
-            }
-        };
-        self.detach_every_viewer(NativeTeardownTiming::Deferred(&schedule));
+        let mut frees = Vec::new();
+        self.detach_every_viewer(NativeTeardownTiming::Deferred(&mut frees));
+        defer_native_frees(application, frees);
     }
 
-    fn detach_every_viewer(&self, timing: NativeTeardownTiming<'_>) {
+    fn detach_every_viewer(&self, mut timing: NativeTeardownTiming<'_>) {
         let (entries, has_in_flight_attachments) = {
             let mut attaching = self
                 .attaching
@@ -77,7 +70,7 @@ impl NativeTerminalState {
         for entry in entries {
             entry.preparation_phase.store(FAILED, Ordering::Release);
             entry.stop_accepting_events();
-            free_view_with_timing(&timing, entry.view, entry.contexts);
+            free_view_with_timing(&mut timing, entry.view, entry.contexts);
             let _ = entry.worker.send(NativeViewerCommand::Detach);
         }
         // A cancelled preparation may still be unwinding a main-thread
@@ -96,12 +89,12 @@ impl NativeTerminalState {
         };
         // Queued after every view above, so the shared app outlives the
         // surfaces that belong to it.
-        free_runtime_with_timing(&timing, runtime);
+        free_runtime_with_timing(&mut timing, runtime);
     }
 }
 
 fn free_view_with_timing(
-    timing: &NativeTeardownTiming<'_>,
+    timing: &mut NativeTeardownTiming<'_>,
     view: usize,
     contexts: NativeViewContexts,
 ) {
@@ -110,15 +103,53 @@ fn free_view_with_timing(
     });
 }
 
-fn free_runtime_with_timing(timing: &NativeTeardownTiming<'_>, runtime: usize) {
+fn free_runtime_with_timing(timing: &mut NativeTeardownTiming<'_>, runtime: usize) {
     free_with_timing(timing, move || {
         unsafe { muxed_ghostty_runtime_free(runtime as *mut c_void) };
     });
 }
 
-fn free_with_timing(timing: &NativeTeardownTiming<'_>, free: impl FnOnce() + Send + 'static) {
+fn free_with_timing(timing: &mut NativeTeardownTiming<'_>, free: impl FnOnce() + Send + 'static) {
     match timing {
         NativeTeardownTiming::Immediate => free(),
-        NativeTeardownTiming::Deferred(schedule) => schedule(Box::new(free)),
+        NativeTeardownTiming::Deferred(frees) => frees.push(Box::new(free)),
     }
+}
+
+/// Calls Tauri's main-thread dispatcher from a fresh worker thread. Tauri
+/// executes `run_on_main_thread` inline when its caller is already the main
+/// thread, so calling it directly from WebKit's navigation callback does not
+/// defer anything.
+fn defer_native_frees(application: &tauri::AppHandle, frees: Vec<NativeFree>) {
+    if frees.is_empty() {
+        return;
+    }
+    let application = application.clone();
+    let batch = Box::new(move || {
+        for free in frees {
+            free();
+        }
+    });
+    let dispatch = move |batch: NativeFree| {
+        // A rejected dispatch means the event loop is already gone. Dropping
+        // the batch leaves the native allocations in place for the remainder
+        // of the process rather than freeing AppKit objects off the main
+        // thread.
+        if let Err(error) = application.run_on_main_thread(move || batch()) {
+            eprintln!("Ticketry could not schedule native viewer teardown: {error}");
+        }
+    };
+    if let Err(error) = dispatch_from_fresh_thread(dispatch, batch) {
+        eprintln!("Ticketry could not defer native viewer teardown: {error}");
+    }
+}
+
+fn dispatch_from_fresh_thread(
+    dispatch: impl FnOnce(NativeFree) + Send + 'static,
+    batch: NativeFree,
+) -> std::io::Result<()> {
+    std::thread::Builder::new()
+        .name("ticketry-native-teardown".to_owned())
+        .spawn(move || dispatch(batch))
+        .map(|_| ())
 }

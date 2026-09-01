@@ -360,12 +360,11 @@ mod tests {
             registry.insert("native-two".to_owned(), second);
         }
 
-        let scheduled = Mutex::new(Vec::new());
-        let schedule = |free: NativeFree| scheduled.lock().expect("scheduled").push(free);
-        state.detach_every_viewer(NativeTeardownTiming::Deferred(&schedule));
+        let mut scheduled = Vec::new();
+        state.detach_every_viewer(NativeTeardownTiming::Deferred(&mut scheduled));
 
         // Two views and the shared runtime, none of them freed inline.
-        assert_eq!(scheduled.lock().expect("scheduled").len(), 3);
+        assert_eq!(scheduled.len(), 3);
         // The registry is drained and the viewers silenced before returning,
         // so the next document cannot reach a detached viewer.
         assert!(state.entries.lock().expect("registry").is_empty());
@@ -376,9 +375,47 @@ mod tests {
             Ok(NativeViewerCommand::Detach)
         ));
 
-        for free in scheduled.into_inner().expect("scheduled") {
+        for free in scheduled {
             free();
         }
+    }
+
+    /// Tauri executes a main-thread task immediately when the dispatcher is
+    /// called from the main thread. Page-load teardown must first cross a
+    /// worker thread so Tauri queues the batch for the next event-loop turn.
+    #[test]
+    fn page_load_teardown_dispatches_from_a_fresh_thread_and_keeps_batch_order() {
+        let caller = thread::current().id();
+        let (dispatch_sender, dispatch_receiver) = mpsc::channel();
+        let (freed_sender, freed_receiver) = mpsc::channel();
+        let mut frees: Vec<NativeFree> = Vec::new();
+        for value in [1, 2, 3] {
+            let freed_sender = freed_sender.clone();
+            frees.push(Box::new(move || freed_sender.send(value).expect("freed")));
+        }
+        let batch = Box::new(move || {
+            for free in frees {
+                free();
+            }
+        });
+
+        dispatch_from_fresh_thread(
+            move |batch| {
+                dispatch_sender
+                    .send((thread::current().id(), batch))
+                    .expect("dispatch");
+            },
+            batch,
+        )
+        .expect("spawn teardown dispatcher");
+
+        let (dispatch_thread, batch) = dispatch_receiver.recv().expect("deferred batch");
+        assert_ne!(dispatch_thread, caller);
+        assert!(freed_receiver.try_recv().is_err());
+        batch();
+        assert_eq!(freed_receiver.recv().expect("first free"), 1);
+        assert_eq!(freed_receiver.recv().expect("second free"), 2);
+        assert_eq!(freed_receiver.recv().expect("runtime free"), 3);
     }
 
     /// Shutdown leaves through this event, so there is no later main-thread
@@ -414,11 +451,10 @@ mod tests {
             NativeAttachReservation::acquire(&state.entries, &state.attaching, "run-one")
                 .expect("attach reservation");
 
-        let scheduled = Mutex::new(Vec::new());
-        let schedule = |free: NativeFree| scheduled.lock().expect("scheduled").push(free);
-        state.detach_every_viewer(NativeTeardownTiming::Deferred(&schedule));
+        let mut scheduled = Vec::new();
+        state.detach_every_viewer(NativeTeardownTiming::Deferred(&mut scheduled));
 
-        assert!(scheduled.lock().expect("scheduled").is_empty());
+        assert!(scheduled.is_empty());
         assert_eq!(*state.runtime.lock().expect("runtime"), Some(1));
     }
 

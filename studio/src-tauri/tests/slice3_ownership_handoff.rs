@@ -11,9 +11,8 @@ use std::process::Command;
 
 use sea_orm::{ConnectionTrait, Database, DbBackend, Statement};
 use ticketry_runs::{
-    self, adopt, owned_run_tables, preflight, publish_readiness,
-    published_readiness_is_complete, RunsReadinessGate, Slice3Readiness, ADOPTED_TABLES,
-    AUTHORED_TABLES,
+    self, adopt, owned_run_tables, preflight, publish_readiness, published_readiness_is_complete,
+    RunsReadinessGate, Slice3Readiness, ADOPTED_TABLES, RUN_OWNED_AUTHORED_TABLES,
 };
 
 fn root() -> PathBuf {
@@ -85,7 +84,7 @@ async fn the_manifest_names_exactly_the_tables_adoption_installs() {
     // shape rather than letting a newer migration write through it.
     for (table, columns) in ADOPTED_TABLES
         .iter()
-        .chain(AUTHORED_TABLES.iter())
+        .chain(RUN_OWNED_AUTHORED_TABLES.iter())
     {
         let rows = database
             .query_all_raw(Statement::from_string(

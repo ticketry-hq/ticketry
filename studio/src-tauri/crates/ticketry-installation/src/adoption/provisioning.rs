@@ -114,19 +114,16 @@ async fn install(database: &DatabaseConnection) -> Result<(), AdoptionFailure> {
                 "the provisioned schema could not reach the Rust leaf: {error}"
             ))
         })?;
-    ticketry_work_management::commands::default_project_catalog::seed(
-        database,
-        &project_id,
-    )
-    .await
-    .map_err(|error| {
-        let detail = std::error::Error::source(&error)
-            .map(ToString::to_string)
-            .unwrap_or_else(|| error.to_string());
-        failed(format!(
-            "the installation catalog could not be created: {detail}"
-        ))
-    })?;
+    ticketry_work_management::commands::default_project_catalog::seed(database, &project_id)
+        .await
+        .map_err(|error| {
+            let detail = std::error::Error::source(&error)
+                .map(ToString::to_string)
+                .unwrap_or_else(|| error.to_string());
+            failed(format!(
+                "the installation catalog could not be created: {detail}"
+            ))
+        })?;
     Ok(())
 }
 

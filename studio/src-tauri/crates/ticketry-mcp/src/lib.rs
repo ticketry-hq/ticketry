@@ -1,3 +1,5 @@
+#![deny(private_bounds, private_interfaces)]
+
 //! The in-process MCP tool listener: how a coding agent talks to Ticketry.
 //!
 //! An agent running inside a terminal reaches the product through one
@@ -42,9 +44,7 @@ use rmcp::transport::streamable_http_server::{
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
-use ticketry_work_management::{
-    commands::attachments::AttachmentStorage, open_for_commands,
-};
+use ticketry_work_management::{commands::attachments::AttachmentStorage, open_for_commands};
 
 pub use registry::allowed_provider_operations;
 use service::WorktrackerMcpService;
@@ -99,18 +99,14 @@ impl McpRuntime {
     #[cfg(any(test, feature = "test-support"))]
     pub async fn start_for_test(
         configuration: McpConfiguration,
-        cleanup_runtime: std::sync::Arc<
-            dyn ticketry_terminal::TerminalCleanupRuntime,
-        >,
+        cleanup_runtime: std::sync::Arc<dyn ticketry_terminal::TerminalCleanupRuntime>,
     ) -> Result<Self, String> {
         Self::start_with_services(configuration, cleanup_runtime, None).await
     }
 
     async fn start_with_services(
         configuration: McpConfiguration,
-        cleanup_runtime: std::sync::Arc<
-            dyn ticketry_terminal::TerminalCleanupRuntime,
-        >,
+        cleanup_runtime: std::sync::Arc<dyn ticketry_terminal::TerminalCleanupRuntime>,
         terminal_launch: Option<ticketry_terminal::TerminalLaunchService>,
     ) -> Result<Self, String> {
         if !configuration.address.ip().is_loopback() {
@@ -139,9 +135,7 @@ impl McpRuntime {
             ingress_credential.clone(),
         );
         let launch_policy =
-            ticketry_work_management::launch_policy::LaunchPolicyResolver::new(
-                database.clone(),
-            );
+            ticketry_work_management::launch_policy::LaunchPolicyResolver::new(database.clone());
         let graph_runs = terminal_launch.clone().map(|terminal_launch| {
             ticketry_agent_execution::GraphRunService::production(
                 database.clone(),
@@ -155,10 +149,7 @@ impl McpRuntime {
             authority.clone(),
             launch_policy,
             graph_runs,
-            ticketry_terminal::TerminalCleanupService::new(
-                database,
-                cleanup_runtime,
-            ),
+            ticketry_terminal::TerminalCleanupService::new(database, cleanup_runtime),
             terminal_launch.clone(),
             data_directory,
         );

@@ -4,9 +4,7 @@ use common::terminal_lifecycle_harness::{
     TerminalLifecycleHarness, MODULE_ID, PROJECT_ID, TASK_ID,
 };
 use sea_orm::{ConnectionTrait, DbBackend, Statement};
-use ticketry_terminal::{
-    ResumableConversationService, RESUMABLE_LIMIT, RESUMABLE_STATEMENT_LIMIT,
-};
+use ticketry_terminal::{ResumableConversationService, RESUMABLE_LIMIT, RESUMABLE_STATEMENT_LIMIT};
 
 #[tokio::test]
 async fn resumable_query_is_bounded_to_ten_conversations() {

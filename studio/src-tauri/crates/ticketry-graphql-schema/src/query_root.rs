@@ -18,8 +18,7 @@ static CONTEXT: LazyLock<BuilderContext> = LazyLock::new(context::builder_contex
 pub struct TerminalServices {
     pub launch: ticketry_terminal::TerminalLaunchService,
     pub viewers: ticketry_terminal::ViewerOwnershipService,
-    pub output_activity:
-        ticketry_terminal::TerminalOutputActivityService,
+    pub output_activity: ticketry_terminal::TerminalOutputActivityService,
 }
 
 #[derive(Clone, Copy)]
@@ -31,17 +30,11 @@ struct EntityContract {
 pub fn foundation_schema(
     database: DatabaseConnection,
     worktracker_database: Option<DatabaseConnection>,
-    worktracker_commands: Option<
-        ticketry_work_management::commands::CommandDatabase,
-    >,
-    attachment_storage: Option<
-        ticketry_work_management::commands::attachments::AttachmentStorage,
-    >,
+    worktracker_commands: Option<ticketry_work_management::commands::CommandDatabase>,
+    attachment_storage: Option<ticketry_work_management::commands::attachments::AttachmentStorage>,
     settings_repository: Option<ticketry_settings::AppSettingRepository>,
     readiness_data_directory: Option<PathBuf>,
-    work_facts: Option<
-        ticketry_work_management::commands::status_facts::WorkFactRecorder,
-    >,
+    work_facts: Option<ticketry_work_management::commands::status_facts::WorkFactRecorder>,
     worktree_operations: Option<
         ticketry_workspace_runtime::worktree_operations::WorktreeOperations,
     >,
@@ -64,17 +57,11 @@ pub fn foundation_schema(
 pub fn foundation_schema_with_terminal_services(
     database: DatabaseConnection,
     worktracker_database: Option<DatabaseConnection>,
-    worktracker_commands: Option<
-        ticketry_work_management::commands::CommandDatabase,
-    >,
-    attachment_storage: Option<
-        ticketry_work_management::commands::attachments::AttachmentStorage,
-    >,
+    worktracker_commands: Option<ticketry_work_management::commands::CommandDatabase>,
+    attachment_storage: Option<ticketry_work_management::commands::attachments::AttachmentStorage>,
     settings_repository: Option<ticketry_settings::AppSettingRepository>,
     readiness_data_directory: Option<PathBuf>,
-    work_facts: Option<
-        ticketry_work_management::commands::status_facts::WorkFactRecorder,
-    >,
+    work_facts: Option<ticketry_work_management::commands::status_facts::WorkFactRecorder>,
     worktree_operations: Option<
         ticketry_workspace_runtime::worktree_operations::WorktreeOperations,
     >,
@@ -155,17 +142,11 @@ pub fn keybinding_settings_schema(
 fn build_schema(
     database: DatabaseConnection,
     worktracker_database: Option<DatabaseConnection>,
-    worktracker_commands: Option<
-        ticketry_work_management::commands::CommandDatabase,
-    >,
-    attachment_storage: Option<
-        ticketry_work_management::commands::attachments::AttachmentStorage,
-    >,
+    worktracker_commands: Option<ticketry_work_management::commands::CommandDatabase>,
+    attachment_storage: Option<ticketry_work_management::commands::attachments::AttachmentStorage>,
     settings_repository: Option<ticketry_settings::AppSettingRepository>,
     readiness_data_directory: Option<PathBuf>,
-    work_facts: Option<
-        ticketry_work_management::commands::status_facts::WorkFactRecorder,
-    >,
+    work_facts: Option<ticketry_work_management::commands::status_facts::WorkFactRecorder>,
     worktree_operations: Option<
         ticketry_workspace_runtime::worktree_operations::WorktreeOperations,
     >,
@@ -183,28 +164,28 @@ fn build_schema(
             .unwrap_or_else(|| database.clone())
     });
     let graph_run_service = match (worktracker_database.as_ref(), terminal_services.as_ref()) {
-        (Some(work_items), Some(terminals)) => Some(
-            ticketry_agent_execution::GraphRunService::production(
+        (Some(work_items), Some(terminals)) => {
+            Some(ticketry_agent_execution::GraphRunService::production(
                 work_items.clone(),
                 ticketry_work_management::launch_policy::LaunchPolicyResolver::new(
                     work_items.clone(),
                 ),
                 terminals.launch.clone(),
-            ),
-        ),
+            ))
+        }
         _ => None,
     };
     let run_now_service = match (worktracker_database.as_ref(), terminal_services.as_ref()) {
-        (Some(work_items), Some(terminals)) => Some(
-            ticketry_agent_execution::run_now::RunNowService::new(
+        (Some(work_items), Some(terminals)) => {
+            Some(ticketry_agent_execution::run_now::RunNowService::new(
                 work_items.clone(),
                 ticketry_work_management::launch_policy::LaunchPolicyResolver::new(
                     work_items.clone(),
                 ),
                 terminals.launch.clone(),
                 work_facts.clone(),
-            ),
-        ),
+            ))
+        }
         _ => None,
     };
     let mut builder = Builder::new(&CONTEXT, entity_database.clone());
@@ -258,8 +239,7 @@ fn build_schema(
     let builder = ticketry_terminal::register_viewer_lease_graphql(builder);
     let builder = ticketry_documents::register_graphql(builder);
     let builder = ticketry_workspace_runtime::design_document::register_graphql(builder);
-    let builder =
-        ticketry_workspace_runtime::directory_completion_query::register(builder);
+    let builder = ticketry_workspace_runtime::directory_completion_query::register(builder);
     let mut schema = builder.schema_builder().data(entity_database);
     if contract.product_generated_mutations {
         schema = schema.data(ticketry_agent_execution::GraphRunCaller);
@@ -334,14 +314,12 @@ fn build_schema(
         schema = schema.data(changes.clone());
         Some(changes)
     } else if let Some(work_items) = &worktracker_database {
-        let status = ticketry_workspace_runtime::status::WorktreeStatusService::new(
-            work_items.clone(),
-        );
-        let changes =
-            ticketry_workspace_runtime::changes::WorktreeChangesService::from_status(
-                status.clone(),
-            )
-            .publishing(work_facts.clone());
+        let status =
+            ticketry_workspace_runtime::status::WorktreeStatusService::new(work_items.clone());
+        let changes = ticketry_workspace_runtime::changes::WorktreeChangesService::from_status(
+            status.clone(),
+        )
+        .publishing(work_facts.clone());
         schema = schema.data(changes.clone());
         schema = schema.data(status);
         Some(changes)
@@ -371,11 +349,9 @@ fn build_schema(
         schema = schema.data(worktree_operations.discard().clone());
     }
     if let Some(worktracker_database) = worktracker_database {
-        schema = schema.data(
-            ticketry_terminal::TerminalCleanupService::with_tmux(
-                worktracker_database.clone(),
-            ),
-        );
+        schema = schema.data(ticketry_terminal::TerminalCleanupService::with_tmux(
+            worktracker_database.clone(),
+        ));
         let runs = ticketry_runs::RunsServices::new(worktracker_database.clone());
         schema = schema.data(
             terminal_services
@@ -394,22 +370,18 @@ fn build_schema(
         schema = schema.data(ticketry_settings::ProviderCatalogService::new(
             worktracker_database.clone(),
         ));
-        schema = schema.data(
-            ticketry_work_management::read_queries::ReadDatabase(
-                worktracker_database,
-            ),
-        );
+        schema = schema.data(ticketry_work_management::read_queries::ReadDatabase(
+            worktracker_database,
+        ));
     }
     if let Some(worktracker_commands) = worktracker_commands {
         if let Some(terminal_services) = terminal_services {
             schema = schema.data(terminal_services.launch);
             schema = schema.data(terminal_services.viewers);
         } else {
-            schema = schema.data(
-                ticketry_terminal::ViewerOwnershipService::new(
-                    worktracker_commands.0.clone(),
-                ),
-            );
+            schema = schema.data(ticketry_terminal::ViewerOwnershipService::new(
+                worktracker_commands.0.clone(),
+            ));
         }
         schema = schema.data(worktracker_commands);
     }
@@ -428,16 +400,12 @@ fn build_schema(
         // Runs status and Runs commands consult their own gate, because the
         // Slice 3 handoff completes after the Slice 2 one and must not open
         // merely because settings ownership did.
-        schema = schema.data(ticketry_runs::RunsReadinessGate::watching(
-            &data_directory,
-        ));
+        schema = schema.data(ticketry_runs::RunsReadinessGate::watching(&data_directory));
         // Documents and Worktrees consult a third gate for the same reason: the
         // Slice 4 handoff completes after both earlier ones, and it must not
         // open merely because settings or Runs ownership did.
         schema = schema.data(
-            ticketry_workspace_runtime::handoff::WorkspaceReadinessGate::watching(
-                &data_directory,
-            ),
+            ticketry_workspace_runtime::handoff::WorkspaceReadinessGate::watching(&data_directory),
         );
         schema = schema.extension(crate::graphql_foundation::Slice2CommandGate::new(
             data_directory,

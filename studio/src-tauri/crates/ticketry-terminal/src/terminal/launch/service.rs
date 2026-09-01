@@ -3,7 +3,7 @@ use std::sync::Arc;
 use sea_orm::{DatabaseConnection, EntityTrait};
 
 use ticketry_diagnostics as trace;
-use ticketry_entities::{session, issue};
+use ticketry_entities::{issue, session};
 use ticketry_launch::InteractiveLaunchAuthority;
 use ticketry_runs::{LaunchPreparationParticipant, RunsServices};
 

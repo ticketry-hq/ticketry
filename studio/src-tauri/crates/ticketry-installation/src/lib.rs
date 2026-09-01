@@ -1,3 +1,5 @@
+#![deny(private_bounds, private_interfaces)]
+
 //! Taking ownership of the installation the user already has.
 //!
 //! Every other slice assumes it is running against a data directory Rust owns.
@@ -38,6 +40,7 @@ pub use adoption::ledger::{
     read as read_adoption_ledger, Completion, LedgerRow, LEDGER_TABLE, RUST_LEAF,
 };
 pub use adoption::outcome::{Adoption, AdoptionPath, EventBoundary, Readiness, EVIDENCE_FILE};
+pub use adoption::ownership::{open_readiness, open_readiness_with};
 pub use adoption::phase::{AdoptionPlan, Phase};
 pub use adoption::provisioning::provision;
 pub use adoption::recovery::{
@@ -46,9 +49,8 @@ pub use adoption::recovery::{
 pub use adoption::snapshot::{verify as verify_snapshot, SnapshotRecord, PINNED_SNAPSHOT};
 pub use adoption::snapshot_manifest::{ExternalRoot, SnapshotManifest};
 pub use adoption::{adopt, adopt_with};
-pub use adoption::ownership::{open_readiness, open_readiness_with};
-pub use classification::manifest::{manifest, CorpusFixture, Generation, Manifest, MigrationStep};
 pub use classification::classify;
+pub use classification::manifest::{manifest, CorpusFixture, Generation, Manifest, MigrationStep};
 pub use classification::outcome::{
     ClassificationError, Engine, Installation, PostgresSource, Refusal as ClassificationRefusal,
     RustOwnership, SqliteGeneration,

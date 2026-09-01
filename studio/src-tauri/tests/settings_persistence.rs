@@ -381,8 +381,8 @@ fn a_malformed_legacy_profile_file_is_refused_and_left_intact() {
     let path = directory.path().join("profiles.json");
     fs::write(&path, b"{broken").unwrap();
 
-    let source = ticketry_work_management::legacy_source::locate(directory.path())
-        .expect("located");
+    let source =
+        ticketry_work_management::legacy_source::locate(directory.path()).expect("located");
     let error = ticketry_work_management::legacy_source::read(&source)
         .expect_err("a malformed profile file cannot be adopted");
 

@@ -39,11 +39,9 @@ async fn execute_traced(
             facts.scope = Some(decision.caller_scope.as_str().to_owned());
         });
     }
-    ticketry_diagnostics::admitted(
-        ticketry_diagnostics::POLICY_EVALUATED,
-    )
-    .with("decisionId", decision.decision_id.clone())
-    .record();
+    ticketry_diagnostics::admitted(ticketry_diagnostics::POLICY_EVALUATED)
+        .with("decisionId", decision.decision_id.clone())
+        .record();
     let kind = if matches!(
         decision.caller_scope,
         CallerScope::Interactive | CallerScope::RunNow

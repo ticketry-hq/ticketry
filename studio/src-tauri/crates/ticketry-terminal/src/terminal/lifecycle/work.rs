@@ -308,20 +308,16 @@ impl TerminalLaunchRuntime for InteractiveTerminalLaunchRuntime {
                     directory
                 }
                 Err(refusal) => {
-                    trace::refused(
-                        trace::DIRECTORY_PREFLIGHTED,
-                        "module_folder_unusable",
-                    )
-                    .with("launchForm", "shell")
-                    .record();
+                    trace::refused(trace::DIRECTORY_PREFLIGHTED, "module_folder_unusable")
+                        .with("launchForm", "shell")
+                        .record();
                     return Err(TerminalLaunchError::new(
                         TerminalLaunchErrorCode::UnusableFolder,
                         refusal.message(),
                     ));
                 }
             };
-            let command =
-                crate::terminal::launch::approved_login_shell(working_directory)?;
+            let command = crate::terminal::launch::approved_login_shell(working_directory)?;
             return create_tmux_runtime(material, checkpoint, command).await;
         }
         let provider =
@@ -358,12 +354,9 @@ impl TerminalLaunchRuntime for InteractiveTerminalLaunchRuntime {
             .preflight_module_folder(&material.module_id)
             .await
         {
-            trace::refused(
-                trace::DIRECTORY_PREFLIGHTED,
-                "module_folder_unusable",
-            )
-            .with("launchForm", "agent")
-            .record();
+            trace::refused(trace::DIRECTORY_PREFLIGHTED, "module_folder_unusable")
+                .with("launchForm", "agent")
+                .record();
             return Err(TerminalLaunchError::new(
                 TerminalLaunchErrorCode::UnusableFolder,
                 refusal.message(),

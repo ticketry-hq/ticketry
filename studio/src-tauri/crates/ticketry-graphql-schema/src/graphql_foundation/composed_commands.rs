@@ -33,8 +33,7 @@ pub struct ComposedWorktracker {
     pub workspace_reconciled: bool,
     pub viewer_ownership: ticketry_terminal::ViewerOwnershipService,
     pub terminal_runtime: ticketry_terminal::InteractiveTerminalLaunchRuntime,
-    pub output_activity:
-        ticketry_terminal::TerminalOutputActivityService,
+    pub output_activity: ticketry_terminal::TerminalOutputActivityService,
 }
 
 /// The live command connection and workspace services held by the installed
@@ -89,15 +88,11 @@ impl ComposedCommandRuntime {
         &self.viewer_ownership
     }
 
-    pub fn terminal_runtime(
-        &self,
-    ) -> &ticketry_terminal::InteractiveTerminalLaunchRuntime {
+    pub fn terminal_runtime(&self) -> &ticketry_terminal::InteractiveTerminalLaunchRuntime {
         &self.terminal_runtime
     }
 
-    pub fn output_activity(
-        &self,
-    ) -> &ticketry_terminal::TerminalOutputActivityService {
+    pub fn output_activity(&self) -> &ticketry_terminal::TerminalOutputActivityService {
         &self.output_activity
     }
 }

@@ -1,3 +1,5 @@
+#![deny(private_bounds, private_interfaces)]
+
 //! The desktop shell: the composition root that turns the slices into an app.
 //!
 //! [`desktop`] is the Tauri application itself — every `#[tauri::command]`

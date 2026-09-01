@@ -1,3 +1,5 @@
+#![deny(private_bounds, private_interfaces)]
+
 //! Design documents: discovering them, authorizing them, and serving them.
 //!
 //! A design document is a Markdown file on disk that the product also tracks

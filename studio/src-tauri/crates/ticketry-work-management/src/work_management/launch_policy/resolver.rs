@@ -37,11 +37,8 @@ impl LaunchPolicyResolver {
                         facts.scope = Some(scope.as_str().to_owned());
                     });
                 }
-                ticketry_diagnostics::refused(
-                    ticketry_diagnostics::POLICY_EVALUATED,
-                    error.code(),
-                )
-                .record();
+                ticketry_diagnostics::refused(ticketry_diagnostics::POLICY_EVALUATED, error.code())
+                    .record();
             })
             .await;
         }

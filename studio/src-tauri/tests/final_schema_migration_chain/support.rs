@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, Statement};
 use ticketry_installation::provision;
-use ticketry_settings::provider_catalog_migrations;
+use ticketry_settings as provider_catalog_migrations;
 use ticketry_work_management::{
     launch_binding_entry_skill_migration, module_presentation_migration, open_for_commands,
     project_onboarding_migration, workflow_color_migration, workspace_tab_order_migration,

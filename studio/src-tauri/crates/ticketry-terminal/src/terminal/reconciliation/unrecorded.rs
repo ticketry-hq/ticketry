@@ -10,9 +10,7 @@ use crate::tmux_adapter::{
     InventoryConflictKind, InventoryEntry, OwnedSession, PersistedSessionName,
 };
 use ticketry_entities::{
-    {agent_run, launch_effect},
-    {cleanup_effect, launch_material, session},
-    issue,
+    issue, {agent_run, launch_effect}, {cleanup_effect, launch_material, session},
 };
 
 use super::service::TerminalReconciliationService;

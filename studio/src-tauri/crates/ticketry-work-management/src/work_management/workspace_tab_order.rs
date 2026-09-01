@@ -13,7 +13,7 @@ use super::commands::status_facts::{
 };
 use super::commands::{work_items, CommandError};
 use ticketry_entities::issue;
-use ticketry_entities::{design_document, agent_run};
+use ticketry_entities::{agent_run, design_document};
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize)]
 #[serde(rename_all = "lowercase")]

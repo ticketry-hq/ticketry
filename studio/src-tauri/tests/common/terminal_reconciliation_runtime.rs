@@ -6,19 +6,19 @@ use std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use ticketry_entities::{launch_material, session};
 use ticketry_launch::TerminalLaunchError;
+use ticketry_terminal::InventoryEntry;
 use ticketry_terminal::{
     CleanupCheckpoint, CleanupCheckpoints, CleanupKillResult, CleanupRuntimeObservation,
     RuntimeInventory, TerminalCleanupError, TerminalCleanupRuntime,
 };
 use ticketry_terminal::{
-    TerminalLaunchBoundary, TerminalLaunchCheckpoint, TerminalLaunchRuntime,
-    TerminalRuntimeObservation, VerifiedTerminalRuntime,
-};
-use ticketry_terminal::{
     ReconciliationCheckpoint, ReconciliationCheckpoints, TerminalReconciliationError,
     TerminalReconciliationService,
 };
-use ticketry_terminal::InventoryEntry;
+use ticketry_terminal::{
+    TerminalLaunchBoundary, TerminalLaunchCheckpoint, TerminalLaunchRuntime,
+    TerminalRuntimeObservation, VerifiedTerminalRuntime,
+};
 
 #[derive(Default)]
 pub struct ScriptedRuntime {

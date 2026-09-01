@@ -1,3 +1,5 @@
+#![deny(private_bounds, private_interfaces)]
+
 //! The developer command line: the tools that generate, export, and verify.
 //!
 //! Nothing the product ships runs from here. These are the commands a

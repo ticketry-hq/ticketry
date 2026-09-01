@@ -5,8 +5,8 @@ use seaography::{
     CustomFields,
 };
 
-use ticketry_entities::StringList;
 use ticketry_entities::session;
+use ticketry_entities::StringList;
 
 use super::TerminalLaunchService;
 use ticketry_launch::{CreateTerminalSession, TerminalLaunchError, TerminalLaunchKind};

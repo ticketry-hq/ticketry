@@ -4,9 +4,7 @@ use seaography::{
 };
 
 use ticketry_entities::{
-    agent_run,
-    {session, viewer_lease},
-    {issue, project},
+    agent_run, {issue, project}, {session, viewer_lease},
 };
 
 const TERMINAL_SESSIONS: &str = "AgentTerminalSessions";

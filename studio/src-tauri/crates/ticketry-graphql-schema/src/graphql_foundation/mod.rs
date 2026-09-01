@@ -53,15 +53,14 @@ pub async fn initialize_with_worktracker_and_install(
     api: &tauri_graphql::TransportApiImpl,
 ) -> Result<(), FoundationInitializationError> {
     let foundation_database = database::open(foundation_database_path).await?;
-    let worktracker_database =
-        ticketry_work_management::open(worktracker_database_path)
-            .await
-            .map_err(|error| {
-                FoundationInitializationError::new(
-                    FoundationInitializationErrorCode::WorktrackerDatabaseOpen,
-                    error.to_string(),
-                )
-            })?;
+    let worktracker_database = ticketry_work_management::open(worktracker_database_path)
+        .await
+        .map_err(|error| {
+            FoundationInitializationError::new(
+                FoundationInitializationErrorCode::WorktrackerDatabaseOpen,
+                error.to_string(),
+            )
+        })?;
     let schema = crate::query_root::foundation_schema_with_terminal_services(
         foundation_database,
         Some(worktracker_database),
@@ -218,11 +217,9 @@ async fn initialize_with_worktracker_commands_and_install_inner(
     let documents = ticketry_documents::DocumentsService::new(worktracker_database.clone())
         .publishing(document_facts(&worktracker_database).await);
     let document_watch = compose_document_watch(&documents).await;
-    let viewer_ownership = ticketry_terminal::ViewerOwnershipService::new(
-        worktracker_database.clone(),
-    );
-    let terminal_runtime =
-        ticketry_terminal::InteractiveTerminalLaunchRuntime::new();
+    let viewer_ownership =
+        ticketry_terminal::ViewerOwnershipService::new(worktracker_database.clone());
+    let terminal_runtime = ticketry_terminal::InteractiveTerminalLaunchRuntime::new();
     let terminal_services = Some(crate::query_root::TerminalServices {
         launch: ticketry_terminal::TerminalLaunchService::new(
             worktracker_database.clone(),
@@ -232,10 +229,9 @@ async fn initialize_with_worktracker_commands_and_install_inner(
             ticketry_launch::LaunchAuthorityService::new(worktracker_database.clone()),
         )),
         viewers: viewer_ownership.clone(),
-        output_activity:
-            ticketry_terminal::TerminalOutputActivityService::production(
-                worktracker_database.clone(),
-            ),
+        output_activity: ticketry_terminal::TerminalOutputActivityService::production(
+            worktracker_database.clone(),
+        ),
     });
     let schema = crate::query_root::foundation_schema_with_terminal_services(
         foundation_database,
@@ -374,7 +370,7 @@ async fn compose_worktree_operations(
     }
     ComposedWorktreeOperations {
         operations: Some(
-        ticketry_workspace_runtime::worktree_operations::WorktreeOperations::new(
+            ticketry_workspace_runtime::worktree_operations::WorktreeOperations::new(
                 create, discard,
             ),
         ),
@@ -438,16 +434,14 @@ async fn compose_document_saves(
 /// state database. It never resolves the established data directory itself, so
 /// an import cannot reach an installation the caller did not name.
 async fn import_module_links(data_directory: &Path) -> Result<(), FoundationInitializationError> {
-    let database = ticketry_work_management::open_for_commands(
-        &data_directory.join("state.db"),
-    )
-    .await
-    .map_err(|error| {
-        FoundationInitializationError::new(
-            FoundationInitializationErrorCode::ModuleLinkImport,
-            error.to_string(),
-        )
-    })?;
+    let database = ticketry_work_management::open_for_commands(&data_directory.join("state.db"))
+        .await
+        .map_err(|error| {
+            FoundationInitializationError::new(
+                FoundationInitializationErrorCode::ModuleLinkImport,
+                error.to_string(),
+            )
+        })?;
     let outcome = ticketry_work_management::import(&database, data_directory)
         .await
         .map_err(|error| {
@@ -495,16 +489,15 @@ pub async fn adopt_worktracker_and_install(
                 error.to_string(),
             )
         })?;
-    let provider_database = ticketry_work_management::open_for_commands(
-        &data_directory.join("state.db"),
-    )
-    .await
-    .map_err(|error| {
-        FoundationInitializationError::new(
-            FoundationInitializationErrorCode::SettingsDatabaseOpen,
-            error.to_string(),
-        )
-    })?;
+    let provider_database =
+        ticketry_work_management::open_for_commands(&data_directory.join("state.db"))
+            .await
+            .map_err(|error| {
+                FoundationInitializationError::new(
+                    FoundationInitializationErrorCode::SettingsDatabaseOpen,
+                    error.to_string(),
+                )
+            })?;
     ticketry_settings::ProviderCatalogService::open(provider_database)
         .await
         .map_err(|error| {
@@ -558,7 +551,7 @@ pub async fn adopt_worktracker_and_install(
     // before any workspace command is composed. An unknown or malformed
     // Documents, Worktree, or journal schema refuses the handoff and leaves the
     // pre-cutover snapshots restorable.
-        ticketry_workspace_runtime::handoff::adopt(data_directory)
+    ticketry_workspace_runtime::handoff::adopt(data_directory)
         .await
         .map_err(workspace_adoption_error)?;
     // Every capability has handed over, so the durable status-event ledger the

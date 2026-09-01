@@ -8,7 +8,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use ticketry_terminal::{
-    OwnedSession, PersistedSessionName, RuntimeIdentity, SESSION_PREFIX,
+    OwnedSession, PersistedSessionName, TerminalRuntimeIdentity as RuntimeIdentity, SESSION_PREFIX,
 };
 
 /// Literal spellings of the naming convention that only the adapter may use.

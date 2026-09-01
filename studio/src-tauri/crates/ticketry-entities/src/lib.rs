@@ -1,3 +1,5 @@
+#![deny(private_bounds, private_interfaces)]
+
 //! Database entity mappings and the small set of generated-GraphQL seams.
 //!
 //! The implementation groups stay private. Generated SeaORM modules are the

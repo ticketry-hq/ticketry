@@ -10,9 +10,7 @@ use common::terminal_lifecycle_harness::{
 };
 use sea_orm::{ConnectionTrait, EntityTrait};
 use ticketry_entities::{launch_material, session};
-use ticketry_launch::{
-    CreateTerminalSession, TerminalLaunchError, TerminalLaunchKind,
-};
+use ticketry_launch::{CreateTerminalSession, TerminalLaunchError, TerminalLaunchKind};
 use ticketry_terminal::{
     TerminalLaunchCheckpoint, TerminalLaunchRuntime, TerminalRuntimeObservation,
     VerifiedTerminalRuntime,
@@ -28,8 +26,7 @@ impl TerminalLaunchRuntime for ResumeRuntime {
         if self.created.lock().unwrap().contains(agent_run_id) {
             TerminalRuntimeObservation::Running(VerifiedTerminalRuntime {
                 tmux_session_name: format!("pt-{agent_run_id}"),
-                runtime_namespace: ticketry_terminal::current_runtime_namespace()
-                    .unwrap(),
+                runtime_namespace: ticketry_terminal::current_runtime_namespace().unwrap(),
             })
         } else {
             TerminalRuntimeObservation::Missing

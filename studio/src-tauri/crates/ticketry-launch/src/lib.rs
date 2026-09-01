@@ -1,3 +1,5 @@
+#![deny(private_bounds, private_interfaces)]
+
 //! What a launch is allowed to be, before anything is spawned.
 //!
 //! Every agent run starts as a request — launch this Work Item, this module,

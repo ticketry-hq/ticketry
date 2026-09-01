@@ -1,3 +1,5 @@
+#![deny(private_bounds, private_interfaces)]
+
 //! Exclusive ownership of Ticketry's established data directory.
 //!
 //! The desktop acquires the guard before opening the database and releases it

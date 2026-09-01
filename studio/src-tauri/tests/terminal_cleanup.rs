@@ -9,8 +9,7 @@ use common::terminal_lifecycle_harness::{
 };
 use sea_orm::{sea_query::Expr, ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter};
 use ticketry_entities::{
-    agent_run,
-    {cleanup_effect, session},
+    agent_run, {cleanup_effect, session},
 };
 use ticketry_terminal::{
     AuthenticatedAgentRun, CleanupCause, CleanupCheckpoint, CleanupCheckpoints, CleanupKillResult,
@@ -345,9 +344,7 @@ async fn every_cleanup_crash_boundary_replays_without_reviving_or_duplicating_th
         assert_eq!(settled_effect.state, "applied", "checkpoint {checkpoint:?}");
         let terminal_events = ticketry_entities::status_event::Entity::find()
             .filter(ticketry_entities::status_event::Column::AgentRunId.eq(TASK_RUN_ID))
-            .filter(
-                ticketry_entities::status_event::Column::EventKind.eq("agent_run.terminal"),
-            )
+            .filter(ticketry_entities::status_event::Column::EventKind.eq("agent_run.terminal"))
             .count(&database)
             .await
             .unwrap();

@@ -117,10 +117,7 @@ const OWNED_ENTRIES: &[(&str, Owned)] = &[
     ("worktrees", Owned::Directory),
     ("profiles.json", Owned::File),
     ("features.json", Owned::File),
-    (
-        ticketry_work_management::receipt::RECEIPT_FILE,
-        Owned::File,
-    ),
+    (ticketry_work_management::receipt::RECEIPT_FILE, Owned::File),
     ("sidecar.log", Owned::File),
 ];
 

@@ -9,9 +9,7 @@ use std::collections::HashMap;
 use super::identifiers::new_database_uuid;
 use super::{reviewed_defaults, CommandError};
 use sea_orm::{ActiveModelTrait, ConnectionTrait, Set};
-use ticketry_entities::{
-    issue_type, issue_type_transition, launch_binding, state,
-};
+use ticketry_entities::{issue_type, issue_type_transition, launch_binding, state};
 
 pub async fn seed(database: &impl ConnectionTrait, project_id: &str) -> Result<(), CommandError> {
     let defaults = reviewed_defaults::load()

@@ -11,12 +11,15 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection, DbBackend, Statement};
+use ticketry_work_management as module_links;
+use ticketry_work_management::open_for_commands;
 use ticketry_work_management::{
     self, legacy_source, receipt::ImportReceipt, ImportOutcome, LinkStatus, LocalModulePath,
     ModuleLinkErrorCode, ModuleLinkStore, SkipReason,
 };
-use ticketry_work_management::{identity, ownership_manifest, schema};
-use ticketry_work_management::open_for_commands;
+use ticketry_work_management::{
+    identity, module_links_ownership_manifest as ownership_manifest, schema,
+};
 
 const PROJECT: &str = "10000000000000000000000000000000";
 const MODULE_TYPE: &str = "30000000000000000000000000000003";
@@ -623,7 +626,7 @@ fn no_supported_django_generation_or_postgresql_staging_schema_carries_these_tab
         crate_root().join("crates/ticketry-installation/src/adoption/provisioning.v1.sql"),
     )
     .expect("read the checked fresh-provisioning schema");
-    let classification = ticketry_installation::classification::manifest();
+    let classification = ticketry_installation::manifest();
 
     for table in ownership_manifest::owned_tables() {
         assert!(
@@ -721,7 +724,7 @@ async fn contract_sdl() -> String {
     let mut builder = Builder::new(context, database);
     builder.mutation = Object::new("Mutation");
     builder.schema = Schema::build("Query", Some("Mutation"), None);
-    let mut builder = ticketry_entities::register_entity_modules(builder);
+    let mut builder = ticketry_entities::register_work_management_entities(builder);
     // The Work Item graph names Agent Runs, so the read graph only closes once
     // that entity is registered alongside it.
     seaography::register_entity!(builder, agent_run, mutation: false);
@@ -746,13 +749,14 @@ async fn executable_contract(
     let mut builder = Builder::new(context, database.clone());
     builder.mutation = Object::new("Mutation");
     builder.schema = Schema::build("Query", Some("Mutation"), None);
-    let mut builder = ticketry_entities::register_entity_modules(builder);
+    let mut builder = ticketry_entities::register_work_management_entities(builder);
     seaography::register_entity!(builder, agent_run, mutation: false);
     let builder = ticketry_work_management::register_graphql(builder);
     let mut schema = builder.schema_builder().data(database.clone());
     if writable {
-        schema = schema
-            .data(ticketry_work_management::commands::CommandDatabase(database));
+        schema = schema.data(ticketry_work_management::commands::CommandDatabase(
+            database,
+        ));
     }
     schema
         .finish()

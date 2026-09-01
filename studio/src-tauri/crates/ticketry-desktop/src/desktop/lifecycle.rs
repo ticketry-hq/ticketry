@@ -42,9 +42,7 @@ pub fn detach_transient_viewers(application: &tauri::AppHandle) {
     // and application exit prevents a stale native surface from covering the
     // freshly loaded Studio layout without signalling or killing durable tmux
     // sessions.
-    application
-        .state::<ViewerCommandState>()
-        .detach_all();
+    application.state::<ViewerCommandState>().detach_all();
     application
         .state::<native_terminal::NativeTerminalState>()
         .detach_all();

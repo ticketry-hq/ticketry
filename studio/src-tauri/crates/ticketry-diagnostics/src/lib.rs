@@ -1,3 +1,5 @@
+#![deny(private_bounds, private_interfaces)]
+
 //! Optional process diagnostics shared by the native shell and domain services.
 
 mod crash_report;

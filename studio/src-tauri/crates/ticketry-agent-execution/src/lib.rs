@@ -1,3 +1,5 @@
+#![deny(private_bounds, private_interfaces)]
+
 //! Running a dependency graph of Work Items as one campaign of agent runs.
 //!
 //! Everything below this crate decides what a run may be; this crate is where

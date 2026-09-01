@@ -64,17 +64,14 @@ impl DesktopLaunchRuntime {
             .replace_mcp_authority(mcp_url, authority)
     }
 
-    pub fn viewer_ownership(
-        &self,
-    ) -> Result<ticketry_terminal::ViewerOwnershipService, String> {
+    pub fn viewer_ownership(&self) -> Result<ticketry_terminal::ViewerOwnershipService, String> {
         self.composed()
             .map(|runtime| runtime.viewer_ownership().clone())
     }
 
     pub fn output_activity(
         &self,
-    ) -> Result<ticketry_terminal::TerminalOutputActivityService, String>
-    {
+    ) -> Result<ticketry_terminal::TerminalOutputActivityService, String> {
         self.composed()
             .map(|runtime| runtime.output_activity().clone())
     }

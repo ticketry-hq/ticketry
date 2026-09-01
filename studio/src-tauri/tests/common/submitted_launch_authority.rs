@@ -13,10 +13,8 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use sea_orm::DatabaseConnection;
-use ticketry_launch::{
-    InteractiveLaunchAuthority, LaunchAuthorityError, ResolvedLaunchMaterial,
-};
 use ticketry_launch::CreateTerminalSession;
+use ticketry_launch::{InteractiveLaunchAuthority, LaunchAuthorityError, ResolvedLaunchMaterial};
 use ticketry_terminal::{TerminalLaunchRuntime, TerminalLaunchService};
 
 pub struct SubmittedLaunchAuthority;

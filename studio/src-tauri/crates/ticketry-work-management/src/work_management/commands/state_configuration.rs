@@ -8,9 +8,7 @@ use super::status_facts::{
     record_workflow_state, stamp, WorkFactRecorder, WorkflowStateChange, WorkflowStateFact,
 };
 use super::CommandError;
-use ticketry_entities::{
-    issue, issue_type, issue_type_transition, launch_binding, project, state,
-};
+use ticketry_entities::{issue, issue_type, issue_type_transition, launch_binding, project, state};
 
 /// Delete one empty, unreferenced catalogue state under the Django guards.
 pub async fn delete_state(

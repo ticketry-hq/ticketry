@@ -13,8 +13,8 @@ use crate::work_management::{
     commands::{reorder, CommandError},
     graphql::{command_database, command_error, work_facts},
 };
-use ticketry_entities::StringList;
 use ticketry_entities::module_presentation;
+use ticketry_entities::StringList;
 
 struct ReorderModulePresentationView;
 

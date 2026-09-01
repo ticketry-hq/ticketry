@@ -1,3 +1,5 @@
+#![deny(private_bounds, private_interfaces)]
+
 //! Trusted executable discovery for the desktop shell.
 //!
 //! Discovery deliberately never asks a shell to resolve a command.  It walks

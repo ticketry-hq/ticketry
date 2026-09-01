@@ -3,7 +3,7 @@ use sea_orm::{
     QueryFilter, QueryOrder, QuerySelect, QueryTrait,
 };
 
-use ticketry_entities::{agent_run, session, project};
+use ticketry_entities::{agent_run, project, session};
 use ticketry_launch::{provider_contract, Provider};
 
 use super::scope::{compact_session_column, ResumeScope};

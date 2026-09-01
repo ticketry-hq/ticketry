@@ -35,8 +35,7 @@ mod work_item_aggregate {
     #[tokio::test]
     async fn aggregate_views_preserve_authored_write_authorization() {
         let database = Database::connect("sqlite::memory:").await.unwrap();
-        let schema =
-            ticketry_graphql_schema::generated_contract_schema(database).unwrap();
+        let schema = ticketry_graphql_schema::generated_contract_schema(database).unwrap();
 
         for mutation in [
             r#"mutation {
@@ -88,8 +87,7 @@ mod project_views {
     #[tokio::test]
     async fn project_views_preserve_authored_write_authorization() {
         let database = Database::connect("sqlite::memory:").await.unwrap();
-        let schema =
-            ticketry_graphql_schema::generated_contract_schema(database).unwrap();
+        let schema = ticketry_graphql_schema::generated_contract_schema(database).unwrap();
 
         for mutation in [
             r#"mutation { acknowledge_onboarding(project_id: "10000000-0000-0000-0000-000000000000") { id } }"#,
@@ -124,8 +122,7 @@ mod work_item_reorder {
         ));
 
         let database = Database::connect("sqlite::memory:").await.unwrap();
-        let schema =
-            ticketry_graphql_schema::generated_contract_schema(database).unwrap();
+        let schema = ticketry_graphql_schema::generated_contract_schema(database).unwrap();
         let response = schema
             .execute(
                 r#"mutation {
@@ -246,9 +243,7 @@ mod issue_type_create {
             .await
             .unwrap();
 
-        let schema =
-            ticketry_graphql_schema::generated_contract_schema(database.clone())
-                .unwrap();
+        let schema = ticketry_graphql_schema::generated_contract_schema(database.clone()).unwrap();
 
         let omitted = schema
             .execute(
@@ -332,8 +327,7 @@ mod work_item_update {
         ));
 
         let database = Database::connect("sqlite::memory:").await.unwrap();
-        let schema =
-            ticketry_graphql_schema::generated_contract_schema(database).unwrap();
+        let schema = ticketry_graphql_schema::generated_contract_schema(database).unwrap();
         let response = schema
             .execute(
                 r#"mutation {

@@ -7,15 +7,11 @@ use std::io::Read;
 use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
+use ticketry_desktop::{run_native_worker, NativeViewerCommand, NativeWorkerExit};
 use ticketry_desktop::{
     ScrollGestureSink, MAX_NATIVE_SCROLL_LINES, SCROLL_DIRECTION_DOWN, SCROLL_DIRECTION_UP,
 };
-use ticketry_desktop::{
-    run_native_worker, NativeViewerCommand, NativeWorkerExit,
-};
-use ticketry_terminal::{
-    TerminalAttachment, TerminalCommandAttachment,
-};
+use ticketry_terminal::{TerminalAttachment, TerminalCommandAttachment};
 
 mod common;
 

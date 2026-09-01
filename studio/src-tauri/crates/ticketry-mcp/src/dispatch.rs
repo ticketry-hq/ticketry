@@ -29,16 +29,14 @@ use super::{
 /// other publisher's subscribers delays delivery to the next reread rather than
 /// losing the fact.
 pub(super) async fn work_facts(database: &DatabaseConnection) -> Option<WorkFactRecorder> {
-    ticketry_runs::outbox_adopted(database)
-        .await
-        .then(|| {
-            WorkFactRecorder::new(
-                ticketry_runs::RunsServices::new(database.clone())
-                    .outbox()
-                    .events()
-                    .clone(),
-            )
-        })
+    ticketry_runs::outbox_adopted(database).await.then(|| {
+        WorkFactRecorder::new(
+            ticketry_runs::RunsServices::new(database.clone())
+                .outbox()
+                .events()
+                .clone(),
+        )
+    })
 }
 
 pub struct DispatchOutput {
@@ -164,10 +162,8 @@ async fn dispatch_checked(
             // edges inside it are returned; MCP must not restate it.
             let access = GraphAccess::caller_roots(&task.project_id, [&task.id]);
             Ok(DispatchOutput::direct(
-                match ticketry_agent_execution::graph::dependency_graph(
-                    database, &task.id, &access,
-                )
-                .await
+                match ticketry_agent_execution::graph::dependency_graph(database, &task.id, &access)
+                    .await
                 {
                     Ok(graph) => json!({
                         "root_id": graph.root_id,
@@ -583,10 +579,7 @@ fn reset_requested(arguments: &Map<String, Value>) -> bool {
         .unwrap_or(false)
 }
 
-fn graph_run_success(
-    root_id: &str,
-    result: GraphRunResult,
-) -> Value {
+fn graph_run_success(root_id: &str, result: GraphRunResult) -> Value {
     json!({
         "root_id": root_id,
         "launched": result
@@ -597,10 +590,7 @@ fn graph_run_success(
     })
 }
 
-fn graph_run_error(
-    root_id: &str,
-    error: &GraphRunServiceError,
-) -> Value {
+fn graph_run_error(root_id: &str, error: &GraphRunServiceError) -> Value {
     json!({"root_id": root_id, "error": error.code_str()})
 }
 

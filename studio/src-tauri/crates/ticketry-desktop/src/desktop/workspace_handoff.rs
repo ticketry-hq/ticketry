@@ -21,9 +21,7 @@ use tauri_graphql::TransportApi;
 
 use crate::desktop::document_protocol;
 use ticketry_graphql_schema::ComposedCommandRuntime;
-use ticketry_workspace_runtime::handoff::{
-    self, manifest, Slice4Readiness, WorkspaceHandoffError,
-};
+use ticketry_workspace_runtime::handoff::{self, manifest, Slice4Readiness, WorkspaceHandoffError};
 
 /// Publish the closed gate. Called at startup, at every backend launch, and at
 /// shutdown, so a stale `ready: true` record can never outlive its runtime.
@@ -58,8 +56,7 @@ async fn evaluate<R: tauri::Runtime>(
     let documents = runtime.documents();
     let mut readiness = Slice4Readiness::unavailable();
 
-    readiness.documents_ownership =
-        ticketry_documents::documents_adopted(database).await;
+    readiness.documents_ownership = ticketry_documents::documents_adopted(database).await;
     readiness.worktree_ownership =
         ticketry_workspace_runtime::persistence::worktrees_adopted(database).await;
     // The journal has never had a Django writer, so its ownership is simply

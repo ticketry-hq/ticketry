@@ -52,10 +52,7 @@ async fn main() {
     );
 }
 
-fn rows(
-    evidence: &ticketry_agent_execution::persistence::AdoptionEvidence,
-    table: &str,
-) -> i64 {
+fn rows(evidence: &ticketry_agent_execution::persistence::AdoptionEvidence, table: &str) -> i64 {
     evidence
         .tables
         .get(table)

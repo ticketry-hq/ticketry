@@ -55,10 +55,7 @@ fn publish_development_readiness(
         data_directory,
         &ticketry_settings::Slice2Readiness::complete(),
     )?;
-    ticketry_runs::publish_readiness(
-        data_directory,
-        &ticketry_runs::Slice3Readiness::complete(),
-    )?;
+    ticketry_runs::publish_readiness(data_directory, &ticketry_runs::Slice3Readiness::complete())?;
     ticketry_workspace_runtime::handoff::publish_readiness(
         data_directory,
         &ticketry_workspace_runtime::handoff::Slice4Readiness::complete(),
@@ -101,8 +98,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // launch paths, and the run authority stay identical across runtimes.
     let hook_runner = hook_runner::HookRunnerResolver::from_environment().resolve()?;
     let database = adopted.runtime.commands().clone();
-    let hook_spool_directory =
-        ticketry_runs::ensure_hook_spool_directory(&data_directory)?;
+    let hook_spool_directory = ticketry_runs::ensure_hook_spool_directory(&data_directory)?;
     adopted
         .runtime
         .terminal_runtime()
@@ -275,9 +271,7 @@ mod tests {
             directory.path()
         ));
         assert!(
-            ticketry_workspace_runtime::handoff::published_readiness_is_complete(
-                directory.path()
-            )
+            ticketry_workspace_runtime::handoff::published_readiness_is_complete(directory.path())
         );
     }
 

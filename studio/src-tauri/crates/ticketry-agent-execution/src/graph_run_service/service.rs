@@ -13,8 +13,7 @@ use std::sync::{
     Arc,
 };
 use ticketry_entities::{
-    {graph_run, launch_claim},
-    issue,
+    issue, {graph_run, launch_claim},
 };
 use ticketry_launch::{compose_task_prompt, TaskPromptSource};
 use ticketry_launch::{CreateTerminalSession, TerminalLaunchKind};

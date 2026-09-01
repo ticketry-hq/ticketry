@@ -1,3 +1,5 @@
+#![deny(private_bounds, private_interfaces)]
+
 //! Authored settings persistence installed after the checked desktop handoff.
 //!
 //! App settings and the provider catalog share the established data directory

@@ -59,10 +59,7 @@ pub fn owned_ledgers() -> Vec<(&'static str, i32)> {
             "ticketry_settings_adoption",
             ticketry_settings::OWNERSHIP_MANIFEST_VERSION,
         ),
-        (
-            "ticketry_runs_adoption",
-            ticketry_runs::VERSION,
-        ),
+        ("ticketry_runs_adoption", ticketry_runs::VERSION),
         (
             ticketry_terminal::LEDGER_TABLE,
             ticketry_terminal::TERMINAL_PERSISTENCE_VERSION,

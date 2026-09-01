@@ -1,7 +1,7 @@
 use sea_orm::{ConnectionTrait, Database, DbBackend, Statement};
 use tauri_graphql::{TransportApi, TransportApiImpl};
 use ticketry_graphql_schema::initialize_with_worktracker_commands_and_install;
-use ticketry_installation::adoption::provisioning;
+use ticketry_installation as provisioning;
 use ticketry_work_management::workflow_color_migration::{
     install, LEDGER_TABLE, MIGRATION_ID, SOURCE_COMMIT,
 };
@@ -188,12 +188,11 @@ async fn skips_color_adoption_when_the_worktracker_state_table_is_absent() {
 
 #[test]
 fn workflow_color_checkpoint_follows_entry_skill_in_the_rust_ledger() {
-    let ledgers = ticketry_installation::classification::rust_ledger::owned_ledgers();
+    let ledgers = ticketry_installation::owned_ledgers();
     let entry_skill = ledgers
         .iter()
         .position(|(table, _)| {
-            *table
-                == ticketry_work_management::launch_binding_entry_skill_migration::LEDGER_TABLE
+            *table == ticketry_work_management::launch_binding_entry_skill_migration::LEDGER_TABLE
         })
         .expect("entry-skill ledger");
     let colors = ledgers

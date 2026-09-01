@@ -11,10 +11,9 @@ mod common;
 use std::path::Path;
 
 use common::installation_corpus as corpus;
-use ticketry_installation::classification::{self as classification, Installation};
-use ticketry_installation::preflight::{
-    self as preflight, Area, PreflightFailure, PreflightReport, Verdict,
-};
+use ticketry_installation as classification;
+use ticketry_installation as preflight;
+use ticketry_installation::{Area, Installation, PreflightFailure, PreflightReport, Verdict};
 
 /// Classify and preflight one installation, expecting both to complete.
 async fn run(data_directory: &Path) -> PreflightReport {
@@ -746,7 +745,7 @@ async fn adopt_every_capability(data_directory: &Path) {
     ticketry_runs::adopt(data_directory)
         .await
         .expect("adopt Runs");
-    ticketry_agent_execution::execution::persistence::adopt(data_directory)
+    ticketry_agent_execution::persistence::adopt(data_directory)
         .await
         .expect("adopt graph execution");
     ticketry_terminal::adopt_terminal_persistence(data_directory)

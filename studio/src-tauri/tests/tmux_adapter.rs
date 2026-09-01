@@ -3,7 +3,8 @@ use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
 use ticketry_terminal::{
     ApprovedArgv, CreateOutcome, CreateSession, InventoryConflictKind, InventoryEntry, KillOutcome,
-    RuntimeIdentity, RuntimeObservation, TerminalGeometry, TmuxAdapter,
+    TerminalGeometry, TerminalRuntimeIdentity as RuntimeIdentity, TmuxAdapter,
+    TmuxRuntimeObservation as RuntimeObservation,
 };
 use ticketry_tool_discovery::SupportedTool;
 

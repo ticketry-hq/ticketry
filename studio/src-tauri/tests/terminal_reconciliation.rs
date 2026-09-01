@@ -15,19 +15,16 @@ use sea_orm::{
     QueryFilter,
 };
 use ticketry_entities::{
-    {agent_run, launch_effect, status_event},
-    {cleanup_effect, session},
+    {agent_run, launch_effect, status_event}, {cleanup_effect, session},
 };
 use ticketry_launch::{CreateTerminalSession, TerminalLaunchKind};
-use ticketry_terminal::{
-    CleanupCause, CleanupRuntimeObservation, TerminalCleanupService,
-};
 use ticketry_terminal::TerminalLaunchBoundary;
+use ticketry_terminal::{CleanupCause, CleanupRuntimeObservation, TerminalCleanupService};
+use ticketry_terminal::{InventoryConflictKind, InventoryEntry, OwnedSession};
 use ticketry_terminal::{
     ReconciliationCheckpoint, RecordedSessionDecision, UnrecordedRuntimeDecision,
     MAX_RECORDED_SESSION_BATCH,
 };
-use ticketry_terminal::{InventoryConflictKind, InventoryEntry, OwnedSession};
 
 #[tokio::test]
 async fn recorded_session_authority_table_converges_and_second_pass_is_stable() {
@@ -635,9 +632,7 @@ async fn terminal_events(database: &sea_orm::DatabaseConnection, run_id: &str) -
         .unwrap()
 }
 
-fn inspected(
-    report: &ticketry_terminal::TerminalReconciliationReport,
-) -> BTreeSet<String> {
+fn inspected(report: &ticketry_terminal::TerminalReconciliationReport) -> BTreeSet<String> {
     report
         .sessions
         .iter()

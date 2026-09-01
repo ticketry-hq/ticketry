@@ -42,8 +42,7 @@ pub use schema::{CURRENT_DJANGO_LEAF, LEDGER_TABLE, VERSION};
 /// unscoped terminal query merely to prove the generated model compiles.
 pub fn register_graphql(builder: seaography::Builder) -> seaography::Builder {
     use ticketry_entities::{
-        agent_run,
-        {session, viewer_lease},
+        agent_run, {session, viewer_lease},
     };
 
     let mut builder = builder;

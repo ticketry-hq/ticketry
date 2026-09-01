@@ -72,10 +72,7 @@ fn private_copy_argument() -> PathBuf {
     supplied
 }
 
-async fn adopt(
-    data_directory: &Path,
-    pass: &str,
-) -> ticketry_terminal::AdoptionEvidence {
+async fn adopt(data_directory: &Path, pass: &str) -> ticketry_terminal::AdoptionEvidence {
     ticketry_runs::preflight(data_directory)
         .await
         .unwrap_or_else(|error| fail(&format!("{pass} Runs adoption preflight failed: {error}")));

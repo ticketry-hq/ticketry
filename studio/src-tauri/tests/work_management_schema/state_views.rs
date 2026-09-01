@@ -3,11 +3,9 @@ use sea_orm::{
     QueryFilter, QueryOrder,
 };
 
-use ticketry_entities::{status_event, state};
+use ticketry_entities::{state, status_event};
 use ticketry_runs::RunsServices;
-use ticketry_work_management::commands::{
-    status_facts::WorkFactRecorder, CommandDatabase,
-};
+use ticketry_work_management::commands::{status_facts::WorkFactRecorder, CommandDatabase};
 
 const PROJECT: &str = "10000000000000000000000000000000";
 const FOREIGN_PROJECT: &str = "10000000000000000000000000000009";

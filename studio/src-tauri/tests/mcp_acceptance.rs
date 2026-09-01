@@ -15,11 +15,9 @@ mod termination;
 
 use ticketry_entities::session;
 use ticketry_graphql_schema::initialize_with_worktracker_commands_and_install;
-use ticketry_mcp::{post, start_authorizer, PROJECT};
 use ticketry_mcp::{loopback, McpConfiguration, McpRuntime};
-use ticketry_terminal::{
-    CleanupKillResult, CleanupRuntimeObservation, TerminalCleanupRuntime,
-};
+use ticketry_mcp::{post, start_authorizer, PROJECT};
+use ticketry_terminal::{CleanupKillResult, CleanupRuntimeObservation, TerminalCleanupRuntime};
 
 const TASK_TYPE: &str = "30000000-0000-0000-0000-000000000001";
 const BACKLOG: &str = "40000000-0000-0000-0000-000000000001";

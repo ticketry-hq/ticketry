@@ -1,9 +1,7 @@
 use sea_orm::{DatabaseConnection, EntityTrait};
 
 use ticketry_entities::issue;
-use ticketry_work_management::{
-    commands::CommandError, read_queries, read_types::WorkItem,
-};
+use ticketry_work_management::{commands::CommandError, read_queries, read_types::WorkItem};
 
 use super::{projection, RunPrincipal};
 

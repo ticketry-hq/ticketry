@@ -1,3 +1,5 @@
+#![deny(private_bounds, private_interfaces)]
+
 //! Durable Runs history and everything that writes to it.
 //!
 //! A Run is the record of one agent execution: what was launched, what the
@@ -23,6 +25,7 @@ pub use hook_spool::{
     HookLifecycleSink, HookSpool, HookSpoolError, HookSpoolRuntime, DEFAULT_BATCH_SIZE,
     MAX_HOOK_BYTES,
 };
+pub use persistence::timestamp::{format as format_timestamp, normalize as normalize_timestamp};
 pub use persistence::{
     adopt, failure_code, open_status_stream, outbox_adopted, owned_run_tables, preflight,
     publish_readiness, published_readiness_is_complete, readiness_open, readiness_unavailable,
@@ -48,4 +51,3 @@ pub use persistence::{
     READINESS_FILE, RETAINED_EVENTS, RETENTION_DAYS, RUNTIME_CONFLICT_CODE,
     RUN_OWNED_AUTHORED_TABLES, SUPPORTED_PAYLOAD_VERSION, VERSION,
 };
-pub use persistence::timestamp::{format as format_timestamp, normalize as normalize_timestamp};

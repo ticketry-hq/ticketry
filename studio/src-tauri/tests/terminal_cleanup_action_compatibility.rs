@@ -9,8 +9,7 @@ use sea_orm::{
     sea_query::Expr, ColumnTrait, DatabaseConnection, EntityTrait, PaginatorTrait, QueryFilter,
 };
 use ticketry_entities::{
-    {agent_run, status_event},
-    {cleanup_effect, session},
+    {agent_run, status_event}, {cleanup_effect, session},
 };
 use ticketry_terminal::{
     CleanupCause, CleanupCheckpoint, CleanupCheckpoints, CleanupKillResult,

@@ -94,10 +94,7 @@ fn rejects_unbounded_input_without_ending_the_session() {
     let (mut viewer, _reader) = viewer.into_control_and_reader();
 
     assert!(matches!(
-        viewer.write_all(&vec![
-            0_u8;
-            ticketry_terminal::MAX_INPUT_BYTES + 1
-        ]),
+        viewer.write_all(&vec![0_u8; ticketry_terminal::MAX_INPUT_BYTES + 1]),
         Err(TerminalAttachmentError::InputTooLarge { .. })
     ));
     assert!(server.has_session());

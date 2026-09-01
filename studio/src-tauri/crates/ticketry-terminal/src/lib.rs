@@ -1,3 +1,5 @@
+#![deny(private_bounds, private_interfaces)]
+
 //! The live terminal a run actually happens in.
 //!
 //! Everything above this crate decides *what* to launch; this is where a

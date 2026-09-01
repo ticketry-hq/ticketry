@@ -170,20 +170,11 @@ impl TerminalCleanupService {
             .filter(
                 Condition::any()
                     .add(ticketry_entities::cleanup_effect::Column::State.eq("prepared"))
-                    .add(
-                        ticketry_entities::cleanup_effect::Column::State
-                            .eq("cleanup_pending"),
-                    )
+                    .add(ticketry_entities::cleanup_effect::Column::State.eq("cleanup_pending"))
                     .add(
                         Condition::all()
-                            .add(
-                                ticketry_entities::cleanup_effect::Column::State
-                                    .eq("leased"),
-                            )
-                            .add(
-                                ticketry_entities::cleanup_effect::Column::LeaseExpiresAt
-                                    .lt(now),
-                            ),
+                            .add(ticketry_entities::cleanup_effect::Column::State.eq("leased"))
+                            .add(ticketry_entities::cleanup_effect::Column::LeaseExpiresAt.lt(now)),
                     ),
             )
             .order_by_asc(ticketry_entities::cleanup_effect::Column::CreatedAt)

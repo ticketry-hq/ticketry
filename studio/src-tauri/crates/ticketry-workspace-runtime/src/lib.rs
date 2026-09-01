@@ -1,3 +1,5 @@
+#![deny(private_bounds, private_interfaces)]
+
 //! Workspace Runtime: the Git worktrees an agent works in, and the workspace
 //! surface built on top of them.
 //!

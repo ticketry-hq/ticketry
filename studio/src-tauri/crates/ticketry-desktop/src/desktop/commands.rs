@@ -39,35 +39,31 @@ pub async fn desktop_launch_default_coding_agent(
     // `state.db` several writers are already sharing.
     let database = launch.commands()?;
     let resolver =
-        ticketry_work_management::launch_policy::LaunchPolicyResolver::new(
-            database.clone(),
-        );
+        ticketry_work_management::launch_policy::LaunchPolicyResolver::new(database.clone());
     let decision = resolver
-        .resolve(ticketry_work_management::launch_policy::LaunchPolicyRequest {
-            task_id: issue_id,
-            destination_state_id: None,
-            provider_override: None,
-            caller_scope: ticketry_work_management::launch_policy::CallerScope::Interactive,
-            idempotency_key: uuid::Uuid::new_v4().simple().to_string(),
-        })
+        .resolve(
+            ticketry_work_management::launch_policy::LaunchPolicyRequest {
+                task_id: issue_id,
+                destination_state_id: None,
+                provider_override: None,
+                caller_scope: ticketry_work_management::launch_policy::CallerScope::Interactive,
+                idempotency_key: uuid::Uuid::new_v4().simple().to_string(),
+            },
+        )
         .await
         .map_err(|error| error.code().to_owned())?;
-    let decision =
-        ticketry_work_management::launch_policy::record(database, &decision)
-            .await
-            .map_err(|error| error.code().to_owned())?;
+    let decision = ticketry_work_management::launch_policy::record(database, &decision)
+        .await
+        .map_err(|error| error.code().to_owned())?;
     let terminal_launch = services
         .terminal_launch
         .lock()
         .expect("terminal launch lock poisoned")
         .clone()
         .ok_or_else(|| "terminal launch is unavailable".to_owned())?;
-    let session = ticketry_agent_execution::launch_delivery::execute(
-        database,
-        &terminal_launch,
-        &decision,
-    )
-    .await?;
+    let session =
+        ticketry_agent_execution::launch_delivery::execute(database, &terminal_launch, &decision)
+            .await?;
     Ok(serde_json::json!({ "agent_run_id": session.agent_run_id }))
 }
 
@@ -136,8 +132,7 @@ pub struct ModuleFolderValidation {
 /// command to the webview.
 #[tauri::command]
 pub fn desktop_validate_module_folder(path: String) -> ModuleFolderValidation {
-    match ticketry_work_management::folder_preflight::validate_configured(Some(&path))
-    {
+    match ticketry_work_management::folder_preflight::validate_configured(Some(&path)) {
         Ok(_) => ModuleFolderValidation {
             valid: true,
             reason: None,

@@ -1,3 +1,5 @@
+#![deny(private_bounds, private_interfaces)]
+
 //! Work Items and the Modules they hang off: the planning model of Ticketry.
 //!
 //! `work_management` owns the Work Item, its Project, Issue Types, states and
@@ -28,6 +30,7 @@ pub use module_links::{
 };
 /// Generated-GraphQL input policy and authored model mutation registration.
 pub use work_management::graphql;
+pub use work_management::workspace_tab_order::update as update_workspace_tab_order;
 pub use work_management::{
     adoption, commands, launch_binding_entry_skill_migration, launch_policy,
     module_presentation_migration, open, open_established, open_for_commands,
@@ -35,4 +38,3 @@ pub use work_management::{
     read_queries, read_types, state_database_path, workflow_color_migration,
     workspace_tab_order_migration, ReadDatabaseError,
 };
-pub use work_management::workspace_tab_order::update as update_workspace_tab_order;

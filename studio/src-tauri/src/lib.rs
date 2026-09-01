@@ -1,3 +1,5 @@
+#![deny(private_bounds, private_interfaces)]
+
 //! Crate root for the Ticketry Studio desktop binary.
 //!
 //! This file exports the single entry point `main.rs` calls. The desktop

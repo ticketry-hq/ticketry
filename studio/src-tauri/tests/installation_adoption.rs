@@ -12,10 +12,11 @@ mod common;
 use std::path::Path;
 
 use common::installation_corpus as corpus;
-use ticketry_installation::adoption::{
-    self as adoption, AdoptionPath, AdoptionPlan, Completion, Phase, Readiness, Refusal,
+use ticketry_installation as classification;
+use ticketry_installation::{
+    self as adoption, AdoptionInventory, AdoptionPath, AdoptionPlan, Completion, Installation,
+    Phase, Readiness, Refusal,
 };
-use ticketry_installation::classification::{self as classification, Installation};
 
 /// Read one scalar out of an installation, for the preservation assertions.
 async fn scalar(data_directory: &Path, query: &str) -> String {
@@ -89,7 +90,7 @@ async fn ledger(data_directory: &Path) -> adoption::LedgerRow {
     ))
     .await
     .expect("open the installation to read its ledger");
-    let row = adoption::ledger::read(&database)
+    let row = adoption::read_adoption_ledger(&database)
         .await
         .expect("the ledger must be readable")
         .expect("an adopted installation carries a ledger");
@@ -447,11 +448,10 @@ async fn a_first_launch_exposes_the_shipping_provider_catalog() {
         .await
         .expect("a first launch must include the provider catalog required by startup");
 
-    let database = ticketry_work_management::open_for_commands(
-        &installation.path().join("state.db"),
-    )
-    .await
-    .expect("open the provisioned catalog");
+    let database =
+        ticketry_work_management::open_for_commands(&installation.path().join("state.db"))
+            .await
+            .expect("open the provisioned catalog");
     let catalog = ticketry_settings::ProviderCatalogService::open(database)
         .await
         .expect("the provisioned providers must match the shipping adapters")
@@ -693,8 +693,6 @@ async fn a_semantic_bridge_fault_rolls_back_the_repair_and_ledger() {
 #[tokio::test]
 async fn every_historical_generation_bridges_to_one_canonical_leaf_and_reopens_twice() {
     use sea_orm::Database;
-    use ticketry_installation::adoption::inventory;
-
     let canonical = corpus::install("django-current");
     let database = Database::connect(format!(
         "sqlite:{}?mode=ro",
@@ -702,7 +700,7 @@ async fn every_historical_generation_bridges_to_one_canonical_leaf_and_reopens_t
     ))
     .await
     .expect("open the canonical fixture");
-    let canonical_inventory = inventory::read(&database)
+    let canonical_inventory = adoption::read_inventory(&database)
         .await
         .expect("inventory the canonical fixture");
     database.close().await.expect("close the canonical fixture");
@@ -755,8 +753,6 @@ async fn every_historical_generation_bridges_to_one_canonical_leaf_and_reopens_t
 #[tokio::test]
 async fn an_alembic_source_with_rows_fails_its_recorded_precondition() {
     use sea_orm::{Database, TransactionTrait};
-    use ticketry_installation::adoption::bridge;
-
     let installation = corpus::install("alembic-0006_design_documents");
     corpus::execute(
         installation.path(),
@@ -770,7 +766,7 @@ async fn an_alembic_source_with_rows_fails_its_recorded_precondition() {
     let Installation::SqliteHistorical(generation) = classified else {
         panic!("the source must be historical")
     };
-    let selected = bridge::select(&generation.name, &generation.fingerprint)
+    let selected = adoption::select_bridge(&generation.name, &generation.fingerprint)
         .expect("the source must have a bridge");
     let database = Database::connect(format!(
         "sqlite:{}?mode=rw",
@@ -779,7 +775,7 @@ async fn an_alembic_source_with_rows_fails_its_recorded_precondition() {
     .await
     .expect("open the source");
     let transaction = database.begin().await.expect("begin the bridge boundary");
-    let failure = bridge::apply(&transaction, &[selected])
+    let failure = adoption::apply_bridge(&transaction, &[selected])
         .await
         .expect_err("the empty-only Alembic correction must refuse rows");
     assert_eq!(failure.phase(), Phase::BridgeWork);
@@ -932,7 +928,7 @@ async fn the_final_python_era_snapshot_is_pinned_outside_rotation() {
 
     let pinned = installation
         .path()
-        .join(ticketry_installation::adoption::snapshot::PINNED_SNAPSHOT);
+        .join(ticketry_installation::PINNED_SNAPSHOT);
     assert!(pinned.is_file(), "the cutover snapshot must be pinned");
     let bytes = std::fs::read(&pinned).expect("read the pinned snapshot");
 
@@ -974,7 +970,7 @@ async fn recovery_discovery_lists_both_manifests_and_revalidates_a_selection() {
     adopt_and_open(installation.path()).await;
 
     let discovered =
-        adoption::recovery::discover(installation.path()).expect("discover recovery points");
+        adoption::discover_recovery(installation.path()).expect("discover recovery points");
     assert_eq!(
         discovered.len(),
         2,
@@ -994,7 +990,7 @@ async fn recovery_discovery_lists_both_manifests_and_revalidates_a_selection() {
         .find(|point| point.snapshot.pinned)
         .expect("discover the pinned source");
     assert_eq!(pinned.snapshot.generation, 0);
-    adoption::recovery::validate_selected(installation.path(), &pinned.snapshot.file)
+    adoption::validate_recovery(installation.path(), &pinned.snapshot.file)
         .await
         .expect("independently validate the pinned source");
 }
@@ -1005,7 +1001,7 @@ async fn recovery_validation_rejects_a_snapshot_changed_after_discovery() {
 
     let installation = corpus::install("current-small");
     adopt_and_open(installation.path()).await;
-    let selected = adoption::recovery::discover(installation.path())
+    let selected = adoption::discover_recovery(installation.path())
         .expect("discover recovery points")
         .into_iter()
         .find(|point| !point.snapshot.pinned)
@@ -1019,10 +1015,9 @@ async fn recovery_validation_rejects_a_snapshot_changed_after_discovery() {
     file.write_all(b"changed").expect("change snapshot bytes");
     file.sync_all().expect("flush changed snapshot");
 
-    let failure =
-        adoption::recovery::validate_selected(installation.path(), &selected.snapshot.file)
-            .await
-            .expect_err("a changed snapshot must fail independent validation");
+    let failure = adoption::validate_recovery(installation.path(), &selected.snapshot.file)
+        .await
+        .expect_err("a changed snapshot must fail independent validation");
     assert_eq!(failure.refusal(), Refusal::SnapshotFailed);
     assert!(failure.detail().contains("hash"));
 }
@@ -1030,8 +1025,6 @@ async fn recovery_validation_rejects_a_snapshot_changed_after_discovery() {
 #[tokio::test]
 async fn a_snapshot_that_does_not_reproduce_the_source_is_refused() {
     use sea_orm::Database;
-    use ticketry_installation::adoption::{inventory, snapshot};
-
     let installation = corpus::install("current-representative");
     let source = {
         let database = Database::connect(format!(
@@ -1040,7 +1033,7 @@ async fn a_snapshot_that_does_not_reproduce_the_source_is_refused() {
         ))
         .await
         .expect("open the installation");
-        let read = inventory::read(&database)
+        let read = adoption::read_inventory(&database)
             .await
             .expect("inventory the installation");
         database.close().await.expect("close the installation");
@@ -1060,7 +1053,7 @@ async fn a_snapshot_that_does_not_reproduce_the_source_is_refused() {
         .expect("lose rows on the way to disk");
     writer.close().await.expect("close the copy");
 
-    let failure = snapshot::verify(&damaged, &source, false)
+    let failure = adoption::verify_snapshot(&damaged, &source, false)
         .await
         .expect_err("a snapshot that lost rows must be refused");
 
@@ -1075,16 +1068,14 @@ async fn a_snapshot_that_does_not_reproduce_the_source_is_refused() {
 #[tokio::test]
 async fn every_product_table_holds_the_same_values_after_adoption() {
     use sea_orm::Database;
-    use ticketry_installation::adoption::inventory;
-
-    async fn preserved(data_directory: &Path) -> inventory::Inventory {
+    async fn preserved(data_directory: &Path) -> AdoptionInventory {
         let database = Database::connect(format!(
             "sqlite:{}?mode=ro",
             data_directory.join("state.db").display()
         ))
         .await
         .expect("open the installation");
-        let read = inventory::read(&database)
+        let read = adoption::read_inventory(&database)
             .await
             .expect("inventory the installation");
         database.close().await.expect("close the installation");

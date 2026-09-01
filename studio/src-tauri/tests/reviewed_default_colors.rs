@@ -1,8 +1,6 @@
 use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder};
 use tauri_graphql::{TransportApi, TransportApiImpl};
-use ticketry_entities::{
-    issue_type, issue_type_transition, launch_binding, project, state,
-};
+use ticketry_entities::{issue_type, issue_type_transition, launch_binding, project, state};
 use ticketry_graphql_schema::initialize_with_worktracker_commands_and_install;
 use ticketry_installation as provisioning;
 use ticketry_work_management::commands::catalog::{self, CreateProject};

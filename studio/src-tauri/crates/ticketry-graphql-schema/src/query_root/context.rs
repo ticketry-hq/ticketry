@@ -7,8 +7,8 @@ use seaography::{
 };
 use uuid::Uuid;
 
-use ticketry_entities::session as terminal_session;
 use ticketry_entities as entities;
+use ticketry_entities::session as terminal_session;
 use ticketry_entities::worktree;
 
 pub(super) fn builder_context() -> BuilderContext {

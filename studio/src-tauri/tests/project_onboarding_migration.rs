@@ -6,7 +6,7 @@
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection, DbBackend, Statement};
 use tauri_graphql::TransportApiImpl;
 use ticketry_graphql_schema::initialize_with_worktracker_commands_and_install;
-use ticketry_installation::adoption::provisioning;
+use ticketry_installation as provisioning;
 use ticketry_work_management::project_onboarding_migration::{
     install, LEDGER_TABLE, MIGRATION_ID, SOURCE_COMMIT, VERSION,
 };
@@ -601,7 +601,7 @@ async fn acknowledging_a_first_launch_clears_onboarding_and_survives_a_reload() 
 #[tokio::test]
 async fn the_migration_ledger_is_a_recognized_rust_ownership_ledger() {
     assert!(
-        ticketry_installation::classification::rust_ledger::owned_ledgers()
+        ticketry_installation::owned_ledgers()
             .iter()
             .any(|(table, version)| *table == LEDGER_TABLE && *version == VERSION),
         "classification must recognize the project-onboarding ledger"

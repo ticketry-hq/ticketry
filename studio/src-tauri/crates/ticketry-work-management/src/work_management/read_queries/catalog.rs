@@ -5,9 +5,7 @@ use sea_orm::{DatabaseConnection, DbErr, EntityTrait, QueryOrder};
 
 use super::uuid;
 use crate::work_management::read_types as output;
-use ticketry_entities::{
-    agent_model, agent_model_reasoning_level, provider, reasoning_level,
-};
+use ticketry_entities::{agent_model, agent_model_reasoning_level, provider, reasoning_level};
 
 pub async fn providers(database: &DatabaseConnection) -> Result<Vec<output::Provider>, DbErr> {
     Ok(provider::Entity::find()

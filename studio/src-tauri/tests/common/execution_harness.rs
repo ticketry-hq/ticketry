@@ -34,11 +34,11 @@ use ticketry_graphql_schema::{
 };
 use ticketry_mcp::{McpConfiguration, McpRuntime};
 use ticketry_runs::{publish_readiness, Slice3Readiness};
-use ticketry_terminal::{TerminalLaunchBoundary, TerminalLaunchService};
 use ticketry_terminal::{
     ProductionTerminalLifecycleWork, TerminalLifecycleConfig, TerminalLifecycleRuntime,
     TerminalRuntimeAuthority,
 };
+use ticketry_terminal::{TerminalLaunchBoundary, TerminalLaunchService};
 use ticketry_work_management::launch_policy::LaunchPolicyResolver;
 
 use super::execution_authorization::{Authorization, AUTHORIZATION_CREDENTIAL};
@@ -227,17 +227,16 @@ impl ExecutionHarness {
         // A module's local folder is its typed link, so it is recorded once the
         // Modules themselves exist rather than written into a profile file.
         link_modules(&commands, &data_directory).await;
-        let spool_directory =
-            ticketry_runs::ensure_hook_spool_directory(&data_directory)
-                .expect("create the provider hook spool directory");
+        let spool_directory = ticketry_runs::ensure_hook_spool_directory(&data_directory)
+            .expect("create the provider hook spool directory");
 
         // The interactive runtime is shared with the GraphQL composition, so
         // every transport prepares and adopts the same verified runtime.
         let launch_runtime = Arc::new(composed.terminal_runtime().clone());
         let mut launch = TerminalLaunchService::new(commands.clone(), launch_runtime.clone())
-            .with_authority(Arc::new(
-                ticketry_launch::LaunchAuthorityService::new(commands.clone()),
-            ));
+            .with_authority(Arc::new(ticketry_launch::LaunchAuthorityService::new(
+                commands.clone(),
+            )));
         if let Some(boundary) = self.options.stop_once_at {
             launch = launch.stopping_once_at(boundary);
         }
@@ -279,12 +278,11 @@ impl ExecutionHarness {
             ticketry_runs::DEFAULT_BATCH_SIZE,
         )
         .expect("open the provider hook spool");
-        let reconciliation =
-            ticketry_terminal::TerminalReconciliationService::new(
-                commands.clone(),
-                launch_runtime,
-                Arc::new(ticketry_terminal::TmuxCleanupRuntime),
-            );
+        let reconciliation = ticketry_terminal::TerminalReconciliationService::new(
+            commands.clone(),
+            launch_runtime,
+            Arc::new(ticketry_terminal::TmuxCleanupRuntime),
+        );
         let terminal = Arc::new(
             TerminalLifecycleRuntime::start(
                 Arc::new(ProductionTerminalLifecycleWork::new(

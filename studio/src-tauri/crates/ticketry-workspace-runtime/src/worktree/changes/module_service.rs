@@ -2,8 +2,8 @@ use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect};
 
 use crate::worktree::status::repository::RepositoryResolution;
 use crate::worktree::status::{self};
-use ticketry_entities::{issue, project};
 use ticketry_entities::worktree;
+use ticketry_entities::{issue, project};
 
 use super::module_view::{
     CurrentWorktreeView, ModuleCheckoutChangesView, ModuleVersionControlView,

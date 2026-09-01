@@ -1,10 +1,8 @@
 use sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, Statement};
 use tauri_graphql::TransportApiImpl;
-use ticketry_graphql_schema::{
-    adopt_worktracker_and_install, InstallationOwnership,
-};
-use ticketry_installation::final_schema_migrations;
-use ticketry_settings::provider_catalog_migrations;
+use ticketry_graphql_schema::{adopt_worktracker_and_install, InstallationOwnership};
+use ticketry_installation::install_final_schema_migrations;
+use ticketry_settings as provider_catalog_migrations;
 use ticketry_work_management::{
     launch_binding_entry_skill_migration, module_presentation_migration, open_for_commands,
     project_onboarding_migration, workflow_color_migration, workspace_tab_order_migration,
@@ -18,7 +16,7 @@ use support::{assert_final, fixture, table_exists};
 #[tokio::test]
 async fn full_0044_through_0052_chain_is_lossless_and_reopens() {
     let (directory, database) = fixture().await;
-    final_schema_migrations::install(&database)
+    install_final_schema_migrations(&database)
         .await
         .expect("run the full chain");
     assert_final(&database).await;
@@ -27,7 +25,7 @@ async fn full_0044_through_0052_chain_is_lossless_and_reopens() {
     let reopened = open_for_commands(&directory.path().join("state.db"))
         .await
         .expect("reopen migrated installation");
-    final_schema_migrations::install(&reopened)
+    install_final_schema_migrations(&reopened)
         .await
         .expect("repeat the full chain");
     assert_final(&reopened).await;
@@ -42,7 +40,7 @@ async fn partial_prior_completion_resumes_without_replaying_completed_steps() {
     project_onboarding_migration::install(&database)
         .await
         .unwrap();
-    final_schema_migrations::install(&database)
+    install_final_schema_migrations(&database)
         .await
         .expect("resume the remaining chain");
     assert_final(&database).await;
@@ -63,7 +61,7 @@ async fn a_pre_chain_snapshot_restores_and_migrates_to_the_same_leaf() {
         let database = open_for_commands(&path.join("state.db"))
             .await
             .expect("open snapshot copy");
-        final_schema_migrations::install(&database)
+        install_final_schema_migrations(&database)
             .await
             .expect("migrate snapshot copy");
         assert_final(&database).await;
@@ -75,7 +73,7 @@ async fn every_data_copy_uses_only_the_supplied_database() {
     let (_supplied_directory, supplied) = fixture().await;
     let (_other_directory, other) = fixture().await;
 
-    final_schema_migrations::install(&supplied)
+    install_final_schema_migrations(&supplied)
         .await
         .expect("migrate supplied database");
     assert_final(&supplied).await;
@@ -121,7 +119,7 @@ async fn fresh_production_entry_reaches_the_final_leaf() {
     .await
     .expect("run the fresh production entry");
     let database = adopted.runtime.commands();
-    final_schema_migrations::install(database)
+    install_final_schema_migrations(database)
         .await
         .expect("repeat the production chain");
     assert!(!table_exists(database, "worktracker_workspace").await);
@@ -230,7 +228,7 @@ async fn every_step_rolls_back_an_injected_failure_and_then_resumes() {
         assert!(!error.to_string().is_empty(), "step {step}");
         assert!(!table_exists(&database, ledger).await, "step {step}");
         database.execute_unprepared(clear).await.unwrap();
-        final_schema_migrations::install(&database)
+        install_final_schema_migrations(&database)
             .await
             .unwrap_or_else(|error| panic!("step {step} did not resume: {error}"));
         assert_final(&database).await;

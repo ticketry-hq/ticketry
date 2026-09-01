@@ -12,9 +12,7 @@ use super::super::status_facts::{
 };
 use super::super::CommandError;
 use crate::work_management::transition_occurrences::{self, NewTransitionOccurrence};
-use ticketry_entities::{
-    issue, issue_type, issue_type_transition, launch_binding, project, state,
-};
+use ticketry_entities::{issue, issue_type, issue_type_transition, launch_binding, project, state};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TransitionOrigin {

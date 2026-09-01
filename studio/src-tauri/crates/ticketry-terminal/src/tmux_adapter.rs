@@ -443,21 +443,18 @@ fn launch_trace_discovery_facts(tool: SupportedTool, duration_ms: u128) -> Disco
 
 impl DiscoveryFacts {
     fn record(self, refusal: Option<&'static str>, path: Option<&str>, version: Option<&str>) {
-        ticketry_diagnostics::stage(
-            ticketry_diagnostics::EXECUTABLE_RESOLVED,
-            refusal,
-        )
-        .with("executableName", self.tool_name)
-        .with("rootsWalked", self.roots_walked)
-        .with(
-            "operatorApprovalConsulted",
-            self.operator_approved_path.is_some(),
-        )
-        .with_optional("operatorApprovedPath", self.operator_approved_path.clone())
-        .with("discoveryDurationMs", self.duration_ms as u64)
-        .with_optional("candidatePath", path.map(str::to_owned))
-        .with_optional("candidateVersion", version.map(str::to_owned))
-        .record();
+        ticketry_diagnostics::stage(ticketry_diagnostics::EXECUTABLE_RESOLVED, refusal)
+            .with("executableName", self.tool_name)
+            .with("rootsWalked", self.roots_walked)
+            .with(
+                "operatorApprovalConsulted",
+                self.operator_approved_path.is_some(),
+            )
+            .with_optional("operatorApprovedPath", self.operator_approved_path.clone())
+            .with("discoveryDurationMs", self.duration_ms as u64)
+            .with_optional("candidatePath", path.map(str::to_owned))
+            .with_optional("candidateVersion", version.map(str::to_owned))
+            .record();
     }
 }
 

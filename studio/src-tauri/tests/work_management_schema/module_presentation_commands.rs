@@ -123,8 +123,7 @@ async fn update_visibility(
     module_id: &str,
     tab_hidden: bool,
 ) -> presentation::Model {
-    let schema =
-        ticketry_graphql_schema::generated_contract_schema(database.clone()).unwrap();
+    let schema = ticketry_graphql_schema::generated_contract_schema(database.clone()).unwrap();
     let response = schema
         .execute(format!(
             r#"mutation {{
@@ -226,8 +225,7 @@ async fn visibility_preserves_rank_and_an_empty_rank_does_not_enable_manual_orde
 #[tokio::test]
 async fn visibility_requires_a_valid_module_identity() {
     let (_directory, database) = fixture().await;
-    let schema =
-        ticketry_graphql_schema::generated_contract_schema(database.clone()).unwrap();
+    let schema = ticketry_graphql_schema::generated_contract_schema(database.clone()).unwrap();
 
     let invalid = schema
         .execute(

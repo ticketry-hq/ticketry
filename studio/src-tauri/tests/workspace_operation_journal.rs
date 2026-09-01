@@ -15,7 +15,7 @@ use std::sync::{
 use async_trait::async_trait;
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection, DbBackend, Statement};
 use serde_json::{json, Value};
-use ticketry_workspace_runtime::workspace::operations::{
+use ticketry_workspace_runtime::workspace_operations::{
     schema, ClaimedOperation, ExternalObservation, OperationSubject, ReconciliationDecision,
     WorkspaceOperationError, WorkspaceOperationErrorCode, WorkspaceOperationExecutor,
     WorkspaceOperationIntent, WorkspaceOperationJournal, WorkspaceOperationKind,

@@ -1,7 +1,5 @@
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection, DbBackend, Statement};
-use ticketry_runs::{
-    AgentRunHolding, LifecycleFact, RunsServices, TerminalFact, TerminalOutcome,
-};
+use ticketry_runs::{AgentRunHolding, LifecycleFact, RunsServices, TerminalFact, TerminalOutcome};
 
 async fn fixture() -> (tempfile::TempDir, DatabaseConnection, RunsServices) {
     let directory = tempfile::tempdir().unwrap();

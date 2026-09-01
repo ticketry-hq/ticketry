@@ -2,9 +2,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use sea_orm::{ConnectionTrait, DbBackend, Statement};
-use ticketry_terminal::{
-    AttachmentOutcome, TerminalAttachment, TerminalAttachmentError,
-};
+use ticketry_terminal::{AttachmentOutcome, TerminalAttachment, TerminalAttachmentError};
 
 mod common;
 use common::terminal_lifecycle_harness::{

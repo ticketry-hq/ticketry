@@ -1,3 +1,5 @@
+#![deny(private_bounds, private_interfaces)]
+
 //! The assembled GraphQL surface: one schema built out of every slice.
 //!
 //! Every other slice registers its own entities, views, and commands. This

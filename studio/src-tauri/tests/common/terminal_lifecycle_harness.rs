@@ -188,8 +188,8 @@ async fn provision(data_directory: &Path) -> String {
     ))
     .await
     .expect("open the Rust terminal fixture");
-    let runtime_namespace = ticketry_terminal::current_runtime_namespace()
-        .expect("derive the isolated tmux namespace");
+    let runtime_namespace =
+        ticketry_terminal::current_runtime_namespace().expect("derive the isolated tmux namespace");
     database
         .execute_unprepared(&format!(
             r#"

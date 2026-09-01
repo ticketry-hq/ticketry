@@ -5,9 +5,7 @@ use sea_orm::{ColumnTrait, DatabaseConnection, DbErr, EntityTrait, QueryFilter, 
 
 use super::{database_uuid, timestamp, uuid};
 use crate::work_management::read_types as output;
-use ticketry_entities::{
-    issue_type, issue_type_transition, launch_binding, state,
-};
+use ticketry_entities::{issue_type, issue_type_transition, launch_binding, state};
 
 pub async fn states(
     database: &DatabaseConnection,

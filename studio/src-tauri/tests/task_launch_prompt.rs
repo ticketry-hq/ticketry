@@ -7,8 +7,10 @@ use async_trait::async_trait;
 use common::submitted_launch_authority::launch_service;
 use common::terminal_lifecycle_harness::{TerminalLifecycleHarness, MODULE_ID, TASK_ID};
 use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter};
-use ticketry_agent_execution::execution::reconciliation::ExecutionReconciliationService;
-use ticketry_agent_execution::execution::run_now::{RunNowCaller, RunNowRequest, RunNowService};
+use ticketry_agent_execution::{
+    reconciliation::ExecutionReconciliationService,
+    run_now::{RunNowCaller, RunNowRequest, RunNowService},
+};
 use ticketry_entities::launch_material;
 use ticketry_launch::TerminalLaunchError;
 use ticketry_terminal::{

@@ -8,7 +8,7 @@
 
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection};
 use tauri_graphql::{TransportApi, TransportApiImpl};
-use ticketry_documents::{registry_refresh, DocumentsService, TaskRegistryScope, SCRATCH_TASK_ID};
+use ticketry_documents::{refresh_scratch, DocumentsService, TaskRegistryScope, SCRATCH_TASK_ID};
 use ticketry_graphql_schema::initialize_with_worktracker_commands_and_install;
 
 const PROJECT: &str = "11111111111111111111111111111111";
@@ -563,7 +563,7 @@ async fn the_scratch_bucket_is_addressed_by_the_established_sentinel() {
     )
     .await;
 
-    let rows = registry_refresh::refresh_scratch(&fixture.database, None, PUBLIC_MODULE)
+    let rows = refresh_scratch(&fixture.database, None, PUBLIC_MODULE)
         .await
         .expect("refresh the scratch registry");
 

@@ -276,10 +276,7 @@ async fn sweep_filters_and_orders_live_sessions_and_isolates_capture_failures() 
     });
     let service = TerminalOutputActivityService::new(database.clone(), capture.clone());
 
-    assert_eq!(
-        ticketry_terminal::observe_live_sessions(&service).await,
-        1
-    );
+    assert_eq!(ticketry_terminal::observe_live_sessions(&service).await, 1);
     assert_eq!(
         capture.calls.lock().unwrap().as_slice(),
         ["run-failing", "run-healthy"]
@@ -310,10 +307,7 @@ async fn enumeration_failure_ends_only_that_pass() {
     });
     let service = TerminalOutputActivityService::new(database.clone(), capture.clone());
 
-    assert_eq!(
-        ticketry_terminal::observe_live_sessions(&service).await,
-        0
-    );
+    assert_eq!(ticketry_terminal::observe_live_sessions(&service).await, 0);
     assert!(capture.calls.lock().unwrap().is_empty());
 
     database
@@ -329,10 +323,7 @@ async fn enumeration_failure_ends_only_that_pass() {
         .await
         .unwrap();
 
-    assert_eq!(
-        ticketry_terminal::observe_live_sessions(&service).await,
-        1
-    );
+    assert_eq!(ticketry_terminal::observe_live_sessions(&service).await, 1);
     assert_eq!(capture.calls.lock().unwrap().as_slice(), ["run-a"]);
 }
 

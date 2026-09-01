@@ -9,12 +9,10 @@
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use ticketry_graphql_schema::generated_schema_sdl;
+use ticketry_terminal::{reconciled_handoffs, CHILD_HANDOFFS};
 use ticketry_terminal::{
     AUDITED_MODULES, CUSTOM_MUTATIONS, CUSTOM_OUTPUTS, CUSTOM_QUERIES, NEEDS_PROOF,
     NON_SEAORM_CRUD_PATHS, RAW_SQL_EVIDENCE_ONLY, REGISTERED_ENTITIES, VERDICT,
-};
-use ticketry_terminal::{
-    reconciled_handoffs, CHILD_HANDOFFS,
 };
 
 /// `studio/src-tauri`, the crate the audited module paths are relative to.

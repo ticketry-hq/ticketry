@@ -17,7 +17,7 @@ tauri-build = { version = "=2.6.3", features = [] }
 
 [features]
 default = []
-# The developer command line lives in `crates/ticketry-dev-tools` now, so this
+# The developer command line lives in `crates/app/ticketry-dev-tools` now, so this
 # feature gates nothing. It stays declared, and empty, so the generation and
 # verification scripts that still pass `--features development-tools` to this
 # package keep working instead of failing on an unknown feature.
@@ -83,24 +83,7 @@ uuid.workspace = true
 [workspace]
 members = [
     ".",
-    "crates/tauri-graphql",
-    "crates/ticketry-data-directory",
-    "crates/ticketry-entities",
-    "crates/ticketry-runs",
-    "crates/ticketry-settings",
-    "crates/ticketry-work-management",
-    "crates/ticketry-tool-discovery",
-    "crates/ticketry-diagnostics",
-    "crates/ticketry-documents",
-    "crates/ticketry-workspace-runtime",
-    "crates/ticketry-launch",
-    "crates/ticketry-terminal",
-    "crates/ticketry-agent-execution",
-    "crates/ticketry-installation",
-    "crates/ticketry-mcp",
-    "crates/ticketry-graphql-schema",
-    "crates/ticketry-desktop",
-    "crates/ticketry-dev-tools",
+    "crates/*/*",
 ]
 resolver = "2"
 
@@ -128,26 +111,26 @@ serde_json = "=1.0.151"
 sha2 = "0.10"
 specta = { version = "=2.0.0-rc.25", features = ["derive"] }
 tauri = "=2.11.5"
-tauri-graphql = { path = "crates/tauri-graphql" }
+tauri-graphql = { path = "crates/foundation/tauri-graphql" }
 taurpc = "=0.8.2"
 tempfile = "=3.23.0"
-ticketry-agent-execution = { path = "crates/ticketry-agent-execution" }
-ticketry-data-directory = { path = "crates/ticketry-data-directory" }
-ticketry-desktop = { path = "crates/ticketry-desktop" }
-ticketry-dev-tools = { path = "crates/ticketry-dev-tools" }
-ticketry-diagnostics = { path = "crates/ticketry-diagnostics" }
-ticketry-documents = { path = "crates/ticketry-documents" }
-ticketry-entities = { path = "crates/ticketry-entities" }
-ticketry-graphql-schema = { path = "crates/ticketry-graphql-schema" }
-ticketry-installation = { path = "crates/ticketry-installation" }
-ticketry-launch = { path = "crates/ticketry-launch" }
-ticketry-mcp = { path = "crates/ticketry-mcp" }
-ticketry-runs = { path = "crates/ticketry-runs" }
-ticketry-settings = { path = "crates/ticketry-settings" }
-ticketry-terminal = { path = "crates/ticketry-terminal" }
-ticketry-tool-discovery = { path = "crates/ticketry-tool-discovery" }
-ticketry-work-management = { path = "crates/ticketry-work-management" }
-ticketry-workspace-runtime = { path = "crates/ticketry-workspace-runtime" }
+ticketry-agent-execution = { path = "crates/execution/ticketry-agent-execution" }
+ticketry-data-directory = { path = "crates/foundation/ticketry-data-directory" }
+ticketry-desktop = { path = "crates/app/ticketry-desktop" }
+ticketry-dev-tools = { path = "crates/app/ticketry-dev-tools" }
+ticketry-diagnostics = { path = "crates/foundation/ticketry-diagnostics" }
+ticketry-documents = { path = "crates/worktracking/ticketry-documents" }
+ticketry-entities = { path = "crates/foundation/ticketry-entities" }
+ticketry-graphql-schema = { path = "crates/surfaces/ticketry-graphql-schema" }
+ticketry-installation = { path = "crates/execution/ticketry-installation" }
+ticketry-launch = { path = "crates/execution/ticketry-launch" }
+ticketry-mcp = { path = "crates/surfaces/ticketry-mcp" }
+ticketry-runs = { path = "crates/worktracking/ticketry-runs" }
+ticketry-settings = { path = "crates/config/ticketry-settings" }
+ticketry-terminal = { path = "crates/execution/ticketry-terminal" }
+ticketry-tool-discovery = { path = "crates/execution/ticketry-tool-discovery" }
+ticketry-work-management = { path = "crates/worktracking/ticketry-work-management" }
+ticketry-workspace-runtime = { path = "crates/execution/ticketry-workspace-runtime" }
 tokio = { version = "=1.53.1", features = ["macros", "net", "rt-multi-thread", "sync", "time"] }
 tokio-util = "=0.7.18"
 uuid = { version = "1.24", features = ["v4", "v5"] }

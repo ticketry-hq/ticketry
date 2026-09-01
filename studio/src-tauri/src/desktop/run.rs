@@ -10,11 +10,13 @@ use crate::desktop::data_directory::{
     data_directory_ownership_for_startup, release_data_directory_ownership,
 };
 use crate::desktop::document_protocol;
+#[cfg(debug_assertions)]
+use crate::desktop::environment::development_panic_abort_requested;
 use crate::desktop::environment::{automated_startup_exit_requested, development_log_path};
 use crate::desktop::launch_runtime::DesktopLaunchRuntime;
 use crate::desktop::lifecycle::{
-    detach_transient_viewers, lifecycle_action, shutdown_rust_runtime, DesktopLifecycleAction,
-    DesktopLifecycleEvent, MAIN_WINDOW_LABEL,
+    detach_transient_viewers, detach_transient_viewers_for_page_load, lifecycle_action,
+    shutdown_rust_runtime, DesktopLifecycleAction, DesktopLifecycleEvent, MAIN_WINDOW_LABEL,
 };
 use crate::desktop::service_state::DesktopServiceState;
 use crate::desktop::startup::initialize_services;
@@ -30,12 +32,19 @@ pub fn run(file_logging_requested: bool) {
         development_log_path(),
     );
     let diagnostic_reports_directory = crate::diagnostics::system_diagnostic_reports_directory();
+    let sentry_database_directory = crate::diagnostics::ghostty_sentry_database_directory();
     let crash_report = crate::diagnostics::collect_dirty_shutdown(
         &ownership.data_directory,
         &diagnostic_reports_directory,
+        &sentry_database_directory,
         file_log.path(),
         Utc::now,
     );
+    crate::diagnostics::install_panic_attribution_hook(&ownership.data_directory);
+    #[cfg(debug_assertions)]
+    if development_panic_abort_requested() {
+        crate::diagnostics::force_development_panic_abort();
+    }
     let crash_reports = CrashReportsRuntime::new(&ownership.data_directory, crash_report);
     if let Some(error) = ownership.startup_error.as_deref() {
         eprintln!("Ticketry could not acquire data-directory ownership: {error}");
@@ -67,6 +76,8 @@ pub fn run(file_logging_requested: bool) {
                 commands::desktop_preflight_report,
                 commands::desktop_approve_executable_path,
                 app_updates::desktop_update_check,
+                app_updates::desktop_update_download_and_install,
+                app_updates::desktop_update_restart,
                 crate::desktop::crash_reports::desktop_latest_crash_collection_outcome,
                 crate::desktop::crash_reports::desktop_reveal_crash_report_folder,
                 webview_commands::viewer_attach,
@@ -96,7 +107,7 @@ pub fn run(file_logging_requested: bool) {
             if webview.label() == MAIN_WINDOW_LABEL
                 && payload.event() == tauri::webview::PageLoadEvent::Started
             {
-                detach_transient_viewers(webview.app_handle());
+                detach_transient_viewers_for_page_load(webview.app_handle());
             }
             if webview.label() == MAIN_WINDOW_LABEL
                 && payload.event() == tauri::webview::PageLoadEvent::Finished

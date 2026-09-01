@@ -191,6 +191,13 @@ named gate before the full Studio suite, typecheck, and build.
 | 206 | Browser update checks defer quietly to the desktop application. |
 | 207 | After a Dirty Shutdown, Studio shows a dismissible, non-modal Crash Notice that reveals the fixed Crash Report folder; clean launches stay silent. |
 | 208 | Desktop launch checks contact the update feed once, show available updates on the Settings entry point, retain the result in App updates, and keep launch failures quiet until that section opens. |
+| 209 | Update and restart starts only after user confirmation, and restart waits for successful installation. |
+| 210 | Settings opens from the bootstrap connecting screen, so a web session held before the local server answers can still reach Settings. |
+| 211 | Settings opens from the failed service-health screen. |
+| 212 | Settings opens while service health is still starting up. |
+| 218 | A saved launch model configuration reads back with its provider, model, and reasoning after reopening the workflow settings. |
+| 219 | A launch configuration naming an agent/provider without a model is refused with that reason rather than saved as unconfigured. |
+| 220 | Saving a launch configuration after the workflow editor loads sends the catalog's model and reasoning UUIDs, not name-keyed placeholders the host rejects with "Enter a valid UUID.". |
 
 Each executable case carries one stable `[overhaul-NN]` marker. The gate has a
 contract test that fails if a marker is missing or duplicated. When a Studio UI

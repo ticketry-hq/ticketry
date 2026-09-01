@@ -118,16 +118,7 @@ fn free_view(
     view: usize,
     contexts: NativeViewContexts,
 ) -> tauri::Result<()> {
-    window.run_on_main_thread(move || {
-        unsafe {
-            muxed_ghostty_view_disable_scroll_callback(view as *mut c_void);
-            muxed_ghostty_view_disable_chord_callback(view as *mut c_void);
-            muxed_ghostty_view_disable_resize_callback(view as *mut c_void);
-            muxed_ghostty_view_disable_process_exit_callback(view as *mut c_void);
-            muxed_ghostty_view_free(view as *mut c_void);
-        };
-        release_view_contexts(contexts);
-    })
+    window.run_on_main_thread(move || unsafe { free_view_and_contexts(view, contexts) })
 }
 
 /// Drops every leaked callback context handed to one native view.

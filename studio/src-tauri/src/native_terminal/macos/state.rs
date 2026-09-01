@@ -233,47 +233,4 @@ impl NativeTerminalState {
             pending_frames: PendingFrames::default(),
         }
     }
-
-    pub fn detach_all(&self) {
-        let (entries, has_in_flight_attachments) = {
-            let mut attaching = self
-                .attaching
-                .lock()
-                .expect("native terminal attachment registry poisoned");
-            attaching.cancel_all();
-            let mut registry = self
-                .entries
-                .lock()
-                .expect("native terminal registry poisoned");
-            (
-                registry.drain().map(|(_, entry)| entry).collect::<Vec<_>>(),
-                !attaching.runs.is_empty(),
-            )
-        };
-        for entry in entries {
-            entry.preparation_phase.store(FAILED, Ordering::Release);
-            entry.stop_accepting_events();
-            unsafe {
-                muxed_ghostty_view_disable_scroll_callback(entry.view as *mut c_void);
-                muxed_ghostty_view_disable_chord_callback(entry.view as *mut c_void);
-                muxed_ghostty_view_disable_process_exit_callback(entry.view as *mut c_void);
-                muxed_ghostty_view_free(entry.view as *mut c_void);
-            };
-            release_view_contexts(entry.contexts);
-            let _ = entry.worker.send(NativeViewerCommand::Detach);
-        }
-        // A cancelled preparation may still be unwinding a main-thread
-        // libghostty operation. Keep the shared runtime alive until a later
-        // teardown rather than freeing it underneath that operation.
-        if !has_in_flight_attachments {
-            if let Some(runtime) = self
-                .runtime
-                .lock()
-                .expect("ghostty runtime poisoned")
-                .take()
-            {
-                unsafe { muxed_ghostty_runtime_free(runtime as *mut c_void) };
-            }
-        }
-    }
 }

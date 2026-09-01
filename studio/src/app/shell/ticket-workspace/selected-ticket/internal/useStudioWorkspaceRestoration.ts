@@ -27,6 +27,7 @@ export function useStudioWorkspaceRestoration({
   requestedSurfaceRef,
   requestedTerminalRef,
   rememberPendingTerminalRef,
+  explicitTerminalRunId = null,
 }: {
   bucket: string | null;
   owner: ForegroundOwner;
@@ -34,6 +35,11 @@ export function useStudioWorkspaceRestoration({
   requestedSurfaceRef: MutableRefObject<TaskWorkspaceTabIdentity | null>;
   requestedTerminalRef: MutableRefObject<string | null>;
   rememberPendingTerminalRef: MutableRefObject<boolean>;
+  /**
+   * The run this workspace was entered for, when the caller already chose one
+   * (clicking a Conversations row). Durable restoration must not override it.
+   */
+  explicitTerminalRunId?: string | null;
 }) {
   const restoreRequestRef = useRef<{
     bucket: string;
@@ -41,6 +47,11 @@ export function useStudioWorkspaceRestoration({
     target: StudioWorkspaceTarget;
   } | null>(null);
   const restoreGenerationRef = useRef(0);
+  // Read at effect time, not through the dependency list: the durable target
+  // is restored once per bucket entry, so a later change of the live selection
+  // must not re-run restoration and clobber it.
+  const explicitTerminalRunIdRef = useRef(explicitTerminalRunId);
+  explicitTerminalRunIdRef.current = explicitTerminalRunId;
 
   useEffect(() => {
     const generation = ++restoreGenerationRef.current;
@@ -49,6 +60,10 @@ export function useStudioWorkspaceRestoration({
     rememberPendingTerminalRef.current = false;
     restoreRequestRef.current = null;
     if (!bucket || owner !== "studio") return;
+    // Entering the workspace already focused on one conversation is the live
+    // instruction; restoring the remembered surface over it is what made
+    // selecting a conversation take a second click.
+    if (explicitTerminalRunIdRef.current) return;
     const target = readStudioWorkspaceTarget(bucket);
     if (!target) return;
     // Keep Details visible while durable targets hydrate.

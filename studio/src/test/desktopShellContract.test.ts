@@ -77,6 +77,8 @@ describe("desktop shell security contract", () => {
         "allow-desktop-approve-executable-path",
         "allow-desktop-launch-default-coding-agent",
         "allow-desktop-update-check",
+        "allow-desktop-update-download-and-install",
+        "allow-desktop-update-restart",
         "allow-desktop-latest-crash-collection-outcome",
         "allow-desktop-reveal-crash-report-folder",
         "allow-TauRPC--graphql-execute",
@@ -105,7 +107,7 @@ describe("desktop shell security contract", () => {
     expect(JSON.stringify(capability)).not.toContain("dialog:");
   });
 
-  it("exposes one permissioned desktop update check through the updater plugin", async () => {
+  it("exposes only the permissioned desktop update actions through the updater plugin", async () => {
     const cargo = await text("../../src-tauri/Cargo.toml");
     const build = await text("../../src-tauri/build.rs");
     const run = await text("../../src-tauri/src/desktop/run.rs");
@@ -116,7 +118,11 @@ describe("desktop shell security contract", () => {
     expect(cargo).toContain('tauri-plugin-updater = "2"');
     expect(run).toContain("tauri_plugin_updater::Builder::new().build()");
     expect(build).toContain('"desktop_update_check"');
+    expect(build).toContain('"desktop_update_download_and_install"');
+    expect(build).toContain('"desktop_update_restart"');
     expect(run).toContain("app_updates::desktop_update_check");
+    expect(run).toContain("app_updates::desktop_update_download_and_install");
+    expect(run).toContain("app_updates::desktop_update_restart");
     expect(appUpdates).toContain("pub(crate) async fn desktop_update_check");
     expect(appUpdates).toContain("UpdaterExt");
     expect(appUpdates).toContain("updater_builder()");
@@ -124,6 +130,10 @@ describe("desktop shell security contract", () => {
 
     const permissions = capability.permissions as string[];
     expect(permissions).toContain("allow-desktop-update-check");
+    expect(permissions).toContain(
+      "allow-desktop-update-download-and-install",
+    );
+    expect(permissions).toContain("allow-desktop-update-restart");
     expect(permissions.some((permission) => permission.startsWith("updater:")))
       .toBe(false);
     expect(configuration.plugins).toEqual({
@@ -336,7 +346,7 @@ describe("desktop shell security contract", () => {
       "desktop:deploy": "node scripts/desktop-deploy.mjs",
       "release:build": "node scripts/release-build.mjs",
       "release:validate": "node scripts/release-build.mjs --validate",
-      "release:test": "node --test scripts/release-build.test.mjs scripts/desktop-deploy.test.mjs scripts/installed-artifact-acceptance.test.mjs scripts/installed-artifact-acceptance-driver.test.mjs scripts/release-publish.test.mjs",
+      "release:test": "node --test scripts/release-build.test.mjs scripts/desktop-deploy.test.mjs scripts/installed-artifact-acceptance.test.mjs scripts/installed-artifact-acceptance-driver.test.mjs scripts/release-publish.test.mjs scripts/public-update-publisher.test.mjs",
       "desktop:smoke": "vitest run src/test/desktopShellContract.test.ts && node --test scripts/desktop-concurrent-smoke.test.mjs && node scripts/desktop-smoke.mjs && cargo test --manifest-path src-tauri/Cargo.toml",
       "desktop:smoke:dev": "node scripts/desktop-smoke.mjs dev",
       "desktop:smoke:packaged": "node scripts/desktop-smoke.mjs packaged",

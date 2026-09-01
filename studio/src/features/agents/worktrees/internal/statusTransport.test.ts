@@ -6,6 +6,7 @@ import {
   type WorktreeStatusPayload,
 } from "./statusTransport";
 import { initializeStudioRuntime, type StudioRuntime } from "../../../../runtime";
+import { stubAppUpdatesRuntime } from "../../../../test/appUpdatesRuntimeStub";
 
 const live: WorktreeStatusPayload = {
   kind: "worktree",
@@ -40,9 +41,7 @@ function desktopRuntime(
       nativeFolderPicker: true,
       appUpdates: true,
     },
-    appUpdates: {
-      check: async () => ({ installedVersion: "0.0.0", status: "current" }),
-    },
+    appUpdates: stubAppUpdatesRuntime(),
     readWorkTracker: execute,
     writeWorkTracker: execute,
     readSettings: execute,

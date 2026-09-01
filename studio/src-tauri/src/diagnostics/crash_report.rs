@@ -10,6 +10,10 @@ const SESSION_MARKER_FILE: &str = "session-marker.json";
 const CRASH_REPORTS_DIRECTORY: &str = "crash-reports";
 const SIDECAR_FILE: &str = "crash-report.json";
 const NATIVE_REPORT_NOT_FOUND: &str = "no native report found";
+/// libghostty's Breakpad backend exits the process itself, so this reason is
+/// the only signal that a dirty shutdown was a native crash rather than a
+/// silent exit. See `native_minidump_report`.
+const LIBGHOSTTY_CRASH_REASON: &str = "libghostty native crash";
 const EVENT_LOG_LINE_LIMIT: usize = 200;
 const REPORT_RETENTION_LIMIT: usize = 10;
 
@@ -37,7 +41,13 @@ struct CrashReportSidecar {
     session_ended_at: DateTime<Utc>,
     #[serde(skip_serializing_if = "Option::is_none")]
     dirty_exit_reason: Option<String>,
-    native_report: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    panic_message: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    rust_backtrace: Option<String>,
+    native_report: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    libghostty_report: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     event_log_tail: Option<Vec<String>>,
 }
@@ -47,17 +57,24 @@ struct CrashReportSidecar {
 pub(crate) fn collect_dirty_shutdown(
     data_directory: &Path,
     diagnostic_reports_directory: &Path,
+    sentry_database_directory: &Path,
     event_log_path: Option<&Path>,
     clock: impl FnOnce() -> DateTime<Utc>,
 ) -> Option<PathBuf> {
     let now = clock();
-    let report = match collect_stale_session(data_directory, diagnostic_reports_directory, now) {
+    let report = match collect_stale_session(
+        data_directory,
+        diagnostic_reports_directory,
+        sentry_database_directory,
+        now,
+    ) {
         Ok(report) => report,
         Err(error) => {
             eprintln!("Ticketry could not collect a Crash Report: {error}");
             None
         }
     };
+    super::panic_attribution::clear(data_directory);
     if let Err(error) = write_session_marker(data_directory, event_log_path, now) {
         eprintln!("Ticketry could not write its Session Marker: {error}");
     }
@@ -83,6 +100,7 @@ pub(crate) fn system_diagnostic_reports_directory() -> PathBuf {
 fn collect_stale_session(
     data_directory: &Path,
     diagnostic_reports_directory: &Path,
+    sentry_database_directory: &Path,
     now: DateTime<Utc>,
 ) -> Result<Option<PathBuf>, String> {
     let marker_path = marker_path(data_directory);
@@ -93,26 +111,13 @@ fn collect_stale_session(
         Err(error) => return Err(format!("could not read {}: {error}", marker_path.display())),
     };
 
-    // Native report matching belongs to the dependent `.ips` slice. Keeping
-    // this argument here preserves the one collector entry point.
-    let _ = diagnostic_reports_directory;
     let event_log_tail = marker
         .event_log_path
         .as_deref()
         .map(read_event_log_tail)
         .transpose()?;
-    let sidecar = CrashReportSidecar {
-        app_version: marker.app_version,
-        commit: marker.commit,
-        os: marker.os,
-        architecture: marker.architecture,
-        session_started_at: marker.session_started_at,
-        session_ended_at: now,
-        dirty_exit_reason: marker.dirty_exit_reason,
-        native_report: NATIVE_REPORT_NOT_FOUND,
-        event_log_tail,
-    };
-
+    let panic_attribution =
+        super::panic_attribution::read_for_session(data_directory, &marker.session_id);
     let reports_directory = data_directory.join(CRASH_REPORTS_DIRECTORY);
     create_private_directory(&reports_directory)?;
     let report_directory = reports_directory.join(format!(
@@ -121,7 +126,63 @@ fn collect_stale_session(
         marker.session_id
     ));
     create_private_directory(&report_directory)?;
+    let native_report = match super::native_crash_report::copy_matching_report(
+        diagnostic_reports_directory,
+        &report_directory,
+        marker.session_started_at,
+        now,
+    ) {
+        Ok(Some(file_name)) => file_name,
+        Ok(None) => NATIVE_REPORT_NOT_FOUND.to_owned(),
+        Err(error) => {
+            eprintln!("Ticketry could not attach a native Crash Report: {error}");
+            NATIVE_REPORT_NOT_FOUND.to_owned()
+        }
+    };
+    let libghostty_report = match super::native_minidump_report::copy_matching_report(
+        sentry_database_directory,
+        &report_directory,
+        marker.session_started_at,
+        now,
+    ) {
+        Ok(collected) => collected,
+        Err(error) => {
+            eprintln!("Ticketry could not attach libghostty's Crash Report: {error}");
+            None
+        }
+    };
+    let dirty_exit_reason = panic_attribution
+        .as_ref()
+        .map(|_| "panic".to_owned())
+        .or(marker.dirty_exit_reason)
+        .or_else(|| {
+            libghostty_report
+                .as_ref()
+                .map(|_| LIBGHOSTTY_CRASH_REASON.to_owned())
+        });
+    let sidecar = CrashReportSidecar {
+        app_version: marker.app_version,
+        commit: marker.commit,
+        os: marker.os,
+        architecture: marker.architecture,
+        session_started_at: marker.session_started_at,
+        session_ended_at: now,
+        dirty_exit_reason,
+        panic_message: panic_attribution
+            .as_ref()
+            .map(|attribution| attribution.panic_message.clone()),
+        rust_backtrace: panic_attribution.map(|attribution| attribution.rust_backtrace),
+        native_report,
+        libghostty_report,
+        event_log_tail,
+    };
     if let Err(error) = write_private_json(&report_directory.join(SIDECAR_FILE), &sidecar) {
+        if sidecar.native_report != NATIVE_REPORT_NOT_FOUND {
+            let _ = fs::remove_file(report_directory.join(&sidecar.native_report));
+        }
+        if let Some(collected) = sidecar.libghostty_report.as_deref() {
+            let _ = fs::remove_file(report_directory.join(collected));
+        }
         let _ = fs::remove_dir(&report_directory);
         return Err(error);
     }

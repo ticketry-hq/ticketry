@@ -6,6 +6,7 @@ import {
   type ReactNode,
 } from "react";
 import { bootstrapStudio, type BootstrapOutcome } from "./bootstrapStudio";
+import { SettingsAccess } from "./SettingsAccess";
 
 type BootstrapStatus = "connecting" | BootstrapOutcome;
 type ConnectingStatus = Exclude<BootstrapStatus, "ready">;
@@ -70,15 +71,19 @@ function ConnectingScreen({ status, onRetry }: ConnectingScreenProps) {
             Start the local server, then retry. Retrying…
           </div>
         ) : null}
-        {isWaiting ? null : (
-          <button
-            type="button"
-            onClick={onRetry}
-            className="border border-focus-accent bg-pane-title px-3 py-1 text-focus-accent hover:bg-pane-bg"
-          >
-            Retry
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {isWaiting ? null : (
+            <button
+              type="button"
+              onClick={onRetry}
+              className="border border-focus-accent bg-pane-title px-3 py-1 text-focus-accent hover:bg-pane-bg"
+            >
+              Retry
+            </button>
+          )}
+          {/* Settings is otherwise unreachable while this gate owns the screen. */}
+          <SettingsAccess />
+        </div>
       </div>
     </div>
   );

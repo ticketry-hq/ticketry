@@ -8,9 +8,16 @@ pub(crate) const ACCEPTANCE_EXIT_AFTER_STARTUP: &str =
     "MUXED_DESKTOP_ACCEPTANCE_EXIT_AFTER_STARTUP";
 pub(crate) const DEVELOPMENT_MCP_PORT_ENV: &str = "MUXED_DESKTOP_MCP_PORT";
 pub(crate) const DEVELOPMENT_LOG_PATH_ENV: &str = "MUXED_DEVELOPMENT_LOG_PATH";
+#[cfg(debug_assertions)]
+pub(crate) const DEVELOPMENT_FORCE_PANIC_ABORT_ENV: &str = "MUXED_DEVELOPMENT_FORCE_PANIC_ABORT";
 
 pub(crate) fn development_log_path() -> Option<std::path::PathBuf> {
     env::var_os(DEVELOPMENT_LOG_PATH_ENV).map(Into::into)
+}
+
+#[cfg(debug_assertions)]
+pub(crate) fn development_panic_abort_requested() -> bool {
+    env::var(DEVELOPMENT_FORCE_PANIC_ABORT_ENV).as_deref() == Ok("1")
 }
 
 pub(crate) fn smoke_startup_exit_requested() -> bool {

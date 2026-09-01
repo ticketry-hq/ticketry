@@ -2,6 +2,7 @@ import { useTerminalStore } from "../../../../../features/agents/terminal/appNav
 import { scratchBucketId } from "../../../../../features/agents/terminal";
 import { TEMP_TASK_ID } from "../../../../../features/agents/types";
 import { useClientStore } from "../../../../../state/clientStore";
+import { rememberStudioWorkspaceTarget } from "../../selected-ticket/internal/studioWorkspaceTarget";
 
 const INSTANT_ROW_PREFIX = "__instant_run__:";
 
@@ -40,6 +41,9 @@ export function selectPlanningRowId(rowId: string): void {
   ui.tabSelected(bucket, sessionId);
   ui.setActive(bucket, "terminal");
   terminal.focusSession(sessionId);
+  // Clicking a Conversations row is a durable choice of surface, exactly like
+  // clicking its workspace tab, so a reload returns to the same conversation.
+  rememberStudioWorkspaceTarget(bucket, { kind: "terminal", agentRunId: runId });
 }
 
 /** The visible row represented by the selected scratch workspace surface. */

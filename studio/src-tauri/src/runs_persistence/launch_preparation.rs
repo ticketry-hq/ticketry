@@ -198,6 +198,10 @@ impl EffectService {
                 "elapsedMs",
                 serde_json::json!(trace_started.elapsed().as_millis()),
             )
+            .with_detail(
+                "launchAttemptId",
+                serde_json::json!(intent.request_id),
+            )
             .with_detail("workItemId", serde_json::json!(intent.issue_id))
             .with_detail(
                 "wakeupAuthority",

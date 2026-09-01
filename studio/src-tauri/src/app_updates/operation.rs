@@ -1,11 +1,30 @@
 use std::future::Future;
 
-use super::contract::{AppUpdateCheckResponse, AppUpdateStatus};
+use super::contract::{AppUpdateCheckResponse, AppUpdateProgress, AppUpdateStatus};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct AvailableUpdate {
     pub(crate) version: String,
     pub(crate) notes: Option<String>,
+}
+
+#[derive(Debug, Default)]
+pub(crate) struct ProgressAccumulator {
+    received_bytes: u64,
+}
+
+impl ProgressAccumulator {
+    pub(crate) fn record_chunk(
+        &mut self,
+        chunk_bytes: usize,
+        total_bytes: Option<u64>,
+    ) -> AppUpdateProgress {
+        self.received_bytes = self.received_bytes.saturating_add(chunk_bytes as u64);
+        AppUpdateProgress {
+            received_bytes: self.received_bytes,
+            total_bytes,
+        }
+    }
 }
 
 pub(crate) async fn check_with<F, Fut, E>(
@@ -40,6 +59,7 @@ mod tests {
     };
 
     use axum::{http::StatusCode, routing::get, Router};
+    use base64::{engine::general_purpose::STANDARD, Engine as _};
     use serde_json::json;
 
     use super::super::{map_install_error, map_updater_error, AppUpdateCheckError};
@@ -124,6 +144,26 @@ mod tests {
     }
 
     #[test]
+    fn download_progress_accumulates_chunks_and_preserves_an_unknown_total() {
+        let mut progress = ProgressAccumulator::default();
+
+        assert_eq!(
+            progress.record_chunk(256, Some(1_024)),
+            super::super::contract::AppUpdateProgress {
+                received_bytes: 256,
+                total_bytes: Some(1_024),
+            }
+        );
+        assert_eq!(
+            progress.record_chunk(128, None),
+            super::super::contract::AppUpdateProgress {
+                received_bytes: 384,
+                total_bytes: None,
+            }
+        );
+    }
+
+    #[test]
     fn unavailable_update_feed_errors_are_retryable() {
         assert_eq!(
             map_updater_error(tauri_plugin_updater::Error::ReleaseNotFound),
@@ -144,11 +184,23 @@ mod tests {
 
     #[test]
     fn invalid_updater_signature_is_rejected_without_retrying_the_same_archive() {
-        let malformed_signature = base64::decode("!").expect_err("fixture must be invalid base64");
+        let malformed_signature = STANDARD
+            .decode("!")
+            .expect_err("fixture must be invalid base64");
 
         assert_eq!(
             map_install_error(tauri_plugin_updater::Error::Base64(malformed_signature)),
-            super::super::contract::AppUpdateInstallError::invalid_signature()
+            super::super::contract::AppUpdateOperationError::invalid_signature()
+        );
+    }
+
+    #[test]
+    fn interrupted_download_can_retry_without_restarting_ticketry() {
+        assert_eq!(
+            map_install_error(tauri_plugin_updater::Error::Network(
+                "connection closed".to_owned()
+            )),
+            super::super::contract::AppUpdateOperationError::download_failed()
         );
     }
 }

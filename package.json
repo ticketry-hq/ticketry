@@ -31,6 +31,8 @@
     "logs:path": "node scripts/dev-logs.mjs path",
     "logs:follow": "node scripts/dev-logs.mjs follow",
     "logs:clear": "node scripts/dev-logs.mjs clear",
+    "logs:trace": "node scripts/dev-logs.mjs trace",
+    "logs:test": "node --test scripts/dev-logs.test.mjs scripts/launch-trace-report.test.mjs scripts/launch-trace-harness-report.test.mjs",
     "serve:dmg": "node scripts/serve-dmg.mjs",
     "verify:slice5-copy": "cargo run --locked --manifest-path studio/src-tauri/Cargo.toml --features development-tools --bin verify_slice5_copy --",
     "verify:slice6-copy": "cargo run --locked --manifest-path studio/src-tauri/Cargo.toml --features development-tools --bin verify_slice6_copy --",

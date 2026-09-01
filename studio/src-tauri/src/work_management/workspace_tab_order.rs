@@ -170,7 +170,7 @@ async fn validate_ownership(
             _ => unreachable!("parse constructs valid identities"),
         };
         match owner {
-            Some(owner) if owner == work_item_id => retained.push(identity),
+            Some(owner) if same_identity(owner, work_item_id) => retained.push(identity),
             Some(_) => {
                 return Err(CommandError::ForeignScope(
                     "A workspace tab identity belongs to another work item.".to_owned(),
@@ -180,6 +180,13 @@ async fn validate_ownership(
         }
     }
     Ok(retained)
+}
+
+fn same_identity(left: &str, right: &str) -> bool {
+    match (uuid::Uuid::parse_str(left), uuid::Uuid::parse_str(right)) {
+        (Ok(left), Ok(right)) => left == right,
+        _ => left == right,
+    }
 }
 
 fn ids_for(order: &[WorkspaceTabIdentity], kind: WorkspaceTabKind) -> Vec<String> {
@@ -294,5 +301,17 @@ mod tests {
         ] {
             assert!(parse(value).is_err());
         }
+    }
+
+    #[test]
+    fn matches_compact_and_hyphenated_uuid_spellings() {
+        assert!(same_identity(
+            "cf2de16d-efbd-4106-b0e4-ceab58b90b22",
+            "cf2de16defbd4106b0e4ceab58b90b22",
+        ));
+        assert!(!same_identity(
+            "cf2de16d-efbd-4106-b0e4-ceab58b90b22",
+            "cf2de16d-efbd-4106-b0e4-ceab58b90b23",
+        ));
     }
 }

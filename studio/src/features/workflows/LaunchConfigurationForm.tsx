@@ -10,6 +10,7 @@ import {
   LaunchDefaultPicker,
   type LaunchDefaultPickerValue,
 } from "./LaunchDefaultPicker";
+import { useLaunchBindingFields } from "./internal/launchBindingFields";
 import { validateLaunchBindingOptions } from "./launchBindingValidation";
 import {
   SETTINGS_FIELD_CLASS,
@@ -37,10 +38,12 @@ export function LaunchConfigurationForm({
   save,
   state,
 }: LaunchConfigurationFormProps) {
-  const [prompt, setPrompt] = useState(binding?.prompt ?? "");
-  const [agent, setAgent] = useState(binding?.agent ?? "");
-  const [model, setModel] = useState(binding?.model ?? "");
-  const [reasoning, setReasoning] = useState(binding?.reasoning ?? "");
+  const [fields, setFields] = useLaunchBindingFields(
+    `${issueType.id}:${state.id}`,
+    binding,
+  );
+  const { prompt, agent, model, reasoning } = fields;
+  const setPrompt = (next: string) => setFields({ ...fields, prompt: next });
   const [applying, setApplying] = useState(false);
 
   const input = useMemo<LaunchBindingInput>(() => ({
@@ -66,9 +69,12 @@ export function LaunchConfigurationForm({
   };
 
   const updatePicker = (next: LaunchDefaultPickerValue) => {
-    setAgent(next.provider);
-    setModel(next.model);
-    setReasoning(next.reasoning);
+    setFields({
+      ...fields,
+      agent: next.provider,
+      model: next.model,
+      reasoning: next.reasoning,
+    });
   };
   const commitPicker = (next: LaunchDefaultPickerValue) => {
     // Built from `next`, not from the `input` memo. `updatePicker`'s setState

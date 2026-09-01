@@ -1,26 +1,32 @@
+import { useEffect } from "react";
 import { studioRuntime } from "../../runtime";
 import { useAppUpdateCheckState } from "./internal/checkState";
 
 export function useAppUpdates() {
   const runtime = studioRuntime();
-  const status = useAppUpdateCheckState((state) => state.status);
   const installedVersion = useAppUpdateCheckState(
-    (state) => state.installedVersion,
+    (updates) => updates.installedVersion,
   );
-  const availableVersion = useAppUpdateCheckState(
-    (state) => state.availableVersion,
+  const state = useAppUpdateCheckState((updates) => updates.state);
+  const check = useAppUpdateCheckState((updates) => updates.check);
+  const retry = useAppUpdateCheckState((updates) => updates.retry);
+  const updateAndRestart = useAppUpdateCheckState(
+    (updates) => updates.updateAndRestart,
   );
-  const notes = useAppUpdateCheckState((state) => state.notes);
-  const errorMessage = useAppUpdateCheckState((state) => state.errorMessage);
-  const check = useAppUpdateCheckState((state) => state.check);
+
+  useEffect(
+    () => runtime.appUpdates.subscribeProgress((progress) => {
+      useAppUpdateCheckState.getState().recordProgress(progress);
+    }),
+    [runtime],
+  );
 
   return {
     available: runtime.capabilities.appUpdates,
-    availableVersion,
-    check,
-    errorMessage,
     installedVersion,
-    notes,
-    status,
+    state,
+    check,
+    retry,
+    updateAndRestart,
   };
 }

@@ -149,7 +149,26 @@ export function setProviderCatalog(catalog: ProviderCatalog): void {
   });
 }
 
+/**
+ * Seed the catalog holding for callers that only know capabilities.
+ *
+ * Capabilities carry names, not row identities, so the rows written here are
+ * synthetic and name-keyed. When the cached catalog already yields exactly
+ * these capabilities — the workflow editor routing its own loaded
+ * capabilities back — the write is skipped: replacing the real rows would
+ * discard their catalog UUIDs, and the next launch-binding save would resolve
+ * its model/reasoning against the synthetic rows and send names where the
+ * host requires UUIDs, failing with "Enter a valid UUID.".
+ */
 export function setProviderCapabilities(capabilities: ProviderCapabilities[]): void {
+  const snapshot = providerPayloadSnapshot();
+  if (
+    snapshot
+    && JSON.stringify(holdingFromGraphQl(snapshot).capabilities)
+      === JSON.stringify(capabilities)
+  ) {
+    return;
+  }
   const reasoning = [...new Set(capabilities.flatMap((row) => row.reasoning_levels ?? []))];
   let reasoningRelationId = 0;
   const providers = capabilities.map((capability) => ({

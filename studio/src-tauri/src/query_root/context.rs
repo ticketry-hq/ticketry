@@ -64,6 +64,10 @@ pub(super) fn builder_context() -> BuilderContext {
             entities::issue::Column::StateId,
         ],
     );
+    add_uuid_columns::<entities::module_presentation::Entity>(
+        &mut context,
+        [entities::module_presentation::Column::ModuleId],
+    );
     add_uuid_columns::<entities::issue_blocker::Entity>(
         &mut context,
         [

@@ -5,6 +5,7 @@ import type {
   PersistedTerminalSession,
   ResumableTerminalSession,
 } from "../features/agents/types";
+import { stubAppUpdatesRuntime } from "./appUpdatesRuntimeStub";
 
 /**
  * The runtime every terminal surface actually ships on.
@@ -234,9 +235,7 @@ export function installDesktopGraphQlRuntime(
       nativeFolderPicker: true,
       appUpdates: true,
     },
-    appUpdates: {
-      check: async () => ({ installedVersion: "0.0.0", status: "current" }),
-    },
+    appUpdates: stubAppUpdatesRuntime(),
     readWorkTracker: route,
     writeWorkTracker: route,
     readSettings: route,

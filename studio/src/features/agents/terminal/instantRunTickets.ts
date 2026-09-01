@@ -1,4 +1,5 @@
 import { useQuery } from "@apollo/client/react";
+import { useMemo } from "react";
 import { studioApolloClient } from "../../../shared/apollo/client";
 import { InstantRunTicketsDocument } from "./generated/instantRunTickets.documents";
 
@@ -23,11 +24,16 @@ export function useInstantRunTickets(
     },
     skip: !projectId || !moduleId,
   });
-  return query.data?.tickets
-    ? query.data.tickets.map((ticket) => ({
-        agentRunId: ticket.agent_run_id,
-        title: ticket.title,
-        startedAt: ticket.started_at,
-      }))
-    : EMPTY_TICKETS;
+  const tickets = query.data?.tickets;
+  return useMemo(
+    () =>
+      tickets
+        ? tickets.map((ticket) => ({
+            agentRunId: ticket.agent_run_id,
+            title: ticket.title,
+            startedAt: ticket.started_at,
+          }))
+        : EMPTY_TICKETS,
+    [tickets],
+  );
 }

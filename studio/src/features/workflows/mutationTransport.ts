@@ -134,11 +134,29 @@ export function upsertIssueTypeWorkflowLaunchBinding(
         ? catalog.reasoningLevels.find((row) => row.name === binding.reasoning)
         : undefined;
       if (binding.agent && !provider) throw new Error(`Agent/provider '${binding.agent}' is not in the catalog.`);
+      // A launch binding records its provider through the chosen model, the
+      // only agent identity the row carries. Sending the model alone silently
+      // dropped an agent-without-model selection, so the state re-read as
+      // unconfigured; refuse it with the reason instead.
+      if (binding.agent && !binding.model) {
+        throw new Error(
+          `Choose a model for agent/provider '${binding.agent}'. A launch `
+          + "configuration stores its provider through the model.",
+        );
+      }
       if (binding.model && !model) throw new Error(`Model '${binding.model}' is not in the catalog for agent/provider '${binding.agent ?? ""}'.`);
       if (binding.reasoning && !reasoning) throw new Error(`Reasoning '${binding.reasoning}' is not in the catalog.`);
+      // `prompt` and `required_skills` are omitted when the caller supplied
+      // neither. Coercing an absent value to `""`/`[]` turned "leave this
+      // alone" into "clear it", so a partial edit erased a configured prompt
+      // and every launch for that type/state then failed with
+      // `prompt_not_configured` (ticket #1372).
       return execute(UpsertWorkTrackerLaunchBindingDocument, {
         issueTypeId: typeId, stateId, workflowRevision,
-        prompt: binding.prompt ?? "", requiredSkills: binding.required_skills ?? [],
+        ...(binding.prompt === undefined ? {} : { prompt: binding.prompt }),
+        ...(binding.required_skills === undefined
+          ? {}
+          : { requiredSkills: binding.required_skills }),
         modelId: model?.id ?? null, reasoningId: reasoning?.id ?? null,
         autoStart, subtreeRunEnabled,
       });

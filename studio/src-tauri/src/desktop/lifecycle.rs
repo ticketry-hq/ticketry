@@ -35,17 +35,32 @@ pub(crate) fn lifecycle_action(event: DesktopLifecycleEvent) -> DesktopLifecycle
     }
 }
 
+/// Application exit teardown. Every native free completes before this
+/// returns, because the process leaves through this event and no later
+/// main-thread turn will run.
 pub(crate) fn detach_transient_viewers(application: &tauri::AppHandle) {
-    // These views live outside the WebView. Detaching them on both page reload
-    // and application exit prevents a stale native surface from covering the
-    // freshly loaded Studio layout without signalling or killing durable tmux
-    // sessions.
     application
         .state::<webview_commands::ViewerCommandState>()
         .detach_all();
     application
         .state::<native_terminal::NativeTerminalState>()
         .detach_all();
+}
+
+/// Page reload teardown. These views live outside the WebView, so a reload
+/// that leaves them attached lets a stale native surface cover the freshly
+/// loaded Studio layout. Neither path signals or kills a durable tmux session.
+///
+/// This runs inside WebKit's navigation-commit callback, so the native frees
+/// are handed to a later main-thread turn rather than performed underneath
+/// WebKit.
+pub(crate) fn detach_transient_viewers_for_page_load(application: &tauri::AppHandle) {
+    application
+        .state::<webview_commands::ViewerCommandState>()
+        .detach_all();
+    application
+        .state::<native_terminal::NativeTerminalState>()
+        .detach_all_for_page_load(application);
 }
 
 pub(crate) fn shutdown_rust_runtime(application: &tauri::AppHandle) {

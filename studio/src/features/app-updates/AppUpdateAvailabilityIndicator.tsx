@@ -2,8 +2,14 @@ import { studioRuntime } from "../../runtime";
 import { useAppUpdateCheckState } from "./internal/checkState";
 
 export function useAppUpdateAvailable(): boolean {
-  const status = useAppUpdateCheckState((state) => state.status);
-  return studioRuntime().capabilities.appUpdates && status === "available";
+  const status = useAppUpdateCheckState((state) => state.state.status);
+  return (
+    studioRuntime().capabilities.appUpdates &&
+    (status === "ready-to-install" ||
+      status === "downloading" ||
+      status === "installing" ||
+      status === "restart-requested")
+  );
 }
 
 export function AppUpdateAvailabilityIndicator({
@@ -22,7 +28,7 @@ export function AppUpdateAvailabilityIndicator({
       <span
         aria-hidden="true"
         title="Update available"
-        className="size-1.5 rounded-full bg-lifecycle-attention"
+        className="size-1.5 bg-lifecycle-attention"
       />
     </>
   );

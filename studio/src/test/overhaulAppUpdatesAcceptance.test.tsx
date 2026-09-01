@@ -1,5 +1,5 @@
 import { StrictMode } from "react";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   AppUpdatesLaunchCheck,
@@ -14,9 +14,19 @@ const runtime = vi.hoisted(() => ({
     check: vi.fn(),
     downloadAndInstall: vi.fn(),
     restart: vi.fn(),
-    subscribeProgress: vi.fn(() => () => {}),
+    subscribeProgress: vi.fn<
+      (
+        listener: (progress: {
+          receivedBytes: number;
+          totalBytes?: number;
+        }) => void,
+      ) => () => void
+    >(() => () => {}),
   },
 }));
+let progressListener:
+  | ((progress: { receivedBytes: number; totalBytes?: number }) => void)
+  | undefined;
 
 vi.mock("../runtime", async () => ({
   ...(await vi.importActual<typeof import("../runtime")>("../runtime")),
@@ -33,7 +43,12 @@ describe("overhaul acceptance - app updates", () => {
     runtime.appUpdates.check.mockReset();
     runtime.appUpdates.downloadAndInstall.mockReset();
     runtime.appUpdates.restart.mockReset();
-    runtime.appUpdates.subscribeProgress.mockClear();
+    progressListener = undefined;
+    runtime.appUpdates.subscribeProgress.mockReset();
+    runtime.appUpdates.subscribeProgress.mockImplementation((listener) => {
+      progressListener = listener;
+      return () => {};
+    });
   });
 
   it("checks once on desktop launch and shares an available update with Settings", async () => {
@@ -165,7 +180,7 @@ describe("overhaul acceptance - app updates", () => {
     ).toBeInTheDocument();
   });
 
-  it("installs only after confirmation and requests restart only after installation", async () => {
+  it("[overhaul-209] installs only after confirmation and requests restart only after installation", async () => {
     let finishInstall!: () => void;
     runtime.appUpdates.check.mockResolvedValue({
       installedVersion: "0.2.0",
@@ -188,6 +203,14 @@ describe("overhaul acceptance - app updates", () => {
     fireEvent.click(screen.getByRole("button", { name: "Update and restart" }));
     expect(runtime.appUpdates.downloadAndInstall).toHaveBeenCalledOnce();
     expect(runtime.appUpdates.restart).not.toHaveBeenCalled();
+    act(() => {
+      progressListener?.({ receivedBytes: 256, totalBytes: 1_024 });
+    });
+    expect(
+      screen.getByRole("progressbar", { name: "Update download progress" }),
+    ).toHaveAttribute("value", "25");
+    expect(screen.getByText("Downloaded 256 B of 1.0 KB (25%)"))
+      .toBeInTheDocument();
 
     finishInstall();
     await vi.waitFor(() => {

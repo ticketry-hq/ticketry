@@ -4,7 +4,7 @@ import type { WorkspaceTabIdentity } from "./types";
 
 const save = vi.hoisted(() => vi.fn(async () => ({ order: [] })));
 
-vi.mock("./mutations", () => ({ saveWorkspaceTabOrder: save }));
+vi.mock("./mutations", () => ({ appendWorkspaceTabs: save }));
 
 import { useWorkspaceTabLifecycleOrder } from "./useWorkspaceTabLifecycleOrder";
 
@@ -36,8 +36,6 @@ describe("useWorkspaceTabLifecycleOrder", () => {
     });
 
     await waitFor(() => expect(save).toHaveBeenCalledWith("work-1", [
-      { kind: "terminal", id: "dormant" },
-      { kind: "details" },
       { kind: "doc", id: "design" },
     ]));
   });

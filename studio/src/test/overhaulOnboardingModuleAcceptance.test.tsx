@@ -119,6 +119,7 @@ import { AddModule } from "../features/studio/modals/AddModule";
 import { getModuleLinks, seedModuleLinks } from "../features/module-links";
 import type { StudioRuntime } from "../runtime";
 import { useClientStore } from "../state/clientStore";
+import { stubAppUpdatesRuntime } from "./appUpdatesRuntimeStub";
 
 function folderPickerRuntime(): StudioRuntime {
   return {
@@ -132,9 +133,7 @@ function folderPickerRuntime(): StudioRuntime {
       nativeFolderPicker: true,
       appUpdates: true,
     },
-    appUpdates: {
-      check: async () => ({ installedVersion: "0.0.0", status: "current" }),
-    },
+    appUpdates: stubAppUpdatesRuntime(),
     readWorkTracker: async () => { throw new Error("unused"); },
     writeWorkTracker: async () => { throw new Error("unused"); },
     readSettings: async () => { throw new Error("unused"); },

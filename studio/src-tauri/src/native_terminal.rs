@@ -48,6 +48,8 @@ mod imp {
         }
 
         pub fn detach_all(&self) {}
+
+        pub fn detach_all_for_page_load(&self, _application: &tauri::AppHandle) {}
     }
 
     #[tauri::command]

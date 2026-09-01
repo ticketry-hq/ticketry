@@ -154,6 +154,7 @@ export function SelectedTicketContent({
     requestedSurfaceRef,
     requestedTerminalRef,
     rememberPendingTerminalRef,
+    explicitTerminalRunId: conversationRunId,
   });
 
   useEffect(() => {

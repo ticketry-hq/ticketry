@@ -60,25 +60,50 @@ impl AppUpdateCheckError {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub(crate) enum AppUpdateInstallErrorCode {
-    UpdateRejectedInvalidSignature,
+pub(crate) enum AppUpdateOperationErrorCode {
+    UpdateSignatureInvalid,
+    UpdateDownloadFailed,
+    UpdateOperationFailed,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub(crate) struct AppUpdateInstallError {
-    pub(crate) code: AppUpdateInstallErrorCode,
+pub(crate) struct AppUpdateOperationError {
+    pub(crate) code: AppUpdateOperationErrorCode,
     pub(crate) message: &'static str,
     pub(crate) retryable: bool,
 }
 
-impl AppUpdateInstallError {
+impl AppUpdateOperationError {
     pub(crate) fn invalid_signature() -> Self {
         Self {
-            code: AppUpdateInstallErrorCode::UpdateRejectedInvalidSignature,
+            code: AppUpdateOperationErrorCode::UpdateSignatureInvalid,
             message: "Update rejected: invalid signature. Ticketry was not changed. Restore a trusted stable channel update and check again.",
             retryable: false,
         }
     }
+
+    pub(crate) fn download_failed() -> Self {
+        Self {
+            code: AppUpdateOperationErrorCode::UpdateDownloadFailed,
+            message:
+                "The update download was interrupted. Check your connection and retry the update.",
+            retryable: true,
+        }
+    }
+
+    pub(crate) fn operation_failed() -> Self {
+        Self {
+            code: AppUpdateOperationErrorCode::UpdateOperationFailed,
+            message: "The update could not be downloaded or installed. Retry the update.",
+            retryable: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub(crate) struct AppUpdateProgress {
+    pub(crate) received_bytes: u64,
+    pub(crate) total_bytes: Option<u64>,
 }
 
 #[cfg(test)]
@@ -116,12 +141,25 @@ mod tests {
     #[test]
     fn signature_rejection_is_distinct_actionable_and_not_retryable_as_is() {
         assert_eq!(
-            serde_json::to_value(AppUpdateInstallError::invalid_signature())
+            serde_json::to_value(AppUpdateOperationError::invalid_signature())
                 .expect("serialize update install error"),
             json!({
-                "code": "update_rejected_invalid_signature",
+                "code": "update_signature_invalid",
                 "message": "Update rejected: invalid signature. Ticketry was not changed. Restore a trusted stable channel update and check again.",
                 "retryable": false
+            })
+        );
+    }
+
+    #[test]
+    fn interrupted_download_is_actionable_and_retryable() {
+        assert_eq!(
+            serde_json::to_value(AppUpdateOperationError::download_failed())
+                .expect("serialize update operation error"),
+            json!({
+                "code": "update_download_failed",
+                "message": "The update download was interrupted. Check your connection and retry the update.",
+                "retryable": true
             })
         );
     }

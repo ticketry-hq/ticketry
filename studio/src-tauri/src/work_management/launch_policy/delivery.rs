@@ -13,6 +13,17 @@ pub(crate) async fn execute(
     service: &TerminalLaunchService,
     decision: &LaunchPolicyDecision,
 ) -> Result<crate::entities::terminals::session::Model, String> {
+    crate::diagnostics::LaunchRequestedRecord {
+        launch_attempt_id: launch_attempt_id(decision),
+        surface: request_surface(decision.caller_scope),
+        project_id: Some(&decision.project_id),
+        work_item_id: Some(&decision.task_id),
+        provider_slug: Some(&decision.provider),
+        model: decision.model.as_deref(),
+        reasoning_level: decision.reasoning.as_deref(),
+        scope: Some("task"),
+    }
+    .record();
     let kind = if matches!(
         decision.caller_scope,
         CallerScope::Interactive | CallerScope::RunNow
@@ -79,12 +90,8 @@ fn request(
     automation_attempt_id: Option<String>,
     prompt: String,
 ) -> CreateTerminalSession {
-    let client_request_id = match decision.caller_scope {
-        CallerScope::RunNow => decision.decision_id.clone(),
-        _ => decision.idempotency_key.clone(),
-    };
     CreateTerminalSession {
-        client_request_id,
+        client_request_id: launch_attempt_id(decision).to_owned(),
         project_id: decision.project_id.clone(),
         issue_id: decision.task_id.clone(),
         module_id: decision.module_link.module_id.clone(),
@@ -103,6 +110,24 @@ fn request(
         document_relative_path: None,
         columns: 120,
         rows: 32,
+    }
+}
+
+fn launch_attempt_id(decision: &LaunchPolicyDecision) -> &str {
+    match decision.caller_scope {
+        CallerScope::RunNow => &decision.decision_id,
+        _ => &decision.idempotency_key,
+    }
+}
+
+fn request_surface(scope: CallerScope) -> crate::diagnostics::LaunchRequestSurface {
+    match scope {
+        CallerScope::Interactive => crate::diagnostics::LaunchRequestSurface::DefaultCodingAgent,
+        CallerScope::RunNow => crate::diagnostics::LaunchRequestSurface::RunNow,
+        CallerScope::AutoStart | CallerScope::Retry => {
+            crate::diagnostics::LaunchRequestSurface::WorkflowAutoStart
+        }
+        CallerScope::Subtree => crate::diagnostics::LaunchRequestSurface::DependencyGraph,
     }
 }
 

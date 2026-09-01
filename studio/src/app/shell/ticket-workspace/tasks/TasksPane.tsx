@@ -11,6 +11,7 @@ import {
   useStoriesTree,
   useReorderWorkItem,
   useSetWorkItemState,
+  recordStoryMove,
 } from "../../../../features/work-items";
 import { TEMP_TASK_ID } from "../../../../features/agents/types";
 import { PaneShell } from "../../PaneShell";
@@ -34,7 +35,6 @@ import {
 } from "./internal/instantRunTicketNavigation";
 import { startInstantChangeFlow } from "../../../../features/studio/modals/PlanFeature";
 import { ConversationStateBadge } from "../../../../features/agents/lifecycle";
-import { recordStoryMove } from "../../../../features/work-items/internal/storyMoveDiagnostics";
 
 export {
   isPlanningRow,

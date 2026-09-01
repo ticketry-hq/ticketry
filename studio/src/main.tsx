@@ -9,7 +9,7 @@ import ToastHost from "./app/shell/ToastHost";
 import { installDesktopFileLogging } from "./shared/logging/desktopFileLogging";
 import { installWebFileLogging } from "./shared/logging/webFileLogging";
 import { StudioApolloProvider } from "./shared/apollo/StudioApolloProvider";
-import { setLaunchDiscoveryRuntimeInstance } from "./features/agents/status/launchDiscoveryTrace";
+import { setLaunchDiscoveryRuntimeInstance } from "./features/agents/status";
 import { AppUpdatesLaunchCheck } from "./features/app-updates";
 
 // Self-hosted fonts (Fontsource, upright variable axes only — no external

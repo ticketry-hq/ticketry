@@ -12,13 +12,13 @@ async function text(relativePath: string): Promise<string> {
 }
 
 const NATIVE_TERMINAL_MODULES = [
-  "../../src-tauri/src/native_terminal.rs",
-  "../../src-tauri/src/native_terminal/macos/mod.rs",
-  "../../src-tauri/src/native_terminal/macos/state.rs",
-  "../../src-tauri/src/native_terminal/macos/lifecycle.rs",
-  "../../src-tauri/src/native_terminal/macos/attach_commands.rs",
-  "../../src-tauri/src/native_terminal/macos/presentation_commands.rs",
-  "../../src-tauri/src/native_terminal/macos/platform_bridge.rs",
+  "../../src-tauri/crates/ticketry-desktop/src/native_terminal.rs",
+  "../../src-tauri/crates/ticketry-desktop/src/native_terminal/macos/mod.rs",
+  "../../src-tauri/crates/ticketry-desktop/src/native_terminal/macos/state.rs",
+  "../../src-tauri/crates/ticketry-desktop/src/native_terminal/macos/lifecycle.rs",
+  "../../src-tauri/crates/ticketry-desktop/src/native_terminal/macos/attach_commands.rs",
+  "../../src-tauri/crates/ticketry-desktop/src/native_terminal/macos/presentation_commands.rs",
+  "../../src-tauri/crates/ticketry-desktop/src/native_terminal/macos/platform_bridge.rs",
 ];
 
 async function nativeTerminalSources(): Promise<string> {
@@ -35,7 +35,7 @@ function snakeCase(value: string): string {
 
 describe("desktop shell security contract", () => {
   it("keeps Rust and TypeScript service-health states in agreement", async () => {
-    const rust = await text("../../src-tauri/src/desktop/service_health.rs");
+    const rust = await text("../../src-tauri/crates/ticketry-desktop/src/desktop/service_health.rs");
     const typescript = await text("../../src/runtime/contract.ts");
     const rustStates = rust
       .match(/enum ServiceHealthState \{(?<states>[^}]+)\}/s)
@@ -108,10 +108,10 @@ describe("desktop shell security contract", () => {
   });
 
   it("exposes only the permissioned desktop update actions through the updater plugin", async () => {
-    const cargo = await text("../../src-tauri/Cargo.toml");
+    const cargo = await text("../../src-tauri/crates/ticketry-desktop/Cargo.toml");
     const build = await text("../../src-tauri/build.rs");
-    const run = await text("../../src-tauri/src/desktop/run.rs");
-    const appUpdates = await text("../../src-tauri/src/app_updates/mod.rs");
+    const run = await text("../../src-tauri/crates/ticketry-desktop/src/desktop/run.rs");
+    const appUpdates = await text("../../src-tauri/crates/ticketry-desktop/src/app_updates/mod.rs");
     const capability = await json("../../src-tauri/capabilities/studio-main.json");
     const configuration = await json("../../src-tauri/tauri.conf.json");
 
@@ -121,9 +121,9 @@ describe("desktop shell security contract", () => {
     expect(build).toContain('"desktop_update_download_and_install"');
     expect(build).toContain('"desktop_update_restart"');
     expect(run).toContain("app_updates::desktop_update_check");
-    expect(run).toContain("app_updates::desktop_update_download_and_install");
-    expect(run).toContain("app_updates::desktop_update_restart");
-    expect(appUpdates).toContain("pub(crate) async fn desktop_update_check");
+    expect(run).toContain("app_updates::install::desktop_update_download_and_install");
+    expect(run).toContain("app_updates::install::desktop_update_restart");
+    expect(appUpdates).toContain("pub async fn desktop_update_check");
     expect(appUpdates).toContain("UpdaterExt");
     expect(appUpdates).toContain("updater_builder()");
     expect(appUpdates).toContain('var("TICKETRY_UPDATE_FEED_URL")');
@@ -150,10 +150,10 @@ describe("desktop shell security contract", () => {
 
   it("installs and restarts through the same permissioned update seam", async () => {
     const build = await text("../../src-tauri/build.rs");
-    const run = await text("../../src-tauri/src/desktop/run.rs");
-    const appUpdates = await text("../../src-tauri/src/app_updates/mod.rs");
-    const install = await text("../../src-tauri/src/app_updates/install.rs");
-    const lifecycle = await text("../../src-tauri/src/desktop/lifecycle.rs");
+    const run = await text("../../src-tauri/crates/ticketry-desktop/src/desktop/run.rs");
+    const appUpdates = await text("../../src-tauri/crates/ticketry-desktop/src/app_updates/mod.rs");
+    const install = await text("../../src-tauri/crates/ticketry-desktop/src/app_updates/install.rs");
+    const lifecycle = await text("../../src-tauri/crates/ticketry-desktop/src/desktop/lifecycle.rs");
 
     for (const command of [
       "desktop_update_download_and_install",
@@ -171,10 +171,10 @@ describe("desktop shell security contract", () => {
     expect(install).toContain("super::stable_channel_updater(&app)");
 
     // Restarting into an update performs the same teardown as a normal exit.
-    expect(lifecycle).toContain("pub(crate) fn tear_down_before_exit");
+    expect(lifecycle).toContain("pub fn tear_down_before_exit");
     expect(lifecycle).toContain("release_data_directory_ownership(application)");
     expect(install).toContain(
-      "crate::desktop::lifecycle::tear_down_before_exit(&handle)",
+      "crate::tear_down_before_exit(&handle)",
     );
     expect(run).toContain("tear_down_before_exit(application)");
 
@@ -182,8 +182,8 @@ describe("desktop shell security contract", () => {
   });
 
   it("runs the packaged update acceptance through the shipped update path", async () => {
-    const run = await text("../../src-tauri/src/desktop/run.rs");
-    const acceptance = await text("../../src-tauri/src/app_updates/acceptance.rs");
+    const run = await text("../../src-tauri/crates/ticketry-desktop/src/desktop/run.rs");
+    const acceptance = await text("../../src-tauri/crates/ticketry-desktop/src/app_updates/acceptance.rs");
 
     // The harness only ever gets the real check, install, and restart.
     expect(acceptance).toContain("super::desktop_update_check(app.clone())");
@@ -200,9 +200,9 @@ describe("desktop shell security contract", () => {
 
   it("exposes only fixed Crash Report outcome and reveal commands", async () => {
     const build = await text("../../src-tauri/build.rs");
-    const run = await text("../../src-tauri/src/desktop/run.rs");
+    const run = await text("../../src-tauri/crates/ticketry-desktop/src/desktop/run.rs");
     const commands = await text(
-      "../../src-tauri/src/desktop/crash_reports.rs",
+      "../../src-tauri/crates/ticketry-desktop/src/desktop/crash_reports.rs",
     );
     const capability = await json(
       "../../src-tauri/capabilities/studio-main.json",
@@ -214,7 +214,7 @@ describe("desktop shell security contract", () => {
     ]) {
       expect(build).toContain(`"${command}"`);
       expect(run).toContain(`crash_reports::${command}`);
-      expect(commands).toContain(`pub(crate) fn ${command}`);
+      expect(commands).toContain(`pub fn ${command}`);
     }
     expect(run).toContain("CrashReportsRuntime::new(");
     expect(run).toContain(".manage(crash_reports)");
@@ -267,9 +267,11 @@ describe("desktop shell security contract", () => {
   it("launches tmux directly in libghostty without a Ticketry byte bridge", async () => {
     const nativeTerminal = await nativeTerminalSources();
     const tmuxViewer = await text(
-      "../../src-tauri/src/terminal/viewer/tmux_client.rs",
+      "../../src-tauri/crates/ticketry-terminal/src/terminal/viewer/tmux_client.rs",
     );
-    const tmuxAdapter = await text("../../src-tauri/src/tmux_adapter.rs");
+    const tmuxAdapter = await text(
+      "../../src-tauri/crates/ticketry-terminal/src/tmux_adapter.rs",
+    );
     const main = await text("../../src-tauri/src/main.rs");
 
     expect(nativeTerminal).toContain("TerminalCommandAttachment::prepare");
@@ -311,9 +313,9 @@ describe("desktop shell security contract", () => {
     const bridge = await text("../../src-tauri/native/libghostty_view_bridge.m");
     const nativeTerminal = await nativeTerminalSources();
     const attachCommands = await text(
-      "../../src-tauri/src/native_terminal/macos/attach_commands.rs",
+      "../../src-tauri/crates/ticketry-desktop/src/native_terminal/macos/attach_commands.rs",
     );
-    const desktop = await text("../../src-tauri/src/desktop/run.rs");
+    const desktop = await text("../../src-tauri/crates/ticketry-desktop/src/desktop/run.rs");
     const build = await text("../../src-tauri/build.rs");
 
     expect(build).toContain('"native_terminal_hide"');
@@ -361,7 +363,7 @@ describe("desktop shell security contract", () => {
   });
 
   it("keeps the service retry command free of webview-supplied values", async () => {
-    const rust = await text("../../src-tauri/src/desktop/commands.rs");
+    const rust = await text("../../src-tauri/crates/ticketry-desktop/src/desktop/commands.rs");
     const build = await text("../../src-tauri/build.rs");
     const command = rust.match(
       /fn desktop_retry_services\((?<parameters>[^)]*)\)[^{]*\{/s,

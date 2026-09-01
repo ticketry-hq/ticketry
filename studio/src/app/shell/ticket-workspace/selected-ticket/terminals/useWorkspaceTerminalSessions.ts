@@ -9,10 +9,10 @@ import {
   useTaskSessions,
   useTerminalStore,
 } from "../../../../../features/agents/terminal";
-import { useAgentStatusSelection } from "../../../../../features/agents/status";
 import {
   recordLaunchDiscoveryForAgentRun,
-} from "../../../../../features/agents/status/launchDiscoveryTrace";
+  useAgentStatusSelection,
+} from "../../../../../features/agents/status";
 
 export function useWorkspaceTerminalSessions(
   bucket: string | null,

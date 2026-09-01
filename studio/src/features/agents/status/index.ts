@@ -39,6 +39,10 @@ export {
 } from "./runPresentation";
 export { startStallDeadlines, stopStallDeadlines } from "./stallDeadlines";
 export {
+  recordLaunchDiscoveryForAgentRun,
+  setLaunchDiscoveryRuntimeInstance,
+} from "./launchDiscoveryTrace";
+export {
   readAgentStatusHolding,
   subscribeAgentStatusHolding,
 } from "./apolloHolding";

@@ -67,6 +67,7 @@ export { usePlanningFilterStore } from "./internal/planningFilterStore";
 export { useClientStore } from "../../state/clientStore";
 export type { SelectionSurface } from "../../state/clientStore";
 export { rankBetween } from "./utilities/rank";
+export { recordStoryMove } from "./internal/storyMoveDiagnostics";
 export { reachable } from "./utilities/dependencyGraph";
 export type { DependencyEdgeField } from "./utilities/dependencyGraph";
 export {

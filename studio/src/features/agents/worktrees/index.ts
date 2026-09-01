@@ -13,3 +13,4 @@ export type {
   WorktreeStatus,
   DiscardResult,
 } from "./internal/types";
+export { WorktreeChangesDocument } from "./generated/worktreeChanges.documents";

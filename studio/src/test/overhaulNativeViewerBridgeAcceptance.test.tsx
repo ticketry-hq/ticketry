@@ -203,17 +203,20 @@ describe("native viewer attachment acceptance", () => {
     const [shellSource, nativeTerminalSource] = await Promise.all([
       import("node:fs/promises").then(async ({ readFile }) =>
         [
-          await readFile(`${process.cwd()}/src-tauri/src/desktop/run.rs`, "utf8"),
-          await readFile(`${process.cwd()}/src-tauri/src/desktop/lifecycle.rs`, "utf8"),
+          await readFile(`${process.cwd()}/src-tauri/crates/ticketry-desktop/src/desktop/run.rs`, "utf8"),
+          await readFile(`${process.cwd()}/src-tauri/crates/ticketry-desktop/src/desktop/lifecycle.rs`, "utf8"),
         ].join("\n"),
       ),
-      import("node:fs/promises").then(({ readFile }) =>
-        readFile(`${process.cwd()}/src-tauri/src/native_terminal/macos/state.rs`, "utf8"),
+      import("node:fs/promises").then(async ({ readFile }) =>
+        [
+          await readFile(`${process.cwd()}/src-tauri/crates/ticketry-desktop/src/native_terminal/macos/state.rs`, "utf8"),
+          await readFile(`${process.cwd()}/src-tauri/crates/ticketry-desktop/src/native_terminal/macos/teardown.rs`, "utf8"),
+        ].join("\n"),
       ),
     ]);
 
     expect(shellSource).toMatch(
-      /PageLoadEvent::Started[\s\S]{0,160}detach_transient_viewers\(webview\.app_handle\(\)\)/,
+      /PageLoadEvent::Started[\s\S]{0,240}detach_transient_viewers_for_page_load\(webview\.app_handle\(\)\)/,
     );
     expect(shellSource).toMatch(
       /fn detach_transient_viewers[\s\S]{0,500}ViewerCommandState[\s\S]{0,500}NativeTerminalState/,
@@ -230,7 +233,10 @@ describe("native viewer attachment acceptance", () => {
       /fn cancel_all[\s\S]{0,180}generation[\s\S]{0,180}phase\.store\(FAILED/,
     );
     expect(nativeTerminalSource).toMatch(
-      /fn detach_all[\s\S]{0,500}attaching\.cancel_all\(\)[\s\S]{0,500}registry\.drain/,
+      /fn detach_all[\s\S]{0,180}detach_every_viewer/,
+    );
+    expect(nativeTerminalSource).toMatch(
+      /fn detach_every_viewer[\s\S]{0,500}attaching\.cancel_all\(\)[\s\S]{0,500}registry\.drain/,
     );
     expect(nativeTerminalSource).toMatch(
       /fn insert_entry[\s\S]{0,500}self\.is_current\(&registry\)/,
@@ -246,8 +252,9 @@ describe("native viewer attachment acceptance", () => {
         "lifecycle.rs",
         "presentation_commands.rs",
         "attach_commands.rs",
+        "teardown.rs",
       ].map((file) =>
-        readFile(`${process.cwd()}/src-tauri/src/native_terminal/macos/${file}`, "utf8")
+        readFile(`${process.cwd()}/src-tauri/crates/ticketry-desktop/src/native_terminal/macos/${file}`, "utf8")
       )).then((sources) => sources.join("\n")),
     ]);
 

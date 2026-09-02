@@ -10,6 +10,7 @@ pub struct Model {
     pub from_state_id: String,
     pub to_state_id: String,
     pub agent_allowed: bool,
+    pub handoff: bool,
     #[sea_orm(belongs_to, from = "issue_type_id", to = "id")]
     pub issue_type: BelongsTo<super::issue_type::Entity>,
     #[sea_orm(

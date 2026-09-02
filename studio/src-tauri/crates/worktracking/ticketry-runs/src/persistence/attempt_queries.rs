@@ -76,6 +76,7 @@ pub fn project(
         error: attempt.error,
         failure,
         agent_run_id: attempt.agent_run_id,
+        delivery_mode: attempt.delivery_mode,
         updated_at: public_timestamp(&attempt.updated_at),
     })
 }

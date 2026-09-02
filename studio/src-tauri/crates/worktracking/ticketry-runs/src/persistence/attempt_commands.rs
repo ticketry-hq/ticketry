@@ -47,6 +47,7 @@ pub async fn materialize_root(
             status: Set("pending".to_owned()),
             agent: NotSet,
             agent_run_id: NotSet,
+            delivery_mode: NotSet,
             error: NotSet,
             error_details: NotSet,
             retryable: Set(true),
@@ -270,20 +271,19 @@ pub async fn retry(
     let source_id = database_uuid(source_id)?;
     let transaction = database.begin().await?;
     let (source, project_id) = attempt_with_project(&transaction, &source_id).await?;
-    if let Some(existing) = retry_child(&transaction, &source_id).await? {
-        transaction.commit().await?;
-        return project(existing);
-    }
     if source.status != "failed" {
         return Err(RunsPersistenceError::new(
             RunsPersistenceErrorCode::AttemptNotFailed,
             "Automation Attempt is not failed",
         ));
     }
-    if !source.retryable {
+    if !source.retryable
+        || source.retry_of_id.is_some()
+        || retry_child(&transaction, &source_id).await?.is_some()
+    {
         return Err(RunsPersistenceError::new(
             RunsPersistenceErrorCode::AttemptNotRetryable,
-            "Automation Attempt is not retryable",
+            "Automation Attempt has no retry remaining",
         ));
     }
     let retry_id = uuid::Uuid::new_v4().simple().to_string();
@@ -303,6 +303,7 @@ pub async fn retry(
             status: Set("pending".to_owned()),
             agent: NotSet,
             agent_run_id: NotSet,
+            delivery_mode: NotSet,
             error: NotSet,
             error_details: NotSet,
             retryable: Set(true),
@@ -316,6 +317,12 @@ pub async fn retry(
         .exec_without_returning(&transaction)
         .await?
             == 1;
+    if !inserted {
+        return Err(RunsPersistenceError::new(
+            RunsPersistenceErrorCode::AttemptNotRetryable,
+            "Automation Attempt has no retry remaining",
+        ));
+    }
     let retry = retry_child(&transaction, &source_id)
         .await?
         .ok_or_else(|| {
@@ -324,20 +331,16 @@ pub async fn retry(
                 "Automation Attempt retry was not found after insertion",
             )
         })?;
-    if inserted {
-        append_attempt_event(
-            events,
-            &transaction,
-            &project_id,
-            "automation_attempt_retried",
-            &retry,
-        )
-        .await?;
-    }
+    append_attempt_event(
+        events,
+        &transaction,
+        &project_id,
+        "automation_attempt_retried",
+        &retry,
+    )
+    .await?;
     transaction.commit().await?;
-    if inserted {
-        events.wake_committed();
-    }
+    events.wake_committed();
     project(retry)
 }
 
@@ -416,7 +419,7 @@ async fn attempt_by_occurrence(
     Ok(automation_attempt(row))
 }
 
-async fn attempt_with_project(
+pub(super) async fn attempt_with_project(
     transaction: &DatabaseTransaction,
     attempt_id: &str,
 ) -> Result<(AutomationAttemptRecord, String), RunsPersistenceError> {
@@ -451,7 +454,7 @@ async fn retry_child(
         .map(automation_attempt))
 }
 
-async fn append_attempt_event(
+pub(super) async fn append_attempt_event(
     events: &StatusEventRepository,
     transaction: &DatabaseTransaction,
     project_id: &str,
@@ -485,10 +488,110 @@ fn invalid(message: &'static str) -> RunsPersistenceError {
     RunsPersistenceError::new(RunsPersistenceErrorCode::InvalidAttempt, message)
 }
 
-fn conflict(message: &'static str) -> RunsPersistenceError {
+pub(super) fn conflict(message: &'static str) -> RunsPersistenceError {
     RunsPersistenceError::new(RunsPersistenceErrorCode::Conflict, message)
 }
 
-fn now() -> String {
+pub(super) fn now() -> String {
     super::timestamp::database_now()
+}
+
+#[cfg(test)]
+mod tests {
+    use sea_orm::{ConnectionTrait, Database};
+
+    use super::super::{AttemptOutcome, RunsPersistenceErrorCode, RunsServices};
+
+    async fn store() -> sea_orm::DatabaseConnection {
+        let database = Database::connect("sqlite::memory:").await.unwrap();
+        database
+            .execute_unprepared(
+                "CREATE TABLE worktracker_issue (
+                    id char(32) PRIMARY KEY,
+                    project_id char(32) NOT NULL,
+                    type varchar(32) NOT NULL
+                );
+                CREATE TABLE automation_attempts (
+                    id char(32) PRIMARY KEY,
+                    transition_id char(32) NOT NULL,
+                    issue_id char(32) NOT NULL,
+                    from_state_id char(32) NOT NULL,
+                    to_state_id char(32) NOT NULL,
+                    workflow_revision integer NOT NULL,
+                    status varchar(32) NOT NULL,
+                    agent varchar NULL,
+                    agent_run_id varchar NULL,
+                    delivery_mode varchar(16) NULL,
+                    error text NULL,
+                    error_details text NULL,
+                    retryable bool NOT NULL DEFAULT 1,
+                    dismissed_at datetime NULL,
+                    retry_of_id char(32) NULL,
+                    root_attempt_id char(32) NULL,
+                    created_at datetime NOT NULL,
+                    updated_at datetime NOT NULL
+                );
+                CREATE UNIQUE INDEX one_retry_per_attempt
+                    ON automation_attempts(retry_of_id)
+                    WHERE retry_of_id IS NOT NULL;
+                INSERT INTO worktracker_issue VALUES
+                    ('00000000000000000000000000000001',
+                     '00000000000000000000000000000002', 'task');
+                INSERT INTO automation_attempts (
+                    id, transition_id, issue_id, from_state_id, to_state_id,
+                    workflow_revision, status, error, error_details, retryable,
+                    created_at, updated_at
+                ) VALUES (
+                    '00000000000000000000000000000003',
+                    '00000000000000000000000000000004',
+                    '00000000000000000000000000000001',
+                    '00000000000000000000000000000005',
+                    '00000000000000000000000000000006',
+                    1, 'failed', 'handoff failed',
+                    '{\"code\":\"handoff_delivery_failed\"}', 1,
+                    CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                );",
+            )
+            .await
+            .unwrap();
+        database
+            .execute_unprepared(super::super::schema::FOCUSED_SCHEMA)
+            .await
+            .unwrap();
+        database
+    }
+
+    #[tokio::test]
+    async fn one_failed_attempt_allows_one_retry_only() {
+        let services = RunsServices::new(store().await);
+        let root = "00000000-0000-0000-0000-000000000003";
+
+        let retry = services.attempts().retry(root).await.unwrap();
+        assert_eq!(
+            services.attempts().retry(root).await.unwrap_err().code(),
+            RunsPersistenceErrorCode::AttemptNotRetryable,
+        );
+
+        let failed_retry = services
+            .attempts()
+            .record_outcome(
+                &retry.attempt_id,
+                AttemptOutcome::Failed {
+                    error: "handoff retry failed".to_owned(),
+                    failure: serde_json::json!({"code": "handoff_delivery_failed"}),
+                    retryable: true,
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            services
+                .attempts()
+                .retry(&failed_retry.attempt_id)
+                .await
+                .unwrap_err()
+                .code(),
+            RunsPersistenceErrorCode::AttemptNotRetryable,
+        );
+    }
 }

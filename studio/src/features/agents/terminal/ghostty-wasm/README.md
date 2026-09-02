@@ -1,8 +1,8 @@
-# `ghostty-wasm` — WebView-hosted Ghostty renderer (CODING-1304)
+# `ghostty-wasm` — Ticketry's WebView-hosted terminal renderer
 
-Ticketry's default browser terminal renderer and a desktop diagnostic option.
-Native libghostty is the desktop default. Both use xterm as their compatibility
-fallback.
+CODING-1304 introduced this renderer as an experiment. CODIN-1514 promotes it
+to Ticketry's default terminal renderer. Native libghostty and xterm remain
+available for diagnostics and fallback.
 
 ## What it does and does not own
 
@@ -21,15 +21,16 @@ fallback.
 
 ## Renderer selection
 
-It is selected by default in browser builds. Native libghostty is selected by
-default in desktop builds. A development build may override either choice, in
-precedence order:
+Packaged builds always select `ghostty-wasm`. Development builds use it unless
+one of these diagnostic overrides selects another renderer, in precedence
+order:
 
-1. Launch flag: open Studio with `?terminalRenderer=ghostty-wasm`.
+1. Launch flag: open Studio with `?terminalRenderer=native` or
+   `?terminalRenderer=xterm`.
 2. Development setting: `localStorage["ticketry:terminal-renderer"]`.
 
 Accepted values are `native`, `xterm` and `ghostty-wasm`. Anything else, or no
-value, uses the default for the current runtime.
+value, selects `ghostty-wasm`.
 
 ## Preparing the artifact
 
@@ -52,14 +53,14 @@ assets through `desktop_ghostty_vt_artifact`; WKWebView cannot fetch that
 embedded file through the root URL used by Vite.
 
 Without the artifact the renderer reports `wasm_artifact_unavailable` and
-Studio falls back to xterm — that is a supported posture, and one of the
-failure cases the experiment has to cover.
+Studio uses an available fallback. Normal development and build commands treat
+the artifact as required and prepare it before Vite starts.
 
 ## Layout
 
 | File | Purpose |
 | --- | --- |
-| `rendererSelection.ts` | Default selection and development overrides. |
+| `rendererSelection.ts` | The product default and development diagnostic overrides. |
 | `GhosttyWasmTerminal.tsx` | React host: owns the surface's lifetime, nothing else. |
 | `internal/wasmRuntime.ts` | Singleton wasm module, memory views, ABI manifest. |
 | `internal/abi.ts` | The enum members this experiment names. |

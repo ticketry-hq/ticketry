@@ -210,6 +210,7 @@ impl RunNowService {
                         provider_override: None,
                         caller_scope: CallerScope::RunNow,
                         idempotency_key: request.request_identity.clone(),
+                        handoff: false,
                     })
                     .await
                     .map_err(|error| policy_refusal(&projected.id, error))?;

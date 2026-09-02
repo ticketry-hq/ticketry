@@ -104,13 +104,14 @@ async fn prepare_command_database(directory: &tempfile::TempDir) {
             CREATE TABLE worktracker_issuetypetransition (
                 id integer PRIMARY KEY AUTOINCREMENT, issue_type_id char(32) NOT NULL,
                 from_state_id char(32) NOT NULL, to_state_id char(32) NOT NULL,
-                agent_allowed bool NOT NULL,
+                agent_allowed bool NOT NULL, handoff bool NOT NULL DEFAULT 0,
                 UNIQUE(issue_type_id, from_state_id, to_state_id)
             );
             CREATE TABLE worktracker_launchbinding (
                 id integer PRIMARY KEY AUTOINCREMENT, issue_type_id char(32) NOT NULL,
                 state_id char(32) NOT NULL, prompt text NOT NULL,
-                required_skills text NOT NULL, model_id char(32), reasoning_id char(32),
+                required_skills text NOT NULL, entry_skill varchar(128),
+                model_id char(32), reasoning_id char(32),
                 auto_start bool NOT NULL, subtree_run_enabled bool NOT NULL,
                 created_at datetime NOT NULL, updated_at datetime NOT NULL,
                 UNIQUE(issue_type_id, state_id)
@@ -457,7 +458,8 @@ async fn mcp_mutations_cover_crud_hierarchy_workflow_and_blockers_through_rust_c
         "upsert_issue_type_workflow_launch_binding",
         json!({
             "type_id": TASK_TYPE, "state_id": BACKLOG, "workflow_revision": 1,
-            "prompt": "Implement this item", "required_skills": ["tdd"]
+            "prompt": "Implement this item", "required_skills": ["tdd"],
+            "entry_skill": "tdd"
         }),
     )
     .await;
@@ -465,6 +467,7 @@ async fn mcp_mutations_cover_crud_hierarchy_workflow_and_blockers_through_rust_c
         launch["launch_bindings"][0]["prompt"],
         "Implement this item"
     );
+    assert_eq!(launch["launch_bindings"][0]["entry_skill"], "tdd");
     let unknown_provider = call(
         &url,
         841,
@@ -499,6 +502,7 @@ async fn mcp_mutations_cover_crud_hierarchy_workflow_and_blockers_through_rust_c
         preserved["launch_bindings"][0]["prompt"],
         "Implement this item"
     );
+    assert_eq!(preserved["launch_bindings"][0]["entry_skill"], "tdd");
     assert_eq!(preserved["workflow_revision"], 2);
 
     let mcp_null = call(

@@ -14,6 +14,12 @@ use ticketry_entities::{issue_type, issue_type_transition, launch_binding, state
 pub async fn seed(database: &impl ConnectionTrait, project_id: &str) -> Result<(), CommandError> {
     let defaults = reviewed_defaults::load()
         .map_err(|_| CommandError::Storage("Reviewed project defaults are invalid.".to_owned()))?;
+    let entry_skills = reviewed_defaults::entry_skill_seeds()
+        .map_err(|_| {
+            CommandError::Storage("Reviewed entry-skill defaults are invalid.".to_owned())
+        })?
+        .into_iter()
+        .collect::<HashMap<_, _>>();
     let now = super::timestamp::now();
 
     let mut state_ids = HashMap::new();
@@ -52,7 +58,9 @@ pub async fn seed(database: &impl ConnectionTrait, project_id: &str) -> Result<(
             .get(type_name)
             .map(|workflow| workflow.start.as_str())
             .or_else(|| (type_name == "Module").then_some("Ideas"));
-        let start_state_id = start_state_name.and_then(|name| state_ids.get(name)).cloned();
+        let start_state_id = start_state_name
+            .and_then(|name| state_ids.get(name))
+            .cloned();
         issue_type::ActiveModel {
             id: Set(type_id),
             project_id: Set(project_id.to_owned()),
@@ -79,6 +87,7 @@ pub async fn seed(database: &impl ConnectionTrait, project_id: &str) -> Result<(
                 from_state_id: Set(state_ids[from].clone()),
                 to_state_id: Set(state_ids[to].clone()),
                 agent_allowed: Set(metadata.agent_allowed),
+                handoff: Set(false),
             }
             .insert(database)
             .await?;
@@ -109,6 +118,7 @@ pub async fn seed(database: &impl ConnectionTrait, project_id: &str) -> Result<(
                 state_id: Set(state_ids[&state_seed.name].clone()),
                 prompt: Set(prompt),
                 required_skills: Set(serde_json::json!(required_skills)),
+                entry_skill: Set(entry_skills.get(&state_seed.name).cloned()),
                 model_id: Set(None),
                 reasoning_id: Set(None),
                 auto_start: Set(state_seed.auto_start),

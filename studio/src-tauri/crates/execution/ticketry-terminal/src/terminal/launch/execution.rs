@@ -1,7 +1,7 @@
 use sea_orm::EntityTrait;
 use serde_json::json;
 
-use ticketry_entities::{launch_material, session};
+use ticketry_entities::{automation_attempt, launch_effect, launch_material, session};
 use ticketry_runs::{ClaimedLaunch, LaunchOutcome};
 
 use super::settlement::SessionSettlement;
@@ -123,6 +123,20 @@ impl TerminalLaunchService {
             return Err(creation.unwrap_err());
         }
         let observed = self.runtime.observe(&claim.agent_run_id).await;
+        if let Err(error) = &creation {
+            if error.code == TerminalLaunchErrorCode::PromptDeliveryFailed {
+                return match observed {
+                    TerminalRuntimeObservation::Missing => {
+                        self.failed_retryable(claim, error.code, &error.to_string())
+                            .await
+                    }
+                    _ => {
+                        self.cleanup_pending(claim, error.code, &error.to_string())
+                            .await
+                    }
+                };
+            }
+        }
         match observed {
             TerminalRuntimeObservation::Running(runtime) => {
                 self.settle(claim, material, runtime).await
@@ -297,6 +311,60 @@ impl TerminalLaunchService {
             )
             .await?;
         Err(public)
+    }
+
+    async fn failed_retryable<T>(
+        &self,
+        claim: &ClaimedLaunch,
+        code: TerminalLaunchErrorCode,
+        message: &str,
+    ) -> Result<T, TerminalLaunchError> {
+        let public = TerminalLaunchError::new(code, message);
+        let effect = launch_effect::Entity::find_by_id(&claim.effect_id)
+            .one(&self.database)
+            .await
+            .map_err(super::service::storage)?;
+        let retryable = if let Some(attempt_id) = effect
+            .as_ref()
+            .and_then(|effect| effect.automation_attempt_id.as_deref())
+        {
+            automation_attempt::Entity::find_by_id(attempt_id)
+                .one(&self.database)
+                .await
+                .map_err(super::service::storage)?
+                .is_some_and(|attempt| delivery_failure_retryable(attempt.retry_of_id.as_deref()))
+        } else {
+            true
+        };
+        self.runs
+            .effects()
+            .record_outcome(
+                &claim.effect_id,
+                &claim.lease_owner,
+                LaunchOutcome::Failed {
+                    code: public.code_str().to_owned(),
+                    message: message.to_owned(),
+                    retryable,
+                    cleanup_confirmed: true,
+                },
+            )
+            .await?;
+        Err(public)
+    }
+}
+
+fn delivery_failure_retryable(retry_of_id: Option<&str>) -> bool {
+    retry_of_id.is_none()
+}
+
+#[cfg(test)]
+mod prompt_delivery_failure_tests {
+    use super::delivery_failure_retryable;
+
+    #[test]
+    fn entry_skill_delivery_allows_only_one_user_retry() {
+        assert!(delivery_failure_retryable(None));
+        assert!(!delivery_failure_retryable(Some("root-attempt")));
     }
 }
 

@@ -75,6 +75,7 @@ export function useRunNowTransitions(
     from_state_id: publicWorktrackerId(transition.from_state),
     to_state_id: publicWorktrackerId(transition.to_state),
     agent_allowed: transition.agent_allowed,
+    handoff: transition.handoff,
   }));
 }
 
@@ -171,6 +172,7 @@ export function startRunNow(item: WorkItem, moduleId: string | null): boolean {
     from_state_id: publicWorktrackerId(transition.from_state),
     to_state_id: publicWorktrackerId(transition.to_state),
     agent_allowed: transition.agent_allowed,
+    handoff: transition.handoff,
   }));
   if (
     !isRunNowEligible(

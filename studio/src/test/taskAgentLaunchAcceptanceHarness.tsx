@@ -117,6 +117,7 @@ const defaultCapabilities = [
 
 beforeEach(() => {
   vi.resetAllMocks();
+  localStorage.setItem("ticketry:terminal-renderer", "xterm");
   setProviderCapabilities(defaultCapabilities);
   providerApi.getLaunchProviderCapabilities.mockResolvedValue(defaultCapabilities);
   providerApi.getProviderCatalog.mockResolvedValue({

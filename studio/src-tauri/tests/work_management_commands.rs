@@ -136,13 +136,14 @@ async fn fixture() -> (tempfile::TempDir, sea_orm::DatabaseConnection) {
             CREATE TABLE worktracker_issuetypetransition (
                 id integer PRIMARY KEY AUTOINCREMENT, issue_type_id char(32) NOT NULL,
                 from_state_id char(32) NOT NULL, to_state_id char(32) NOT NULL,
-                agent_allowed bool NOT NULL,
+                agent_allowed bool NOT NULL, handoff bool NOT NULL DEFAULT 0,
                 UNIQUE(issue_type_id, from_state_id, to_state_id)
             );
             CREATE TABLE worktracker_launchbinding (
                 id integer PRIMARY KEY AUTOINCREMENT, issue_type_id char(32) NOT NULL,
                 state_id char(32) NOT NULL, prompt text NOT NULL,
-                required_skills text NOT NULL, model_id char(32), reasoning_id char(32),
+                required_skills text NOT NULL, entry_skill varchar(128),
+                model_id char(32), reasoning_id char(32),
                 auto_start bool NOT NULL, subtree_run_enabled bool NOT NULL,
                 created_at datetime NOT NULL, updated_at datetime NOT NULL,
                 UNIQUE(issue_type_id, state_id)
@@ -1541,16 +1542,20 @@ async fn graphql_exposes_only_authored_mutations_and_structured_errors() {
 
     let workflow_write: serde_json::Value = serde_json::from_str(
         &api.clone().graphql_execute(serde_json::json!({
-            "query": format!("mutation {{ create_issue_type_transition(issue_type_id: \"{TASK_TYPE}\", from_state_id: \"{BACKLOG}\", to_state_id: \"{READY}\", agent_allowed: true, workflow_revision: 1) {{ agent_allowed: agentAllowed }} }}")
+            "query": format!("mutation {{ create_issue_type_transition(issue_type_id: \"{TASK_TYPE}\", from_state_id: \"{BACKLOG}\", to_state_id: \"{READY}\", agent_allowed: true, handoff: true, workflow_revision: 1) {{ agent_allowed: agentAllowed handoff }} }}")
         }).to_string()).await,
     ).unwrap();
     assert_eq!(
         workflow_write["data"]["create_issue_type_transition"]["agent_allowed"],
         true
     );
+    assert_eq!(
+        workflow_write["data"]["create_issue_type_transition"]["handoff"],
+        true
+    );
     let stale_workflow_write: serde_json::Value = serde_json::from_str(
         &api.clone().graphql_execute(serde_json::json!({
-            "query": format!("mutation {{ update_issue_type_transition(issue_type_id: \"{TASK_TYPE}\", from_state_id: \"{BACKLOG}\", to_state_id: \"{READY}\", agent_allowed: false, workflow_revision: 1) {{ id }} }}")
+            "query": format!("mutation {{ update_issue_type_transition(issue_type_id: \"{TASK_TYPE}\", from_state_id: \"{BACKLOG}\", to_state_id: \"{READY}\", agent_allowed: false, handoff: false, workflow_revision: 1) {{ id }} }}")
         }).to_string()).await,
     ).unwrap();
     assert_eq!(
@@ -1559,13 +1564,17 @@ async fn graphql_exposes_only_authored_mutations_and_structured_errors() {
     );
     let binding_write: serde_json::Value = serde_json::from_str(
         &api.clone().graphql_execute(serde_json::json!({
-            "query": format!("mutation {{ upsert_issue_type_launch_binding(issue_type_id: \"{TASK_TYPE}\", state_id: \"{BACKLOG}\", workflow_revision: 2, prompt: \"Implement it.\", required_skills: [\"tdd\"]) {{ id prompt required_skills: requiredSkills }} }}")
+            "query": format!("mutation {{ upsert_issue_type_launch_binding(issue_type_id: \"{TASK_TYPE}\", state_id: \"{BACKLOG}\", workflow_revision: 2, prompt: \"Implement it.\", required_skills: [\"tdd\"], entry_skill: \"tdd\") {{ id prompt required_skills: requiredSkills entry_skill: entrySkill }} }}")
         }).to_string()).await,
     ).unwrap();
     assert!(binding_write.get("errors").is_none(), "{binding_write:#}");
     assert_eq!(
         binding_write["data"]["upsert_issue_type_launch_binding"]["required_skills"],
         serde_json::json!(["tdd"])
+    );
+    assert_eq!(
+        binding_write["data"]["upsert_issue_type_launch_binding"]["entry_skill"],
+        "tdd"
     );
     let stale_binding_write: serde_json::Value = serde_json::from_str(
         &api.clone().graphql_execute(serde_json::json!({
@@ -1949,6 +1958,7 @@ async fn protected_and_referenced_states_cannot_be_deleted() {
             from_state_id: BACKLOG.to_owned(),
             to_state_id: CANCELLED.to_owned(),
             agent_allowed: true,
+            handoff: false,
             workflow_revision: 1,
         },
     )
@@ -1997,6 +2007,7 @@ async fn workflow_configuration_compare_and_set_is_atomic_and_prunes_unreachable
             from_state_id: BACKLOG.to_owned(),
             to_state_id: READY.to_owned(),
             agent_allowed: true,
+            handoff: false,
             workflow_revision: 1,
         },
     )
@@ -2009,6 +2020,7 @@ async fn workflow_configuration_compare_and_set_is_atomic_and_prunes_unreachable
             from_state_id: READY.to_owned(),
             to_state_id: DONE.to_owned(),
             agent_allowed: true,
+            handoff: false,
             workflow_revision: 1,
         },
     )
@@ -2031,6 +2043,7 @@ async fn workflow_configuration_compare_and_set_is_atomic_and_prunes_unreachable
             workflow_revision: 2,
             prompt: workflow::PatchValue::Value("Implement the work item.".to_owned()),
             required_skills: workflow::PatchValue::Unset,
+            entry_skill: workflow::PatchValue::Unset,
             model_id: workflow::PatchValue::Unset,
             reasoning_id: workflow::PatchValue::Unset,
             auto_start: workflow::PatchValue::Value(true),
@@ -2097,6 +2110,7 @@ async fn concurrent_workflow_edits_have_one_winner_and_one_typed_stale_result() 
                         from_state_id: BACKLOG.to_owned(),
                         to_state_id: target.to_owned(),
                         agent_allowed: allowed,
+                        handoff: false,
                         workflow_revision: 1,
                     },
                 )
@@ -2364,6 +2378,7 @@ async fn launch_binding_patch_preserves_omitted_fields_and_skips_noop_revision()
             workflow_revision: 1,
             prompt: workflow::PatchValue::Value("Initial prompt".to_owned()),
             required_skills: workflow::PatchValue::Value(vec!["tdd".to_owned()]),
+            entry_skill: workflow::PatchValue::Unset,
             model_id: workflow::PatchValue::Unset,
             reasoning_id: workflow::PatchValue::Unset,
             auto_start: workflow::PatchValue::Unset,
@@ -2388,6 +2403,7 @@ async fn launch_binding_patch_preserves_omitted_fields_and_skips_noop_revision()
             workflow_revision: 2,
             prompt: workflow::PatchValue::Unset,
             required_skills: workflow::PatchValue::Unset,
+            entry_skill: workflow::PatchValue::Unset,
             model_id: workflow::PatchValue::Unset,
             reasoning_id: workflow::PatchValue::Unset,
             auto_start: workflow::PatchValue::Value(false),
@@ -2427,6 +2443,7 @@ async fn automation_flags_ride_the_launch_binding_patch_and_need_a_configured_bi
             workflow_revision: 1,
             prompt: workflow::PatchValue::Unset,
             required_skills: workflow::PatchValue::Unset,
+            entry_skill: workflow::PatchValue::Unset,
             model_id: workflow::PatchValue::Unset,
             reasoning_id: workflow::PatchValue::Unset,
             auto_start: workflow::PatchValue::Value(true),
@@ -2461,6 +2478,7 @@ async fn automation_flags_ride_the_launch_binding_patch_and_need_a_configured_bi
             workflow_revision: 1,
             prompt: workflow::PatchValue::Value("Implement it.".to_owned()),
             required_skills: workflow::PatchValue::Unset,
+            entry_skill: workflow::PatchValue::Unset,
             model_id: workflow::PatchValue::Unset,
             reasoning_id: workflow::PatchValue::Unset,
             auto_start: workflow::PatchValue::Unset,
@@ -2490,6 +2508,7 @@ async fn automation_flags_ride_the_launch_binding_patch_and_need_a_configured_bi
                     workflow_revision: revision,
                     prompt: workflow::PatchValue::Unset,
                     required_skills: workflow::PatchValue::Unset,
+                    entry_skill: workflow::PatchValue::Unset,
                     model_id: workflow::PatchValue::Unset,
                     reasoning_id: workflow::PatchValue::Unset,
                     auto_start,
@@ -2526,7 +2545,8 @@ async fn transition_rows_reject_stale_revisions_and_unknown_rows() {
             issue_type_id: TASK_TYPE.to_owned(),
             from_state_id: BACKLOG.to_owned(),
             to_state_id: READY.to_owned(),
-            agent_allowed: false,
+            agent_allowed: Some(false),
+            handoff: None,
             workflow_revision: 1,
         },
     )
@@ -2541,6 +2561,7 @@ async fn transition_rows_reject_stale_revisions_and_unknown_rows() {
             from_state_id: BACKLOG.to_owned(),
             to_state_id: READY.to_owned(),
             agent_allowed: true,
+            handoff: false,
             workflow_revision: 1,
         },
     )
@@ -2552,20 +2573,20 @@ async fn transition_rows_reject_stale_revisions_and_unknown_rows() {
             issue_type_id: TASK_TYPE.to_owned(),
             from_state_id: BACKLOG.to_owned(),
             to_state_id: READY.to_owned(),
-            agent_allowed: false,
+            agent_allowed: Some(false),
+            handoff: Some(true),
             workflow_revision: 2,
         },
     )
     .await
     .unwrap();
-    assert!(
-        !issue_type_transition::Entity::find()
-            .one(&database)
-            .await
-            .unwrap()
-            .unwrap()
-            .agent_allowed
-    );
+    let transition = issue_type_transition::Entity::find()
+        .one(&database)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(!transition.agent_allowed);
+    assert!(transition.handoff);
     let stale = workflow::delete_transition(
         &database,
         workflow::RevisionedTransition {

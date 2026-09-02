@@ -5,7 +5,8 @@ use ticketry_installation::provision;
 use ticketry_settings as provider_catalog_migrations;
 use ticketry_work_management::{
     launch_binding_entry_skill_migration, module_presentation_migration, open_for_commands,
-    project_onboarding_migration, workflow_color_migration, workspace_tab_order_migration,
+    project_onboarding_migration, workflow_color_migration, workflow_handoff_migration,
+    workspace_tab_order_migration,
 };
 use ticketry_workspace_runtime::persistence::pull_request_url_migration;
 
@@ -271,6 +272,10 @@ pub async fn assert_final(database: &DatabaseConnection) {
         (
             pull_request_url_migration::LEDGER_TABLE,
             pull_request_url_migration::MIGRATION_ID,
+        ),
+        (
+            workflow_handoff_migration::LEDGER_TABLE,
+            workflow_handoff_migration::MIGRATION_ID,
         ),
     ] {
         let row = database

@@ -4,12 +4,13 @@ import { compactWorktrackerId } from "../../../shared/api/generatedWorktracker";
 interface CatalogProvider { id: string; slug: string; activated?: boolean }
 interface CatalogModel { id: string; provider: string; name: string }
 interface CatalogReasoning { id: string; name: string }
-interface Transition { from_state: string; to_state: string; agent_allowed?: boolean }
+interface Transition { from_state: string; to_state: string; agent_allowed?: boolean; handoff?: boolean }
 interface Binding {
   issue_type: string;
   state: string;
   prompt?: string;
   required_skills?: unknown;
+  entry_skill?: string | null;
   model?: string | null;
   reasoning?: string | null;
   auto_start?: boolean;
@@ -60,6 +61,7 @@ export function assembleScopedWorkflowSettings(
     from_state_id: transition.from_state,
     to_state_id: transition.to_state,
     agent_allowed: transition.agent_allowed ?? true,
+    handoff: transition.handoff ?? false,
   }));
   const scopedBindings = bindings.filter((binding) => binding.issue_type === issueType.id).map((binding) => {
     const model = binding.model
@@ -75,6 +77,7 @@ export function assembleScopedWorkflowSettings(
       required_skills: Array.isArray(binding.required_skills)
         ? binding.required_skills.filter((skill): skill is string => typeof skill === "string")
         : [],
+      entry_skill: binding.entry_skill ?? null,
       agent: provider?.slug ?? null,
       model: model?.name ?? null,
       reasoning: binding.reasoning

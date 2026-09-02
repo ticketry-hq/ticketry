@@ -71,12 +71,30 @@ async fn assert_persisted_catalog(database: &sea_orm::DatabaseConnection, projec
     );
     assert_eq!(
         launch_binding::Entity::find()
-            .filter(launch_binding::Column::IssueTypeId.is_in(type_ids))
+            .filter(launch_binding::Column::IssueTypeId.is_in(type_ids.clone()))
             .count(database)
             .await
             .expect("count seeded launch bindings"),
         15
     );
+    let state_names = states
+        .iter()
+        .map(|state| (state.id.as_str(), state.name.as_str()))
+        .collect::<std::collections::HashMap<_, _>>();
+    for binding in launch_binding::Entity::find()
+        .filter(launch_binding::Column::IssueTypeId.is_in(type_ids))
+        .all(database)
+        .await
+        .expect("read seeded launch bindings")
+    {
+        let expected = match state_names[binding.state_id.as_str()] {
+            "Grill" => Some("grill-with-docs"),
+            "Spec" => Some("to-spec"),
+            "Tickets" => Some("to-tickets"),
+            _ => None,
+        };
+        assert_eq!(binding.entry_skill.as_deref(), expected);
+    }
 }
 
 async fn assert_generated_state_read(api: &TransportApiImpl, project_id: &str) {

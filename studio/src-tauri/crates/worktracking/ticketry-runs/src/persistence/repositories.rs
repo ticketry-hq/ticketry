@@ -375,6 +375,7 @@ pub fn automation_attempt(row: automation_attempt_entity::Model) -> AutomationAt
         status: row.status,
         agent: row.agent,
         agent_run_id: row.agent_run_id,
+        delivery_mode: row.delivery_mode,
         error: row.error,
         error_details: row.error_details,
         retryable: row.retryable,

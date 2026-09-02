@@ -1,9 +1,21 @@
 # Workspace Runtime worktrees
 
 Workspace Runtime owns the local Git checkouts used to isolate work for a Work
-Item and tracks each checkout until the person removes it.
+Item and tracks each checkout until the person removes it. It also owns the
+tmux-backed terminal sessions agents run in.
 
 ## Language
+
+### Terminals
+
+**Typed delivery**:
+Backend-owned injection of text into a tmux session as if a user typed it:
+wait for the provider's ready composer, paste the text, verify visibility,
+then submit. Independent of any open frontend viewer, which merely observes
+the result. Used for entry-skill submission and handoff delivery.
+_Avoid_: viewer input, frontend typing, send-keys prompt
+
+### Worktrees
 
 **Task worktree**:
 A Git worktree owned by one top-level Work Item, with its own branch and a

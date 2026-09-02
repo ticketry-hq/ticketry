@@ -108,6 +108,13 @@ interface WorkflowEditorState {
     agentAllowed: boolean,
     control: string,
   ) => Promise<void>;
+  setTransitionHandoff: (
+    typeId: string,
+    fromStateId: string,
+    toStateId: string,
+    handoff: boolean,
+    control: string,
+  ) => Promise<void>;
   upsertLaunchBinding: (
     typeId: string,
     stateId: string,
@@ -399,6 +406,7 @@ export const useWorkflowEditorStore = createApolloStore<WorkflowEditorState>("wo
         from_state_id: fromStateId,
         to_state_id: toStateId,
         agent_allowed: true,
+        handoff: false,
         workflow_revision: revision,
       }));
     if (next && get().stagedStateIds[typeId] === toStateId) {
@@ -432,12 +440,39 @@ export const useWorkflowEditorStore = createApolloStore<WorkflowEditorState>("wo
     agentAllowed,
     control,
   ) {
+    const edge = get().workflows[typeId]?.transitions.find((candidate) =>
+      candidate.from_state_id === fromStateId
+      && candidate.to_state_id === toStateId);
+    if (!edge) return;
     await get().applyScoped(control, typeId, (revision) =>
-      api.setIssueTypeWorkflowTransitionPermission(
+      api.updateIssueTypeWorkflowTransition(
         typeId,
         fromStateId,
         toStateId,
         agentAllowed,
+        edge.handoff,
+        revision,
+      ));
+  },
+
+  async setTransitionHandoff(
+    typeId,
+    fromStateId,
+    toStateId,
+    handoff,
+    control,
+  ) {
+    const edge = get().workflows[typeId]?.transitions.find((candidate) =>
+      candidate.from_state_id === fromStateId
+      && candidate.to_state_id === toStateId);
+    if (!edge) return;
+    await get().applyScoped(control, typeId, (revision) =>
+      api.updateIssueTypeWorkflowTransition(
+        typeId,
+        fromStateId,
+        toStateId,
+        edge.agent_allowed,
+        handoff,
         revision,
       ));
   },
@@ -457,6 +492,10 @@ export const useWorkflowEditorStore = createApolloStore<WorkflowEditorState>("wo
           ...binding,
           required_skills:
             binding.required_skills ?? current?.required_skills ?? [],
+          entry_skill:
+            binding.entry_skill === undefined
+              ? current?.entry_skill ?? null
+              : binding.entry_skill,
         },
         revision,
         current?.auto_start ?? false,

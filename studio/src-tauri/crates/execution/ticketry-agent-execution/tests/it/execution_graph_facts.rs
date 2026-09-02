@@ -290,6 +290,7 @@ async fn fixture() -> DatabaseConnection {
                 issue_type_id TEXT NOT NULL, parent_id TEXT, module_id TEXT, state_id TEXT,
                 state_revision INTEGER NOT NULL, name TEXT NOT NULL, sequence_id INTEGER NOT NULL,
                 is_archived BOOLEAN NOT NULL, rank TEXT NOT NULL, description TEXT NOT NULL,
+                workspace_tab_order TEXT NOT NULL DEFAULT '[]',
                 created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL
             );
             CREATE INDEX issue_parent_scope ON worktracker_issue(parent_id, type, is_archived, sequence_id, id);

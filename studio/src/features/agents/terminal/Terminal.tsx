@@ -27,7 +27,8 @@ import { nativeViewerSessionIsLive } from "./internal/nativeViewerSessionLivenes
 import { ensureTerminalRunCreated } from "./internal/terminalRunCreation";
 import { currentTerminalRenderer } from "./ghostty-wasm/rendererSelection";
 
-// Loaded on demand so the browser default does not delay the Studio shell.
+// CODIN-1514 — keep the default renderer in its own chunk so Studio can paint
+// the workspace shell while the WASM terminal code loads.
 const GhosttyWasmTerminal = lazy(async () => ({
   default: (await import("./ghostty-wasm/GhosttyWasmTerminal")).GhosttyWasmTerminal,
 }));
@@ -60,10 +61,10 @@ export function Terminal({
     sessionId ? state.sessions[sessionId] ?? null : null,
   );
   const desktop = isTauri();
-  // Native libghostty is the desktop default. Browser Studio uses Ghostty WASM,
-  // and development builds can override either choice for comparison.
-  const [rendererOverride] = useState(() => currentTerminalRenderer(desktop));
-  // WASM failures are kept out of `nativeFailure`: the
+  // CODIN-1514 — ghostty-wasm is the product default. Development builds may
+  // still force native or xterm for diagnostics.
+  const [rendererChoice] = useState(() => currentTerminalRenderer());
+  // The WASM renderer's failures stay out of `nativeFailure`: the
   // window-scoped native recovery campaign reloads the WebView, which can
   // neither produce a missing wasm artifact nor fix a Canvas renderer fault.
   const [wasmFailure, setWasmFailure] = useState<{
@@ -76,7 +77,7 @@ export function Terminal({
   const wasmFailureReason =
     wasmFailure?.sessionId === sessionId ? wasmFailure.reason : null;
   const [nativeAvailable, setNativeAvailable] = useState<boolean | null>(() =>
-    desktop && rendererOverride === "native" ? null : false,
+    desktop && rendererChoice === "native" ? null : false,
   );
   const [nativeFailure, setNativeFailure] = useState<{
     sessionId: string | null;
@@ -89,7 +90,7 @@ export function Terminal({
     nativeFailure?.sessionId === sessionId ? nativeFailure.reason : null;
 
   useEffect(() => {
-    if (!desktop || rendererOverride !== "native") return;
+    if (!desktop || rendererChoice !== "native") return;
     let active = true;
     void nativeGhosttyAvailable().then((available) => {
       if (active) setNativeAvailable(available);
@@ -97,7 +98,7 @@ export function Terminal({
     return () => {
       active = false;
     };
-  }, [desktop, rendererOverride]);
+  }, [desktop, rendererChoice]);
 
   useEffect(() => {
     if (!sessionId || !session) return;
@@ -141,7 +142,7 @@ export function Terminal({
   }
 
   if (
-    rendererOverride === "ghostty-wasm" &&
+    rendererChoice === "ghostty-wasm" &&
     sessionId &&
     session?.agentRunId &&
     nativeViewerSessionIsLive(session.status) &&
@@ -163,7 +164,7 @@ export function Terminal({
   }
 
   if (
-    rendererOverride === "native" &&
+    rendererChoice === "native" &&
     desktop &&
     (nativeAvailable === null || !session?.agentRunId)
   ) {
@@ -176,7 +177,7 @@ export function Terminal({
   }
 
   if (
-    rendererOverride === "native" &&
+    rendererChoice === "native" &&
     nativeAvailable &&
     sessionId &&
     session?.agentRunId &&

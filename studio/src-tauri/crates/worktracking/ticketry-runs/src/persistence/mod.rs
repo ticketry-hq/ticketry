@@ -13,8 +13,10 @@
 
 mod adoption;
 mod attempt_commands;
+mod attempt_delivery;
 mod attempt_queries;
 use ticketry_entities as entities;
+mod delivery_mode;
 mod end_of_life;
 mod error;
 mod intent;
@@ -50,6 +52,7 @@ mod work_item_scope;
 pub use adoption::{
     adopt, outbox_adopted, preflight, AdoptionEvidence, DjangoGeneration, SourceClassification,
 };
+pub use delivery_mode::DeliveryMode;
 pub use end_of_life::{record_run_ended, record_sweep_ended, terminating_signal, EndOfLifeOrigin};
 pub use error::{RunsPersistenceError, RunsPersistenceErrorCode};
 pub use intent::LaunchIntent;

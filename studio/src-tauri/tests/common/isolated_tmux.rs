@@ -333,6 +333,23 @@ impl IsolatedTmux {
             .to_owned()
     }
 
+    pub fn pane_contents(&self, agent_run_id: &str) -> String {
+        let target = format!("pt-{agent_run_id}");
+        let output = Command::new(&self.executable)
+            .env("TMUX_TMPDIR", &self.socket_dir)
+            .env_remove("TMUX")
+            .args(["-L", SOCKET, "capture-pane", "-p", "-J", "-t", &target])
+            .stdin(Stdio::null())
+            .output()
+            .expect("capture isolated tmux pane");
+        assert!(
+            output.status.success(),
+            "tmux pane capture failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        String::from_utf8(output.stdout).expect("tmux pane is UTF-8")
+    }
+
     pub fn global_option(&self, option: &str) -> String {
         let output = Command::new(&self.executable)
             .env("TMUX_TMPDIR", &self.socket_dir)

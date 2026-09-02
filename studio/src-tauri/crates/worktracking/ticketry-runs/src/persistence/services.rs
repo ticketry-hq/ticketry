@@ -3,9 +3,10 @@ use sea_orm::DatabaseConnection;
 use super::status_compaction::StatusCompactionService;
 use super::status_wakeup::StatusWakeup;
 use super::{
-    attempt_commands, attempt_queries, AgentRunRepository, AttemptOutcome,
+    attempt_commands, attempt_delivery, attempt_queries, AgentRunRepository, AttemptOutcome,
     AutomationAttemptProjection, AutomationAttemptRepository, CompactionWatermarkRepository,
-    LaunchEffectRepository, RunsPersistenceError, StatusEventRepository, TransitionOccurrence,
+    DeliveryMode, LaunchEffectRepository, RunsPersistenceError, StatusEventRepository,
+    TransitionOccurrence,
 };
 
 /// Composition root for authored Runs concerns. Transport layers receive the
@@ -181,6 +182,16 @@ impl AttemptService {
         outcome: AttemptOutcome,
     ) -> Result<AutomationAttemptProjection, RunsPersistenceError> {
         attempt_commands::record_outcome(&self.database, &self.events, attempt_id, outcome).await
+    }
+
+    /// Record whether the handoff was continued in a live agent session or
+    /// carried by a freshly started run. The fact is written once.
+    pub async fn record_delivery_mode(
+        &self,
+        attempt_id: &str,
+        mode: DeliveryMode,
+    ) -> Result<AutomationAttemptProjection, RunsPersistenceError> {
+        attempt_delivery::record_delivery_mode(&self.database, &self.events, attempt_id, mode).await
     }
 
     pub async fn dismiss(

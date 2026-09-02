@@ -2,7 +2,7 @@
 //!
 //! A transition is ordinary CRUD (ADR 0005). Its identity is the natural key
 //! `(issue_type_id, from_state_id, to_state_id)`; `workflow_revision` is the
-//! compare-and-set guard, and `agent_allowed` is the only writable field.
+//! compare-and-set guard. `agent_allowed` and `handoff` are writable policy.
 
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, DatabaseConnection, DatabaseTransaction, EntityTrait,
@@ -20,6 +20,7 @@ pub struct NewTransition {
     pub from_state_id: String,
     pub to_state_id: String,
     pub agent_allowed: bool,
+    pub handoff: bool,
     pub workflow_revision: i32,
 }
 
@@ -28,7 +29,8 @@ pub struct TransitionPatch {
     pub issue_type_id: String,
     pub from_state_id: String,
     pub to_state_id: String,
-    pub agent_allowed: bool,
+    pub agent_allowed: Option<bool>,
+    pub handoff: Option<bool>,
     pub workflow_revision: i32,
 }
 
@@ -74,6 +76,7 @@ pub async fn create_transition(
         from_state_id: Set(from_id),
         to_state_id: Set(to_id),
         agent_allowed: Set(input.agent_allowed),
+        handoff: Set(input.handoff),
     }
     .insert(&transaction)
     .await?;
@@ -85,6 +88,11 @@ pub async fn update_transition(
     database: &DatabaseConnection,
     input: TransitionPatch,
 ) -> Result<i64, CommandError> {
+    if input.agent_allowed.is_none() && input.handoff.is_none() {
+        return Err(CommandError::validation(
+            "A workflow transition update must change policy.",
+        ));
+    }
     let type_id = database_uuid(&input.issue_type_id, "issue_type_id")?;
     let from_id = database_uuid(&input.from_state_id, "from_state_id")?;
     let to_id = database_uuid(&input.to_state_id, "to_state_id")?;
@@ -95,7 +103,12 @@ pub async fn update_transition(
     let row = transition_row(&transaction, &type_id, &from_id, &to_id).await?;
     let id = row.id;
     let mut active: issue_type_transition::ActiveModel = row.into();
-    active.agent_allowed = Set(input.agent_allowed);
+    if let Some(agent_allowed) = input.agent_allowed {
+        active.agent_allowed = Set(agent_allowed);
+    }
+    if let Some(handoff) = input.handoff {
+        active.handoff = Set(handoff);
+    }
     active.update(&transaction).await?;
     transaction.commit().await?;
     Ok(id)

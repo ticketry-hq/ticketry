@@ -231,6 +231,7 @@ export type AutomationAttemptProjection = {
   __typename?: 'AutomationAttemptProjection';
   agent_run_id?: Maybe<Scalars['String']['output']>;
   attempt_id: Scalars['String']['output'];
+  delivery_mode?: Maybe<Scalars['String']['output']>;
   error?: Maybe<Scalars['String']['output']>;
   failure?: Maybe<Scalars['Json']['output']>;
   retry_of_attempt_id?: Maybe<Scalars['String']['output']>;
@@ -701,6 +702,7 @@ export type MutationClear_Module_LinkArgs = {
 export type MutationCreate_Issue_Type_TransitionArgs = {
   agent_allowed: Scalars['Boolean']['input'];
   from_state_id: Scalars['String']['input'];
+  handoff: Scalars['Boolean']['input'];
   issue_type_id: Scalars['String']['input'];
   to_state_id: Scalars['String']['input'];
   workflow_revision: Scalars['Int']['input'];
@@ -954,6 +956,7 @@ export type MutationUpdate_Issue_TypeArgs = {
 export type MutationUpdate_Issue_Type_TransitionArgs = {
   agent_allowed: Scalars['Boolean']['input'];
   from_state_id: Scalars['String']['input'];
+  handoff: Scalars['Boolean']['input'];
   issue_type_id: Scalars['String']['input'];
   to_state_id: Scalars['String']['input'];
   workflow_revision: Scalars['Int']['input'];
@@ -1017,6 +1020,7 @@ export type MutationUpdate_Work_ItemArgs = {
 
 export type MutationUpsert_Issue_Type_Launch_BindingArgs = {
   auto_start?: InputMaybe<Scalars['Boolean']['input']>;
+  entry_skill?: InputMaybe<Scalars['String']['input']>;
   issue_type_id: Scalars['String']['input'];
   model_id?: InputMaybe<Scalars['String']['input']>;
   prompt?: InputMaybe<Scalars['String']['input']>;
@@ -2013,6 +2017,7 @@ export type WorktrackerIssuetypetransition = {
   agentAllowed: Scalars['Boolean']['output'];
   fromState?: Maybe<WorktrackerState>;
   fromStateId: Scalars['String']['output'];
+  handoff: Scalars['Boolean']['output'];
   id: Scalars['Int']['output'];
   issueType?: Maybe<WorktrackerIssuetype>;
   issueTypeId: Scalars['String']['output'];
@@ -2038,6 +2043,7 @@ export type WorktrackerIssuetypetransitionFilterInput = {
   agentAllowed?: InputMaybe<BooleanFilterInput>;
   and?: InputMaybe<Array<WorktrackerIssuetypetransitionFilterInput>>;
   fromStateId?: InputMaybe<StringFilterInput>;
+  handoff?: InputMaybe<BooleanFilterInput>;
   id?: InputMaybe<IntegerFilterInput>;
   issueTypeId?: InputMaybe<StringFilterInput>;
   not?: InputMaybe<WorktrackerIssuetypetransitionFilterInput>;
@@ -2054,6 +2060,7 @@ export type WorktrackerIssuetypetransitionHavingInput = {
 export type WorktrackerIssuetypetransitionOrderInput = {
   agentAllowed?: InputMaybe<OrderByEnum>;
   fromStateId?: InputMaybe<OrderByEnum>;
+  handoff?: InputMaybe<OrderByEnum>;
   id?: InputMaybe<OrderByEnum>;
   issueTypeId?: InputMaybe<OrderByEnum>;
   toStateId?: InputMaybe<OrderByEnum>;
@@ -2064,6 +2071,7 @@ export type WorktrackerLaunchbinding = {
   agentModel?: Maybe<WorktrackerAgentmodel>;
   autoStart: Scalars['Boolean']['output'];
   createdAt: Scalars['String']['output'];
+  entrySkill?: Maybe<Scalars['String']['output']>;
   id: Scalars['Int']['output'];
   issueType?: Maybe<WorktrackerIssuetype>;
   issueTypeId: Scalars['String']['output'];
@@ -2096,6 +2104,7 @@ export type WorktrackerLaunchbindingFilterInput = {
   and?: InputMaybe<Array<WorktrackerLaunchbindingFilterInput>>;
   autoStart?: InputMaybe<BooleanFilterInput>;
   createdAt?: InputMaybe<TextFilterInput>;
+  entrySkill?: InputMaybe<StringFilterInput>;
   id?: InputMaybe<IntegerFilterInput>;
   issueTypeId?: InputMaybe<StringFilterInput>;
   modelId?: InputMaybe<StringFilterInput>;
@@ -2119,6 +2128,7 @@ export type WorktrackerLaunchbindingHavingInput = {
 export type WorktrackerLaunchbindingOrderInput = {
   autoStart?: InputMaybe<OrderByEnum>;
   createdAt?: InputMaybe<OrderByEnum>;
+  entrySkill?: InputMaybe<OrderByEnum>;
   id?: InputMaybe<OrderByEnum>;
   issueTypeId?: InputMaybe<OrderByEnum>;
   modelId?: InputMaybe<OrderByEnum>;

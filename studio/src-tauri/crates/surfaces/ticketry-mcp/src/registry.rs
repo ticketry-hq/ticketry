@@ -36,7 +36,8 @@ pub fn tools() -> Vec<Tool> {
         tool("terminate_current_run", "Terminate only the Studio run bound to this MCP request. Ticket runs must first reach a configured destination state from their launch state.", json!({}), &[]),
         tool("add_issue_type_workflow_transition", "Add one transition to a type's workflow at the supplied revision.", json!({
             "type_id": {"type": "string"}, "from_state_id": {"type": "string"}, "to_state_id": {"type": "string"},
-            "workflow_revision": {"type": "integer"}, "agent_allowed": {"type": "boolean", "default": true}
+            "workflow_revision": {"type": "integer"}, "agent_allowed": {"type": "boolean", "default": true},
+            "handoff": {"type": "boolean", "default": false}
         }), &["type_id", "from_state_id", "to_state_id", "workflow_revision"]),
         tool("add_task_blocker", "Add a dependency edge: task_id is blocked by blocker_task_id.", json!({
             "task_id": {"type": "string"}, "blocker_task_id": {"type": "string"}
@@ -109,10 +110,10 @@ pub fn tools() -> Vec<Tool> {
         tool("set_issue_type_workflow_start_state", "Set the issue type's start state at the supplied revision.", json!({
             "type_id": {"type": "string"}, "state_id": {"type": "string"}, "workflow_revision": {"type": "integer"}
         }), &["type_id", "state_id", "workflow_revision"]),
-        tool("set_issue_type_workflow_transition_permission", "Allow or forbid agents on one existing transition.", json!({
+        tool("set_issue_type_workflow_transition_permission", "Update policy on one existing transition.", json!({
             "type_id": {"type": "string"}, "from_state_id": {"type": "string"}, "to_state_id": {"type": "string"},
-            "agent_allowed": {"type": "boolean"}, "workflow_revision": {"type": "integer"}
-        }), &["type_id", "from_state_id", "to_state_id", "agent_allowed", "workflow_revision"]),
+            "agent_allowed": {"type": "boolean"}, "handoff": {"type": "boolean"}, "workflow_revision": {"type": "integer"}
+        }), &["type_id", "from_state_id", "to_state_id", "workflow_revision"]),
         tool("set_task_blockers", "Replace the tasks that block a task. IDs may be UUIDs or keys.", json!({
             "task_id": {"type": "string"}, "blocked_by_ids": {"type": "array", "items": {"type": "string"}}
         }), &["task_id", "blocked_by_ids"]),
@@ -124,7 +125,7 @@ pub fn tools() -> Vec<Tool> {
         }), &["project_id", "task_id", "status_name"]),
         tool("upsert_issue_type_workflow_launch_binding", "Create or replace one state's launch binding at the supplied revision.", json!({
             "type_id": {"type": "string"}, "state_id": {"type": "string"}, "workflow_revision": {"type": "integer"},
-            "prompt": nullable_string(), "agent": nullable_string(), "model": nullable_string(), "reasoning": nullable_string(), "required_skills": nullable_strings()
+            "prompt": nullable_string(), "agent": nullable_string(), "model": nullable_string(), "reasoning": nullable_string(), "required_skills": nullable_strings(), "entry_skill": nullable_string()
         }), &["type_id", "state_id", "workflow_revision"]),
     ]
 }
@@ -210,6 +211,10 @@ mod tests {
         assert_eq!(
             transition.input_schema["properties"]["agent_allowed"]["default"],
             true
+        );
+        assert_eq!(
+            transition.input_schema["properties"]["handoff"]["default"],
+            false
         );
     }
 }

@@ -97,7 +97,7 @@ async fn fixture() -> Fixture {
                 id integer PRIMARY KEY AUTOINCREMENT,
                 issue_type_id char(32) NOT NULL, state_id char(32) NOT NULL,
                 prompt text NOT NULL, required_skills text NOT NULL,
-                model_id char(32), reasoning_id char(32),
+                entry_skill varchar(128), model_id char(32), reasoning_id char(32),
                 auto_start bool NOT NULL, subtree_run_enabled bool NOT NULL,
                 created_at datetime NOT NULL, updated_at datetime NOT NULL
             );

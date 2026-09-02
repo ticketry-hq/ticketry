@@ -24,6 +24,7 @@ pub async fn dispatch(
                     to_state_id: string(arguments, "to_state_id")?.to_owned(),
                     workflow_revision: integer(arguments, "workflow_revision")?,
                     agent_allowed: boolean_default(arguments, "agent_allowed", true)?,
+                    handoff: boolean_default(arguments, "handoff", false)?,
                 },
             )
             .await?;
@@ -47,7 +48,8 @@ pub async fn dispatch(
                     issue_type_id: type_id.to_owned(),
                     from_state_id: string(arguments, "from_state_id")?.to_owned(),
                     to_state_id: string(arguments, "to_state_id")?.to_owned(),
-                    agent_allowed: boolean(arguments, "agent_allowed")?,
+                    agent_allowed: optional_boolean(arguments, "agent_allowed")?,
+                    handoff: optional_boolean(arguments, "handoff")?,
                     workflow_revision: integer(arguments, "workflow_revision")?,
                 },
             )
@@ -87,6 +89,7 @@ pub async fn dispatch(
                     workflow_revision: integer(arguments, "workflow_revision")?,
                     prompt: workflow::PatchValue::Unset,
                     required_skills: workflow::PatchValue::Unset,
+                    entry_skill: workflow::PatchValue::Unset,
                     model_id: workflow::PatchValue::Unset,
                     reasoning_id: workflow::PatchValue::Unset,
                     auto_start: workflow::PatchValue::Value(boolean(arguments, "auto_start")?),
@@ -186,6 +189,7 @@ async fn upsert_launch_binding(
             workflow_revision: integer(arguments, "workflow_revision")?,
             prompt: patch_string(arguments, "prompt")?,
             required_skills: patch_strings(arguments, "required_skills")?,
+            entry_skill: patch_string(arguments, "entry_skill")?,
             model_id,
             reasoning_id,
             auto_start: workflow::PatchValue::Unset,
@@ -234,6 +238,18 @@ pub fn boolean(arguments: &Map<String, Value>, name: &str) -> Result<bool, Comma
         .get(name)
         .and_then(Value::as_bool)
         .ok_or_else(|| CommandError::field("arguments", format!("{name} must be a boolean.")))
+}
+
+fn optional_boolean(
+    arguments: &Map<String, Value>,
+    name: &'static str,
+) -> Result<Option<bool>, CommandError> {
+    arguments.get(name).map_or(Ok(None), |value| {
+        value
+            .as_bool()
+            .map(Some)
+            .ok_or_else(|| CommandError::field(name, format!("{name} must be a boolean.")))
+    })
 }
 
 fn boolean_default(

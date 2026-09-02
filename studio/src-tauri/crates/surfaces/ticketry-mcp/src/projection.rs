@@ -287,6 +287,7 @@ pub async fn workflow_settings(database: &DatabaseConnection, type_id: &str) -> 
                 "state_id": binding.state,
                 "prompt": binding.prompt,
                 "required_skills": binding.required_skills.0,
+                "entry_skill": binding.entry_skill,
                 "agent": provider.map(|row| row.slug.as_str()),
                 "model": model.map(|row| row.name.as_str()),
                 "reasoning": binding.reasoning.as_deref().and_then(|id| reasoning_map.get(id)).map(|row| row.name.as_str()),
@@ -300,7 +301,8 @@ pub async fn workflow_settings(database: &DatabaseConnection, type_id: &str) -> 
         "start_state_id": kind.start_state,
         "workflow_revision": kind.workflow_revision,
         "transitions": transitions.into_iter().map(|edge| json!({
-            "from_state_id": edge.from_state, "to_state_id": edge.to_state, "agent_allowed": edge.agent_allowed
+            "from_state_id": edge.from_state, "to_state_id": edge.to_state,
+            "agent_allowed": edge.agent_allowed, "handoff": edge.handoff
         })).collect::<Vec<_>>(),
         "launch_bindings": launch_bindings,
         "warnings": warnings,

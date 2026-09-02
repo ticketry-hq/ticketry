@@ -104,6 +104,7 @@ interface CachedAttempt {
   failure: AutomationAttemptRecord["failure"];
   retryable: boolean;
   agentRunId: string | null;
+  deliveryMode: AutomationAttemptRecord["delivery_mode"];
   updatedAt: string;
 }
 
@@ -183,6 +184,7 @@ function cacheAttempt(attempt: AutomationAttemptRecord): CachedAttempt {
     failure: attempt.failure,
     retryable: attempt.retryable,
     agentRunId: attempt.agent_run_id,
+    deliveryMode: attempt.delivery_mode,
     updatedAt: attempt.updated_at,
   };
 }
@@ -198,6 +200,7 @@ function attemptRecord(attempt: CachedAttempt): AutomationAttemptRecord {
     failure: attempt.failure,
     retryable: attempt.retryable,
     agent_run_id: attempt.agentRunId,
+    delivery_mode: attempt.deliveryMode as AutomationAttemptRecord["delivery_mode"],
     updated_at: attempt.updatedAt,
   };
 }

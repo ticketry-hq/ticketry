@@ -19,6 +19,7 @@ serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
 tauri.workspace = true
+tempfile.workspace = true
 ticketry-diagnostics.workspace = true
 ticketry-documents.workspace = true
 ticketry-entities.workspace = true
@@ -30,6 +31,3 @@ ticketry-workspace-runtime.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
 uuid.workspace = true
-
-[dev-dependencies]
-tempfile.workspace = true

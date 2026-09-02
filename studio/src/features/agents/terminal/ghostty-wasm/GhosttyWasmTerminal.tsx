@@ -1,5 +1,6 @@
 /**
- * CODING-1304 — the WebView-hosted Ghostty renderer, behind the experiment gate.
+ * The WebView-hosted Ghostty renderer introduced by CODING-1304 and promoted
+ * to Ticketry's default by CODIN-1514.
  *
  * Deliberately thin: it owns a host element and the surface's lifetime, and
  * nothing else. Frames never pass through React, so a busy terminal does not

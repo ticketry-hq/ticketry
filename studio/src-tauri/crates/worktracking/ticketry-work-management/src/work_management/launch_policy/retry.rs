@@ -32,12 +32,14 @@ pub async fn prepare_pending_retries(
 
     let mut decisions = Vec::new();
     for attempt in attempts {
+        let handoff = failed_handoff_delivery(database, &attempt).await?;
         let request = LaunchPolicyRequest {
             task_id: attempt.issue_id.clone(),
             destination_state_id: Some(attempt.to_state_id),
             provider_override: None,
             caller_scope: CallerScope::Retry,
             idempotency_key: attempt.id,
+            handoff,
         };
         match resolver.resolve(request.clone()).await {
             Ok(decision) => {
@@ -71,6 +73,28 @@ pub async fn prepare_pending_retries(
         }
     }
     Ok(decisions)
+}
+
+async fn failed_handoff_delivery(
+    database: &DatabaseConnection,
+    attempt: &automation_attempt::Model,
+) -> Result<bool, LaunchPolicyError> {
+    let Some(source_id) = attempt.retry_of_id.as_deref() else {
+        return Ok(false);
+    };
+    let source = automation_attempt::Entity::find_by_id(source_id)
+        .one(database)
+        .await?;
+    Ok(source
+        .and_then(|source| source.error_details)
+        .and_then(|details| serde_json::from_str::<serde_json::Value>(&details).ok())
+        .and_then(|details| {
+            details
+                .get("code")
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_owned)
+        })
+        .is_some_and(|code| code == "handoff_delivery_failed"))
 }
 
 /// Pending retry children with neither a decision nor a rejection.

@@ -78,6 +78,7 @@ pub struct IssueTypeTransition {
     pub from_state: String,
     pub to_state: String,
     pub agent_allowed: bool,
+    pub handoff: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -87,6 +88,7 @@ pub struct LaunchBinding {
     pub state: String,
     pub prompt: String,
     pub required_skills: StringList,
+    pub entry_skill: Option<String>,
     pub model: Option<String>,
     pub reasoning: Option<String>,
     pub auto_start: bool,

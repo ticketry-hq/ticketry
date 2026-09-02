@@ -317,6 +317,7 @@ pub async fn transition_with_expectation(
             work_item_revision: revision,
             workflow_revision: kind.workflow_revision,
             destination_auto_start,
+            handoff: edge.handoff,
             run_now_decision_id,
         },
     )

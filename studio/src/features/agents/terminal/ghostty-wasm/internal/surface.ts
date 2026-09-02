@@ -45,7 +45,7 @@ export interface GhosttyWasmSurfaceOptions {
   active?: boolean;
   /** Forwarded viewer lifecycle, so the host can mirror xterm's status handling. */
   onTransportEvent?: (event: TerminalClientEvent) => void;
-  /** The experiment could not run; the caller should fall back to xterm. */
+  /** The renderer could not run; the caller should use an available fallback. */
   onFailure?: (reason: GhosttyWasmFailureReason, detail: string) => void;
   artifactUrl?: string;
   pixelRatio?: number;

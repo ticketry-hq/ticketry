@@ -223,6 +223,12 @@ named gate before the full Studio suite, typecheck, and build.
 | 238 | An authoritative snapshot that reports an agent run exited closes its mounted terminal tab and clears the local terminal session. |
 | 239 | Module Changes occupies the footer's left slot with a version-control symbol, stays disabled without a selected Module, and no longer appears beside Terminal and Settings. |
 | 240 | A newly captured Story appears first in its issue type's initial workflow state while creation is pending and remains first after the authoritative persisted result replaces it. |
+| 241 | Normal development and packaged builds select ghostty-wasm by default, retain development-only native and xterm overrides, and require the pinned WASM artifact in release output. |
+| 242 | Development builds can compare three Conversations designs in the real Stories pane; each makes New chat obvious, caps the initial list at ten, and expands or hides the remaining chats. |
+| 243 | A workflow launch binding can set, reload, and clear one required skill as its entry skill, and each change uses the existing binding upsert. |
+| 244 | Incoming and outgoing workflow transition rows show and save each edge's handoff setting. |
+| 245 | A fresh bound launch keeps the composed prompt in provider argv, waits only when an entry skill exists, types only that skill with the provider-owned prefix, and tears down a pane when delivery fails. |
+| 246 | An untouched launch-configuration form follows canonical binding changes instead of retaining a stale mounted snapshot. |
 
 Each executable case carries one stable `[overhaul-NN]` marker. The gate has a
 contract test that fails if a marker is missing or duplicated. When a Studio UI

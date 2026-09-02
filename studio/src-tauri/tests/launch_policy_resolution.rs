@@ -64,6 +64,7 @@ async fn fixture() -> (tempfile::TempDir, DatabaseConnection, LaunchPolicyResolv
                 state_revision bigint NOT NULL, name varchar(512) NOT NULL,
                 sequence_id integer NOT NULL, is_archived bool NOT NULL,
                 rank varchar(64) NOT NULL, description text NOT NULL,
+                workspace_tab_order text NOT NULL DEFAULT '[]',
                 created_at datetime NOT NULL, updated_at datetime NOT NULL
             );
             CREATE TABLE worktracker_provider (
@@ -86,6 +87,7 @@ async fn fixture() -> (tempfile::TempDir, DatabaseConnection, LaunchPolicyResolv
                 id integer PRIMARY KEY AUTOINCREMENT,
                 issue_type_id char(32) NOT NULL, state_id char(32) NOT NULL,
                 prompt text NOT NULL, required_skills text NOT NULL,
+                entry_skill varchar(128),
                 model_id char(32), reasoning_id char(32),
                 auto_start bool NOT NULL, subtree_run_enabled bool NOT NULL,
                 created_at datetime NOT NULL, updated_at datetime NOT NULL
@@ -97,6 +99,7 @@ async fn fixture() -> (tempfile::TempDir, DatabaseConnection, LaunchPolicyResolv
                 status text NOT NULL, agent text, agent_run_id text, error text,
                 error_details text, retryable bool NOT NULL DEFAULT 1,
                 dismissed_at text, retry_of_id text, root_attempt_id text,
+                delivery_mode text,
                 created_at text NOT NULL, updated_at text NOT NULL
             );
             CREATE UNIQUE INDEX uniq_auto_attempt_transition_root
@@ -121,9 +124,9 @@ async fn fixture() -> (tempfile::TempDir, DatabaseConnection, LaunchPolicyResolv
                  CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
             INSERT INTO worktracker_issue VALUES
                 ('{MODULE}', '{PROJECT}', 'module', '{TYPE}', NULL, NULL, NULL, 0,
-                 'Module', 1, 0, 'M', '', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+                 'Module', 1, 0, 'M', '', '[]', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
                 ('{TASK}', '{PROJECT}', 'task', '{TYPE}', '{MODULE}', '{MODULE}', '{STATE}', 0,
-                 'Task', 2, 0, 'N', '', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+                 'Task', 2, 0, 'N', '', '[]', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
             INSERT INTO worktracker_provider VALUES
                 ('{CODEX}', 'codex', 1, 1),
                 ('{CLAUDE}', 'claude', 1, 1),
@@ -140,9 +143,9 @@ async fn fixture() -> (tempfile::TempDir, DatabaseConnection, LaunchPolicyResolv
                 (agent_model_id, reasoning_level_id) VALUES
                 ('{GPT}', '{HIGH}'), ('{OPUS}', '{LOW}');
             INSERT INTO worktracker_launchbinding
-                (issue_type_id, state_id, prompt, required_skills, model_id, reasoning_id,
+                (issue_type_id, state_id, prompt, required_skills, entry_skill, model_id, reasoning_id,
                  auto_start, subtree_run_enabled, created_at, updated_at)
-                VALUES ('{TYPE}', '{STATE}', 'Implement it.', '["tdd"]', NULL, NULL, 1, 1,
+                VALUES ('{TYPE}', '{STATE}', 'Implement it.', '["tdd"]', 'tdd', NULL, NULL, 1, 1,
                         CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
             INSERT INTO app_settings VALUES
                 ('host', 'provider_catalog',
@@ -179,6 +182,16 @@ fn request(scope: CallerScope, key: &str) -> LaunchPolicyRequest {
         provider_override: None,
         caller_scope: scope,
         idempotency_key: key.to_owned(),
+        handoff: false,
+    }
+}
+
+/// The same request across a handoff edge. Only delivery changes; every other
+/// term of the resolved decision must be identical.
+fn handoff_request(scope: CallerScope, key: &str) -> LaunchPolicyRequest {
+    LaunchPolicyRequest {
+        handoff: true,
+        ..request(scope, key)
     }
 }
 
@@ -205,6 +218,7 @@ async fn all_doors_share_one_complete_versioned_snapshot() {
         );
         assert_eq!(decision.prompt, "Implement it.");
         assert_eq!(decision.required_skills, ["tdd"]);
+        assert_eq!(decision.entry_skill.as_deref(), Some("tdd"));
         assert_eq!(
             (
                 decision.provider.as_str(),
@@ -729,6 +743,33 @@ async fn a_rejected_retry_is_re_resolved_once_its_configuration_is_repaired() {
     assert_eq!(recovered[0].idempotency_key, RETRY_ATTEMPT);
 }
 
+/// A user retry of failed typed delivery must target the same live session.
+/// Resolving it as a fresh launch would auto-spawn a second agent while the
+/// original session still exists.
+#[tokio::test]
+async fn a_handoff_delivery_retry_preserves_handoff_delivery() {
+    let (_directory, database, resolver) = fixture().await;
+    seed_attempts(&database).await;
+    database
+        .execute_unprepared(&format!(
+            r#"UPDATE automation_attempts
+                SET error_details = '{{"code":"handoff_delivery_failed"}}'
+                WHERE id = '{ROOT_ATTEMPT}'"#
+        ))
+        .await
+        .unwrap();
+
+    let decisions = launch_policy::prepare_pending_retries(&database, &resolver, 10)
+        .await
+        .unwrap();
+
+    let retry = decisions
+        .into_iter()
+        .find(|decision| decision.idempotency_key == RETRY_ATTEMPT)
+        .expect("the retry resolves");
+    assert!(retry.handoff);
+}
+
 const ROOT_ATTEMPT: &str = "a0000000000000000000000000000001";
 const RETRY_ATTEMPT: &str = "a0000000000000000000000000000002";
 const PENDING_ROOT_ATTEMPT: &str = "a0000000000000000000000000000003";
@@ -799,4 +840,33 @@ async fn resolution_reads_the_stored_default_exactly_as_the_catalogue_query_does
         (decision.provider.as_str(), decision.model.as_deref()),
         ("codex", None)
     );
+}
+
+/// A handoff edge decides how the destination is delivered, not what it is.
+/// The resolved decision must carry the flag and change nothing else, or the
+/// continued session would receive a different destination than a fresh spawn.
+#[tokio::test]
+async fn a_handoff_request_changes_only_the_delivery_flag() {
+    let (directory, _database, resolver) = fixture().await;
+
+    let fresh = resolver
+        .resolve(request(CallerScope::AutoStart, "fresh"))
+        .await
+        .expect("the fresh decision resolves");
+    let continued = resolver
+        .resolve(handoff_request(CallerScope::AutoStart, "continued"))
+        .await
+        .expect("the handoff decision resolves");
+
+    assert!(!fresh.handoff);
+    assert!(continued.handoff);
+    assert_eq!(continued.prompt, fresh.prompt);
+    assert_eq!(continued.entry_skill, fresh.entry_skill);
+    assert_eq!(continued.required_skills, fresh.required_skills);
+    assert_eq!(continued.provider, fresh.provider);
+    assert_eq!(continued.model, fresh.model);
+    assert_eq!(continued.reasoning, fresh.reasoning);
+    assert_eq!(continued.state_id, fresh.state_id);
+    assert_eq!(continued.module_link, fresh.module_link);
+    drop(directory);
 }

@@ -54,6 +54,7 @@ pub struct AutomationAttemptRecord {
     pub status: String,
     pub agent: Option<String>,
     pub agent_run_id: Option<String>,
+    pub delivery_mode: Option<String>,
     pub error: Option<String>,
     pub error_details: Option<String>,
     pub retryable: bool,
@@ -78,6 +79,7 @@ pub struct AutomationAttemptProjection {
     pub failure: Option<AttemptFailure>,
     pub retryable: bool,
     pub agent_run_id: Option<String>,
+    pub delivery_mode: Option<String>,
     pub updated_at: String,
 }
 

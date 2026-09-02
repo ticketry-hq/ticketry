@@ -37,6 +37,7 @@ const ATTEMPT_KINDS: ReadonlySet<string> = new Set([
   "automation_attempt_outcome",
   "automation_attempt_dismissed",
   "automation_attempt_retried",
+  "automation_attempt_delivery",
 ]);
 
 export interface AgentRunFact {

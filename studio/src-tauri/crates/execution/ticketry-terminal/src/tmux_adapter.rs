@@ -12,6 +12,7 @@ use ticketry_tool_discovery::{preflight_report, SupportedTool, ToolHealth};
 
 mod hosted_command;
 mod inventory;
+mod prompt_input;
 mod runtime_namespace;
 mod session_naming;
 mod session_records;
@@ -204,7 +205,7 @@ impl TmuxAdapter {
         validate_identifier(run_id)?;
         let session = session_name(run_id);
         let output = self
-            .command_with(["capture-pane", "-p", "-t", &session])
+            .command_with(["capture-pane", "-p", "-J", "-t", &session])
             .output()
             .map_err(|error| TmuxAdapterError::Unavailable(error.to_string()))?;
         if !output.status.success() {

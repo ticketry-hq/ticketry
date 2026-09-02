@@ -7,6 +7,7 @@ pub(crate) mod launch;
 pub(crate) mod lifecycle;
 pub(crate) mod output_activity;
 pub(crate) mod persistence;
+pub(crate) mod prompt_delivery;
 pub(crate) mod reconciliation;
 pub(crate) mod resume;
 pub(crate) mod session;

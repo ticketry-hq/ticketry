@@ -11,6 +11,7 @@ const REQUIRED_SKILL_LOCK: &str =
 pub(super) struct LaunchBindingCandidate<'a> {
     pub prompt: &'a str,
     pub required_skills: &'a [String],
+    pub entry_skill: Option<&'a str>,
     pub model_id: Option<&'a str>,
     pub reasoning_id: Option<&'a str>,
     pub auto_start: bool,
@@ -34,6 +35,18 @@ pub(super) async fn validate_launch_binding(
 ) -> Result<(), CommandError> {
     validate_prompt(candidate.prompt)?;
     validate_required_skills(candidate.required_skills)?;
+    if candidate.entry_skill.is_some_and(|entry_skill| {
+        !candidate
+            .required_skills
+            .iter()
+            .any(|skill| skill == entry_skill)
+    }) {
+        return Err(rejected(
+            "entry_skill",
+            "entry_skill_not_required",
+            "Entry skill must also be listed as a required skill.",
+        ));
+    }
     if candidate.reasoning_id.is_some() && candidate.model_id.is_none() {
         return Err(rejected(
             "model_id",

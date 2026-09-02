@@ -50,11 +50,13 @@ async fn fixture() -> (tempfile::TempDir, sea_orm::DatabaseConnection) {
         );
         CREATE TABLE worktracker_issuetypetransition (
             id integer PRIMARY KEY, issue_type_id char(32) NOT NULL, from_state_id char(32) NOT NULL,
-            to_state_id char(32) NOT NULL, agent_allowed bool NOT NULL
+            to_state_id char(32) NOT NULL, agent_allowed bool NOT NULL,
+            handoff bool NOT NULL DEFAULT 0
         );
         CREATE TABLE worktracker_launchbinding (
             id integer PRIMARY KEY, issue_type_id char(32) NOT NULL, state_id char(32) NOT NULL,
-            prompt text NOT NULL, required_skills text NOT NULL, model_id char(32), reasoning_id char(32),
+            prompt text NOT NULL, required_skills text NOT NULL, entry_skill varchar(128),
+            model_id char(32), reasoning_id char(32),
             auto_start bool NOT NULL, subtree_run_enabled bool NOT NULL,
             created_at datetime NOT NULL, updated_at datetime NOT NULL
         );
@@ -104,10 +106,10 @@ async fn fixture() -> (tempfile::TempDir, sea_orm::DatabaseConnection) {
              '2026-08-12 00:00:01', '2026-08-12 00:00:01');
         INSERT INTO worktracker_issuetypetransition VALUES
             (1, '30000000000000000000000000000001', '80000000000000000000000000000001',
-             '80000000000000000000000000000001', 1);
+             '80000000000000000000000000000001', 1, 0);
         INSERT INTO worktracker_launchbinding VALUES
             (1, '30000000000000000000000000000001', '80000000000000000000000000000001',
-             'Implement it.', '["tdd"]', NULL, NULL, 0, 1,
+             'Implement it.', '["tdd"]', NULL, NULL, NULL, 0, 1,
              '2026-08-12 00:00:00', '2026-08-12 00:00:00');
         INSERT INTO worktracker_provider VALUES
             ('50000000000000000000000000000000', 'codex', 1, 1);

@@ -14,7 +14,7 @@ mod support;
 use support::{assert_final, fixture, table_exists};
 
 #[tokio::test]
-async fn full_0044_through_0052_chain_is_lossless_and_reopens() {
+async fn full_0044_through_0053_chain_is_lossless_and_reopens() {
     let (directory, database) = fixture().await;
     install_final_schema_migrations(&database)
         .await
@@ -44,6 +44,28 @@ async fn partial_prior_completion_resumes_without_replaying_completed_steps() {
         .await
         .expect("resume the remaining chain");
     assert_final(&database).await;
+}
+
+#[tokio::test]
+async fn final_schema_adds_handoff_to_workflow_edges_defaulting_off() {
+    let (_directory, database) = fixture().await;
+    final_schema_migrations::install(&database)
+        .await
+        .expect("run the full chain");
+
+    let handoff = database
+        .query_all_raw(Statement::from_string(
+            DbBackend::Sqlite,
+            "PRAGMA table_info(worktracker_issuetypetransition)".to_owned(),
+        ))
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|row| row.try_get::<String>("", "name").unwrap() == "handoff")
+        .expect("handoff column");
+
+    assert_eq!(handoff.try_get::<i64>("", "notnull").unwrap(), 1);
+    assert_eq!(handoff.try_get::<String>("", "dflt_value").unwrap(), "0");
 }
 
 #[tokio::test]

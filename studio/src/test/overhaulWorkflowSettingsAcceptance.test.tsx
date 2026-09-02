@@ -1,8 +1,9 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { StateCatalog } from "../features/workflows/StateCatalog";
+import { StateConfigurationPanel } from "../features/workflows/StateConfigurationPanel";
 import { useWorkflowEditorStore } from "../features/workflows/workflowEditorStore";
-import { setStatesSorted } from "../features/projects";
+import { setStatesSorted, useStudioStore } from "../features/projects";
 import {
   getWorkflowIssueTypesSnapshot,
   getWorkflowStatesSnapshot,
@@ -32,8 +33,18 @@ const workflow = {
   start_state_id: "todo",
   workflow_revision: 4,
   transitions: [
-    { from_state_id: "todo", to_state_id: "review", agent_allowed: true },
-    { from_state_id: "review", to_state_id: "done", agent_allowed: true },
+    {
+      from_state_id: "todo",
+      to_state_id: "review",
+      agent_allowed: true,
+      handoff: false,
+    },
+    {
+      from_state_id: "review",
+      to_state_id: "done",
+      agent_allowed: true,
+      handoff: true,
+    },
   ],
   launch_bindings: [],
   warnings: [],
@@ -71,6 +82,7 @@ describe("workflow settings acceptance", () => {
             from_state: transition.from_state_id,
             to_state: transition.to_state_id,
             agent_allowed: transition.agent_allowed,
+            handoff: transition.handoff,
           })));
         }
         if (url.endsWith("/work-tracker/projects/project-1/launch-bindings")) {
@@ -155,5 +167,68 @@ describe("workflow settings acceptance", () => {
       .toEqual(["Story"]);
 
     await loading;
+  });
+
+  it("loads state policy after an in-flight project catalog becomes ready", async () => {
+    const loadWorkflows = vi.fn().mockResolvedValue(undefined);
+    useStudioStore.setState({ selectedProjectId: "project-1" });
+    useWorkflowEditorStore.setState({
+      projectId: "project-1",
+      issueTypes: [],
+      workflows: {},
+      loading: true,
+      loadWorkflows,
+    });
+
+    render(
+      <StateConfigurationPanel state={states[1]} onClose={vi.fn()} />,
+    );
+    expect(loadWorkflows).not.toHaveBeenCalled();
+
+    act(() => {
+      useWorkflowEditorStore.setState({
+        issueTypes: [
+          { id: "story", name: "Story", level: "task", color: null, sort_order: 0 },
+        ],
+        loading: false,
+      });
+    });
+
+    await waitFor(() => expect(loadWorkflows).toHaveBeenCalledWith(["story"]));
+  });
+
+  it("[overhaul-244] shows and saves handoff for incoming and outgoing transitions", async () => {
+    const setTransitionHandoff = vi.fn().mockResolvedValue(undefined);
+    useStudioStore.setState({ selectedProjectId: "project-1" });
+    useWorkflowEditorStore.setState({ setTransitionHandoff });
+
+    render(
+      <StateConfigurationPanel state={states[2]} onClose={vi.fn()} />,
+    );
+
+    const incoming = await screen.findByRole("listitem", {
+      name: "Incoming Todo to Review",
+    });
+    const outgoing = screen.getByRole("listitem", {
+      name: "Outgoing Review to Done",
+    });
+    const incomingHandoff = within(incoming).getByRole("checkbox", {
+      name: "Handoff Todo to Review",
+    });
+    const outgoingHandoff = within(outgoing).getByRole("checkbox", {
+      name: "Handoff Review to Done",
+    });
+
+    expect(incomingHandoff).not.toBeChecked();
+    expect(outgoingHandoff).toBeChecked();
+    fireEvent.click(incomingHandoff);
+
+    expect(setTransitionHandoff).toHaveBeenCalledWith(
+      "story",
+      "todo",
+      "review",
+      true,
+      "handoff:story:todo:review",
+    );
   });
 });

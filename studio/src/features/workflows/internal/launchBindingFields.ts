@@ -4,6 +4,7 @@ import type { ScopedWorkflowLaunchBinding } from "../../../shared/api/types";
 /** The editable fields of one state's launch configuration. */
 export interface LaunchBindingFields {
   prompt: string;
+  entrySkill: string;
   agent: string;
   model: string;
   reasoning: string;
@@ -15,6 +16,7 @@ export function storedLaunchBindingFields(
 ): LaunchBindingFields {
   return {
     prompt: binding?.prompt ?? "",
+    entrySkill: binding?.entry_skill ?? "",
     agent: binding?.agent ?? "",
     model: binding?.model ?? "",
     reasoning: binding?.reasoning ?? "",
@@ -41,18 +43,60 @@ export function storedLaunchBindingFields(
 export function useLaunchBindingFields(
   identity: string,
   binding?: ScopedWorkflowLaunchBinding,
-): readonly [LaunchBindingFields, (next: LaunchBindingFields) => void] {
+): readonly [
+  LaunchBindingFields,
+  (next: LaunchBindingFields) => void,
+  (saved: LaunchBindingFields) => void,
+] {
   const stored = storedLaunchBindingFields(binding);
-  const [fields, setFields] = useState(stored);
-  const [source, setSource] = useState(() => ({
+  const storedKey = JSON.stringify(stored);
+  const [editor, setEditor] = useState(() => ({
     identity,
+    fields: stored,
     hydrated: binding !== undefined,
+    observedStoredKey: storedKey,
+    dirty: false,
   }));
 
-  if (source.identity !== identity || (!source.hydrated && binding !== undefined)) {
-    setSource({ identity, hydrated: binding !== undefined });
-    setFields(stored);
-    return [stored, setFields] as const;
+  const setFields = (next: LaunchBindingFields): void => {
+    setEditor((current) => ({ ...current, fields: next, dirty: true }));
+  };
+  const markSaved = (saved: LaunchBindingFields): void => {
+    const savedKey = JSON.stringify(saved);
+    setEditor((current) =>
+      JSON.stringify(current.fields) === savedKey
+        ? { ...current, dirty: false }
+        : current,
+    );
+  };
+
+  if (editor.identity !== identity) {
+    setEditor({
+      identity,
+      fields: stored,
+      hydrated: binding !== undefined,
+      observedStoredKey: storedKey,
+      dirty: false,
+    });
+    return [stored, setFields, markSaved] as const;
   }
-  return [fields, setFields] as const;
+  if (!editor.hydrated && binding !== undefined) {
+    setEditor({
+      ...editor,
+      fields: stored,
+      hydrated: true,
+      observedStoredKey: storedKey,
+      dirty: false,
+    });
+    return [stored, setFields, markSaved] as const;
+  }
+  if (editor.observedStoredKey !== storedKey) {
+    setEditor({
+      ...editor,
+      fields: editor.dirty ? editor.fields : stored,
+      observedStoredKey: storedKey,
+    });
+    return [editor.dirty ? editor.fields : stored, setFields, markSaved] as const;
+  }
+  return [editor.fields, setFields, markSaved] as const;
 }

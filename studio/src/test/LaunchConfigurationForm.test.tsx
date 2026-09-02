@@ -35,6 +35,7 @@ const binding: ScopedWorkflowLaunchBinding = {
   state_id: "ready",
   prompt: "do the thing",
   required_skills: [],
+  entry_skill: null,
   agent: "claude",
   model: "opus",
   reasoning: "high",
@@ -70,6 +71,7 @@ describe("LaunchConfigurationForm", () => {
     await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
     expect(save).toHaveBeenCalledWith({
       prompt: "do the thing",
+      entry_skill: null,
       agent: "gemini",
       model: null,
       reasoning: null,
@@ -87,6 +89,7 @@ describe("LaunchConfigurationForm", () => {
     await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
     expect(save).toHaveBeenCalledWith({
       prompt: "do the thing",
+      entry_skill: null,
       agent: "claude",
       model: "opus",
       reasoning: "low",
@@ -127,6 +130,7 @@ describe("LaunchConfigurationForm", () => {
     await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
     expect(save).toHaveBeenCalledWith({
       prompt: "do the thing",
+      entry_skill: null,
       agent: "claude",
       model: "opus",
       reasoning: "low",
@@ -163,6 +167,7 @@ describe("LaunchConfigurationForm", () => {
     await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
     expect(save).toHaveBeenCalledWith({
       prompt: "implement the slice",
+      entry_skill: null,
       agent: "claude",
       model: "opus",
       reasoning: "low",

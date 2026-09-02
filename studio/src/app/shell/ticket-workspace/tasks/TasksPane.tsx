@@ -35,6 +35,10 @@ import {
 } from "./internal/instantRunTicketNavigation";
 import { startInstantChangeFlow } from "../../../../features/studio/modals/PlanFeature";
 import { ConversationStateBadge } from "../../../../features/agents/lifecycle";
+import {
+  ConversationDesignPrototype,
+  hasConversationDesignPrototype,
+} from "../../../../features/conversations/prototype/ConversationDesignPrototype";
 
 export {
   isPlanningRow,
@@ -410,7 +414,9 @@ export function TasksPane() {
     <PaneShell pane="tasks">
       <StoriesSearchInput />
       <IdeaEntry />
-      {loadingTasks && tree.order.length === 0 ? (
+      {hasConversationDesignPrototype() ? (
+        <ConversationDesignPrototype />
+      ) : loadingTasks && tree.order.length === 0 ? (
         <div className="text-text-muted">…</div>
       ) : !rows.some(isPlanningRow) ? (
         <div className="text-text-muted">No stories</div>

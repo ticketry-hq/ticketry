@@ -2,7 +2,7 @@
 
 ## Contexts
 
-- **Work Management** owns workspaces, projects, work items, types, workflows,
+- **[Work Management](./studio/src-tauri/src/work_management/CONTEXT.md)** owns workspaces, projects, work items, types, workflows,
   launch bindings, and the durable planning database.
 - **Agent Execution** owns dependency-graph runs, launch readiness, retry
   attempts, and durable agent-run lifecycle.

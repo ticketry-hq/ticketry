@@ -13,6 +13,7 @@ export { WorkflowSettingsPanel } from "./WorkflowSettingsPanel";
 export {
   CONFIGURABLE_PROVIDERS,
   canAutoLaunchTo,
+  entrySkillWarning,
   launchBindingsByStateId,
   unavailableProviderMessage,
   validateLaunchBindingOptions,

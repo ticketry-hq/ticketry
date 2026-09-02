@@ -52,11 +52,12 @@ async fn fixture() -> DatabaseConnection {
             CREATE TABLE worktracker_issuetypetransition (
                 id INTEGER PRIMARY KEY, issue_type_id TEXT NOT NULL,
                 from_state_id TEXT NOT NULL, to_state_id TEXT NOT NULL,
-                agent_allowed BOOLEAN NOT NULL
+                agent_allowed BOOLEAN NOT NULL, handoff BOOLEAN NOT NULL DEFAULT 0
             );
             CREATE TABLE worktracker_launchbinding (
                 id INTEGER PRIMARY KEY, issue_type_id TEXT NOT NULL, state_id TEXT NOT NULL,
-                prompt TEXT NOT NULL, required_skills JSON NOT NULL, model_id TEXT,
+                prompt TEXT NOT NULL, required_skills JSON NOT NULL,
+                entry_skill TEXT, model_id TEXT,
                 reasoning_id TEXT, auto_start BOOLEAN NOT NULL,
                 subtree_run_enabled BOOLEAN NOT NULL, created_at DATETIME NOT NULL,
                 updated_at DATETIME NOT NULL

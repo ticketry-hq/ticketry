@@ -37,6 +37,8 @@ pub enum TimeoutUnit {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ProviderContract {
     pub slug: &'static str,
+    pub invocation_prefix: &'static str,
+    pub ready_composer_marker: Option<&'static str>,
     pub supports_model: bool,
     pub supports_reasoning: bool,
     pub supports_resume: bool,
@@ -46,6 +48,18 @@ pub struct ProviderContract {
     pub hook_timeout: u64,
     pub hook_timeout_unit: TimeoutUnit,
     pub settings_environment: Option<&'static str>,
+}
+
+impl ProviderContract {
+    pub fn is_ready_composer(self, screen: &[u8]) -> bool {
+        let Some(marker) = self.ready_composer_marker else {
+            return false;
+        };
+        let rendered = String::from_utf8_lossy(screen);
+        strip_terminal_controls(&rendered)
+            .lines()
+            .any(|line| line.trim_start().starts_with(marker))
+    }
 }
 
 const CLAUDE_EVENTS: &[&str] = &[
@@ -86,10 +100,30 @@ const AGY_EVENTS: &[&str] = &[
 
 pub fn provider_contract(provider: Provider) -> ProviderContract {
     match provider {
-        Provider::Claude => contract("claude", true, CLAUDE_EVENTS, 5, TimeoutUnit::Seconds, None),
-        Provider::Codex => contract("codex", true, CODEX_EVENTS, 5, TimeoutUnit::Seconds, None),
+        Provider::Claude => contract(
+            "claude",
+            "/",
+            Some("\u{276f}"),
+            true,
+            CLAUDE_EVENTS,
+            5,
+            TimeoutUnit::Seconds,
+            None,
+        ),
+        Provider::Codex => contract(
+            "codex",
+            "$",
+            Some("\u{203a} Ask Codex"),
+            true,
+            CODEX_EVENTS,
+            5,
+            TimeoutUnit::Seconds,
+            None,
+        ),
         Provider::Gemini => contract(
             "gemini",
+            "/",
+            Some("> Type your message"),
             false,
             GEMINI_EVENTS,
             5_000,
@@ -98,6 +132,8 @@ pub fn provider_contract(provider: Provider) -> ProviderContract {
         ),
         Provider::Agy => contract(
             "agy",
+            "/",
+            Some("> you:"),
             false,
             AGY_EVENTS,
             5_000,
@@ -109,6 +145,8 @@ pub fn provider_contract(provider: Provider) -> ProviderContract {
 
 fn contract(
     slug: &'static str,
+    invocation_prefix: &'static str,
+    ready_composer_marker: Option<&'static str>,
     reasoning: bool,
     events: &'static [&'static str],
     timeout: u64,
@@ -117,6 +155,8 @@ fn contract(
 ) -> ProviderContract {
     ProviderContract {
         slug,
+        invocation_prefix,
+        ready_composer_marker,
         supports_model: true,
         supports_reasoning: reasoning,
         supports_resume: true,
@@ -127,6 +167,37 @@ fn contract(
         hook_timeout_unit: timeout_unit,
         settings_environment,
     }
+}
+
+fn strip_terminal_controls(value: &str) -> String {
+    let mut output = String::with_capacity(value.len());
+    let mut characters = value.chars().peekable();
+    while let Some(character) = characters.next() {
+        if character != '\u{1b}' {
+            output.push(character);
+            continue;
+        }
+        match characters.next() {
+            Some('[') => {
+                for control in characters.by_ref() {
+                    if ('@'..='~').contains(&control) {
+                        break;
+                    }
+                }
+            }
+            Some(']') => {
+                let mut previous_escape = false;
+                for control in characters.by_ref() {
+                    if control == '\u{7}' || (previous_escape && control == '\\') {
+                        break;
+                    }
+                    previous_escape = control == '\u{1b}';
+                }
+            }
+            Some(_) | None => {}
+        }
+    }
+    output
 }
 
 pub fn validate_options(
@@ -168,4 +239,43 @@ fn valid_option(value: &str) -> bool {
         && value.bytes().all(|byte| {
             byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b':' | b'/' | b'-')
         })
+}
+
+#[cfg(test)]
+mod prompt_delivery_contract_tests {
+    use super::*;
+
+    #[test]
+    fn provider_contracts_own_invocation_prefixes_and_ready_composer_markers() {
+        let cases = [
+            (Provider::Claude, "/", "\u{1b}[32m\u{276f}\u{1b}[0m "),
+            (Provider::Codex, "$", "\u{203a} Ask Codex to do anything"),
+            (
+                Provider::Gemini,
+                "/",
+                "> Type your message or @path/to/file",
+            ),
+            (Provider::Agy, "/", "> you: "),
+        ];
+
+        for (provider, prefix, screen) in cases {
+            let contract = provider_contract(provider);
+            assert_eq!(contract.invocation_prefix, prefix);
+            assert!(contract.is_ready_composer(screen.as_bytes()));
+        }
+    }
+
+    #[test]
+    fn codex_startup_prompt_is_not_a_ready_composer() {
+        assert!(!provider_contract(Provider::Codex)
+            .is_ready_composer("\u{203a} Selected workflow prompt:\n  Start the task".as_bytes()));
+    }
+
+    #[test]
+    fn a_contract_without_a_marker_is_never_ready() {
+        let mut contract = provider_contract(Provider::Claude);
+        contract.ready_composer_marker = None;
+
+        assert!(!contract.is_ready_composer(b"ready"));
+    }
 }

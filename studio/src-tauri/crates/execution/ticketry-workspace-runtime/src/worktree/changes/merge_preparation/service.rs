@@ -103,6 +103,7 @@ impl MergePreparationService {
                 provider_override: None,
                 caller_scope: CallerScope::Interactive,
                 idempotency_key: operation_id.to_owned(),
+                handoff: false,
             })
             .await?;
         decision.prompt = prompt::build(&row, &status, pull_request_url);

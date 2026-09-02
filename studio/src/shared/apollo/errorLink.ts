@@ -33,6 +33,7 @@ export type FoundationDomainErrorCode =
   | "model_required"
   | "unsupported_reasoning"
   | "invalid_required_skills"
+  | "entry_skill_not_required"
   | "prompt_required_for_skills"
   | "binding_not_configured"
   | "agent_not_configured"
@@ -80,7 +81,8 @@ const knownDomainErrorCodes = new Set<FoundationDomainErrorCode>([
   "settings_file_failed", "settings_write_unavailable", "provider_catalog_unavailable",
   "provider_catalog_drift", "provider_catalog_validation", "provider_catalog_storage_failed",
   "unknown_agent", "provider_not_activated", "unsupported_model", "model_required",
-  "unsupported_reasoning", "invalid_required_skills", "prompt_required_for_skills",
+  "unsupported_reasoning", "invalid_required_skills", "entry_skill_not_required",
+  "prompt_required_for_skills",
   "binding_not_configured", "agent_not_configured", "unattended_launch_unsupported",
   "automation_attempt_not_found", "automation_attempt_not_failed",
   "automation_attempt_not_retryable", "terminal_launch_invalid", "module_folder_unusable",

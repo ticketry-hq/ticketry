@@ -28,12 +28,13 @@ CREATE TABLE worktracker_issue (
 CREATE TABLE worktracker_issuetypetransition (
     id integer PRIMARY KEY AUTOINCREMENT, issue_type_id char(32) NOT NULL,
     from_state_id char(32) NOT NULL, to_state_id char(32) NOT NULL,
-    agent_allowed bool NOT NULL, UNIQUE(issue_type_id, from_state_id, to_state_id)
+    agent_allowed bool NOT NULL, handoff bool NOT NULL DEFAULT 0,
+    UNIQUE(issue_type_id, from_state_id, to_state_id)
 );
 CREATE TABLE worktracker_launchbinding (
     id integer PRIMARY KEY AUTOINCREMENT, issue_type_id char(32) NOT NULL,
     state_id char(32) NOT NULL, prompt text NOT NULL, required_skills text NOT NULL,
-    model_id char(32), reasoning_id char(32), auto_start bool NOT NULL,
+    entry_skill varchar(128), model_id char(32), reasoning_id char(32), auto_start bool NOT NULL,
     subtree_run_enabled bool NOT NULL, created_at datetime NOT NULL,
     updated_at datetime NOT NULL, UNIQUE(issue_type_id, state_id)
 );

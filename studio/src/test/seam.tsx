@@ -432,6 +432,7 @@ class BoundaryFixture implements StudioFixture {
             from_state: ideas.id,
             to_state: implement.id,
             agent_allowed: true,
+            handoff: false,
             fromState: { __typename: "WorktrackerState", id: ideas.id, sort_order: ideas.sort_order ?? 0 },
             toState: { __typename: "WorktrackerState", id: implement.id, sort_order: implement.sort_order ?? 0 },
           }]
@@ -817,6 +818,7 @@ class BoundaryFixture implements StudioFixture {
               from_state: ideas.id,
               to_state: implement.id,
               agent_allowed: true,
+              handoff: false,
               workflow_revision: 1,
             }]
           : [],

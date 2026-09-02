@@ -100,8 +100,8 @@ export function reorderStates(projectId: string, orderedIds: string[]): Promise<
 export function setIssueTypeWorkflowStartState(typeId: string, stateId: string, revision: number): Promise<unknown> {
   return studioRuntime().writeWorkTracker<unknown>({ graphQl: (execute) => graphQl(() => execute(SetWorkTrackerStartStateDocument, { id: typeId, startStateId: stateId, workflowRevision: revision })) });
 }
-export function addIssueTypeWorkflowTransition(typeId: string, input: { from_state_id: string; to_state_id: string; agent_allowed: boolean; workflow_revision: number }): Promise<unknown> {
-  return studioRuntime().writeWorkTracker({ graphQl: (execute) => graphQl(() => execute(CreateWorkTrackerTransitionDocument, { issueTypeId: typeId, fromStateId: input.from_state_id, toStateId: input.to_state_id, agentAllowed: input.agent_allowed, workflowRevision: input.workflow_revision })) });
+export function addIssueTypeWorkflowTransition(typeId: string, input: { from_state_id: string; to_state_id: string; agent_allowed: boolean; handoff: boolean; workflow_revision: number }): Promise<unknown> {
+  return studioRuntime().writeWorkTracker({ graphQl: (execute) => graphQl(() => execute(CreateWorkTrackerTransitionDocument, { issueTypeId: typeId, fromStateId: input.from_state_id, toStateId: input.to_state_id, agentAllowed: input.agent_allowed, handoff: input.handoff, workflowRevision: input.workflow_revision })) });
 }
 export function removeIssueTypeWorkflowTransition(typeId: string, fromStateId: string, toStateId: string, revision: number): Promise<unknown> {
   return studioRuntime().writeWorkTracker<unknown>({ graphQl: (execute) => graphQl(() => execute(DeleteWorkTrackerTransitionDocument, { issueTypeId: typeId, fromStateId, toStateId, workflowRevision: revision })) });
@@ -109,8 +109,8 @@ export function removeIssueTypeWorkflowTransition(typeId: string, fromStateId: s
 export function removeIssueTypeWorkflowState(typeId: string, stateId: string, revision: number): Promise<unknown> {
   return studioRuntime().writeWorkTracker<unknown>({ graphQl: (execute) => graphQl(() => execute(RemoveWorkTrackerWorkflowStateDocument, { issueTypeId: typeId, stateId, workflowRevision: revision })) });
 }
-export function setIssueTypeWorkflowTransitionPermission(typeId: string, fromStateId: string, toStateId: string, agentAllowed: boolean, revision: number): Promise<unknown> {
-  return studioRuntime().writeWorkTracker({ graphQl: (execute) => graphQl(() => execute(UpdateWorkTrackerTransitionDocument, { issueTypeId: typeId, fromStateId, toStateId, agentAllowed, workflowRevision: revision })) });
+export function updateIssueTypeWorkflowTransition(typeId: string, fromStateId: string, toStateId: string, agentAllowed: boolean, handoff: boolean, revision: number): Promise<unknown> {
+  return studioRuntime().writeWorkTracker({ graphQl: (execute) => graphQl(() => execute(UpdateWorkTrackerTransitionDocument, { issueTypeId: typeId, fromStateId, toStateId, agentAllowed, handoff, workflowRevision: revision })) });
 }
 
 export function upsertIssueTypeWorkflowLaunchBinding(
@@ -157,6 +157,9 @@ export function upsertIssueTypeWorkflowLaunchBinding(
         ...(binding.required_skills === undefined
           ? {}
           : { requiredSkills: binding.required_skills }),
+        ...(binding.entry_skill === undefined
+          ? {}
+          : { entrySkill: binding.entry_skill }),
         modelId: model?.id ?? null, reasoningId: reasoning?.id ?? null,
         autoStart, subtreeRunEnabled,
       });

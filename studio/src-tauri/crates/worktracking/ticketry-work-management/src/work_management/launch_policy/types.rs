@@ -39,6 +39,9 @@ pub struct LaunchPolicyRequest {
     pub provider_override: Option<String>,
     pub caller_scope: CallerScope,
     pub idempotency_key: String,
+    /// The transition crossed a handoff edge, so the destination is delivered
+    /// into the work item's live agent session when it still has one.
+    pub handoff: bool,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -55,6 +58,10 @@ pub struct LaunchPolicyDecision {
     pub policy_version: i32,
     pub caller_scope: CallerScope,
     pub idempotency_key: String,
+    /// Decisions recorded before handoff existed deserialize as fresh launches,
+    /// which is what they were.
+    #[serde(default)]
+    pub handoff: bool,
     pub task_id: String,
     pub project_id: String,
     pub issue_type_id: String,
@@ -63,6 +70,8 @@ pub struct LaunchPolicyDecision {
     pub state_name: Option<String>,
     pub prompt: String,
     pub required_skills: Vec<String>,
+    #[serde(default)]
+    pub entry_skill: Option<String>,
     pub provider: String,
     pub model: Option<String>,
     pub reasoning: Option<String>,

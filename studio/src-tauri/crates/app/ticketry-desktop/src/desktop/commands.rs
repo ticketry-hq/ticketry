@@ -48,6 +48,7 @@ pub async fn desktop_launch_default_coding_agent(
                 provider_override: None,
                 caller_scope: ticketry_work_management::launch_policy::CallerScope::Interactive,
                 idempotency_key: uuid::Uuid::new_v4().simple().to_string(),
+                handoff: false,
             },
         )
         .await

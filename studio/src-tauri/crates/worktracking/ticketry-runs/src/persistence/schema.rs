@@ -59,6 +59,41 @@ pub const ATTEMPT_BASE_COLUMNS: &[&str] = &[
     "updated_at",
 ];
 
+/// Columns this application adds to the adopted `automation_attempts` table
+/// after the Django bridge has run. They are nullable and carry no history, so
+/// they are reconciled additively on every adopted store rather than defining a
+/// new ownership generation: an older database simply gains the column, and a
+/// database that already has it is left alone.
+pub(crate) const ATTEMPT_RECONCILED_COLUMNS: &[(&str, &str)] =
+    &[("delivery_mode", "varchar(16) NULL")];
+
+/// Bring an adopted `automation_attempts` table up to the column shape this
+/// build reads. Safe to call on every startup and inside an adoption
+/// transaction: it only adds columns that are missing.
+pub(crate) async fn reconcile_attempt_columns(
+    database: &impl ConnectionTrait,
+) -> Result<(), RunsPersistenceError> {
+    let installed = columns(database, "automation_attempts").await?;
+    // A store that never provisioned the table has nothing to reconcile. It
+    // will be created with the current column shape when it does arrive, so
+    // reconciliation stays a no-op rather than a failed ALTER.
+    if installed.is_empty() {
+        return Ok(());
+    }
+    for (column, definition) in ATTEMPT_RECONCILED_COLUMNS {
+        if installed.contains(*column) {
+            continue;
+        }
+        database
+            .execute_unprepared(&format!(
+                "ALTER TABLE automation_attempts ADD COLUMN {column} {definition};"
+            ))
+            .await
+            .map_err(storage)?;
+    }
+    Ok(())
+}
+
 pub async fn install(
     database: &sea_orm::DatabaseConnection,
     bridge_from: Option<&str>,
@@ -66,6 +101,7 @@ pub async fn install(
 ) -> Result<(), RunsPersistenceError> {
     let transaction = database.begin().await.map_err(storage)?;
     bridge(&transaction, bridge_from).await?;
+    reconcile_attempt_columns(&transaction).await?;
     transaction
         .execute_unprepared(FOCUSED_SCHEMA)
         .await
@@ -91,6 +127,7 @@ pub async fn upgrade_v1(
 ) -> Result<(), RunsPersistenceError> {
     let transaction = database.begin().await.map_err(storage)?;
     rebuild_premerge_agent_runs(&transaction).await?;
+    reconcile_attempt_columns(&transaction).await?;
     transaction
         .execute_unprepared(
             "CREATE TABLE ticketry_runs_adoption__v2 (\n\
@@ -264,7 +301,7 @@ pub const DJANGO_MIGRATIONS: [&str; 13] = [
     "0013_agentrun_launch_configuration_snapshot",
 ];
 
-const FOCUSED_SCHEMA: &str = r#"
+pub(crate) const FOCUSED_SCHEMA: &str = r#"
 CREATE TABLE ticketry_runs_adoption (
     singleton integer PRIMARY KEY CHECK (singleton = 1),
     version integer NOT NULL CHECK (version = 2),

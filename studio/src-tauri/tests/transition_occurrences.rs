@@ -51,19 +51,21 @@ async fn fixture() -> (tempfile::TempDir, sea_orm::DatabaseConnection) {
                 state_revision bigint NOT NULL, name varchar(512) NOT NULL,
                 sequence_id integer NOT NULL, is_archived bool NOT NULL,
                 rank varchar(64) NOT NULL, description text NOT NULL,
+                workspace_tab_order json NOT NULL DEFAULT '[]',
                 created_at datetime NOT NULL, updated_at datetime NOT NULL,
                 UNIQUE(project_id, sequence_id)
             );
             CREATE TABLE worktracker_issuetypetransition (
                 id integer PRIMARY KEY AUTOINCREMENT, issue_type_id char(32) NOT NULL,
                 from_state_id char(32) NOT NULL, to_state_id char(32) NOT NULL,
-                agent_allowed bool NOT NULL,
+                agent_allowed bool NOT NULL, handoff bool NOT NULL DEFAULT 0,
                 UNIQUE(issue_type_id, from_state_id, to_state_id)
             );
             CREATE TABLE worktracker_launchbinding (
                 id integer PRIMARY KEY AUTOINCREMENT, issue_type_id char(32) NOT NULL,
                 state_id char(32) NOT NULL, prompt text NOT NULL,
-                required_skills text NOT NULL, model_id char(32), reasoning_id char(32),
+                required_skills text NOT NULL, entry_skill varchar(128),
+                model_id char(32), reasoning_id char(32),
                 auto_start bool NOT NULL, subtree_run_enabled bool NOT NULL,
                 created_at datetime NOT NULL, updated_at datetime NOT NULL,
                 UNIQUE(issue_type_id, state_id)
@@ -81,7 +83,7 @@ async fn fixture() -> (tempfile::TempDir, sea_orm::DatabaseConnection) {
                  '{FROM}', 11, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
             INSERT INTO worktracker_issue VALUES
                 ('{ISSUE}', '{PROJECT}', 'task', '{ISSUE_TYPE}', NULL, NULL, '{FROM}',
-                 7, 'Occurrence seam', 1, 0, 'M', '', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+                 7, 'Occurrence seam', 1, 0, 'M', '', '[]', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
             INSERT INTO worktracker_issuetypetransition
                 (issue_type_id, from_state_id, to_state_id, agent_allowed)
                 VALUES ('{ISSUE_TYPE}', '{FROM}', '{TO}', 1);
@@ -261,4 +263,73 @@ async fn command_open_upgrades_the_pre_claim_occurrence_schema_once() {
     drop(database);
 
     open_for_commands(&path).await.unwrap();
+}
+
+/// The edge decides handoff; the mover does not. A human and an agent crossing
+/// the same handoff edge must leave occurrences that are indistinguishable to
+/// the launch pass, or the two would launch differently.
+#[tokio::test]
+async fn handoff_is_recorded_identically_for_human_and_agent_movers() {
+    for origin in [TransitionOrigin::Human, TransitionOrigin::Agent] {
+        let (directory, database) = fixture().await;
+        database
+            .execute_unprepared("UPDATE worktracker_issuetypetransition SET handoff = 1")
+            .await
+            .unwrap();
+
+        workflow::transition(
+            &database,
+            TransitionWorkItem {
+                id: ISSUE.to_owned(),
+                target_state_id: TO.to_owned(),
+                origin,
+            },
+            None,
+        )
+        .await
+        .unwrap();
+
+        let row = database
+            .query_one_raw(Statement::from_string(
+                DbBackend::Sqlite,
+                "SELECT handoff FROM worktracker_transitionoccurrence".to_owned(),
+            ))
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(
+            row.try_get::<bool>("", "handoff").unwrap(),
+            "{origin:?} must record the edge's handoff flag"
+        );
+        drop(directory);
+    }
+}
+
+/// An ordinary edge must stay ordinary: nothing about the handoff column may
+/// make a non-handoff transition look continuable.
+#[tokio::test]
+async fn an_unchecked_edge_records_no_handoff() {
+    let (_directory, database) = fixture().await;
+
+    workflow::transition(
+        &database,
+        TransitionWorkItem {
+            id: ISSUE.to_owned(),
+            target_state_id: TO.to_owned(),
+            origin: TransitionOrigin::Human,
+        },
+        None,
+    )
+    .await
+    .unwrap();
+
+    let row = database
+        .query_one_raw(Statement::from_string(
+            DbBackend::Sqlite,
+            "SELECT handoff FROM worktracker_transitionoccurrence".to_owned(),
+        ))
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(!row.try_get::<bool>("", "handoff").unwrap());
 }

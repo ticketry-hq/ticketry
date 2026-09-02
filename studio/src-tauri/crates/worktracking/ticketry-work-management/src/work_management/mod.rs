@@ -20,6 +20,7 @@ pub(crate) mod state;
 mod transition_occurrences;
 pub(crate) mod work_item;
 pub mod workflow_color_migration;
+pub mod workflow_handoff_migration;
 pub(crate) mod workspace_tab_order;
 pub mod workspace_tab_order_migration;
 

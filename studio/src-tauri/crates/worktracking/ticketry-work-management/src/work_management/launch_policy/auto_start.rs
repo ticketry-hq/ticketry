@@ -53,6 +53,10 @@ pub async fn prepare_pending_auto_starts(
             provider_override: None,
             caller_scope: CallerScope::AutoStart,
             idempotency_key: occurrence.occurrence_id,
+            // The edge decided this at commit time. Reading it back from the
+            // occurrence keeps delivery faithful to the workflow the mover
+            // actually crossed, even if the edge is reconfigured afterwards.
+            handoff: occurrence.handoff,
         };
         match resolver.resolve(request.clone()).await {
             Ok(decision) => {
@@ -177,6 +181,7 @@ mod tests {
             work_item_revision: Set(2),
             workflow_revision: Set(3),
             destination_auto_start: Set(true),
+            handoff: Set(false),
             run_now_decision_id: Set(run_now_decision_id.map(str::to_owned)),
             committed_at: sea_orm::ActiveValue::NotSet,
         }

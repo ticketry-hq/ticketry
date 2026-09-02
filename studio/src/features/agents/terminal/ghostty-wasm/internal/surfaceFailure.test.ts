@@ -1,5 +1,5 @@
 /**
- * CODING-1304 — the experiment must fail into the compatibility renderer, not
+ * The default renderer must fail into a compatibility renderer, not
  * into a broken terminal. A missing or unusable wasm artifact is a supported
  * posture: the surface reports it, tears its own DOM down, and never attaches
  * a viewer to the durable run.

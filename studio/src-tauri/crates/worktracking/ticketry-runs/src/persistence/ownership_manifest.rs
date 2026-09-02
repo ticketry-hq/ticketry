@@ -36,6 +36,7 @@ pub const ATTEMPT_COLUMNS: &[&str] = &[
     "error_details",
     "retryable",
     "dismissed_at",
+    "delivery_mode",
 ];
 
 /// The focused tables this slice authors outright. They have never had a

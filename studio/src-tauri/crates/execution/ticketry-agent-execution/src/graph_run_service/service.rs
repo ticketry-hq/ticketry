@@ -219,6 +219,7 @@ impl GraphRunService {
                 provider_override: request.provider_override.clone(),
                 caller_scope: CallerScope::Subtree,
                 idempotency_key: uuid::Uuid::new_v4().simple().to_string(),
+                handoff: false,
             })
             .await?;
         if compact(&decision.project_id) != root.project_id

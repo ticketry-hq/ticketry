@@ -255,9 +255,14 @@ async fn attempts_are_idempotent_durable_scoped_and_event_atomic() {
         services.attempts().retry(&left.attempt_id),
         services.attempts().retry(&left.attempt_id),
     );
-    let retry_left = retry_left.unwrap();
-    let retry_right = retry_right.unwrap();
-    assert_eq!(retry_left.attempt_id, retry_right.attempt_id);
+    let (retry_left, retry_refusal) = match (retry_left, retry_right) {
+        (Ok(retry), Err(refusal)) | (Err(refusal), Ok(retry)) => (retry, refusal),
+        outcomes => panic!("exactly one retry must be accepted: {outcomes:?}"),
+    };
+    assert_eq!(
+        retry_refusal.code(),
+        RunsPersistenceErrorCode::AttemptNotRetryable
+    );
     assert_ne!(retry_left.attempt_id, left.attempt_id);
     assert_eq!(retry_left.root_attempt_id, left.attempt_id);
     assert_eq!(
@@ -278,6 +283,16 @@ async fn attempts_are_idempotent_durable_scoped_and_event_atomic() {
         )
         .await
         .unwrap();
+    assert_eq!(
+        services
+            .attempts()
+            .retry(&retry_failed.attempt_id)
+            .await
+            .unwrap_err()
+            .code(),
+        RunsPersistenceErrorCode::AttemptNotRetryable,
+        "a failed retry child cannot mint a second retry"
+    );
     assert_eq!(
         services.attempts().latest(&id(801), None).await.unwrap(),
         vec![retry_failed.clone()]

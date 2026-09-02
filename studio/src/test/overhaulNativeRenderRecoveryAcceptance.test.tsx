@@ -115,6 +115,7 @@ describe("native render recovery acceptance", () => {
   beforeEach(() => {
     window.history.replaceState({}, "", "/?terminalRenderer=native");
     vi.resetAllMocks();
+    localStorage.setItem("ticketry:terminal-renderer", "native");
     installDesktopGraphQlRuntime();
     // `shouldAdvanceTime` keeps Testing Library's own polling alive — it does
     // not detect Vitest's fake timers — while every recovery delay in this

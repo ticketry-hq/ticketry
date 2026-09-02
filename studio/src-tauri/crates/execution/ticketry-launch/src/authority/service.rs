@@ -88,6 +88,7 @@ impl LaunchAuthorityService {
                 provider_override: submitted(request.provider.as_deref()).map(str::to_owned),
                 caller_scope: CallerScope::Interactive,
                 idempotency_key: request.client_request_id.clone(),
+                handoff: false,
             })
             .await?;
         let paths = launch_paths(&self.paths, request).await?;

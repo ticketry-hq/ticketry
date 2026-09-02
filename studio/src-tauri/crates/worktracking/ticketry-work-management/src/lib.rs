@@ -36,5 +36,5 @@ pub use work_management::{
     module_presentation_migration, open, open_established, open_for_commands,
     ownership_manifest as work_management_ownership_manifest, project_onboarding_migration,
     read_queries, read_types, state_database_path, workflow_color_migration,
-    workspace_tab_order_migration, ReadDatabaseError,
+    workflow_handoff_migration, workspace_tab_order_migration, ReadDatabaseError,
 };

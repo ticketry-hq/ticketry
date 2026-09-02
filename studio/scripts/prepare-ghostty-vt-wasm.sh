@@ -1,6 +1,7 @@
 #!/bin/sh
-# CODING-1304 — reproducible build of the pinned libghostty-vt WebAssembly
-# artifact used by Ticketry's browser-default `ghostty-wasm` renderer.
+# Reproducible build of the pinned libghostty-vt WebAssembly artifact used by
+# Ticketry's default `ghostty-wasm` renderer. Introduced by CODING-1304 and
+# promoted by CODIN-1514.
 #
 # This pin is deliberately separate from the retained native libghostty pin in
 # `prepare-libghostty.sh`. The VT C ABI needed for the WebView renderer exists
@@ -27,8 +28,8 @@ case "$(uname -s)-$(uname -m)" in
   Linux-aarch64) ZIG_ARCHIVE="zig-aarch64-linux-$ZIG_VERSION" ;;
   Linux-x86_64) ZIG_ARCHIVE="zig-x86_64-linux-$ZIG_VERSION" ;;
   *)
-    echo "Skipping ghostty-vt wasm preparation: unsupported host"
-    exit 0
+    echo "Cannot prepare required ghostty-vt wasm artifact: unsupported host" >&2
+    exit 1
     ;;
 esac
 

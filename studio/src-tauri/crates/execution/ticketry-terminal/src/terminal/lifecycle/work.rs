@@ -5,7 +5,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use sea_orm::{DatabaseConnection, EntityTrait};
+use sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, EntityTrait, Statement};
 
 use crate::terminal::launch::{
     TerminalLaunchCheckpoint, TerminalLaunchRuntime, TerminalRuntimeObservation,
@@ -318,11 +318,12 @@ impl TerminalLaunchRuntime for InteractiveTerminalLaunchRuntime {
                 }
             };
             let command = crate::terminal::launch::approved_login_shell(working_directory)?;
-            return create_tmux_runtime(material, checkpoint, command).await;
+            return create_tmux_runtime(material, checkpoint, command, None).await;
         }
         let provider =
             ticketry_launch::Provider::try_from(material.provider.as_deref().unwrap_or_default())
                 .map_err(planning_error)?;
+        let entry_skill = entry_skill_for_effect(&authority.database, &material.effect_id).await?;
         let scope = match material.scope.as_str() {
             "task" => ticketry_launch::LaunchScope::Task,
             "plan" => ticketry_launch::LaunchScope::Plan,
@@ -455,7 +456,13 @@ impl TerminalLaunchRuntime for InteractiveTerminalLaunchRuntime {
             launch.environment,
         )
         .map_err(|_| invalid_launch("The provider command is unavailable."))?;
-        let spawned = create_tmux_runtime(material, checkpoint, command).await;
+        let spawned = create_tmux_runtime(
+            material,
+            checkpoint,
+            command,
+            entry_skill.map(|skill| (provider, skill)),
+        )
+        .await;
         record_prompt_delivery(material.prompt.as_deref(), &spawned);
         spawned
     }
@@ -476,7 +483,8 @@ fn require_provider_control(
 
 #[cfg(test)]
 mod provider_control_tests {
-    use super::require_provider_control;
+    use super::{entry_skill_for_effect, require_provider_control};
+    use sea_orm::{ConnectionTrait, Database};
     use ticketry_launch::{TerminalLaunchErrorCode, TerminalLaunchKind};
 
     #[test]
@@ -504,14 +512,43 @@ mod provider_control_tests {
                 .is_ok()
         );
     }
+
+    #[tokio::test]
+    async fn entry_skill_is_read_from_the_bound_policy_and_absence_is_a_no_op() {
+        let database = Database::connect("sqlite::memory:").await.unwrap();
+        database
+            .execute_unprepared(
+                "CREATE TABLE runs_launch_effects (effect_id text PRIMARY KEY, policy_reference text);\
+                 CREATE TABLE worktracker_launchbinding (id integer PRIMARY KEY, entry_skill text);\
+                 INSERT INTO worktracker_launchbinding VALUES (7, 'tdd');\
+                 INSERT INTO runs_launch_effects VALUES ('with-entry', 'launch-binding:7');\
+                 INSERT INTO runs_launch_effects VALUES ('without-entry', NULL);",
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(
+            entry_skill_for_effect(&database, "with-entry")
+                .await
+                .unwrap(),
+            Some("tdd".to_owned())
+        );
+        assert_eq!(
+            entry_skill_for_effect(&database, "without-entry")
+                .await
+                .unwrap(),
+            None
+        );
+    }
 }
 
 async fn create_tmux_runtime(
     material: &ticketry_entities::launch_material::Model,
     checkpoint: &dyn TerminalLaunchCheckpoint,
     command: ApprovedArgv,
+    entry_skill: Option<(ticketry_launch::Provider, String)>,
 ) -> Result<(), TerminalLaunchError> {
-    let outcome = spawn_tmux_runtime(material, checkpoint, command).await;
+    let outcome = spawn_tmux_runtime(material, checkpoint, command, entry_skill).await;
     if let Err(error) = &outcome {
         trace::refused(trace::RUNTIME_SPAWNED, error.code_str()).record();
     }
@@ -524,6 +561,7 @@ async fn spawn_tmux_runtime(
     material: &ticketry_entities::launch_material::Model,
     checkpoint: &dyn TerminalLaunchCheckpoint,
     command: ApprovedArgv,
+    entry_skill: Option<(ticketry_launch::Provider, String)>,
 ) -> Result<(), TerminalLaunchError> {
     let adapter = TmuxAdapter::discover().map_err(|_| {
         TerminalLaunchError::new(
@@ -539,7 +577,7 @@ async fn spawn_tmux_runtime(
     .map_err(|_| invalid_launch("The terminal runtime identity is invalid."))?;
     match adapter
         .create(&CreateSession {
-            identity,
+            identity: identity.clone(),
             geometry: TerminalGeometry::new(
                 material.initial_columns as u16,
                 material.initial_rows as u16,
@@ -564,6 +602,35 @@ async fn spawn_tmux_runtime(
                 .record();
         }
         _ => return Err(invalid_launch("The terminal runtime identity conflicts.")),
+    }
+    if let Some((provider, skill)) = entry_skill {
+        let invocation = crate::terminal::prompt_delivery::entry_skill_invocation(provider, &skill);
+        let run_id = material.agent_run_id.clone();
+        let delivery = tokio::task::spawn_blocking(move || {
+            crate::terminal::prompt_delivery::submit_text(provider, &run_id, &invocation)
+        })
+        .await
+        .map_err(|error| error.to_string())
+        .and_then(|result| result.map_err(|error| error.to_string()));
+        if let Err(detail) = delivery {
+            let cleanup = adapter.kill_verified(&identity);
+            let message = match cleanup {
+                Ok(crate::tmux_adapter::KillOutcome::Killed)
+                | Ok(crate::tmux_adapter::KillOutcome::AlreadyMissing) => {
+                    format!("Entry skill delivery failed and the terminal pane was terminated: {detail}")
+                }
+                Ok(crate::tmux_adapter::KillOutcome::Refused(observation)) => format!(
+                    "Entry skill delivery failed; verified pane termination was refused ({observation:?}): {detail}"
+                ),
+                Err(error) => format!(
+                    "Entry skill delivery failed and pane termination also failed ({error}): {detail}"
+                ),
+            };
+            return Err(TerminalLaunchError::new(
+                TerminalLaunchErrorCode::PromptDeliveryFailed,
+                message,
+            ));
+        }
     }
     checkpoint
         .checkpoint(crate::terminal::launch::TerminalLaunchBoundary::TmuxCreated)
@@ -590,6 +657,49 @@ fn record_prompt_delivery(prompt: Option<&str>, spawned: &Result<(), TerminalLau
             .with("runtimeRefusal", error.code_str())
             .record(),
     }
+}
+
+async fn entry_skill_for_effect(
+    database: &DatabaseConnection,
+    effect_id: &str,
+) -> Result<Option<String>, TerminalLaunchError> {
+    let Some(effect) = database
+        .query_one_raw(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
+            "SELECT policy_reference FROM runs_launch_effects WHERE effect_id = ?",
+            [effect_id.to_owned().into()],
+        ))
+        .await
+        .map_err(|_| invalid_launch("The launch policy reference is unavailable."))?
+    else {
+        return Err(invalid_launch(
+            "The launch policy reference is unavailable.",
+        ));
+    };
+    let reference = effect
+        .try_get::<Option<String>>("", "policy_reference")
+        .map_err(|_| invalid_launch("The launch policy reference is unavailable."))?;
+    let Some(reference) = reference.as_deref() else {
+        return Ok(None);
+    };
+    let Some(raw_id) = reference.strip_prefix("launch-binding:") else {
+        return Ok(None);
+    };
+    let binding_id = raw_id
+        .parse::<i64>()
+        .map_err(|_| invalid_launch("The launch binding reference is invalid."))?;
+    let binding = database
+        .query_one_raw(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
+            "SELECT entry_skill FROM worktracker_launchbinding WHERE id = ?",
+            [binding_id.into()],
+        ))
+        .await
+        .map_err(|_| invalid_launch("The launch binding is unavailable."))?
+        .ok_or_else(|| invalid_launch("The launch binding is unavailable."))?;
+    binding
+        .try_get::<Option<String>>("", "entry_skill")
+        .map_err(|_| invalid_launch("The launch binding is unavailable."))
 }
 
 fn invalid_launch(message: &'static str) -> TerminalLaunchError {

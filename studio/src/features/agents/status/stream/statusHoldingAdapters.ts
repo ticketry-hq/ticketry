@@ -52,6 +52,7 @@ export function toAutomationAttemptRecord(
     failure: toAttemptFailure(payload.failure),
     retryable: payload.retryable,
     agent_run_id: payload.agent_run_id,
+    delivery_mode: payload.delivery_mode as AutomationAttemptRecord["delivery_mode"],
     updated_at: payload.updated_at,
   };
 }

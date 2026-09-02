@@ -1,12 +1,10 @@
 /**
- * CODING-1304 — which terminal renderer a Studio build presents.
+ * CODIN-1514 — which terminal renderer a Studio build presents.
  *
- * Native libghostty is the default in development and packaged desktop builds.
- * `ghostty-wasm` remains the browser default and xterm is the compatibility
- * fallback. Development builds may still select another renderer for
- * comparison. Selection changes nothing
- * about the run, the tmux session identity, or any persisted terminal record:
- * all three renderers attach the same durable viewer through the same transport.
+ * `ghostty-wasm` is the product default. Development builds can force the
+ * native or xterm renderer for diagnostics. Selection changes nothing about
+ * the run, tmux session identity, or persisted terminal record: all three
+ * renderers attach the same durable viewer through the same transport.
  */
 
 export type TerminalRendererChoice = "native" | "xterm" | "ghostty-wasm";
@@ -16,15 +14,14 @@ export const RENDERER_QUERY_PARAM = "terminalRenderer";
 export const RENDERER_STORAGE_KEY = "ticketry:terminal-renderer";
 
 const CHOICES: readonly TerminalRendererChoice[] = ["native", "xterm", "ghostty-wasm"];
+export const DEFAULT_TERMINAL_RENDERER: TerminalRendererChoice = "ghostty-wasm";
 
 export interface RendererGateInput {
   /** `location.search` of the Studio document. */
   search?: string;
   /** A `localStorage`-shaped store; omitted when storage is unavailable. */
   storage?: Pick<Storage, "getItem">;
-  /** Whether this document is running inside the Tauri desktop application. */
-  desktopApp: boolean;
-  /** False in packaged release builds, where renderer overrides stay unreachable. */
+  /** False in packaged release builds, where diagnostic overrides stay unreachable. */
   developmentBuild: boolean;
 }
 
@@ -37,15 +34,15 @@ function parse(value: string | null | undefined): TerminalRendererChoice | null 
 }
 
 /**
- * Resolve the requested development renderer or use the shipping default.
- * A launch flag (`?terminalRenderer=…`) wins over the stored development
- * setting so one window can be compared against another.
+ * Resolve the renderer choice. A development launch flag
+ * (`?terminalRenderer=…`) wins over the stored development setting so one
+ * window can be compared against another. Packaged builds always use the
+ * product default.
  */
 export function selectedTerminalRenderer(
   input: RendererGateInput,
 ): TerminalRendererChoice {
-  const defaultRenderer = input.desktopApp ? "native" : "ghostty-wasm";
-  if (!input.developmentBuild) return defaultRenderer;
+  if (!input.developmentBuild) return DEFAULT_TERMINAL_RENDERER;
   let fromQuery: TerminalRendererChoice | null = null;
   try {
     fromQuery = parse(new URLSearchParams(input.search ?? "").get(RENDERER_QUERY_PARAM));
@@ -54,16 +51,16 @@ export function selectedTerminalRenderer(
   }
   if (fromQuery) return fromQuery;
   try {
-    return parse(input.storage?.getItem(RENDERER_STORAGE_KEY)) ?? defaultRenderer;
+    return parse(input.storage?.getItem(RENDERER_STORAGE_KEY)) ?? DEFAULT_TERMINAL_RENDERER;
   } catch {
-    /* Storage can be unavailable; use the shipping default renderer. */
-    return defaultRenderer;
+    /* Storage can be unavailable; fall back to the default renderer. */
+    return DEFAULT_TERMINAL_RENDERER;
   }
 }
 
-/** Read the renderer choice from the live document. */
-export function currentTerminalRenderer(desktopApp: boolean): TerminalRendererChoice {
-  if (typeof window === "undefined") return "ghostty-wasm";
+/** Read the gate from the live document. */
+export function currentTerminalRenderer(): TerminalRendererChoice {
+  if (typeof window === "undefined") return DEFAULT_TERMINAL_RENDERER;
   let storage: Pick<Storage, "getItem"> | undefined;
   try {
     storage = window.localStorage;
@@ -73,7 +70,6 @@ export function currentTerminalRenderer(desktopApp: boolean): TerminalRendererCh
   return selectedTerminalRenderer({
     search: window.location?.search,
     storage,
-    desktopApp,
     developmentBuild: import.meta.env.DEV === true,
   });
 }

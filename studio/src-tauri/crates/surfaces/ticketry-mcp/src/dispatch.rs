@@ -274,6 +274,7 @@ async fn dispatch_checked(
                     provider_override: None,
                     caller_scope: CallerScope::Interactive,
                     idempotency_key: uuid::Uuid::new_v4().simple().to_string(),
+                    handoff: false,
                 })
                 .await
             {

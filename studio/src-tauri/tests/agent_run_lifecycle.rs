@@ -39,7 +39,8 @@ async fn fixture() -> (tempfile::TempDir, DatabaseConnection, RunsServices) {
             from_state_id TEXT NOT NULL, to_state_id TEXT NOT NULL, workflow_revision INTEGER NOT NULL,
             status TEXT NOT NULL, agent TEXT, agent_run_id TEXT, error TEXT, error_details TEXT,
             retryable BOOL NOT NULL DEFAULT 1, dismissed_at TEXT, retry_of_id TEXT,
-            root_attempt_id TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+            root_attempt_id TEXT, delivery_mode TEXT,
+            created_at TEXT NOT NULL, updated_at TEXT NOT NULL
         );
         CREATE TABLE runs_project_compaction_watermarks (
             project_id TEXT PRIMARY KEY, compacted_through_cursor INTEGER NOT NULL,

@@ -44,6 +44,7 @@ describe("native viewer attachment acceptance", () => {
   beforeEach(() => {
     window.history.replaceState({}, "", "/?terminalRenderer=native");
     vi.resetAllMocks();
+    localStorage.setItem("ticketry:terminal-renderer", "native");
     installDesktopGraphQlRuntime();
     vi.stubGlobal("ResizeObserver", ResizeObserverStub);
     vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({

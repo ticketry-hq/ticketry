@@ -77,6 +77,10 @@ pub use terminal::persistence::{
     RAW_SQL_EVIDENCE_ONLY, REGISTERED_ENTITIES, SESSION_COLUMNS, VERDICT,
     VERSION as TERMINAL_PERSISTENCE_VERSION,
 };
+pub use terminal::prompt_delivery::{
+    entry_skill_invocation, stage_text, submit_text, DeliveryTimings, PromptDelivery,
+    PromptDeliveryError, PromptDeliveryFailureReason, PromptDeliveryTmux, TmuxPromptDelivery,
+};
 /* Keep the persistence version and ownership table names distinct at this
  * facade: the Runs crate has its own migration owner with the same symbols. */
 /* The terminal persistence GraphQL registration remains an explicit seam. */

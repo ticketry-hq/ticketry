@@ -12,6 +12,10 @@ Use the application's canonical runtime scripts. `npm run desktop:dev` and
 `pnpm dev` rebuild and launch the desktop application. `npm run web` starts the
 frontend with the supporting Rust GraphQL adapter.
 
+`ghostty-wasm` is the default terminal renderer (CODIN-1514). Normal frontend
+and desktop commands prepare its pinned WebAssembly artifact. Native libghostty
+and xterm remain diagnostic and fallback renderers.
+
 ## Code structure — governing rules
 
 The file tree is the primary map of this project. Someone should be able to

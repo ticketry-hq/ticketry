@@ -1,4 +1,4 @@
-//! The 0044 through 0052 parity chain, in source order.
+//! The 0044 through 0053 parity chain, in source order.
 //!
 //! The chain spans work management, settings, and worktree schemas, so it is
 //! installation's to compose rather than any one of theirs to own.
@@ -10,7 +10,8 @@ use ticketry_settings::{
 };
 use ticketry_work_management::{
     launch_binding_entry_skill_migration, module_presentation_migration,
-    project_onboarding_migration, workflow_color_migration, workspace_tab_order_migration,
+    project_onboarding_migration, workflow_color_migration, workflow_handoff_migration,
+    workspace_tab_order_migration,
 };
 
 pub const ORDERED_MIGRATION_IDS: &[&str] = &[
@@ -22,6 +23,7 @@ pub const ORDERED_MIGRATION_IDS: &[&str] = &[
     module_presentation_migration::MIGRATION_ID,
     CODEX_SPARK_MIGRATION_ID,
     ticketry_workspace_runtime::persistence::pull_request_url_migration::MIGRATION_ID,
+    workflow_handoff_migration::MIGRATION_ID,
 ];
 
 pub async fn install(database: &DatabaseConnection) -> Result<(), DbErr> {
@@ -48,7 +50,10 @@ pub async fn install(database: &DatabaseConnection) -> Result<(), DbErr> {
         .map_err(|error| step_error("0051", error))?;
     ticketry_workspace_runtime::persistence::pull_request_url_migration::install(database)
         .await
-        .map_err(|error| step_error("0052", error))
+        .map_err(|error| step_error("0052", error))?;
+    workflow_handoff_migration::install(database)
+        .await
+        .map_err(|error| step_error("0053", error))
 }
 
 fn step_error(step: &str, error: DbErr) -> DbErr {

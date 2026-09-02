@@ -7,11 +7,15 @@
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 
 use ticketry_entities::automation_attempt;
-use ticketry_launch::{compose_task_prompt, TaskPromptSource};
-use ticketry_launch::{CreateTerminalSession, TerminalLaunchKind};
+use ticketry_launch::{
+    compose_task_prompt, provider_contract, CreateTerminalSession, TaskPromptSource,
+    TerminalLaunchKind,
+};
+use ticketry_runs::{AttemptOutcome, DeliveryMode, RunsServices};
 use ticketry_terminal::TerminalLaunchService;
-
 use ticketry_work_management::launch_policy::{mark_delivered, CallerScope, LaunchPolicyDecision};
+
+use super::handoff;
 
 /// Prepare one durable policy decision through the Rust Terminal owner, then
 /// mark it delivered before attempting the recoverable external effect.
@@ -97,9 +101,45 @@ async fn execute_traced(
     )
     .await
     .map_err(|error| error.to_string())?;
+    if decision.handoff {
+        if let Some(live) = handoff::live_agent_session(database, &decision.task_id)
+            .await
+            .map_err(|error| error.to_string())?
+        {
+            // The decision is spent the moment typed delivery begins. Marking
+            // it delivered first is what stops a replay from pasting the
+            // destination prompt into the same session twice.
+            mark_delivered(database, &decision.decision_id)
+                .await
+                .map_err(|error| error.code().to_owned())?;
+            let delivered = handoff::deliver(&live, prompt, decision.entry_skill.clone()).await;
+            if delivered.is_ok() {
+                record_delivery_mode(
+                    database,
+                    automation_attempt_id.as_deref(),
+                    DeliveryMode::Continued,
+                )
+                .await?;
+            }
+            // A continued handoff mints no Launch Effect, so nothing else will
+            // ever settle its Automation Attempt. Typed delivery is the whole
+            // of the attempt's work: its outcome settles it here, or the
+            // attempt stays pending for good.
+            settle_handoff_attempt(
+                database,
+                automation_attempt_id.as_deref(),
+                &live,
+                delivered.as_ref().err().map(String::as_str),
+                decision.caller_scope != CallerScope::Retry,
+            )
+            .await?;
+            delivered?;
+            return session_of(database, &live.agent_run_id).await;
+        }
+    }
     let accepted = service
         .prepare_policy(
-            request(decision, kind, automation_attempt_id, prompt),
+            request(decision, kind, automation_attempt_id.clone(), prompt),
             decision.state_name.clone(),
         )
         .await
@@ -107,10 +147,85 @@ async fn execute_traced(
     mark_delivered(database, &decision.decision_id)
         .await
         .map_err(|error| error.code().to_owned())?;
-    service
+    let session = service
         .execute_accepted(accepted)
         .await
-        .map_err(|error| error.code_str().to_owned())
+        .map_err(|error| error.code_str().to_owned())?;
+    record_delivery_mode(
+        database,
+        automation_attempt_id.as_deref(),
+        DeliveryMode::StartedFresh,
+    )
+    .await?;
+    Ok(session)
+}
+
+/// Settle the Automation Attempt a continued handoff owns. A typed delivery
+/// that reached the session is the attempt succeeding in that session; one
+/// that did not is retryable only on the original attempt. A failed retry is
+/// terminal so the status feed cannot offer a second retry.
+async fn settle_handoff_attempt(
+    database: &DatabaseConnection,
+    automation_attempt_id: Option<&str>,
+    live: &handoff::LiveAgentSession,
+    failure: Option<&str>,
+    retryable: bool,
+) -> Result<(), String> {
+    let Some(attempt_id) = automation_attempt_id else {
+        return Ok(());
+    };
+    let outcome = match failure {
+        None => AttemptOutcome::Succeeded {
+            agent: provider_contract(live.provider).slug.to_owned(),
+            agent_run_id: live.agent_run_id.clone(),
+        },
+        Some(detail) => AttemptOutcome::Failed {
+            error: "The destination could not be typed into the live session.".to_owned(),
+            failure: serde_json::json!({
+                "code": "handoff_delivery_failed",
+                "detail": detail,
+            }),
+            retryable,
+        },
+    };
+    RunsServices::new(database.clone())
+        .attempts()
+        .record_outcome(attempt_id, outcome)
+        .await
+        .map(drop)
+        .map_err(|error| error.to_string())
+}
+
+/// Record on the durable Automation Attempt whether the destination continued
+/// a live session or started a fresh one. Callers with no attempt — an
+/// interactive or Run Now launch — have no automation lineage to annotate.
+async fn record_delivery_mode(
+    database: &DatabaseConnection,
+    automation_attempt_id: Option<&str>,
+    mode: DeliveryMode,
+) -> Result<(), String> {
+    let Some(attempt_id) = automation_attempt_id else {
+        return Ok(());
+    };
+    RunsServices::new(database.clone())
+        .attempts()
+        .record_delivery_mode(attempt_id, mode)
+        .await
+        .map(drop)
+        .map_err(|error| error.to_string())
+}
+
+/// The session a handoff continued. It already exists, so a handoff returns
+/// the same shape a fresh launch does without minting anything.
+async fn session_of(
+    database: &DatabaseConnection,
+    agent_run_id: &str,
+) -> Result<ticketry_entities::session::Model, String> {
+    ticketry_entities::session::Entity::find_by_id(agent_run_id)
+        .one(database)
+        .await
+        .map_err(|error| error.to_string())?
+        .ok_or_else(|| format!("continued session {agent_run_id} is no longer recorded"))
 }
 
 fn request(
@@ -173,6 +288,7 @@ mod tests {
             policy_version: 7,
             caller_scope: CallerScope::RunNow,
             idempotency_key: "transport-request".to_owned(),
+            handoff: false,
             task_id: "task".to_owned(),
             project_id: "project".to_owned(),
             issue_type_id: "story".to_owned(),
@@ -180,6 +296,7 @@ mod tests {
             state_name: Some("Implement".to_owned()),
             prompt: "Implement this Story.".to_owned(),
             required_skills: Vec::new(),
+            entry_skill: Some("tdd".to_owned()),
             provider: "codex".to_owned(),
             model: Some("gpt-test".to_owned()),
             reasoning: None,

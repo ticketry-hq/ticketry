@@ -41,11 +41,12 @@ async fn fixture() -> DatabaseConnection {
             CREATE TABLE worktracker_issuetypetransition (
                 id INTEGER PRIMARY KEY, issue_type_id TEXT NOT NULL,
                 from_state_id TEXT NOT NULL, to_state_id TEXT NOT NULL,
-                agent_allowed BOOLEAN NOT NULL
+                agent_allowed BOOLEAN NOT NULL, handoff BOOLEAN NOT NULL DEFAULT 0
             );
             CREATE TABLE worktracker_launchbinding (
                 id INTEGER PRIMARY KEY, issue_type_id TEXT NOT NULL, state_id TEXT NOT NULL,
-                prompt TEXT NOT NULL, required_skills JSON NOT NULL, model_id TEXT,
+                prompt TEXT NOT NULL, required_skills JSON NOT NULL,
+                entry_skill TEXT, model_id TEXT,
                 reasoning_id TEXT, auto_start BOOLEAN NOT NULL,
                 subtree_run_enabled BOOLEAN NOT NULL, created_at DATETIME NOT NULL,
                 updated_at DATETIME NOT NULL
@@ -62,10 +63,10 @@ async fn fixture() -> DatabaseConnection {
                 ('{SECOND_TYPE}', '{PROJECT}', 'Story', 'task', '#222222', 1, '{FIRST_STATE}', 1, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
                 ('{FOREIGN_TYPE}', '{FOREIGN_PROJECT}', 'Foreign', 'task', '#999999', 7, '{FOREIGN_STATE}', 1, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
             INSERT INTO worktracker_issuetypetransition VALUES
-                (1, '{FIRST_TYPE}', '{FIRST_STATE}', '{SECOND_STATE}', 1);
+                (1, '{FIRST_TYPE}', '{FIRST_STATE}', '{SECOND_STATE}', 1, 0);
             INSERT INTO worktracker_launchbinding VALUES
-                (1, '{FIRST_TYPE}', '{FIRST_STATE}', '', '[]', NULL, NULL, 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-                (2, '{FIRST_TYPE}', '{SECOND_STATE}', '', '[]', NULL, NULL, 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+                (1, '{FIRST_TYPE}', '{FIRST_STATE}', '', '[]', NULL, NULL, NULL, 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+                (2, '{FIRST_TYPE}', '{SECOND_STATE}', '', '[]', NULL, NULL, NULL, 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
             "#,
         ))
         .await

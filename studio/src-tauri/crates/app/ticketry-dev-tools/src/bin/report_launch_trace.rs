@@ -20,8 +20,8 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use ticketry_diagnostics::{
-    correlate_launch_traces, launch_trace_records_from_log, render_launch_trace,
-    LaunchTraceReport, TraceVerdict,
+    correlate_launch_traces, launch_trace_records_from_log, render_launch_trace, LaunchTraceReport,
+    TraceVerdict,
 };
 
 const DEVELOPMENT_LOG: &str = ".ticketry-dev/logs/ticketry.log";
@@ -84,10 +84,7 @@ fn parse_options(args: impl IntoIterator<Item = String>) -> Result<Options, Stri
     let mut options = Options::default();
     let mut args = args.into_iter();
     while let Some(flag) = args.next() {
-        let mut value = |name: &str| {
-            args.next()
-                .ok_or_else(|| format!("{name} needs a value"))
-        };
+        let mut value = |name: &str| args.next().ok_or_else(|| format!("{name} needs a value"));
         match flag.as_str() {
             "--log" => options.log = Some(PathBuf::from(value("--log")?)),
             "--agent-run" => options.agent_run = Some(value("--agent-run")?),
@@ -166,7 +163,10 @@ fn select<'a>(reports: &'a [LaunchTraceReport], options: &Options) -> Vec<&'a La
 fn summary(reports: &[&LaunchTraceReport]) -> String {
     let mut by_provider: BTreeMap<String, BTreeMap<&'static str, usize>> = BTreeMap::new();
     for report in reports {
-        let provider = report.provider.clone().unwrap_or_else(|| "unknown".to_owned());
+        let provider = report
+            .provider
+            .clone()
+            .unwrap_or_else(|| "unknown".to_owned());
         *by_provider
             .entry(provider)
             .or_default()
@@ -195,7 +195,14 @@ mod tests {
     #[test]
     fn options_name_the_launch_and_the_log() {
         let options = parse_options(args(&[
-            "--log", "/tmp/dev.log", "--agent-run", "run-1", "--provider", "claude", "--limit", "2",
+            "--log",
+            "/tmp/dev.log",
+            "--agent-run",
+            "run-1",
+            "--provider",
+            "claude",
+            "--limit",
+            "2",
         ]))
         .expect("options parse");
         assert_eq!(options.log, Some(PathBuf::from("/tmp/dev.log")));
@@ -221,7 +228,10 @@ mod tests {
         std::fs::create_dir_all(&nested).unwrap();
 
         assert_eq!(find_development_log(&nested), Some(log));
-        assert_eq!(find_development_log(Path::new("/nonexistent-root-for-test")), None);
+        assert_eq!(
+            find_development_log(Path::new("/nonexistent-root-for-test")),
+            None
+        );
     }
 
     #[test]
@@ -246,18 +256,30 @@ mod tests {
 
         let claude = select(
             &reports,
-            &Options { provider: Some("claude".into()), ..Options::default() },
+            &Options {
+                provider: Some("claude".into()),
+                ..Options::default()
+            },
         );
         assert_eq!(claude.len(), 2);
 
         let refused = select(
             &reports,
-            &Options { verdict: Some("refused".into()), ..Options::default() },
+            &Options {
+                verdict: Some("refused".into()),
+                ..Options::default()
+            },
         );
         assert_eq!(refused.len(), 1);
         assert_eq!(refused[0].launch_attempt_id.as_deref(), Some("a2"));
 
-        let latest = select(&reports, &Options { limit: Some(1), ..Options::default() });
+        let latest = select(
+            &reports,
+            &Options {
+                limit: Some(1),
+                ..Options::default()
+            },
+        );
         assert_eq!(latest[0].launch_attempt_id.as_deref(), Some("a3"));
 
         let text = summary(&select(&reports, &Options::default()));

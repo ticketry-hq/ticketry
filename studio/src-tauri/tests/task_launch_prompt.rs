@@ -102,6 +102,7 @@ async fn policy_driven_task_launches_include_the_work_item_description() {
                 provider_override: None,
                 caller_scope: scope,
                 idempotency_key: idempotency_key.to_owned(),
+                handoff: false,
             })
             .await
             .unwrap();

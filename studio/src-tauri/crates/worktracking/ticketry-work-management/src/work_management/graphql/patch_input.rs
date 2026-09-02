@@ -76,9 +76,7 @@ impl CustomInputType for GraphqlPatchStringListNullAsUnset {
         Ok(Self(match value {
             None => workflow::PatchValue::Unset,
             Some(value) if value.is_null() => workflow::PatchValue::Unset,
-            Some(value) => {
-                workflow::PatchValue::Value(StringList::parse_value(ctx, Some(value))?)
-            }
+            Some(value) => workflow::PatchValue::Value(StringList::parse_value(ctx, Some(value))?),
         }))
     }
 }

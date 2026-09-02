@@ -32,6 +32,7 @@ subscription RunStatusStream($projectId: String!, $afterCursor: Int) {
         failure
         retryable
         agent_run_id
+        delivery_mode
         updated_at
       }
     }

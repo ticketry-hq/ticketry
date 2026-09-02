@@ -49,6 +49,9 @@ export function StateConfigurationPanel({
   const setTransitionPermission = useWorkflowEditorStore(
     (store) => store.setTransitionPermission,
   );
+  const setTransitionHandoff = useWorkflowEditorStore(
+    (store) => store.setTransitionHandoff,
+  );
   const setAutoStart = useWorkflowEditorStore((store) => store.setAutoStart);
   const setSubtreeRun = useWorkflowEditorStore((store) => store.setSubtreeRun);
   const [selectedTypeId, setSelectedTypeId] = useState<string | null>(null);
@@ -155,6 +158,7 @@ export function StateConfigurationPanel({
           setAutoStart={setAutoStart}
           setSubtreeRun={setSubtreeRun}
           setTransitionPermission={setTransitionPermission}
+          setTransitionHandoff={setTransitionHandoff}
           state={state}
           states={states}
           types={eligibleTypes}
@@ -183,6 +187,7 @@ function StateLaunchBindingEditor({
   setAutoStart,
   setSubtreeRun,
   setTransitionPermission,
+  setTransitionHandoff,
   state,
   states,
   types,
@@ -200,6 +205,7 @@ function StateLaunchBindingEditor({
   setAutoStart: ReturnType<typeof useWorkflowEditorStore.getState>["setAutoStart"];
   setSubtreeRun: ReturnType<typeof useWorkflowEditorStore.getState>["setSubtreeRun"];
   setTransitionPermission: ReturnType<typeof useWorkflowEditorStore.getState>["setTransitionPermission"];
+  setTransitionHandoff: ReturnType<typeof useWorkflowEditorStore.getState>["setTransitionHandoff"];
   state: State;
   states: State[];
   types: IssueType[];
@@ -249,6 +255,7 @@ function StateLaunchBindingEditor({
         controlErrors={controlErrors}
         issueType={issueType}
         setTransitionPermission={setTransitionPermission}
+        setTransitionHandoff={setTransitionHandoff}
         state={state}
         states={states}
         workflow={workflow}
@@ -348,6 +355,7 @@ function StateTransitions({
   controlErrors,
   issueType,
   setTransitionPermission,
+  setTransitionHandoff,
   state,
   states,
   workflow,
@@ -356,6 +364,7 @@ function StateTransitions({
   controlErrors: Record<string, string>;
   issueType: IssueType;
   setTransitionPermission: ReturnType<typeof useWorkflowEditorStore.getState>["setTransitionPermission"];
+  setTransitionHandoff: ReturnType<typeof useWorkflowEditorStore.getState>["setTransitionHandoff"];
   state: State;
   states: State[];
   workflow: ScopedWorkflowSettings;
@@ -376,6 +385,7 @@ function StateTransitions({
             const fromName = names.get(edge.from_state_id) ?? edge.from_state_id;
             const toName = names.get(edge.to_state_id) ?? edge.to_state_id;
             const control = `permission:${issueType.id}:${edge.from_state_id}:${edge.to_state_id}`;
+            const handoffControl = `handoff:${issueType.id}:${edge.from_state_id}:${edge.to_state_id}`;
             return (
               <li
                 key={`${edge.from_state_id}:${edge.to_state_id}`}
@@ -389,6 +399,23 @@ function StateTransitions({
                   <span className="min-w-0 flex-1 text-text-primary">
                     {fromName} → {toName}
                   </span>
+                  <label className="flex items-center gap-2 text-text-primary">
+                    <input
+                      type="checkbox"
+                      aria-label={`Handoff ${fromName} to ${toName}`}
+                      checked={edge.handoff}
+                      disabled={action === handoffControl}
+                      className={SETTINGS_CHECKBOX_CLASS}
+                      onChange={(event) => void setTransitionHandoff(
+                        issueType.id,
+                        edge.from_state_id,
+                        edge.to_state_id,
+                        event.target.checked,
+                        handoffControl,
+                      )}
+                    />
+                    Handoff
+                  </label>
                   <label className="flex items-center gap-2 text-text-primary">
                     <input
                       type="checkbox"
@@ -410,6 +437,11 @@ function StateTransitions({
                 {controlErrors[control] ? (
                   <SettingsStatusLine tone="danger">
                     {controlErrors[control]}
+                  </SettingsStatusLine>
+                ) : null}
+                {controlErrors[handoffControl] ? (
+                  <SettingsStatusLine tone="danger">
+                    {controlErrors[handoffControl]}
                   </SettingsStatusLine>
                 ) : null}
               </li>

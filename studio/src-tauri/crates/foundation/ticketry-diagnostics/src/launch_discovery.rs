@@ -225,9 +225,8 @@ mod tests {
 
     #[tokio::test]
     async fn launch_requests_use_the_ambient_trace_attempt_identity() {
-        let (trace_attempt_id, value) = crate::launch_trace::requested_by(
-            crate::launch_trace::LaunchSurface::RunNow,
-            async {
+        let (trace_attempt_id, value) =
+            crate::launch_trace::requested_by(crate::launch_trace::LaunchSurface::RunNow, async {
                 let trace_attempt_id = crate::launch_trace::current()
                     .expect("a launch attempt inside the request scope")
                     .id()
@@ -245,9 +244,8 @@ mod tests {
                 .into_record("runtime-1")
                 .into_value();
                 (trace_attempt_id, value)
-            },
-        )
-        .await;
+            })
+            .await;
 
         assert_eq!(value["launchAttemptId"], trace_attempt_id);
     }

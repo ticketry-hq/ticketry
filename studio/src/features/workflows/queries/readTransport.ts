@@ -21,6 +21,7 @@ export async function readWorkflowTransitions(
     from_state_id: publicWorktrackerId(transition.from_state),
     to_state_id: publicWorktrackerId(transition.to_state),
     agent_allowed: transition.agent_allowed,
+    handoff: transition.handoff,
   })) ?? [];
 }
 
@@ -63,6 +64,7 @@ export async function readWorkflowSettings(
     from_state: publicWorktrackerId(transition.from_state),
     to_state: publicWorktrackerId(transition.to_state),
     agent_allowed: transition.agent_allowed,
+    handoff: transition.handoff,
     from_order: transition.fromState?.sort_order ?? Number.MAX_SAFE_INTEGER,
     to_order: transition.toState?.sort_order ?? Number.MAX_SAFE_INTEGER,
   })).sort((left, right) =>

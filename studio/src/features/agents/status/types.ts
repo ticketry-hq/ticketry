@@ -77,6 +77,12 @@ export interface AutomationAttemptRecord {
     retryable: boolean;
   } | null;
   retryable: boolean;
+  /**
+   * How the destination reached its agent: `continued` when a handoff edge
+   * typed it into the work item's live session, `started_fresh` when a new run
+   * spawned. Null until the attempt has been delivered.
+   */
+  delivery_mode: "continued" | "started_fresh" | null;
   agent_run_id: string | null;
   updated_at: string;
 }

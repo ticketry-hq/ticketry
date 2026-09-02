@@ -216,6 +216,7 @@ function resetStudioState(): void {
 
 describe("terminal panel shell exit acceptance", () => {
   beforeEach(() => {
+    localStorage.setItem("ticketry:terminal-renderer", "xterm");
     runtime.desktop = false;
     runtime.nativeAvailable = false;
     shellApi.createModuleShell.mockReset();

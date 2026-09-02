@@ -3352,6 +3352,9 @@ test.describe("complete browser application", () => {
     let agentPermission = panel.getByRole("checkbox", {
       name: "Agents may move Grill to Spec",
     });
+    let handoff = panel.getByRole("checkbox", {
+      name: "Handoff Grill to Spec",
+    });
     let autoStart = panel.getByRole("checkbox", { name: "Auto-start Grill" });
     let runSubtree = panel.getByRole("checkbox", { name: "Run subtree Grill" });
     let provider = panel.getByRole("combobox", { name: "Agent/provider" });
@@ -3359,6 +3362,7 @@ test.describe("complete browser application", () => {
     let reasoning = panel.getByRole("combobox", { name: "Reasoning" });
     const originalPrompt = await prompt.inputValue();
     const originalAgentPermission = await agentPermission.isChecked();
+    const originalHandoff = await handoff.isChecked();
     const originalAutoStart = await autoStart.isChecked();
     const originalRunSubtree = await runSubtree.isChecked();
     const originalProvider = await provider.inputValue();
@@ -3372,6 +3376,7 @@ test.describe("complete browser application", () => {
     await saved;
     await expect(panel.getByText("Applying…")).toHaveCount(0);
     await setPolicyCheckbox(agentPermission, !originalAgentPermission);
+    await setPolicyCheckbox(handoff, !originalHandoff);
     await setPolicyCheckbox(autoStart, !originalAutoStart);
     await setPolicyCheckbox(runSubtree, !originalRunSubtree);
     if (originalProvider === "codex") {
@@ -3388,6 +3393,9 @@ test.describe("complete browser application", () => {
     agentPermission = panel.getByRole("checkbox", {
       name: "Agents may move Grill to Spec",
     });
+    handoff = panel.getByRole("checkbox", {
+      name: "Handoff Grill to Spec",
+    });
     autoStart = panel.getByRole("checkbox", { name: "Auto-start Grill" });
     runSubtree = panel.getByRole("checkbox", { name: "Run subtree Grill" });
     provider = panel.getByRole("combobox", { name: "Agent/provider" });
@@ -3397,6 +3405,7 @@ test.describe("complete browser application", () => {
     await expect(agentPermission).toBeChecked({
       checked: !originalAgentPermission,
     });
+    await expect(handoff).toBeChecked({ checked: !originalHandoff });
     await expect(autoStart).toBeChecked({ checked: !originalAutoStart });
     await expect(runSubtree).toBeChecked({ checked: !originalRunSubtree });
     await expect(provider).toHaveValue("codex");
@@ -3417,6 +3426,9 @@ test.describe("complete browser application", () => {
     agentPermission = panel.getByRole("checkbox", {
       name: "Agents may move Grill to Spec",
     });
+    handoff = panel.getByRole("checkbox", {
+      name: "Handoff Grill to Spec",
+    });
     autoStart = panel.getByRole("checkbox", { name: "Auto-start Grill" });
     runSubtree = panel.getByRole("checkbox", { name: "Run subtree Grill" });
     provider = panel.getByRole("combobox", { name: "Agent/provider" });
@@ -3432,6 +3444,7 @@ test.describe("complete browser application", () => {
     await saved;
     await expect(panel.getByText("Applying…")).toHaveCount(0);
     await setPolicyCheckbox(agentPermission, originalAgentPermission);
+    await setPolicyCheckbox(handoff, originalHandoff);
     await setPolicyCheckbox(autoStart, originalAutoStart);
     await setPolicyCheckbox(runSubtree, originalRunSubtree);
     await selectPersistedOption(provider, originalProvider);
@@ -3448,6 +3461,9 @@ test.describe("complete browser application", () => {
     await expect(panel.getByRole("checkbox", {
       name: "Agents may move Grill to Spec",
     })).toBeChecked({ checked: originalAgentPermission });
+    await expect(panel.getByRole("checkbox", {
+      name: "Handoff Grill to Spec",
+    })).toBeChecked({ checked: originalHandoff });
     await expect(panel.getByRole("checkbox", { name: "Auto-start Grill" }))
       .toBeChecked({ checked: originalAutoStart });
     await expect(panel.getByRole("checkbox", { name: "Run subtree Grill" }))

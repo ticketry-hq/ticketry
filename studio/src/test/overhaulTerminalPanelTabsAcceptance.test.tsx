@@ -144,6 +144,7 @@ function resetStudioState(): void {
 
 describe("terminal panel tab acceptance", () => {
   beforeEach(() => {
+    localStorage.setItem("ticketry:terminal-renderer", "xterm");
     runtime.desktop = false;
     runtime.nativeAvailable = false;
     shellApi.createModuleShell.mockReset();

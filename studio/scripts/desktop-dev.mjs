@@ -201,9 +201,8 @@ export function stopTemporaryTmuxServer(
 
 export function buildTauriDevelopmentConfig(port) {
   const origin = `http://127.0.0.1:${port}`;
-  // Local experiment hook: MUXED_TERMINAL_RENDERER=ghostty-wasm launches the
-  // dev window straight onto the renderer gate's query flag. Unset by default,
-  // so devUrl stays the bare origin.
+  // CODIN-1514 diagnostic hook. ghostty-wasm needs no flag because it is the
+  // default; native and xterm remain available for renderer comparisons.
   const renderer = process.env.MUXED_TERMINAL_RENDERER;
   const devUrl = renderer
     ? `${origin}/?terminalRenderer=${encodeURIComponent(renderer)}`

@@ -18,6 +18,7 @@ pub async fn submit_interactive(
             provider_override: None,
             caller_scope: CallerScope::Interactive,
             idempotency_key: uuid::Uuid::new_v4().simple().to_string(),
+            handoff: false,
         })
         .await
         .map_err(|error| error.code().to_owned())?;

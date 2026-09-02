@@ -18,6 +18,7 @@ impl UpdateIssueTypeTransition {
         from_state_id: String,
         to_state_id: String,
         agent_allowed: bool,
+        handoff: bool,
         workflow_revision: i32,
     ) -> Result<issue_type_transition::Model> {
         let database = graphql::command_database(ctx)?;
@@ -27,7 +28,8 @@ impl UpdateIssueTypeTransition {
                 issue_type_id,
                 from_state_id,
                 to_state_id,
-                agent_allowed,
+                agent_allowed: Some(agent_allowed),
+                handoff: Some(handoff),
                 workflow_revision,
             },
         )

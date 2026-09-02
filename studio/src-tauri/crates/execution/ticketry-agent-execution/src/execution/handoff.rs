@@ -96,8 +96,8 @@ fn configured_readiness_timeout() -> Option<std::time::Duration> {
 }
 
 /// The destination arrives as prompt first, entry skill second, each submitted
-/// on its own. The order matters: the skill is what the agent must begin with,
-/// so it is the last thing typed before the agent starts working.
+/// on its own. After the prompt's readiness wait, the skill is typed
+/// immediately so the provider queues it while handling the prompt.
 fn submit_destination<T: PromptDeliveryTmux>(
     delivery: &mut PromptDelivery<T>,
     provider: Provider,
@@ -109,7 +109,7 @@ fn submit_destination<T: PromptDeliveryTmux>(
     let Some(skill) = entry_skill else {
         return Ok(());
     };
-    delivery.submit(provider, run_id, &entry_skill_invocation(provider, skill))
+    delivery.submit_follow_on(run_id, &entry_skill_invocation(provider, skill))
 }
 
 /// Open task sessions for the work item, newest first, restricted to providers
@@ -176,15 +176,24 @@ mod tests {
         buffers: HashMap<String, String>,
         pasted: String,
         calls: Vec<String>,
+        hide_ready_after_submission: bool,
+        verifications: usize,
     }
 
     impl PromptDeliveryTmux for FakePane {
         fn verify_session(&mut self, _: &str) -> Result<(), String> {
+            self.verifications += 1;
             Ok(())
         }
 
         fn capture_screen(&mut self, _: &str) -> Result<Vec<u8>, String> {
-            Ok(format!("\u{276f} {}", self.pasted).into_bytes())
+            let submitted = self.calls.iter().filter(|call| *call == "enter").count() >= 2;
+            let composer = if self.hide_ready_after_submission && submitted {
+                ""
+            } else {
+                "\u{276f} "
+            };
+            Ok(format!("{composer}{}", self.pasted).into_bytes())
         }
 
         fn set_buffer(&mut self, _: &str, buffer: &str, text: &str) -> Result<(), String> {
@@ -250,6 +259,40 @@ mod tests {
                 "enter".to_owned(),
             ]
         );
+        assert_eq!(delivery.tmux().verifications, 1);
+    }
+
+    /// Providers queue input typed while they are handling the destination
+    /// prompt, so the follow-on skill must not wait for another ready composer.
+    #[test]
+    fn the_entry_skill_is_queued_without_a_second_readiness_wait() {
+        let pane = FakePane {
+            hide_ready_after_submission: true,
+            ..Default::default()
+        };
+        let mut delivery = PromptDelivery::with_timings(pane, instant());
+
+        submit_destination(
+            &mut delivery,
+            Provider::Claude,
+            "run",
+            "Destination prompt.",
+            Some("tdd"),
+        )
+        .expect("the skill queues while the agent handles the prompt");
+
+        assert_eq!(
+            delivery.tmux().calls,
+            vec![
+                "paste:Destination prompt.".to_owned(),
+                "enter".to_owned(),
+                "enter".to_owned(),
+                "paste:/tdd".to_owned(),
+                "enter".to_owned(),
+                "enter".to_owned(),
+            ]
+        );
+        assert_eq!(delivery.tmux().verifications, 1);
     }
 
     /// A destination with no entry skill still delivers its prompt, and types

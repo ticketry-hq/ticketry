@@ -59,7 +59,27 @@ impl<T: PromptDeliveryTmux> PromptDelivery<T> {
         text: &str,
     ) -> Result<(), PromptDeliveryError> {
         let baseline = self.wait_until_ready(provider_contract(provider), run_id)?;
-        self.stage_payload(run_id, text, &baseline)?;
+        self.submit_from_baseline(run_id, text, &baseline)
+    }
+
+    pub(crate) fn submit_follow_on(
+        &mut self,
+        run_id: &str,
+        text: &str,
+    ) -> Result<(), PromptDeliveryError> {
+        let baseline = self.tmux.capture_screen(run_id).map_err(|detail| {
+            PromptDeliveryError::new(PromptDeliveryFailureReason::CaptureFailed, detail)
+        })?;
+        self.submit_from_baseline(run_id, text, &baseline)
+    }
+
+    fn submit_from_baseline(
+        &mut self,
+        run_id: &str,
+        text: &str,
+        baseline: &[u8],
+    ) -> Result<(), PromptDeliveryError> {
+        self.stage_payload(run_id, text, baseline)?;
         // Providers debounce paste bursts and may use the first Enter to accept
         // skill completion. Wait 150 ms, then send Enter twice with 50 ms
         // between presses so the completed invocation is submitted.

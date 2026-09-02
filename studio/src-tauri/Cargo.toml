@@ -20,7 +20,7 @@ native-libghostty = []
 [dependencies]
 libc = "0.2"
 portable-pty = "0.9"
-process-wrap = { version = "9.1", default-features = false, features = [
+process-wrap = { version = "10.0", default-features = false, features = [
     "std",
     "process-group",
 ] }

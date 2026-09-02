@@ -10,12 +10,20 @@
 import { replaceAgentStatusSnapshot } from "../apolloHolding";
 import type { RunStatusSnapshotFrame } from "../types";
 import { toAutomationAttemptRecord, toRunRecord } from "./statusHoldingAdapters";
+import { settleTerminalHoldings } from "./terminalInvalidation";
 
 /** Returns true when the snapshot was authoritative for the live project. */
 export function applySnapshotFrame(frame: RunStatusSnapshotFrame): boolean {
-  return replaceAgentStatusSnapshot(
+  const applied = replaceAgentStatusSnapshot(
     frame.project_id,
     frame.runs.map(toRunRecord),
     frame.automation_attempts.map(toAutomationAttemptRecord),
   );
+  if (applied) {
+    const exitedRunIds = frame.runs
+      .filter((run) => run.state === "exited")
+      .map((run) => run.agent_run_id);
+    if (exitedRunIds.length > 0) settleTerminalHoldings(exitedRunIds);
+  }
+  return applied;
 }

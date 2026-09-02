@@ -20,6 +20,7 @@ import {
   recordStoryMove,
   storyMoveError,
 } from "./internal/storyMoveDiagnostics";
+import { optimisticCreatedIssue } from "./internal/optimisticCreation";
 
 export interface ModuleMembership {
   projectId: string;
@@ -278,44 +279,13 @@ export function useReorderWorkItem(membership: ModuleMembership) {
   );
 }
 
-let optimisticSequence = 0;
-
-function optimisticCreatedIssue(
-  membership: ModuleMembership,
-  body: WorkItemCreate,
-): GeneratedWorkTrackerWorkItemFieldsFragment {
-  const now = new Date().toISOString();
-  return {
-    id: `optimistic:${++optimisticSequence}`,
-    name: body.name ?? "",
-    project_id: compactWorktrackerId(membership.projectId),
-    sequence_id: -optimisticSequence,
-    state_id: body.state_id ? compactWorktrackerId(body.state_id) : null,
-    description: body.description ?? "",
-    workspace_tab_order: [],
-    parent_id: body.parent_id ? compactWorktrackerId(body.parent_id) : compactWorktrackerId(membership.moduleId),
-    module_id: compactWorktrackerId(membership.moduleId),
-    is_archived: false,
-    created_at: now,
-    updated_at: now,
-    rank: "z",
-    issue_type_id: compactWorktrackerId(body.issue_type_id ?? ""),
-    project: null,
-    state_record: null,
-    issue_type_record: null,
-    children: { nodes: [] },
-    blocked_by_edges: { nodes: [] },
-    blocks_edges: { nodes: [] },
-  };
-}
-
 export function useCreateWorkItem(membership: ModuleMembership) {
   return useApolloWorkItemMutation(
     (body: WorkItemCreate) => createWorkItem(
       membership.projectId,
       body,
       {
-        optimistic: optimisticCreatedIssue(membership, body),
+        optimistic: optimisticCreatedIssue(studioApolloClient().cache, membership, body),
         moduleId: membership.moduleId,
       },
     ),

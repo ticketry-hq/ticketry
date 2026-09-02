@@ -1,11 +1,11 @@
 import { useSyncExternalStore } from "react";
 
-import { IconPanelLeft } from "../../shared/ui/icons";
-import { useClientStore } from "../../state/clientStore";
-import { formatChordSymbols } from "../navigation/chordLabel";
-import { studioKeymapRegistry } from "../navigation/keymapRegistry";
+import { IconPanelLeft } from "../../../shared/ui/icons";
+import { useClientStore } from "../../../state/clientStore";
+import { formatChordSymbols } from "../../navigation/chordLabel";
+import { studioKeymapRegistry } from "../../navigation/keymapRegistry";
 
-export function FooterModulesToggle() {
+export function ModulesPaneToggle() {
   useSyncExternalStore(
     studioKeymapRegistry.subscribe,
     studioKeymapRegistry.getRevision,
@@ -17,19 +17,19 @@ export function FooterModulesToggle() {
     .getEffectiveBindings()
     .find(
       (candidate) =>
-        candidate.context === "global" &&
-        candidate.actionId === "toggle-sidebar",
+        candidate.context === "global"
+        && candidate.actionId === "toggle-sidebar",
     );
 
   return (
     <button
       type="button"
-      data-testid="footer-modules-toggle"
+      data-testid="modules-pane-toggle"
       aria-label={action}
       aria-expanded={sidebarVisible}
       title={action}
       onClick={toggleSidebar}
-      className="flex items-center gap-1 px-1.5 py-0.5 text-text-muted hover:bg-pane-bg hover:text-text-primary focus-visible:ring-1 focus-visible:ring-focus-accent focus-visible:ring-inset"
+      className="flex h-full shrink-0 items-center gap-1 border-r border-pane-border px-2 text-xs text-text-muted hover:bg-pane-panel hover:text-text-primary focus-visible:ring-1 focus-visible:ring-focus-accent focus-visible:ring-inset"
     >
       <IconPanelLeft size={14} />
       <span>Modules</span>

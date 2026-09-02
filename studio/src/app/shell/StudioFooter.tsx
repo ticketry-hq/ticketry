@@ -1,4 +1,4 @@
-import { FooterModulesToggle } from "./FooterModulesToggle";
+import { FooterChangesToggle } from "./FooterChangesToggle";
 import { StudioFooterActions } from "./StudioFooterActions";
 import { StudioFooterHints } from "./StudioFooterHints";
 
@@ -9,7 +9,7 @@ export function StudioFooter() {
       data-studio-status-bar
     >
       <div className="flex min-w-0 items-center justify-start">
-        <FooterModulesToggle />
+        <FooterChangesToggle />
       </div>
       <div className="flex min-w-0 items-center justify-center gap-3">
         <StudioFooterHints />

@@ -159,7 +159,7 @@ named gate before the full Studio suite, typecheck, and build.
 | 174 | When Ticketry cannot own an MCP listener, Studio says agent launches are blocked, local shells remain available, restart retries listener startup, and the acknowledgement does not claim to continue without MCP. |
 | 175 | A hidden Module tab stays hidden after the Apollo cache is rebuilt from the authoritative project read. |
 | 176 | Agent activity does not reopen a hidden Module tab. |
-| 177 | When every Module tab is hidden, the permanent footer control opens the Modules pane, hidden rows keep lifecycle status, and sidebar selection restores and selects the tab. A project with no Modules offers creation instead of recovery copy. |
+| 177 | When every Module tab is hidden, the permanent top-strip control opens the Modules pane, hidden rows keep lifecycle status, and sidebar selection restores and selects the tab. A project with no Modules offers creation instead of recovery copy. |
 | 178 | While a native Ghostty view is engaged, only its live focused surface receives Ghostty-bound Command keys such as `Cmd++`; unbound application commands stay with AppKit, and retained or tearing-down viewers cannot query stale surfaces. |
 | 179 | Cmd+1 through Cmd+0 select the same canonical visible Module positions from WebView and focused native Ghostty input; hidden and archived Modules consume no position, and native keyboard engagement clears held-Command badges. |
 | 180 | Cmd+Escape from the live focused native terminal and the WebView leave typing through the same transition exactly once, return focus to the current zone, preserve the open terminal and workspace selection, ignore disposed viewers, and do not steal modal focus. |
@@ -219,6 +219,10 @@ named gate before the full Studio suite, typecheck, and build.
 | 234 | The opt-in WebView-underlay comparison coordinates retained native Ghostty terminals through one generation-fenced window selection. |
 | 235 | Native Ghostty warm retention caps the total mounted set at the measured 20-view limit, keeps the selected run, refreshes recency on revisit, and evicts the least recently viewed inactive viewer. |
 | 236 | A bottom-left toast stays outside the selected native Ghostty host and above the Studio footer and safe areas; stacked notifications remain actionable without lowering, detaching, recreating, or focusing the terminal. |
+| 237 | The Modules pane toggle sits at the top of the workspace immediately left of module creation and no longer occupies the footer. |
+| 238 | An authoritative snapshot that reports an agent run exited closes its mounted terminal tab and clears the local terminal session. |
+| 239 | Module Changes occupies the footer's left slot with a version-control symbol, stays disabled without a selected Module, and no longer appears beside Terminal and Settings. |
+| 240 | A newly captured Story appears first in its issue type's initial workflow state while creation is pending and remains first after the authoritative persisted result replaces it. |
 
 Each executable case carries one stable `[overhaul-NN]` marker. The gate has a
 contract test that fails if a marker is missing or duplicated. When a Studio UI

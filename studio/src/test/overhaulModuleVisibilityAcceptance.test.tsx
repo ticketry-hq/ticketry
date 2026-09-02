@@ -228,7 +228,7 @@ describe("module tab visibility acceptance", () => {
     });
   });
 
-  it("[overhaul-177] keeps footer recovery and lifecycle status available when every tab is hidden", async () => {
+  it("[overhaul-177] keeps top-strip recovery and lifecycle status available when every tab is hidden", async () => {
     hiddenIds = new Set(MODULES.map((module) => module.id));
     useClientStore.setState({
       selectedModuleId: null,

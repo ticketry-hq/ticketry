@@ -5,7 +5,6 @@ import {
 } from "../../features/app-updates";
 import { IconSettings } from "../../shared/ui/icons";
 import { useModalStore } from "../modal/modalStore";
-import { FooterChangesToggle } from "./FooterChangesToggle";
 
 const preloadSettings = () => {
   void import("../../features/studio/modals/SettingsModal");
@@ -18,7 +17,6 @@ export function StudioFooterActions() {
 
   return (
     <div className="flex min-w-0 items-center justify-end gap-3">
-      <FooterChangesToggle />
       <FooterTerminalToggle />
       <button
         type="button"

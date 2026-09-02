@@ -15,6 +15,7 @@ import {
 } from "../../../features/projects";
 import { useClientStore } from "../../../state/clientStore";
 import { ModuleTab } from "./ModuleTab";
+import { ModulesPaneToggle } from "./ModulesPaneToggle";
 
 export function ModuleTabStrip() {
   const selectedProjectId = useStudioStore((state) => state.selectedProjectId);
@@ -90,6 +91,7 @@ export function ModuleTabStrip() {
       aria-label="Project modules"
       className="flex h-7 min-w-0 shrink-0 border-b border-pane-border bg-pane-title"
     >
+      <ModulesPaneToggle />
       {!loading ? (
         <ModulePicker
           modules={modules}

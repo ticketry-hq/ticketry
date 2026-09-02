@@ -4,12 +4,12 @@ use sea_orm::{
     TransactionTrait,
 };
 
-use super::fractional_rank;
 use super::identifiers::{database_uuid, new_database_uuid};
 use super::status_facts::{
     record_work_item, stamp, WorkFactRecorder, WorkItemChange, WorkItemFact, WorkItemIdentity,
 };
 use super::CommandError;
+use super::{arrival_rank, fractional_rank};
 use ticketry_entities::{issue, issue_type, module_presentation, project, state};
 
 pub use super::descriptions::{append_description, AppendDescription};
@@ -116,15 +116,7 @@ pub async fn create(
     let rank = if item_type == "module" {
         String::new()
     } else {
-        let tail = issue::Entity::find()
-            .filter(issue::Column::ProjectId.eq(&project_id))
-            .filter(issue::Column::Type.eq("task"))
-            .filter(issue::Column::Rank.ne(""))
-            .order_by_desc(issue::Column::Rank)
-            .one(&transaction)
-            .await?;
-        fractional_rank::between(tail.as_ref().map(|row| row.rank.as_str()), None)
-            .map_err(|_| CommandError::validation("An existing work-item rank is invalid."))?
+        arrival_rank::for_work_item(&transaction, &project_id, state_id.as_deref()).await?
     };
     let id = new_database_uuid();
     let now = super::timestamp::now();

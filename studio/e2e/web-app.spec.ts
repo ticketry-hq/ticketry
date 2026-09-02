@@ -77,7 +77,7 @@ async function ensureModulesPane(
   options: { mayAlreadyBeOpen?: boolean } = {},
 ): Promise<Locator> {
   const pane = page.getByTestId("pane-modules");
-  const toggle = page.getByTestId("footer-modules-toggle");
+  const toggle = page.getByTestId("modules-pane-toggle");
   if (options.mayAlreadyBeOpen && await pane.isVisible()) return pane;
   await expect(toggle).toHaveAttribute("aria-label", "Open Modules pane");
   await toggle.click();
@@ -1836,7 +1836,7 @@ test.describe("complete browser application", () => {
   }) => {
     await openModule(page, names.module);
     await ensureModulesPane(page);
-    const toggle = page.getByTestId("footer-modules-toggle");
+    const toggle = page.getByTestId("modules-pane-toggle");
     await expect(page.getByTestId("pane-modules")).toBeVisible();
     await expect(toggle).toHaveAttribute("aria-expanded", "true");
 

@@ -15,6 +15,7 @@ vi.mock("../features/projects/queries/readTransport", async () => ({
 }));
 
 import { useModalStore } from "../app/modal/modalStore";
+import { StudioFooter } from "../app/shell/StudioFooter";
 import { ModuleTabStrip } from "../app/shell/ticket-workspace/ModuleTabStrip";
 import {
   getModulePresentationsSnapshot,
@@ -165,6 +166,26 @@ describe("restore-aware module picker acceptance", () => {
       }),
       toasts: [],
     });
+  });
+
+  it("[overhaul-237] puts the Modules pane toggle at the top before module creation", async () => {
+    render(
+      <>
+        <ModuleTabStrip />
+        <StudioFooter />
+      </>,
+    );
+
+    const strip = screen.getByLabelText("Project modules");
+    const modulesToggle = screen.getByRole("button", {
+      name: /^(Open|Close) Modules pane$/,
+    });
+    const modulePicker = await screen.findByRole("button", {
+      name: "Open module picker",
+    });
+
+    expect(strip).toContainElement(modulesToggle);
+    expect(modulesToggle.nextElementSibling).toContainElement(modulePicker);
   });
 
   it("opens creation as the first action and keeps the coach mark off the trigger", async () => {

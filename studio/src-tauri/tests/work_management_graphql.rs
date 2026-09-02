@@ -1,6 +1,8 @@
 use sea_orm::{ConnectionTrait, Database};
+use seaography::async_graphql::{dynamic::Schema, Request, Variables};
 use tauri_graphql::{TransportApi, TransportApiImpl};
-use ticketry_graphql_schema::initialize_with_worktracker_and_install;
+use ticketry_graphql_schema::{foundation_schema, initialize_with_worktracker_and_install};
+use ticketry_work_management::commands::CommandDatabase;
 
 fn request(query: &str, variables: serde_json::Value) -> String {
     serde_json::json!({ "query": query, "variables": variables }).to_string()
@@ -81,16 +83,25 @@ async fn fixture() -> (tempfile::TempDir, sea_orm::DatabaseConnection) {
             ('20000000000000000000000000000003','10000000000000000000000000000000','module','30000000000000000000000000000000',NULL,NULL,NULL,0,'Archived',3,1,'B','','[]','2026-08-12 00:00:03','2026-08-12 00:00:03'),
             ('40000000000000000000000000000001','10000000000000000000000000000000','task','30000000000000000000000000000001','20000000000000000000000000000002','20000000000000000000000000000002',NULL,4,'Root',10,0,'V','root','[]','2026-08-12 00:00:10','2026-08-12 00:00:10'),
             ('40000000000000000000000000000002','10000000000000000000000000000000','task','30000000000000000000000000000001','40000000000000000000000000000001','20000000000000000000000000000002',NULL,5,'Active child',11,0,'A','','[]','2026-08-12 00:00:11','2026-08-12 00:00:11'),
-            ('40000000000000000000000000000003','10000000000000000000000000000000','task','30000000000000000000000000000001','40000000000000000000000000000001','20000000000000000000000000000002',NULL,6,'Archived child',12,1,'B','','[]','2026-08-12 00:00:12','2026-08-12 00:00:12');
+            ('40000000000000000000000000000003','10000000000000000000000000000000','task','30000000000000000000000000000001','40000000000000000000000000000001','20000000000000000000000000000002',NULL,6,'Archived child',12,1,'B','','[]','2026-08-12 00:00:12','2026-08-12 00:00:12'),
+            ('40000000000000000000000000000004','10000000000000000000000000000000','task','30000000000000000000000000000001',NULL,NULL,'80000000000000000000000000000001',7,'First backlog item',13,0,'V','','[]','2026-08-12 00:00:13','2026-08-12 00:00:13'),
+            ('40000000000000000000000000000005','10000000000000000000000000000000','task','30000000000000000000000000000001',NULL,NULL,'80000000000000000000000000000001',8,'Archived backlog item',14,1,'1','','[]','2026-08-12 00:00:14','2026-08-12 00:00:14'),
+            ('40000000000000000000000000000006','10000000000000000000000000000000','task','30000000000000000000000000000001',NULL,NULL,'80000000000000000000000000000001',9,'Unranked backlog item',15,0,'','','[]','2026-08-12 00:00:15','2026-08-12 00:00:15'),
+            ('40000000000000000000000000000007','10000000000000000000000000000000','task','30000000000000000000000000000001',NULL,NULL,'80000000000000000000000000000001',10,'Second backlog item',16,0,'k','','[]','2026-08-12 00:00:16','2026-08-12 00:00:16');
         INSERT INTO worktracker_issue_blocked_by VALUES
             (1, '40000000000000000000000000000001', '40000000000000000000000000000002');
         INSERT INTO worktracker_state VALUES
             ('80000000000000000000000000000001', '10000000000000000000000000000000',
-             'Backlog', 'backlog', '#888888', 0, 1, '2026-08-12 00:00:00', '2026-08-12 00:00:00');
+             'Backlog', 'backlog', '#888888', 0, 1, '2026-08-12 00:00:00', '2026-08-12 00:00:00'),
+            ('80000000000000000000000000000002', '10000000000000000000000000000000',
+             'Ready', 'unstarted', '#777777', 1, 0, '2026-08-12 00:00:01', '2026-08-12 00:00:01');
         INSERT INTO worktracker_issuetype VALUES
             ('30000000000000000000000000000001', '10000000000000000000000000000000',
              'Task', 'task', '#888888', 0, '80000000000000000000000000000001', 1, 0,
-             '2026-08-12 00:00:00', '2026-08-12 00:00:00');
+             '2026-08-12 00:00:00', '2026-08-12 00:00:00'),
+            ('30000000000000000000000000000002', '10000000000000000000000000000000',
+             'Task without start', 'task', '#777777', 1, NULL, 1, 0,
+             '2026-08-12 00:00:01', '2026-08-12 00:00:01');
         INSERT INTO worktracker_issuetypetransition VALUES
             (1, '30000000000000000000000000000001', '80000000000000000000000000000001',
              '80000000000000000000000000000001', 1);
@@ -124,6 +135,153 @@ fn operation_request(query: &str, operation_name: &str, variables: serde_json::V
         "variables": variables,
     })
     .to_string()
+}
+
+fn command_schema(database: sea_orm::DatabaseConnection) -> Schema {
+    foundation_schema(
+        database.clone(),
+        Some(database.clone()),
+        Some(CommandDatabase(database)),
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("build command GraphQL schema")
+}
+
+async fn execute_schema(
+    schema: &Schema,
+    query: &str,
+    variables: serde_json::Value,
+) -> serde_json::Value {
+    serde_json::to_value(
+        schema
+            .execute(Request::new(query).variables(Variables::from_json(variables)))
+            .await,
+    )
+    .expect("encode GraphQL response")
+}
+
+async fn create_work_item(
+    schema: &Schema,
+    name: &str,
+    issue_type_id: &str,
+    state_id: Option<&str>,
+) -> serde_json::Value {
+    execute_schema(
+        schema,
+        r#"mutation($name: String!, $issueTypeId: String!, $stateId: String) {
+            create_work_item(
+                project_id: "10000000000000000000000000000000"
+                name: $name
+                issue_type_id: $issueTypeId
+                state_id: $stateId
+            ) { id name stateId rank }
+        }"#,
+        serde_json::json!({
+            "name": name,
+            "issueTypeId": issue_type_id,
+            "stateId": state_id,
+        }),
+    )
+    .await
+}
+
+#[tokio::test]
+async fn create_work_item_arrives_before_the_first_active_rank_in_its_start_state() {
+    let (_directory, writer) = fixture().await;
+    let schema = command_schema(writer);
+
+    let created = create_work_item(
+        &schema,
+        "Newest backlog item",
+        "30000000000000000000000000000001",
+        None,
+    )
+    .await;
+    assert!(created.get("errors").is_none(), "{created:#}");
+    assert_eq!(
+        created["data"]["create_work_item"]["stateId"],
+        "80000000-0000-0000-0000-000000000001"
+    );
+    assert_eq!(created["data"]["create_work_item"]["rank"], "F");
+
+    let persisted = execute_schema(
+        &schema,
+        r#"query {
+            worktrackerIssue(
+                filters: {
+                    projectId: { eq: "10000000000000000000000000000000" }
+                    type: { eq: "task" }
+                    stateId: { eq: "80000000000000000000000000000001" }
+                    isArchived: { eq: false }
+                    rank: { ne: "" }
+                }
+                orderBy: { rank: ASC, sequenceId: ASC }
+            ) { nodes { name rank } }
+        }"#,
+        serde_json::json!({}),
+    )
+    .await;
+    assert!(persisted.get("errors").is_none(), "{persisted:#}");
+    let nodes = persisted["data"]["worktrackerIssue"]["nodes"]
+        .as_array()
+        .expect("persisted ranked Work Items");
+    let rank = |name: &str| {
+        nodes
+            .iter()
+            .find(|row| row["name"] == name)
+            .and_then(|row| row["rank"].as_str())
+            .expect("named Work Item rank")
+    };
+    assert_eq!(rank("First backlog item"), "V");
+    assert_eq!(rank("Second backlog item"), "k");
+    assert_eq!(rank("Newest backlog item"), "F");
+    assert!(rank("Newest backlog item") < rank("First backlog item"));
+    assert!(rank("First backlog item") < rank("Second backlog item"));
+}
+
+#[tokio::test]
+async fn create_work_item_in_an_explicit_empty_state_gets_a_fractional_rank() {
+    let (_directory, writer) = fixture().await;
+    let schema = command_schema(writer);
+
+    let created = create_work_item(
+        &schema,
+        "Ready first",
+        "30000000000000000000000000000002",
+        Some("80000000000000000000000000000002"),
+    )
+    .await;
+    assert!(created.get("errors").is_none(), "{created:#}");
+    assert_eq!(
+        created["data"]["create_work_item"]["stateId"],
+        "80000000-0000-0000-0000-000000000002"
+    );
+    assert_eq!(created["data"]["create_work_item"]["rank"], "V");
+}
+
+#[tokio::test]
+async fn create_work_item_without_a_type_start_state_falls_back_to_backlog_first() {
+    let (_directory, writer) = fixture().await;
+    let schema = command_schema(writer);
+
+    let created = create_work_item(
+        &schema,
+        "Fallback backlog item",
+        "30000000000000000000000000000002",
+        None,
+    )
+    .await;
+    assert!(created.get("errors").is_none(), "{created:#}");
+    assert_eq!(
+        created["data"]["create_work_item"]["stateId"],
+        "80000000-0000-0000-0000-000000000001"
+    );
+    assert_eq!(created["data"]["create_work_item"]["rank"], "F");
 }
 
 #[tokio::test]

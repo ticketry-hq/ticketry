@@ -2,6 +2,7 @@ import { act, fireEvent, screen, waitFor, within } from "@testing-library/react"
 import { describe, expect, it } from "vitest";
 
 import { FooterChangesToggle } from "../app/shell/FooterChangesToggle";
+import { StudioFooter } from "../app/shell/StudioFooter";
 import { SelectedTicketContent } from "../app/shell/ticket-workspace/selected-ticket/SelectedTicketContent";
 import { scratchBucketId } from "../features/agents/terminal";
 import { TEMP_TASK_ID } from "../features/agents/types";
@@ -90,7 +91,34 @@ function ModuleWorkspaceHarness() {
 }
 
 describe("overhaul acceptance - module Changes and current worktrees", () => {
-  it("[overhaul-187] opens clean module Changes beside Terminal and presents the empty task list", async () => {
+  it("[overhaul-239] puts module Changes in the footer's left slot with a version-control symbol", () => {
+    const http = fixture();
+    http.tree("module-1", { rootIds: [], children: {}, order: [] });
+
+    mountStudio({ http, children: <StudioFooter /> });
+
+    const changes = screen.getByRole("button", { name: "Open module Changes" });
+    const footer = changes.parentElement?.parentElement;
+    expect(footer).not.toBeNull();
+    expect(footer?.firstElementChild).toContainElement(changes);
+    expect(footer?.lastElementChild).not.toContainElement(changes);
+    expect(footer?.lastElementChild).toContainElement(
+      screen.getByRole("button", { name: "Open terminal panel" }),
+    );
+    expect(footer?.lastElementChild).toContainElement(
+      screen.getByRole("button", { name: "Open Settings" }),
+    );
+    expect(footer?.children[1]).toHaveClass("justify-center");
+    expect(within(changes).getByTestId("version-control-icon")).toBeVisible();
+
+    act(() => useClientStore.setState({ selectedModuleId: null }));
+
+    expect(changes).toBeDisabled();
+    expect(changes).toHaveAccessibleName("Select a module to open Changes");
+    expect(changes).toHaveAttribute("title", "Select a module to open Changes");
+  });
+
+  it("[overhaul-187] opens clean module Changes and presents the empty task list", async () => {
     const http = fixture();
     const operations: string[] = [];
     http.tree("module-1", { rootIds: [], children: {}, order: [] });

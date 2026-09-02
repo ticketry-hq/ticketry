@@ -3,7 +3,7 @@ use sea_orm::{
     QueryFilter, QueryOrder, Set, TransactionTrait,
 };
 
-use super::fractional_rank;
+use super::arrival_rank;
 use super::identifiers::{database_uuid, new_database_uuid};
 use super::{work_items, CommandError};
 use ticketry_entities::{issue, issue_type, project, state};
@@ -125,14 +125,7 @@ pub async fn create_review_finding(
         .ok_or_else(|| CommandError::NotFound("Project not found.".to_owned()))?;
     let sequence_id = counters.seq_counter;
     let state_revision = counters.state_revision;
-    let tail = issue::Entity::find()
-        .filter(issue::Column::ProjectId.eq(&project_id))
-        .filter(issue::Column::Rank.ne(""))
-        .order_by_desc(issue::Column::Rank)
-        .one(&transaction)
-        .await?;
-    let rank = fractional_rank::between(tail.as_ref().map(|row| row.rank.as_str()), None)
-        .map_err(|_| CommandError::validation("An existing work-item rank is invalid."))?;
+    let rank = arrival_rank::for_work_item(&transaction, &project_id, state_id.as_deref()).await?;
     let mut description = vec![
         format!("Path: {path}"),
         format!("Lines: {}-{}", input.line_start, input.line_end),

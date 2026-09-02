@@ -183,10 +183,14 @@ describe("module tab strip reorder acceptance", () => {
     const pickerButton = screen.getByRole("button", {
       name: "Open module picker",
     });
+    const modulesToggle = screen.getByRole("button", {
+      name: /^(Open|Close) Modules pane$/,
+    });
 
-    // The picker is pinned to the left edge and is not one of the project's
-    // Modules: it cannot be picked up, and it cannot receive one.
-    expect(strip.parentElement?.firstElementChild).toContainElement(pickerButton);
+    // The sidebar toggle and picker stay ahead of the project's Modules. They
+    // cannot be picked up, and the picker cannot receive a tab.
+    expect(strip.parentElement?.firstElementChild).toBe(modulesToggle);
+    expect(modulesToggle.nextElementSibling).toContainElement(pickerButton);
     expect(pickerButton.getAttribute("draggable")).toBeNull();
 
     const transfer = dataTransfer();
@@ -210,7 +214,8 @@ describe("module tab strip reorder acceptance", () => {
     expect(tabFor("module-c").getAttribute("aria-selected")).toBe("false");
     expect(tabBadges("module-c")).toHaveLength(1);
     expect(tabBadges("module-a")).toEqual([]);
-    expect(strip.parentElement?.firstElementChild).toContainElement(pickerButton);
+    expect(strip.parentElement?.firstElementChild).toBe(modulesToggle);
+    expect(modulesToggle.nextElementSibling).toContainElement(pickerButton);
 
     // The selected tab kept its id but changed position, so it must be scrolled
     // back into the strip's horizontal viewport (#369).

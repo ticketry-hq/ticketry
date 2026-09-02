@@ -285,4 +285,30 @@ describe("overhaul acceptance — terminal outcome authority", () => {
     ).toBeGreaterThan(0);
     expect(useAgentStatusStore.getState().runs["run-1"].state).toBe("quiet");
   });
+
+  it("[overhaul-238] closes a terminal when an authoritative snapshot reports its run exited", () => {
+    renderWorkspace();
+    expect(screen.getByRole("tab", { name: "Implement codex terminal" }))
+      .toBeInTheDocument();
+
+    act(() => {
+      applySnapshotFrame({
+        __typename: "RunStatusSnapshot",
+        project_id: "project-1",
+        cursor: 4,
+        runs: [
+          statusRunHolding(run({
+            state: "exited",
+            effective_state: "exited",
+            updated_at: TERMINATED_AT,
+          })),
+        ],
+        automation_attempts: [],
+        at: TERMINATED_AT,
+      });
+    });
+
+    expectExitedEverywhere();
+    expect(useTerminalStore.getState().sessions).toEqual({});
+  });
 });

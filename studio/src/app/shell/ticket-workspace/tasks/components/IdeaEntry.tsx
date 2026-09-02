@@ -8,7 +8,7 @@ import {
 import { toast } from "../../../../../state/clientStore";
 import { useOnboardingTourStore } from "../../../../onboarding/onboardingTourStore";
 import { apiErrorMessage } from "../../../../../shared/api/errors";
-import { createWorkItem } from "../../../../../features/work-items";
+import { useCreateWorkItem } from "../../../../../features/work-items";
 import { useStudioStore } from "../../../../../features/projects";
 import { loadIssueTypes } from "../../../../../features/settings";
 import { useClientStore } from "../../../../../state/clientStore";
@@ -17,6 +17,10 @@ import { focusFirstStory } from "../storiesFocus";
 export function IdeaEntry() {
   const selectedProjectId = useStudioStore((state) => state.selectedProjectId);
   const selectedModuleId = useClientStore((state) => state.selectedModuleId);
+  const createStory = useCreateWorkItem({
+    projectId: selectedProjectId ?? "",
+    moduleId: selectedModuleId ?? "",
+  });
   const [draft, setDraft] = useState("");
   const [pending, setPending] = useState(false);
   // #623: focus needs to read at a glance — the caret alone was invisible
@@ -61,11 +65,11 @@ export function IdeaEntry() {
         (type) => type.level === "task" && type.name === "Story",
       );
       if (!storyType) throw new Error("The Story issue type is unavailable.");
-      const created = await createWorkItem(projectId, {
+      const created = await createStory.mutateAsync({
         name,
         parent_id: moduleId,
         issue_type_id: storyType.id,
-      }, { moduleId });
+      });
       if (
         submissionRef.current !== submission ||
         useClientStore.getState().selectedModuleId !== moduleId

@@ -1,3 +1,4 @@
+mod arrival_rank;
 pub mod attachments;
 pub mod blockers;
 pub mod catalog;

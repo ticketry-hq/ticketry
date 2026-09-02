@@ -327,16 +327,9 @@ describe("overhaul acceptance — terminals", () => {
 
   it("[overhaul-112] rebuilds launch labels, provider styling and ordinals from the authoritative records after a reload", async () => {
     // A reload starts with no client-side session state. ProjectRunStatus must
-    // reproduce the tabs without an AgentTerminalSessions discovery read.
-    render(
-        <SelectedTicketContent
-          bucket="story-1"
-          projectId="project-1"
-          moduleId="module-1"
-          owner="studio"
-          details={<div>Issue details</div>}
-        />
-    );
+    // already contain the runs when the task opens, and must reproduce the
+    // connecting tabs before the workspace's first visible frame without an
+    // AgentTerminalSessions discovery read.
     act(() => {
       useAgentStatusStore.setState({
         runs: {
@@ -357,9 +350,19 @@ describe("overhaul acceptance — terminals", () => {
       });
     });
 
+    render(
+        <SelectedTicketContent
+          bucket="story-1"
+          projectId="project-1"
+          moduleId="module-1"
+          owner="studio"
+          details={<div>Issue details</div>}
+        />
+    );
+
     // Captured state and model come back on the tab, ordinals included: the
     // two live Grill runs still collide, in the launch order the records give.
-    const first = await screen.findByRole("tab", {
+    const first = screen.getByRole("tab", {
       name: "Grill 1 codex terminal",
     });
     expect(first).toHaveAttribute("title", "codex · gpt-5 · started in Grill");

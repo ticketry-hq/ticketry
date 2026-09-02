@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type ReactNode,
@@ -189,7 +190,11 @@ export function SelectedTicketContent({
     setActiveDoc,
   });
 
-  useEffect(() => {
+  // ProjectRunStatus already knows which live runs belong to this workspace.
+  // Materialize their connecting tabs before paint so reopening a task never
+  // shows its lifecycle badge without the matching terminal tab. Attaching the
+  // viewer remains asynchronous and may keep the tab in "connecting".
+  useLayoutEffect(() => {
     if (!bucket) return;
     useTerminalStore.getState().reconcileRunTabs(bucket, workspaceRuns);
     restoreTerminalTarget(bucket, restoreGenerationRef.current, true);

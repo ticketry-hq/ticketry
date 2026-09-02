@@ -40,16 +40,25 @@ export function useAgentStatusSelection<T>(
   select: (holding: AgentStatusData) => T,
   equal: (left: T, right: T) => boolean = Object.is,
 ): T {
-  const retained = useRef<{ holding: AgentStatusData; value: T } | null>(null);
+  const retained = useRef<{
+    holding: AgentStatusData;
+    select: (holding: AgentStatusData) => T;
+    value: T;
+  } | null>(null);
   const snapshot = useCallback(() => {
     const holding = readAgentStatusHolding();
-    if (retained.current?.holding === holding) return retained.current.value;
-    const value = select(holding);
-    if (retained.current && equal(retained.current.value, value)) {
-      retained.current = { holding, value: retained.current.value };
+    if (
+      retained.current?.holding === holding &&
+      retained.current.select === select
+    ) {
       return retained.current.value;
     }
-    retained.current = { holding, value };
+    const value = select(holding);
+    if (retained.current && equal(retained.current.value, value)) {
+      retained.current = { holding, select, value: retained.current.value };
+      return retained.current.value;
+    }
+    retained.current = { holding, select, value };
     return value;
   }, [equal, select]);
   return useSyncExternalStore(

@@ -12,6 +12,7 @@ import { StudioFooter } from "./StudioFooter";
 import { StudioLayout } from "./StudioLayout";
 import { useStoriesTree } from "../../features/work-items";
 import { statusStreamTransport } from "../../runtime";
+import { ProjectRunTerminalTabBridge } from "./ProjectRunTerminalTabBridge";
 
 export function StudioShell() {
   const { rows } = useStoriesTree();
@@ -40,6 +41,7 @@ export function StudioShell() {
 
   return (
     <div className="flex h-full w-full flex-col">
+      <ProjectRunTerminalTabBridge />
       <div className="min-h-0 flex-1">
         <StudioLayout />
       </div>

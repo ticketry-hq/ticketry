@@ -8,7 +8,7 @@ import {
   replaceAgentStatusSnapshot,
   switchAgentStatusProject,
 } from "./apolloHolding";
-import { useTaskLifecycleChips } from "./hooks";
+import { useAgentStatusSelection, useTaskLifecycleChips } from "./hooks";
 import type { RunRecord } from "./types";
 
 const PROJECT = "11111111-1111-1111-1111-111111111111";
@@ -62,5 +62,20 @@ describe("Apollo status hooks", () => {
 
     expect(hook.result.current).toEqual([{ state: "working", count: 1 }]);
     expect(renders).toBe(initialRenders);
+  });
+
+  it("recomputes when selector inputs change without an Apollo write", () => {
+    const hook = renderHook(
+      ({ taskId }) => useAgentStatusSelection((holding) =>
+        Object.values(holding.runs)
+          .filter((held) => held.task_id === taskId)
+          .map((held) => held.agent_run_id)
+      ),
+      { initialProps: { taskId: "task-a" } },
+    );
+
+    expect(hook.result.current).toEqual(["run-a"]);
+    hook.rerender({ taskId: "task-b" });
+    expect(hook.result.current).toEqual(["run-b"]);
   });
 });

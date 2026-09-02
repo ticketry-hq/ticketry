@@ -1,6 +1,7 @@
 import { act, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SelectedTicketContent } from "../app/shell/ticket-workspace/selected-ticket/SelectedTicketContent";
+import { ProjectRunTerminalTabBridge } from "../app/shell/ProjectRunTerminalTabBridge";
 import { presentTerminalRuns } from "../features/agents/terminal";
 import { useStudioStore } from "../features/projects/store";
 import { useAgentStatusStore } from "../features/agents/status/testStore";
@@ -350,7 +351,29 @@ describe("overhaul acceptance — terminals", () => {
       });
     });
 
-    render(
+    const { rerender } = render(
+      <>
+        <ProjectRunTerminalTabBridge />
+        <SelectedTicketContent
+          bucket="story-without-runs"
+          projectId="project-1"
+          moduleId="module-1"
+          owner="studio"
+          details={<div>Issue details</div>}
+        />
+      </>
+    );
+    expect(screen.queryByRole("tab", { name: /codex terminal/ })).toBeNull();
+    expect(useTerminalStore.getState().sessionByRun).toMatchObject({
+      "run-first": expect.any(String),
+      "run-second": expect.any(String),
+    });
+
+    // Status owns tab discovery before the ticket is selected. Switching to
+    // the ticket only presents the tabs and starts its terminal viewers.
+    rerender(
+      <>
+        <ProjectRunTerminalTabBridge />
         <SelectedTicketContent
           bucket="story-1"
           projectId="project-1"
@@ -358,6 +381,7 @@ describe("overhaul acceptance — terminals", () => {
           owner="studio"
           details={<div>Issue details</div>}
         />
+      </>
     );
 
     // Captured state and model come back on the tab, ordinals included: the

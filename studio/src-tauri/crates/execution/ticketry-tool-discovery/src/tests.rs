@@ -54,6 +54,35 @@ fn discovers_a_package_manager_fixture_without_path_or_shell() {
 }
 
 #[test]
+fn focused_discovery_probes_only_the_requested_tool() {
+    let root = fixture_dir("focused");
+    let probe_log = root.join("probes.log");
+    for tool in [SupportedTool::Claude, SupportedTool::Codex] {
+        let candidate = root.join(tool.executable_name());
+        executable(
+            &candidate,
+            format!(
+                "#!/bin/sh\nprintf '{}\\n' >> '{}'\nprintf '{} 1.2.3\\n'\n",
+                tool.executable_name(),
+                probe_log.display(),
+                tool.executable_name(),
+            )
+            .as_bytes(),
+        );
+    }
+    let service = DiscoveryService {
+        roots: vec![root.clone()],
+        approved: ApprovedToolPaths::default(),
+    };
+
+    let diagnostic = discover_tool_from_service(&service, SupportedTool::Codex);
+
+    assert_eq!(diagnostic.health, ToolHealth::Ready);
+    assert_eq!(fs::read_to_string(&probe_log).unwrap(), "codex\n");
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn version_manager_layout_and_paths_with_spaces_are_traversed() {
     let home = fixture_dir("home with spaces");
     let bin = home.join(".nvm/versions/node/v22.1.0/bin");

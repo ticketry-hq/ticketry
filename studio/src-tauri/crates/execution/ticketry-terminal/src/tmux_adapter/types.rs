@@ -2,7 +2,7 @@ use super::approved_tool_path;
 use std::collections::BTreeMap;
 use std::ffi::OsString;
 use std::fmt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use ticketry_tool_discovery::SupportedTool;
 
 #[derive(Clone, Debug)]
@@ -24,16 +24,33 @@ impl ApprovedArgv {
         I: IntoIterator<Item = S>,
         S: Into<OsString>,
     {
-        if tool == SupportedTool::Tmux || !working_directory.is_absolute() {
+        validate_provider_command(tool, &working_directory, &environment)?;
+        let executable = approved_tool_path(tool)?;
+        Ok(Self {
+            executable,
+            arguments: arguments.into_iter().map(Into::into).collect(),
+            working_directory,
+            environment,
+        })
+    }
+
+    pub(crate) fn for_resolved_tool<I, S>(
+        tool: SupportedTool,
+        executable: PathBuf,
+        arguments: I,
+        working_directory: PathBuf,
+        environment: BTreeMap<String, String>,
+    ) -> Result<Self, TmuxAdapterError>
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<OsString>,
+    {
+        validate_provider_command(tool, &working_directory, &environment)?;
+        if !executable.is_absolute() {
             return Err(TmuxAdapterError::InvalidOperation);
         }
-        for (name, value) in &environment {
-            if !valid_environment_name(name) || value.contains('\0') {
-                return Err(TmuxAdapterError::InvalidOperation);
-            }
-        }
         Ok(Self {
-            executable: approved_tool_path(tool)?,
+            executable,
             arguments: arguments.into_iter().map(Into::into).collect(),
             working_directory,
             environment,
@@ -67,6 +84,22 @@ impl ApprovedArgv {
             environment: BTreeMap::new(),
         })
     }
+}
+
+fn validate_provider_command(
+    tool: SupportedTool,
+    working_directory: &Path,
+    environment: &BTreeMap<String, String>,
+) -> Result<(), TmuxAdapterError> {
+    if tool == SupportedTool::Tmux || !working_directory.is_absolute() {
+        return Err(TmuxAdapterError::InvalidOperation);
+    }
+    for (name, value) in environment {
+        if !valid_environment_name(name) || value.contains('\0') {
+            return Err(TmuxAdapterError::InvalidOperation);
+        }
+    }
+    Ok(())
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -244,5 +277,20 @@ mod tests {
             ["-u", "NO_COLOR", "/bin/sh", "-l"].map(OsString::from)
         );
         assert!(command.environment.is_empty());
+    }
+
+    #[test]
+    fn resolved_provider_constructor_keeps_the_executable_that_was_traced() {
+        let executable = PathBuf::from("/approved/codex");
+        let command = ApprovedArgv::for_resolved_tool(
+            SupportedTool::Codex,
+            executable.clone(),
+            ["exec"],
+            PathBuf::from("/workspace"),
+            BTreeMap::new(),
+        )
+        .expect("construct an argv from the provider resolution");
+
+        assert_eq!(command.executable, executable);
     }
 }

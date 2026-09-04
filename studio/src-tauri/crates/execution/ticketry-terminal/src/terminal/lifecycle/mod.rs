@@ -1,5 +1,6 @@
 //! Bounded startup, periodic recovery, and shutdown for the Rust terminal runtime.
 
+mod provider_executable;
 mod runtime;
 mod work;
 

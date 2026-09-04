@@ -702,6 +702,7 @@ ticketry-tool-discovery|ToolDiagnostic
 ticketry-tool-discovery|ToolHealth
 ticketry-tool-discovery|approve_executable_path
 ticketry-tool-discovery|consulted_discovery
+ticketry-tool-discovery|discover_tool
 ticketry-tool-discovery|preflight_report
 ticketry-tool-discovery|resolved_tool_environment
 ticketry-work-management|FOLDER_INVALID

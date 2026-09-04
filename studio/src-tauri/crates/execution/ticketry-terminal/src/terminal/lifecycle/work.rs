@@ -423,10 +423,10 @@ impl TerminalLaunchRuntime for InteractiveTerminalLaunchRuntime {
         );
         let authorization = issue_run_authorization(&authority, &material.agent_run_id).await?;
         let tool = provider_tool(provider);
-        let executable = crate::tmux_adapter::approved_tool_path(tool)
+        let executable = super::provider_executable::resolve(tool)
             .map_err(|_| invalid_launch("The approved provider executable is unavailable."))?;
         let execution = ticketry_launch::ExecutionAuthority::new(
-            executable,
+            executable.clone(),
             working_directory,
             authority.hook_runner.clone(),
             authority.hook_spool_directory.clone(),
@@ -449,8 +449,9 @@ impl TerminalLaunchRuntime for InteractiveTerminalLaunchRuntime {
                 path.to_string_lossy().into_owned(),
             );
         }
-        let command = ApprovedArgv::for_tool(
+        let command = ApprovedArgv::for_resolved_tool(
             tool,
+            executable,
             launch.argv.into_iter().skip(1),
             launch.working_directory,
             launch.environment,

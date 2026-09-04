@@ -35,10 +35,7 @@ pub use diagnostics::{AccessHint, PreflightReport, ToolDiagnostic, ToolHealth};
 pub use supported_tools::SupportedTool;
 
 pub fn preflight_report() -> PreflightReport {
-    let service = DiscoveryService::from_environment().unwrap_or_else(|_| DiscoveryService {
-        roots: trusted_roots(env::var_os("HOME").as_deref().map(Path::new)),
-        approved: ApprovedToolPaths::default(),
-    });
+    let service = discovery_service();
     let tools = SUPPORTED_TOOLS
         .into_iter()
         .map(|tool| service.discover(tool))
@@ -50,6 +47,23 @@ pub fn preflight_report() -> PreflightReport {
         repository_access,
         os_permission_hint: platform_permission_hint(),
     }
+}
+
+/// Resolves and probes only the requested tool.
+pub fn discover_tool(tool: SupportedTool) -> ToolDiagnostic {
+    let service = discovery_service();
+    discover_tool_from_service(&service, tool)
+}
+
+fn discovery_service() -> DiscoveryService {
+    DiscoveryService::from_environment().unwrap_or_else(|_| DiscoveryService {
+        roots: trusted_roots(env::var_os("HOME").as_deref().map(Path::new)),
+        approved: ApprovedToolPaths::default(),
+    })
+}
+
+fn discover_tool_from_service(service: &DiscoveryService, tool: SupportedTool) -> ToolDiagnostic {
+    service.discover(tool)
 }
 
 /// Environment entries for the packaged backend. The values are created only

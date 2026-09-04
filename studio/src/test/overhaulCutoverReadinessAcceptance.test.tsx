@@ -2,13 +2,18 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { ServiceHealthGate } from "../app/startup/ServiceHealthGate";
-import type { ServiceHealth, StudioRuntime } from "../runtime";
+import {
+  inertLaunchkeyRuntime,
+  type ServiceHealth,
+  type StudioRuntime,
+} from "../runtime";
 import { quietAppUpdatesRuntime } from "./appUpdatesRuntimeFixture";
 
 function runtime(health: ServiceHealth): StudioRuntime {
   return {
     platform: "desktop",
     graphQlTransport: () => { throw new Error("not used"); },
+    launchkey: inertLaunchkeyRuntime,
     capabilities: {
       statusFeed: true,
       nativeLifecycle: true,

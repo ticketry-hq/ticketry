@@ -6,6 +6,7 @@ import type {
 import { executeGraphQlTransport } from "./graphQlTransport";
 import type { GraphQlTransportProxy } from "../graphql-foundation/generated/taurpc";
 import { encodeDocumentPath } from "./documentAssetUrl";
+import { inertLaunchkeyRuntime } from "./launchkey";
 
 export interface BrowserRuntimeEnvironment {
   readonly VITE_GRAPHQL_API?: string;
@@ -188,6 +189,7 @@ export function createBrowserRuntime({
   return Object.freeze({
     platform: "browser" as const,
     graphQlTransport,
+    launchkey: inertLaunchkeyRuntime,
     capabilities: Object.freeze({
       statusFeed: true,
       nativeLifecycle: false,

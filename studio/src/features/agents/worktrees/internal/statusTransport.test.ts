@@ -5,7 +5,11 @@ import {
   readWorktreeStatus,
   type WorktreeStatusPayload,
 } from "./statusTransport";
-import { initializeStudioRuntime, type StudioRuntime } from "../../../../runtime";
+import {
+  inertLaunchkeyRuntime,
+  initializeStudioRuntime,
+  type StudioRuntime,
+} from "../../../../runtime";
 import { quietAppUpdatesRuntime } from "../../../../test/appUpdatesRuntimeFixture";
 
 const live: WorktreeStatusPayload = {
@@ -33,6 +37,7 @@ function desktopRuntime(
   return {
     platform: "desktop",
     graphQlTransport: () => { throw new Error("not used"); },
+    launchkey: inertLaunchkeyRuntime,
     capabilities: {
       statusFeed: true,
       nativeLifecycle: false,

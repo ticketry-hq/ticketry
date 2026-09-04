@@ -1,4 +1,8 @@
-import { createBrowserRuntime, initializeStudioRuntime } from "../runtime";
+import {
+  createBrowserRuntime,
+  inertLaunchkeyRuntime,
+  initializeStudioRuntime,
+} from "../runtime";
 import type { StudioRuntime, WorkTrackerGraphQlExecute } from "../runtime";
 import { documentOperationName } from "../graphql-foundation/typedDocument";
 import type {
@@ -227,6 +231,7 @@ export function installDesktopGraphQlRuntime(
   initializeStudioRuntime({
     platform: "desktop",
     graphQlTransport,
+    launchkey: inertLaunchkeyRuntime,
     capabilities: {
       statusFeed: true,
       nativeLifecycle: true,

@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { initializeStudioRuntime, type StudioRuntime } from "../runtime";
+import {
+  inertLaunchkeyRuntime,
+  initializeStudioRuntime,
+  type StudioRuntime,
+} from "../runtime";
 import {
   createDefaultInteractiveTaskLaunch,
   createTerminalSession,
@@ -36,6 +40,7 @@ function desktopRuntime(
   return {
     platform: "desktop",
     graphQlTransport: () => { throw new Error("not used"); },
+    launchkey: inertLaunchkeyRuntime,
     capabilities: {
       statusFeed: true,
       nativeLifecycle: true,

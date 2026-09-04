@@ -59,6 +59,37 @@ describe("desktop runtime contract", () => {
     });
   });
 
+  it("exposes the native MIDI transport and routes controls through fixed commands", async () => {
+    const invoke = vi.fn().mockResolvedValue(startupConfiguration());
+    const launchkeyMidi = {
+      listPorts: vi.fn(),
+      connect: vi.fn(),
+    };
+    const runtime = await createDesktopRuntime({ invoke, launchkeyMidi });
+
+    expect(runtime.launchkey.midi()).toBe(launchkeyMidi);
+
+    await runtime.launchkey.toggleHandyTranscription();
+    expect(invoke).toHaveBeenLastCalledWith("desktop_toggle_handy_transcription");
+
+    await runtime.launchkey.submitTerminal("viewer-7");
+    expect(invoke).toHaveBeenLastCalledWith("viewer_input", {
+      viewerHandle: "viewer-7",
+      data: [13],
+    });
+  });
+
+  it("swallows Handy command failures", async () => {
+    const invoke = vi.fn()
+      .mockResolvedValueOnce(startupConfiguration())
+      .mockRejectedValueOnce(new Error("Handy is not installed"));
+    const runtime = await createDesktopRuntime({ invoke });
+
+    await expect(
+      runtime.launchkey.toggleHandyTranscription(),
+    ).resolves.toBeUndefined();
+  });
+
   it("gives Apollo the configured in-process GraphQL transport", async () => {
     const invoke = vi.fn().mockResolvedValue(startupConfiguration());
     const proxy = {} as GraphQlTransportProxy;

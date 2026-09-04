@@ -18,8 +18,10 @@ const PRODUCT_ROOTS = [
 // module instead of pulling a broad barrel into the initial chunk.
 const PUBLIC_ENTRYPOINTS = new Set([
   "features/agents/api/agentApi",
+  "features/agents/actions/agentRunActions",
   "features/agents/lifecycle",
   "features/agents/status",
+  "features/agents/status/launchDiscoveryTrace",
   "features/agents/status/stream/statusStreamFeed",
   "features/agents/terminal",
   "features/agents/terminal/appNavigation",
@@ -29,6 +31,7 @@ const PUBLIC_ENTRYPOINTS = new Set([
   "features/agents/terminal/ModuleFolder",
   "features/agents/terminal/ModuleFolderSelection",
   "features/agents/terminal/PromptInput",
+  "features/agents/terminal/instantRunTickets",
   "features/agents/types",
   "features/agents/worktrees",
   "features/studio/lib/liveTerminalCycle",

@@ -22,6 +22,7 @@ fn main() {
             "desktop_approve_executable_path",
             "desktop_launch_default_coding_agent",
             "desktop_ghostty_vt_artifact",
+            "desktop_toggle_handy_transcription",
             "desktop_update_check",
             "desktop_update_download_and_install",
             "desktop_update_restart",

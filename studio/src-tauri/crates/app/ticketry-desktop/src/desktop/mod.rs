@@ -13,6 +13,7 @@ pub(crate) mod embedded_assets;
 pub(crate) mod environment;
 pub(crate) mod folder_selection;
 pub(crate) mod frontend_log;
+pub(crate) mod handy;
 pub(crate) mod launch_runtime;
 pub(crate) mod lifecycle;
 pub(crate) mod mcp_runtime;

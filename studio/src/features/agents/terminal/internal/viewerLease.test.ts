@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { initializeStudioRuntime, type StudioRuntime } from "../../../../runtime";
+import {
+  inertLaunchkeyRuntime,
+  initializeStudioRuntime,
+  type StudioRuntime,
+} from "../../../../runtime";
 import { documentOperationName } from "../../../../graphql-foundation/typedDocument";
 import { desktopViewerLease } from "./viewerLease";
 import { quietAppUpdatesRuntime } from "../../../../test/appUpdatesRuntimeFixture";
@@ -11,6 +15,7 @@ function desktopRuntime(
   return {
     platform: "desktop",
     graphQlTransport: () => { throw new Error("not used"); },
+    launchkey: inertLaunchkeyRuntime,
     capabilities: {
       statusFeed: true,
       nativeLifecycle: true,

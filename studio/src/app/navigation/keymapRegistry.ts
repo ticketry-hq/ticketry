@@ -8,6 +8,12 @@ import {
   type KeymapContext,
 } from "./keymapBindings";
 import { studioRuntime, type StudioPlatform } from "../../runtime";
+import {
+  AGENT_RUN_ACTIONS,
+  type AgentRunActionId,
+} from "./actionIds";
+
+type ActionHandler = (payload?: unknown) => boolean | Promise<boolean>;
 
 const DEFAULT_BINDINGS_IN_CONTEXT_PRECEDENCE =
   KEYMAP_CONTEXT_PRECEDENCE.flatMap((context) =>
@@ -69,6 +75,7 @@ function matchesChord(
 
 class KeymapRegistry {
   private overrides = new Map<string, KeyChord>();
+  private actions = new Map<string, ActionHandler>();
   private listeners = new Set<() => void>();
   private revision = 0;
 
@@ -225,6 +232,18 @@ class KeymapRegistry {
   };
 
   getRevision = (): number => this.revision;
+
+  registerAction(actionId: string, handler: ActionHandler): () => void {
+    this.actions.set(actionId, handler);
+    return () => {
+      if (this.actions.get(actionId) === handler) this.actions.delete(actionId);
+    };
+  }
+
+  async dispatch(actionId: string, payload?: unknown): Promise<boolean> {
+    const handler = this.actions.get(actionId);
+    return handler ? await handler(payload) : false;
+  }
 }
 
 function bindingKey(context: KeymapContext, actionId: string): string {
@@ -286,3 +305,13 @@ function isBindingOverride(value: unknown): value is BindingOverride {
 }
 
 export const studioKeymapRegistry = new KeymapRegistry();
+for (const actionId of Object.values(AGENT_RUN_ACTIONS)) {
+  studioKeymapRegistry.registerAction(actionId, async (payload) => {
+    const { dispatchAgentRunAction } = await import(
+      "../../features/agents/actions/agentRunActions"
+    );
+    return dispatchAgentRunAction(actionId as AgentRunActionId, payload);
+  });
+}
+
+export { AGENT_RUN_ACTIONS };

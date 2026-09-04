@@ -21,6 +21,13 @@ export type {
   WorkTrackerGraphQlExecute,
   WorkTrackerReadRoutes,
 } from "./contract";
+export type {
+  LaunchkeyMidiPorts,
+  LaunchkeyMidiRuntime,
+  LaunchkeyMidiSelection,
+  LaunchkeyRuntime,
+} from "./launchkey";
+export { inertLaunchkeyRuntime } from "./launchkey";
 export { AppUpdateCheckError, AppUpdateOperationError } from "./contract";
 export {
   USER_NOTICE_SEVERITIES,

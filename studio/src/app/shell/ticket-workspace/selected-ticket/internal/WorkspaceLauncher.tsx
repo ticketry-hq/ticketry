@@ -1,4 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
+import { createPortal } from "react-dom";
+import { useModalStore } from "../../../../../app/modal/modalStore";
 import type { SessionMeta } from "../../../../../features/agents/terminal";
 import { providerListPlaceholder } from "../../../../../features/workflows";
 import { loadSelectedTicketTerminal } from "../terminals/selectedTicketTerminalLoader";
@@ -43,22 +51,29 @@ export function WorkspaceLauncher({
   activatedProviders,
   providersLoaded,
   providersFailed,
-  onLaunchTaskAgent,
+  triggerRef,
+  onTaskAgentLaunched,
 }: {
   bucket: string;
   launchContext: WorkspaceLauncherContext;
   activatedProviders: ReadonlySet<string>;
   providersLoaded: boolean;
   providersFailed: boolean;
-  onLaunchTaskAgent: (
-    agent: SessionMeta["agent"],
-    context: TicketLaunchContext,
-  ) => void;
+  triggerRef: React.RefObject<HTMLButtonElement>;
+  /**
+   * Called once the agent picker has placed a task run in this workspace, so
+   * the host can record the launched run as the workspace's restore target
+   * (CODING-1436). The picker owns opening the session and activating the
+   * terminal surface.
+   */
+  onTaskAgentLaunched: () => void;
 }) {
   const [launchOpen, setLaunchOpen] = useState(false);
+  const pushModal = useModalStore((state) => state.pushModal);
   const launchCommittedRef = useRef(false);
-  const launchTriggerRef = useRef<HTMLButtonElement>(null);
+  const launchTriggerRef = triggerRef;
   const launchMenuRef = useRef<HTMLDivElement>(null);
+  const [launchMenuPosition, setLaunchMenuPosition] = useState<CSSProperties>({});
   const launcherIdentity =
     launchContext.kind === "task"
       ? [
@@ -125,6 +140,58 @@ export function WorkspaceLauncher({
           failed: providersFailed,
         });
 
+  useLayoutEffect(() => {
+    if (!launchOpen) return;
+
+    const updatePosition = () => {
+      const triggerElement = launchTriggerRef.current;
+      const trigger = triggerElement?.getBoundingClientRect();
+      if (!trigger) return;
+      const tabStripBottom =
+        triggerElement
+          ?.closest<HTMLElement>('[role="tablist"]')
+          ?.getBoundingClientRect().bottom ?? trigger.bottom;
+      const menu = launchMenuRef.current;
+      const viewportGap = 8;
+      const menuGap = 4;
+      const menuWidth = menu?.offsetWidth ?? 0;
+      const menuHeight = menu?.offsetHeight ?? 0;
+      const below = Math.max(trigger.bottom, tabStripBottom) + menuGap;
+      const fitsBelow = below + menuHeight <= window.innerHeight - viewportGap;
+
+      setLaunchMenuPosition({
+        left: Math.max(
+          viewportGap,
+          Math.min(trigger.left, window.innerWidth - menuWidth - viewportGap),
+        ),
+        top: fitsBelow
+          ? below
+          : Math.max(viewportGap, trigger.top - menuHeight - menuGap),
+      });
+    };
+
+    updatePosition();
+    const layoutObserver = typeof ResizeObserver === "undefined"
+      ? null
+      : new ResizeObserver(updatePosition);
+    const trigger = launchTriggerRef.current;
+    const menu = launchMenuRef.current;
+    const tabStrip = trigger?.closest('[role="tablist"]');
+    if (trigger) layoutObserver?.observe(trigger);
+    if (menu) layoutObserver?.observe(menu);
+    if (tabStrip) layoutObserver?.observe(tabStrip);
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, {
+      capture: true,
+      passive: true,
+    });
+    return () => {
+      layoutObserver?.disconnect();
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [launchOpen, launcherItems.length, launcherNotice]);
+
   function activateLauncherItem(id: string) {
     if (launchCommittedRef.current) return;
     const opened = openLauncherRef.current;
@@ -135,11 +202,11 @@ export function WorkspaceLauncher({
     launchCommittedRef.current = true;
     openLauncherRef.current = null;
     setLaunchOpen(false);
+    // This menu is the scratch launcher only: a task workspace opens the agent
+    // picker modal straight from the trigger and never populates the menu.
     if (opened.context.kind === "scratch") {
       opened.context.onChooseMode(id as ScratchLaunchMode);
-      return;
     }
-    onLaunchTaskAgent(id as SessionMeta["agent"], opened.context);
   }
 
   function onLauncherMenuKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
@@ -180,11 +247,26 @@ export function WorkspaceLauncher({
   }
 
   return (
-    <div className="relative">
+    <div className="relative shrink-0">
       <button
         type="button"
         ref={launchTriggerRef}
-        onClick={() =>
+        onClick={() => {
+          if (launchContext.kind === "task") {
+            pushModal({
+              type: "agent-picker",
+              payload: {
+                mode: "open",
+                projectId: launchContext.projectId,
+                taskId: launchContext.taskId,
+                ...(launchContext.moduleId
+                  ? { moduleId: launchContext.moduleId }
+                  : {}),
+                onLaunched: onTaskAgentLaunched,
+              },
+            });
+            return;
+          }
           setLaunchOpen((open) => {
             if (!open) {
               launchCommittedRef.current = false;
@@ -196,12 +278,12 @@ export function WorkspaceLauncher({
               openLauncherRef.current = null;
             }
             return !open;
-          })
-        }
+          });
+        }}
         onPointerEnter={() => void loadSelectedTicketTerminal()}
         onFocus={() => void loadSelectedTicketTerminal()}
-        aria-haspopup="menu"
-        aria-expanded={launchOpen}
+        aria-haspopup={launchContext.kind === "task" ? "dialog" : "menu"}
+        aria-expanded={launchContext.kind === "scratch" ? launchOpen : undefined}
         title={
           launchContext.kind === "scratch"
             ? "Start a new Plan or Instant conversation"
@@ -211,13 +293,14 @@ export function WorkspaceLauncher({
       >
         ＋ Agent
       </button>
-      {launchOpen && (
+      {launchOpen && createPortal(
         <div
           ref={launchMenuRef}
           role="menu"
           aria-label="Launch agent"
           onKeyDown={onLauncherMenuKeyDown}
-          className="absolute left-0 top-full z-10 mt-1 flex min-w-[10ch] flex-col border border-pane-border bg-pane-panel py-1 shadow-lg"
+          style={launchMenuPosition}
+          className="fixed z-50 flex min-w-[10ch] flex-col border border-pane-border bg-pane-panel py-1 shadow-lg"
         >
           {launcherNotice ? (
             <p className="px-3 py-1 text-xs text-text-muted">
@@ -237,7 +320,8 @@ export function WorkspaceLauncher({
               </button>
             ))
           )}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

@@ -5,7 +5,6 @@ import {
   LifecycleBadge,
   presentTerminalRuns,
   providerToneClasses,
-  type SessionMeta,
   type SessionTab,
 } from "../../../../../features/agents/terminal";
 import type { EditViewZone } from "../../../../../state/clientStore";
@@ -15,7 +14,6 @@ import type { WorkspaceTabReorderDrag } from "../../../../../features/workspace-
 import { workspaceTabIdentityKey } from "../../../../../features/workspace-tabs/ordering";
 import {
   WorkspaceLauncher,
-  type TicketLaunchContext,
   type WorkspaceLauncherContext,
 } from "./WorkspaceLauncher";
 
@@ -28,6 +26,7 @@ function isLiveTerminal(tab: SessionTab): boolean {
 
 export function WorkspaceTabStrip({
   tabStripRef,
+  launcherTriggerRef,
   isEditView,
   editViewZone,
   showZoneChrome,
@@ -52,9 +51,10 @@ export function WorkspaceTabStrip({
   onSelectTab,
   onCloseDocument,
   onCloseTerminal,
-  onLaunchTaskAgent,
+  onTaskAgentLaunched,
 }: {
   tabStripRef: RefObject<HTMLDivElement>;
+  launcherTriggerRef: RefObject<HTMLButtonElement>;
   isEditView: boolean;
   editViewZone: EditViewZone;
   showZoneChrome: boolean;
@@ -79,10 +79,7 @@ export function WorkspaceTabStrip({
   onSelectTab: (tab: TaskWorkspaceTabIdentity) => void;
   onCloseDocument: (docId: string) => void;
   onCloseTerminal: (sessionId: string) => void;
-  onLaunchTaskAgent: (
-    agent: SessionMeta["agent"],
-    context: TicketLaunchContext,
-  ) => void;
+  onTaskAgentLaunched: () => void;
 }) {
   const tabRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const registerTabRef = useCallback(
@@ -130,7 +127,7 @@ export function WorkspaceTabStrip({
       tabIndex={isEditView ? -1 : undefined}
       onMouseDown={isEditView ? () => onClaimPointerZone("tab-strip") : undefined}
       onFocus={isEditView ? () => onSetEditViewZone("tab-strip") : undefined}
-      className={`mb-1 flex min-w-0 shrink-0 flex-nowrap gap-1 overflow-x-auto border-b border-pane-border pb-1 outline-none transition-opacity duration-150 [scrollbar-width:none] motion-reduce:transition-none [&::-webkit-scrollbar]:hidden ${
+      className={`mb-1 flex min-w-0 shrink-0 flex-nowrap gap-1 border-b border-pane-border pb-1 outline-none transition-opacity duration-150 motion-reduce:transition-none ${
         isEditView
           ? `min-h-10 items-center px-1 py-1 ${
               showZoneChrome
@@ -142,7 +139,12 @@ export function WorkspaceTabStrip({
           : ""
       }`}
     >
-      {orderedTabs.map((identity) => {
+      <div
+        role="presentation"
+        data-testid="workspace-tab-scroll"
+        className="flex min-w-0 flex-1 flex-nowrap gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
+        {orderedTabs.map((identity) => {
         if (identity.kind === "details") {
           return (
             <WorkspaceTab
@@ -255,7 +257,8 @@ export function WorkspaceTabStrip({
             dropTargetProps={reorderDrag.dropTargetPropsFor(identity)}
           />
         );
-      })}
+        })}
+      </div>
       {launchContext && (
         <WorkspaceLauncher
           bucket={bucket}
@@ -263,7 +266,8 @@ export function WorkspaceTabStrip({
           activatedProviders={activatedProviders}
           providersLoaded={providersLoaded}
           providersFailed={providersFailed}
-          onLaunchTaskAgent={onLaunchTaskAgent}
+          triggerRef={launcherTriggerRef}
+          onTaskAgentLaunched={onTaskAgentLaunched}
         />
       )}
     </div>

@@ -19,10 +19,7 @@ import {
 import { closeTerminalTab } from "./closeTerminalTab";
 import { rememberStudioWorkspaceTarget } from "./studioWorkspaceTarget";
 import type { TaskWorkspaceTabIdentity } from "./useTaskWorkspaceTabNavigation";
-import type {
-  TicketLaunchContext,
-  WorkspaceLauncherContext,
-} from "./WorkspaceLauncher";
+import type { WorkspaceLauncherContext } from "./WorkspaceLauncher";
 
 function resumeErrorMessage(error: unknown): string {
   const body = error instanceof FoundationGraphQlError ? error.extensions : null;
@@ -229,18 +226,15 @@ export function useWorkspaceTabActions({
     }
   }
 
-  function launchTaskAgent(
-    agent: SessionMeta["agent"],
-    context: TicketLaunchContext,
-  ): void {
+  /**
+   * A task run launched from `＋ Agent` must survive leaving and re-entering
+   * the ticket (CODING-1436). The agent picker opens the session and activates
+   * the terminal surface itself; the run has no durable id yet, so the only
+   * thing left for the workspace is to arm the pending-terminal handoff that
+   * persists `{ kind: "terminal", agentRunId }` once the id arrives.
+   */
+  function rememberLaunchedTaskAgent(): void {
     if (!bucket || !launchContext || launchContext.kind !== "task") return;
-    openSession({
-      taskId: context.taskId,
-      projectId: context.projectId,
-      moduleId: context.moduleId ?? undefined,
-      agent,
-    });
-    setActive(bucket, "terminal");
     if (owner === "studio") rememberPendingTerminalRef.current = true;
   }
 
@@ -252,7 +246,7 @@ export function useWorkspaceTabActions({
     reopenWorkspaceDocument,
     closeWorkspaceTerminal,
     resumeWorkspaceTerminal,
-    launchTaskAgent,
+    rememberLaunchedTaskAgent,
     resumingRunIds,
   };
 }

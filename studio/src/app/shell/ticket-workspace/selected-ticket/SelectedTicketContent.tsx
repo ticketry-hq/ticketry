@@ -86,6 +86,7 @@ export function SelectedTicketContent({
     scratch,
     workspaceRuns,
     resumableSessions,
+    restorationExcludedRunIds,
   } = useWorkspaceTerminalSessions(
     bucket,
     projectId,
@@ -102,6 +103,7 @@ export function SelectedTicketContent({
   const setActiveDoc = useTicketWorkspaceStore((s) => s.setActiveDoc);
   const paneRef = useRef<HTMLDivElement>(null);
   const tabStripRef = useRef<HTMLDivElement>(null);
+  const launcherTriggerRef = useRef<HTMLButtonElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const detailsSurfaceRef = useRef<HTMLDivElement>(null);
   const requestedSurfaceRef = useRef<TaskWorkspaceTabIdentity | null>(null);
@@ -196,10 +198,15 @@ export function SelectedTicketContent({
   // viewer remains asynchronous and may keep the tab in "connecting".
   useLayoutEffect(() => {
     if (!bucket) return;
-    useTerminalStore.getState().reconcileRunTabs(bucket, workspaceRuns);
+    useTerminalStore.getState().reconcileRunTabs(
+      bucket,
+      workspaceRuns,
+      restorationExcludedRunIds,
+    );
     restoreTerminalTarget(bucket, restoreGenerationRef.current, true);
   }, [
     bucket,
+    restorationExcludedRunIds,
     restoreTerminalTarget,
     workspaceRuns,
   ]);
@@ -298,7 +305,7 @@ export function SelectedTicketContent({
     reopenWorkspaceDocument,
     closeWorkspaceTerminal,
     resumeWorkspaceTerminal,
-    launchTaskAgent,
+    rememberLaunchedTaskAgent,
     resumingRunIds,
   } = useWorkspaceTabActions({
     bucket,
@@ -329,6 +336,7 @@ export function SelectedTicketContent({
     selectTab: selectWorkspaceTab,
     diveTab: diveWorkspaceTab,
     engageTab: engageWorkspaceTab,
+    launcherTriggerRef,
     onBeforeFirst: onBeforeFirstTab,
     modal,
   });
@@ -351,6 +359,7 @@ export function SelectedTicketContent({
     >
       <WorkspaceTabStrip
         tabStripRef={tabStripRef}
+        launcherTriggerRef={launcherTriggerRef}
         isEditView={isEditView}
         editViewZone={editViewZone}
         showZoneChrome={showZoneChrome}
@@ -375,7 +384,7 @@ export function SelectedTicketContent({
         onSelectTab={selectWorkspaceTab}
         onCloseDocument={closeWorkspaceDocument}
         onCloseTerminal={closeWorkspaceTerminal}
-        onLaunchTaskAgent={launchTaskAgent}
+        onTaskAgentLaunched={rememberLaunchedTaskAgent}
       />
 
       <DormantWorkspaceTabs

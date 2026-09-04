@@ -273,7 +273,10 @@ describe("overhaul acceptance, server-owned workspace tab order", () => {
       "NOTES",
     ]);
 
-    act(() => useTerminalStore.setState({ sessions: {}, sessionByRun: {} }));
+    act(() => {
+      useTerminalStore.setState({ sessions: {}, sessionByRun: {} });
+      useAgentStatusStore.setState({ runs: {} });
+    });
     await waitFor(() => expect(visibleTabNames()).toEqual([
       "Details",
       "DESIGN",
@@ -283,6 +286,7 @@ describe("overhaul acceptance, server-owned workspace tab order", () => {
       sessions: { "viewer-1": terminal },
       sessionByRun: { "run-1": "viewer-1" },
     }));
+    act(() => useAgentStatusStore.setState({ runs: { "run-1": run("run-1") } }));
     await waitFor(() => expect(visibleTabNames()).toEqual([
       "codex terminal",
       "Details",

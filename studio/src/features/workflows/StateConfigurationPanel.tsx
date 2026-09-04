@@ -59,6 +59,10 @@ export function StateConfigurationPanel({
 
   useEffect(() => {
     if (!selectedProjectId) return;
+    if (
+      useWorkflowEditorStore.getState().projectId === selectedProjectId
+      && loading
+    ) return;
     let disposed = false;
     const prepare = async () => {
       if (useWorkflowEditorStore.getState().projectId !== selectedProjectId) {
@@ -74,7 +78,7 @@ export function StateConfigurationPanel({
     return () => {
       disposed = true;
     };
-  }, [load, loadWorkflows, selectedProjectId]);
+  }, [load, loadWorkflows, loading, selectedProjectId]);
 
   const eligibleTypes = useMemo(() => {
     if (!stateId) return [];

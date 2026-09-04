@@ -41,9 +41,7 @@ fn stable_channel_updater(app: &tauri::AppHandle) -> Result<Updater, AppUpdateCh
     let updater = if let Some(certificate) =
         acceptance_tls::load_acceptance_ca().map_err(map_updater_error)?
     {
-        updater.configure_client(move |client| {
-            client.add_root_certificate(certificate.clone())
-        })
+        updater.configure_client(move |client| client.add_root_certificate(certificate.clone()))
     } else {
         updater
     };

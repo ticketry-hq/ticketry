@@ -4,11 +4,31 @@ import { expect, it } from "vitest";
 
 it("[overhaul-245] fresh bound launches type only the provider-formatted entry skill", () => {
   const runtime = readFileSync(
-    join(process.cwd(), "src-tauri", "src", "terminal", "lifecycle", "work.rs"),
+    join(
+      process.cwd(),
+      "src-tauri",
+      "crates",
+      "execution",
+      "ticketry-terminal",
+      "src",
+      "terminal",
+      "lifecycle",
+      "work.rs",
+    ),
     "utf8",
   );
   const delivery = readFileSync(
-    join(process.cwd(), "src-tauri", "src", "terminal", "prompt_delivery", "mod.rs"),
+    join(
+      process.cwd(),
+      "src-tauri",
+      "crates",
+      "execution",
+      "ticketry-terminal",
+      "src",
+      "terminal",
+      "prompt_delivery",
+      "mod.rs",
+    ),
     "utf8",
   );
 

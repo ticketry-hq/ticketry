@@ -337,6 +337,7 @@ ticketry-launch|planning_reason
 ticketry-launch|provider_contract
 ticketry-mcp|McpConfiguration
 ticketry-mcp|McpRuntime
+ticketry-mcp|McpStartupError
 ticketry-mcp|PROJECT
 ticketry-mcp|RunAuthority
 ticketry-mcp|RunPrincipal
@@ -367,6 +368,7 @@ ticketry-runs|CompatibilityService
 ticketry-runs|DEFAULT_BATCH_SIZE
 ticketry-runs|DJANGO_COMPATIBILITY_PORTS
 ticketry-runs|DJANGO_OWNER_ENV
+ticketry-runs|DeliveryMode
 ticketry-runs|DjangoGeneration
 ticketry-runs|DrainReport
 ticketry-runs|EffectService
@@ -535,6 +537,7 @@ ticketry-terminal|CustomFieldKind
 ticketry-terminal|DEFAULT_OWNED_ORPHAN_GRACE_SECONDS
 ticketry-terminal|DEFAULT_SWEEP_INTERVAL
 ticketry-terminal|DeleteViewerLease
+ticketry-terminal|DeliveryTimings
 ticketry-terminal|EMPTY_DJANGO_LEAF
 ticketry-terminal|GENERATED_MUTATION_GAPS
 ticketry-terminal|GENERATED_WRITES
@@ -568,6 +571,10 @@ ticketry-terminal|PreservationCheck
 ticketry-terminal|ProductionTerminalLifecycleWork
 ticketry-terminal|ProfileRemoval
 ticketry-terminal|ProfileTeardownOutcome
+ticketry-terminal|PromptDelivery
+ticketry-terminal|PromptDeliveryError
+ticketry-terminal|PromptDeliveryFailureReason
+ticketry-terminal|PromptDeliveryTmux
 ticketry-terminal|RAW_SQL_EVIDENCE_ONLY
 ticketry-terminal|REGISTERED_ENTITIES
 ticketry-terminal|RESUMABLE_LIMIT
@@ -635,6 +642,7 @@ ticketry-terminal|TerminationPatch
 ticketry-terminal|TmuxAdapter
 ticketry-terminal|TmuxAdapterError
 ticketry-terminal|TmuxCleanupRuntime
+ticketry-terminal|TmuxPromptDelivery
 ticketry-terminal|TmuxRuntimeObservation
 ticketry-terminal|UnrecordedRuntimeDecision
 ticketry-terminal|UnresolvedCleanup
@@ -662,6 +670,7 @@ ticketry-terminal|approved_login_shell
 ticketry-terminal|approved_tool_path
 ticketry-terminal|configured_sweep_interval
 ticketry-terminal|current_runtime_namespace
+ticketry-terminal|entry_skill_invocation
 ticketry-terminal|journal_profile_teardown
 ticketry-terminal|journal_terminal_cleanup
 ticketry-terminal|observe_live_sessions
@@ -675,6 +684,8 @@ ticketry-terminal|register_persistence_graphql
 ticketry-terminal|register_resume_graphql
 ticketry-terminal|register_session_graphql
 ticketry-terminal|register_viewer_lease_graphql
+ticketry-terminal|stage_text
+ticketry-terminal|submit_text
 ticketry-terminal|terminals_adopted
 ticketry-terminal|validate_resume_request
 ticketry-terminal|viewer_attach
@@ -737,6 +748,7 @@ ticketry-work-management|test_support
 ticketry-work-management|update_workspace_tab_order
 ticketry-work-management|work_management_ownership_manifest
 ticketry-work-management|workflow_color_migration
+ticketry-work-management|workflow_handoff_migration
 ticketry-work-management|workspace_tab_order_migration
 ticketry-workspace-runtime|changes
 ticketry-workspace-runtime|create

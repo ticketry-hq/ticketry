@@ -98,7 +98,7 @@ describe("overhaul acceptance — Stories and details", () => {
       children: <AttachmentCacheProbe issueId="story-1" />,
     });
 
-    const details = screen.getByRole("region", { name: "Details" });
+    const details = await screen.findByRole("region", { name: "Details" });
     const attachment = await within(details).findByRole("link", {
       name: /implementation-notes\.md/,
     });
@@ -485,9 +485,9 @@ describe("overhaul acceptance — Stories and details", () => {
     mountStudio({ http });
 
     const stories = await screen.findByRole("region", { name: "Stories" });
-    const details = screen.getByRole("region", { name: "Details" });
     for (const name of ["First", "Second", "Third", "First"]) {
       fireEvent.click(await within(stories).findByRole("treeitem", { name: new RegExp(name) }));
+      const details = await screen.findByRole("region", { name: "Details" });
       expect(await within(details).findByText(name)).toBeVisible();
       expect(within(details).queryByText("Loading issue…")).toBeNull();
       expect(within(stories).queryByText("…")).toBeNull();

@@ -49,7 +49,7 @@ async fn partial_prior_completion_resumes_without_replaying_completed_steps() {
 #[tokio::test]
 async fn final_schema_adds_handoff_to_workflow_edges_defaulting_off() {
     let (_directory, database) = fixture().await;
-    final_schema_migrations::install(&database)
+    install_final_schema_migrations(&database)
         .await
         .expect("run the full chain");
 

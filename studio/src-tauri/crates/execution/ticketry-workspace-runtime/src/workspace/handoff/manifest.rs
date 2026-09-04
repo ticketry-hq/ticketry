@@ -85,6 +85,11 @@ pub const OWNED_TABLES: &[(&str, ProductionWriter, &[&str])] = &[
         ADOPTION_LEDGER_COLUMNS,
     ),
     (
+        crate::worktree::persistence::pull_request_url_migration::LEDGER_TABLE,
+        ProductionWriter::Worktrees,
+        WORKTREE_PULL_REQUEST_MIGRATION_COLUMNS,
+    ),
+    (
         "workspace_operations",
         ProductionWriter::WorkspaceOperations,
         OPERATION_COLUMNS,
@@ -99,6 +104,9 @@ pub const OWNED_TABLES: &[(&str, ProductionWriter, &[&str])] = &[
 /// The adopted Worktree index, at the shape the capability manifest declares.
 const WORKTREE_COLUMNS: &[&str] =
     crate::worktree::persistence::ownership_manifest::ADOPTED_TABLES[0].1;
+
+const WORKTREE_PULL_REQUEST_MIGRATION_COLUMNS: &[&str] =
+    crate::worktree::persistence::ownership_manifest::AUTHORED_TABLES[1].1;
 
 /// The authored journal, at the shape the capability manifest declares.
 const OPERATION_COLUMNS: &[&str] =

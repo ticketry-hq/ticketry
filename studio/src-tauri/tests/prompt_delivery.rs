@@ -1,9 +1,8 @@
 use crate::common::isolated_tmux::{IsolatedTmux, TmuxEnvironmentOverride, RUN_ID, TMUX_ENV_LOCK};
-use muxed_studio_lib::launch::planning::Provider;
-use muxed_studio_lib::terminal::prompt_delivery::{PromptDelivery, TmuxPromptDelivery};
-use muxed_studio_lib::tmux_adapter::current_runtime_namespace;
 use std::thread;
 use std::time::{Duration, Instant};
+use ticketry_launch::Provider;
+use ticketry_terminal::{current_runtime_namespace, PromptDelivery, TmuxPromptDelivery};
 
 mod common;
 

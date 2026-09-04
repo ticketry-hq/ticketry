@@ -71,7 +71,14 @@ test("the shipping Cargo package builds one binary and no developer tools", asyn
   assert.equal(cargoToml.includes("verify_slice6_copy"), false);
 
   const devToolsToml = await readFile(
-    path.join(studioRoot, "src-tauri", "crates", "ticketry-dev-tools", "Cargo.toml"),
+    path.join(
+      studioRoot,
+      "src-tauri",
+      "crates",
+      "app",
+      "ticketry-dev-tools",
+      "Cargo.toml",
+    ),
     "utf8",
   );
   assert.match(devToolsToml, /name = "verify_slice6_copy"/);

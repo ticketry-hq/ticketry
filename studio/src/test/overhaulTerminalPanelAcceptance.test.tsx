@@ -323,7 +323,7 @@ describe("terminal panel acceptance", () => {
     });
   });
 
-  it("[overhaul-149] uses Ghostty WASM in the browser and native Ghostty on desktop", async () => {
+  it("[overhaul-149] uses Ghostty WASM in browser and desktop builds", async () => {
     window.history.replaceState({}, "", "/");
     localStorage.removeItem("ticketry:terminal-renderer");
     const browser = render(
@@ -353,9 +353,8 @@ describe("terminal panel acceptance", () => {
     );
     pressTogglePanel();
     await shellSessionId();
-    const nativeHost = await screen.findByTestId("native-terminal-host");
-    expect(nativeHost.getAttribute("data-terminal-renderer")).toBe("libghostty");
-    expect(screen.queryByTestId("ghostty-wasm-host")).toBeNull();
+    await waitFor(() => expect(screen.getByTestId("ghostty-wasm-host")).toBeTruthy());
+    expect(screen.queryByTestId("native-terminal-host")).toBeNull();
 
     const { readFile } = await import("node:fs/promises");
     const tauriConfig = JSON.parse(

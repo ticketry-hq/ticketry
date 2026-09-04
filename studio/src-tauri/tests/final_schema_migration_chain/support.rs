@@ -1,10 +1,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, Statement};
-use ticketry_installation::provision;
+use sea_orm::{ConnectionTrait, Database, DatabaseConnection, DbBackend, Statement};
 use ticketry_settings as provider_catalog_migrations;
 use ticketry_work_management::{
-    launch_binding_entry_skill_migration, module_presentation_migration, open_for_commands,
+    launch_binding_entry_skill_migration, module_presentation_migration,
     project_onboarding_migration, workflow_color_migration, workflow_handoff_migration,
     workspace_tab_order_migration,
 };
@@ -16,21 +15,37 @@ const STORY: &str = "00000000000000000000000000001003";
 const ACTIVE_MODULE: &str = "00000000000000000000000000001004";
 const ARCHIVED_MODULE: &str = "00000000000000000000000000001005";
 const TASK: &str = "00000000000000000000000000001006";
+const RECORDED_DJANGO_SCHEMA: &str =
+    include_str!("../../crates/execution/ticketry-installation/src/adoption/provisioning.v1.sql");
 
 pub async fn fixture() -> (tempfile::TempDir, DatabaseConnection) {
     let directory = tempfile::tempdir().expect("create 0043 fixture directory");
-    provision(directory.path())
+    let database = Database::connect(format!(
+        "sqlite:{}?mode=rwc",
+        directory.path().join("state.db").display()
+    ))
+    .await
+    .expect("open the 0043 fixture");
+    database
+        .execute_unprepared(RECORDED_DJANGO_SCHEMA)
         .await
-        .expect("provision the generated 0043 schema");
-    let database = open_for_commands(&directory.path().join("state.db"))
+        .expect("install the recorded Django schema");
+    provider_catalog_migrations::provision_provider_catalog(&database)
         .await
-        .expect("open the 0043 fixture");
+        .expect("seed the pre-migration provider catalog");
     database
         .execute_unprepared(&format!(
             "PRAGMA foreign_keys = ON;
-             UPDATE worktracker_project
-                SET id='{PROJECT}', manual_module_order=1
-              WHERE slug='CDN';
+             INSERT INTO worktracker_workspace
+                (id,slug,name,created_at,updated_at,onboarding_required)
+             VALUES
+                ('00000000000000000000000000001000','meml','Ticketry',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,1);
+             INSERT INTO worktracker_project
+                (id,name,slug,description,seq_counter,created_at,updated_at,workspace_id,
+                 state_revision,manual_module_order)
+             VALUES
+                ('{PROJECT}','Coding','CDN','',3,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,
+                 '00000000000000000000000000001000',0,1);
              INSERT INTO worktracker_state
                 (id,name,\"group\",color,created_at,updated_at,project_id,sort_order,is_protected)
              VALUES

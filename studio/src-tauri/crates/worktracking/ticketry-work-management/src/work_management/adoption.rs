@@ -548,7 +548,8 @@ fn io_error(error: std::io::Error) -> AdoptionError {
 mod tests {
     use sea_orm::{ConnectionTrait, Database};
 
-    use super::{effective_owned_tables, SchemaGeneration, WORKFLOW_HANDOFF_LEDGER_TABLE};
+    use super::{effective_owned_tables, SchemaGeneration};
+    use crate::work_management::workflow_handoff_migration::LEDGER_TABLE as WORKFLOW_HANDOFF_LEDGER_TABLE;
 
     #[tokio::test]
     async fn workflow_handoff_column_is_expected_only_when_its_ledger_exists() {

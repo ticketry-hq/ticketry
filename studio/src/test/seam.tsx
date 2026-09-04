@@ -1012,15 +1012,13 @@ export function workItem(overrides: WorkItemOverrides = {}): FixtureWorkItem {
 function StudioBehaviourSurface({ children }: { children?: ReactNode }) {
   return (
     <StudioApolloProvider>
-        <div>
-          <section role="region" aria-label="Stories">
-            <TasksPane />
-          </section>
-          <section role="region" aria-label="Details">
-            <SelectedTicketDetails />
-          </section>
-          {children}
-        </div>
+      <div>
+        <section role="region" aria-label="Stories">
+          <TasksPane />
+        </section>
+        <SelectedTicketDetails />
+        {children}
+      </div>
     </StudioApolloProvider>
   );
 }

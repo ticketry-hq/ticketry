@@ -177,8 +177,7 @@ pub async fn start_in_process_mcp(
         };
         let attempt = match terminal_launch.clone() {
             Some(service) => {
-                ticketry_mcp::McpRuntime::start_with_terminal_launch(configuration, service)
-                    .await
+                ticketry_mcp::McpRuntime::start_with_terminal_launch(configuration, service).await
             }
             None => ticketry_mcp::McpRuntime::start(configuration).await,
         };

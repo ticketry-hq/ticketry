@@ -78,11 +78,11 @@ describe("overhaul acceptance — transition landing", () => {
 
     mountStudio({ http, graphQlExecute });
     const stories = await screen.findByRole("region", { name: "Stories" });
-    const details = screen.getByRole("region", { name: "Details" });
     expect(await within(stories).findByText("Previous first")).toBeVisible();
     fireEvent.click(
       within(stories).getByRole("treeitem", { name: /Move first/ }),
     );
+    const details = await screen.findByRole("region", { name: "Details" });
 
     fireEvent.click(await within(details).findByRole("button", { name: "Grill" }));
     fireEvent.click(await screen.findByRole("button", { name: "Implement" }));

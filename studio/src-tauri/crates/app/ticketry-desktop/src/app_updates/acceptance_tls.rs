@@ -28,10 +28,7 @@ where
 }
 
 pub(super) fn load_acceptance_ca() -> Result<Option<Certificate>, UpdaterError> {
-    load_acceptance_ca_with(
-        |name| std::env::var_os(name),
-        |path| std::fs::read(path),
-    )
+    load_acceptance_ca_with(|name| std::env::var_os(name), |path| std::fs::read(path))
 }
 
 #[cfg(test)]

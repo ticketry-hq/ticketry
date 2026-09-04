@@ -18,8 +18,9 @@ use seaography::{
 use crate::work_management::{
     commands::{workflow::PatchValue, CommandError},
     graphql::{
-        authoritative_work_item, command_database, command_error, work_facts, GraphqlPatchBool,
-        GraphqlPatchJson, GraphqlPatchString, GraphqlPatchStringList,
+        authoritative_work_item, command_database, command_error, work_facts, GraphqlPatchBoolNullAsUnset,
+        GraphqlPatchJsonNullAsUnset, GraphqlPatchString, GraphqlPatchStringListNullAsUnset,
+        GraphqlPatchStringNullAsUnset,
     },
 };
 
@@ -33,11 +34,11 @@ impl UpdateWorkItemMutation {
         name: Option<String>,
         description: Option<String>,
         issue_type_id: Option<String>,
-        state_id: GraphqlPatchString,
+        state_id: GraphqlPatchStringNullAsUnset,
         parent_id: GraphqlPatchString,
-        blocked_by_ids: GraphqlPatchStringList,
-        is_archived: GraphqlPatchBool,
-        workspace_tab_order: GraphqlPatchJson,
+        blocked_by_ids: GraphqlPatchStringListNullAsUnset,
+        is_archived: GraphqlPatchBoolNullAsUnset,
+        workspace_tab_order: GraphqlPatchJsonNullAsUnset,
     ) -> Result<ticketry_entities::issue::Model> {
         let database = command_database(ctx)?;
         let input = UpdateInput {

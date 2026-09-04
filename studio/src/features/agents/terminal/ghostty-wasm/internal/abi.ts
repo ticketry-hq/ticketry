@@ -16,6 +16,11 @@ export interface GhosttyVtAbi {
     activeScreen: number;
     scrollbar: number;
     viewportActive: number;
+    mode: number;
+  };
+  terminalOption: {
+    colorBackground: number;
+    colorForeground: number;
   };
   renderData: {
     dirty: number;
@@ -73,6 +78,11 @@ export function resolveGhosttyVtAbi(runtime: GhosttyVtRuntime): GhosttyVtAbi {
       activeScreen: value("GhosttyTerminalData", "ACTIVE_SCREEN"),
       scrollbar: value("GhosttyTerminalData", "SCROLLBAR"),
       viewportActive: value("GhosttyTerminalData", "VIEWPORT_ACTIVE"),
+      mode: value("GhosttyTerminalData", "MODE"),
+    },
+    terminalOption: {
+      colorBackground: value("GhosttyTerminalOption", "COLOR_BACKGROUND"),
+      colorForeground: value("GhosttyTerminalOption", "COLOR_FOREGROUND"),
     },
     renderData: {
       dirty: value("GhosttyRenderStateData", "DIRTY"),

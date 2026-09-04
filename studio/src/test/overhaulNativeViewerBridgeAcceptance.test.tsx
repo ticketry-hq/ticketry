@@ -40,6 +40,7 @@ describe("native viewer attachment acceptance", () => {
   });
 
   beforeEach(() => {
+    window.history.replaceState({}, "", "/?terminalRenderer=native");
     vi.resetAllMocks();
     installDesktopGraphQlRuntime();
     vi.stubGlobal("ResizeObserver", ResizeObserverStub);
@@ -144,7 +145,7 @@ describe("native viewer attachment acceptance", () => {
       readFile(`${process.cwd()}/src-tauri/tauri.conf.json`, "utf8"),
     ]);
     expect(themeSource).toContain("background = #111317");
-    expect(tauriConfig).toContain('"native/ticketry-ghostty.conf": "ticketry-ghostty.conf"');
+    expect(tauriConfig).not.toContain('"native/ticketry-ghostty.conf"');
     expect(runtimeSource).toContain("load_ticketry_ghostty_theme(runtime->config)");
     expect(runtimeSource).toContain("ghostty_config_load_file(config");
     expect(runtimeSource).toContain("ticketry_ghostty_background_is_configured");

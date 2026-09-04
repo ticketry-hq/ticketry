@@ -9,6 +9,7 @@
 mod attachment;
 mod tmux_client;
 mod webview_commands;
+mod worker_diagnostics;
 
 pub use attachment::{
     AttachmentOutcome, TerminalAttachment, TerminalAttachmentControl, TerminalAttachmentError,

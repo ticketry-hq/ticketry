@@ -1,13 +1,7 @@
 # `ghostty-wasm` — WebView-hosted Ghostty renderer (CODING-1304)
 
-A feature-gated third terminal renderer, built to answer one question with
-measurements: does rendering the terminal inside Ticketry's WKWebView improve
-focus, layout, modal behaviour and maintainability enough to justify any loss
-in rendering speed, terminal features or native integration?
-
-It is an experiment. Native libghostty stays the desktop default and xterm
-stays the compatibility fallback. Nothing here is on a path to shipping without
-a separate follow-up ticket.
+The default Ticketry terminal renderer. It renders inside the browser or
+WKWebView and uses xterm as its compatibility fallback.
 
 ## What it does and does not own
 
@@ -19,17 +13,21 @@ a separate follow-up ticket.
 - **Frames never reach React.** `internal/surface.ts` drives a
   `requestAnimationFrame` loop off Ghostty's own damage tracking; the React
   component owns a host element and nothing else.
+- **Warm story navigation keeps the viewer live.** Hidden viewers keep their
+  tmux attachment and continue parsing output into the Ghostty terminal, but
+  they do not paint. Returning to a story only fits and paints the current
+  state. It does not reattach or replay terminal output.
 
-## Enabling it
+## Renderer selection
 
-The gate is development-only — `import.meta.env.DEV` — so a packaged build can
-never reach it. Within a development build, in precedence order:
+It is selected by default in every build. A development build may override it,
+in precedence order:
 
 1. Launch flag: open Studio with `?terminalRenderer=ghostty-wasm`.
 2. Development setting: `localStorage["ticketry:terminal-renderer"]`.
 
 Accepted values are `native`, `xterm` and `ghostty-wasm`. Anything else, or no
-value, keeps the default native/xterm behaviour.
+value, keeps `ghostty-wasm`.
 
 ## Preparing the artifact
 
@@ -43,9 +41,13 @@ default `ReleaseFast` artifact is ~4.5 MB; set `GHOSTTY_VT_OPTIMIZE=ReleaseSmall
 to build the small one for the cold-start comparison. The mode is recorded in
 `public/ghostty-vt/OPTIMIZE` so a rebuild switches artifacts rather than
 reusing the wrong one. The pin is
-**separate from** the native libghostty pin in `prepare-libghostty.sh`: the
-released tag Ticketry links natively predates the VT C ABI (terminal, screen,
-render, snapshot, selection) this renderer needs. The artifact is not committed.
+**separate from** the retained native libghostty pin in
+`prepare-libghostty.sh`. The artifact is generated and not committed.
+
+Browser and desktop development builds fetch the prepared file from Vite.
+Packaged desktop builds read the same file from Tauri's embedded frontend
+assets through `desktop_ghostty_vt_artifact`; WKWebView cannot fetch that
+embedded file through the root URL used by Vite.
 
 Without the artifact the renderer reports `wasm_artifact_unavailable` and
 Studio falls back to xterm — that is a supported posture, and one of the
@@ -55,7 +57,7 @@ failure cases the experiment has to cover.
 
 | File | Purpose |
 | --- | --- |
-| `rendererSelection.ts` | The development-only renderer gate. |
+| `rendererSelection.ts` | Default selection and development overrides. |
 | `GhosttyWasmTerminal.tsx` | React host: owns the surface's lifetime, nothing else. |
 | `internal/wasmRuntime.ts` | Singleton wasm module, memory views, ABI manifest. |
 | `internal/abi.ts` | The enum members this experiment names. |
@@ -83,8 +85,8 @@ skips when the artifact has not been prepared.
   reference in the wasm indirect table. The artifact is built with an exported,
   growable table for exactly this, but installing a JS function into it has not
   been wired or verified against WKWebView's JavaScriptCore. Until it is, those
-  queries go unanswered and a program that waits on one will stall. Resolving
-  or ruling this out is a prerequisite for any promotion decision.
+  queries go unanswered and a program that waits on one will stall. Xterm
+  remains the compatibility fallback while this is unresolved.
 - **OSC 8 hyperlinks, selection and Kitty graphics** are present in the C ABI
   but not wired to the canvas yet. Mouse *wheel* reporting is wired; mouse
   buttons and motion are not.
@@ -93,12 +95,11 @@ skips when the artifact has not been prepared.
 
 ## Running it
 
-The renderer is selected inside the real Studio window; there is no separate
-harness page. Start the app the usual way and pass the experiment flag:
+The renderer runs inside the real Studio window; there is no separate harness
+page. Start the app normally:
 
 ```bash
 npm run web            # or npm run desktop:dev
-# then open http://127.0.0.1:5174/?terminalRenderer=ghostty-wasm
 ```
 
 Any task terminal opened in that window is drawn by libghostty into a Canvas.
@@ -138,8 +139,8 @@ wheel gesture one of three ways, in precedence order:
    live bottom away from the viewport, and a purely relative row count drifts
    one row per line until nothing can reach the live output again.
 3. **On the alternate screen**, which keeps no scrollback of its own, the
-   gesture falls back to the durable viewer's `tmux copy-mode` scroll, which is
-   what the native and xterm renderers always do.
+   gesture scrolls the durable tmux viewer. This keeps Codex wheel gestures out
+   of the app's cursor-key input path.
 
 Any input — a keystroke, a paste — snaps the viewport back to the live bottom
 first, and so does a resize, whose reflow makes a row-measured position

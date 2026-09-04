@@ -168,7 +168,7 @@ named gate before the full Studio suite, typecheck, and build.
 | 183 | A Module tab's close hover background remains a compact square inside the tab. |
 | 184 | A task worktree keeps cumulative committed changes in one labeled, accessible Changes tab. |
 | 185 | A task workspace restores Details and explains the state when its worktree disappears. |
-| 186 | One caught-up project feed turns one guarded launch acknowledgement and its authoritative update into one visible Agent Run without a second click, subscription, or reconnect. |
+| 186 | One caught-up project feed selects one guarded launch's terminal from its authoritative update, defers viewer attachment until runtime acknowledgement, and never needs a second click, subscription, or reconnect. |
 | 187 | A clean module opens Changes beside Terminal and presents the empty task list. |
 | 188 | Module Changes orders the required facts and navigates module and task rows without a write. |
 | 189 | Module Changes distinguishes an unavailable module checkout. |
@@ -210,6 +210,10 @@ named gate before the full Studio suite, typecheck, and build.
 | 225 | A saved launch model configuration reads back with its provider, model, and reasoning after reopening the workflow settings. |
 | 226 | A launch configuration naming an agent/provider without a model is refused with that reason rather than saved as unconfigured. |
 | 227 | Saving a launch configuration after the workflow editor loads sends the catalog's model and reasoning UUIDs, not name-keyed placeholders the host rejects with "Enter a valid UUID.". |
+| 228 | A retained live Ghostty viewer restores without rebuilding or reattaching it. |
+| 229 | Task badges omit terminal history and quietly announce newly lost runs. |
+| 230 | Codex alternate-screen scrolling uses durable terminal history without sending cursor-key input to Codex. |
+| 231 | Run agent selects its terminal from the authoritative status event before launch returns, then attaches its viewer only after runtime acknowledgement. |
 
 Each executable case carries one stable `[overhaul-NN]` marker. The gate has a
 contract test that fails if a marker is missing or duplicated. When a Studio UI

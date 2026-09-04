@@ -19,12 +19,15 @@ export interface CanvasRendererOptions {
   fontSize: number;
   /** Backing-store scale; 1 keeps the canvas in CSS pixels. */
   pixelRatio: number;
+  /** The opaque background resolved from the surrounding Studio pane. */
+  background: string;
 }
 
 export const DEFAULT_CANVAS_RENDERER_OPTIONS: CanvasRendererOptions = {
   fontFamily: "JetBrains Mono, Fira Code, ui-monospace, monospace",
   fontSize: 13,
   pixelRatio: 1,
+  background: "#111317",
 };
 
 export class TerminalCanvasRenderer {
@@ -32,7 +35,7 @@ export class TerminalCanvasRenderer {
   private readonly canvas: HTMLCanvasElement;
   private options: CanvasRendererOptions;
   private cell: CellMetrics;
-  private lastBackground = "#000000";
+  private lastBackground: string;
 
   constructor(canvas: HTMLCanvasElement, options: Partial<CanvasRendererOptions> = {}) {
     const context = canvas.getContext("2d");
@@ -40,6 +43,7 @@ export class TerminalCanvasRenderer {
     this.canvas = canvas;
     this.context = context;
     this.options = { ...DEFAULT_CANVAS_RENDERER_OPTIONS, ...options };
+    this.lastBackground = this.options.background;
     this.cell = this.measureCell();
   }
 

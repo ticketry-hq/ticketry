@@ -1,6 +1,5 @@
 import { skipToken, useQuery } from "@apollo/client/react";
 import { useSyncExternalStore } from "react";
-import { useTerminalStore, type SessionMeta } from "../agents/terminal/appNavigation";
 import { launchFailureMessage } from "../agents/terminal";
 import { toast, useClientStore } from "../../state/clientStore";
 import type {
@@ -16,8 +15,11 @@ import { getIssueTypesSnapshot } from "../settings";
 import {
   RunNowRefusalError,
   runWorkItemNow,
-  type RunNowResponse,
 } from "./internal/runNowTransport";
+import {
+  activateAcknowledgedTaskRunTab,
+  watchNewTaskRunTab,
+} from "./taskRunTabActivation";
 import { WorkTrackerProjectOpenDocument } from "../projects";
 import { WorkTrackerModuleOpenDocument } from "./generated/workItems.documents";
 import { workItemFromIssue } from "./issueAdapter";
@@ -154,22 +156,6 @@ function refusalMessage(error: unknown): string {
   return launchFailureMessage(error);
 }
 
-function activateRunTerminal(
-  item: WorkItem,
-  moduleId: string | null,
-  response: RunNowResponse,
-): void {
-  useTerminalStore.getState().openSession({
-    taskId: item.id,
-    projectId: item.project_id,
-    moduleId: moduleId ?? undefined,
-    agent: response.run.agent as SessionMeta["agent"],
-    agentRunId: response.run.agent_run_id,
-    select: true,
-  });
-  useClientStore.getState().setActive(item.id, "terminal");
-}
-
 export function startRunNow(item: WorkItem, moduleId: string | null): boolean {
   if (pendingIds.has(item.id)) return false;
   const projectOpen = studioApolloClient().readQuery({
@@ -198,11 +184,20 @@ export function startRunNow(item: WorkItem, moduleId: string | null): boolean {
   }
 
   setPending(item.id, true);
+  const tabTarget = {
+    taskId: item.id,
+    projectId: item.project_id,
+    moduleId,
+  };
+  const runTabWatch = watchNewTaskRunTab(tabTarget);
   void runWorkItemNow(item.id).then((response) => {
+    runTabWatch.acknowledge();
+    runTabWatch.cancel();
     reconcileCommittedState(item, response.committed_state);
-    activateRunTerminal(item, moduleId, response);
+    activateAcknowledgedTaskRunTab(tabTarget, response.run);
     toast.success("Run now started.");
   }).catch((error: unknown) => {
+    runTabWatch.cancel();
     reconcileCommittedState(item, committedStateFromError(error));
     toast.error(`Run now could not be started: ${refusalMessage(error)}`);
   }).finally(() => setPending(item.id, false));

@@ -152,6 +152,15 @@ const ALERT_TRIANGLE_GEOMETRY = (
 );
 export const IconAlertTriangle = (p: IconProps) => <Icon {...p}>{ALERT_TRIANGLE_GEOMETRY}</Icon>;
 
+const INFO_GEOMETRY = (
+  <>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 11v5" />
+    <path d="M12 8h.01" />
+  </>
+);
+export const IconInfo = (p: IconProps) => <Icon {...p}>{INFO_GEOMETRY}</Icon>;
+
 // Create / add — plus.
 const PLUS_GEOMETRY = (
   <>

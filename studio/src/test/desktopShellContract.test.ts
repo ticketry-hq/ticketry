@@ -76,6 +76,7 @@ describe("desktop shell security contract", () => {
         "allow-desktop-preflight-report",
         "allow-desktop-approve-executable-path",
         "allow-desktop-launch-default-coding-agent",
+        "allow-desktop-ghostty-vt-artifact",
         "allow-desktop-update-check",
         "allow-desktop-update-download-and-install",
         "allow-desktop-update-restart",
@@ -415,10 +416,6 @@ describe("desktop shell security contract", () => {
       active: true,
       targets: ["app", "dmg"],
       icon: ["icons/icon.icns", "icons/icon.png"],
-      resources: {
-        "native/ticketry-ghostty.conf": "ticketry-ghostty.conf",
-        "vendor/libghostty/resources/": "",
-      },
       externalBin: ["binaries/ticketry-hook"],
       macOS: {
         minimumSystemVersion: "11.0",

@@ -29,6 +29,8 @@ const SCRATCH_BYTES = 64 * 1024;
 export interface GhosttyVtTerminalOptions {
   cols: number;
   rows: number;
+  background?: readonly [number, number, number];
+  foreground?: readonly [number, number, number];
 }
 
 /** A libghostty-vt terminal plus the render state used to snapshot it. */
@@ -46,6 +48,8 @@ export class GhosttyVtTerminal {
   private readonly rowIteratorSlot: number;
   private readonly cellsSlot: number;
   private readonly scratch: number;
+  private readonly modeConfig: number;
+  private readonly modeConfigBytes: number;
   private readonly viewport: GhosttyTerminalViewport;
   private disposed = false;
 
@@ -57,6 +61,20 @@ export class GhosttyVtTerminal {
     this.terminal = takeOpaque(runtime, "ghostty_terminal_new", (out) =>
       exports.ghostty_terminal_new(0, out, options.cols, options.rows),
     );
+    if (options.background) {
+      this.setColor(
+        this.abi.terminalOption.colorBackground,
+        options.background,
+        "COLOR_BACKGROUND",
+      );
+    }
+    if (options.foreground) {
+      this.setColor(
+        this.abi.terminalOption.colorForeground,
+        options.foreground,
+        "COLOR_FOREGROUND",
+      );
+    }
     this.state = takeOpaque(runtime, "ghostty_render_state_new", (out) =>
       exports.ghostty_render_state_new(0, out),
     );
@@ -67,8 +85,34 @@ export class GhosttyVtTerminal {
       exports.ghostty_render_state_row_cells_new(0, out),
     );
     this.scratch = exports.ghostty_wasm_alloc(SCRATCH_BYTES);
+    this.modeConfigBytes = runtime.sizeOf("GhosttyTerminalModeConfig");
+    this.modeConfig = exports.ghostty_wasm_alloc(this.modeConfigBytes);
     this.reader = new FrameReader(runtime, this.abi);
     this.viewport = new GhosttyTerminalViewport(runtime, this.terminal);
+  }
+
+  /** Set one RGB default before the render state takes its first snapshot. */
+  private setColor(
+    option: number,
+    color: readonly [number, number, number],
+    label: string,
+  ): void {
+    const { exports } = this.runtime;
+    const fields = this.runtime.fields("GhosttyColorRgb");
+    const size = this.runtime.sizeOf("GhosttyColorRgb");
+    const ptr = exports.ghostty_wasm_alloc(size);
+    try {
+      const bytes = this.runtime.bytes();
+      bytes[ptr + fields.r.offset] = color[0];
+      bytes[ptr + fields.g.offset] = color[1];
+      bytes[ptr + fields.b.offset] = color[2];
+      this.runtime.check(
+        `ghostty_terminal_set(${label})`,
+        exports.ghostty_terminal_set(this.terminal, option, ptr),
+      );
+    } finally {
+      exports.ghostty_wasm_free(ptr, size);
+    }
   }
 
   /** The native handle, for callers that must configure the terminal directly. */
@@ -193,6 +237,24 @@ export class GhosttyVtTerminal {
     return this.viewport.viewportActive();
   }
 
+  /** Whether one DEC terminal mode is set. */
+  modeEnabled(mode: number): boolean {
+    this.assertLive();
+    const fields = this.runtime.fields("GhosttyTerminalModeConfig");
+    const bytes = this.runtime.bytes();
+    bytes.fill(0, this.modeConfig, this.modeConfig + this.modeConfigBytes);
+    this.runtime.view().setUint16(this.modeConfig + fields.mode.offset, mode, true);
+    this.runtime.check(
+      `ghostty_terminal_get(MODE ${mode})`,
+      this.runtime.exports.ghostty_terminal_get(
+        this.terminal,
+        this.abi.terminalData.mode,
+        this.modeConfig,
+      ),
+    );
+    return this.runtime.bytes()[this.modeConfig + fields.value.offset] !== 0;
+  }
+
   /**
    * Force the next frame to report every row dirty. Needed after a canvas
    * resize, which clears the backing store that partial repaint relies on, and
@@ -234,6 +296,7 @@ export class GhosttyVtTerminal {
     exports.ghostty_wasm_free_opaque(this.cellsSlot);
     exports.ghostty_wasm_free_opaque(this.rowIteratorSlot);
     exports.ghostty_wasm_free(this.scratch, SCRATCH_BYTES);
+    exports.ghostty_wasm_free(this.modeConfig, this.modeConfigBytes);
   }
 
   private handleAt(slot: number): number {
@@ -271,4 +334,3 @@ function takeOpaque(
     exports.ghostty_wasm_free_opaque(out);
   }
 }
-

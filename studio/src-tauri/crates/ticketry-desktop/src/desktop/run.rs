@@ -79,6 +79,7 @@ pub fn run(context: tauri::Context, file_logging_requested: bool) {
                 commands::desktop_validate_module_folder,
                 commands::desktop_preflight_report,
                 commands::desktop_approve_executable_path,
+                crate::desktop::embedded_assets::desktop_ghostty_vt_artifact,
                 app_updates::desktop_update_check,
                 app_updates::install::desktop_update_download_and_install,
                 app_updates::install::desktop_update_restart,

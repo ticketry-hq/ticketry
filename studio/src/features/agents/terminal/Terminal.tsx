@@ -27,8 +27,7 @@ import { nativeViewerSessionIsLive } from "./internal/nativeViewerSessionLivenes
 import { ensureTerminalRunCreated } from "./internal/terminalRunCreation";
 import { currentTerminalRendererOverride } from "./ghostty-wasm/rendererSelection";
 
-// CODING-1304 — loaded on demand so the experiment's renderer never reaches a
-// packaged bundle, where its development-only gate can never open.
+// Loaded on demand so the default renderer does not delay the Studio shell.
 const GhosttyWasmTerminal = lazy(async () => ({
   default: (await import("./ghostty-wasm/GhosttyWasmTerminal")).GhosttyWasmTerminal,
 }));
@@ -61,23 +60,23 @@ export function Terminal({
     sessionId ? state.sessions[sessionId] ?? null : null,
   );
   const desktop = isTauri();
-  // CODING-1304 — development-only renderer override. Null in every packaged
-  // build, so native stays the desktop default and xterm the fallback.
+  // ghostty-wasm is the shipping default. Development builds can override it
+  // to compare the retained renderers.
   const [rendererOverride] = useState(() => currentTerminalRendererOverride());
-  // The experiment's own failures are kept out of `nativeFailure`: the
+  // WASM failures are kept out of `nativeFailure`: the
   // window-scoped native recovery campaign reloads the WebView, which can
   // neither produce a missing wasm artifact nor fix a Canvas renderer fault.
-  const [experimentFailure, setExperimentFailure] = useState<{
+  const [wasmFailure, setWasmFailure] = useState<{
     sessionId: string | null;
     reason: string;
   } | null>(null);
-  const markExperimentUnavailable = useCallback((reason: string) => {
-    setExperimentFailure({ sessionId, reason });
+  const markWasmUnavailable = useCallback((reason: string) => {
+    setWasmFailure({ sessionId, reason });
   }, [sessionId]);
-  const experimentFailureReason =
-    experimentFailure?.sessionId === sessionId ? experimentFailure.reason : null;
+  const wasmFailureReason =
+    wasmFailure?.sessionId === sessionId ? wasmFailure.reason : null;
   const [nativeAvailable, setNativeAvailable] = useState<boolean | null>(() =>
-    desktop ? null : false,
+    desktop && rendererOverride === "native" ? null : false,
   );
   const [nativeFailure, setNativeFailure] = useState<{
     sessionId: string | null;
@@ -90,7 +89,7 @@ export function Terminal({
     nativeFailure?.sessionId === sessionId ? nativeFailure.reason : null;
 
   useEffect(() => {
-    if (!desktop) return;
+    if (!desktop || rendererOverride !== "native") return;
     let active = true;
     void nativeGhosttyAvailable().then((available) => {
       if (active) setNativeAvailable(available);
@@ -98,14 +97,14 @@ export function Terminal({
     return () => {
       active = false;
     };
-  }, [desktop]);
+  }, [desktop, rendererOverride]);
 
   useEffect(() => {
     if (!sessionId || !session) return;
     ensureTerminalRunCreated(sessionId, session);
   }, [session, sessionId]);
 
-  // A native failure on a live desktop terminal is the only input to the
+  // An explicitly selected native renderer failure on a live desktop terminal is the only input to the
   // window-scoped recovery campaign. Capability absence, browser rendering and
   // ended sessions are supported fallback postures, not render failures.
   useEffect(() => {
@@ -132,29 +131,42 @@ export function Terminal({
     session?.status,
   ]);
 
+  if (session?.viewerAttachmentDeferred) {
+    return (
+      <div
+        className="h-full w-full bg-inherit"
+        data-testid="terminal-viewer-pending"
+      />
+    );
+  }
+
   if (
     rendererOverride === "ghostty-wasm" &&
     sessionId &&
     session?.agentRunId &&
     nativeViewerSessionIsLive(session.status) &&
-    !experimentFailureReason
+    !wasmFailureReason
   ) {
     return (
       <Suspense
-        fallback={<div className="h-full w-full bg-pane-panel" data-testid="terminal-renderer-pending" />}
+        fallback={<div className="h-full w-full bg-inherit" data-testid="terminal-renderer-pending" />}
       >
         <GhosttyWasmTerminal
           sessionId={sessionId}
           agentRunId={session.agentRunId}
           active={active}
           focusSignal={focusSignal}
-          onUnavailable={markExperimentUnavailable}
+          onUnavailable={markWasmUnavailable}
         />
       </Suspense>
     );
   }
 
-  if (desktop && (nativeAvailable === null || !session?.agentRunId)) {
+  if (
+    rendererOverride === "native" &&
+    desktop &&
+    (nativeAvailable === null || !session?.agentRunId)
+  ) {
     return (
       <div
         className="h-full w-full bg-pane-panel"
@@ -164,8 +176,8 @@ export function Terminal({
   }
 
   if (
+    rendererOverride === "native" &&
     nativeAvailable &&
-    rendererOverride !== "xterm" &&
     sessionId &&
     session?.agentRunId &&
     nativeViewerSessionIsLive(session.status) &&
@@ -189,17 +201,15 @@ export function Terminal({
       focusSignal={focusSignal}
     />
   );
-  // CODING-1304 — an experiment renderer that stepped aside explains itself
-  // through the same notice, without touching the native fallback contract.
-  if (experimentFailureReason) {
-    return withFallbackNotice(fallback, experimentFailureReason);
+  if (wasmFailureReason) {
+    return withFallbackNotice(fallback, wasmFailureReason, "Ghostty WASM");
   }
   if (!nativeFailureReason) return fallback;
-  return withFallbackNotice(fallback, nativeFailureReason);
+  return withFallbackNotice(fallback, nativeFailureReason, "Native terminal");
 }
 
 /** The compatibility renderer plus the reason the preferred one stepped aside. */
-function withFallbackNotice(fallback: JSX.Element, reason: string) {
+function withFallbackNotice(fallback: JSX.Element, reason: string, renderer: string) {
   return (
     <div className="relative h-full w-full">
       {fallback}
@@ -208,7 +218,7 @@ function withFallbackNotice(fallback: JSX.Element, reason: string) {
         data-testid="native-terminal-fallback-notice"
         className="pointer-events-none absolute bottom-2 right-2 max-w-[min(32rem,calc(100%-1rem))] border border-lifecycle-attention/40 bg-pane-bg/95 px-2 py-1 text-xs text-lifecycle-attention shadow"
       >
-        Native terminal unavailable: {reason}. Using compatibility renderer.
+        {renderer} unavailable: {reason}. Using compatibility renderer.
       </div>
     </div>
   );

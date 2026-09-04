@@ -248,6 +248,12 @@ export async function terminateTerminalSession(
     agentRunId,
     terminationRequestId: crypto.randomUUID(),
   };
+  console.info("[terminal-probe]", JSON.stringify({
+    event: "terminal-cleanup-requested",
+    agentRunId,
+    requestId: variables.terminationRequestId,
+    caller: new Error("terminal cleanup caller").stack?.split("\n").slice(1, 8).join(" | ") ?? null,
+  }));
   const result = await studioRuntime().writeWorkTracker({
     graphQl: async (execute) => {
       try {

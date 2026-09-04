@@ -121,7 +121,9 @@ async fn prepare_command_database(directory: &tempfile::TempDir) {
                 started_at TEXT NOT NULL, ended_at TEXT, exit_code INTEGER, error TEXT,
                 cwd TEXT, provider_session_id TEXT, lifecycle_state TEXT,
                 lifecycle_updated_at TEXT, design_dir TEXT, resumed_from TEXT,
-                scope TEXT NOT NULL, launch_state TEXT, launch_model TEXT
+                scope TEXT NOT NULL, launch_state TEXT, launch_model TEXT,
+                initial_prompt TEXT, launch_reasoning TEXT,
+                launch_unattended BOOL NOT NULL DEFAULT 0
             );
             CREATE TABLE runs_status_events (
                 cursor INTEGER PRIMARY KEY AUTOINCREMENT, event_id TEXT NOT NULL UNIQUE,
@@ -155,7 +157,11 @@ async fn prepare_command_database(directory: &tempfile::TempDir) {
                 ('40000000000000000000000000000001', '10000000000000000000000000000000',
                  'Backlog', 'backlog', '', 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
                 ('40000000000000000000000000000002', '10000000000000000000000000000000',
-                 'Review', 'started', '', 1, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+                 'Review', 'started', '', 1, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+                ('40000000000000000000000000000003', '10000000000000000000000000000000',
+                 'Building', 'started', '', 2, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+                ('40000000000000000000000000000004', '10000000000000000000000000000000',
+                 'Validation', 'started', '', 3, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
             INSERT INTO worktracker_issuetype VALUES
                 ('30000000000000000000000000000001', '10000000000000000000000000000000',
                  'Story', 'task', '', 0, '40000000000000000000000000000001', 0, 0,
@@ -172,13 +178,18 @@ async fn prepare_command_database(directory: &tempfile::TempDir) {
                  'Module', 0, 0, 'M', '', '[]', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
                 ('30000000000000000000000000000000', '10000000000000000000000000000000',
                  'task', '30000000000000000000000000000002', NULL,
-                 '20000000000000000000000000000001', '40000000000000000000000000000001', 0,
+                 '20000000000000000000000000000001', '40000000000000000000000000000003', 0,
                  'Authenticated caller', 900, 0, 'Z', '', '[]',
                  CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
             INSERT INTO agent_runs
-                (id, issue_id, agent, status, started_at, scope)
+                (id, issue_id, agent, status, started_at, scope, launch_state)
                 VALUES ('run-valid', '30000000000000000000000000000000', 'codex',
-                        'running', '2026-08-15T00:00:00+00:00', 'task');
+                        'running', '2026-08-15T00:00:00+00:00', 'task', 'Building');
+            INSERT INTO worktracker_issuetypetransition
+                (issue_type_id, from_state_id, to_state_id, agent_allowed)
+                VALUES ('30000000000000000000000000000002',
+                        '40000000000000000000000000000003',
+                        '40000000000000000000000000000004', 1);
             INSERT INTO agent_terminal_sessions
                 (agent_run_id, tmux_session_name, task_id, module_id, project_id,
                  created_at, scope, runtime_namespace, agent)
@@ -561,6 +572,22 @@ async fn mcp_mutations_cover_crud_hierarchy_workflow_and_blockers_through_rust_c
     )
     .await;
     assert_eq!(launched["error"], "module_folder_unusable", "{launched}");
+    let run_ticket_transitioned = call(
+        &url,
+        121,
+        "update_task_status",
+        json!({
+            "project_id": PROJECT,
+            "task_id": "AUTH-900",
+            "status_name": "Validation"
+        }),
+    )
+    .await;
+    assert_eq!(
+        run_ticket_transitioned["ok"], true,
+        "{run_ticket_transitioned}"
+    );
+    assert_eq!(run_ticket_transitioned["status"], "Validation");
     let terminated = call(&url, 13, "terminate_current_run", json!({})).await;
     assert_eq!(terminated["agent_run_id"], "run-valid", "{terminated}");
     assert_eq!(terminated["termination_requested"], true);

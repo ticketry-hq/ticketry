@@ -1,12 +1,11 @@
 /**
  * CODING-1304 — which terminal renderer a Studio build presents.
  *
- * Native libghostty stays the desktop default and xterm stays the
- * compatibility fallback. `ghostty-wasm` is an opt-in experiment behind a
- * development-only gate, so a normal build — packaged or not — never reaches
- * it. Selection changes nothing about the run, the tmux session identity, or
- * any persisted terminal record: all three renderers attach the same durable
- * viewer through the same transport.
+ * `ghostty-wasm` is the default in browser, development desktop and packaged
+ * desktop builds. xterm is the compatibility fallback. Development builds may
+ * still select another renderer for comparison. Selection changes nothing
+ * about the run, the tmux session identity, or any persisted terminal record:
+ * all three renderers attach the same durable viewer through the same transport.
  */
 
 export type TerminalRendererChoice = "native" | "xterm" | "ghostty-wasm";
@@ -35,14 +34,14 @@ function parse(value: string | null | undefined): TerminalRendererChoice | null 
 }
 
 /**
- * Resolve the requested renderer override, or null to keep the default
- * native/xterm behaviour. A launch flag (`?terminalRenderer=…`) wins over the
- * stored development setting so one window can be compared against another.
+ * Resolve the requested development renderer or use the shipping default.
+ * A launch flag (`?terminalRenderer=…`) wins over the stored development
+ * setting so one window can be compared against another.
  */
 export function selectedTerminalRenderer(
   input: RendererGateInput,
-): TerminalRendererChoice | null {
-  if (!input.developmentBuild) return null;
+): TerminalRendererChoice {
+  if (!input.developmentBuild) return "ghostty-wasm";
   let fromQuery: TerminalRendererChoice | null = null;
   try {
     fromQuery = parse(new URLSearchParams(input.search ?? "").get(RENDERER_QUERY_PARAM));
@@ -51,16 +50,16 @@ export function selectedTerminalRenderer(
   }
   if (fromQuery) return fromQuery;
   try {
-    return parse(input.storage?.getItem(RENDERER_STORAGE_KEY));
+    return parse(input.storage?.getItem(RENDERER_STORAGE_KEY)) ?? "ghostty-wasm";
   } catch {
-    /* Storage can be unavailable; fall back to the default renderer. */
-    return null;
+    /* Storage can be unavailable; use the shipping default renderer. */
+    return "ghostty-wasm";
   }
 }
 
-/** Read the gate from the live document. */
-export function currentTerminalRendererOverride(): TerminalRendererChoice | null {
-  if (typeof window === "undefined") return null;
+/** Read the renderer choice from the live document. */
+export function currentTerminalRendererOverride(): TerminalRendererChoice {
+  if (typeof window === "undefined") return "ghostty-wasm";
   let storage: Pick<Storage, "getItem"> | undefined;
   try {
     storage = window.localStorage;

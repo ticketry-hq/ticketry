@@ -23,6 +23,7 @@
     "desktop:deploy": "npm run desktop:deploy --workspace @worktracker/studio",
     "deploy": "npm run desktop:deploy --workspace @worktracker/studio",
     "desktop:dev": "npm run desktop:dev --workspace @worktracker/studio --",
+    "desktop:dev:prod": "npm run desktop:dev --workspace @worktracker/studio -- --production-data",
     "desktop:smoke": "npm run desktop:smoke --workspace @worktracker/studio",
     "desktop:smoke:concurrent": "npm run desktop:smoke:concurrent --workspace @worktracker/studio",
     "desktop:smoke:dev": "npm run desktop:smoke:dev --workspace @worktracker/studio",

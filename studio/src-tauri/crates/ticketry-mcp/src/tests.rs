@@ -59,7 +59,9 @@ async fn prepare_projects(directory: &tempfile::TempDir) {
                 started_at varchar NOT NULL, ended_at varchar, exit_code integer, error varchar,
                 cwd varchar, provider_session_id varchar, lifecycle_state varchar,
                 lifecycle_updated_at varchar, design_dir varchar, resumed_from varchar,
-                scope varchar NOT NULL, launch_state varchar, launch_model varchar
+                scope varchar NOT NULL, launch_state varchar, launch_model varchar,
+                initial_prompt text, launch_reasoning varchar,
+                launch_unattended bool NOT NULL DEFAULT 0
             );
             INSERT INTO worktracker_project VALUES
                 ('10000000000000000000000000000000',
@@ -128,6 +130,41 @@ async fn listener_lists_the_thirty_one_tools_and_recovers_on_the_same_port() {
     .unwrap();
     assert_eq!(pinged["result"]["structuredContent"]["status"], "ok");
     second.shutdown().await;
+    backend_cancellation.cancel();
+    backend_task.await.unwrap();
+}
+
+#[tokio::test]
+async fn current_protocol_tool_catalog_has_required_private_cache_policy() {
+    let directory = tempfile::tempdir().unwrap();
+    prepare_projects(&directory).await;
+    let (backend, backend_cancellation, backend_task) = start_authorizer().await;
+    let runtime = start(&directory, 0, backend).await;
+    let url = format!("http://{}/mcp", runtime.address());
+
+    let listed = reqwest::Client::new()
+        .post(url)
+        .header("content-type", "application/json")
+        .header("accept", "application/json, text/event-stream")
+        .header("mcp-protocol-version", "2026-07-28")
+        .header("mcp-method", "tools/list")
+        .json(&json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/list",
+            "params": {}
+        }))
+        .send()
+        .await
+        .expect("list tools through current MCP protocol")
+        .json::<Value>()
+        .await
+        .expect("decode current MCP tool catalog");
+
+    assert_eq!(listed["result"]["ttlMs"], 0, "{listed:#}");
+    assert_eq!(listed["result"]["cacheScope"], "private", "{listed:#}");
+
+    runtime.shutdown().await;
     backend_cancellation.cancel();
     backend_task.await.unwrap();
 }

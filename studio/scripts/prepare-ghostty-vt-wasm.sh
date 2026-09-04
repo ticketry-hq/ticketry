@@ -1,12 +1,10 @@
 #!/bin/sh
 # CODING-1304 — reproducible build of the pinned libghostty-vt WebAssembly
-# artifact used by the feature-gated `ghostty-wasm` renderer experiment.
+# artifact used by Ticketry's default `ghostty-wasm` renderer.
 #
-# This pin is deliberately separate from the native libghostty pin in
-# `prepare-libghostty.sh`. The native renderer stays on the released tag; the
-# VT C ABI needed for a WebView renderer (terminal, screen, render, snapshot,
-# selection, mouse encoder) only exists on newer revisions. Nothing here may
-# change what the native renderer links against.
+# This pin is deliberately separate from the retained native libghostty pin in
+# `prepare-libghostty.sh`. The VT C ABI needed for the WebView renderer exists
+# only on newer revisions.
 set -eu
 
 GHOSTTY_VT_REVISION="e8aa098674a42e2b4ed1b8c42f4224564ad9fc1e"

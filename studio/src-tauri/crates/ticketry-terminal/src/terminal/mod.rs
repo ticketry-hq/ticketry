@@ -1,6 +1,7 @@
 //! Terminal capability: launch, lifecycle, persistence, reconciliation, and viewing of agent terminals.
 
 pub(crate) mod cleanup;
+pub(crate) mod diagnostics;
 pub(crate) mod instant_run_ticket;
 pub(crate) mod launch;
 pub(crate) mod lifecycle;

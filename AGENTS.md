@@ -57,18 +57,14 @@ Apollo's `InMemoryCache` is the frontend's one state owner for server records
 and client-only state. Selector and persistence adapters may write cache rows,
 but must not retain a second application-state snapshot.
 
-Keep the Tauri/webview boundary narrow. The native terminal renderer consumes a
-pinned libghostty revision through its C API, while tmux remains responsible for
-durable sessions. Preserve the existing fallback unless a deliberate migration
-removes it.
-
-A third renderer, `ghostty-wasm`, exists as a development-only experiment under
-`studio/src/features/agents/terminal/ghostty-wasm/` (CODING-1304). It draws
-libghostty-vt frames on a Canvas surface inside the webview, behind its own
-pinned wasm artifact prepared by `npm run ghostty-vt:prepare --workspace
-@worktracker/studio`. It changes no run, no tmux session identity, and no
-persisted terminal record, and it must not become the default without a
-separate ticket.
+Keep the Tauri/webview boundary narrow. `ghostty-wasm` is the terminal renderer
+in browser, development desktop, and packaged desktop builds. It draws pinned
+libghostty-vt frames on a Canvas surface inside the webview; prepare its artifact
+with `npm run ghostty-vt:prepare --workspace @worktracker/studio`. xterm is the
+compatibility fallback. tmux remains responsible for durable sessions, and a
+renderer change must not change a run, tmux session identity, or persisted
+terminal record. Native libghostty remains only as non-shipping migration code
+until a separate cleanup removes it.
 
 Development data must remain isolated from live application data. Generated
 databases, caches, native libraries, and build output must not be

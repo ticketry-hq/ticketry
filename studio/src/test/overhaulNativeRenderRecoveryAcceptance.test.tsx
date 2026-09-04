@@ -113,6 +113,7 @@ describe("native render recovery acceptance", () => {
   let restore: () => void;
 
   beforeEach(() => {
+    window.history.replaceState({}, "", "/?terminalRenderer=native");
     vi.resetAllMocks();
     installDesktopGraphQlRuntime();
     // `shouldAdvanceTime` keeps Testing Library's own polling alive — it does

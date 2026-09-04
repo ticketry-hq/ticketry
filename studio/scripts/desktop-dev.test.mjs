@@ -18,6 +18,7 @@ import {
   parseDesktopDevOptions,
   parseDesktopDevMode,
   removeTemporarySqliteProfile,
+  resolveDesktopDevelopmentProfile,
   resolveDevelopmentDataDirectory,
   resolveDevelopmentLogPath,
   resolveDevelopmentTmuxSocket,
@@ -126,7 +127,7 @@ test("desktop development selects the first free frontend port", async () => {
   assert.deepEqual(checked, [5174, 5175]);
 });
 
-test("desktop development accepts temporary SQLite mode", () => {
+test("desktop development accepts explicit data modes", () => {
   assert.equal(parseDesktopDevMode([]), "isolated");
   assert.deepEqual(parseDesktopDevOptions(["--temp-sqlite"]), {
     mode: "isolated",
@@ -136,10 +137,54 @@ test("desktop development accepts temporary SQLite mode", () => {
     mode: "isolated",
     temporarySqlite: true,
   });
+  assert.deepEqual(parseDesktopDevOptions(["--production-data"]), {
+    mode: "production-data",
+    temporarySqlite: false,
+  });
+  assert.deepEqual(parseDesktopDevOptions(["--", "--production-data"]), {
+    mode: "production-data",
+    temporarySqlite: false,
+  });
+  assert.throws(
+    () => parseDesktopDevMode(["--production-data", "--temp-sqlite"]),
+    /\[--production-data \| --temp-sqlite\]/,
+  );
   assert.throws(
     () => parseDesktopDevMode(["--unknown"]),
-    /usage: pnpm --filter @worktracker\/studio desktop:dev -- \[--temp-sqlite\]/,
+    /usage: pnpm --filter @worktracker\/studio desktop:dev -- \[--production-data \| --temp-sqlite\]/,
   );
+});
+
+test("production-data mode selects the product profile and tmux namespace", () => {
+  const calls = [];
+  const profile = resolveDesktopDevelopmentProfile({
+    options: parseDesktopDevOptions(["--production-data"]),
+    cwd: "/repository",
+    environment: { HOME: "/users/ticketry" },
+    resolveProductData(input) {
+      calls.push(input);
+      return "/users/ticketry/.config/ticketry";
+    },
+  });
+
+  assert.deepEqual(profile, {
+    dataDirectory: "/users/ticketry/.config/ticketry",
+    tmuxSocket: "muxed",
+  });
+  assert.deepEqual(calls, [{
+    cwd: "/repository",
+    environment: { HOME: "/users/ticketry" },
+  }]);
+});
+
+test("production-data mode preserves an explicit product tmux namespace", () => {
+  const profile = resolveDesktopDevelopmentProfile({
+    options: parseDesktopDevOptions(["--production-data"]),
+    environment: { MUXED_TMUX_SOCKET: "ticketry-product" },
+    resolveProductData: () => "/product/data",
+  });
+
+  assert.equal(profile.tmuxSocket, "ticketry-product");
 });
 
 test("temporary SQLite profiles are unique and removed on shutdown", () => {

@@ -207,11 +207,12 @@ export default function IssueDetail({ issueId }: { issueId: string }) {
   };
 
   return (
-    <div
-      className={`grid h-full overflow-hidden ${
-        sidebarVisible ? "grid-cols-[1fr_260px]" : "grid-cols-[1fr]"
-      }`}
-    >
+    <section role="region" aria-label="Details" className="h-full overflow-hidden">
+      <div
+        className={`grid h-full overflow-hidden ${
+          sidebarVisible ? "grid-cols-[1fr_260px]" : "grid-cols-[1fr]"
+        }`}
+      >
       {/* Left content column */}
       <div className="overflow-y-auto p-6">
         <div className="flex items-start justify-between gap-3">
@@ -346,6 +347,7 @@ export default function IssueDetail({ issueId }: { issueId: string }) {
           }
         />
       )}
-    </div>
+      </div>
+    </section>
   );
 }

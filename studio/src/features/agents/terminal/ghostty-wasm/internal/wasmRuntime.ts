@@ -10,6 +10,8 @@
  * so a re-pinned artifact cannot silently desynchronise this binding.
  */
 
+import { invoke, isTauri } from "@tauri-apps/api/core";
+
 /** Where the prepared artifact is served from. See `prepare-ghostty-vt-wasm.sh`. */
 export const GHOSTTY_VT_ARTIFACT_URL = "/ghostty-vt/ghostty-vt.wasm";
 
@@ -177,6 +179,49 @@ export interface GhosttyVtRuntime {
 
 let runtime: Promise<GhosttyVtRuntime> | null = null;
 
+interface ArtifactLoadOptions {
+  packagedDesktop?: boolean;
+  invokeArtifact?: () => Promise<ArrayBuffer | Uint8Array>;
+  fetchArtifact?: typeof fetch;
+}
+
+/**
+ * Packaged WKWebView builds cannot fetch Tauri's embedded assets by a root URL.
+ * Read the exact bundled file through the desktop command there; keep Vite's
+ * ordinary HTTP path for browser and development builds.
+ */
+export async function loadGhosttyVtArtifact(
+  url: string = GHOSTTY_VT_ARTIFACT_URL,
+  options: ArtifactLoadOptions = {},
+): Promise<ArrayBuffer> {
+  const packagedDesktop = options.packagedDesktop ?? (isTauri() && import.meta.env.PROD);
+
+  try {
+    if (packagedDesktop) {
+      const artifact = await (options.invokeArtifact ?? (() =>
+        invoke<ArrayBuffer>("desktop_ghostty_vt_artifact")))();
+      if (artifact instanceof ArrayBuffer) return artifact;
+      return artifact.buffer.slice(
+        artifact.byteOffset,
+        artifact.byteOffset + artifact.byteLength,
+      ) as ArrayBuffer;
+    }
+
+    const response = await (options.fetchArtifact ?? fetch)(url);
+    if (!response.ok) {
+      throw new Error(`${response.status} ${response.statusText}`);
+    }
+    return response.arrayBuffer();
+  } catch (error) {
+    const source = packagedDesktop ? "the packaged application" : url;
+    throw new GhosttyWasmLoadError(
+      "artifact_unavailable",
+      `ghostty-vt artifact could not be loaded from ${source}`,
+      error,
+    );
+  }
+}
+
 /**
  * Load the singleton runtime. Concurrent callers share one in-flight load; a
  * failed load is not cached, so a later retry can succeed after the artifact
@@ -198,20 +243,7 @@ export function resetGhosttyVtRuntime(): void {
 }
 
 async function instantiate(url: string): Promise<GhosttyVtRuntime> {
-  let artifact: ArrayBuffer;
-  try {
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`${response.status} ${response.statusText}`);
-    }
-    artifact = await response.arrayBuffer();
-  } catch (error) {
-    throw new GhosttyWasmLoadError(
-      "artifact_unavailable",
-      `ghostty-vt artifact could not be fetched from ${url}`,
-      error,
-    );
-  }
+  const artifact = await loadGhosttyVtArtifact(url);
 
   let instance: WebAssembly.Instance;
   try {

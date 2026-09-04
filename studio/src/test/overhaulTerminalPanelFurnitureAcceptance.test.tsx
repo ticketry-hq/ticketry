@@ -254,6 +254,7 @@ function nudgeGrip(key: "ArrowUp" | "ArrowDown"): void {
 
 describe("terminal panel furniture acceptance", () => {
   beforeEach(() => {
+    window.history.replaceState({}, "", "/?terminalRenderer=native");
     localStorage.clear();
     installDesktopGraphQlRuntime();
     vi.useFakeTimers();

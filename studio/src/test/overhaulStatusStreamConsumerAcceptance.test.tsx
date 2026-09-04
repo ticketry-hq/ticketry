@@ -20,6 +20,8 @@ import {
   TaskDocumentRegistryDocument,
 } from "../features/documents/generated/documentRegistry.documents";
 import { createBrowserRuntime } from "../runtime/browserRuntime";
+import ToastHost from "../app/shell/ToastHost";
+import { useClientStore } from "../state/clientStore";
 
 const PROJECT = "11111111-1111-1111-1111-111111111111";
 const OTHER_PROJECT = "22222222-2222-2222-2222-222222222222";
@@ -76,6 +78,27 @@ const durableEvent = (
   ...overrides,
 });
 
+function statusRun(overrides: Record<string, unknown> = {}) {
+  return {
+    agent_run_id: "run-1",
+    project_id: PROJECT,
+    task_id: "task-1",
+    module_id: "module-1",
+    agent: "codex",
+    scope: "task",
+    launch_state: "Implement",
+    launch_model: "gpt-5",
+    started_at: "2026-08-16T09:00:00+00:00",
+    state: "working",
+    effective_state: "working",
+    updated_at: "2026-08-16T09:00:00+00:00",
+    provider_session_id: null,
+    output_sequence: 0,
+    last_output_at: null,
+    ...overrides,
+  };
+}
+
 beforeEach(() => {
   vi.useFakeTimers();
   statusStreamFeed.resetCursors(PROJECT);
@@ -86,6 +109,7 @@ beforeEach(() => {
     automationAttempts: {},
     automationByTask: {},
   });
+  useClientStore.setState({ toasts: [] });
 });
 
 afterEach(() => {
@@ -104,6 +128,82 @@ describe("durable status consumer acceptance", () => {
 
     expect(server.subscriptions).toHaveLength(1);
     expect(server.subscriptions[0].id).toMatch(/^[A-Za-z0-9_-]{1,128}$/);
+  });
+
+  it("[overhaul-229] drops terminal history from task badges and quietly announces new losses", async () => {
+    const server = transport();
+    render(
+      <>
+        <AgentStateBadge issueId="task-1" />
+        <ToastHost />
+      </>,
+    );
+
+    statusStreamFeed.start(PROJECT, { createProxy: server.createProxy });
+    await vi.advanceTimersByTimeAsync(0);
+    act(() => {
+      server.send({
+        __typename: "RunStatusSnapshot",
+        project_id: PROJECT,
+        cursor: 10,
+        at: "2026-08-16T10:00:00+00:00",
+        runs: [
+          statusRun({ agent_run_id: "run-1" }),
+          statusRun({ agent_run_id: "run-2" }),
+          statusRun({
+            agent_run_id: "historical-loss",
+            state: "lost",
+            effective_state: "lost",
+          }),
+        ],
+        automation_attempts: [],
+      });
+    });
+
+    expect(screen.getByTestId("agent-state-badge")).toHaveTextContent("▶2");
+    expect(screen.queryByTestId("toast-info")).not.toBeInTheDocument();
+
+    // Replayed loss history before caught-up is silent.
+    act(() => {
+      server.send(durableEvent(
+        11,
+        "agent_run.terminal",
+        {
+          agentRunId: "historical-loss",
+          state: "lost",
+          occurredAt: "2026-08-16T10:01:00+00:00",
+        },
+        { subject_kind: "agent_run", agent_run_id: "historical-loss" },
+      ));
+      server.send({
+        __typename: "RunStatusCaughtUp",
+        project_id: PROJECT,
+        cursor: 11,
+      });
+    });
+    expect(screen.queryByTestId("toast-info")).not.toBeInTheDocument();
+
+    await act(async () => {
+      for (const [cursor, agentRunId] of [[12, "run-1"], [13, "run-2"]] as const) {
+        server.send(durableEvent(
+          cursor,
+          "agent_run.terminal",
+          {
+            agentRunId,
+            state: "lost",
+            occurredAt: `2026-08-16T10:0${cursor - 10}:00+00:00`,
+          },
+          { subject_kind: "agent_run", agent_run_id: agentRunId },
+        ));
+      }
+      await vi.advanceTimersByTimeAsync(250);
+    });
+
+    expect(screen.queryByTestId("agent-state-badge")).not.toBeInTheDocument();
+    expect(screen.getAllByTestId("toast-info")).toHaveLength(1);
+    expect(screen.getByTestId("toast-info")).toHaveTextContent(
+      "2 terminal sessions closed. You can resume them from terminal history.",
+    );
   });
 
   it("[overhaul-82c] applies the durable status subscription in browser Studio", async () => {

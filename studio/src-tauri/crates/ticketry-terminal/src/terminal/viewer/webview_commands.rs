@@ -13,7 +13,6 @@ use std::collections::HashMap;
 use std::io::Read;
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
 use std::sync::{Arc, Mutex};
-use std::thread;
 use std::time::Duration;
 use tauri::ipc::Channel;
 
@@ -314,6 +313,11 @@ impl OutputObservationTrigger {
         let agent_run_id = self.agent_run_id.clone();
         self.runtime.spawn(async move {
             if let Err(error) = service.observe(&agent_run_id).await {
+                crate::terminal::diagnostics::record(
+                    "terminal-output-observation-failed",
+                    Some(&agent_run_id),
+                    serde_json::json!({"message": error.to_string()}),
+                );
                 eprintln!("Terminal output observation failed for {agent_run_id}: {error}");
             }
         });
@@ -376,6 +380,7 @@ pub fn viewer_attach(
     }
     spawn_viewer_worker(
         runtime.clone(),
+        run_id.clone(),
         handle.clone(),
         viewer,
         output,
@@ -388,6 +393,15 @@ pub fn viewer_attach(
                 agent_run_id: run_id.clone(),
                 runtime,
             }),
+    );
+    crate::terminal::diagnostics::record(
+        "terminal-viewer-attached",
+        Some(&run_id),
+        serde_json::json!({
+            "viewerHandle": handle,
+            "columns": columns,
+            "rows": rows,
+        }),
     );
     let lease = CreateViewerLease {
         agent_run_id: run_id,
@@ -571,6 +585,7 @@ fn request<T>(
 
 fn spawn_viewer_worker(
     runtime: Arc<ViewerRuntime>,
+    run_id: String,
     handle: String,
     viewer: TerminalAttachment,
     output: Channel<ViewerChannelEvent>,
@@ -580,11 +595,19 @@ fn spawn_viewer_worker(
 ) {
     let (control, mut reader) = viewer.into_control_and_reader();
     let (output_sender, output_receiver) = mpsc::sync_channel(OUTPUT_CHANNEL_CAPACITY);
-    spawn_output_pump(output_receiver, output, command_sender.clone());
+    spawn_output_pump(
+        &run_id,
+        &handle,
+        output_receiver,
+        output,
+        command_sender.clone(),
+    );
 
     let reader_sender = output_sender.clone();
     let reader_commands = command_sender.clone();
-    thread::spawn(move || {
+    let reader_run = run_id.clone();
+    let reader_handle = handle.clone();
+    super::worker_diagnostics::spawn("pty-reader", &run_id, &handle, move || {
         let mut buffer = vec![0; READ_BUFFER_BYTES];
         let close_reason = loop {
             match reader.read(&mut buffer) {
@@ -612,10 +635,21 @@ fn spawn_viewer_worker(
                 }
             }
         };
+        crate::terminal::diagnostics::record(
+            "terminal-viewer-reader-closed",
+            Some(&reader_run),
+            serde_json::json!({
+                "viewerHandle": reader_handle,
+                "reason": format!("{close_reason:?}"),
+            }),
+        );
         let _ = reader_commands.send(WorkerCommand::ReaderClosed(close_reason));
     });
 
-    thread::spawn(move || {
+    let control_run = run_id.clone();
+    let control_handle = handle.clone();
+    let registry_handle = handle.clone();
+    super::worker_diagnostics::spawn("control", &run_id, &handle, move || {
         let mut control = Some(control);
         loop {
             match command_receiver.recv_timeout(Duration::from_millis(50)) {
@@ -662,25 +696,49 @@ fn spawn_viewer_worker(
                             continue;
                         }
                     };
-                    let status = close_viewer(&runtime, &handle, reason);
+                    crate::terminal::diagnostics::record(
+                        "terminal-viewer-control-closed",
+                        Some(&control_run),
+                        serde_json::json!({
+                            "viewerHandle": control_handle,
+                            "reason": format!("{reason:?}"),
+                        }),
+                    );
+                    let status = close_viewer(&runtime, &registry_handle, reason);
                     let _ = output_sender.send(ViewerChannelEvent::Closed { reason });
                     let _ = reply.send(Ok(status));
                     return;
                 }
                 Ok(WorkerCommand::ReaderClosed(reason)) => {
-                    if is_detaching(&runtime, &handle) {
+                    if is_detaching(&runtime, &registry_handle) {
                         continue;
                     }
-                    let status = close_viewer(&runtime, &handle, reason);
+                    crate::terminal::diagnostics::record(
+                        "terminal-viewer-control-closed",
+                        Some(&control_run),
+                        serde_json::json!({
+                            "viewerHandle": control_handle,
+                            "reason": format!("{reason:?}"),
+                        }),
+                    );
+                    let status = close_viewer(&runtime, &registry_handle, reason);
                     let _ = output_sender.send(ViewerChannelEvent::Closed { reason });
                     let _ = status;
                     return;
                 }
                 Ok(WorkerCommand::ChannelClosed) => {
+                    crate::terminal::diagnostics::record(
+                        "terminal-viewer-control-closed",
+                        Some(&control_run),
+                        serde_json::json!({
+                            "viewerHandle": control_handle,
+                            "reason": "channel_closed",
+                        }),
+                    );
                     if let Some(control) = control.take() {
                         let _ = control.detach();
                     }
-                    close_viewer(&runtime, &handle, ViewerCloseReason::ChannelClosed);
+                    close_viewer(&runtime, &registry_handle, ViewerCloseReason::ChannelClosed);
                     return;
                 }
                 Err(RecvTimeoutError::Timeout) => match control
@@ -690,18 +748,35 @@ fn spawn_viewer_worker(
                 {
                     Ok(Some(AttachmentOutcome::ClientExited { exit_code })) => {
                         let reason = ViewerCloseReason::TmuxClientExited { exit_code };
-                        close_viewer(&runtime, &handle, reason);
+                        crate::terminal::diagnostics::record(
+                            "terminal-viewer-control-closed",
+                            Some(&control_run),
+                            serde_json::json!({
+                                "viewerHandle": control_handle,
+                                "reason": "tmux_client_exited",
+                                "exitCode": exit_code,
+                            }),
+                        );
+                        close_viewer(&runtime, &registry_handle, reason);
                         let _ = output_sender.send(ViewerChannelEvent::Closed { reason });
                         return;
                     }
                     Ok(_) => {}
                     Err(_) => {
+                        crate::terminal::diagnostics::record(
+                            "terminal-viewer-control-closed",
+                            Some(&control_run),
+                            serde_json::json!({
+                                "viewerHandle": control_handle,
+                                "reason": "tmux_client_poll_failed",
+                            }),
+                        );
                         let _ = output_sender.send(ViewerChannelEvent::Failure {
                             layer: ViewerFailureLayer::Pty,
                             code: ViewerFailureCode::PtyFailed,
                             message: "could not poll the viewer PTY client".to_owned(),
                         });
-                        close_viewer(&runtime, &handle, ViewerCloseReason::PtyEof);
+                        close_viewer(&runtime, &registry_handle, ViewerCloseReason::PtyEof);
                         let _ = output_sender.send(ViewerChannelEvent::Closed {
                             reason: ViewerCloseReason::PtyEof,
                         });
@@ -734,13 +809,22 @@ impl ViewerCommandState {
 }
 
 fn spawn_output_pump(
+    run_id: &str,
+    handle: &str,
     receiver: Receiver<ViewerChannelEvent>,
     output: Channel<ViewerChannelEvent>,
     command_sender: mpsc::Sender<WorkerCommand>,
 ) {
-    thread::spawn(move || {
+    let run = run_id.to_owned();
+    let viewer_handle = handle.to_owned();
+    super::worker_diagnostics::spawn("output-pump", run_id, handle, move || {
         while let Ok(event) = receiver.recv() {
             if output.send(event).is_err() {
+                crate::terminal::diagnostics::record(
+                    "terminal-viewer-output-channel-closed",
+                    Some(&run),
+                    serde_json::json!({"viewerHandle": viewer_handle}),
+                );
                 let _ = command_sender.send(WorkerCommand::ChannelClosed);
                 return;
             }

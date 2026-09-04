@@ -26,6 +26,7 @@ import {
   type StatusCursorStore,
 } from "../statusStreamCursors";
 import {
+  readAgentStatusHolding,
   switchAgentStatusProject,
   upsertAutomationAttempt,
 } from "../apolloHolding";
@@ -43,6 +44,7 @@ import { applyCreatedDocumentFact } from "./documentDiscovery";
 import { applySnapshotFrame } from "./statusSnapshot";
 import { readStatusFact } from "./statusFacts";
 import { applyRunStatusFact } from "./runStatusHolding";
+import { createLostRunNotifier } from "./lostRunNotifier";
 import { refreshTerminalHoldings } from "./terminalInvalidation";
 import {
   createWorkItemInvalidator,
@@ -105,6 +107,7 @@ export const statusStreamFeed = {
     const invalidator: WorkItemInvalidator = createWorkItemInvalidator();
     const documents: DocumentInvalidator = createDocumentInvalidator();
     const worktrees: WorktreeInvalidator = createWorktreeInvalidator();
+    const lostRuns = createLostRunNotifier();
 
     /** Only the currently owned subscription may write into this project. */
     const owns = (subscription: number) =>
@@ -153,7 +156,10 @@ export const statusStreamFeed = {
       }, RESYNC_DEBOUNCE_MS);
     };
 
-    const applyEvent = (frame: RunStatusEventFrame): void => {
+    const applyEvent = (
+      frame: RunStatusEventFrame,
+      notifyLostRun = false,
+    ): void => {
       const fact = readStatusFact(frame);
       const agentRunId = fact?.family === "agent_run"
         ? fact.agentRunId
@@ -166,6 +172,17 @@ export const statusStreamFeed = {
         { frameType: "event", eventKind: frame.event_kind },
       );
       if (!fact) return;
+      let liveRunWasLost = false;
+      if (
+        notifyLostRun &&
+        fact.family === "agent_run" &&
+        fact.state === "lost"
+      ) {
+        const held = readAgentStatusHolding().runs[fact.agentRunId];
+        liveRunWasLost = Boolean(
+          held && held.state !== "lost" && held.state !== "exited",
+        );
+      }
       const runResult = applyRunStatusFact(fact);
       if (runResult !== "not_run_fact") {
         recordLaunchDiscovery(
@@ -180,7 +197,12 @@ export const statusStreamFeed = {
         }
         return;
       }
-      if (runResult === "applied") return;
+      if (runResult === "applied") {
+        if (liveRunWasLost && fact.family === "agent_run") {
+          lostRuns.record(fact.agentRunId);
+        }
+        return;
+      }
       switch (fact.family) {
         case "automation_attempt":
           upsertAutomationAttempt(fact.attempt);
@@ -226,7 +248,8 @@ export const statusStreamFeed = {
     const reset: AuthoritativeReset = createAuthoritativeReset({
       refresh: () => refreshCanonicalHoldings({ projectId, snapshotCursor }),
       install: (cursor) => client?.acceptBaseline(cursor),
-      applyEvent: (frame) => applyEvent(frame),
+      // Reset-buffered facts are recovery history, not foreground losses.
+      applyEvent: (frame) => applyEvent(frame, false),
       owns: () => !stopped && resetGeneration === generation,
       onFailed: closeAndRetry,
     });
@@ -248,6 +271,7 @@ export const statusStreamFeed = {
     }) => {
       if (stopped) return;
       const subscription = ++generation;
+      let caughtUp = false;
       snapshotCursor = null;
       const identity = (agentRunId: string | null, cursor: number | null) =>
         traceIdentity(agentRunId, cursor, subscription);
@@ -296,10 +320,11 @@ export const statusStreamFeed = {
             if (!owns(subscription)) return;
             // A fact newer than an unusable baseline is buffered, not dropped.
             if (reset.capture(frame)) return;
-            applyEvent(frame);
+            applyEvent(frame, caughtUp);
           },
           onCaughtUp() {
             if (!owns(subscription)) return;
+            caughtUp = true;
             recordLaunchDiscovery(
               "caught-up",
               identity(null, cursors.get(projectId) ?? null),
@@ -386,6 +411,7 @@ export const statusStreamFeed = {
       invalidator.cancel();
       documents.cancel();
       worktrees.cancel();
+      lostRuns.cancel();
       reset.cancel();
       if (retry) clearTimeout(retry);
       if (resyncTimer) clearTimeout(resyncTimer);

@@ -57,24 +57,24 @@ try {
 
   await assertSameTree(
     join(first, "entities"),
-    join(studioRoot, "src-tauri/src/entities/foundation"),
+    join(studioRoot, "src-tauri/crates/ticketry-entities/src/foundation"),
     "SeaORM entity drift",
   );
   await assertSameFile(
     join(first, "terminal-entities/agent_run.rs"),
-    join(studioRoot, "src-tauri/src/entities/runs/agent_run.rs"),
+    join(studioRoot, "src-tauri/crates/ticketry-entities/src/runs/agent_run.rs"),
     "Agent Run entity drift",
   );
   for (const name of ["graph_run.rs", "launch_claim.rs"]) {
     await assertSameFile(
       join(first, "execution-entities", name),
-      join(studioRoot, "src-tauri/src/entities/execution", name),
+      join(studioRoot, "src-tauri/crates/ticketry-entities/src/execution", name),
       `Execution ${name} entity drift`,
     );
   }
   await assertSameFile(
     join(first, "terminal-entities/session.rs"),
-    join(studioRoot, "src-tauri/src/entities/terminals/session.rs"),
+    join(studioRoot, "src-tauri/crates/ticketry-entities/src/terminals/session.rs"),
     "Terminal Session entity drift",
   );
   const generatedDirectory = join(studioRoot, "src/graphql-foundation/generated");

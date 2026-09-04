@@ -14,7 +14,7 @@ export interface RendererSampleSummary {
   runId: string;
   /** Attach request to first painted frame, in milliseconds. */
   coldAttachMs: number | null;
-  /** Re-attach after a suspend, in milliseconds. */
+  /** Return from a retained hidden state to first paint, in milliseconds. */
   warmAttachMs: number | null;
   frames: number;
   bytes: number;
@@ -71,7 +71,7 @@ function sample(renderer: TerminalRendererChoice, runId: string): Sample {
   return existing;
 }
 
-/** A renderer began attaching a viewer. `resume` marks a warm re-attach. */
+/** A renderer began attaching or presenting a retained viewer. */
 export function recordAttachStart(
   renderer: TerminalRendererChoice,
   runId: string,

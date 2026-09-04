@@ -7,13 +7,18 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
-import { productIdentity } from "../../scripts/product-identity.mjs";
+import {
+  productIdentity,
+  resolveProductDataDirectory,
+} from "../../scripts/product-identity.mjs";
 
 const studioRoot = fileURLToPath(new URL("..", import.meta.url));
 const require = createRequire(import.meta.url);
 const defaultFrontendPort = 5174;
 const frontendPortCandidates = 10;
 const isolatedMode = "isolated";
+const productionDataMode = "production-data";
+const productionTmuxSocket = "muxed";
 const temporarySqlitePrefix = "ticketry-temp-sqlite-";
 const workspaceRoot = path.resolve(studioRoot, "..");
 
@@ -130,13 +135,35 @@ export function parseDesktopDevOptions(args = []) {
   if (normalized.length === 1 && normalized[0] === "--temp-sqlite") {
     return { mode: isolatedMode, temporarySqlite: true };
   }
+  if (normalized.length === 1 && normalized[0] === "--production-data") {
+    return { mode: productionDataMode, temporarySqlite: false };
+  }
   throw new Error(
-    "usage: pnpm --filter @worktracker/studio desktop:dev -- [--temp-sqlite]",
+    "usage: pnpm --filter @worktracker/studio desktop:dev -- [--production-data | --temp-sqlite]",
   );
 }
 
 export function parseDesktopDevMode(args = []) {
   return parseDesktopDevOptions(args).mode;
+}
+
+export function resolveDesktopDevelopmentProfile({
+  options,
+  cwd = workspaceRoot,
+  environment = process.env,
+  temporaryRoot = tmpdir(),
+  resolveProductData = resolveProductDataDirectory,
+  resolveDevelopmentData = resolveDevelopmentDataDirectory,
+} = {}) {
+  const dataDirectory = options.temporarySqlite
+    ? createTemporarySqliteProfile({ temporaryRoot })
+    : options.mode === productionDataMode
+      ? resolveProductData({ cwd, environment })
+      : resolveDevelopmentData({ cwd, environment });
+  const tmuxSocket = options.mode === productionDataMode
+    ? environment.MUXED_TMUX_SOCKET ?? productionTmuxSocket
+    : resolveDevelopmentTmuxSocket(dataDirectory);
+  return { dataDirectory, tmuxSocket };
 }
 
 export function createTemporarySqliteProfile({ temporaryRoot = tmpdir() } = {}) {
@@ -255,10 +282,7 @@ export function resolveTauriCliPath(resolver = require.resolve) {
 
 export async function main() {
   const options = parseDesktopDevOptions(process.argv.slice(2));
-  const dataDirectory = options.temporarySqlite
-    ? createTemporarySqliteProfile()
-    : resolveDevelopmentDataDirectory();
-  const tmuxSocket = resolveDevelopmentTmuxSocket(dataDirectory);
+  const { dataDirectory, tmuxSocket } = resolveDesktopDevelopmentProfile({ options });
   const logPath = prepareDevelopmentLog();
   const buildEnvironment = {
     ...process.env,
@@ -285,13 +309,14 @@ export async function main() {
       dataDirectory,
       tmuxSocket,
     }));
+    if (options.mode === productionDataMode) {
+      console.log("Ticketry Dev is using writable production data; the installed app must remain closed.");
+    }
     console.log(`Ticketry development logs: ${logPath}`);
     await run(process.execPath, [
       resolveTauriCliPath(),
       "dev",
       "--no-watch",
-      "--features",
-      "native-libghostty",
       "--config",
       config,
     ], environment);

@@ -1,4 +1,4 @@
-import { fireEvent, screen, within } from "@testing-library/react";
+import { fireEvent, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SelectedTicketContent } from "../app/shell/ticket-workspace/selected-ticket/SelectedTicketContent";
@@ -68,7 +68,7 @@ describe("overhaul acceptance - acknowledged Agent Run visibility", () => {
     vi.useRealTimers();
   });
 
-  it("[overhaul-186] turns one acknowledged launch into one visible authoritative Agent Run", async () => {
+  it("[overhaul-186] selects one authoritative Agent Run before launch acknowledgement", async () => {
     const http = fixture();
     http.tree("module-1", {
       rootIds: [TASK, "state-catalog"],
@@ -167,8 +167,7 @@ describe("overhaul acceptance - acknowledged Agent Run visibility", () => {
       cursor: 10,
     });
 
-    const details = await screen.findByRole("region", { name: "Details" });
-    const runNow = await within(details).findByRole("button", { name: "Run now" });
+    const runNow = await screen.findByRole("button", { name: "Run now" });
     const acknowledge = http.holdRunNow();
     fireEvent.click(runNow);
     fireEvent.click(runNow);
@@ -178,10 +177,7 @@ describe("overhaul acceptance - acknowledged Agent Run visibility", () => {
     expect(runNow).toBeDisabled();
     expect(runNow).toHaveAttribute("aria-busy", "true");
     expect(readAgentStatusHolding().runs[RUN]).toBeUndefined();
-
-    acknowledge();
-    await vi.advanceTimersByTimeAsync(0);
-    expect(useTerminalStore.getState().sessionByRun[RUN]).toBeTruthy();
+    expect(screen.queryAllByRole("tab", { name: /terminal$/ })).toHaveLength(0);
 
     status.send({
       __typename: "RunStatusEvent",
@@ -224,6 +220,25 @@ describe("overhaul acceptance - acknowledged Agent Run visibility", () => {
     expect(Object.values(readAgentStatusHolding().runs)).toEqual([
       expect.objectContaining({ agent_run_id: RUN, state: "starting" }),
     ]);
+    expect(runNow).toBeDisabled();
+    expect(runNow).toHaveAttribute("aria-busy", "true");
+    const pendingTabs = screen.getAllByRole("tab", { name: /terminal$/ });
+    expect(pendingTabs).toHaveLength(1);
+    expect(pendingTabs[0]).toHaveAttribute("aria-selected", "true");
+    const pendingSessionId = useTerminalStore.getState().sessionByRun[RUN];
+    expect(
+      useTerminalStore.getState().sessions[pendingSessionId]
+        ?.viewerAttachmentDeferred,
+    ).toBe(true);
+
+    acknowledge();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(useTerminalStore.getState().sessionByRun[RUN]).toBeTruthy();
+    expect(
+      useTerminalStore.getState().sessions[pendingSessionId]
+        ?.viewerAttachmentDeferred,
+    ).toBe(false);
+    expect(screen.getAllByRole("tab", { name: /terminal$/ })).toHaveLength(1);
 
     status.send({
       __typename: "RunStatusEvent",

@@ -1,9 +1,11 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { LaunchAgentAction } from "../app/shell/ticket-workspace/selected-ticket/details/LaunchAgentAction";
+import { useAgentStatusStore } from "../features/agents/status/testStore";
+import { Terminal, useTerminalStore } from "../features/agents/terminal";
 import { useClientStore } from "../state/clientStore";
 import {
   installGraphQlViewerLeases,
@@ -39,6 +41,94 @@ describe("Rust launch-policy acceptance", () => {
       agent: "codex",
       agent_run_id: "run-1",
     });
+    useAgentStatusStore.setState({ projectId: "project-1", runs: {} });
+    useTerminalStore.setState({ sessions: {}, sessionByRun: {} });
+    useClientStore.setState({ workspaces: {}, activeByTask: {} });
+  });
+
+  it("[overhaul-231] selects the Run agent terminal early but waits to attach until launch returns", async () => {
+    let acknowledge!: (value: unknown) => void;
+    tauri.invoke.mockImplementation(() => new Promise((resolve) => {
+      acknowledge = resolve;
+    }));
+    render(
+      <LaunchAgentAction
+        issueId="task-1"
+        projectId="project-1"
+        moduleId="module-1"
+      />,
+    );
+
+    const button = screen.getByRole("button", { name: "Run agent" });
+    fireEvent.click(button);
+    await waitFor(() => expect(button).toHaveAttribute("aria-busy", "true"));
+
+    act(() => {
+      useAgentStatusStore.getState().upsertRun({
+        agent_run_id: "run-early",
+        project_id: "project-1",
+        task_id: "task-1",
+        module_id: "module-1",
+        agent: "codex",
+        scope: "task",
+        state: "starting",
+        effective_state: "starting",
+        started_at: "2026-09-02T09:00:00Z",
+        updated_at: "2026-09-02T09:00:00Z",
+      });
+    });
+
+    await waitFor(() => {
+      const sessionId = useTerminalStore.getState().sessionByRun["run-early"];
+      expect(sessionId).toBeTruthy();
+      expect(
+        useTerminalStore.getState().sessions[sessionId!]
+          ?.viewerAttachmentDeferred,
+      ).toBe(true);
+      expect(useClientStore.getState().activeByTask["task-1"]).toBe(sessionId);
+      expect(useClientStore.getState().workspaces["task-1"]?.active)
+        .toBe("terminal");
+    });
+    expect(button).toHaveAttribute("aria-busy", "true");
+
+    acknowledge({ agent_run_id: "run-early" });
+    await waitFor(() => expect(button).toHaveAttribute("aria-busy", "false"));
+    expect(Object.values(useTerminalStore.getState().sessions)).toHaveLength(1);
+    const sessionId = useTerminalStore.getState().sessionByRun["run-early"];
+    expect(
+      useTerminalStore.getState().sessions[sessionId]
+        ?.viewerAttachmentDeferred,
+    ).toBe(false);
+  });
+
+  it("does not mount a renderer for a launch whose runtime is still pending", () => {
+    useTerminalStore.setState({
+      sessions: {
+        "pending-session": {
+          sessionId: "pending-session",
+          taskId: "task-1",
+          projectId: "project-1",
+          moduleId: "module-1",
+          agent: "codex",
+          status: "connecting",
+          transport: "connecting",
+          isPlanning: false,
+          isInstant: false,
+          initialPrompt: null,
+          agentRunId: "run-pending",
+          viewerAttachmentDeferred: true,
+        },
+      },
+      sessionByRun: { "run-pending": "pending-session" },
+    });
+
+    render(<Terminal sessionId="pending-session" />);
+
+    expect(screen.getByTestId("terminal-viewer-pending")).toBeInTheDocument();
+    expect(tauri.invoke).not.toHaveBeenCalledWith(
+      "viewer_attach",
+      expect.anything(),
+    );
   });
 
   it("[overhaul-81] routes the desktop launch action through Rust policy", async () => {

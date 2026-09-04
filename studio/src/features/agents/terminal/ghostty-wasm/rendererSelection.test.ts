@@ -10,20 +10,20 @@ function storage(value: string | null) {
 }
 
 describe("terminal renderer gate", () => {
-  it("keeps the default renderer when nothing is set", () => {
+  it("uses ghostty-wasm when nothing is set", () => {
     expect(
       selectedTerminalRenderer({ search: "", storage: storage(null), developmentBuild: true }),
-    ).toBeNull();
+    ).toBe("ghostty-wasm");
   });
 
-  it("is unreachable outside development builds", () => {
+  it("uses ghostty-wasm in packaged builds", () => {
     expect(
       selectedTerminalRenderer({
         search: "?terminalRenderer=ghostty-wasm",
         storage: storage("ghostty-wasm"),
         developmentBuild: false,
       }),
-    ).toBeNull();
+    ).toBe("ghostty-wasm");
   });
 
   it("prefers the launch flag over the stored development setting", () => {
@@ -53,7 +53,7 @@ describe("terminal renderer gate", () => {
         storage: storage(null),
         developmentBuild: true,
       }),
-    ).toBeNull();
+    ).toBe("ghostty-wasm");
   });
 
   it("survives storage that throws", () => {
@@ -67,6 +67,6 @@ describe("terminal renderer gate", () => {
         },
         developmentBuild: true,
       }),
-    ).toBeNull();
+    ).toBe("ghostty-wasm");
   });
 });

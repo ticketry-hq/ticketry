@@ -168,7 +168,7 @@ describe("ghostty-wasm wheel policy", () => {
     expect(surface.recorder.frames).toBe(1);
   });
 
-  it("falls back to the durable viewer on the alternate screen", () => {
+  it("scrolls the durable viewer on the alternate screen", () => {
     const surface = surfaceStub();
     surface.screen("alternate");
     surface.policy.wheel(wheel(-40));

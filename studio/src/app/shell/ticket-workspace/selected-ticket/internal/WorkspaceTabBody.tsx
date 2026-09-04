@@ -19,7 +19,10 @@ import { formatChordSymbols } from "../../../../navigation/chordLabel";
 import { EDIT_VIEW_BODY_DISENGAGE_CHORD } from "../../../../navigation/three-zone/threeZoneNavigation";
 import { LazySelectedTicketTerminal } from "../terminals/selectedTicketTerminalLoader";
 import type { TaskWorkspaceTabIdentity } from "./useTaskWorkspaceTabNavigation";
-import { isScratchBucket } from "../../../../../features/agents/terminal";
+import {
+  isScratchBucket,
+  isTerminalInputElement,
+} from "../../../../../features/agents/terminal";
 import { ModuleVersionControl, TaskWorktreeChanges } from "../../../../../features/agents/worktrees";
 import {
   openModuleChangesWorkspace,
@@ -122,8 +125,7 @@ export function WorkspaceTabBody({
           ? (event) => {
               if (
                 !useClientStore.getState().editViewBodyEngaged &&
-                event.target instanceof HTMLElement &&
-                event.target.closest(".xterm")
+                isTerminalInputElement(event.target)
               ) {
                 bodyRef.current?.focus({ preventScroll: true });
               }

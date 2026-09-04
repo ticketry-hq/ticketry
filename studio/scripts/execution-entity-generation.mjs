@@ -23,7 +23,7 @@ export async function generateExecutionEntities({ rawDirectory, outputRoot }) {
   graphRun = replace(
     graphRun,
     "use sea_orm::entity::prelude::*;\n",
-    "use sea_orm::entity::prelude::*;\n\nuse crate::work_management::entities::{issue, project};\n",
+    "use sea_orm::entity::prelude::*;\n\nuse crate::work_management::{issue, project};\n",
     "Graph Run relation imports",
   );
   graphRun = dateColumn(dateColumn(graphRun, "created_at"), "updated_at");
@@ -52,7 +52,7 @@ export async function generateExecutionEntities({ rawDirectory, outputRoot }) {
     "    #[seaography(ignore)]\n    pub agent_run_id: String,",
     "launch claim Agent Run protection",
   );
-  launchClaim = launchClaim.slice(0, launchClaim.indexOf("    #[sea_orm(\n        belongs_to,")) + `    #[sea_orm(belongs_to, from = "task_id", to = "id")]\n    pub task: BelongsTo<crate::work_management::entities::issue::Entity>,\n    #[sea_orm(belongs_to, from = "root_id", to = "root_id")]\n    pub graph_run: BelongsTo<super::graph_run::Entity>,\n    #[sea_orm(belongs_to, from = "agent_run_id", to = "id")]\n    pub agent_run: BelongsTo<crate::entities::runs::agent_run::Entity>,\n}\n\nimpl ActiveModelBehavior for ActiveModel {}\n`;
+  launchClaim = launchClaim.slice(0, launchClaim.indexOf("    #[sea_orm(\n        belongs_to,")) + `    #[sea_orm(belongs_to, from = "task_id", to = "id")]\n    pub task: BelongsTo<crate::work_management::issue::Entity>,\n    #[sea_orm(belongs_to, from = "root_id", to = "root_id")]\n    pub graph_run: BelongsTo<super::graph_run::Entity>,\n    #[sea_orm(belongs_to, from = "agent_run_id", to = "id")]\n    pub agent_run: BelongsTo<crate::runs::agent_run::Entity>,\n}\n\nimpl ActiveModelBehavior for ActiveModel {}\n`;
 
   const target = join(outputRoot, "execution-entities");
   await mkdir(target, { recursive: true });

@@ -33,7 +33,7 @@ fn nullable_strings() -> Value {
 pub fn tools() -> Vec<Tool> {
     vec![
         tool("mcp_ping", "Verify MCP transport and tool execution without touching a backend.", json!({}), &[]),
-        tool("terminate_current_run", "Terminate only the Studio run bound to this MCP request.", json!({}), &[]),
+        tool("terminate_current_run", "Terminate only the Studio run bound to this MCP request. Ticket runs must first reach a configured destination state from their launch state.", json!({}), &[]),
         tool("add_issue_type_workflow_transition", "Add one transition to a type's workflow at the supplied revision.", json!({
             "type_id": {"type": "string"}, "from_state_id": {"type": "string"}, "to_state_id": {"type": "string"},
             "workflow_revision": {"type": "integer"}, "agent_allowed": {"type": "boolean", "default": true}

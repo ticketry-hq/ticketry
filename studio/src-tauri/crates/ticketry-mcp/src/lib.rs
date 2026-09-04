@@ -25,6 +25,7 @@ mod runs_lifecycle;
 mod scope;
 mod service;
 mod terminal_launch_ingress;
+mod termination_eligibility;
 #[cfg(any(test, feature = "test-support"))]
 mod test_support;
 mod workflow_tools;

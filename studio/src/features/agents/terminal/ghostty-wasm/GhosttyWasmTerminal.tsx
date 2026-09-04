@@ -20,7 +20,7 @@ import { publishRendererMeasurements } from "./internal/rendererMeasurement";
 export interface GhosttyWasmTerminalProps {
   sessionId: string;
   agentRunId: string;
-  /** Whether this surface is the presented one; hidden surfaces stay detached. */
+  /** Whether this surface is presented; hidden surfaces retain live terminal state. */
   active?: boolean;
   focusSignal?: number;
   onUnavailable: (reason: string) => void;
@@ -36,10 +36,16 @@ export function GhosttyWasmTerminal({
   const hostRef = useRef<HTMLDivElement | null>(null);
   const surfaceRef = useRef<GhosttyWasmSurface | null>(null);
   const handledFocusSignalRef = useRef(0);
+  // Read by the surface effect, which re-runs whenever the run or session
+  // changes. Retained viewers mount inactive and are activated later by prop,
+  // so a surface opened with the mount-time value would never attach its
+  // client and would silently drop every keystroke.
+  const activeRef = useRef(active);
+  activeRef.current = active;
 
   useEffect(() => {
     const host = hostRef.current;
-    if (!host || !active) return;
+    if (!host) return;
     publishRendererMeasurements();
     // Only one viewer may hold a durable run; hand the pooled xterm viewer
     // over the same way the native renderer does.
@@ -47,6 +53,7 @@ export function GhosttyWasmTerminal({
     const surface = openGhosttyWasmSurface({
       agentRunId,
       host,
+      active: activeRef.current,
       transport: terminalClientTransport,
       onFailure: (reason: GhosttyWasmFailureReason, detail) => {
         onUnavailable(`${reason}: ${detail}`);
@@ -57,7 +64,14 @@ export function GhosttyWasmTerminal({
       surfaceRef.current = null;
       surface.detach();
     };
-  }, [active, agentRunId, onUnavailable, sessionId]);
+    // `active` deliberately does not own this lifetime. Retained story
+    // viewers keep their Ghostty state, Canvas and viewer attachment while
+    // hidden. The effect below only turns painting on and off.
+  }, [agentRunId, onUnavailable, sessionId]);
+
+  useEffect(() => {
+    surfaceRef.current?.setActive(active);
+  }, [active]);
 
   useEffect(() => {
     if (!active) return;
@@ -75,8 +89,16 @@ export function GhosttyWasmTerminal({
     <div
       ref={hostRef}
       data-testid="ghostty-wasm-host"
-      className="relative h-full w-full overflow-hidden bg-pane-bg"
-      onMouseDown={() => surfaceRef.current?.focus()}
+      className="relative h-full w-full overflow-hidden bg-inherit"
+      onMouseDown={(event) => {
+        // Without this the browser's default mousedown action moves focus to
+        // the nearest focusable ancestor (the workspace tab body), undoing the
+        // focus below: the terminal then looks focused but ignores keys. It
+        // also suppresses DOM text selection over the canvas, which is
+        // correct — selection belongs to Ghostty.
+        event.preventDefault();
+        surfaceRef.current?.focus();
+      }}
     />
   );
 }

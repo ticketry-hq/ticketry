@@ -27,6 +27,18 @@ installed `Ticketry` app without sharing data, tmux sessions, frontend ports,
 or MCP listeners. Frontend, Rust runtime, and MCP output is written to
 `.ticketry-dev/logs/ticketry.log`.
 
+To run that development build as the main app against the writable production
+data and product tmux sessions, close the installed app first, then run:
+
+```bash
+npm run desktop:dev:prod
+```
+
+The production data-directory lock still applies, so a second Ticketry process
+will refuse to start. The command respects `TICKETRY_DATA_DIR` and
+`TICKETRY_DATA_DIR_NAME`, and keeps development diagnostics in
+`.ticketry-dev/logs/ticketry.log` for agent inspection.
+
 The production-data web launcher uses a small Rust GraphQL adapter. It shares
 `~/.config/ticketry/state.db` and the product tmux namespace with the installed
 app:

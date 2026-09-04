@@ -49,6 +49,8 @@ export async function generateFoundationArtifacts(outputRoot) {
       "--entity-format",
       "dense",
       "--seaography",
+      "--with-prelude",
+      "none",
     ],
     tauriRoot,
   );

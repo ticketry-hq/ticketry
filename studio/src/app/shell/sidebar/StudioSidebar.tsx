@@ -11,6 +11,7 @@ export function StudioSidebar({ layout }: StudioSidebarProps) {
   return (
     <>
       <Panel
+        id="modules"
         defaultSize={layout[0]}
         minSize={10}
         order={2}

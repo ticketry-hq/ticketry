@@ -6,6 +6,7 @@ use ticketry_terminal::{
     AuthenticatedAgentRun, TerminalCleanupError, TerminalCleanupErrorCode, TerminalCleanupService,
 };
 
+use super::termination_eligibility;
 use super::RunPrincipal;
 
 const RESPONSE_GRACE: std::time::Duration = std::time::Duration::from_millis(250);
@@ -22,6 +23,13 @@ pub async fn terminate_current_run(
         .ok()
         .flatten()
         .is_some_and(|terminal| terminal.terminated_at.is_some());
+    if !already_terminated {
+        if let Some(rejection) =
+            termination_eligibility::rejection(service.database(), principal).await
+        {
+            return rejection;
+        }
+    }
     let authenticated = AuthenticatedAgentRun {
         agent_run_id: principal.agent_run_id.clone(),
         issue_id: principal.issue_id.clone(),

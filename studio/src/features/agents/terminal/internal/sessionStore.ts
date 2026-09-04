@@ -169,6 +169,10 @@ export interface SessionMeta {
   // Set when this tab reattaches to a persisted tmux session rather than
   // spawning a fresh agent. Drives the attach-mode init frame in ws.ts.
   agentRunId: string | null;
+  // A status event can publish a new run before its launch command has
+  // finished creating tmux. Keep the selected tab visible, but do not attach
+  // a viewer until that command acknowledges the runtime is ready.
+  viewerAttachmentDeferred?: boolean;
 }
 
 export interface OpenSessionArgs {
@@ -181,6 +185,7 @@ export interface OpenSessionArgs {
   isInstant?: boolean;
   agentRunId?: string | null;
   select?: boolean;
+  viewerAttachmentDeferred?: boolean;
 }
 
 export interface OpenShellSessionArgs {
@@ -263,6 +268,7 @@ interface TerminalStoreState {
     agentRunId?: string | null,
   ) => void;
   bindRun: (sessionId: SessionId, agentRunId: string) => void;
+  allowViewerAttachment: (agentRunId: string) => void;
   setTransport: (sessionId: SessionId, transport: TerminalTransport) => void;
   setExited: (sessionId: SessionId) => void;
   setViewerClosed: (sessionId: SessionId) => void;
@@ -321,6 +327,7 @@ export const useTerminalStore = createApolloStore<TerminalStoreState>("terminal-
       isInstant: args.isInstant ?? false,
       initialPrompt: args.initialPrompt ?? null,
       agentRunId: args.agentRunId ?? null,
+      viewerAttachmentDeferred: args.viewerAttachmentDeferred,
     };
     set((s) => ({ sessions: { ...s.sessions, [tempId]: meta } }));
     useWorkspaceTabsStore
@@ -411,6 +418,21 @@ export const useTerminalStore = createApolloStore<TerminalStoreState>("terminal-
           [sessionId]: { ...existing, agentRunId },
         },
         sessionByRun,
+      };
+    });
+  },
+
+  allowViewerAttachment(agentRunId) {
+    const sessionId = get().sessionByRun[agentRunId];
+    if (!sessionId) return;
+    set((state) => {
+      const existing = state.sessions[sessionId];
+      if (!existing?.viewerAttachmentDeferred) return state;
+      return {
+        sessions: {
+          ...state.sessions,
+          [sessionId]: { ...existing, viewerAttachmentDeferred: false },
+        },
       };
     });
   },

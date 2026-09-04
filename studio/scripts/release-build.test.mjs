@@ -9,6 +9,7 @@ import {
   ReleaseManifestError,
   macosTauriBuildEnvironment,
   macosTauriSigningConfig,
+  hookRunnerBuild,
   parseArguments,
   releaseMetadata,
   selectTargets,
@@ -42,14 +43,15 @@ function latestJson(overrides = {}) {
   };
 }
 
-test("the release is one Rust desktop artifact with native libghostty", () => {
+test("the release ships the Ghostty WASM renderer without native libghostty", () => {
   assert.equal(manifest.release_version, "0.2.0");
   assert.deepEqual(Object.keys(manifest.artifacts).sort(), [
     "frontend", "runtime_resources", "tauri", "updater",
   ]);
-  assert.deepEqual(manifest.artifacts.tauri.command.slice(-2), [
-    "--features", "native-libghostty",
-  ]);
+  assert.equal(manifest.artifacts.tauri.command.includes("native-libghostty"), false);
+  assert.ok(manifest.artifacts.frontend.required_outputs.includes(
+    "dist/ghostty-vt/ghostty-vt.wasm",
+  ));
   assert.equal(JSON.stringify(manifest).includes("python"), false);
   assert.equal(JSON.stringify(manifest).includes("sidecar"), false);
   assert.doesNotThrow(() => validateManifest(manifest));
@@ -73,10 +75,28 @@ test("the shipping Cargo package builds one binary and no developer tools", asyn
   assert.match(devToolsToml, /publish = false/);
 });
 
+test("the release builds the target-specific hook runner expected by Tauri", () => {
+  const build = hookRunnerBuild(manifest.targets[0], "/repository/studio");
+  assert.equal(build.command, "rustc");
+  assert.deepEqual(build.args, [
+    "/repository/studio/src-tauri/native/ticketry_hook.rs",
+    "--edition",
+    "2021",
+    "--target",
+    "aarch64-apple-darwin",
+    "-O",
+    "-o",
+    "/repository/studio/src-tauri/binaries/ticketry-hook-aarch64-apple-darwin",
+  ]);
+});
+
 test("manifest validation requires Rust runtime and release policy declarations", () => {
-  const withoutRuntime = structuredClone(manifest);
-  withoutRuntime.artifacts.tauri.command = withoutRuntime.artifacts.tauri.command.slice(0, -2);
-  assert.throws(() => validateManifest(withoutRuntime), /native-libghostty/);
+  const withNativeRenderer = structuredClone(manifest);
+  withNativeRenderer.artifacts.tauri.command.push("--features", "native-libghostty");
+  assert.throws(() => validateManifest(withNativeRenderer), /retired native-libghostty/);
+  const withoutWasm = structuredClone(manifest);
+  withoutWasm.artifacts.frontend.required_outputs = ["dist/index.html"];
+  assert.throws(() => validateManifest(withoutWasm), /ghostty-vt\/ghostty-vt\.wasm/);
   const withoutArchitecture = structuredClone(manifest);
   delete withoutArchitecture.targets[0].build_architecture;
   assert.throws(() => validateManifest(withoutArchitecture), ReleaseManifestError);

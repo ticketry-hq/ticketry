@@ -91,8 +91,8 @@ mutation CreateWorkTrackerWorkItem($projectId: String!, $name: String!, $issueTy
   }
 }
 
-mutation UpdateWorkTrackerWorkItem($id: String!, $name: String, $description: String, $issueTypeId: String) {
-  update_work_item(id: $id, name: $name, description: $description, issue_type_id: $issueTypeId) {
+mutation UpdateWorkTrackerWorkItem($id: String!, $name: String, $description: String, $issueTypeId: String, $stateId: String, $parentId: String, $blockedByIds: [String!], $isArchived: Boolean) {
+  update_work_item(id: $id, name: $name, description: $description, issue_type_id: $issueTypeId, state_id: $stateId, parent_id: $parentId, blocked_by_ids: $blockedByIds, is_archived: $isArchived) {
     ...GeneratedWorkTrackerWorkItemFields
   }
 }

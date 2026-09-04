@@ -26,5 +26,11 @@ export default defineConfig({
       allow: [".."],
     },
     proxy: devProxy,
+    watch: {
+      // Playwright writes traces/reports into studio/ while the dev server
+      // serves the app; watching those paths triggers full page reloads that
+      // race the integration suite's interactions.
+      ignored: ["**/playwright-report/**", "**/test-results/**"],
+    },
   },
 });

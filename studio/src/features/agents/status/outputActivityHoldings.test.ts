@@ -234,9 +234,9 @@ describe("terminal outcomes outrank the inactivity overlay", () => {
     vi.advanceTimersByTime(STALL_AFTER_MS * 5);
 
     expect(selectRunState(holding(), "run-1")).toBe("lost");
-    expect(selectTaskLifecycleChips(holding(), "story-1")).toEqual([
-      { state: "lost", count: 1 },
-    ]);
+    // Lost is terminal history. It remains available to terminal recovery, but
+    // it no longer presents as an ongoing task-tree error.
+    expect(selectTaskLifecycleChips(holding(), "story-1")).toEqual([]);
   });
 
   it("reconstructs a terminated run as exited from either side of the boundary", () => {

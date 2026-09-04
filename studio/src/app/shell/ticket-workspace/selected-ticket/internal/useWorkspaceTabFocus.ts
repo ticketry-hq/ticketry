@@ -5,7 +5,10 @@ import {
   type RefObject,
   type SetStateAction,
 } from "react";
-import type { SessionMeta } from "../../../../../features/agents/terminal";
+import {
+  hasFocusedTerminalInput,
+  type SessionMeta,
+} from "../../../../../features/agents/terminal";
 import type { EditViewZone } from "../../../../../state/clientStore";
 import type { TabKind } from "../../../../../features/agents/types";
 import type { TaskWorkspaceTabIdentity } from "./useTaskWorkspaceTabNavigation";
@@ -103,9 +106,12 @@ export function useEditViewWorkspaceFocus({
       return;
     }
     if (editViewZone !== "active-tab-body") return;
-    if (document.activeElement !== bodyRef.current) {
-      bodyRef.current?.focus({ preventScroll: true });
-    }
+    if (document.activeElement === bodyRef.current) return;
+    // A terminal parks focus on a hidden input inside the body. That already
+    // counts as focused-in-zone; pulling focus back to the body would blur the
+    // terminal the user just clicked into.
+    if (hasFocusedTerminalInput(bodyRef.current)) return;
+    bodyRef.current?.focus({ preventScroll: true });
   }, [bodyRef, editViewZone, isEditView, tabStripRef]);
 
   useEffect(() => {

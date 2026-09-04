@@ -9,6 +9,7 @@ pub(crate) mod commands;
 pub(crate) mod crash_reports;
 pub(crate) mod data_directory;
 pub(crate) mod document_protocol;
+pub(crate) mod embedded_assets;
 pub(crate) mod environment;
 pub(crate) mod folder_selection;
 pub(crate) mod frontend_log;

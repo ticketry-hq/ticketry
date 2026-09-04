@@ -16,17 +16,17 @@ try {
   await generateFoundationArtifacts(scratch);
   const entityTarget = join(
     studioRoot,
-    "src-tauri/src/entities/foundation",
+    "src-tauri/crates/ticketry-entities/src/foundation",
   );
   const frontendTarget = join(studioRoot, "src/graphql-foundation/generated");
   await mkdir(entityTarget, { recursive: true });
   await mkdir(frontendTarget, { recursive: true });
-  for (const name of ["migration_probes.rs", "mod.rs", "prelude.rs"]) {
+  for (const name of ["migration_probes.rs", "mod.rs"]) {
     await copyFile(join(scratch, "entities", name), join(entityTarget, name));
   }
   const executionEntityTarget = join(
     studioRoot,
-    "src-tauri/src/entities/execution",
+    "src-tauri/crates/ticketry-entities/src/execution",
   );
   await mkdir(executionEntityTarget, { recursive: true });
   for (const name of ["graph_run.rs", "launch_claim.rs"]) {
@@ -37,12 +37,12 @@ try {
   }
   const terminalEntityTarget = join(
     studioRoot,
-    "src-tauri/src/entities/terminals",
+    "src-tauri/crates/ticketry-entities/src/terminals",
   );
   await mkdir(terminalEntityTarget, { recursive: true });
   await copyFile(
     join(scratch, "terminal-entities/agent_run.rs"),
-    join(studioRoot, "src-tauri/src/entities/runs/agent_run.rs"),
+    join(studioRoot, "src-tauri/crates/ticketry-entities/src/runs/agent_run.rs"),
   );
   await copyFile(
     join(scratch, "terminal-entities/session.rs"),

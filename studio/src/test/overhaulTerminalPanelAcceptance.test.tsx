@@ -48,6 +48,16 @@ vi.mock(
   () => ({ nativeGhosttyAvailable: async () => runtime.nativeAvailable }),
 );
 
+vi.mock("../features/agents/terminal/ghostty-wasm/GhosttyWasmTerminal", () => ({
+  GhosttyWasmTerminal: () => (
+    <div
+      className="bg-inherit"
+      data-testid="ghostty-wasm-host"
+      data-terminal-renderer="ghostty-wasm"
+    />
+  ),
+}));
+
 vi.mock("../features/terminal-panel/api/moduleShellApi", async (importOriginal) => ({
   ...(await importOriginal<
     typeof import("../features/terminal-panel/api/moduleShellApi")
@@ -144,6 +154,7 @@ async function shellSessionId(): Promise<string> {
 
 describe("terminal panel acceptance", () => {
   beforeEach(() => {
+    localStorage.setItem("ticketry:terminal-renderer", "xterm");
     runtime.desktop = false;
     runtime.nativeAvailable = false;
     pool.entries.clear();
@@ -312,7 +323,9 @@ describe("terminal panel acceptance", () => {
     });
   });
 
-  it("[overhaul-149] renders the shell through the native renderer when available and the browser fallback otherwise", async () => {
+  it("[overhaul-149] renders the shell through Ghostty WASM in browser and desktop builds", async () => {
+    window.history.replaceState({}, "", "/");
+    localStorage.removeItem("ticketry:terminal-renderer");
     const browser = render(
       <>
         <KeymapHarness />
@@ -321,7 +334,7 @@ describe("terminal panel acceptance", () => {
     );
     pressTogglePanel();
     await shellSessionId();
-    await waitFor(() => expect(screen.getByTestId("terminal-host")).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId("ghostty-wasm-host")).toBeTruthy());
     expect(screen.queryByTestId("native-terminal-host")).toBeNull();
     browser.unmount();
 
@@ -340,10 +353,15 @@ describe("terminal panel acceptance", () => {
     );
     pressTogglePanel();
     await shellSessionId();
-    // The shell reaches the same native renderer an agent terminal uses. Its
-    // attachment then follows the established native lifecycle — including
-    // that lifecycle's own fallback, which the native viewer cases pin.
-    const nativeHost = await screen.findByTestId("native-terminal-host");
-    expect(nativeHost.getAttribute("data-terminal-renderer")).toBe("libghostty");
+    const wasmHost = await screen.findByTestId("ghostty-wasm-host");
+    expect(wasmHost.getAttribute("data-terminal-renderer")).toBe("ghostty-wasm");
+    expect(wasmHost).toHaveClass("bg-inherit");
+    expect(screen.queryByTestId("native-terminal-host")).toBeNull();
+
+    const { readFile } = await import("node:fs/promises");
+    const tauriConfig = JSON.parse(
+      await readFile(`${process.cwd()}/src-tauri/tauri.conf.json`, "utf8"),
+    );
+    expect(tauriConfig.app.security.csp["script-src"]).toContain("'wasm-unsafe-eval'");
   });
 });

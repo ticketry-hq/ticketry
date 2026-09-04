@@ -16,7 +16,9 @@ pub fn register_model_mutations(builder: seaography::Builder) -> seaography::Bui
 }
 
 pub use patch_input::{
-    GraphqlPatchBool, GraphqlPatchJson, GraphqlPatchString, GraphqlPatchStringList,
+    GraphqlPatchBool, GraphqlPatchBoolNullAsUnset, GraphqlPatchJson, GraphqlPatchJsonNullAsUnset,
+    GraphqlPatchString, GraphqlPatchStringList, GraphqlPatchStringListNullAsUnset,
+    GraphqlPatchStringNullAsUnset,
 };
 pub use support::{
     authoritative_launch_binding, authoritative_project, authoritative_transition,

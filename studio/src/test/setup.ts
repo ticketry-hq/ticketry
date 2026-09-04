@@ -49,6 +49,10 @@ if (typeof globalThis.localStorage === "undefined") {
 // Imported lazily: a static import here would bind the real API module before
 // a test file's `vi.mock` of it is registered.
 beforeEach(async () => {
+  // Most acceptance cases exercise Studio behavior independent of a terminal
+  // renderer. Keep those cases on the lightweight compatibility renderer;
+  // renderer-specific acceptance cases replace this query value explicitly.
+  window.history.replaceState({}, "", "/?terminalRenderer=xterm");
   const { setProviderCapabilities } = await import(
     "../features/workflows/providerQueries"
   );

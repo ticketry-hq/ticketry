@@ -1,9 +1,14 @@
 import { useClientStore } from "../../state/clientStore";
-import { IconAlertTriangle, IconCheckCircle, IconX } from "../../shared/ui/icons";
+import {
+  IconAlertTriangle,
+  IconCheckCircle,
+  IconInfo,
+  IconX,
+} from "../../shared/ui/icons";
 import { useModalStore } from "../modal/modalStore";
 
 // C3 (#638) toast surface (G16). Mounted once at the app root and stacked
-// bottom-right. Success toasts announce politely
+// bottom-right. Success and informational toasts announce politely
 // (role=status / aria-live=polite); errors assert (role=alert) so they're read
 // even mid-action.
 export default function ToastHost() {
@@ -21,6 +26,7 @@ export default function ToastHost() {
     >
       {toasts.map((t) => {
         const isError = t.kind === "error";
+        const isInfo = t.kind === "info";
         return (
           <div
             key={t.id}
@@ -30,15 +36,25 @@ export default function ToastHost() {
             className={`pointer-events-auto flex items-start gap-2.5 border px-3 py-2.5 shadow-lg ${
               isError
                 ? "border-lifecycle-danger/40 bg-lifecycle-danger/15"
-                : "border-lifecycle-success/40 bg-lifecycle-success/15"
+                : isInfo
+                  ? "border-lifecycle-active/40 bg-lifecycle-active/10"
+                  : "border-lifecycle-success/40 bg-lifecycle-success/15"
             }`}
           >
             <span
               className={`mt-0.5 flex-none ${
-                isError ? "text-lifecycle-danger" : "text-lifecycle-success"
+                isError
+                  ? "text-lifecycle-danger"
+                  : isInfo
+                    ? "text-lifecycle-active"
+                    : "text-lifecycle-success"
               }`}
             >
-              {isError ? <IconAlertTriangle size={16} /> : <IconCheckCircle size={16} />}
+              {isError
+                ? <IconAlertTriangle size={16} />
+                : isInfo
+                  ? <IconInfo size={16} />
+                  : <IconCheckCircle size={16} />}
             </span>
             <span className="flex-1 text-sm leading-snug text-text-primary">{t.message}</span>
             <button

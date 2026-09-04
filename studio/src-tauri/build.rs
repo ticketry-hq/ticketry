@@ -21,6 +21,7 @@ fn main() {
             "desktop_preflight_report",
             "desktop_approve_executable_path",
             "desktop_launch_default_coding_agent",
+            "desktop_ghostty_vt_artifact",
             "desktop_update_check",
             "desktop_update_download_and_install",
             "desktop_update_restart",

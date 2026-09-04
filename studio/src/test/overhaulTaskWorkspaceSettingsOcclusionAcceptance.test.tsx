@@ -180,6 +180,7 @@ function mountTaskWorkspace() {
 
 describe("overhaul acceptance — Task workspace Settings occlusion", () => {
   beforeEach(() => {
+    window.history.replaceState({}, "", "/?terminalRenderer=native");
     vi.resetAllMocks();
     leaseOperations = installDesktopGraphQlRuntime(
       terminalSessionReadExecutor(terminalReads),

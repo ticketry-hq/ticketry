@@ -84,6 +84,11 @@ impl TerminalCleanupService {
                 "A termination request cannot be null.",
             )),
             TerminationPatch::Request(request_id) => {
+                crate::terminal::diagnostics::record(
+                    "terminal-cleanup-origin",
+                    Some(agent_run_id),
+                    json!({"source": "studio_graphql", "requestId": request_id}),
+                );
                 self.cleanup(agent_run_id, CleanupCause::Explicit, &request_id)
                     .await
             }
@@ -96,6 +101,11 @@ impl TerminalCleanupService {
         request_id: &str,
     ) -> Result<session::Model, TerminalCleanupError> {
         self.authenticated_terminal(principal).await?;
+        crate::terminal::diagnostics::record(
+            "terminal-cleanup-origin",
+            Some(&principal.agent_run_id),
+            json!({"source": "agent_mcp_immediate", "requestId": request_id}),
+        );
         record_agent_self_termination(&principal.agent_run_id);
         self.cleanup(&principal.agent_run_id, CleanupCause::Explicit, request_id)
             .await
@@ -112,6 +122,11 @@ impl TerminalCleanupService {
         if terminal.terminated_at.is_some() && !terminal.runtime_cleanup_pending {
             return Ok(terminal);
         }
+        crate::terminal::diagnostics::record(
+            "terminal-cleanup-origin",
+            Some(&principal.agent_run_id),
+            json!({"source": "agent_mcp_deferred", "requestId": request_id}),
+        );
         record_agent_self_termination(&principal.agent_run_id);
         let identity = CleanupEffectIdentity::predetermined(
             &principal.agent_run_id,
@@ -156,6 +171,14 @@ impl TerminalCleanupService {
             return Ok(terminal);
         }
         let identity = CleanupEffectIdentity::predetermined(agent_run_id, cause, cause_identity)?;
+        crate::terminal::diagnostics::record(
+            "terminal-cleanup-requested",
+            Some(agent_run_id),
+            json!({
+                "cause": cause.as_str(),
+                "effectId": identity.effect_id,
+            }),
+        );
         let effect = self.prepare(&identity).await?;
         self.checkpoints.reached(CleanupCheckpoint::Preparation)?;
         self.execute_effect(effect, terminal).await
@@ -214,6 +237,15 @@ impl TerminalCleanupService {
         let claim = self.claim(&effect.effect_id).await?;
         self.checkpoints.reached(CleanupCheckpoint::Claim)?;
         let observation = self.runtime.inspect(&terminal).await;
+        crate::terminal::diagnostics::record(
+            "terminal-cleanup-runtime-observed",
+            Some(&terminal.agent_run_id),
+            json!({
+                "cause": effect.cause,
+                "effectId": effect.effect_id,
+                "observation": observation_name(observation),
+            }),
+        );
         self.checkpoints.reached(CleanupCheckpoint::Inspect)?;
         match observation {
             CleanupRuntimeObservation::Missing => {
@@ -242,6 +274,16 @@ impl TerminalCleanupService {
             }
             CleanupRuntimeObservation::Running | CleanupRuntimeObservation::Exited { .. } => {
                 let kill = self.runtime.kill_verified(&terminal).await;
+                crate::terminal::diagnostics::record(
+                    "terminal-cleanup-kill-finished",
+                    Some(&terminal.agent_run_id),
+                    json!({
+                        "cause": effect.cause,
+                        "effectId": effect.effect_id,
+                        "observation": observation_name(observation),
+                        "kill": kill_name(kill),
+                    }),
+                );
                 self.checkpoints.reached(CleanupCheckpoint::Kill)?;
                 match kill {
                     CleanupKillResult::Foreign | CleanupKillResult::Ambiguous => {

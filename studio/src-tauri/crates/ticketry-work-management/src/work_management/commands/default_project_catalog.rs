@@ -47,11 +47,12 @@ pub async fn seed(database: &impl ConnectionTrait, project_id: &str) -> Result<(
     {
         let type_id = new_database_uuid();
         type_ids.insert(type_name.to_owned(), type_id.clone());
-        let start_state_id = defaults
+        let start_state_name = defaults
             .workflows
             .get(type_name)
-            .and_then(|workflow| state_ids.get(&workflow.start))
-            .cloned();
+            .map(|workflow| workflow.start.as_str())
+            .or_else(|| (type_name == "Module").then_some("Ideas"));
+        let start_state_id = start_state_name.and_then(|name| state_ids.get(name)).cloned();
         issue_type::ActiveModel {
             id: Set(type_id),
             project_id: Set(project_id.to_owned()),

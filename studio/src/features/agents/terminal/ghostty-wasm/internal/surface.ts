@@ -23,6 +23,11 @@ import {
   recordWasmMemory,
 } from "./rendererMeasurement";
 import { GhosttyVtTerminal } from "./terminalCore";
+import { createViewerRecovery } from "./viewerRecovery";
+import {
+  resolveTerminalHostBackground,
+  TERMINAL_FOREGROUND_RGB,
+} from "./hostBackground";
 import { GhosttyWasmLoadError, loadGhosttyVtRuntime } from "./wasmRuntime";
 import { GhosttyWheelPolicy } from "./wheelPolicy";
 
@@ -36,6 +41,8 @@ export interface GhosttyWasmSurfaceOptions {
   agentRunId: string;
   host: HTMLElement;
   transport: TerminalClientTransport;
+  /** Initial presentation state. Hidden retained surfaces do not attach. */
+  active?: boolean;
   /** Forwarded viewer lifecycle, so the host can mirror xterm's status handling. */
   onTransportEvent?: (event: TerminalClientEvent) => void;
   /** The experiment could not run; the caller should fall back to xterm. */
@@ -48,6 +55,8 @@ export interface GhosttyWasmSurface {
   focus(): void;
   /** Re-fit to the host box and resize the durable viewer to match. */
   refit(): void;
+  /** Stop or restart painting without detaching the durable viewer. */
+  setActive(active: boolean): void;
   detach(): void;
 }
 
@@ -57,6 +66,7 @@ export function openGhosttyWasmSurface(
   options: GhosttyWasmSurfaceOptions,
 ): GhosttyWasmSurface {
   const { host, agentRunId } = options;
+  const background = resolveTerminalHostBackground(host);
   const canvas = document.createElement("canvas");
   canvas.dataset.testid = "ghostty-wasm-canvas";
   canvas.style.display = "block";
@@ -71,6 +81,7 @@ export function openGhosttyWasmSurface(
   host.append(canvas, input);
 
   let disposed = false;
+  let active = options.active ?? true;
   let client: TerminalClient | null = null;
   let core: GhosttyVtTerminal | null = null;
   let encoder: GhosttyKeyEncoder | null = null;
@@ -80,7 +91,11 @@ export function openGhosttyWasmSurface(
   let wheelPolicy: GhosttyWheelPolicy | null = null;
   let frameHandle: number | null = null;
   let firstPaintPending = true;
+  let pendingPaintKind: "cold" | "warm" = "cold";
   let geometry = { cols: 80, rows: 24 };
+  // The durable run ended; a new viewer would only fail the same way.
+  let retired = false;
+  const recovery = createViewerRecovery();
 
   function fail(reason: GhosttyWasmFailureReason, detail: string): void {
     if (disposed) return;
@@ -89,7 +104,7 @@ export function openGhosttyWasmSurface(
   }
 
   function scheduleFrame(): void {
-    if (disposed || frameHandle !== null || !core || !renderer) return;
+    if (disposed || !active || frameHandle !== null || !core || !renderer) return;
     frameHandle = requestAnimationFrame(() => {
       frameHandle = null;
       paint();
@@ -110,7 +125,7 @@ export function openGhosttyWasmSurface(
       if (memory) recordWasmMemory(agentRunId, memory.buffer.byteLength);
       if (firstPaintPending) {
         firstPaintPending = false;
-        recordFirstPaint(RENDERER, agentRunId);
+        recordFirstPaint(RENDERER, agentRunId, pendingPaintKind);
       }
     } catch (error) {
       fail("renderer_failed", error instanceof Error ? error.message : String(error));
@@ -124,7 +139,7 @@ export function openGhosttyWasmSurface(
   }
 
   function refit(): void {
-    if (disposed || !renderer || !core) return;
+    if (disposed || !active || !renderer || !core) return;
     const next = fit();
     if (next.cols !== geometry.cols || next.rows !== geometry.rows) {
       geometry = next;
@@ -148,6 +163,8 @@ export function openGhosttyWasmSurface(
   resizeObserver?.observe(host);
 
   function onKeyDown(event: KeyboardEvent): void {
+    // A viewer dropped while hidden is reclaimed by the reader typing into it.
+    if (!client && active && !retired) attachClient();
     if (!encoder || !core || !client) return;
     // Application shortcuts stay in the WebView's event system: anything with
     // Command is Studio's, never the terminal's.
@@ -231,31 +248,69 @@ export function openGhosttyWasmSurface(
       scheduleFrame();
       return;
     }
-    if (event.type === "resumed") {
-      firstPaintPending = true;
-      recordAttachStart(RENDERER, agentRunId, "warm");
+    if (event.type === "ready") {
+      // Visibility does not own the viewer lease. Once attached, a retained
+      // terminal keeps parsing output while hidden so returning never needs a
+      // tmux reattach or replay.
+      client?.resize(geometry.cols, geometry.rows);
+    }
+    // A viewer that ended must be released, or the surface keeps a dead client
+    // installed and every later attach is a silent no-op.
+    switch (recovery.plan(event, { active })) {
+      case "ignore":
+        return;
+      case "retire":
+        retired = true;
+        releaseClient();
+        return;
+      case "drop":
+        releaseClient();
+        return;
+      case "reattach":
+        releaseClient();
+        attachClient();
+        return;
     }
   }
 
-  recordAttachStart(RENDERER, agentRunId);
+  function releaseClient(): void {
+    const ended = client;
+    client = null;
+    try {
+      ended?.detach();
+    } catch {
+      /* The viewer is already gone; releasing our reference is the point. */
+    }
+  }
+
+  function attachClient(): void {
+    if (disposed || retired || !active || !core || client) return;
+    recordAttachStart(RENDERER, agentRunId);
+    client = options.transport.attach(
+      { agentRunId, cols: geometry.cols, rows: geometry.rows },
+      handleTransportEvent,
+    );
+  }
+
   void loadGhosttyVtRuntime(options.artifactUrl)
     .then((runtime) => {
       if (disposed) return;
       memory = runtime.exports.memory;
       renderer = new TerminalCanvasRenderer(canvas, {
         pixelRatio: options.pixelRatio ?? (globalThis.devicePixelRatio || 1),
+        background: background.css,
       });
       geometry = fit();
-      core = new GhosttyVtTerminal(runtime, geometry);
+      core = new GhosttyVtTerminal(runtime, {
+        ...geometry,
+        background: background.rgb,
+        foreground: TERMINAL_FOREGROUND_RGB,
+      });
       const metrics = renderer.metrics;
       core.resize(geometry.cols, geometry.rows, metrics.width, metrics.height);
       encoder = new GhosttyKeyEncoder(runtime);
       mouse = new GhosttyMouseEncoder(runtime);
       publishViewport();
-      client = options.transport.attach(
-        { agentRunId, cols: geometry.cols, rows: geometry.rows },
-        handleTransportEvent,
-      );
       wheelPolicy = new GhosttyWheelPolicy({
         core,
         mouse,
@@ -266,6 +321,7 @@ export function openGhosttyWasmSurface(
         scrollViewer: (direction, lines) => client?.scroll(direction, lines),
         scheduleFrame,
       });
+      attachClient();
       scheduleFrame();
     })
     .catch((error) => {
@@ -298,9 +354,28 @@ export function openGhosttyWasmSurface(
     input.remove();
   }
 
+  function setActive(nextActive: boolean): void {
+    if (disposed || active === nextActive) return;
+    active = nextActive;
+    if (!active) {
+      if (frameHandle !== null) cancelAnimationFrame(frameHandle);
+      frameHandle = null;
+      return;
+    }
+
+    // Output kept updating the retained core while hidden. Repaint its current
+    // frame without waiting for transport setup or a tmux history replay.
+    firstPaintPending = true;
+    pendingPaintKind = "warm";
+    recordAttachStart(RENDERER, agentRunId, "warm");
+    refit();
+    if (!client) attachClient();
+  }
+
   return {
     focus: () => input.focus(),
     refit,
+    setActive,
     detach,
   };
 }

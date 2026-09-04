@@ -5,10 +5,14 @@
   "artifacts": {
     "frontend": {
       "command": ["npm", "run", "build"],
-      "required_outputs": ["dist/index.html"]
+      "required_outputs": [
+        "dist/index.html",
+        "dist/ghostty-vt/ghostty-vt.wasm",
+        "dist/ghostty-vt/LICENSE"
+      ]
     },
     "tauri": {
-      "command": ["npm", "run", "tauri", "--", "build", "--features", "native-libghostty"],
+      "command": ["npm", "run", "tauri", "--", "build"],
       "binary_name": "ticketry",
       "bundle_formats": ["app", "dmg", "app.tar.gz"]
     },

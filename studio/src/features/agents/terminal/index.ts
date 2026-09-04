@@ -121,6 +121,10 @@ export {
   type ForegroundOwner,
 } from "./internal/foregroundStore";
 export { focusTerminal } from "./internal/terminalRegistry";
+export {
+  hasFocusedTerminalInput,
+  isTerminalInputElement,
+} from "./internal/terminalInputFocus";
 export { launchFailureMessage } from "./internal/launchFailure";
 export { launchDefaultAgent } from "./internal/launchDefaultAgent";
 export { refreshTerminalHoldings } from "./refresh";

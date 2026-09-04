@@ -39,10 +39,18 @@ export function validateManifest(manifest) {
   requireArray(artifacts.frontend?.command, "artifacts.frontend.command");
   requireArray(artifacts.frontend?.required_outputs, "artifacts.frontend.required_outputs");
   const tauriCommand = requireArray(artifacts.tauri?.command, "artifacts.tauri.command");
-  if (!tauriCommand.includes("native-libghostty")) {
+  if (tauriCommand.includes("native-libghostty")) {
     throw new ReleaseManifestError(
-      "artifacts.tauri.command must enable the native-libghostty feature",
+      "artifacts.tauri.command must not enable the retired native-libghostty renderer",
     );
+  }
+  for (const asset of [
+    "dist/ghostty-vt/ghostty-vt.wasm",
+    "dist/ghostty-vt/LICENSE",
+  ]) {
+    if (!artifacts.frontend.required_outputs.includes(asset)) {
+      throw new ReleaseManifestError(`artifacts.frontend.required_outputs must include ${asset}`);
+    }
   }
   requireValue(artifacts.tauri?.binary_name, "artifacts.tauri.binary_name");
   requireArray(artifacts.tauri?.bundle_formats, "artifacts.tauri.bundle_formats");
@@ -236,6 +244,21 @@ export function tauriBuildArguments(manifest, target, environment = process.env,
   ];
 }
 
+export function hookRunnerBuild(target, root = studioRoot) {
+  const source = path.join(root, "src-tauri", "native", "ticketry_hook.rs");
+  const output = path.join(
+    root,
+    "src-tauri",
+    "binaries",
+    `ticketry-hook-${target.rust_target}`,
+  );
+  return {
+    command: "rustc",
+    args: [source, "--edition", "2021", "--target", target.rust_target, "-O", "-o", output],
+    output,
+  };
+}
+
 export function selectTargets(manifest, requestedTarget = "all") {
   validateManifest(manifest);
   if (requestedTarget === "all") return manifest.targets;
@@ -302,11 +325,18 @@ export async function validateReleaseInputs(
       "Tauri bundle must declare icons/icon.icns as its macOS application icon",
     );
   }
+  if (tauriConfiguration.bundle?.resources?.["vendor/libghostty/resources/"] !== undefined) {
+    throw new ReleaseManifestError(
+      "Tauri bundle must not install retired native libghostty resources",
+    );
+  }
   if (
-    tauriConfiguration.bundle?.resources?.["vendor/libghostty/resources/"] !== ""
+    !tauriConfiguration.app?.security?.csp?.["script-src"]
+      ?.split(/\s+/)
+      .includes("'wasm-unsafe-eval'")
   ) {
     throw new ReleaseManifestError(
-      "Tauri bundle must install the pinned libghostty resources at the macOS Resources root",
+      "Tauri CSP must allow wasm-unsafe-eval for the Ghostty WASM renderer",
     );
   }
   const cargoVersion = cargoToml.match(/^version\s*=\s*"([^"]+)"$/m)?.[1];
@@ -401,33 +431,11 @@ export async function verifyMacOSBundle(
 ) {
   const appExecutable = path.join(artifacts.app, "Contents", "MacOS", manifest.artifacts.tauri.binary_name);
   const embeddedHookRunner = await findFileWithin(artifacts.app, "ticketry-hook");
-  const ghosttyTerminfo = path.join(
-    artifacts.app,
-    "Contents",
-    "Resources",
-    "terminfo",
-    "78",
-    "xterm-ghostty",
-  );
-  const ghosttyShellIntegration = path.join(
-    artifacts.app,
-    "Contents",
-    "Resources",
-    "ghostty",
-    "shell-integration",
-    "zsh",
-    "ghostty-integration",
-  );
   if (!(await exists(appExecutable))) {
     throw new ReleaseManifestError(`macOS bundle for ${target.id} is missing its app executable: ${appExecutable}`);
   }
   if (!embeddedHookRunner) {
     throw new ReleaseManifestError(`macOS bundle for ${target.id} is missing embedded hook runner ticketry-hook`);
-  }
-  if (!(await exists(ghosttyTerminfo)) || !(await exists(ghosttyShellIntegration))) {
-    throw new ReleaseManifestError(
-      `macOS bundle for ${target.id} is missing pinned libghostty runtime resources`,
-    );
   }
   const inspection = await inspectReleaseBundle(
     artifacts.app,
@@ -584,6 +592,13 @@ export async function buildRelease(
     await rm(
       path.join(studioRoot, "src-tauri", "target", target.rust_target, "release", "bundle"),
       { recursive: true, force: true },
+    );
+    const hookRunner = hookRunnerBuild(target);
+    await mkdir(path.dirname(hookRunner.output), { recursive: true });
+    await execute(
+      hookRunner.command,
+      hookRunner.args,
+      `hook runner build for ${target.id}`,
     );
     const [tauriCommand] = manifest.artifacts.tauri.command;
     await execute(

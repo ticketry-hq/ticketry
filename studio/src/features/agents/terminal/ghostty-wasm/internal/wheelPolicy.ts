@@ -12,10 +12,9 @@
  *    bytes built, so scrolling it is one wasm call and no subprocess, the
  *    position is continuous rather than whole-line quantized, and tmux is not
  *    in the path at all.
- * 3. Only the alternate screen — which keeps no scrollback of its own, and
- *    where nothing is listening for a report — falls back to the durable
- *    viewer's `tmux copy-mode` history, which is what the native and xterm
- *    renderers always do.
+ * 3. Only the alternate screen, which keeps no scrollback of its own, falls
+ *    back to the durable viewer's tmux history. Sending cursor keys here turns
+ *    Codex wheel gestures into ordinary TUI navigation input.
  *
  * tmux's own `mouse` option stays off in every case, so a renderer switch
  * leaves no trace on the session.
@@ -53,7 +52,7 @@ export interface WheelPolicyOptions {
   viewportRows: () => number;
   /** Send bytes to the running program. */
   sendInput: (bytes: Uint8Array) => void;
-  /** Scroll the durable tmux viewer — the fallback path. */
+  /** Scroll the durable tmux viewer when the active screen has no history. */
   scrollViewer: (direction: "up" | "down", lines: number) => void;
   /** Ask the surface for a paint. */
   scheduleFrame: () => void;

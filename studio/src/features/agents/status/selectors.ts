@@ -104,7 +104,9 @@ export function selectTaskAgentLifecycle(
 ): AgentLifecycle {
   let best: AgentLifecycle = "idle";
   for (const runId of taskRunIds(state, taskId, descendantTaskIds)) {
-    const lifecycle = toAgentLifecycle(presentationOf(state.runs[runId]));
+    const presentation = presentationOf(state.runs[runId]);
+    if (!isLiveAgentRunState(presentation)) continue;
+    const lifecycle = toAgentLifecycle(presentation);
     if (RANK[lifecycle] > RANK[best]) best = lifecycle;
   }
   return best;
@@ -128,7 +130,8 @@ export function selectTaskLifecycleChips(
   const counts = new Map<RunPresentationState, number>();
   for (const runId of taskRunIds(state, taskId, descendantTaskIds)) {
     const lifecycle = presentationOf(state.runs[runId]);
-    if (!lifecycle || !LIFECYCLE_STATE_ORDER.includes(lifecycle)) continue;
+    if (!lifecycle || !isLiveAgentRunState(lifecycle)) continue;
+    if (!LIFECYCLE_STATE_ORDER.includes(lifecycle)) continue;
     counts.set(lifecycle, (counts.get(lifecycle) ?? 0) + 1);
   }
   return LIFECYCLE_STATE_ORDER.flatMap((lifecycle) => {

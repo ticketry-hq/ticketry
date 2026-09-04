@@ -3,6 +3,10 @@
 Post-release experiment. Not a release blocker, and not a migration: the
 deliverable is evidence and one recommendation.
 
+The current order of work and the native fallback are recorded in
+[`terminal-renderer-strategy.md`](terminal-renderer-strategy.md). This file
+remains the evidence log and comparison matrix for the WASM attempt.
+
 ## What shipped in this branch
 
 A feature-gated third renderer, `ghostty-wasm`, under

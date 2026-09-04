@@ -2,7 +2,7 @@ use std::{path::PathBuf, sync::Arc};
 
 use rmcp::{
     model::{
-        CallToolRequestParams, CallToolResponse, CallToolResult, ListToolsResult,
+        CacheScope, CallToolRequestParams, CallToolResponse, CallToolResult, ListToolsResult,
         PaginatedRequestParams, ServerCapabilities, ServerInfo, Tool,
     },
     service::RequestContext,
@@ -94,7 +94,9 @@ impl ServerHandler for WorktrackerMcpService {
         _request: Option<PaginatedRequestParams>,
         _context: RequestContext<rmcp::RoleServer>,
     ) -> Result<ListToolsResult, ErrorData> {
-        Ok(ListToolsResult::with_all_items(self.tools.as_ref().clone()))
+        Ok(ListToolsResult::with_all_items(self.tools.as_ref().clone())
+            .with_ttl_ms(0)
+            .with_cache_scope(CacheScope::Private))
     }
 
     fn get_tool(&self, name: &str) -> Option<Tool> {

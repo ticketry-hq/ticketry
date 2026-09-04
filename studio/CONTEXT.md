@@ -210,9 +210,11 @@ The editing surface opened by selecting a workflow graph view node. It edits the
 _Avoid_: Node modal, state drawer, launch form
 
 **Run self-termination**:
-An agent-initiated action that ends only the agent's own active Studio run after
-the agent decides its objective is fulfilled. It is not an MCP-server completion
-decision and never accepts another run as a target.
+An agent-initiated action that ends only the agent's own active Studio run. A
+work-item run may use it only after its work item reaches a configured
+destination from the run's launch state. The workflow transition, rather than
+the agent's claim that it finished, is the completion condition. Taskless runs
+have no workflow condition. The action never accepts another run as a target.
 _Avoid_: Objective completion, arbitrary run termination, self-kill
 
 **Model configuration** (Settings section):

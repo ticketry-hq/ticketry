@@ -72,7 +72,7 @@ export type DialogDescriptor =
       resolve: (value: ReassignResult) => void;
     };
 
-export type ToastKind = "success" | "error";
+export type ToastKind = "success" | "info" | "error";
 
 export interface Toast {
   id: number;
@@ -733,6 +733,8 @@ export const dialog = {
 export const toast = {
   success: (message: string) =>
     useClientStore.getState().pushToast("success", message),
+  info: (message: string) =>
+    useClientStore.getState().pushToast("info", message),
   error: (message: string) =>
     useClientStore.getState().pushToast("error", message),
 };

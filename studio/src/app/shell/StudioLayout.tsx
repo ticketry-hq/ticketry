@@ -24,7 +24,7 @@ export function StudioLayout() {
       onLayout={handleOuterLayout}
     >
       {sidebarVisible ? <StudioSidebar layout={layout} /> : null}
-      <Panel defaultSize={outerLayout.at(-1)} minSize={30} order={3}>
+      <Panel id="workspace" defaultSize={outerLayout.at(-1)} minSize={30} order={3}>
         <TicketWorkspace
           tasksSize={tasksSize}
           workspaceSize={workspaceSize}

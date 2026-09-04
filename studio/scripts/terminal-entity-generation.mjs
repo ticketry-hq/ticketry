@@ -19,7 +19,7 @@ export async function generateTerminalEntities({ rawDirectory, outputRoot }) {
   agentRun = replace(
     agentRun,
     "    #[sea_orm(has_one)]\n    pub agent_terminal_sessions: HasOne<super::agent_terminal_sessions::Entity>,",
-    "    #[sea_orm(belongs_to, from = \"issue_id\", to = \"id\")]\n    pub issue: BelongsTo<crate::work_management::entities::issue::Entity>,",
+    "    #[sea_orm(belongs_to, from = \"issue_id\", to = \"id\")]\n    pub issue: BelongsTo<crate::work_management::issue::Entity>,",
     "Agent Run relation policy",
   );
 
@@ -44,7 +44,7 @@ export async function generateTerminalEntities({ rawDirectory, outputRoot }) {
   session = replace(
     session,
     "    #[sea_orm(\n        belongs_to,\n        from = \"agent_run_id\",\n        to = \"id\",\n        on_update = \"NoAction\",\n        on_delete = \"Cascade\"\n    )]\n    pub agent_runs: BelongsTo<super::agent_runs::Entity>,",
-    "    #[sea_orm(belongs_to, from = \"agent_run_id\", to = \"id\")]\n    pub agent_run: BelongsTo<crate::entities::runs::agent_run::Entity>,",
+    "    #[sea_orm(belongs_to, from = \"agent_run_id\", to = \"id\")]\n    pub agent_run: BelongsTo<crate::runs::agent_run::Entity>,",
     "Terminal Session Agent Run relation policy",
   );
 

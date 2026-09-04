@@ -5,6 +5,7 @@ import {
   type ViewerLease,
   type ViewerLeaseClient,
 } from "./viewerLease";
+import { isViewerLeaseLost } from "./viewerLeaseFailure";
 
 import type {
   TerminalClient,
@@ -117,11 +118,7 @@ export function openTauriTerminalClient(
       const lease = viewerLease;
       if (!lease) return;
       void lease.renew().catch((error) => {
-        if (["replaced_by_another_viewer", "viewer_lease_not_owned"].includes(
-          (error as { code?: string }).code ?? "",
-        )) {
-          replacedByAnotherViewer();
-        }
+        if (isViewerLeaseLost(error)) replacedByAnotherViewer();
       });
     }, 10_000);
   }

@@ -129,6 +129,20 @@ describe.skipIf(!prepared)("libghostty-vt artifact contract", () => {
     }
   });
 
+  it("uses the surrounding pane background in libghostty frames", () => {
+    const terminal = new GhosttyVtTerminal(runtime, {
+      cols: 20,
+      rows: 2,
+      background: [17, 19, 23],
+      foreground: [214, 222, 235],
+    });
+    try {
+      expect(terminal.frame().background).toBe("#111317");
+    } finally {
+      terminal.dispose();
+    }
+  });
+
   it("resolves SGR colours to the RGB the canvas fills with", () => {
     const terminal = new GhosttyVtTerminal(runtime, { cols: 20, rows: 2 });
     try {
@@ -274,6 +288,18 @@ describe.skipIf(!prepared)("libghostty-vt artifact contract", () => {
       expect(mouse.tracking(terminal.handle)).toBe(false);
     } finally {
       mouse.dispose();
+      terminal.dispose();
+    }
+  });
+
+  it("reports alternate-scroll mode changes", () => {
+    const terminal = new GhosttyVtTerminal(runtime, { cols: 20, rows: 6 });
+    try {
+      terminal.write(encoder.encode("\u001b[?1007l"));
+      expect(terminal.modeEnabled(1007)).toBe(false);
+      terminal.write(encoder.encode("\u001b[?1007h"));
+      expect(terminal.modeEnabled(1007)).toBe(true);
+    } finally {
       terminal.dispose();
     }
   });

@@ -93,6 +93,11 @@ Ticketry's Rust GraphQL surface is migration-first and generated-contract-first:
 
 ## Runtime validation
 
+Native libghostty is the default terminal renderer in desktop builds.
+`ghostty-wasm` is the browser default and a desktop diagnostic renderer, while
+xterm remains the compatibility fallback. tmux owns durable terminal sessions
+under every renderer.
+
 Install from the repository root, then run:
 
 ```bash

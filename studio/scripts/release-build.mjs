@@ -39,9 +39,9 @@ export function validateManifest(manifest) {
   requireArray(artifacts.frontend?.command, "artifacts.frontend.command");
   requireArray(artifacts.frontend?.required_outputs, "artifacts.frontend.required_outputs");
   const tauriCommand = requireArray(artifacts.tauri?.command, "artifacts.tauri.command");
-  if (tauriCommand.includes("native-libghostty")) {
+  if (!tauriCommand.includes("native-libghostty")) {
     throw new ReleaseManifestError(
-      "artifacts.tauri.command must not enable the retired native-libghostty renderer",
+      "artifacts.tauri.command must enable the native-libghostty feature",
     );
   }
   for (const asset of [
@@ -325,9 +325,9 @@ export async function validateReleaseInputs(
       "Tauri bundle must declare icons/icon.icns as its macOS application icon",
     );
   }
-  if (tauriConfiguration.bundle?.resources?.["vendor/libghostty/resources/"] !== undefined) {
+  if (tauriConfiguration.bundle?.resources?.["vendor/libghostty/resources/"] !== "") {
     throw new ReleaseManifestError(
-      "Tauri bundle must not install retired native libghostty resources",
+      "Tauri bundle must install the pinned libghostty resources at the macOS Resources root",
     );
   }
   if (
@@ -431,11 +431,33 @@ export async function verifyMacOSBundle(
 ) {
   const appExecutable = path.join(artifacts.app, "Contents", "MacOS", manifest.artifacts.tauri.binary_name);
   const embeddedHookRunner = await findFileWithin(artifacts.app, "ticketry-hook");
+  const ghosttyTerminfo = path.join(
+    artifacts.app,
+    "Contents",
+    "Resources",
+    "terminfo",
+    "78",
+    "xterm-ghostty",
+  );
+  const ghosttyShellIntegration = path.join(
+    artifacts.app,
+    "Contents",
+    "Resources",
+    "ghostty",
+    "shell-integration",
+    "zsh",
+    "ghostty-integration",
+  );
   if (!(await exists(appExecutable))) {
     throw new ReleaseManifestError(`macOS bundle for ${target.id} is missing its app executable: ${appExecutable}`);
   }
   if (!embeddedHookRunner) {
     throw new ReleaseManifestError(`macOS bundle for ${target.id} is missing embedded hook runner ticketry-hook`);
+  }
+  if (!(await exists(ghosttyTerminfo)) || !(await exists(ghosttyShellIntegration))) {
+    throw new ReleaseManifestError(
+      `macOS bundle for ${target.id} is missing pinned libghostty runtime resources`,
+    );
   }
   const inspection = await inspectReleaseBundle(
     artifacts.app,

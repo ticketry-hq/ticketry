@@ -25,9 +25,9 @@ import {
 } from "./internal/nativeViewerFailure";
 import { nativeViewerSessionIsLive } from "./internal/nativeViewerSessionLiveness";
 import { ensureTerminalRunCreated } from "./internal/terminalRunCreation";
-import { currentTerminalRendererOverride } from "./ghostty-wasm/rendererSelection";
+import { currentTerminalRenderer } from "./ghostty-wasm/rendererSelection";
 
-// Loaded on demand so the default renderer does not delay the Studio shell.
+// Loaded on demand so the browser default does not delay the Studio shell.
 const GhosttyWasmTerminal = lazy(async () => ({
   default: (await import("./ghostty-wasm/GhosttyWasmTerminal")).GhosttyWasmTerminal,
 }));
@@ -60,9 +60,9 @@ export function Terminal({
     sessionId ? state.sessions[sessionId] ?? null : null,
   );
   const desktop = isTauri();
-  // ghostty-wasm is the shipping default. Development builds can override it
-  // to compare the retained renderers.
-  const [rendererOverride] = useState(() => currentTerminalRendererOverride());
+  // Native libghostty is the desktop default. Browser Studio uses Ghostty WASM,
+  // and development builds can override either choice for comparison.
+  const [rendererOverride] = useState(() => currentTerminalRenderer(desktop));
   // WASM failures are kept out of `nativeFailure`: the
   // window-scoped native recovery campaign reloads the WebView, which can
   // neither produce a missing wasm artifact nor fix a Canvas renderer fault.
@@ -104,7 +104,7 @@ export function Terminal({
     ensureTerminalRunCreated(sessionId, session);
   }, [session, sessionId]);
 
-  // An explicitly selected native renderer failure on a live desktop terminal is the only input to the
+  // A native renderer failure on a live desktop terminal is the only input to the
   // window-scoped recovery campaign. Capability absence, browser rendering and
   // ended sessions are supported fallback postures, not render failures.
   useEffect(() => {

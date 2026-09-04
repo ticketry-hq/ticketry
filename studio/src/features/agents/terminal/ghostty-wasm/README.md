@@ -1,7 +1,8 @@
 # `ghostty-wasm` — WebView-hosted Ghostty renderer (CODING-1304)
 
-The default Ticketry terminal renderer. It renders inside the browser or
-WKWebView and uses xterm as its compatibility fallback.
+Ticketry's default browser terminal renderer and a desktop diagnostic option.
+Native libghostty is the desktop default. Both use xterm as their compatibility
+fallback.
 
 ## What it does and does not own
 
@@ -20,14 +21,15 @@ WKWebView and uses xterm as its compatibility fallback.
 
 ## Renderer selection
 
-It is selected by default in every build. A development build may override it,
-in precedence order:
+It is selected by default in browser builds. Native libghostty is selected by
+default in desktop builds. A development build may override either choice, in
+precedence order:
 
 1. Launch flag: open Studio with `?terminalRenderer=ghostty-wasm`.
 2. Development setting: `localStorage["ticketry:terminal-renderer"]`.
 
 Accepted values are `native`, `xterm` and `ghostty-wasm`. Anything else, or no
-value, keeps `ghostty-wasm`.
+value, uses the default for the current runtime.
 
 ## Preparing the artifact
 

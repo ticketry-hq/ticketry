@@ -360,7 +360,7 @@ async function main() {
       "--debug",
       "--no-bundle",
       "--features",
-      "desktop-acceptance",
+      "native-libghostty,desktop-acceptance",
     ], { cwd: studioRoot });
   }
 

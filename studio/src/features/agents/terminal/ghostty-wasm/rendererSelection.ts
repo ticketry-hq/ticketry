@@ -1,9 +1,10 @@
 /**
  * CODING-1304 — which terminal renderer a Studio build presents.
  *
- * `ghostty-wasm` is the default in browser, development desktop and packaged
- * desktop builds. xterm is the compatibility fallback. Development builds may
- * still select another renderer for comparison. Selection changes nothing
+ * Native libghostty is the default in development and packaged desktop builds.
+ * `ghostty-wasm` remains the browser default and xterm is the compatibility
+ * fallback. Development builds may still select another renderer for
+ * comparison. Selection changes nothing
  * about the run, the tmux session identity, or any persisted terminal record:
  * all three renderers attach the same durable viewer through the same transport.
  */
@@ -21,7 +22,9 @@ export interface RendererGateInput {
   search?: string;
   /** A `localStorage`-shaped store; omitted when storage is unavailable. */
   storage?: Pick<Storage, "getItem">;
-  /** False in packaged release builds, where the experiment stays unreachable. */
+  /** Whether this document is running inside the Tauri desktop application. */
+  desktopApp: boolean;
+  /** False in packaged release builds, where renderer overrides stay unreachable. */
   developmentBuild: boolean;
 }
 
@@ -41,7 +44,8 @@ function parse(value: string | null | undefined): TerminalRendererChoice | null 
 export function selectedTerminalRenderer(
   input: RendererGateInput,
 ): TerminalRendererChoice {
-  if (!input.developmentBuild) return "ghostty-wasm";
+  const defaultRenderer = input.desktopApp ? "native" : "ghostty-wasm";
+  if (!input.developmentBuild) return defaultRenderer;
   let fromQuery: TerminalRendererChoice | null = null;
   try {
     fromQuery = parse(new URLSearchParams(input.search ?? "").get(RENDERER_QUERY_PARAM));
@@ -50,15 +54,15 @@ export function selectedTerminalRenderer(
   }
   if (fromQuery) return fromQuery;
   try {
-    return parse(input.storage?.getItem(RENDERER_STORAGE_KEY)) ?? "ghostty-wasm";
+    return parse(input.storage?.getItem(RENDERER_STORAGE_KEY)) ?? defaultRenderer;
   } catch {
     /* Storage can be unavailable; use the shipping default renderer. */
-    return "ghostty-wasm";
+    return defaultRenderer;
   }
 }
 
 /** Read the renderer choice from the live document. */
-export function currentTerminalRendererOverride(): TerminalRendererChoice {
+export function currentTerminalRenderer(desktopApp: boolean): TerminalRendererChoice {
   if (typeof window === "undefined") return "ghostty-wasm";
   let storage: Pick<Storage, "getItem"> | undefined;
   try {
@@ -69,6 +73,7 @@ export function currentTerminalRendererOverride(): TerminalRendererChoice {
   return selectedTerminalRenderer({
     search: window.location?.search,
     storage,
+    desktopApp,
     developmentBuild: import.meta.env.DEV === true,
   });
 }

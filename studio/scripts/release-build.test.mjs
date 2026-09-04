@@ -43,12 +43,14 @@ function latestJson(overrides = {}) {
   };
 }
 
-test("the release ships the Ghostty WASM renderer without native libghostty", () => {
+test("the release ships native libghostty with the browser Ghostty WASM artifact", () => {
   assert.equal(manifest.release_version, "0.2.0");
   assert.deepEqual(Object.keys(manifest.artifacts).sort(), [
     "frontend", "runtime_resources", "tauri", "updater",
   ]);
-  assert.equal(manifest.artifacts.tauri.command.includes("native-libghostty"), false);
+  assert.deepEqual(manifest.artifacts.tauri.command.slice(-2), [
+    "--features", "native-libghostty",
+  ]);
   assert.ok(manifest.artifacts.frontend.required_outputs.includes(
     "dist/ghostty-vt/ghostty-vt.wasm",
   ));
@@ -91,9 +93,10 @@ test("the release builds the target-specific hook runner expected by Tauri", () 
 });
 
 test("manifest validation requires Rust runtime and release policy declarations", () => {
-  const withNativeRenderer = structuredClone(manifest);
-  withNativeRenderer.artifacts.tauri.command.push("--features", "native-libghostty");
-  assert.throws(() => validateManifest(withNativeRenderer), /retired native-libghostty/);
+  const withoutNativeRenderer = structuredClone(manifest);
+  withoutNativeRenderer.artifacts.tauri.command =
+    withoutNativeRenderer.artifacts.tauri.command.slice(0, -2);
+  assert.throws(() => validateManifest(withoutNativeRenderer), /native-libghostty/);
   const withoutWasm = structuredClone(manifest);
   withoutWasm.artifacts.frontend.required_outputs = ["dist/index.html"];
   assert.throws(() => validateManifest(withoutWasm), /ghostty-vt\/ghostty-vt\.wasm/);
@@ -232,7 +235,7 @@ test("repository release inputs validate without a packaged service", async () =
   }));
 });
 
-test("unsigned bundle verification checks only the app and hook binaries", async () => {
+test("unsigned bundle verification checks binaries and native Ghostty resources", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "ticketry-release-"));
   const app = path.join(root, "Ticketry.app");
   const resources = path.join(app, "Contents", "Resources");

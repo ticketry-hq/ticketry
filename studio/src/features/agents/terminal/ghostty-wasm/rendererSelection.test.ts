@@ -10,20 +10,37 @@ function storage(value: string | null) {
 }
 
 describe("terminal renderer gate", () => {
-  it("uses ghostty-wasm when nothing is set", () => {
+  it("uses ghostty-wasm by default in the browser", () => {
     expect(
-      selectedTerminalRenderer({ search: "", storage: storage(null), developmentBuild: true }),
+      selectedTerminalRenderer({
+        search: "",
+        storage: storage(null),
+        desktopApp: false,
+        developmentBuild: true,
+      }),
     ).toBe("ghostty-wasm");
   });
 
-  it("uses ghostty-wasm in packaged builds", () => {
+  it("uses native libghostty by default in desktop development", () => {
+    expect(
+      selectedTerminalRenderer({
+        search: "",
+        storage: storage(null),
+        desktopApp: true,
+        developmentBuild: true,
+      }),
+    ).toBe("native");
+  });
+
+  it("uses native libghostty in packaged desktop builds", () => {
     expect(
       selectedTerminalRenderer({
         search: "?terminalRenderer=ghostty-wasm",
         storage: storage("ghostty-wasm"),
+        desktopApp: true,
         developmentBuild: false,
       }),
-    ).toBe("ghostty-wasm");
+    ).toBe("native");
   });
 
   it("prefers the launch flag over the stored development setting", () => {
@@ -31,6 +48,7 @@ describe("terminal renderer gate", () => {
       selectedTerminalRenderer({
         search: "?terminalRenderer=ghostty-wasm",
         storage: storage("xterm"),
+        desktopApp: true,
         developmentBuild: true,
       }),
     ).toBe("ghostty-wasm");
@@ -41,6 +59,7 @@ describe("terminal renderer gate", () => {
       selectedTerminalRenderer({
         search: "?other=1",
         storage: storage("XTerm"),
+        desktopApp: true,
         developmentBuild: true,
       }),
     ).toBe("xterm");
@@ -51,6 +70,7 @@ describe("terminal renderer gate", () => {
       selectedTerminalRenderer({
         search: "?terminalRenderer=webgl",
         storage: storage(null),
+        desktopApp: false,
         developmentBuild: true,
       }),
     ).toBe("ghostty-wasm");
@@ -65,8 +85,9 @@ describe("terminal renderer gate", () => {
             throw new Error("storage disabled");
           },
         },
+        desktopApp: true,
         developmentBuild: true,
       }),
-    ).toBe("ghostty-wasm");
+    ).toBe("native");
   });
 });

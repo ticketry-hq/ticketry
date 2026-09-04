@@ -12,7 +12,7 @@
       ]
     },
     "tauri": {
-      "command": ["npm", "run", "tauri", "--", "build"],
+      "command": ["npm", "run", "tauri", "--", "build", "--features", "native-libghostty"],
       "binary_name": "ticketry",
       "bundle_formats": ["app", "dmg", "app.tar.gz"]
     },

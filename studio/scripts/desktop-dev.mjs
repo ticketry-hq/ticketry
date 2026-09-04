@@ -319,6 +319,8 @@ export async function main() {
       "--no-watch",
       "--config",
       config,
+      "--features",
+      "native-libghostty",
     ], environment);
   } finally {
     if (options.temporarySqlite) {

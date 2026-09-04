@@ -126,7 +126,15 @@ if (mode === "all" || mode === "dev") {
       await runCommandWithTimeout(
         "desktop development startup",
         process.execPath,
-        [tauriCli, "dev", "--no-watch", "--config", developmentConfig],
+        [
+          tauriCli,
+          "dev",
+          "--no-watch",
+          "--config",
+          developmentConfig,
+          "--features",
+          "native-libghostty",
+        ],
         180_000,
         developmentSmokeEnvironment,
       );
@@ -141,7 +149,7 @@ if (mode === "all" || mode === "packaged") {
     await runCommandWithTimeout(
       "desktop production build",
       process.execPath,
-      [tauriCli, "build", "--no-bundle"],
+      [tauriCli, "build", "--no-bundle", "--features", "native-libghostty"],
       300_000,
       packagedSmokeEnvironment,
     );

@@ -145,7 +145,8 @@ describe("native viewer attachment acceptance", () => {
       readFile(`${process.cwd()}/src-tauri/tauri.conf.json`, "utf8"),
     ]);
     expect(themeSource).toContain("background = #111317");
-    expect(tauriConfig).not.toContain('"native/ticketry-ghostty.conf"');
+    expect(tauriConfig).toContain('"native/ticketry-ghostty.conf"');
+    expect(tauriConfig).toContain('"vendor/libghostty/resources/"');
     expect(runtimeSource).toContain("load_ticketry_ghostty_theme(runtime->config)");
     expect(runtimeSource).toContain("ghostty_config_load_file(config");
     expect(runtimeSource).toContain("ticketry_ghostty_background_is_configured");

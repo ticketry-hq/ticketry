@@ -2,11 +2,17 @@
 
 Decision date: 2026-09-04
 
-Decision: keep `ghostty-wasm` as the default.
+Original evidence-based decision: keep `ghostty-wasm` as the default.
 
-This task does not change renderer selection. Native libghostty remains an
+Superseded on 2026-09-04 by explicit product direction. Native libghostty is
+now the desktop default. `ghostty-wasm` remains the browser default and a
+desktop diagnostic option; xterm remains the compatibility fallback. The
+evidence and limitations below remain the historical record behind the earlier
+recommendation.
+
+The original task did not change renderer selection. Native libghostty was an
 explicit packaged capture override and a development diagnostic renderer.
-`xterm` remains a fallback.
+`xterm` was the fallback.
 
 ## Why native is not being promoted
 
@@ -107,8 +113,8 @@ native experiment, not a new certification of the existing renderer.
 
 ## Follow-up rule
 
-A later native migration proposal needs a new task. It must repeat native and
-WASM measurements with the same Terminal Sessions, commands, dimensions,
-machine, build, input device, and sample windows, and it must include the full
-packaged selection-gate capture set above. Until then, `ghostty-wasm` remains
-the shipping default.
+A future renderer comparison should repeat native and WASM measurements with
+the same Terminal Sessions, commands, dimensions, machine, build, input device,
+and sample windows. It should include the full packaged selection-gate capture
+set above. The later product direction promoted native libghostty without
+claiming that the missing comparison evidence had been collected.

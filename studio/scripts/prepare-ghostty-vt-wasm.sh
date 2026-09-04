@@ -1,6 +1,6 @@
 #!/bin/sh
 # CODING-1304 — reproducible build of the pinned libghostty-vt WebAssembly
-# artifact used by Ticketry's default `ghostty-wasm` renderer.
+# artifact used by Ticketry's browser-default `ghostty-wasm` renderer.
 #
 # This pin is deliberately separate from the retained native libghostty pin in
 # `prepare-libghostty.sh`. The VT C ABI needed for the WebView renderer exists

@@ -12,9 +12,9 @@ frames onto a Canvas 2D surface inside Ticketry's WKWebView, fed by the
 existing Rust tmux attachment over the existing Tauri byte channel.
 
 - tmux remains the durable session owner.
-- `ghostty-wasm` is now the product default. Native libghostty remains an
-  explicit packaged capture override and a development diagnostic renderer;
-  xterm remains the fallback.
+- Native libghostty is now the desktop default. `ghostty-wasm` remains the
+  browser default and a desktop diagnostic renderer; xterm remains the
+  fallback.
 - Development renderer selection reads `?terminalRenderer=` then
   `localStorage["ticketry:terminal-renderer"]`.
 - Switching renderers changes no run, no tmux session identity, and no
@@ -217,7 +217,8 @@ here proves the ownership rule itself must change.
 
 ## Recommendation
 
-Keep `ghostty-wasm` as the default. The final rationale, native-only packaged
-measurements, selection-gate evidence, UX costs, and unsupported cases are in
-[`CODING-1394-renderer-decision.md`](CODING-1394-renderer-decision.md). Any
-native production migration is a separate task.
+The original experiment recommended keeping `ghostty-wasm` as the default.
+Later product direction promoted native libghostty for desktop builds without
+changing the measurements recorded here. The rationale, native-only packaged
+measurements, selection-gate evidence, UX costs, and supersession note are in
+[`CODING-1394-renderer-decision.md`](CODING-1394-renderer-decision.md).

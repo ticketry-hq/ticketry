@@ -200,10 +200,20 @@ fn audited_source_roots() -> Vec<PathBuf> {
     let crates = manifest.join("crates");
     let mut slices: Vec<PathBuf> = fs::read_dir(&crates)
         .unwrap_or_else(|error| panic!("read {}: {error}", crates.display()))
-        .map(|entry| entry.expect("read crates entry").path().join("src"))
+        .flat_map(|entry| {
+            let tier = entry.expect("read tier entry").path();
+            fs::read_dir(&tier)
+                .unwrap_or_else(|error| panic!("read {}: {error}", tier.display()))
+                .map(|entry| entry.expect("read crate entry").path().join("src"))
+        })
         .filter(|path| path.is_dir())
         .collect();
     slices.sort();
+    assert_eq!(
+        slices.len(),
+        18,
+        "GraphQL audit must scan all workspace crates"
+    );
     roots.extend(slices);
     roots
 }
@@ -245,18 +255,18 @@ fn superseded_seaolim_migration_files_stay_removed() {
     // the `src/<module>/` prefix it had in the root package.
     let workspace = Path::new(env!("CARGO_MANIFEST_DIR"));
     for relative in [
-        "crates/ticketry-agent-execution/src/graph_run_service/graphql.rs",
-        "crates/ticketry-agent-execution/src/graph_run_service/operation_registry.rs",
-        "crates/ticketry-documents/src/save/graphql.rs",
-        "crates/ticketry-runs/src/persistence/attempt_graphql.rs",
-        "crates/ticketry-runs/src/persistence/lifecycle_graphql.rs",
-        "crates/ticketry-work-management/src/work_management/commands/module_presentation.rs",
-        "crates/ticketry-work-management/src/work_management/graphql/catalog.rs",
-        "crates/ticketry-work-management/src/work_management/graphql/module_presentations.rs",
-        "crates/ticketry-work-management/src/work_management/graphql/work_items.rs",
-        "crates/ticketry-work-management/src/work_management/graphql/workflow_configuration.rs",
-        "crates/ticketry-workspace-runtime/src/worktree/create/graphql.rs",
-        "crates/ticketry-workspace-runtime/src/worktree/discard/graphql.rs",
+        "crates/execution/ticketry-agent-execution/src/graph_run_service/graphql.rs",
+        "crates/execution/ticketry-agent-execution/src/graph_run_service/operation_registry.rs",
+        "crates/worktracking/ticketry-documents/src/save/graphql.rs",
+        "crates/worktracking/ticketry-runs/src/persistence/attempt_graphql.rs",
+        "crates/worktracking/ticketry-runs/src/persistence/lifecycle_graphql.rs",
+        "crates/worktracking/ticketry-work-management/src/work_management/commands/module_presentation.rs",
+        "crates/worktracking/ticketry-work-management/src/work_management/graphql/catalog.rs",
+        "crates/worktracking/ticketry-work-management/src/work_management/graphql/module_presentations.rs",
+        "crates/worktracking/ticketry-work-management/src/work_management/graphql/work_items.rs",
+        "crates/worktracking/ticketry-work-management/src/work_management/graphql/workflow_configuration.rs",
+        "crates/execution/ticketry-workspace-runtime/src/worktree/create/graphql.rs",
+        "crates/execution/ticketry-workspace-runtime/src/worktree/discard/graphql.rs",
         "src/documents/save/graphql.rs",
         "src/graph_run_service/graphql.rs",
         "src/graph_run_service/operation_registry.rs",
@@ -268,8 +278,8 @@ fn superseded_seaolim_migration_files_stay_removed() {
         "src/run_now/types.rs",
         "src/runs_persistence/attempt_graphql.rs",
         "src/runs_persistence/lifecycle_graphql.rs",
-        "crates/ticketry-terminal/src/terminal/output_activity/graphql.rs",
-        "crates/ticketry-terminal/src/terminal/output_activity/operation_registry.rs",
+        "crates/execution/ticketry-terminal/src/terminal/output_activity/graphql.rs",
+        "crates/execution/ticketry-terminal/src/terminal/output_activity/operation_registry.rs",
         "src/terminal/output_activity/graphql.rs",
         "src/terminal/output_activity/operation_registry.rs",
         "src/work_management/commands/module_presentation.rs",

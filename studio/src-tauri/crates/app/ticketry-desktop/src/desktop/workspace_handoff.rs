@@ -180,7 +180,8 @@ mod tests {
 
     #[test]
     fn readiness_probes_the_exact_generated_workspace_field_names() {
-        let schema = include_str!("../../../../../src/graphql-foundation/generated/schema.graphql");
+        let schema =
+            include_str!("../../../../../../src/graphql-foundation/generated/schema.graphql");
         for field in REQUIRED_QUERIES.iter().chain(REQUIRED_MUTATIONS) {
             assert!(
                 schema.contains(&format!("\t{field}(")),

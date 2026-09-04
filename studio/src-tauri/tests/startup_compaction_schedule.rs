@@ -190,7 +190,7 @@ fn the_shipped_interval_is_measured_in_hours() {
 fn the_desktop_handoff_drives_compaction_after_reconciliation() {
     let source = std::fs::read_to_string(
         Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("crates/ticketry-desktop/src/desktop/runs_handoff.rs"),
+            .join("crates/app/ticketry-desktop/src/desktop/runs_handoff.rs"),
     )
     .unwrap();
     assert!(

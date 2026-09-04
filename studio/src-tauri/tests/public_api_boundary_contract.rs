@@ -108,24 +108,34 @@ fn write_approved_api(manifest_dir: &Path, actual: &BTreeMap<String, BTreeSet<St
 fn library_roots(manifest_dir: &Path) -> Vec<(String, PathBuf)> {
     let mut roots = vec![("ticketry".to_owned(), manifest_dir.join("src/lib.rs"))];
     let crates_dir = manifest_dir.join("crates");
-    for entry in fs::read_dir(&crates_dir)
+    for tier_entry in fs::read_dir(&crates_dir)
         .unwrap_or_else(|error| panic!("cannot read {}: {error}", crates_dir.display()))
     {
-        let path = entry.expect("crate directory entry").path();
-        let manifest = path.join("Cargo.toml");
-        let lib = path.join("src/lib.rs");
-        if !manifest.is_file() || !lib.is_file() {
-            continue;
+        let tier = tier_entry.expect("tier directory entry").path();
+        for crate_entry in fs::read_dir(&tier)
+            .unwrap_or_else(|error| panic!("cannot read {}: {error}", tier.display()))
+        {
+            let path = crate_entry.expect("crate directory entry").path();
+            let manifest = path.join("Cargo.toml");
+            let lib = path.join("src/lib.rs");
+            if !manifest.is_file() || !lib.is_file() {
+                continue;
+            }
+            let text = fs::read_to_string(&manifest)
+                .unwrap_or_else(|error| panic!("cannot read {}: {error}", manifest.display()));
+            let name = text
+                .lines()
+                .find_map(|line| line.strip_prefix("name = \"")?.strip_suffix('"'))
+                .unwrap_or_else(|| panic!("{} has no package name", manifest.display()));
+            roots.push((name.to_owned(), lib));
         }
-        let text = fs::read_to_string(&manifest)
-            .unwrap_or_else(|error| panic!("cannot read {}: {error}", manifest.display()));
-        let name = text
-            .lines()
-            .find_map(|line| line.strip_prefix("name = \"")?.strip_suffix('"'))
-            .unwrap_or_else(|| panic!("{} has no package name", manifest.display()));
-        roots.push((name.to_owned(), lib));
     }
     roots.sort_by(|left, right| left.0.cmp(&right.0));
+    assert_eq!(
+        roots.len(),
+        19,
+        "public API audit must scan the root and 18 crates"
+    );
     roots
 }
 

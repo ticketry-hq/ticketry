@@ -6,7 +6,7 @@ use ticketry_entities::{agent_model, agent_model_reasoning_level, provider};
 use ticketry_settings::read_global_launch_default;
 
 const REQUIRED_SKILL_LOCK: &str =
-    include_str!("../../../../../../resources/launch/skills.lock.json");
+    include_str!("../../../../../../../resources/launch/skills.lock.json");
 
 pub(super) struct LaunchBindingCandidate<'a> {
     pub prompt: &'a str,

@@ -8,11 +8,11 @@ describe("overhaul acceptance - typography readability", () => {
         readFile(`${process.cwd()}/src/app/styles/studio-surface.css`, "utf8"),
         readFile(`${process.cwd()}/src-tauri/native/ticketry-ghostty.conf`, "utf8"),
         readFile(
-          `${process.cwd()}/src-tauri/crates/ticketry-launch/src/planning/materialize.rs`,
+          `${process.cwd()}/src-tauri/crates/execution/ticketry-launch/src/planning/materialize.rs`,
           "utf8",
         ),
         readFile(
-          `${process.cwd()}/src-tauri/crates/ticketry-terminal/src/tmux_adapter/hosted_command.rs`,
+          `${process.cwd()}/src-tauri/crates/execution/ticketry-terminal/src/tmux_adapter/hosted_command.rs`,
           "utf8",
         ),
       ]);

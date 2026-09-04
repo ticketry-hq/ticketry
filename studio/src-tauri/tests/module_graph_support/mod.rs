@@ -141,12 +141,17 @@ pub fn slice_of(module: &str) -> Option<String> {
 /// `(slice name, crate directory)` for every already-extracted crate.
 pub fn extracted_crates() -> Vec<(String, PathBuf)> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("crates");
-    let Ok(entries) = std::fs::read_dir(root) else {
+    let Ok(tiers) = std::fs::read_dir(root) else {
         return Vec::new();
     };
-    let mut crates: Vec<_> = entries
+    let mut crates: Vec<_> = tiers
         .flatten()
-        .filter(|entry| entry.path().is_dir())
+        .flat_map(|tier| {
+            std::fs::read_dir(tier.path())
+                .into_iter()
+                .flatten()
+                .flatten()
+        })
         .filter_map(|entry| {
             let name = entry.file_name().to_string_lossy().into_owned();
             name.strip_prefix("ticketry-")
@@ -154,6 +159,11 @@ pub fn extracted_crates() -> Vec<(String, PathBuf)> {
         })
         .collect();
     crates.sort();
+    assert_eq!(
+        crates.len(),
+        17,
+        "module graph must scan all ticketry-* crates"
+    );
     crates
 }
 

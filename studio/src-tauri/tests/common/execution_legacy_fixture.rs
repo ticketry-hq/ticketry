@@ -31,9 +31,10 @@ pub const CLAIMED_AGENT_RUN: &str = "run-893";
 pub const CLAIMED_LAUNCHED_AT: &str = "2026-08-19 17:30:00";
 
 const CURRENT_SCHEMA: &str =
-    include_str!("../../crates/ticketry-installation/src/adoption/provisioning.v1.sql");
-const CURRENT_LEDGER: &str =
-    include_str!("../../crates/ticketry-installation/src/adoption/provisioning-ledger.v1.sql");
+    include_str!("../../crates/execution/ticketry-installation/src/adoption/provisioning.v1.sql");
+const CURRENT_LEDGER: &str = include_str!(
+    "../../crates/execution/ticketry-installation/src/adoption/provisioning-ledger.v1.sql"
+);
 
 pub async fn migrate_leaf(data_directory: &Path, leaf: &str) {
     let database = install_current_shape(data_directory).await;

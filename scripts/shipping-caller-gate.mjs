@@ -87,11 +87,21 @@ if (/^[^/\n]*["']\/api/m.test(proxy) || /\bws\s*:/m.test(proxy)) {
   findings.push("studio/vite.proxy.ts: development proxy exposes retired REST or WebSocket routing");
 }
 const mcpRuntime = readFileSync(
-  join(root, "studio", "src-tauri", "src", "desktop", "mcp_runtime.rs"),
+  join(
+    root,
+    "studio",
+    "src-tauri",
+    "crates",
+    "app",
+    "ticketry-desktop",
+    "src",
+    "desktop",
+    "mcp_runtime.rs",
+  ),
   "utf8",
 );
 if (!mcpRuntime.includes("if cfg!(debug_assertions)") || !mcpRuntime.includes("Ok(0)")) {
-  findings.push("studio/src-tauri/src/desktop/mcp_runtime.rs: production MCP must request an OS-assigned port");
+  findings.push("studio/src-tauri/crates/app/ticketry-desktop/src/desktop/mcp_runtime.rs: production MCP must request an OS-assigned port");
 }
 const shippingFiles = [
   "package.json",

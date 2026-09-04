@@ -59,8 +59,8 @@ pub const CHILD_HANDOFFS: &[ChildHandoff] = &[
         verdict: "aligned",
         evidence: "spec/rusting--cf2de16d/T865--adopt-terminal-persistence-and-generate/AUDIT.md",
         files_checked: &[
-            "studio/src-tauri/crates/ticketry-entities/src/terminals",
-            "studio/src-tauri/crates/ticketry-terminal/src/terminal/persistence",
+            "studio/src-tauri/crates/foundation/ticketry-entities/src/terminals",
+            "studio/src-tauri/crates/execution/ticketry-terminal/src/terminal/persistence",
         ],
     },
     ChildHandoff {
@@ -71,8 +71,8 @@ pub const CHILD_HANDOFFS: &[ChildHandoff] = &[
         verdict: "aligned: runtime adapter only, no GraphQL surface",
         evidence: "spec/rusting--cf2de16d/T866--centralize-verified-tmux-lifecycle-opera/AUDIT.md",
         files_checked: &[
-            "studio/src-tauri/crates/ticketry-terminal/src/tmux_adapter.rs",
-            "studio/src-tauri/crates/ticketry-terminal/src/tmux_adapter",
+            "studio/src-tauri/crates/execution/ticketry-terminal/src/tmux_adapter.rs",
+            "studio/src-tauri/crates/execution/ticketry-terminal/src/tmux_adapter",
         ],
     },
     ChildHandoff {
@@ -83,8 +83,8 @@ pub const CHILD_HANDOFFS: &[ChildHandoff] = &[
         verdict: "aligned: pure planning, no GraphQL surface",
         evidence: "spec/rusting--cf2de16d/T867--centralize-approved-provider-launch-plan/AUDIT.md",
         files_checked: &[
-            "studio/src-tauri/crates/ticketry-launch/src/planning",
-            "studio/src-tauri/crates/ticketry-launch/src/paths",
+            "studio/src-tauri/crates/execution/ticketry-launch/src/planning",
+            "studio/src-tauri/crates/execution/ticketry-launch/src/paths",
         ],
     },
     ChildHandoff {
@@ -95,8 +95,8 @@ pub const CHILD_HANDOFFS: &[ChildHandoff] = &[
         verdict: "aligned",
         evidence: "spec/rusting--cf2de16d/T868--expose-scoped-generated-terminal-session/AUDIT.md",
         files_checked: &[
-            "studio/src-tauri/crates/ticketry-terminal/src/terminal/persistence/mod.rs",
-            "studio/src-tauri/crates/ticketry-terminal/src/terminal/persistence/graphql_scope.rs",
+            "studio/src-tauri/crates/execution/ticketry-terminal/src/terminal/persistence/mod.rs",
+            "studio/src-tauri/crates/execution/ticketry-terminal/src/terminal/persistence/graphql_scope.rs",
             "studio/src/features/agents/terminal/operations/terminalSessions.graphql",
         ],
     },
@@ -108,9 +108,9 @@ pub const CHILD_HANDOFFS: &[ChildHandoff] = &[
         verdict: "aligned: viewer mechanics only, no GraphQL surface",
         evidence: "spec/rusting--cf2de16d/T869--route-terminal-viewers-through-the-rust/AUDIT.md",
         files_checked: &[
-            "studio/src-tauri/crates/ticketry-terminal/src/terminal/viewer",
-            "studio/src-tauri/crates/ticketry-desktop/src/native_terminal",
-            "studio/src-tauri/crates/ticketry-desktop/src/native_terminal.rs",
+            "studio/src-tauri/crates/execution/ticketry-terminal/src/terminal/viewer",
+            "studio/src-tauri/crates/app/ticketry-desktop/src/native_terminal",
+            "studio/src-tauri/crates/app/ticketry-desktop/src/native_terminal.rs",
         ],
     },
     ChildHandoff {
@@ -121,8 +121,8 @@ pub const CHILD_HANDOFFS: &[ChildHandoff] = &[
         verdict: "aligned: filesystem spool only, no GraphQL surface",
         evidence: "spec/rusting--cf2de16d/T870--port-provider-hook-spooling-and-ingestio/AUDIT.md",
         files_checked: &[
-            "studio/src-tauri/crates/ticketry-runs/src/hook_spool",
-            "studio/src-tauri/crates/ticketry-runs/src/hook_spool/directory_layout.rs",
+            "studio/src-tauri/crates/worktracking/ticketry-runs/src/hook_spool",
+            "studio/src-tauri/crates/worktracking/ticketry-runs/src/hook_spool/directory_layout.rs",
         ],
     },
     ChildHandoff {
@@ -132,7 +132,7 @@ pub const CHILD_HANDOFFS: &[ChildHandoff] = &[
         status: HandoffStatus::Reconciled,
         verdict: "aligned",
         evidence: "spec/rusting--cf2de16d/T871--launch-one-terminal-through-the-restrict/AUDIT.md",
-        files_checked: &["studio/src-tauri/crates/ticketry-terminal/src/terminal/launch"],
+        files_checked: &["studio/src-tauri/crates/execution/ticketry-terminal/src/terminal/launch"],
     },
     ChildHandoff {
         ticket: "CODING-872",
@@ -142,7 +142,7 @@ pub const CHILD_HANDOFFS: &[ChildHandoff] = &[
         verdict: "aligned",
         evidence: "spec/rusting--cf2de16d/T872--enforce-atomic-viewer-ownership-with-res/AUDIT.md",
         files_checked: &[
-            "studio/src-tauri/crates/ticketry-terminal/src/viewer_ownership",
+            "studio/src-tauri/crates/execution/ticketry-terminal/src/viewer_ownership",
             "studio/src/features/agents/terminal/operations/viewerLeases.graphql",
         ],
     },
@@ -154,8 +154,8 @@ pub const CHILD_HANDOFFS: &[ChildHandoff] = &[
         verdict: "aligned",
         evidence: "spec/rusting--cf2de16d/T873--make-terminal-launch-recovery-converge-a/AUDIT.md",
         files_checked: &[
-            "studio/src-tauri/crates/ticketry-terminal/src/terminal/launch/execution.rs",
-            "studio/src-tauri/crates/ticketry-terminal/src/terminal/launch/settlement.rs",
+            "studio/src-tauri/crates/execution/ticketry-terminal/src/terminal/launch/execution.rs",
+            "studio/src-tauri/crates/execution/ticketry-terminal/src/terminal/launch/settlement.rs",
         ],
     },
     ChildHandoff {
@@ -165,7 +165,7 @@ pub const CHILD_HANDOFFS: &[ChildHandoff] = &[
         status: HandoffStatus::Reconciled,
         verdict: "aligned",
         evidence: "spec/rusting--cf2de16d/T874--resume-provider-conversations-into-new-t/AUDIT.md",
-        files_checked: &["studio/src-tauri/crates/ticketry-terminal/src/terminal/resume"],
+        files_checked: &["studio/src-tauri/crates/execution/ticketry-terminal/src/terminal/resume"],
     },
     ChildHandoff {
         ticket: "CODING-875",
@@ -174,7 +174,7 @@ pub const CHILD_HANDOFFS: &[ChildHandoff] = &[
         status: HandoffStatus::Reconciled,
         verdict: "aligned",
         evidence: "spec/rusting--cf2de16d/T875--implement-durable-verified-cleanup-and-t/AUDIT.md",
-        files_checked: &["studio/src-tauri/crates/ticketry-terminal/src/terminal/cleanup"],
+        files_checked: &["studio/src-tauri/crates/execution/ticketry-terminal/src/terminal/cleanup"],
     },
     ChildHandoff {
         ticket: "CODING-876",
@@ -183,7 +183,7 @@ pub const CHILD_HANDOFFS: &[ChildHandoff] = &[
         status: HandoffStatus::Reconciled,
         verdict: "aligned: host operation, adds no GraphQL field",
         evidence: "spec/rusting--cf2de16d/T876--reconcile-recorded-sessions-with-verifie/AUDIT.md",
-        files_checked: &["studio/src-tauri/crates/ticketry-terminal/src/terminal/reconciliation"],
+        files_checked: &["studio/src-tauri/crates/execution/ticketry-terminal/src/terminal/reconciliation"],
     },
     ChildHandoff {
         ticket: "CODING-877",
@@ -193,8 +193,8 @@ pub const CHILD_HANDOFFS: &[ChildHandoff] = &[
         verdict: "aligned: host operation, adds no GraphQL field",
         evidence: "spec/rusting--cf2de16d/T877--quarantine-owned-orphans-and-surface-run/AUDIT.md",
         files_checked: &[
-            "studio/src-tauri/crates/ticketry-terminal/src/terminal/reconciliation/unrecorded.rs",
-            "studio/src-tauri/crates/ticketry-terminal/src/terminal/cleanup/service.rs",
+            "studio/src-tauri/crates/execution/ticketry-terminal/src/terminal/reconciliation/unrecorded.rs",
+            "studio/src-tauri/crates/execution/ticketry-terminal/src/terminal/cleanup/service.rs",
         ],
     },
     ChildHandoff {
@@ -204,7 +204,7 @@ pub const CHILD_HANDOFFS: &[ChildHandoff] = &[
         status: HandoffStatus::Reconciled,
         verdict: "aligned: scheduling only, no GraphQL surface",
         evidence: "spec/rusting--cf2de16d/T878--wire-bounded-terminal-startup-sweeps-and/AUDIT.md",
-        files_checked: &["studio/src-tauri/crates/ticketry-terminal/src/terminal/lifecycle"],
+        files_checked: &["studio/src-tauri/crates/execution/ticketry-terminal/src/terminal/lifecycle"],
     },
     ChildHandoff {
         ticket: "CODING-879",
@@ -227,8 +227,8 @@ pub const CHILD_HANDOFFS: &[ChildHandoff] = &[
         verdict: "aligned: removal only, Rust GraphQL surface unchanged",
         evidence: "spec/rusting--cf2de16d/T880--remove-the-python-terminal-authority/AUDIT.md",
         files_checked: &[
-            "studio/src-tauri/crates/ticketry-terminal/src/terminal/persistence",
-            "studio/src-tauri/crates/ticketry-terminal/src/terminal/launch",
+            "studio/src-tauri/crates/execution/ticketry-terminal/src/terminal/persistence",
+            "studio/src-tauri/crates/execution/ticketry-terminal/src/terminal/launch",
             "studio/src/graphql-foundation/generated/schema.graphql",
         ],
     },
@@ -248,7 +248,7 @@ pub const CHILD_HANDOFFS: &[ChildHandoff] = &[
         status: HandoffStatus::Open,
         verdict: "owed at its own Review: expected reconciliation-only change",
         evidence: "handoff due with the reconciliation fix",
-        files_checked: &["studio/src-tauri/crates/ticketry-terminal/src/terminal/reconciliation/service.rs"],
+        files_checked: &["studio/src-tauri/crates/execution/ticketry-terminal/src/terminal/reconciliation/service.rs"],
     },
     ChildHandoff {
         ticket: "CODING-964",
@@ -257,7 +257,7 @@ pub const CHILD_HANDOFFS: &[ChildHandoff] = &[
         status: HandoffStatus::Open,
         verdict: "owed at its own Review: expected bounded-batch change",
         evidence: "handoff due with the batch fix",
-        files_checked: &["studio/src-tauri/crates/ticketry-terminal/src/terminal/reconciliation/batch.rs"],
+        files_checked: &["studio/src-tauri/crates/execution/ticketry-terminal/src/terminal/reconciliation/batch.rs"],
     },
     ChildHandoff {
         ticket: "CODING-965",
@@ -267,8 +267,8 @@ pub const CHILD_HANDOFFS: &[ChildHandoff] = &[
         verdict: "owed at its own Review: touches the restricted create seam",
         evidence: "handoff due with the launch-policy fix",
         files_checked: &[
-            "studio/src-tauri/crates/ticketry-launch/src/terminal_session/request.rs",
-            "studio/src-tauri/crates/ticketry-launch/src/planning",
+            "studio/src-tauri/crates/execution/ticketry-launch/src/terminal_session/request.rs",
+            "studio/src-tauri/crates/execution/ticketry-launch/src/planning",
         ],
     },
     ChildHandoff {
@@ -279,10 +279,10 @@ pub const CHILD_HANDOFFS: &[ChildHandoff] = &[
         verdict: "aligned: teardown calls the registered temporary_profile cleanup seam only",
         evidence: "spec/rusting--cf2de16d/T966--journal-temporary-profile-terminal-clean/AUDIT.md",
         files_checked: &[
-            "studio/src-tauri/crates/ticketry-terminal/src/temporary_profile",
-            "studio/src-tauri/crates/ticketry-terminal/src/terminal/cleanup/service.rs",
-            "studio/src-tauri/crates/ticketry-terminal/src/terminal/cleanup/journal.rs",
-            "studio/src-tauri/crates/ticketry-terminal/src/terminal/cleanup/effect.rs",
+            "studio/src-tauri/crates/execution/ticketry-terminal/src/temporary_profile",
+            "studio/src-tauri/crates/execution/ticketry-terminal/src/terminal/cleanup/service.rs",
+            "studio/src-tauri/crates/execution/ticketry-terminal/src/terminal/cleanup/journal.rs",
+            "studio/src-tauri/crates/execution/ticketry-terminal/src/terminal/cleanup/effect.rs",
             "studio/src-tauri/src/main.rs",
             "studio/src-tauri/tests/temporary_profile_teardown.rs",
         ],
@@ -294,7 +294,7 @@ pub const CHILD_HANDOFFS: &[ChildHandoff] = &[
         status: HandoffStatus::Open,
         verdict: "owed at its own Review: expected adapter-only change",
         evidence: "handoff due with the session-naming fix",
-        files_checked: &["studio/src-tauri/crates/ticketry-terminal/src/tmux_adapter/session_naming.rs"],
+        files_checked: &["studio/src-tauri/crates/execution/ticketry-terminal/src/tmux_adapter/session_naming.rs"],
     },
     ChildHandoff {
         ticket: "CODING-968",
@@ -322,8 +322,8 @@ pub const CHILD_HANDOFFS: &[ChildHandoff] = &[
         verdict: "aligned: evidence only, no GraphQL surface",
         evidence: "spec/rusting--cf2de16d/T970--record-the-aggregate-seaography-audit-ev/AUDIT.md",
         files_checked: &[
-            "studio/src-tauri/crates/ticketry-terminal/src/terminal/persistence/aggregate_seaography_audit.rs",
-            "studio/src-tauri/crates/ticketry-terminal/src/terminal/persistence/child_seaography_handoffs.rs",
+            "studio/src-tauri/crates/execution/ticketry-terminal/src/terminal/persistence/aggregate_seaography_audit.rs",
+            "studio/src-tauri/crates/execution/ticketry-terminal/src/terminal/persistence/child_seaography_handoffs.rs",
             "studio/src-tauri/tests/slice5_seaography_aggregate_audit.rs",
         ],
     },

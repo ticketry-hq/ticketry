@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use serde::Deserialize;
 
 const REVIEWED_DEFAULTS: &str =
-    include_str!("../../../../../resources/work-management/reviewed_defaults.json");
+    include_str!("../../../../../../resources/work-management/reviewed_defaults.json");
 
 pub(super) fn load() -> serde_json::Result<Defaults> {
     serde_json::from_str(REVIEWED_DEFAULTS)

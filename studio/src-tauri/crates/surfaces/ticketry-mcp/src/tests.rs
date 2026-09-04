@@ -405,7 +405,7 @@ async fn global_mcp_allows_task_tools_while_run_credentials_remain_scoped() {
 fn mcp_dispatch_has_no_backend_http_authorization_path() {
     let module = include_str!("lib.rs");
     let service = include_str!("service.rs");
-    let authority = include_str!("../../ticketry-runs/src/authority/authority.rs");
+    let authority = include_str!("../../../worktracking/ticketry-runs/src/authority/authority.rs");
 
     assert!(!module.contains("backend_base_url"));
     assert!(!module.contains("backend_api_key"));

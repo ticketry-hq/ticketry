@@ -81,7 +81,7 @@ fn the_manifest_records_every_migration_on_disk() {
             recorded, on_disk,
             "{app} migrations changed; regenerate the manifest with \
              `backend/.venv/bin/python scripts/installation_corpus.py emit-manifest \
-             studio/src-tauri/crates/ticketry-installation/src/classification/manifest.v1.json`"
+             studio/src-tauri/crates/execution/ticketry-installation/src/classification/manifest.v1.json`"
         );
     }
 }

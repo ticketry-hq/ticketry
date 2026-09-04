@@ -466,6 +466,8 @@ pub async fn adopt_worktracker_and_install(
     // write, and a write before the verified recovery snapshot exists is the
     // one step of this migration that cannot be undone.
     //
+    // Take the installation's one-writer lease, recover it if needed, and
+    // convert any adoption failure into the startup error this function returns.
     let installation = match ownership {
         InstallationOwnership::Owned => Some(
             ticketry_installation::adopt(data_directory)
@@ -473,6 +475,7 @@ pub async fn adopt_worktracker_and_install(
                 .map_err(installation_adoption_error)?,
         ),
     };
+    // Check that the settings store can be carried forward before changing it.
     ticketry_settings::preflight(data_directory)
         .await
         .map_err(|error| {
@@ -481,6 +484,7 @@ pub async fn adopt_worktracker_and_install(
                 error.to_string(),
             )
         })?;
+    // Adopt WorkTracker's state database and its Rust-owned schema changes.
     ticketry_work_management::adoption::adopt(data_directory)
         .await
         .map_err(|error| {
@@ -489,6 +493,7 @@ pub async fn adopt_worktracker_and_install(
                 error.to_string(),
             )
         })?;
+    // Open the adopted state database for provider-catalog initialization.
     let provider_database =
         ticketry_work_management::open_for_commands(&data_directory.join("state.db"))
             .await
@@ -498,6 +503,7 @@ pub async fn adopt_worktracker_and_install(
                     error.to_string(),
                 )
             })?;
+    // Create or update the provider catalog against that adopted database.
     ticketry_settings::ProviderCatalogService::open(provider_database)
         .await
         .map_err(|error| {
@@ -506,6 +512,7 @@ pub async fn adopt_worktracker_and_install(
                 error.to_string(),
             )
         })?;
+    // Adopt the settings store after its provider catalog is available.
     ticketry_settings::adopt(data_directory)
         .await
         .map_err(|error| {
@@ -563,6 +570,7 @@ pub async fn adopt_worktracker_and_install(
             .await
             .map_err(installation_adoption_error)?;
     }
+    // Compose native command services and install their GraphQL endpoint.
     let composed = initialize_with_worktracker_commands_and_install_inner(
         foundation_database_path,
         &data_directory.join("state.db"),
@@ -571,7 +579,9 @@ pub async fn adopt_worktracker_and_install(
         api,
     )
     .await?;
+    // Confirm the installed endpoint can answer its readiness query.
     verify_graphql_readiness(api).await?;
+    // Return the services that the desktop runtime starts after initialization.
     Ok(AdoptedWorktracker {
         runtime: ComposedCommandRuntime::new(composed),
     })

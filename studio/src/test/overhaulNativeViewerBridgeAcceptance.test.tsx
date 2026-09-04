@@ -205,14 +205,14 @@ describe("native viewer attachment acceptance", () => {
     const [shellSource, nativeTerminalSource] = await Promise.all([
       import("node:fs/promises").then(async ({ readFile }) =>
         [
-          await readFile(`${process.cwd()}/src-tauri/crates/ticketry-desktop/src/desktop/run.rs`, "utf8"),
-          await readFile(`${process.cwd()}/src-tauri/crates/ticketry-desktop/src/desktop/lifecycle.rs`, "utf8"),
+          await readFile(`${process.cwd()}/src-tauri/crates/app/ticketry-desktop/src/desktop/run.rs`, "utf8"),
+          await readFile(`${process.cwd()}/src-tauri/crates/app/ticketry-desktop/src/desktop/lifecycle.rs`, "utf8"),
         ].join("\n"),
       ),
       import("node:fs/promises").then(async ({ readFile }) =>
         [
-          await readFile(`${process.cwd()}/src-tauri/crates/ticketry-desktop/src/native_terminal/macos/state.rs`, "utf8"),
-          await readFile(`${process.cwd()}/src-tauri/crates/ticketry-desktop/src/native_terminal/macos/teardown.rs`, "utf8"),
+          await readFile(`${process.cwd()}/src-tauri/crates/app/ticketry-desktop/src/native_terminal/macos/state.rs`, "utf8"),
+          await readFile(`${process.cwd()}/src-tauri/crates/app/ticketry-desktop/src/native_terminal/macos/teardown.rs`, "utf8"),
         ].join("\n"),
       ),
     ]);
@@ -270,7 +270,7 @@ describe("native viewer attachment acceptance", () => {
         "attach_commands.rs",
         "teardown.rs",
       ].map((file) =>
-        readFile(`${process.cwd()}/src-tauri/crates/ticketry-desktop/src/native_terminal/macos/${file}`, "utf8")
+        readFile(`${process.cwd()}/src-tauri/crates/app/ticketry-desktop/src/native_terminal/macos/${file}`, "utf8")
       )).then((sources) => sources.join("\n")),
     ]);
 

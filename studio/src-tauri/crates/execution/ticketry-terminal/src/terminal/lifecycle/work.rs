@@ -627,7 +627,7 @@ fn provider_tool(provider: ticketry_launch::Provider) -> ticketry_tool_discovery
 
 fn available_skills() -> BTreeSet<String> {
     serde_json::from_str::<serde_json::Value>(include_str!(
-        "../../../../../resources/launch/skills.lock.json"
+        "../../../../../../resources/launch/skills.lock.json"
     ))
     .ok()
     .and_then(|value| value.get("selected_packages").cloned())

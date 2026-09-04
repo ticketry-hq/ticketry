@@ -4,6 +4,22 @@ The Rust shell that packages Studio as a desktop application. It owns the
 local data directory, starts and supervises the local services Studio depends
 on, and publishes a single health signal to the webview.
 
+## Crate layout
+
+Workspace crates are grouped by dependency tier under `crates/`:
+
+- `foundation`: entities, data-directory handling, diagnostics, and the Tauri
+  GraphQL transport.
+- `config`: application settings.
+- `worktracking`: work management, documents, and run records.
+- `execution`: tool discovery, workspace runtime, launch, terminals, agent
+  execution, and installation.
+- `surfaces`: the GraphQL schema and MCP boundary.
+- `app`: the desktop application and developer tools.
+
+Dependencies may stay within a tier or point to a lower tier. They must not
+point to a higher tier.
+
 ## Rust migration recovery handoff (2026-08-13)
 
 The `rust-migration` branch is recovering from an implementation drift in the
@@ -34,7 +50,7 @@ The recovery decisions are:
 Current recovery state:
 
 - The Rust source has been mechanically reorganized to the Seaography-style
-  `crates/ticketry-entities/src/`, `src/query_root.rs`, and
+  `crates/foundation/ticketry-entities/src/`, `src/query_root.rs`, and
   `src/query_root/{queries,mutations,types}` boundaries. Generation and drift
   scripts point at the new foundation-entity location.
 - A clean SQLite database created by the current Django migration chain was
@@ -46,7 +62,8 @@ Current recovery state:
   relationship names are database-derived rather than semantic; and generated
   metadata includes keys/actions omitted by some handwritten mappings.
 - `app_settings` was a byte-for-byte match and has been replaced by the
-  generated entity at `crates/ticketry-entities/src/settings/app_settings.rs`.
+  generated entity at
+  `crates/foundation/ticketry-entities/src/settings/app_settings.rs`.
 - The remaining WorkTracker cohort is still the compatibility mapping pending
   deterministic generation normalization. Rust-owned tables such as transition
   occurrences and launch-policy decisions/rejections are absent from the

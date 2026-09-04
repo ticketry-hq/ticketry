@@ -17,6 +17,10 @@ and single-purpose, place frontend code in `studio/src/features/<domain>/`
 give each Rust backend capability its own focused module under
 `studio/src-tauri/src/`, with database-backed GraphQL composed through
 SeaORM and Seaography.
+Workspace crates live under `studio/src-tauri/crates/<tier>/<crate>/` in
+dependency order: `foundation`, `config`, `worktracking`, `execution`,
+`surfaces`, then `app`. Crates may depend within their tier or on a lower tier,
+never on a higher tier.
 Each Rust crate exposes its external contract only from `src/lib.rs`:
 implementation modules are private, crate-internal seams use `pub(crate)`, and
 the crate root explicitly re-exports approved public items. Do not expose

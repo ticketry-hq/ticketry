@@ -617,13 +617,13 @@ async fn the_installed_schema_is_the_one_the_ownership_manifest_declares() {
 /// installation's rows were ours, and a PostgreSQL import would stage them.
 #[test]
 fn no_supported_django_generation_or_postgresql_staging_schema_carries_these_tables() {
-    let staging = std::fs::read_to_string(
-        crate_root()
-            .join("crates/ticketry-installation/src/import/postgres-staging-schemas.v1.json"),
-    )
+    let staging = std::fs::read_to_string(crate_root().join(
+        "crates/execution/ticketry-installation/src/import/postgres-staging-schemas.v1.json",
+    ))
     .expect("read the checked PostgreSQL staging catalog");
     let provisioning = std::fs::read_to_string(
-        crate_root().join("crates/ticketry-installation/src/adoption/provisioning.v1.sql"),
+        crate_root()
+            .join("crates/execution/ticketry-installation/src/adoption/provisioning.v1.sql"),
     )
     .expect("read the checked fresh-provisioning schema");
     let classification = ticketry_installation::manifest();
@@ -651,7 +651,7 @@ fn no_supported_django_generation_or_postgresql_staging_schema_carries_these_tab
 fn no_importer_reaches_a_database_its_caller_did_not_name() {
     let mut sources = Vec::new();
     collect_rust_sources(
-        &crate_root().join("crates/ticketry-work-management/src/module_links"),
+        &crate_root().join("crates/worktracking/ticketry-work-management/src/module_links"),
         &mut sources,
     );
     assert!(

@@ -31,6 +31,10 @@ opening any code. To keep that true:
 - **Rust service layout** (`studio/src-tauri/src/`): keep each capability in a
   focused module. Database-backed GraphQL starts with migrations, SeaORM
   entities, and Seaography registration. Native host commands stay narrow.
+  Workspace crates live under `studio/src-tauri/crates/<tier>/<crate>/` in
+  dependency order: `foundation`, `config`, `worktracking`, `execution`,
+  `surfaces`, then `app`. Crates may depend within their tier or on a lower
+  tier, never on a higher tier.
   Each Rust crate exposes its external contract only from `src/lib.rs`.
   Implementation modules use private `mod` declarations, crate-internal seams
   use `pub(crate)`, and `lib.rs` re-exports each approved public item. Do not

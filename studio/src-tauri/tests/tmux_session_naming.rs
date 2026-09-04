@@ -16,7 +16,7 @@ const LOCAL_DERIVATIONS: [&str; 2] = ["pt-{", "pt-%"];
 
 /// Every directory the naming guard scans: the root package's `src` plus each
 /// extracted slice crate's `src`. The adapter itself now lives in
-/// `crates/ticketry-terminal`, so scanning only the root package would let a
+/// `crates/execution/ticketry-terminal`, so scanning only the root package would let a
 /// second copy of the convention appear anywhere in the workspace unnoticed.
 fn source_roots() -> Vec<PathBuf> {
     let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -24,10 +24,20 @@ fn source_roots() -> Vec<PathBuf> {
     let crates = manifest.join("crates");
     let mut slices: Vec<PathBuf> = fs::read_dir(&crates)
         .expect("readable crates directory")
-        .map(|entry| entry.expect("readable crates entry").path().join("src"))
+        .flat_map(|entry| {
+            let tier = entry.expect("readable tier entry").path();
+            fs::read_dir(&tier)
+                .expect("readable tier directory")
+                .map(|entry| entry.expect("readable crate entry").path().join("src"))
+        })
         .filter(|path| path.is_dir())
         .collect();
     slices.sort();
+    assert_eq!(
+        slices.len(),
+        18,
+        "tmux naming guard must scan all workspace crates"
+    );
     roots.extend(slices);
     roots
 }

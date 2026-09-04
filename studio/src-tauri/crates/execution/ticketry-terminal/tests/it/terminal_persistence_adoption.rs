@@ -193,7 +193,7 @@ async fn preflight_refuses_schema_and_semantic_drift_before_mutation() {
 
 fn repository_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../../..")
+        .join("../../../../..")
         .canonicalize()
         .unwrap()
 }

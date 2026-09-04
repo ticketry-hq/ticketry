@@ -55,6 +55,8 @@ ticketry-diagnostics|FileLog
 ticketry-diagnostics|JOIN_STAGE
 ticketry-diagnostics|LaunchAttempt
 ticketry-diagnostics|LaunchDiscoveryRecord
+ticketry-diagnostics|LaunchRequestSurface
+ticketry-diagnostics|LaunchRequestedRecord
 ticketry-diagnostics|LaunchSurface
 ticketry-diagnostics|LaunchTraceRecord
 ticketry-diagnostics|LaunchTraceReport
@@ -81,6 +83,9 @@ ticketry-diagnostics|configure_process_file_log
 ticketry-diagnostics|correlate_launch_traces
 ticketry-diagnostics|current
 ticketry-diagnostics|file_logging_requested
+ticketry-diagnostics|force_development_panic_abort
+ticketry-diagnostics|ghostty_sentry_database_directory
+ticketry-diagnostics|install_panic_attribution_hook
 ticketry-diagnostics|is_path_stage
 ticketry-diagnostics|is_pre_commit_stage
 ticketry-diagnostics|launch_trace_for_agent_run

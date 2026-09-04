@@ -1,6 +1,6 @@
 #[test]
 fn generated_contract_keeps_runs_fields_and_custom_payloads() {
-    let sdl = include_str!("../../../../../src/graphql-foundation/generated/schema.graphql");
+    let sdl = include_str!("../../../../../../src/graphql-foundation/generated/schema.graphql");
     assert!(sdl.contains(
         "automation_attempts(project_id: String!, task_id: String): [AutomationAttemptProjection!]!"
     ));

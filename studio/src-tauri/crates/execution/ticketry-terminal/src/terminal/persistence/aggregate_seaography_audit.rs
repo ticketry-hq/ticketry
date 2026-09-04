@@ -186,15 +186,15 @@ pub struct RawSqlEvidence {
 /// or write.
 pub const RAW_SQL_EVIDENCE_ONLY: &[RawSqlEvidence] = &[
     RawSqlEvidence {
-        path: "crates/ticketry-terminal/src/terminal/persistence/schema.rs",
+        path: "crates/execution/ticketry-terminal/src/terminal/persistence/schema.rs",
         purpose: "migration DDL, Django source classification, and schema fingerprints",
     },
     RawSqlEvidence {
-        path: "crates/ticketry-terminal/src/terminal/persistence/adoption.rs",
+        path: "crates/execution/ticketry-terminal/src/terminal/persistence/adoption.rs",
         purpose: "pre-adoption validation, ownership ledger, and checkpoint pragmas",
     },
     RawSqlEvidence {
-        path: "crates/ticketry-terminal/src/temporary_profile/journal.rs",
+        path: "crates/execution/ticketry-terminal/src/temporary_profile/journal.rs",
         purpose:
             "sqlite_master probe proving a discarded profile never provisioned terminal storage",
     },
@@ -204,25 +204,25 @@ pub const RAW_SQL_EVIDENCE_ONLY: &[RawSqlEvidence] = &[
 /// the package these paths were written against before the workspace split.
 /// The integration test scans these for CRUD outside SeaORM.
 pub const AUDITED_MODULES: &[&str] = &[
-    "crates/ticketry-entities/src/terminals",
-    "crates/ticketry-terminal/src/terminal/persistence",
-    "crates/ticketry-terminal/src/terminal/launch",
-    "crates/ticketry-terminal/src/terminal/cleanup",
-    "crates/ticketry-terminal/src/temporary_profile",
-    "crates/ticketry-terminal/src/terminal/reconciliation",
-    "crates/ticketry-terminal/src/terminal/lifecycle",
-    "crates/ticketry-terminal/src/terminal/output_activity",
-    "crates/ticketry-terminal/src/terminal/instant_run_ticket",
-    "crates/ticketry-terminal/src/terminal/resume",
-    "crates/ticketry-terminal/src/terminal/viewer",
-    "crates/ticketry-terminal/src/viewer_ownership",
-    "crates/ticketry-terminal/src/tmux_adapter.rs",
-    "crates/ticketry-terminal/src/tmux_adapter",
-    "crates/ticketry-launch/src/planning",
-    "crates/ticketry-launch/src/paths",
-    "crates/ticketry-runs/src/hook_spool",
-    "crates/ticketry-desktop/src/native_terminal.rs",
-    "crates/ticketry-desktop/src/native_terminal",
+    "crates/foundation/ticketry-entities/src/terminals",
+    "crates/execution/ticketry-terminal/src/terminal/persistence",
+    "crates/execution/ticketry-terminal/src/terminal/launch",
+    "crates/execution/ticketry-terminal/src/terminal/cleanup",
+    "crates/execution/ticketry-terminal/src/temporary_profile",
+    "crates/execution/ticketry-terminal/src/terminal/reconciliation",
+    "crates/execution/ticketry-terminal/src/terminal/lifecycle",
+    "crates/execution/ticketry-terminal/src/terminal/output_activity",
+    "crates/execution/ticketry-terminal/src/terminal/instant_run_ticket",
+    "crates/execution/ticketry-terminal/src/terminal/resume",
+    "crates/execution/ticketry-terminal/src/terminal/viewer",
+    "crates/execution/ticketry-terminal/src/viewer_ownership",
+    "crates/execution/ticketry-terminal/src/tmux_adapter.rs",
+    "crates/execution/ticketry-terminal/src/tmux_adapter",
+    "crates/execution/ticketry-launch/src/planning",
+    "crates/execution/ticketry-launch/src/paths",
+    "crates/worktracking/ticketry-runs/src/hook_spool",
+    "crates/app/ticketry-desktop/src/native_terminal.rs",
+    "crates/app/ticketry-desktop/src/native_terminal",
 ];
 
 #[cfg(test)]
@@ -294,12 +294,12 @@ mod tests {
     fn the_audit_covers_every_child_of_the_story() {
         assert_eq!(CHILD_HANDOFFS.len(), 26);
         for module in AUDITED_MODULES {
-            // Paths are relative to `studio/src-tauri`, two levels above this
-            // crate, and slices move between `src/` and `crates/` as the
+            // Paths are relative to `studio/src-tauri`, three levels above
+            // this crate, and slices move between `src/` and `crates/` as the
             // workspace split proceeds, so the check is that each one still
             // names something real.
             let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../..")
+                .join("../../..")
                 .join(module);
             assert!(path.exists(), "{module} no longer exists");
         }

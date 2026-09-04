@@ -20,7 +20,12 @@ impl PromptDeliveryTmux for FakeTmux {
 
     fn capture_screen(&mut self, _: &str) -> Result<Vec<u8>, String> {
         self.calls.push("capture-pane");
-        Ok(self.screens.pop_front().unwrap_or_default())
+        // A real pane keeps showing its last frame, so the final scripted
+        // screen persists instead of the pane going blank.
+        if self.screens.len() > 1 {
+            return Ok(self.screens.pop_front().unwrap_or_default());
+        }
+        Ok(self.screens.front().cloned().unwrap_or_default())
     }
 
     fn set_buffer(&mut self, _: &str, _: &str, _: &str) -> Result<(), String> {
@@ -189,6 +194,79 @@ fn invisible_paste_is_not_submitted() {
 
     let error = delivery
         .submit(Provider::Claude, "run", "continue")
+        .unwrap_err();
+
+    assert_eq!(
+        error.reason(),
+        PromptDeliveryFailureReason::VisibilityTimeout
+    );
+    assert!(!delivery
+        .tmux()
+        .calls
+        .iter()
+        .any(|call| call.contains("send-keys")));
+}
+
+/// Claude Code and Codex replace a bracketed multi-line paste with a
+/// placeholder, so the payload's tail is never rendered. Delivery is proven by
+/// the composer region changing instead, and the submission proceeds.
+#[test]
+fn a_multi_line_paste_collapsed_into_a_placeholder_is_submitted() {
+    let fake = FakeTmux {
+        screens: [
+            "\u{276f} ".as_bytes().to_vec(),
+            "\u{276f} [Pasted text #1 +3 lines]".as_bytes().to_vec(),
+        ]
+        .into(),
+        ..Default::default()
+    };
+    let mut delivery = PromptDelivery::with_timings(fake, timings());
+
+    delivery
+        .submit(
+            Provider::Claude,
+            "run",
+            "Destination prompt.\nSecond line.\nThird line.",
+        )
+        .unwrap();
+
+    assert_eq!(
+        delivery.tmux().calls,
+        [
+            "verify-session",
+            "capture-pane",
+            "set-buffer",
+            "paste-buffer",
+            "capture-pane",
+            "send-keys Enter",
+            "send-keys Enter"
+        ]
+    );
+}
+
+/// Tolerating collapsed pastes must not degrade into accepting anything: a
+/// composer that never changes still fails the delivery for the whole window.
+#[test]
+fn a_composer_that_never_changes_still_times_out() {
+    let fake = FakeTmux {
+        screens: ["\u{276f} ".as_bytes().to_vec()].into(),
+        ..Default::default()
+    };
+    let mut delivery = PromptDelivery::with_timings(
+        fake,
+        DeliveryTimings {
+            visibility_timeout: Duration::from_millis(30),
+            visibility_poll: Duration::from_millis(5),
+            ..timings()
+        },
+    );
+
+    let error = delivery
+        .submit(
+            Provider::Claude,
+            "run",
+            "Destination prompt.\nSecond line.\nThird line.",
+        )
         .unwrap_err();
 
     assert_eq!(

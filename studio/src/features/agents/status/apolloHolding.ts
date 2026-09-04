@@ -28,6 +28,7 @@ const ActiveProjectRunStatusDocument = gql`
         scope
         launchState
         launchModel
+        providerSessionId
         startedAt
         state @client
         effectiveState @client
@@ -47,6 +48,7 @@ const ActiveProjectRunStatusDocument = gql`
         failure
         retryable
         agentRunId
+        deliveryMode
         updatedAt
       }
     }
@@ -64,6 +66,7 @@ const AgentRunStatusFragment = gql`
     scope
     launchState
     launchModel
+    providerSessionId
     startedAt
     state @client
     effectiveState @client
@@ -84,6 +87,7 @@ interface CachedRun {
   scope: string;
   launchState: string | null;
   launchModel: string | null;
+  providerSessionId: string | null;
   startedAt: string | null;
   state: string;
   effectiveState: string | null;
@@ -142,6 +146,7 @@ function cacheRun(run: RunRecord): CachedRun {
     scope: run.scope,
     launchState: run.launch_state ?? null,
     launchModel: run.launch_model ?? null,
+    providerSessionId: run.provider_session_id ?? null,
     startedAt: run.started_at ?? null,
     state: run.state,
     effectiveState: run.effective_state ?? null,
@@ -162,6 +167,7 @@ function runRecord(run: CachedRun): RunRecord {
     scope: run.scope as RunRecord["scope"],
     launch_state: run.launchState,
     launch_model: run.launchModel,
+    provider_session_id: run.providerSessionId,
     started_at: run.startedAt ?? undefined,
     state: run.state as RunRecord["state"],
     effective_state: run.effectiveState as RunRecord["effective_state"],
@@ -184,7 +190,11 @@ function cacheAttempt(attempt: AutomationAttemptRecord): CachedAttempt {
     failure: attempt.failure,
     retryable: attempt.retryable,
     agentRunId: attempt.agent_run_id,
-    deliveryMode: attempt.delivery_mode,
+    // An attempt from a build that predates the delivery column carries no
+    // mode at all. The cache rejects a write with a field missing — and a
+    // rejected write loses the whole holding, not just the mode — so absent
+    // is normalised to "not delivered" here.
+    deliveryMode: attempt.delivery_mode ?? null,
     updatedAt: attempt.updated_at,
   };
 }

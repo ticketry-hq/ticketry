@@ -1,8 +1,9 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 
 import {
   isLiveTerminalState,
   isScratchBucket,
+  excludeResumableTerminalRuns,
   selectWorkspaceTerminalRuns,
   useActiveSession,
   useResumableTerminalSessions,
@@ -40,7 +41,7 @@ export function useWorkspaceTerminalSessions(
   );
   const focusSession = useTerminalStore((state) => state.focusSession);
   const openSession = useTerminalStore((state) => state.openSession);
-  const workspaceRuns = useAgentStatusSelection(
+  const candidateWorkspaceRuns = useAgentStatusSelection(
     (holding) => {
       const runs = selectWorkspaceTerminalRuns(
         holding,
@@ -53,6 +54,16 @@ export function useWorkspaceTerminalSessions(
         : runs;
     },
   );
+  const knownResumableRunIds = useRef(new Set<string>());
+  const workspaceRuns = useMemo(() => {
+    for (const session of bucketResumableSessions) {
+      knownResumableRunIds.current.add(session.agent_run_id);
+    }
+    return excludeResumableTerminalRuns(
+      candidateWorkspaceRuns,
+      knownResumableRunIds.current,
+    );
+  }, [bucketResumableSessions, candidateWorkspaceRuns]);
   const committedRunIds = useRef(new Set<string>());
 
   useEffect(() => {
@@ -79,6 +90,7 @@ export function useWorkspaceTerminalSessions(
     scratch,
     workspaceRuns,
     resumableSessions: conversationRunId ? [] : bucketResumableSessions,
+    restorationExcludedRunIds: knownResumableRunIds.current,
     focusSession,
     openSession,
   };

@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 
 import {
   ReleaseManifestError,
+  bundleArtifacts,
   macosTauriBuildEnvironment,
   macosTauriSigningConfig,
   hookRunnerBuild,
@@ -203,11 +204,16 @@ test("Tauri signing configuration follows the manifest", () => {
   const signed = JSON.parse(macosTauriSigningConfig(manifest, {
     APPLE_SIGNING_IDENTITY: "Developer ID Application: Example",
   }));
+  assert.equal(signed.bundle.createUpdaterArtifacts, true);
   assert.deepEqual(signed.bundle.macOS, {
     signingIdentity: "Developer ID Application: Example",
     hardenedRuntime: true,
     entitlements: "entitlements.plist",
   });
+  const unsigned = JSON.parse(macosTauriSigningConfig(manifest, {}, {
+    allowUnsigned: true,
+  }));
+  assert.equal(unsigned.bundle.createUpdaterArtifacts, false);
   assert.deepEqual(
     macosTauriBuildEnvironment({ EXISTING: "yes" }, { allowUnsigned: true }),
     { EXISTING: "yes", CI: "true" },
@@ -235,7 +241,82 @@ test("repository release inputs validate without a packaged service", async () =
   }));
 });
 
-test("unsigned bundle verification checks binaries and native Ghostty resources", async () => {
+test("bundle discovery returns the manifest-declared updater artifacts", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "ticketry-bundles-"));
+  const bundleRoot = path.join(
+    root,
+    "src-tauri",
+    "target",
+    manifest.targets[0].rust_target,
+    "release",
+    "bundle",
+  );
+  const app = path.join(bundleRoot, "macos", "Ticketry.app");
+  const dmg = path.join(bundleRoot, "dmg", "Ticketry_0.2.0_aarch64.dmg");
+  const updaterArchive = path.join(bundleRoot, "macos", "Ticketry.app.tar.gz");
+  const updaterSignature = `${updaterArchive}.sig`;
+  await Promise.all([
+    mkdir(app, { recursive: true }),
+    mkdir(path.dirname(dmg), { recursive: true }),
+  ]);
+  await Promise.all([
+    writeFile(dmg, "dmg"),
+    writeFile(updaterArchive, "updater archive"),
+    writeFile(updaterSignature, "updater signature"),
+  ]);
+  try {
+    assert.deepEqual(
+      await bundleArtifacts(manifest, manifest.targets[0], { root }),
+      { app, dmg, updaterArchive, updaterSignature },
+    );
+    await rm(updaterSignature);
+    await assert.rejects(
+      bundleArtifacts(manifest, manifest.targets[0], { root }),
+      /exactly one \.app\.tar\.gz and its matching \.app\.tar\.gz\.sig/,
+    );
+    await writeFile(updaterSignature, "updater signature");
+    const mismatchedManifest = structuredClone(manifest);
+    mismatchedManifest.artifacts.tauri.bundle_formats = ["app", "dmg"];
+    await assert.rejects(
+      bundleArtifacts(mismatchedManifest, mismatchedManifest.targets[0], { root }),
+      /do not match the release manifest/,
+    );
+    await rm(updaterArchive);
+    await assert.rejects(
+      bundleArtifacts(manifest, manifest.targets[0], { root }),
+      /do not match the release manifest/,
+    );
+    await rm(updaterSignature);
+    assert.deepEqual(
+      await bundleArtifacts(manifest, manifest.targets[0], { root, allowUnsigned: true }),
+      {
+        app,
+        dmg,
+        updaterArchive: undefined,
+        updaterSignature: undefined,
+      },
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("release inputs reject a Tauri updater endpoint that differs from the manifest feed", async () => {
+  const mismatchedFeed = structuredClone(manifest);
+  mismatchedFeed.release_policy.update.feed.repository = "ticketry-hq/ticketry-update-test-fixture";
+  mismatchedFeed.release_policy.update.feed.latest_url =
+    "https://github.com/ticketry-hq/ticketry-update-test-fixture/releases/latest/download/latest.json";
+
+  await assert.rejects(
+    validateReleaseInputs(mismatchedFeed, studioRoot, { includeFrontendOutputs: false }),
+    {
+      name: "Error",
+      message: /plugins\.updater\.endpoints\[0\].*must match release_policy\.update\.feed\.latest_url/,
+    },
+  );
+});
+
+test("unsigned bundle verification checks only the app and hook binaries", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "ticketry-release-"));
   const app = path.join(root, "Ticketry.app");
   const resources = path.join(app, "Contents", "Resources");
@@ -301,12 +382,19 @@ test("staging emits app, installer, and Rust runtime metadata", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "ticketry-stage-"));
   const app = path.join(root, "source", "Ticketry.app");
   const dmg = path.join(root, "source", "Ticketry_0.2.0_aarch64.dmg");
+  const updaterArchive = path.join(root, "source", "Ticketry.app.tar.gz");
+  const updaterSignature = `${updaterArchive}.sig`;
   await mkdir(app, { recursive: true });
   await writeFile(path.join(app, "marker"), "app");
   await writeFile(dmg, "dmg");
+  await writeFile(updaterArchive, "updater archive");
+  await writeFile(updaterSignature, "updater signature");
   try {
     const destination = await stageTarget(
-      manifest, manifest.targets[0], { app, dmg }, { allowUnsigned: true, root },
+      manifest,
+      manifest.targets[0],
+      { app, dmg, updaterArchive, updaterSignature },
+      { root },
     );
     const metadata = JSON.parse(
       await readFile(path.join(destination, "release-metadata.json"), "utf8"),
@@ -316,8 +404,46 @@ test("staging emits app, installer, and Rust runtime metadata", async () => {
       runtime_protocol: "1",
       database_schema: "forward-migrations-required",
     });
-    assert.equal(metadata.signed, false);
-    assert.equal(metadata.notarized, false);
+    assert.equal(metadata.signed, true);
+    assert.equal(metadata.notarized, true);
+    assert.equal(
+      await readFile(path.join(destination, "Ticketry.app.tar.gz"), "utf8"),
+      "updater archive",
+    );
+    assert.equal(
+      await readFile(path.join(destination, "Ticketry.app.tar.gz.sig"), "utf8"),
+      "updater signature",
+    );
+    const mismatchedSignature = path.join(root, "source", "Other.app.tar.gz.sig");
+    await writeFile(mismatchedSignature, "other updater signature");
+    await assert.rejects(
+      stageTarget(
+        manifest,
+        manifest.targets[0],
+        { app, dmg, updaterArchive, updaterSignature: mismatchedSignature },
+        { root },
+      ),
+      /matching signature/,
+    );
+    await assert.rejects(
+      stageTarget(manifest, manifest.targets[0], { app, dmg }, { root }),
+      /updater archive and matching signature/,
+    );
+    const unsignedDestination = await stageTarget(
+      manifest,
+      manifest.targets[0],
+      { app, dmg },
+      { allowUnsigned: true, root },
+    );
+    const unsignedMetadata = JSON.parse(
+      await readFile(path.join(unsignedDestination, "release-metadata.json"), "utf8"),
+    );
+    assert.equal(unsignedMetadata.signed, false);
+    assert.equal(unsignedMetadata.notarized, false);
+    await assert.rejects(
+      readFile(path.join(unsignedDestination, "Ticketry.app.tar.gz")),
+      /ENOENT/,
+    );
   } finally {
     await rm(root, { recursive: true, force: true });
   }

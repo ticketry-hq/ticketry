@@ -206,18 +206,21 @@ export function useAxisDragAndDrop<Payload, TargetId extends string>(
   const finishDrag = useCallback(
     (event: ReactDragEvent<HTMLElement>) => {
       const current = stateRef.current;
-      const resolved =
+      const currentResolved =
         current.targetId !== null && current.intent !== null
           ? { targetId: current.targetId, intent: current.intent }
-          : lastResolvedDropRef.current;
+          : null;
+      const resolved = currentResolved ?? lastResolvedDropRef.current;
       try {
         // Some desktop webviews report the accepted target through dragover
         // but finish the gesture with dragend alone. A normal drop clears the
-        // state before dragend, so this only fills that missing final event.
+        // state before dragend. A final dragleave clears the current target but
+        // retains its accepted placement, even when dragend resets dropEffect.
         if (
           !disabledRef.current &&
           current.payload !== null &&
-          resolved !== null
+          resolved !== null &&
+          (event.dataTransfer.dropEffect === "move" || currentResolved === null)
         ) {
           onDropRef.current?.(current.payload, resolved, event);
         }

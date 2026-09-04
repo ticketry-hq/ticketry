@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("./legacyApiFixture", async () => {
@@ -45,6 +45,8 @@ vi.mock("../features/projects/queries/readTransport", async () => {
 
 import { ModuleTabStrip } from "../app/shell/ticket-workspace/ModuleTabStrip";
 import { ModulesPane } from "../app/shell/sidebar/modules/ModulesPane";
+import { ModulesPaneToggle } from "../app/shell/ticket-workspace/ModulesPaneToggle";
+import { useGlobalKeymap } from "../app/navigation/useGlobalKeymap";
 import {
   getModulesSnapshot,
   loadModules,
@@ -98,6 +100,17 @@ function ModuleSurfaces() {
   );
 }
 
+function KeyboardModuleSurface() {
+  useGlobalKeymap();
+  const sidebarVisible = useClientStore((state) => state.sidebarVisible);
+  return (
+    <>
+      <ModulesPaneToggle />
+      {sidebarVisible ? <ModulesPane /> : null}
+    </>
+  );
+}
+
 function sidebarOrder(): string[] {
   return Array.from(document.querySelectorAll("li"))
     .map((row) => row.textContent?.replace("📦 ", "").trim() ?? "")
@@ -130,7 +143,47 @@ describe("canonical module order acceptance", () => {
     listModules.mockReset().mockResolvedValue(SERVER_ORDER);
     listProjects.mockReset().mockResolvedValue([project(false)]);
     useStudioStore.setState({ selectedProjectId: PROJECT_ID, error: null });
-    useClientStore.setState({ selectedModuleId: null, modulesCursorId: null });
+    useClientStore.setState({
+      selectedModuleId: null,
+      modulesCursorId: null,
+      sidebarVisible: true,
+      focusedPane: "modules",
+    });
+  });
+
+  it("[overhaul-252] opens Modules for arrow-key cursor movement and activation", async () => {
+    seedProjects([project(false)]);
+    const selectModule = vi.fn(async (moduleId: string) => {
+      useClientStore.setState({ selectedModuleId: moduleId });
+    });
+    useClientStore.setState({
+      selectedModuleId: "module-c",
+      modulesCursorId: "module-c",
+      sidebarVisible: false,
+      focusedPane: "tasks",
+      selectModule,
+    });
+
+    render(<KeyboardModuleSurface />);
+    fireEvent.click(screen.getByRole("button", { name: "Open Modules pane" }));
+    await waitFor(() =>
+      expect(sidebarOrder()).toEqual(["Charlie", "Bravo", "Alpha"]),
+    );
+    expect(useClientStore.getState().focusedPane).toBe("modules");
+
+    fireEvent.keyDown(window, { key: "ArrowDown" });
+    fireEvent.keyDown(window, { key: "Enter" });
+
+    await waitFor(() => expect(selectModule).toHaveBeenCalledWith("module-b"));
+    expect(useClientStore.getState().selectedModuleId).toBe("module-b");
+
+    fireEvent.keyDown(window, { key: "ArrowUp" });
+    fireEvent.keyDown(window, { key: "Enter" });
+
+    await waitFor(() =>
+      expect(selectModule).toHaveBeenLastCalledWith("module-c"),
+    );
+    expect(useClientStore.getState().selectedModuleId).toBe("module-c");
   });
 
   it("[overhaul-37] gives every module consumer one canonical order", async () => {

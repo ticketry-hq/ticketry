@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import {
   providerApi,
@@ -30,7 +30,8 @@ describe("overhaul acceptance — task agent launch", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "＋ Agent" }));
-    fireEvent.click(await screen.findByRole("menuitem", { name: "codex" }));
+    const picker = await screen.findByRole("dialog", { name: "Select Agent" });
+    fireEvent.click(within(picker).getByText("codex"));
 
     await waitFor(() =>
       expect(terminalApi.createTerminalRun).toHaveBeenCalledWith({
@@ -90,18 +91,19 @@ describe("overhaul acceptance — task agent launch", () => {
     ]);
     let mounted = renderLauncher();
     fireEvent.click(screen.getByRole("button", { name: "＋ Agent" }));
-    expect(screen.getAllByRole("menuitem", { name: "codex" })).toHaveLength(1);
-    expect(screen.getAllByRole("menuitem", { name: "claude" })).toHaveLength(1);
-    expect(screen.queryByRole("menuitem", { name: "gemini" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("menuitem", { name: "unsupported-provider" })).not.toBeInTheDocument();
+    let picker = await screen.findByRole("dialog", { name: "Select Agent" });
+    expect(within(picker).getByText("codex")).toBeVisible();
+    expect(within(picker).getByText("claude")).toBeVisible();
+    expect(within(picker).queryByText("gemini")).not.toBeInTheDocument();
+    expect(within(picker).queryByText("unsupported-provider")).not.toBeInTheDocument();
     mounted.unmount();
 
     clearProviderHolding();
     providerApi.getLaunchProviderCapabilities.mockReturnValue(new Promise(() => {}));
     mounted = renderLauncher();
     fireEvent.click(screen.getByRole("button", { name: "＋ Agent" }));
-    expect(screen.getByText("Loading providers…")).toBeVisible();
-    expect(screen.queryByRole("menuitem")).not.toBeInTheDocument();
+    picker = await screen.findByRole("dialog", { name: "Select Agent" });
+    expect(within(picker).getByText("Loading providers…")).toBeVisible();
     mounted.unmount();
 
     clearProviderHolding();
@@ -110,19 +112,19 @@ describe("overhaul acceptance — task agent launch", () => {
     );
     mounted = renderLauncher();
     fireEvent.click(screen.getByRole("button", { name: "＋ Agent" }));
-    expect(await screen.findByText("Providers unavailable — retry.")).toBeVisible();
-    expect(screen.queryByRole("menuitem")).not.toBeInTheDocument();
+    picker = await screen.findByRole("dialog", { name: "Select Agent" });
+    expect(await within(picker).findByText("Providers unavailable — retry.")).toBeVisible();
     mounted.unmount();
 
     setProviderCapabilities([]);
     mounted = renderLauncher();
     fireEvent.click(screen.getByRole("button", { name: "＋ Agent" }));
+    picker = await screen.findByRole("dialog", { name: "Select Agent" });
     expect(
-      screen.getByText(
+      within(picker).getByText(
         "No activated providers. Activate one in Settings → Model configuration.",
       ),
     ).toBeVisible();
-    expect(screen.queryByRole("menuitem")).not.toBeInTheDocument();
     expect(terminalApi.createTerminalRun).not.toHaveBeenCalled();
     mounted.unmount();
 
@@ -135,6 +137,7 @@ describe("overhaul acceptance — task agent launch", () => {
     fireEvent.click(screen.getByRole("button", { name: "＋ Agent" }));
     expect(screen.getByRole("menuitem", { name: "Plan" })).toBeVisible();
     expect(screen.getByRole("menuitem", { name: "Instant" })).toBeVisible();
-    expect(screen.queryByRole("menuitem", { name: "codex" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Select Agent" }))
+      .not.toBeInTheDocument();
   });
 });

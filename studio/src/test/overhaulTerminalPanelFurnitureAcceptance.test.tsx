@@ -256,6 +256,7 @@ describe("terminal panel furniture acceptance", () => {
   beforeEach(() => {
     window.history.replaceState({}, "", "/?terminalRenderer=native");
     localStorage.clear();
+    localStorage.setItem("ticketry:terminal-renderer", "xterm");
     installDesktopGraphQlRuntime();
     vi.useFakeTimers();
     runtime.desktop = false;
@@ -440,6 +441,7 @@ describe("terminal panel furniture acceptance", () => {
     // The same controls drive the desktop build's native viewer, so the
     // presentation boundary is where minimising is observed, not what it means.
     browser.unmount();
+    localStorage.setItem("ticketry:terminal-renderer", "native");
     runtime.desktop = true;
     runtime.nativeAvailable = true;
     shellApi.createModuleShell.mockClear();
@@ -667,6 +669,7 @@ describe("terminal panel furniture acceptance", () => {
     // The desktop build's native viewer is resized in place by the same
     // control: no second attach, no detach, no new run, no terminal input.
     browser.unmount();
+    localStorage.setItem("ticketry:terminal-renderer", "native");
     runtime.desktop = true;
     runtime.nativeAvailable = true;
     shellApi.createModuleShell.mockClear();

@@ -72,8 +72,49 @@ pub struct McpRuntime {
     authority: RunAuthority,
 }
 
+#[derive(Debug, Eq, PartialEq)]
+pub enum McpStartupError {
+    AddressInUse { diagnostic: String },
+    Other { diagnostic: String },
+}
+
+impl McpStartupError {
+    fn other(diagnostic: impl Into<String>) -> Self {
+        Self::Other {
+            diagnostic: diagnostic.into(),
+        }
+    }
+
+    fn from_bind(error: io::Error) -> Self {
+        let diagnostic = format!("could not bind WorkTracker MCP listener: {error}");
+        if error.kind() == io::ErrorKind::AddrInUse {
+            Self::AddressInUse { diagnostic }
+        } else {
+            Self::Other { diagnostic }
+        }
+    }
+
+    pub fn is_address_in_use(&self) -> bool {
+        matches!(self, Self::AddressInUse { .. })
+    }
+
+    pub fn diagnostic(&self) -> &str {
+        match self {
+            Self::AddressInUse { diagnostic } | Self::Other { diagnostic } => diagnostic,
+        }
+    }
+}
+
+impl std::fmt::Display for McpStartupError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(self.diagnostic())
+    }
+}
+
+impl std::error::Error for McpStartupError {}
+
 impl McpRuntime {
-    pub async fn start(configuration: McpConfiguration) -> Result<Self, String> {
+    pub async fn start(configuration: McpConfiguration) -> Result<Self, McpStartupError> {
         Self::start_with_services(
             configuration,
             std::sync::Arc::new(ticketry_terminal::TmuxCleanupRuntime),
@@ -85,7 +126,7 @@ impl McpRuntime {
     pub async fn start_with_terminal_launch(
         configuration: McpConfiguration,
         terminal_launch: ticketry_terminal::TerminalLaunchService,
-    ) -> Result<Self, String> {
+    ) -> Result<Self, McpStartupError> {
         Self::start_with_services(
             configuration,
             std::sync::Arc::new(ticketry_terminal::TmuxCleanupRuntime),
@@ -101,7 +142,7 @@ impl McpRuntime {
     pub async fn start_for_test(
         configuration: McpConfiguration,
         cleanup_runtime: std::sync::Arc<dyn ticketry_terminal::TerminalCleanupRuntime>,
-    ) -> Result<Self, String> {
+    ) -> Result<Self, McpStartupError> {
         Self::start_with_services(configuration, cleanup_runtime, None).await
     }
 
@@ -109,26 +150,35 @@ impl McpRuntime {
         configuration: McpConfiguration,
         cleanup_runtime: std::sync::Arc<dyn ticketry_terminal::TerminalCleanupRuntime>,
         terminal_launch: Option<ticketry_terminal::TerminalLaunchService>,
-    ) -> Result<Self, String> {
+    ) -> Result<Self, McpStartupError> {
         if !configuration.address.ip().is_loopback() {
-            return Err("WorkTracker MCP must bind to a loopback address.".to_owned());
+            return Err(McpStartupError::other(
+                "WorkTracker MCP must bind to a loopback address.",
+            ));
         }
         let ingress_credential = configuration.ingress_credential.clone();
         let database = open_for_commands(&configuration.database_path)
             .await
-            .map_err(|error| format!("could not open WorkTracker commands for MCP: {error}"))?;
+            .map_err(|error| {
+                McpStartupError::other(format!(
+                    "could not open WorkTracker commands for MCP: {error}"
+                ))
+            })?;
         let data_directory = configuration
             .database_path
             .parent()
             .unwrap_or_else(|| std::path::Path::new("."))
             .to_path_buf();
-        let authority = RunAuthority::persistent(database.clone(), &data_directory)?;
+        let authority = RunAuthority::persistent(database.clone(), &data_directory)
+            .map_err(McpStartupError::other)?;
         let listener = tokio::net::TcpListener::bind(configuration.address)
             .await
-            .map_err(|error| format!("could not bind WorkTracker MCP listener: {error}"))?;
-        let address = listener
-            .local_addr()
-            .map_err(|error| format!("could not inspect WorkTracker MCP listener: {error}"))?;
+            .map_err(McpStartupError::from_bind)?;
+        let address = listener.local_addr().map_err(|error| {
+            McpStartupError::other(format!(
+                "could not inspect WorkTracker MCP listener: {error}"
+            ))
+        })?;
         let cancellation = CancellationToken::new();
         let ingress_database = database.clone();
         let launch_paths_state = launch_paths::LaunchPathsIngressState::new(
@@ -226,7 +276,7 @@ impl McpRuntime {
             task,
             authority,
         };
-        verify_registry()?;
+        verify_registry().map_err(McpStartupError::other)?;
         Ok(runtime)
     }
 

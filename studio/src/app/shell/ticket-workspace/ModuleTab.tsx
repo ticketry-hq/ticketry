@@ -61,7 +61,7 @@ export function ModuleTab({
 }: ModuleTabProps) {
   const { ref: registerDropTarget, ...dropHandlers } = dropTargetProps ?? {};
   return (
-    <div className="group relative flex max-w-64 shrink-0 border-r border-pane-border">
+    <div className="group relative flex w-64 shrink-0 border-r border-pane-border">
       <button
         ref={(node) => {
           registerRef(module.id, node);

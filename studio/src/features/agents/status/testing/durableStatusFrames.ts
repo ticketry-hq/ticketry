@@ -92,7 +92,7 @@ export function statusRunHolding(run: RunRecord): RunHoldingPayload {
     state: run.state,
     effective_state: run.effective_state ?? run.state,
     updated_at: run.updated_at,
-    provider_session_id: null,
+    provider_session_id: run.provider_session_id ?? null,
     output_sequence: run.output_sequence ?? 0,
     last_output_at: run.last_output_at ?? null,
   };

@@ -6837,6 +6837,7 @@ dependencies = [
  "notify",
  "rand 0.8.7",
  "reqwest",
+ "rustls-pki-types",
  "sea-orm",
  "serde",
  "serde_json",

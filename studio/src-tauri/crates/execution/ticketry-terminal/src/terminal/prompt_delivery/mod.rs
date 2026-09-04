@@ -2,6 +2,7 @@
 
 mod transport;
 mod types;
+mod visibility;
 
 pub use transport::{PromptDeliveryTmux, TmuxPromptDelivery};
 pub use types::{DeliveryTimings, PromptDeliveryError, PromptDeliveryFailureReason};
@@ -11,9 +12,9 @@ use std::thread;
 use std::time::Instant;
 use ticketry_launch::{provider_contract, Provider, ProviderContract};
 use uuid::Uuid;
+use visibility::PasteEvidence;
 
 const INLINE_BUFFER_MAX_BYTES: usize = 8 * 1024;
-const VISIBLE_TAIL_CHARACTERS: usize = 64;
 
 pub struct PromptDelivery<T> {
     tmux: T,
@@ -49,7 +50,7 @@ impl<T: PromptDeliveryTmux> PromptDelivery<T> {
         text: &str,
     ) -> Result<(), PromptDeliveryError> {
         let baseline = self.wait_until_ready(contract, run_id)?;
-        self.stage_payload(run_id, text, &baseline)
+        self.stage_payload(contract, run_id, text, &baseline)
     }
 
     pub fn submit(
@@ -58,28 +59,31 @@ impl<T: PromptDeliveryTmux> PromptDelivery<T> {
         run_id: &str,
         text: &str,
     ) -> Result<(), PromptDeliveryError> {
-        let baseline = self.wait_until_ready(provider_contract(provider), run_id)?;
-        self.submit_from_baseline(run_id, text, &baseline)
+        let contract = provider_contract(provider);
+        let baseline = self.wait_until_ready(contract, run_id)?;
+        self.submit_from_baseline(contract, run_id, text, &baseline)
     }
 
-    pub(crate) fn submit_follow_on(
+    pub fn submit_follow_on(
         &mut self,
+        provider: Provider,
         run_id: &str,
         text: &str,
     ) -> Result<(), PromptDeliveryError> {
         let baseline = self.tmux.capture_screen(run_id).map_err(|detail| {
             PromptDeliveryError::new(PromptDeliveryFailureReason::CaptureFailed, detail)
         })?;
-        self.submit_from_baseline(run_id, text, &baseline)
+        self.submit_from_baseline(provider_contract(provider), run_id, text, &baseline)
     }
 
     fn submit_from_baseline(
         &mut self,
+        contract: ProviderContract,
         run_id: &str,
         text: &str,
         baseline: &[u8],
     ) -> Result<(), PromptDeliveryError> {
-        self.stage_payload(run_id, text, baseline)?;
+        self.stage_payload(contract, run_id, text, baseline)?;
         // Providers debounce paste bursts and may use the first Enter to accept
         // skill completion. Wait 150 ms, then send Enter twice with 50 ms
         // between presses so the completed invocation is submitted.
@@ -133,6 +137,7 @@ impl<T: PromptDeliveryTmux> PromptDelivery<T> {
 
     fn stage_payload(
         &mut self,
+        contract: ProviderContract,
         run_id: &str,
         text: &str,
         baseline: &[u8],
@@ -159,7 +164,7 @@ impl<T: PromptDeliveryTmux> PromptDelivery<T> {
         self.tmux.paste_buffer(run_id, &buffer).map_err(|detail| {
             PromptDeliveryError::new(PromptDeliveryFailureReason::PasteFailed, detail)
         })?;
-        self.wait_until_visible(run_id, text, baseline)
+        self.wait_until_visible(contract, run_id, text, baseline)
     }
 
     fn load_large_buffer(
@@ -195,14 +200,12 @@ impl<T: PromptDeliveryTmux> PromptDelivery<T> {
 
     fn wait_until_visible(
         &mut self,
+        contract: ProviderContract,
         run_id: &str,
         text: &str,
         baseline: &[u8],
     ) -> Result<(), PromptDeliveryError> {
-        let expected = normalized_visible_tail(text);
-        let prior_matches = normalize_visible(&String::from_utf8_lossy(baseline))
-            .matches(&expected)
-            .count();
+        let evidence = PasteEvidence::before(contract, text, baseline);
         let deadline = Instant::now() + self.timings.visibility_timeout;
         loop {
             let screen = self.tmux.capture_screen(run_id).map_err(|detail| {
@@ -214,11 +217,7 @@ impl<T: PromptDeliveryTmux> PromptDelivery<T> {
                     "pasted text did not become visible before the deadline",
                 ));
             }
-            if normalize_visible(&String::from_utf8_lossy(&screen))
-                .matches(&expected)
-                .count()
-                > prior_matches
-            {
+            if evidence.is_visible(&screen) {
                 return Ok(());
             }
             thread::sleep(self.timings.visibility_poll);
@@ -240,21 +239,6 @@ pub fn submit_text(
 
 pub fn entry_skill_invocation(provider: Provider, skill: &str) -> String {
     format!("{}{skill}", provider_contract(provider).invocation_prefix)
-}
-
-fn normalize_visible(value: &str) -> String {
-    value.split_whitespace().collect::<Vec<_>>().join(" ")
-}
-
-fn normalized_visible_tail(value: &str) -> String {
-    let normalized = normalize_visible(value);
-    let mut tail = normalized
-        .chars()
-        .rev()
-        .take(VISIBLE_TAIL_CHARACTERS)
-        .collect::<Vec<_>>();
-    tail.reverse();
-    tail.into_iter().collect()
 }
 
 #[cfg(test)]

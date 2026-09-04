@@ -15,6 +15,7 @@ pub async fn start(data_directory: &Path) -> Result<McpRuntime, String> {
         ingress_credential: uuid::Uuid::new_v4().simple().to_string(),
     })
     .await
+    .map_err(|error| error.to_string())
 }
 
 fn configured_port() -> Result<u16, String> {

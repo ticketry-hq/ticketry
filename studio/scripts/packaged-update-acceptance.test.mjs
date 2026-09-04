@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
@@ -9,9 +10,13 @@ import {
   assertPackagedUpdateAcceptanceResult,
   createPackagedUpdateAcceptancePlan,
   runPackagedUpdateAcceptance,
+  runPackagedUpdateAcceptanceMain,
 } from "./packaged-update-acceptance.mjs";
 
 const studioRoot = fileURLToPath(new URL("..", import.meta.url));
+const acceptanceCli = fileURLToPath(
+  new URL("./packaged-update-acceptance.mjs", import.meta.url),
+);
 const manifest = JSON.parse(
   await readFile(path.join(studioRoot, "release", "manifest.v1.json"), "utf8"),
 );
@@ -28,6 +33,30 @@ const wrongUpdaterKey = {
   publicKey: "wrong throwaway updater public key",
   privateKeyPath: "/tmp/packaged-update-acceptance/wrong.key",
 };
+
+test("the packaged update acceptance CLI rejects unknown options", () => {
+  const result = spawnSync(process.execPath, [acceptanceCli, "--unknown"], {
+    cwd: studioRoot,
+    encoding: "utf8",
+  });
+
+  assert.equal(result.status, 1);
+  assert.match(
+    result.stderr,
+    /unknown packaged update acceptance option: --unknown/i,
+  );
+});
+
+test("the packaged update acceptance main runs the real command composer", async () => {
+  const calls = [];
+
+  await runPackagedUpdateAcceptanceMain({
+    arguments_: [],
+    runCommand: async () => calls.push("run"),
+  });
+
+  assert.deepEqual(calls, ["run"]);
+});
 
 function acceptancePlan(overrides = {}) {
   return createPackagedUpdateAcceptancePlan({
@@ -275,7 +304,7 @@ test("result evidence proves wrong-key and unreachable feeds leave version A hea
     ["update_signature_invalid", (result) => {
       result.wrongKey.error.code = "update_operation_failed";
     }],
-    ["actionable", (result) => { result.wrongKey.error.action = ""; }],
+    ["actionable", (result) => { result.wrongKey.error.message = ""; }],
     ["version A", (result) => { result.wrongKey.app.version = versionB; }],
     ["healthy", (result) => { result.wrongKey.app.healthy = false; }],
     ["preserved", (result) => { result.wrongKey.dataPreserved = false; }],
@@ -301,6 +330,17 @@ test("result evidence proves wrong-key and unreachable feeds leave version A hea
       new RegExp(expectedMessage, "i"),
     );
   }
+});
+
+test("result evidence accepts the real desktop error contract", () => {
+  const result = passingResult();
+  delete result.wrongKey.error.action;
+  delete result.unreachable.error.action;
+
+  assert.doesNotThrow(() => assertPackagedUpdateAcceptanceResult(
+    result,
+    { manifest, versionA, versionB },
+  ));
 });
 
 test("the orchestrator cleans acquired resources when the acceptance driver fails", async () => {

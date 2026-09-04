@@ -4,12 +4,16 @@ use std::collections::BTreeSet;
 use std::path::PathBuf;
 
 fn authority(provider: Provider) -> ExecutionAuthority {
+    authority_with_mcp_url(provider, "http://127.0.0.1:8123/mcp")
+}
+
+fn authority_with_mcp_url(provider: Provider, mcp_url: &str) -> ExecutionAuthority {
     ExecutionAuthority::new(
         PathBuf::from(format!("/approved/{}", provider_contract(provider).slug)),
         PathBuf::from("/authorized/workspace"),
         PathBuf::from("/Applications/Ticketry/ticketry-hook"),
         PathBuf::from("/private/spool"),
-        "http://127.0.0.1:8123/mcp".into(),
+        mcp_url.into(),
         "Bearer secret-mcp".into(),
         BTreeSet::from(["tdd".into()]),
     )
@@ -80,6 +84,55 @@ fn provider_contracts_keep_flags_hooks_mcp_and_timeout_units() {
                 plan.settings.unwrap().environment_name,
                 "GEMINI_CLI_SYSTEM_SETTINGS_PATH"
             );
+        }
+    }
+}
+
+#[test]
+fn distinctive_mcp_url_is_materialized_in_each_provider_launch_shape() {
+    const MCP_URL: &str =
+        "https://mcp.coding-1422.example:9443/agent?source=golden&workspace=ticketry";
+
+    for provider in [
+        Provider::Claude,
+        Provider::Codex,
+        Provider::Gemini,
+        Provider::Agy,
+    ] {
+        let plan = materialize(
+            &durable(provider, LaunchKind::Task),
+            &authority_with_mcp_url(provider, MCP_URL),
+        )
+        .unwrap();
+
+        match provider {
+            Provider::Claude => {
+                let config_index = plan
+                    .argv
+                    .iter()
+                    .position(|argument| argument == "--mcp-config")
+                    .unwrap();
+                let config: serde_json::Value =
+                    serde_json::from_str(&plan.argv[config_index + 1]).unwrap();
+                assert_eq!(config["mcpServers"]["worktracker-agent"]["url"], MCP_URL);
+            }
+            Provider::Codex => {
+                let expected = format!(
+                    "mcp_servers={{worktracker-agent={{http_headers={{Authorization=\"Bearer secret-mcp\"}},url=\"{MCP_URL}\"}}}}"
+                );
+                assert!(
+                    contains_sequence(&plan.argv, &["-c", &expected]),
+                    "argv: {:?}",
+                    plan.argv
+                );
+            }
+            Provider::Gemini | Provider::Agy => {
+                let settings = plan.settings.unwrap();
+                assert_eq!(
+                    settings.contents["mcpServers"]["worktracker-agent"]["httpUrl"],
+                    MCP_URL
+                );
+            }
         }
     }
 }

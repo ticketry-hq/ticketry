@@ -28,6 +28,11 @@ function hasOpenModal(): boolean {
   return useModalStore.getState().modalStack.length > 0;
 }
 
+function isLaunchMenuTarget(target: EventTarget | null): boolean {
+  return target instanceof HTMLElement &&
+    target.closest('[role="menu"][aria-label="Launch agent"]') !== null;
+}
+
 /** Installs the application-wide keyboard precedence and delegates actions. */
 export function useGlobalKeymap(taskRows: TreeRow[] = EMPTY_TASK_ROWS): void {
   const taskRowsRef = useRef(taskRows);
@@ -47,6 +52,7 @@ export function useGlobalKeymap(taskRows: TreeRow[] = EMPTY_TASK_ROWS): void {
       const ui = useClientStore.getState();
       const sidebarVisible = ui.sidebarVisible;
       if (hasOpenModal()) return;
+      if (isLaunchMenuTarget(event.target)) return;
 
       const actionId = studioKeymapRegistry.resolve("capture", event);
       // Ahead of body engagement: the panel toggle must reverse itself from any

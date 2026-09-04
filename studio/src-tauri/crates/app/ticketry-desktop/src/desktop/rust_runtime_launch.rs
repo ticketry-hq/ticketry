@@ -6,7 +6,7 @@ use std::time::Duration;
 use tauri::Manager;
 
 use crate::desktop::launch_runtime::DesktopLaunchRuntime;
-use crate::desktop::mcp_runtime::{configured_mcp_port, owned_mcp_url, start_in_process_mcp};
+use crate::desktop::mcp_runtime::{configured_mcp_ports, owned_mcp_url, start_in_process_mcp};
 use crate::desktop::packaged_binaries::hook_runner_binary;
 use crate::desktop::runtime_configuration::rust_runtime_configuration;
 use crate::desktop::service_health::ServiceHealth;
@@ -53,7 +53,7 @@ pub fn launch_rust_runtime(
     let mut mcp_runtime = match tauri::async_runtime::block_on(start_in_process_mcp(
         &data_directory,
         &credential,
-        configured_mcp_port()?,
+        configured_mcp_ports()?,
         Some(terminal_launch.clone()),
     )) {
         Ok(runtime) => Some(runtime),

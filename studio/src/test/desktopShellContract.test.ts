@@ -115,6 +115,9 @@ describe("desktop shell security contract", () => {
     const build = await text("../../src-tauri/build.rs");
     const run = await text("../../src-tauri/crates/app/ticketry-desktop/src/desktop/run.rs");
     const appUpdates = await text("../../src-tauri/crates/app/ticketry-desktop/src/app_updates/mod.rs");
+    const acceptanceTls = await text(
+      "../../src-tauri/crates/app/ticketry-desktop/src/app_updates/acceptance_tls.rs",
+    );
     const capability = await json("../../src-tauri/capabilities/studio-main.json");
     const configuration = await json("../../src-tauri/tauri.conf.json");
 
@@ -129,7 +132,10 @@ describe("desktop shell security contract", () => {
     expect(appUpdates).toContain("pub async fn desktop_update_check");
     expect(appUpdates).toContain("UpdaterExt");
     expect(appUpdates).toContain("updater_builder()");
-    expect(appUpdates).toContain('var("TICKETRY_UPDATE_FEED_URL")');
+    expect(appUpdates).not.toContain("TICKETRY_UPDATE_FEED_URL");
+    expect(appUpdates).toContain('#[cfg(feature = "desktop-acceptance")]');
+    expect(appUpdates).toContain("add_root_certificate");
+    expect(acceptanceTls).toContain("TICKETRY_DESKTOP_ACCEPTANCE_CA_CERT");
 
     const permissions = capability.permissions as string[];
     expect(permissions).toContain("allow-desktop-update-check");
@@ -143,7 +149,7 @@ describe("desktop shell security contract", () => {
       updater: {
         pubkey: expect.any(String),
         endpoints: [
-          "https://github.com/ticketry-hq/ticketry-releases/releases/latest/download/latest.json",
+          "https://github.com/ticketry-hq/ticketry-updates/releases/latest/download/latest.json",
         ],
       },
     });
@@ -401,9 +407,9 @@ describe("desktop shell security contract", () => {
       "desktop:deploy": "node scripts/desktop-deploy.mjs",
       "release:build": "node scripts/release-build.mjs",
       "release:validate": "node scripts/release-build.mjs --validate",
-      "release:test": "node --test scripts/release-build.test.mjs scripts/desktop-deploy.test.mjs scripts/installed-artifact-acceptance.test.mjs scripts/installed-artifact-acceptance-driver.test.mjs scripts/release-publish.test.mjs scripts/public-update-publisher.test.mjs scripts/update-acceptance.test.mjs scripts/update-acceptance-driver.test.mjs",
+      "release:test": "node --test scripts/release-build.test.mjs scripts/desktop-deploy.test.mjs scripts/installed-artifact-acceptance.test.mjs scripts/installed-artifact-acceptance-driver.test.mjs scripts/packaged-update-build.test.mjs scripts/packaged-update-feed.test.mjs scripts/packaged-update-acceptance.test.mjs scripts/packaged-update-acceptance-command.test.mjs scripts/packaged-update-acceptance-environment.test.mjs scripts/packaged-update-acceptance-driver.test.mjs scripts/packaged-update-acceptance-runner.test.mjs scripts/packaged-update-webdriver.test.mjs scripts/release-publish.test.mjs scripts/public-update-publisher.test.mjs scripts/update-acceptance.test.mjs scripts/update-acceptance-driver.test.mjs",
       "release:acceptance": "node scripts/installed-artifact-acceptance.mjs",
-      "release:acceptance:update": "node scripts/update-acceptance.mjs",
+      "release:acceptance:update": "node scripts/packaged-update-acceptance.mjs",
       "desktop:smoke": "vitest run src/test/desktopShellContract.test.ts && node --test scripts/desktop-concurrent-smoke.test.mjs && node scripts/desktop-smoke.mjs && cargo test --manifest-path src-tauri/Cargo.toml",
       "desktop:smoke:dev": "node scripts/desktop-smoke.mjs dev",
       "desktop:smoke:packaged": "node scripts/desktop-smoke.mjs packaged",

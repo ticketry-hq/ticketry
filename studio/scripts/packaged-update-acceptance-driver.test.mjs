@@ -21,6 +21,10 @@ function preservedData() {
       "/opt/homebrew/bin/codex",
       "/opt/homebrew/bin/tmux",
     ],
+    compatibleAgentLoginState: {
+      codex: "authenticated",
+      claude: "authenticated",
+    },
   };
 }
 
@@ -69,6 +73,7 @@ test("packaged A discovers B, confirms the update, and relaunches with data inta
       selectedWorkspace: true,
       preferences: true,
       approvedExecutablePaths: true,
+      compatibleAgentLoginState: true,
     },
     lifecycle: {
       dataDirectoryLock: {
@@ -83,7 +88,7 @@ test("packaged A discovers B, confirms the update, and relaunches with data inta
 
 test("a wrong-key signature is refused with an actionable error and A remains healthy", async () => {
   const signatureError = {
-    code: "invalid_signature",
+    code: "update_signature_invalid",
     message: "Update signature verification failed. Ticketry was not changed.",
     action: "Retry after a correctly signed release is published.",
     retryable: false,
@@ -125,7 +130,7 @@ test("a wrong-key signature is refused with an actionable error and A remains he
 
 test("an unreachable feed reports a retryable actionable error and A remains healthy", async () => {
   const feedError = {
-    code: "feed_unreachable",
+    code: "update_feed_unreachable",
     message: "Ticketry could not reach the update feed.",
     action: "Check the connection and retry.",
     retryable: true,

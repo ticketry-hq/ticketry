@@ -58,6 +58,12 @@ async fn fixture() -> (tempfile::TempDir, sea_orm::DatabaseConnection) {
             id integer PRIMARY KEY, from_issue_id char(32) NOT NULL,
             to_issue_id char(32) NOT NULL
         );
+        CREATE TABLE worktracker_issuetypetransition (
+            id integer PRIMARY KEY AUTOINCREMENT, issue_type_id char(32) NOT NULL,
+            from_state_id char(32) NOT NULL, to_state_id char(32) NOT NULL,
+            agent_allowed bool NOT NULL, handoff bool NOT NULL DEFAULT 0,
+            UNIQUE(issue_type_id, from_state_id, to_state_id)
+        );
         CREATE TABLE worktracker_launchbinding (
             id integer PRIMARY KEY AUTOINCREMENT, issue_type_id char(32) NOT NULL,
             state_id char(32) NOT NULL, prompt text NOT NULL,
@@ -75,6 +81,9 @@ async fn fixture() -> (tempfile::TempDir, sea_orm::DatabaseConnection) {
         INSERT INTO worktracker_issuetype VALUES
             ('{STORY}', '{PROJECT}', 'Story', 'task', '', 0, '{BACKLOG}', 1, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
             ('{IMPLEMENTATION}', '{PROJECT}', 'Implementation', 'task', '', 1, '{BACKLOG}', 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+        INSERT INTO worktracker_issuetypetransition
+            (issue_type_id, from_state_id, to_state_id, agent_allowed)
+            VALUES ('{STORY}', '{BACKLOG}', '{REVIEW}', 1);
     "#)).await.unwrap();
     drop(writer);
     let database = open_for_commands(&path).await.unwrap();
@@ -90,6 +99,90 @@ fn create(name: &str) -> work_items::CreateWorkItem {
         state_id: None,
         parent_id: None,
     }
+}
+
+#[tokio::test]
+async fn accepted_transition_arrives_before_an_occupied_destination() {
+    let (_directory, database) = fixture().await;
+    let existing = work_items::create(&database, create("Existing review item"), None)
+        .await
+        .unwrap();
+    database
+        .execute_unprepared(&format!(
+            "UPDATE worktracker_issue SET state_id = '{REVIEW}', rank = 'V' WHERE id = '{existing}'"
+        ))
+        .await
+        .unwrap();
+    let moving = work_items::create(&database, create("Moving item"), None)
+        .await
+        .unwrap();
+    let existing_rank = issue::Entity::find_by_id(&existing)
+        .one(&database)
+        .await
+        .unwrap()
+        .unwrap()
+        .rank;
+
+    workflow::transition(
+        &database,
+        workflow::TransitionWorkItem {
+            id: moving.clone(),
+            target_state_id: REVIEW.to_owned(),
+            origin: workflow::TransitionOrigin::Human,
+        },
+        None,
+    )
+    .await
+    .unwrap();
+
+    let arrived = issue::Entity::find_by_id(moving)
+        .one(&database)
+        .await
+        .unwrap()
+        .unwrap();
+    let unchanged = issue::Entity::find_by_id(existing)
+        .one(&database)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(arrived.state_id.as_deref(), Some(REVIEW));
+    assert!(arrived.rank < existing_rank);
+    assert_eq!(unchanged.rank, existing_rank);
+}
+
+#[tokio::test]
+async fn accepted_transition_into_an_empty_destination_replaces_the_old_rank() {
+    let (_directory, database) = fixture().await;
+    let moving = work_items::create(&database, create("Moving item"), None)
+        .await
+        .unwrap();
+    let old_rank = issue::Entity::find_by_id(&moving)
+        .one(&database)
+        .await
+        .unwrap()
+        .unwrap()
+        .rank;
+
+    workflow::transition(
+        &database,
+        workflow::TransitionWorkItem {
+            id: moving.clone(),
+            target_state_id: REVIEW.to_owned(),
+            origin: workflow::TransitionOrigin::Agent,
+        },
+        None,
+    )
+    .await
+    .unwrap();
+
+    let arrived = issue::Entity::find_by_id(moving)
+        .one(&database)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(arrived.state_id.as_deref(), Some(REVIEW));
+    assert!(!arrived.rank.is_empty());
+    assert_ne!(arrived.rank, old_rank);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]

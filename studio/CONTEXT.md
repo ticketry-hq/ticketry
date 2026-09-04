@@ -46,8 +46,9 @@ _Avoid_: Scratch child row, per-run chicklet, run tab
 
 **Instant ticket**:
 A Stories-pane row backed by one active, taskless Instant Agent Run. Its title
-uses the safe launch title available to Ticketry, and selecting it foregrounds
-the exact terminal conversation. It is presentation over an Agent Run, not a
+is the Codex thread name once Codex has given the thread a real name; until
+then it uses the safe launch title available to Ticketry. Selecting it
+foregrounds the exact terminal conversation. It is presentation over an Agent Run, not a
 persisted WorkItem. The module-scoped workspace remains its internal owner. A
 selected row presents only that run's terminal and never a lifecycle chicklet
 or add-agent control.

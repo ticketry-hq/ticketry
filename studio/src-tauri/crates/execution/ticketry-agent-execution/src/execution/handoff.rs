@@ -109,7 +109,7 @@ fn submit_destination<T: PromptDeliveryTmux>(
     let Some(skill) = entry_skill else {
         return Ok(());
     };
-    delivery.submit_follow_on(run_id, &entry_skill_invocation(provider, skill))
+    delivery.submit_follow_on(provider, run_id, &entry_skill_invocation(provider, skill))
 }
 
 /// Open task sessions for the work item, newest first, restricted to providers
@@ -171,12 +171,17 @@ mod tests {
 
     /// A pane that echoes everything pasted into it below a ready composer, so
     /// readiness and visibility both resolve without a real provider.
+    ///
+    /// `collapse_multiline_pastes` reproduces what Claude Code and Codex
+    /// actually do: a bracketed multi-line paste is replaced by a placeholder,
+    /// so the pasted text never appears on screen.
     #[derive(Default)]
     struct FakePane {
         buffers: HashMap<String, String>,
         pasted: String,
         calls: Vec<String>,
         hide_ready_after_submission: bool,
+        collapse_multiline_pastes: bool,
         verifications: usize,
     }
 
@@ -210,8 +215,14 @@ mod tests {
         fn paste_buffer(&mut self, _: &str, buffer: &str) -> Result<(), String> {
             let text = self.buffers.get(buffer).cloned().unwrap_or_default();
             self.calls.push(format!("paste:{text}"));
+            let lines = text.lines().count();
+            let rendered = if self.collapse_multiline_pastes && lines > 1 {
+                format!("[Pasted text #1 +{lines} lines]")
+            } else {
+                text
+            };
             self.pasted.push(' ');
-            self.pasted.push_str(&text);
+            self.pasted.push_str(&rendered);
             Ok(())
         }
 
@@ -293,6 +304,35 @@ mod tests {
             ]
         );
         assert_eq!(delivery.tmux().verifications, 1);
+    }
+
+    /// Handoff always pastes the composed destination prompt, which is
+    /// multi-line. A provider that collapses such a paste into a placeholder
+    /// never renders the prompt's text, so verification that insists on seeing
+    /// it fails the delivery after the prompt has in fact landed.
+    #[test]
+    fn a_multi_line_destination_prompt_lands_in_a_pane_that_collapses_pastes() {
+        let pane = FakePane {
+            collapse_multiline_pastes: true,
+            ..Default::default()
+        };
+        let mut delivery = PromptDelivery::with_timings(pane, instant());
+        let prompt = "Destination prompt.\n\nWork item context (factual):\nState: Review";
+
+        submit_destination(&mut delivery, Provider::Claude, "run", prompt, Some("tdd"))
+            .expect("a collapsed paste is still a delivered paste");
+
+        assert_eq!(
+            delivery.tmux().calls,
+            vec![
+                format!("paste:{prompt}"),
+                "enter".to_owned(),
+                "enter".to_owned(),
+                "paste:/tdd".to_owned(),
+                "enter".to_owned(),
+                "enter".to_owned(),
+            ]
+        );
     }
 
     /// A destination with no entry skill still delivers its prompt, and types

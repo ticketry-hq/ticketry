@@ -121,6 +121,7 @@ export const useAgentStatusStore: AgentStatusFacade = Object.assign(
             scope: run.scope ?? "task",
             launch_state: run.launch_state ?? null,
             launch_model: run.launch_model ?? null,
+            provider_session_id: run.provider_session_id ?? null,
             started_at: run.started_at ?? "1970-01-01T00:00:00Z",
             state: run.state,
             effective_state: run.effective_state ?? run.state,

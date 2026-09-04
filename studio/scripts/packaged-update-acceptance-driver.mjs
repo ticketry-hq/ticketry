@@ -14,6 +14,10 @@ function preserved(before, after) {
       after.approvedExecutablePaths,
       before.approvedExecutablePaths,
     ),
+    compatibleAgentLoginState: isDeepStrictEqual(
+      after.compatibleAgentLoginState,
+      before.compatibleAgentLoginState,
+    ),
   };
 }
 

@@ -5,6 +5,7 @@
 //                                 (byIssue; startPolling wired by the shell)
 
 export { AgentStateBadge } from "./AgentStateBadge";
+export { AutomationDeliveryChicklet } from "./AutomationDeliveryChicklet";
 export { AutomationFailureChicklet } from "./AutomationFailureChicklet";
 export { ConversationStateBadge } from "./ConversationStateBadge";
 export { ScratchStateBadge } from "./ScratchStateBadge";

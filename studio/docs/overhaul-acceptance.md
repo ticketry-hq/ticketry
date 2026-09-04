@@ -154,7 +154,7 @@ named gate before the full Studio suite, typecheck, and build.
 | 169 | A native terminal viewer reports terminal output through the shared backend activity operation exactly once when it takes the run, and then never polls. |
 | 170 | Onboarding belongs to the installation project: the welcome appears while no project exists or while the installation project still requires it, an acknowledgement names the project the tour ran for, and a restart reads the acknowledged state back. |
 | 171 | A WorkItem's Apollo-owned workspace tab order interleaves Details, documents, and terminals across reload, close and reopen, dormant periods, and newly visible tabs. |
-| 172 | Workspace tabs stay locked until their saved order loads, then show horizontal drag placement, suppress the drop click, serialize saves, retain the active tab in view, and roll back a failed optimistic save. |
+| 172 | Workspace tabs stay locked until their saved order loads, then show horizontal drag placement, suppress the drop click, serialize saves, retain the active tab in view, commit desktop drags that end without a drop event, and roll back a failed optimistic save. |
 | 173 | Live-terminal cycling reads each candidate WorkItem's Apollo-owned saved order, including workspaces that have not been opened, before selecting the next terminal. |
 | 174 | When Ticketry cannot own an MCP listener, Studio says agent launches are blocked, local shells remain available, restart retries listener startup, and the acknowledgement does not claim to continue without MCP. |
 | 175 | A hidden Module tab stays hidden after the Apollo cache is rebuilt from the authoritative project read. |
@@ -229,6 +229,13 @@ named gate before the full Studio suite, typecheck, and build.
 | 244 | Incoming and outgoing workflow transition rows show and save each edge's handoff setting. |
 | 245 | A fresh bound launch keeps the composed prompt in provider argv, waits only when an entry skill exists, types only that skill with the provider-owned prefix, and tears down a pane when delivery fails. |
 | 246 | An untouched launch-configuration form follows canonical binding changes instead of retaining a stale mounted snapshot. |
+| 247 | A transitioned Story stays first in its destination state while the update is pending and after the authoritative result replaces it. |
+| 248 | Changing the selected Story discards its unsaved description draft, opens the new Story's saved description in view mode, and keeps later description updates bound to the new Story. |
+| 249 | Resuming one stopped terminal conversation opens and focuses one successor while every unselected stopped conversation stays independently resumable through holding refreshes and reload. |
+| 250 | The Stories pane says whether an automated transition continued the Story's live agent session or started a fresh one, and follows the newest delivery across the rolled-up subtree. |
+| 251 | Clicking + Agent opens the same provider picker used by Cmd+Enter instead of an inline dropdown. |
+| 252 | Opening the Modules pane gives it keyboard focus; arrow keys move its cursor without snapping back, and Enter activates the cursor. |
+| 253 | Edit-view keyboard navigation reaches the + Agent launcher after the final workspace tab and opens it with Enter. |
 
 Each executable case carries one stable `[overhaul-NN]` marker. The gate has a
 contract test that fails if a marker is missing or duplicated. When a Studio UI

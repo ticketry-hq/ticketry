@@ -1,7 +1,10 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useGlobalKeymap } from "../app/navigation/useGlobalKeymap";
+import { ModalHost } from "../app/modal/ModalHost";
+import { useModalStore } from "../app/modal/modalStore";
 import { SelectedTicketContent } from "../app/shell/ticket-workspace/selected-ticket/SelectedTicketContent";
+import type { WorkspaceLauncherContext } from "../app/shell/ticket-workspace/selected-ticket/SelectedTicketContent";
 import type {
   ScratchRow,
   TreeRow,
@@ -16,6 +19,7 @@ import {
   type SessionMeta,
 } from "../features/agents/terminal";
 import { setStatesSorted } from "../features/projects";
+import { setProviderCapabilities } from "../features/workflows";
 import { useClientStore, type EditViewZone } from "../state/clientStore";
 import { workItem } from "./seam";
 import { seedModuleOpenFixture } from "./projectOpenFixture";
@@ -129,6 +133,7 @@ function bodyElement(): HTMLElement {
 
 async function renderEditViewWorkspace(
   rows: WorkItemRow[],
+  launchContext: WorkspaceLauncherContext | null = null,
 ): Promise<{ setRows: (next: WorkItemRow[]) => void }> {
   function tree(current: WorkItemRow[]) {
     return (
@@ -140,7 +145,9 @@ async function renderEditViewWorkspace(
           moduleId="module-1"
           owner="studio"
           details={<div>Details surface</div>}
+          launchContext={launchContext}
         />
+        <ModalHost />
       </>
     );
   }
@@ -186,6 +193,7 @@ describe("overhaul acceptance — Edit view navigation zones", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     localStorage.clear();
+    useModalStore.setState({ modalStack: [] });
     useStudioStore.setState({ selectedProjectId: "project-1" });
     useClientStore.setState({
       selectedModuleId: "module-1",
@@ -376,20 +384,68 @@ describe("overhaul acceptance — Edit view navigation zones", () => {
     expect(terminal).toHaveAttribute("aria-selected", "true");
   });
 
-  it("leaves an engaged terminal owning its keys until Cmd+Escape", async () => {
+  it("[overhaul-253] reaches and activates the visible Agent launcher with the keyboard", async () => {
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        observe() {}
+        disconnect() {}
+      },
+    );
+    setProviderCapabilities([
+      {
+        agent: "codex",
+        accepts_model: true,
+        accepts_any_model: false,
+        model_aliases: [],
+        model_prefixes: [],
+        reasoning_levels: [],
+      },
+    ]);
+    await renderEditViewWorkspace(EXPANDED_ROWS, {
+      kind: "task",
+      taskId: "story-1",
+      projectId: "project-1",
+      moduleId: "module-1",
+    });
+    const launcher = screen.getByRole("button", { name: "＋ Agent" });
+
+    press("ArrowRight");
+    press("ArrowUp");
+    press("ArrowRight");
+
+    expect(launcher).toHaveFocus();
+
+    press("Enter");
+    const picker = await screen.findByRole("dialog", { name: "Select Agent" });
+    expect(picker).toHaveTextContent("codex");
+    expect(screen.queryByRole("menu", { name: "Launch agent" }))
+      .not.toBeInTheDocument();
+  });
+
+  it("returns terminal input to Studio navigation with Cmd+Escape", async () => {
     await renderEditViewWorkspace(EXPANDED_ROWS);
+    const terminalTab = screen.getByRole("tab", { name: "codex terminal" });
+    const terminalInput = screen.getByRole("textbox", { name: "Terminal input" });
 
     press("ArrowRight");
     press("Enter");
     expect(useClientStore.getState().editViewBodyEngaged).toBe(true);
+    terminalInput.focus();
+    expect(terminalInput).toHaveFocus();
 
-    press("ArrowLeft");
+    fireEvent.keyDown(terminalInput, { key: "ArrowLeft" });
     expect(useClientStore.getState().editViewZone).toBe("active-tab-body");
     expect(useClientStore.getState().editViewBodyEngaged).toBe(true);
 
-    press("Escape", { metaKey: true });
+    fireEvent.keyDown(terminalInput, { key: "Escape", metaKey: true });
     expect(useClientStore.getState().editViewBodyEngaged).toBe(false);
     expect(useClientStore.getState().editViewZone).toBe("active-tab-body");
+    expect(bodyElement()).toHaveFocus();
+    expect(terminalTab).toHaveAttribute("aria-selected", "true");
+
+    fireEvent.keyDown(document.activeElement ?? window, { key: "ArrowLeft" });
+    expect(useClientStore.getState().editViewZone).toBe("stories");
   });
 
   it("leaves Full sidebar view pane navigation unchanged", async () => {

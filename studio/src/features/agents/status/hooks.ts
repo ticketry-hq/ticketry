@@ -4,6 +4,7 @@ import {
   readAgentStatusHolding,
   subscribeAgentStatusHolding,
 } from "./apolloHolding";
+import { selectTaskAutomationDelivery } from "./automationDelivery";
 import {
   selectModuleLifecycleCounts,
   selectConversationLifecycleChips,
@@ -101,6 +102,18 @@ export const useTaskAutomationAttempts = (
   descendantTaskIds: readonly string[] = [],
 ) => useAgentStatusSelection(
   (holding) => selectTaskAutomationAttempts(
+    holding,
+    taskId,
+    descendantTaskIds,
+  ),
+  selectionEqual,
+);
+
+export const useTaskAutomationDelivery = (
+  taskId: string,
+  descendantTaskIds: readonly string[] = [],
+) => useAgentStatusSelection(
+  (holding) => selectTaskAutomationDelivery(
     holding,
     taskId,
     descendantTaskIds,

@@ -4,6 +4,7 @@ use std::process::Command;
 use sea_orm::{ConnectionTrait, Database, DbBackend, Statement};
 use ticketry_work_management::adoption::{adopt, SourceClassification};
 use ticketry_work_management::launch_binding_entry_skill_migration;
+use ticketry_work_management::workflow_handoff_migration;
 
 fn repository_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -85,6 +86,29 @@ async fn reopens_after_the_ledger_backed_entry_skill_migration() {
     let reopened = adopt(directory.path())
         .await
         .expect("reopen ledger-backed entry-skill shape");
+    assert_eq!(reopened.source, SourceClassification::RustOwned);
+    assert!(reopened.snapshot_path.is_none());
+}
+
+#[tokio::test]
+async fn reopens_after_the_ledger_backed_workflow_handoff_migration() {
+    let directory = tempfile::tempdir().expect("create fixture directory");
+    let path = directory.path().join("state.db");
+    django_fixture(&path);
+    normalize_fixture_counters(&path).await;
+    adopt(directory.path()).await.expect("adopt fixture");
+
+    let database = Database::connect(format!("sqlite:{}?mode=rw", path.display()))
+        .await
+        .expect("open adopted WorkTracker");
+    workflow_handoff_migration::install(&database)
+        .await
+        .expect("install workflow-handoff final shape");
+    database.close().await.expect("close migrated WorkTracker");
+
+    let reopened = adopt(directory.path())
+        .await
+        .expect("reopen ledger-backed workflow-handoff shape");
     assert_eq!(reopened.source, SourceClassification::RustOwned);
     assert!(reopened.snapshot_path.is_none());
 }

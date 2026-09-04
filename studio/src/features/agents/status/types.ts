@@ -51,6 +51,7 @@ export interface RunRecord {
   scope: AgentRunScope;
   launch_state?: string | null;
   launch_model?: string | null;
+  provider_session_id?: string | null;
   started_at?: string;
   state: RawLifecycleState;
   updated_at: string;

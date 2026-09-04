@@ -207,6 +207,7 @@ export function macosTauriSigningConfig(manifest, environment = process.env, { a
   if (allowUnsigned) {
     return JSON.stringify({
       bundle: {
+        createUpdaterArtifacts: false,
         macOS: {
           hardenedRuntime: false,
           entitlements: null,
@@ -216,6 +217,7 @@ export function macosTauriSigningConfig(manifest, environment = process.env, { a
   }
   return JSON.stringify({
     bundle: {
+      createUpdaterArtifacts: true,
       macOS: {
         signingIdentity: environment[signing.identity_environment],
         hardenedRuntime: signing.hardened_runtime,
@@ -339,6 +341,14 @@ export async function validateReleaseInputs(
       "Tauri CSP must allow wasm-unsafe-eval for the Ghostty WASM renderer",
     );
   }
+  const updaterEndpoint = tauriConfiguration.plugins?.updater?.endpoints?.[0];
+  const releaseFeedUrl = manifest.release_policy.update.feed.latest_url;
+  if (updaterEndpoint !== releaseFeedUrl) {
+    throw new ReleaseManifestError(
+      `Tauri plugins.updater.endpoints[0] ${JSON.stringify(updaterEndpoint)} must match `
+        + `release_policy.update.feed.latest_url ${JSON.stringify(releaseFeedUrl)}`,
+    );
+  }
   const cargoVersion = cargoToml.match(/^version\s*=\s*"([^"]+)"$/m)?.[1];
   validateComponentVersions(manifest, { tauriVersion: tauriConfiguration.version, cargoVersion });
 }
@@ -385,32 +395,82 @@ async function collectFiles(directory) {
   return files.flat();
 }
 
-async function findDirectoryWithSuffix(directory, suffix) {
+async function findDirectoriesWithSuffix(directory, suffix) {
   const entries = await readdir(directory, { withFileTypes: true });
+  const matches = [];
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
     const entryPath = path.join(directory, entry.name);
-    if (entry.name.endsWith(suffix)) return entryPath;
-    const nested = await findDirectoryWithSuffix(entryPath, suffix);
-    if (nested) return nested;
+    if (entry.name.endsWith(suffix)) {
+      matches.push(entryPath);
+      continue;
+    }
+    matches.push(...await findDirectoriesWithSuffix(entryPath, suffix));
   }
-  return undefined;
+  return matches;
 }
 
-async function bundleArtifacts(manifest, target) {
-  const bundleRoot = path.join(studioRoot, "src-tauri", "target", target.rust_target, "release", "bundle");
+export async function bundleArtifacts(
+  manifest,
+  target,
+  { root = studioRoot, allowUnsigned = false } = {},
+) {
+  const bundleRoot = path.join(root, "src-tauri", "target", target.rust_target, "release", "bundle");
   let files;
+  let apps;
   try {
-    files = await collectFiles(bundleRoot);
+    [files, apps] = await Promise.all([
+      collectFiles(bundleRoot),
+      findDirectoriesWithSuffix(bundleRoot, ".app"),
+    ]);
   } catch {
     throw new ReleaseManifestError(`Tauri did not produce a bundle directory for ${target.id}: ${bundleRoot}`);
   }
-  const app = await findDirectoryWithSuffix(bundleRoot, ".app");
-  const dmg = files.find((file) => file.endsWith(".dmg"));
-  if (!app || !dmg) {
-    throw new ReleaseManifestError(`Tauri did not produce both .app and .dmg bundles for ${target.id}`);
+
+  const updaterFormat = manifest.artifacts.updater.archive_suffix.replace(/^\./, "");
+  const dmgs = files.filter((file) => file.endsWith(".dmg"));
+  const updaterArchives = files.filter((file) =>
+    file.endsWith(manifest.artifacts.updater.archive_suffix)
+  );
+  const updaterSignatures = files.filter((file) =>
+    file.endsWith(manifest.artifacts.updater.signature_suffix)
+  );
+  const producedFormats = [
+    ...(apps.length > 0 ? ["app"] : []),
+    ...(dmgs.length > 0 ? ["dmg"] : []),
+    ...(updaterArchives.length > 0 ? [updaterFormat] : []),
+  ].sort();
+  const expectedFormats = manifest.artifacts.tauri.bundle_formats
+    .filter((format) => !allowUnsigned || format !== updaterFormat)
+    .toSorted();
+  if (JSON.stringify(producedFormats) !== JSON.stringify(expectedFormats)) {
+    throw new ReleaseManifestError(
+      `Tauri bundle formats for ${target.id} do not match the release manifest: expected ${expectedFormats.join(", ")}; produced ${producedFormats.join(", ") || "none"}`,
+    );
   }
-  return { app, dmg };
+  if (apps.length !== 1 || dmgs.length !== 1) {
+    throw new ReleaseManifestError(
+      `Tauri must produce exactly one .app and one .dmg bundle for ${target.id}`,
+    );
+  }
+  if (
+    !allowUnsigned
+    && (
+      updaterArchives.length !== 1
+      || updaterSignatures.length !== 1
+      || updaterSignatures[0] !== `${updaterArchives[0]}.sig`
+    )
+  ) {
+    throw new ReleaseManifestError(
+      `Tauri must produce exactly one ${manifest.artifacts.updater.archive_suffix} and its matching ${manifest.artifacts.updater.signature_suffix} for ${target.id}`,
+    );
+  }
+  return {
+    app: apps[0],
+    dmg: dmgs[0],
+    updaterArchive: updaterArchives[0],
+    updaterSignature: updaterSignatures[0],
+  };
 }
 
 async function findFileWithin(directory, basename) {
@@ -578,6 +638,17 @@ export async function stageTarget(
   artifacts,
   { allowUnsigned = false, root = studioRoot } = {},
 ) {
+  const hasUpdaterArchive = Boolean(artifacts.updaterArchive);
+  const hasUpdaterSignature = Boolean(artifacts.updaterSignature);
+  if (
+    hasUpdaterArchive !== hasUpdaterSignature
+    || (!allowUnsigned && !hasUpdaterArchive)
+    || (hasUpdaterArchive && artifacts.updaterSignature !== `${artifacts.updaterArchive}.sig`)
+  ) {
+    throw new ReleaseManifestError(
+      `release staging for ${target.id} requires an updater archive and matching signature`,
+    );
+  }
   const destination = path.join(root, "release-output", manifest.release_version, target.id);
 
   await rm(destination, { recursive: true, force: true });
@@ -589,6 +660,16 @@ export async function stageTarget(
   await Promise.all([
     copyArtifact(artifacts.app, path.join(destination, "Ticketry.app"), { recursive: true }),
     copyArtifact(artifacts.dmg, path.join(destination, path.basename(artifacts.dmg)), { recursive: false }),
+    ...(hasUpdaterArchive ? [
+      copyArtifact(
+        artifacts.updaterArchive,
+        path.join(destination, path.basename(artifacts.updaterArchive)),
+      ),
+      copyArtifact(
+        artifacts.updaterSignature,
+        path.join(destination, path.basename(artifacts.updaterSignature)),
+      ),
+    ] : []),
     writeFile(
       path.join(destination, "release-metadata.json"),
       `${JSON.stringify(releaseMetadata(manifest, target, { allowUnsigned }), null, 2)}\n`,
@@ -629,7 +710,7 @@ export async function buildRelease(
       `Tauri build for ${target.id}`,
       { environment: macosTauriBuildEnvironment(process.env, { allowUnsigned }) },
     );
-    const artifacts = await bundleArtifacts(manifest, target);
+    const artifacts = await bundleArtifacts(manifest, target, { allowUnsigned });
     await verifyMacOSBundle(manifest, target, artifacts, { allowUnsigned });
     if (allowUnsigned) {
       // Ad-hoc signing mutates the app after Tauri has already created its

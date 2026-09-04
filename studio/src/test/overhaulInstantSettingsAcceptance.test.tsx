@@ -5,15 +5,15 @@ import { documentOperationName } from "../graphql-foundation/typedDocument";
 import { SettingsModal } from "../features/studio/modals/SettingsModal";
 import { installDesktopGraphQlRuntime } from "./desktopGraphQlRuntime";
 
-describe("overhaul acceptance — Instant settings", () => {
+describe("overhaul acceptance — Conversations settings", () => {
   beforeEach(() => {
     useModalStore.setState({
-      modalStack: [{ type: "settings", payload: { section: "instant" } }],
+      modalStack: [{ type: "settings" }],
       presentedNoticeIds: new Set(),
     });
   });
 
-  it("[overhaul-203] edits the Instant initial prompt and auto-close defaults", async () => {
+  it("[overhaul-203] navigates to Conversations settings and edits the starter prompt", async () => {
     const saves: unknown[] = [];
     installDesktopGraphQlRuntime(async (document, variables) => {
       const operation = documentOperationName(document);
@@ -55,8 +55,16 @@ describe("overhaul acceptance — Instant settings", () => {
 
     render(<SettingsModal />);
 
+    fireEvent.click(screen.getByRole("tab", { name: "Conversations" }));
+
+    expect(
+      screen.getByRole("heading", { name: "Conversations" }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("heading", { name: "Starter prompt" }),
+    ).toBeVisible();
     const prompt = await screen.findByRole("textbox", {
-      name: "Instant initial prompt",
+      name: "Conversation starter prompt",
     });
     expect(prompt).toHaveValue("Keep changes local.");
     fireEvent.change(prompt, {
@@ -65,12 +73,14 @@ describe("overhaul acceptance — Instant settings", () => {
     fireEvent.click(screen.getByRole("checkbox", {
       name: /Auto-close successful runs/,
     }));
-    fireEvent.click(screen.getByRole("button", { name: "Save Instant settings" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Save conversation settings" }),
+    );
 
     await waitFor(() => expect(saves).toEqual([{
       initialPrompt: "Keep changes local and run focused tests.",
       autoClose: true,
     }]));
-    expect(await screen.findByText("Instant settings saved.")).toBeVisible();
+    expect(await screen.findByText("Conversation settings saved.")).toBeVisible();
   });
 });

@@ -288,6 +288,7 @@ interface TerminalStoreState {
   reconcileRunTabs: (
     taskId: TaskId,
     runs: readonly RunRecord[],
+    excludedRunIds?: ReadonlySet<string>,
   ) => void;
   attachRun: (agentRunId: string) => SessionId;
   // `dismiss` defaults to true for the same reason `closeTab` does: an agent
@@ -624,7 +625,14 @@ export const useTerminalStore = createApolloStore<TerminalStoreState>("terminal-
     useWorkspaceTabsStore.getState().tabFocused(bucketOfMeta(meta), sessionId);
   },
 
-  reconcileRunTabs(taskId, runs) {
+  reconcileRunTabs(taskId, runs, excludedRunIds = new Set()) {
+    for (const runId of excludedRunIds) {
+      const sessionId = get().sessionByRun[runId];
+      const session = sessionId ? get().sessions[sessionId] : undefined;
+      if (session && bucketOfMeta(session) === taskId) {
+        get().closeTab(sessionId, { dismiss: false });
+      }
+    }
     const { sessions, sessionByRun } = get();
     // Ids already held by a live (or reconnecting) tab must not be duplicated.
     const attached = new Set(

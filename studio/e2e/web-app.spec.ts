@@ -2632,6 +2632,28 @@ test.describe("complete browser application", () => {
     await expect(workspaceTabs.getByRole("tab")).toHaveCount(initialTabCount);
   });
 
+  test("opens the shared provider picker from the workspace launcher", async ({
+    page,
+  }) => {
+    await openModule(page, names.module);
+    await openWorkItem(page, names.blocker);
+
+    await page.getByRole("button", { name: "＋ Agent" }).click();
+    let picker = page.getByRole("dialog", { name: "Select Agent" });
+    await expect(picker).toBeVisible();
+    await expect(picker.getByText("codex", { exact: true })).toBeVisible();
+    await expect(page.getByRole("menu", { name: "Launch agent" }))
+      .toHaveCount(0);
+    await page.keyboard.press("Escape");
+    await expect(picker).toHaveCount(0);
+
+    await page.getByRole("button", { name: "Open Settings" }).focus();
+    await page.keyboard.press("Meta+Enter");
+    picker = page.getByRole("dialog", { name: "Select Agent" });
+    await expect(picker).toBeVisible();
+    await expect(picker.getByText("codex", { exact: true })).toBeVisible();
+  });
+
   test("updates the live Agent Picker when Rust provider activation changes", async ({
     page,
     request,
@@ -3496,6 +3518,87 @@ test.describe("complete browser application", () => {
     await expect(alert).toHaveCount(0);
     await expect(page.getByTestId("issue-name"))
       .toContainText(/Complete parent(?: renamed)?/);
+  });
+
+  test("says whether an automated transition continued a session or started a fresh one", async ({
+    page,
+  }) => {
+    // The browser suite never starts a provider process, so the continued and
+    // fresh deliveries are published onto the status stream the application
+    // really subscribes to rather than produced by a real handoff. What is
+    // under test here is the browser seam: a delivery mode the server puts on
+    // the feed has to become something a person can see on the Story row.
+    const attempt = (
+      workItemId: string,
+      attemptId: string,
+      deliveryMode: "continued" | "started_fresh",
+    ) => ({
+      attempt_id: attemptId,
+      root_attempt_id: attemptId,
+      retry_of_attempt_id: null,
+      work_item_id: workItemId,
+      // A continued handoff settles its attempt the moment typed delivery
+      // lands, so the happy path is only ever a succeeded attempt.
+      status: "succeeded",
+      error: null,
+      failure: null,
+      retryable: false,
+      agent_run_id: null,
+      delivery_mode: deliveryMode,
+      updated_at: "2026-09-01T12:00:00+00:00",
+    });
+    const snapshot = {
+      __typename: "RunStatusSnapshot",
+      project_id: fixture.project.id,
+      cursor: 1,
+      at: "2026-09-01T12:00:00+00:00",
+      runs: [],
+      automation_attempts: [
+        attempt(fixture.parent.id, "11111111-1111-4111-8111-111111111111", "continued"),
+        attempt(fixture.moving.id, "22222222-2222-4222-8222-222222222222", "started_fresh"),
+      ],
+    };
+
+    await page.route("**/graphql/subscribe", async (route) => {
+      await route.fulfill({
+        contentType: "text/event-stream",
+        body: `data: ${JSON.stringify({
+          type: "next",
+          payload: { data: { run_status_stream: snapshot } },
+        })}\n\n`,
+      });
+    });
+    try {
+      await openModule(page, names.module);
+
+      const continued = page
+        .getByRole("treeitem", { name: new RegExp(fixture.parent.key) })
+        .getByTestId("automation-delivery-chicklet");
+      await expect(continued).toHaveAttribute("data-delivery-mode", "continued");
+      await expect(continued).toContainText("Continued");
+      await expect(continued).toContainText(
+        "This transition continued the Story's existing agent session.",
+      );
+
+      const fresh = page
+        .getByRole("treeitem", { name: new RegExp(fixture.moving.key) })
+        .getByTestId("automation-delivery-chicklet");
+      await expect(fresh).toHaveAttribute("data-delivery-mode", "started_fresh");
+      await expect(fresh).toContainText("Fresh");
+      await expect(fresh).toContainText(
+        "This transition started a fresh agent session.",
+      );
+
+      // A Story that nothing delivered stays silent rather than implying a
+      // mode it has no fact for.
+      await expect(
+        page
+          .getByRole("treeitem", { name: new RegExp(fixture.blocker.key) })
+          .getByTestId("automation-delivery-chicklet"),
+      ).toHaveCount(0);
+    } finally {
+      await page.unroute("**/graphql/subscribe");
+    }
   });
 
   test("loads and edits every Settings section without stale endpoints", async ({

@@ -1,6 +1,16 @@
 import { spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
-import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  copyFileSync,
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import net from "node:net";
 import path from "node:path";
 import process from "node:process";
@@ -14,7 +24,7 @@ const builtBinary = process.env.TICKETRY_DESKTOP_ACCEPTANCE_BINARY
   ?? path.join(studioRoot, "src-tauri", "target", "debug", "ticketry");
 const tmux = process.env.TICKETRY_DESKTOP_ACCEPTANCE_TMUX
   ?? ["/opt/homebrew/bin/tmux", "/usr/local/bin/tmux", "/usr/bin/tmux"].find(existsSync);
-const retain = process.env.TICKETRY_KEEP_DESKTOP_ACCEPTANCE === "1";
+const rotatedMcpUrl = "http://127.0.0.1:8124/mcp";
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
@@ -74,6 +84,50 @@ async function waitForPort(port, child, timeoutMs = 90_000) {
   throw new Error(`WebDriver did not listen on port ${port}`);
 }
 
+async function waitForMcpPing(url, child, timeoutMs = 30_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (child.exitCode !== null) {
+      throw new Error(`Ticketry exited before its MCP listener became ready (${child.exitCode})`);
+    }
+    const controller = new AbortController();
+    const attemptTimeout = setTimeout(
+      () => controller.abort(),
+      Math.min(1_000, deadline - Date.now()),
+    );
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        signal: controller.signal,
+        headers: {
+          accept: "application/json, text/event-stream",
+          "content-type": "application/json",
+          "mcp-protocol-version": "2025-03-26",
+        },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: "desktop-port-rotation",
+          method: "tools/call",
+          params: { name: "mcp_ping", arguments: {} },
+        }),
+      });
+      const payload = await response.json();
+      if (
+        payload?.result?.structuredContent?.status === "ok"
+        && payload.result.structuredContent.server === "worktracker-agent"
+      ) {
+        return;
+      }
+    } catch {
+      // The desktop can become WebDriver-ready just before its MCP listener.
+    } finally {
+      clearTimeout(attemptTimeout);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error(`Ticketry MCP did not answer at the selected endpoint ${url}`);
+}
+
 async function stopProcess(child) {
   if (!child || child.exitCode !== null || child.signalCode !== null) return;
   const exited = once(child, "exit");
@@ -89,9 +143,13 @@ async function stopProcess(child) {
 }
 
 function spawnTicketry(binary, environment, stdout, stderr) {
+  const childEnvironment = { ...process.env, ...environment };
+  if (!Object.hasOwn(environment, "MUXED_DESKTOP_MCP_PORT")) {
+    delete childEnvironment.MUXED_DESKTOP_MCP_PORT;
+  }
   const child = spawn(binary, [], {
     cwd: repositoryRoot,
-    env: { ...process.env, ...environment },
+    env: childEnvironment,
     stdio: ["ignore", "pipe", "pipe"],
   });
   child.stdout.on("data", (chunk) => stdout.push(chunk));
@@ -213,8 +271,8 @@ wait_for_signal() {
   [ -f "$acceptance_root/$signal" ] || exit 67
 }
 
-printf '{"pid":%s,"cwd":"%s","task_id":"%s","project_id":"%s","hook":true,"mcp":true}\\n' \
-  "$$" "$PWD" "$task_id" "$project_id" > ${JSON.stringify(marker)}
+printf '{"pid":%s,"cwd":"%s","task_id":"%s","project_id":"%s","hook":true,"mcp_url":"%s","mcp_authorization":true}\\n' \
+  "$$" "$PWD" "$task_id" "$project_id" "$mcp_url" > ${JSON.stringify(marker)}
 printf 'Ticketry desktop acceptance provider started\\n'
 emit_hook SessionStart
 emit_hook UserPromptSubmit
@@ -276,15 +334,25 @@ async function createStoryThroughStudio(browser, workspaceDirectory) {
   await idea.waitForDisplayed({ timeout: 20_000 });
   await idea.setValue("Prove desktop agent execution");
   await browser.keys("Enter");
-  const story = await browser.$(
-    '//li[@role="treeitem"][.//*[@data-task-name="true" and normalize-space()="Prove desktop agent execution"]]',
-  );
-  await click(story);
-  const issueName = await browser.$('[data-testid="issue-name"]');
-  await issueName.waitForDisplayed({ timeout: 20_000 });
+  const storySelector =
+    '//li[@role="treeitem"][.//*[@data-task-name="true" and normalize-space()="Prove desktop agent execution"]]';
+  let taskId;
+  await browser.waitUntil(async () => {
+    const story = await browser.$(storySelector);
+    if (!await story.isDisplayed().catch(() => false)) return false;
+    const candidate = await story.getAttribute("data-task-id");
+    if (!candidate || candidate.startsWith("optimistic:")) return false;
+    taskId = candidate;
+    return true;
+  }, {
+    interval: 100,
+    timeout: 20_000,
+    timeoutMsg: "the created Story did not receive its persisted identity",
+  });
+  await openExistingStory(browser, taskId);
   return {
     launch: await browser.$("aria/Run agent"),
-    taskId: await story.getAttribute("data-task-id"),
+    taskId,
   };
 }
 
@@ -340,9 +408,18 @@ async function waitForState(browser, state) {
 }
 
 async function openExistingStory(browser, taskId) {
-  const story = await browser.$(`[data-task-id="${taskId}"]`);
-  await click(story);
-  await (await browser.$('[data-testid="issue-name"]')).waitForDisplayed({ timeout: 20_000 });
+  await browser.waitUntil(async () => {
+    const story = await browser.$(`[data-task-id="${taskId}"]`);
+    if (!await story.isDisplayed().catch(() => false)) return false;
+    await story.click().catch(() => {});
+    return await (await browser.$('[data-testid="issue-name"]'))
+      .isDisplayed()
+      .catch(() => false);
+  }, {
+    interval: 250,
+    timeout: 30_000,
+    timeoutMsg: `Story ${taskId} did not open in the details surface`,
+  });
 }
 
 async function main() {
@@ -370,97 +447,66 @@ async function main() {
   const workspaceDirectory = path.join(root, "workspace");
   const tmuxDirectory = path.join(root, "tmux");
   const runtimeTempDirectory = path.join(root, "runtime-temp");
-  mkdirSync(artifacts);
-  mkdirSync(applicationDirectory);
-  mkdirSync(workspaceDirectory);
-  mkdirSync(tmuxDirectory);
-  mkdirSync(runtimeTempDirectory);
-  const tools = provisionDisposableTools(root);
-  const binary = path.join(applicationDirectory, "ticketry");
-  const hook = path.join(applicationDirectory, "ticketry-hook");
-  copyFileSync(builtBinary, binary);
-  copyFileSync(tools.hook, hook);
-  chmodSync(binary, 0o755);
-  chmodSync(hook, 0o755);
   const stdout = [];
   const stderr = [];
-  let port = await availablePort();
-  let mcpPort = await availablePort();
-  while (mcpPort === port) mcpPort = await availablePort();
-  const applicationEnvironment = {
-    MUXED_DATA_DIR: tools.dataDirectory,
-    MUXED_DESKTOP_MCP_PORT: String(mcpPort),
-    MUXED_FORCE_SQLITE: "true",
-    MUXED_TMUX_SOCKET: "ticketry-e2e",
-    TMUX_TMPDIR: tmuxDirectory,
-    TMPDIR: runtimeTempDirectory,
-    MUXED_OUTPUT_SWEEP_SECONDS: "1",
-  };
-  let mcpBlocker = await occupyPort(mcpPort);
-  let child = spawnTicketry(binary, {
-    ...applicationEnvironment,
-    TAURI_WEBDRIVER_PORT: String(port),
-    TICKETRY_DESKTOP_ACCEPTANCE_SWEEP_MILLIS: "250",
-  }, stdout, stderr);
+  let tools;
+  let child;
   let browser;
-  let failed = false;
-  try {
-    browser = await connectToStudio(port, child);
-    const outageNotice = await browser.$("aria/Agent launches unavailable");
-    await outageNotice.waitForDisplayed({ timeout: 60_000 });
-    const outageMessage = await outageNotice.getText();
-    if (
-      !outageMessage.includes("Agent launches are blocked")
-      || !outageMessage.includes("Local shells remain available")
-    ) {
-      throw new Error(`MCP outage notice omitted its fail-closed boundary: ${outageMessage}`);
-    }
-    await click(await browser.$("aria/Understood"));
-
-    const story = await createStoryThroughStudio(browser, workspaceDirectory);
-    await click(await browser.$("aria/Open terminal panel"));
-    const localShell = await browser.$("aria/Shell 1");
-    await localShell.waitForDisplayed({ timeout: 30_000 });
-    await click(await browser.$("aria/Close shell 1"));
-    await localShell.waitForDisplayed({ timeout: 20_000, reverse: true });
-    // Shell tabs disappear immediately while durable termination finishes in
-    // the background. Do not interrupt that explicit close with the restart
-    // this scenario performs next.
-    await waitForTmuxEmpty(root);
-    await click(await browser.$("aria/Minimize terminal panel"));
-
-    await click(story.launch);
-    const refusedLaunch = await browser.$(
-      '//*[@data-testid and starts-with(@data-testid,"toast-") and contains(.,"Agent run could not be started")]',
-    );
-    await refusedLaunch.waitForDisplayed({ timeout: 20_000 });
-
-    await browser.deleteSession();
-    browser = undefined;
+  let mcpBlocker;
+  let cleanupPromise;
+  const cleanup = () => cleanupPromise ??= (async () => {
+    if (browser) await browser.deleteSession().catch(() => {});
     await stopProcess(child);
-    await closeServer(mcpBlocker);
-    mcpBlocker = undefined;
-
-    port = await availablePort();
+    await closeServer(mcpBlocker).catch(() => {});
+    spawnSync(tmux, ["-L", "ticketry-e2e", "kill-server"], {
+      env: { ...process.env, TMUX_TMPDIR: tmuxDirectory },
+      stdio: "ignore",
+    });
+    rmSync(root, { recursive: true, force: true });
+  })();
+  const handleSignal = (signal) => {
+    void cleanup().finally(() => process.kill(process.pid, signal));
+  };
+  const handleInterrupt = () => handleSignal("SIGINT");
+  const handleTermination = () => handleSignal("SIGTERM");
+  process.once("SIGINT", handleInterrupt);
+  process.once("SIGTERM", handleTermination);
+  try {
+    mkdirSync(artifacts);
+    mkdirSync(applicationDirectory);
+    mkdirSync(workspaceDirectory);
+    mkdirSync(tmuxDirectory);
+    mkdirSync(runtimeTempDirectory);
+    tools = provisionDisposableTools(root);
+    const binary = path.join(applicationDirectory, "ticketry");
+    const hook = path.join(applicationDirectory, "ticketry-hook");
+    copyFileSync(builtBinary, binary);
+    copyFileSync(tools.hook, hook);
+    chmodSync(binary, 0o755);
+    chmodSync(hook, 0o755);
+    let port = await availablePort();
+    const applicationEnvironment = {
+      MUXED_DATA_DIR: tools.dataDirectory,
+      MUXED_FORCE_SQLITE: "true",
+      MUXED_TMUX_SOCKET: "ticketry-e2e",
+      TMUX_TMPDIR: tmuxDirectory,
+      TMPDIR: runtimeTempDirectory,
+      MUXED_OUTPUT_SWEEP_SECONDS: "1",
+    };
+    const nextPortReservation = await occupyPort(8124);
+    await closeServer(nextPortReservation);
+    mcpBlocker = await occupyPort(8123);
     child = spawnTicketry(binary, {
       ...applicationEnvironment,
       TAURI_WEBDRIVER_PORT: String(port),
       TICKETRY_DESKTOP_ACCEPTANCE_SWEEP_MILLIS: "250",
     }, stdout, stderr);
     browser = await connectToStudio(port, child);
-    await openExistingStory(browser, story.taskId);
-    const restoredPanel = await browser.$('[data-testid="terminal-panel"]');
-    if (await restoredPanel.isDisplayed().catch(() => false)) {
-      const restoredShell = await browser.$("aria/Shell 1");
-      await restoredShell.waitForDisplayed({ timeout: 20_000 });
-      if (!existsSync(tools.marker)) {
-        await click(await browser.$("aria/Close shell 1"));
-        await restoredShell.waitForDisplayed({ timeout: 20_000, reverse: true });
-        await waitForTmuxEmpty(root);
-      }
-      await click(await browser.$("aria/Minimize terminal panel"));
+    await waitForMcpPing(rotatedMcpUrl, child);
+    if (!mcpBlocker.listening) {
+      throw new Error("the port 8123 reservation ended before desktop startup completed");
     }
-    story.launch = await browser.$("aria/Run agent");
+    const story = await createStoryThroughStudio(browser, workspaceDirectory);
     await waitForState(browser, "Ideas");
     writeFileSync(path.join(root, "provider-task"), `${story.taskId}\nCoding\n`);
     if (!existsSync(tools.marker)) {
@@ -484,6 +530,9 @@ async function main() {
     const provider = JSON.parse(readFileSync(tools.marker, "utf8"));
     if (provider.task_id !== story.taskId || provider.cwd !== workspaceDirectory) {
       throw new Error("the disposable provider did not receive Ticketry's task and CWD");
+    }
+    if (provider.mcp_url !== rotatedMcpUrl || provider.mcp_authorization !== true) {
+      throw new Error("the disposable provider did not receive Ticketry's rotated MCP authority");
     }
     const inventory = tmuxInventory(root);
     if (inventory.includes("<no private tmux sessions>") || !inventory.includes("|0|")) {
@@ -559,13 +608,16 @@ async function main() {
         throw new Error(`the disposable provider did not report ${event} through the hook runner`);
       }
     }
+    const mcpEvidence = readFileSync(path.join(root, "provider-mcp.log"), "utf8");
+    if (!mcpEvidence.includes('"ok":true')) {
+      throw new Error("the disposable provider did not report through Ticketry's rotated MCP endpoint");
+    }
     const finalInventory = tmuxInventory(root);
     if (!finalInventory.includes("<no private tmux sessions>")) {
       throw new Error(`private tmux sessions leaked after completion: ${finalInventory.trim()}`);
     }
     console.log("Ticketry desktop agent acceptance passed.");
   } catch (error) {
-    failed = true;
     if (browser) {
       await browser.saveScreenshot(path.join(artifacts, "failure.png")).catch(() => {});
       const diagnostic = await browser.execute(() => ({
@@ -588,18 +640,18 @@ async function main() {
       const source = path.join(root, evidence);
       if (existsSync(source)) copyFileSync(source, path.join(artifacts, evidence));
     }
-    console.error(`Desktop acceptance failed. Artifacts: ${artifacts}`);
+    const retainedArtifacts = path.join(
+      studioRoot,
+      "test-results",
+      `desktop-agent-acceptance-${Date.now()}`,
+    );
+    cpSync(artifacts, retainedArtifacts, { recursive: true });
+    console.error(`Desktop acceptance failed. Artifacts: ${retainedArtifacts}`);
     throw error;
   } finally {
-    if (browser) await browser.deleteSession().catch(() => {});
-    await stopProcess(child);
-    await closeServer(mcpBlocker).catch(() => {});
-    spawnSync(tmux, ["-L", "ticketry-e2e", "kill-server"], {
-      env: { ...process.env, TMUX_TMPDIR: tmuxDirectory },
-      stdio: "ignore",
-    });
-    if (!failed && !retain) rmSync(root, { recursive: true, force: true });
-    else if (!failed) console.log(`Desktop acceptance retained: ${root}`);
+    process.off("SIGINT", handleInterrupt);
+    process.off("SIGTERM", handleTermination);
+    await cleanup();
   }
 }
 

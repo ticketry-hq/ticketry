@@ -60,6 +60,31 @@ impl ProviderContract {
             .lines()
             .any(|line| line.trim_start().starts_with(marker))
     }
+
+    /// The composer line and everything the provider renders below it, with
+    /// terminal control sequences removed. `None` when the marker is absent
+    /// from the capture.
+    ///
+    /// Whether typed text landed is only observable here. A provider that
+    /// collapses a multi-line paste renders a placeholder in place of the
+    /// pasted body, and a provider whose marker *is* the empty composer's
+    /// placeholder stops rendering the marker once the composer holds text.
+    /// Neither shows the payload, so callers compare this region across the
+    /// paste rather than searching the capture for the text itself.
+    pub fn composer_region(self, screen: &[u8]) -> Option<String> {
+        let marker = self.ready_composer_marker?;
+        let rendered = strip_terminal_controls(&String::from_utf8_lossy(screen));
+        let composer = rendered
+            .lines()
+            .position(|line| line.trim_start().starts_with(marker))?;
+        Some(
+            rendered
+                .lines()
+                .skip(composer)
+                .collect::<Vec<_>>()
+                .join("\n"),
+        )
+    }
 }
 
 const CLAUDE_EVENTS: &[&str] = &[
@@ -269,6 +294,30 @@ mod prompt_delivery_contract_tests {
     fn codex_startup_prompt_is_not_a_ready_composer() {
         assert!(!provider_contract(Provider::Codex)
             .is_ready_composer("\u{203a} Selected workflow prompt:\n  Start the task".as_bytes()));
+    }
+
+    #[test]
+    fn the_composer_region_starts_at_the_marker_and_runs_to_the_end_of_the_capture() {
+        let region = provider_contract(Provider::Claude)
+            .composer_region(
+                "transcript above\n\u{276f} [Pasted text #1 +12 lines]\n? for shortcuts".as_bytes(),
+            )
+            .expect("the marker is on screen");
+
+        assert_eq!(
+            region,
+            "\u{276f} [Pasted text #1 +12 lines]\n? for shortcuts"
+        );
+    }
+
+    #[test]
+    fn a_capture_without_the_marker_has_no_composer_region() {
+        assert!(provider_contract(Provider::Codex)
+            .composer_region(b"working")
+            .is_none());
+        let mut contract = provider_contract(Provider::Claude);
+        contract.ready_composer_marker = None;
+        assert!(contract.composer_region("\u{276f} ".as_bytes()).is_none());
     }
 
     #[test]

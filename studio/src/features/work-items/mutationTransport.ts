@@ -94,6 +94,7 @@ export async function transitionWorkItem(
   stateId: string,
   options: WorkItemWriteOptions = {},
 ): Promise<WorkItem> {
+  const client = studioApolloClient();
   const variables = {
     id: compactWorktrackerId(id),
     targetStateId: compactWorktrackerId(stateId),
@@ -103,7 +104,7 @@ export async function transitionWorkItem(
     optimistic: Boolean(options.optimistic),
   });
   try {
-    const { data } = await studioApolloClient().mutate({
+    const { data } = await client.mutate({
       mutation: TransitionWorkTrackerWorkItemDocument,
       variables,
       optimisticResponse: options.optimistic
@@ -116,6 +117,13 @@ export async function transitionWorkItem(
       stateId: item.state,
       rank: item.rank,
     });
+    if (options.moduleId) {
+      await client.query({
+        query: WorkTrackerModuleOpenDocument,
+        variables: { moduleId: compactWorktrackerId(options.moduleId) },
+        fetchPolicy: "network-only",
+      });
+    }
     return item;
   } catch (error) {
     recordStoryMove("transition-failed", {

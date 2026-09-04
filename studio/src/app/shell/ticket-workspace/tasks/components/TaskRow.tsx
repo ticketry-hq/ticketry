@@ -8,6 +8,7 @@ import {
 } from "../TasksPane";
 import {
   AgentStateBadge,
+  AutomationDeliveryChicklet,
   AutomationFailureChicklet,
 } from "../../../../../features/agents/lifecycle";
 import { TEMP_TASK_ID } from "../../../../../features/agents/types";
@@ -257,6 +258,11 @@ function PlanningRowView({
 
       {showAgentBadges ? (
         <>
+          <AutomationDeliveryChicklet
+            issueId={id}
+            descendantIds={descendantIds}
+            className="ml-2"
+          />
           <AutomationFailureChicklet
             issueId={id}
             descendantIds={descendantIds}

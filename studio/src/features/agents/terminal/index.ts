@@ -63,7 +63,10 @@ export {
   type TerminalProvider,
 } from "./presentation/providerPresentation";
 export { isLiveTerminalState } from "./presentation/terminalLiveness";
-export { selectWorkspaceTerminalRuns } from "./runTabRestoration";
+export {
+  excludeResumableTerminalRuns,
+  selectWorkspaceTerminalRuns,
+} from "./runTabRestoration";
 export {
   presentDormantTerminalChips,
   type DormantTerminalChip,

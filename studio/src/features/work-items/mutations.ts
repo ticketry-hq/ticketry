@@ -21,6 +21,7 @@ import {
   storyMoveError,
 } from "./internal/storyMoveDiagnostics";
 import { optimisticCreatedIssue } from "./internal/optimisticCreation";
+import { optimisticTransitionedIssue } from "./internal/optimisticTransition";
 
 export interface ModuleMembership {
   projectId: string;
@@ -160,20 +161,16 @@ export interface SetWorkItemStateArgs { id: string; state: State & { id: string 
 export function useSetWorkItemState() {
   return useApolloWorkItemMutation(
     ({ id, state }: SetWorkItemStateArgs, optimistic) =>
-      transitionWorkItem(id, state.id, { optimistic }),
+      transitionWorkItem(id, state.id, {
+        optimistic,
+        moduleId: optimistic?.module_id ?? undefined,
+      }),
     ({ id }: SetWorkItemStateArgs) => id,
-    (current, { state }) => ({
-      ...current,
-      state_id: compactWorktrackerId(state.id),
-      state_record: {
-        id: compactWorktrackerId(state.id),
-        name: state.name,
-        group: state.group,
-        color: state.color ?? "",
-        sort_order: state.sort_order ?? 0,
-        is_protected: state.is_protected ?? false,
-      },
-    }),
+    (current, { state }) => optimisticTransitionedIssue(
+      studioApolloClient().cache,
+      current,
+      state,
+    ),
   );
 }
 

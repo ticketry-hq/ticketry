@@ -278,6 +278,7 @@ export default function IssueDetail({ issueId }: { issueId: string }) {
           <div className="mb-1 text-xs uppercase tracking-wider text-text-secondary">Description</div>
           <Suspense fallback={null}>
             <DescriptionEditor
+              key={task.id}
               value={descriptionValue}
               onSave={(description) =>
                 editDescription.mutate(

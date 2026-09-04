@@ -138,7 +138,12 @@ describe("overhaul acceptance - module jump badges", () => {
       "⌘0",
     ]);
     expect(firstTab.className).toBe(firstTabClass);
-    expect(firstTab.parentElement).toHaveClass("shrink-0", "max-w-64");
+    const visibleTabs = within(
+      screen.getByRole("tablist", { name: "Project module tabs" }),
+    ).getAllByRole("tab");
+    expect(
+      visibleTabs.every((tab) => tab.parentElement?.classList.contains("w-64")),
+    ).toBe(true);
     expect(badges[0]).toHaveClass("absolute", "pointer-events-none");
     expect(badges[0]).toHaveAttribute("aria-hidden", "true");
     expect(

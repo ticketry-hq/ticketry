@@ -45,7 +45,7 @@ export function InstantSettingsPanel() {
         if (current) {
           setMessage({
             tone: "danger",
-            text: "Instant settings could not be loaded.",
+            text: "Conversation settings could not be loaded.",
           });
         }
       })
@@ -66,9 +66,12 @@ export function InstantSettingsPanel() {
       const persisted = await saveInstantLaunchSettings(draft);
       setSaved(persisted);
       setDraft(persisted);
-      setMessage({ tone: "success", text: "Instant settings saved." });
+      setMessage({ tone: "success", text: "Conversation settings saved." });
     } catch {
-      setMessage({ tone: "danger", text: "Instant settings could not be saved." });
+      setMessage({
+        tone: "danger",
+        text: "Conversation settings could not be saved.",
+      });
     } finally {
       setSaving(false);
     }
@@ -77,9 +80,9 @@ export function InstantSettingsPanel() {
   return (
     <div className="space-y-5">
       <header>
-        <h2 className={SETTINGS_SECTION_HEADING_CLASS}>Instant</h2>
+        <h2 className={SETTINGS_SECTION_HEADING_CLASS}>Conversations</h2>
         <p className="mt-0.5 text-sm text-text-muted">
-          Defaults applied to every new taskless Instant run.
+          Defaults applied to every new conversation.
         </p>
       </header>
 
@@ -93,14 +96,14 @@ export function InstantSettingsPanel() {
             id="instant-initial-prompt-heading"
             className="text-sm font-semibold text-text-primary"
           >
-            Initial prompt
+            Starter prompt
           </h3>
           <p className="mt-0.5 text-sm text-text-muted">
-            Add standing instructions before the request entered for each Instant run.
+            Add standing instructions for every new conversation.
           </p>
         </div>
         <textarea
-          aria-label="Instant initial prompt"
+          aria-label="Conversation starter prompt"
           value={draft.initialPrompt}
           maxLength={MAX_INITIAL_PROMPT_CHARACTERS}
           disabled={loading || saving}
@@ -158,7 +161,7 @@ export function InstantSettingsPanel() {
         </button>
         <button
           type="button"
-          aria-label="Save Instant settings"
+          aria-label="Save conversation settings"
           disabled={loading || saving || !dirty}
           onClick={() => void save()}
           className={settingsButtonClass("primary")}

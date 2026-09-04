@@ -2,15 +2,15 @@ use std::collections::HashSet;
 
 use sea_orm::{
     sea_query::Expr, ActiveModelTrait, ColumnTrait, DatabaseConnection, DatabaseTransaction,
-    EntityTrait, QueryFilter, QueryOrder, Set, TransactionTrait,
+    EntityTrait, QueryFilter, Set, TransactionTrait,
 };
 
-use super::super::fractional_rank;
 use super::super::identifiers::database_uuid;
 use super::super::status_facts::{
     record_work_item, stamp, WorkFactRecorder, WorkItemChange, WorkItemFact, WorkItemIdentity,
 };
 use super::super::CommandError;
+use super::super::{arrival_rank, fractional_rank};
 use crate::work_management::transition_occurrences::{self, NewTransitionOccurrence};
 use ticketry_entities::{issue, issue_type, issue_type_transition, launch_binding, project, state};
 
@@ -345,34 +345,13 @@ async fn transition_rank(
     current: &issue::Model,
     target_id: &str,
 ) -> Result<String, CommandError> {
-    let tail = issue::Entity::find()
-        .filter(issue::Column::ProjectId.eq(&current.project_id))
-        .filter(issue::Column::Type.eq("task"))
-        .filter(issue::Column::StateId.eq(target_id))
-        .filter(issue::Column::IsArchived.eq(false))
-        .filter(issue::Column::Id.ne(&current.id))
-        .order_by_desc(issue::Column::Rank)
-        .order_by_desc(issue::Column::SequenceId)
-        .one(transaction)
-        .await?;
-    let Some(tail) = tail else {
-        return Ok(current.rank.clone());
-    };
-    let successor = issue::Entity::find()
-        .filter(issue::Column::ProjectId.eq(&current.project_id))
-        .filter(issue::Column::Type.eq("task"))
-        .filter(issue::Column::IsArchived.eq(false))
-        .filter(issue::Column::Id.ne(&current.id))
-        .filter(issue::Column::Rank.gt(&tail.rank))
-        .order_by_asc(issue::Column::Rank)
-        .order_by_asc(issue::Column::SequenceId)
-        .one(transaction)
-        .await?;
-    fractional_rank::between(
-        Some(&tail.rank),
-        successor.as_ref().map(|row| row.rank.as_str()),
-    )
-    .map_err(|_| CommandError::validation("An existing work-item rank is invalid."))
+    let rank =
+        arrival_rank::for_work_item(transaction, &current.project_id, Some(target_id)).await?;
+    if rank != current.rank {
+        return Ok(rank);
+    }
+    fractional_rank::between(None, Some(&rank))
+        .map_err(|_| CommandError::validation("An existing work-item rank is invalid."))
 }
 
 async fn next_project_revision(

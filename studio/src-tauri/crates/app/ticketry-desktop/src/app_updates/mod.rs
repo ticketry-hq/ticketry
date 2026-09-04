@@ -2,11 +2,11 @@
 //! restart into the installed version, each a narrow desktop command.
 
 pub(crate) mod acceptance;
+#[cfg(feature = "desktop-acceptance")]
+mod acceptance_tls;
 mod contract;
 pub(crate) mod install;
 mod operation;
-
-use std::env;
 
 use tauri_plugin_updater::{Error as UpdaterError, Updater, UpdaterExt};
 
@@ -33,19 +33,20 @@ fn map_updater_error(error: UpdaterError) -> AppUpdateCheckError {
 
 /// The one updater every update operation goes through.
 ///
-/// `TICKETRY_UPDATE_FEED_URL` replaces the packaged stable channel endpoint so
-/// acceptance runs can serve a locally signed release; without it the packaged
-/// feed in `tauri.conf.json` is the only endpoint.
+/// The packaged feed in `tauri.conf.json` is the only update endpoint.
 fn stable_channel_updater(app: &tauri::AppHandle) -> Result<Updater, AppUpdateCheckError> {
-    let mut updater = app.updater_builder();
+    let updater = app.updater_builder();
 
-    if let Ok(update_feed) = env::var("TICKETRY_UPDATE_FEED_URL") {
-        let endpoint =
-            tauri::Url::parse(&update_feed).map_err(|_| AppUpdateCheckError::invalid_manifest())?;
-        updater = updater
-            .endpoints(vec![endpoint])
-            .map_err(map_updater_error)?;
-    }
+    #[cfg(feature = "desktop-acceptance")]
+    let updater = if let Some(certificate) =
+        acceptance_tls::load_acceptance_ca().map_err(map_updater_error)?
+    {
+        updater.configure_client(move |client| {
+            client.add_root_certificate(certificate.clone())
+        })
+    } else {
+        updater
+    };
 
     updater.build().map_err(map_updater_error)
 }

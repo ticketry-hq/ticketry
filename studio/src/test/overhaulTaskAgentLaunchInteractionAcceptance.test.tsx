@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import {
   providerCapability,
@@ -11,8 +11,36 @@ import {
 import type { WorkspaceLauncherContext } from "./taskAgentLaunchAcceptanceHarness";
 
 describe("overhaul acceptance — task agent launch interaction", () => {
-  it("[overhaul-130] supports keyboard choice and dismisses without stealing focus or pointer actions", async () => {
-    const outsidePress = vi.fn();
+  it("[overhaul-251] opens the shared provider picker from the workspace launcher", async () => {
+    setProviderCapabilities([providerCapability("codex")]);
+    render(
+      workspaceView({
+        launchContext: {
+          kind: "task",
+          taskId: "task-1417",
+          projectId: "project-1417",
+          moduleId: "module-1417",
+        },
+        bucket: "task-1417",
+        projectId: "project-1417",
+        moduleId: "module-1417",
+      }),
+    );
+
+    const launcher = screen.getByRole("button", { name: "＋ Agent" });
+    const tabScroller = screen.getByTestId("workspace-tab-scroll");
+    expect(tabScroller).toHaveClass("overflow-x-auto");
+    expect(tabScroller).not.toContainElement(launcher);
+
+    fireEvent.click(launcher);
+
+    const picker = await screen.findByRole("dialog", { name: "Select Agent" });
+    expect(picker).toHaveTextContent("codex");
+    expect(screen.queryByRole("menu", { name: "Launch agent" }))
+      .not.toBeInTheDocument();
+  });
+
+  it("[overhaul-130] supports keyboard provider choice and returns focus when dismissed", async () => {
     setProviderCapabilities([
       providerCapability("claude"),
       providerCapability("codex"),
@@ -28,38 +56,29 @@ describe("overhaul acceptance — task agent launch interaction", () => {
         bucket: "task-572",
         projectId: "project-572",
         moduleId: "module-572",
-        children: (
-          <button type="button" onPointerDown={outsidePress}>
-            Outside action
-          </button>
-        ),
       }),
     );
 
     const launcher = screen.getByRole("button", { name: "＋ Agent" });
+    launcher.focus();
     fireEvent.click(launcher);
-    expect(screen.getByRole("menuitem", { name: "claude" })).toHaveFocus();
-    fireEvent.keyDown(screen.getByRole("menu"), { key: "End" });
-    expect(screen.getByRole("menuitem", { name: "codex" })).toHaveFocus();
-    fireEvent.keyDown(screen.getByRole("menu"), { key: "Home" });
-    fireEvent.keyDown(screen.getByRole("menu"), { key: "ArrowUp" });
-    expect(screen.getByRole("menuitem", { name: "codex" })).toHaveFocus();
-    fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" });
-    expect(launcher).toHaveFocus();
+    let picker = await screen.findByRole("dialog", { name: "Select Agent" });
+    expect(within(picker).getByRole("button", { name: "Close dialog" }))
+      .toHaveFocus();
+    fireEvent.keyDown(picker, { key: "Escape" });
+    await waitFor(() => expect(launcher).toHaveFocus());
     expect(terminalApi.createTerminalRun).not.toHaveBeenCalled();
 
     fireEvent.click(launcher);
-    fireEvent.pointerDown(screen.getByRole("button", { name: "Outside action" }));
-    expect(outsidePress).toHaveBeenCalledOnce();
-    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
-
-    fireEvent.click(launcher);
-    fireEvent.keyDown(screen.getByRole("menu"), { key: "ArrowDown" });
-    fireEvent.keyDown(screen.getByRole("menuitem", { name: "codex" }), { key: "Enter" });
+    picker = await screen.findByRole("dialog", { name: "Select Agent" });
+    expect(within(picker).getByText("claude")).toBeVisible();
+    expect(within(picker).getByText("codex")).toBeVisible();
+    fireEvent.keyDown(picker, { key: "ArrowDown" });
+    fireEvent.keyDown(picker, { key: "Enter" });
     await waitFor(() => expect(terminalApi.createTerminalRun).toHaveBeenCalledTimes(1));
   });
 
-  it("[overhaul-131] invalidates changed launch context and commits once per intentional opening", async () => {
+  it("[overhaul-131] launches against the task context captured when the picker opens", async () => {
     terminalApi.createTerminalRun
       .mockResolvedValueOnce({ agent_run_id: "run-572-a" })
       .mockResolvedValueOnce({ agent_run_id: "run-572-b" });
@@ -96,54 +115,26 @@ describe("overhaul acceptance — task agent launch interaction", () => {
         moduleId: "module-572",
       });
     const mounted = render(view(context));
-    const launcher = screen.getByRole("button", { name: "＋ Agent" });
-    fireEvent.click(launcher);
-    mounted.rerender(view({ ...context, moduleId: "module-572-alt" }));
-    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
-    expect(terminalApi.createTerminalRun).not.toHaveBeenCalled();
-
     fireEvent.click(screen.getByRole("button", { name: "＋ Agent" }));
-    mounted.rerender(view(context));
-    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
-    expect(terminalApi.createTerminalRun).not.toHaveBeenCalled();
-
-    fireEvent.click(screen.getByRole("button", { name: "＋ Agent" }));
+    const picker = await screen.findByRole("dialog", { name: "Select Agent" });
     mounted.rerender(
       view({ ...context, taskId: "replacement-task" }),
     );
-    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
-    expect(terminalApi.createTerminalRun).not.toHaveBeenCalled();
-
-    mounted.rerender(view(context));
-    fireEvent.click(screen.getByRole("button", { name: "＋ Agent" }));
-    mounted.rerender(view(context, "another-workspace"));
-    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
-
-    mounted.rerender(view(context));
-    fireEvent.click(screen.getByRole("button", { name: "＋ Agent" }));
-    mounted.rerender(
-      view({
-        kind: "scratch",
-        onChooseMode: vi.fn(),
-      }),
-    );
-    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
-    expect(terminalApi.createTerminalRun).not.toHaveBeenCalled();
-
-    mounted.rerender(view(context));
-    fireEvent.click(screen.getByRole("button", { name: "＋ Agent" }));
-    const committedChoice = screen.getByRole("menuitem", { name: "codex" });
-    fireEvent.click(committedChoice);
-    fireEvent.click(committedChoice);
+    fireEvent.click(within(picker).getByText("codex"));
     await waitFor(() => expect(terminalApi.createTerminalRun).toHaveBeenCalledTimes(1));
+    expect(terminalApi.createTerminalRun).toHaveBeenCalledWith(
+      expect.objectContaining({ task_id: "task-572" }),
+    );
     await waitFor(() =>
       expect(useTerminalStore.getState().sessions["terminal-run-572-a"]).toMatchObject({
         taskId: "task-572",
       }),
     );
 
+    mounted.rerender(view(context));
     fireEvent.click(screen.getByRole("button", { name: "＋ Agent" }));
-    fireEvent.click(screen.getByRole("menuitem", { name: "codex" }));
+    const secondPicker = await screen.findByRole("dialog", { name: "Select Agent" });
+    fireEvent.click(within(secondPicker).getByText("codex"));
     await waitFor(() => expect(terminalApi.createTerminalRun).toHaveBeenCalledTimes(2));
     // Launch-state projection can arrive after the tab. Provider fallbacks keep
     // both tabs named and visibly distinct during that gap.

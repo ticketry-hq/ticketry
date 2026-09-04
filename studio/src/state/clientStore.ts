@@ -528,7 +528,11 @@ export const useClientStore = createApolloStore<ClientState>("client", (set, get
     writeSidebarVisible(sidebarVisible);
     set(
       sidebarVisible
-        ? { sidebarVisible: true, editViewBodyEngaged: false }
+        ? {
+            sidebarVisible: true,
+            editViewBodyEngaged: false,
+            focusedPane: "modules",
+          }
         : {
             sidebarVisible: false,
             editViewZone: "stories",

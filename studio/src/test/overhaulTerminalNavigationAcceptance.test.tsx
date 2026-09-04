@@ -98,6 +98,7 @@ function run(
   agentRunId: string,
   taskId: string,
   state: "working" | "exited" | "lost" = "working",
+  providerSessionId: string | null = null,
 ) {
   return {
     agent_run_id: agentRunId,
@@ -105,6 +106,7 @@ function run(
     module_id: "module-1",
     scope: "task" as const,
     state,
+    provider_session_id: providerSessionId,
     started_at: "2026-08-07T12:00:00Z",
     updated_at: "2026-08-07T12:00:00Z",
   };
@@ -503,6 +505,132 @@ describe("overhaul acceptance — terminals", () => {
         expect.objectContaining({ agentRunId: "run-spec-successor" }),
       ]),
     );
+  });
+
+  it("[overhaul-249] resumes one stopped conversation without restoring its stopped peers", async () => {
+    const grill = {
+      agent_run_id: "run-grill",
+      agent: "codex" as const,
+      status: "exited",
+      started_at: "2026-08-07T12:00:00Z",
+      ended_at: "2026-08-07T12:30:00Z",
+      launch_state: "Grill",
+      launch_model: "gpt-5",
+      provider_session_id: "provider-grill",
+      resumed_from: null,
+      scope: "task" as const,
+    };
+    const spec = {
+      ...grill,
+      agent_run_id: "run-spec",
+      started_at: "2026-08-07T13:00:00Z",
+      ended_at: "2026-08-07T13:30:00Z",
+      launch_state: "Spec",
+      provider_session_id: "provider-spec",
+    };
+    terminalReads.readTaskResumableTerminalSessions
+      .mockResolvedValueOnce([grill, spec])
+      .mockResolvedValue([spec]);
+    terminalApi.resumeTerminal.mockResolvedValue({
+      agent_run_id: "run-grill-successor",
+      resumed_from: "run-grill",
+    });
+    useAgentStatusStore.setState({
+      runs: {
+        "run-grill": {
+          ...run("run-grill", "story-1", "working", "provider-grill"),
+          agent: "codex",
+        },
+        "run-spec": {
+          ...run("run-spec", "story-1", "working", "provider-spec"),
+          agent: "codex",
+        },
+      },
+    });
+
+    const view = render(
+      <SelectedTicketContent
+        bucket="story-1"
+        projectId="project-1"
+        moduleId="module-1"
+        owner="studio"
+        details={<div>Issue details</div>}
+      />,
+    );
+
+    const grillResume = await screen.findByRole("button", {
+      name: "Resume Grill codex terminal",
+    });
+    expect(screen.getByRole("button", { name: "Resume Spec codex terminal" }))
+      .toBeEnabled();
+    expect(Object.values(useTerminalStore.getState().sessions)).toHaveLength(0);
+
+    fireEvent.click(grillResume);
+    await waitFor(() => expect(terminalApi.resumeTerminal).toHaveBeenCalledTimes(1));
+    expect(terminalApi.resumeTerminal).toHaveBeenCalledWith(
+      expect.objectContaining({ source: grill }),
+    );
+
+    useAgentStatusStore.setState({
+      runs: {
+        "run-grill": {
+          ...run("run-grill", "story-1", "working", "provider-grill"),
+          agent: "codex",
+        },
+        "run-spec": {
+          ...run("run-spec", "story-1", "working", "provider-spec"),
+          agent: "codex",
+        },
+        "run-grill-successor": {
+          ...run(
+            "run-grill-successor",
+            "story-1",
+            "working",
+            "provider-grill",
+          ),
+          agent: "codex",
+        },
+      },
+    });
+
+    await waitFor(() => {
+      const tabs = Object.values(useTerminalStore.getState().sessions);
+      expect(tabs.filter((tab) => tab.agentRunId === "run-grill-successor"))
+        .toHaveLength(1);
+      expect(tabs.some((tab) => tab.agentRunId === "run-grill")).toBe(false);
+      expect(tabs.some((tab) => tab.agentRunId === "run-spec")).toBe(false);
+    });
+    const resumedTab = Object.values(useTerminalStore.getState().sessions).find(
+      (tab) => tab.agentRunId === "run-grill-successor",
+    );
+    expect(useClientStore.getState().activeByTask["story-1"])
+      .toBe(resumedTab?.sessionId);
+
+    await refreshTerminalHoldings();
+    expect(screen.getByRole("button", { name: "Resume Spec codex terminal" }))
+      .toBeEnabled();
+    expect(screen.queryByRole("button", { name: "Resume Grill codex terminal" }))
+      .not.toBeInTheDocument();
+
+    view.unmount();
+    useTerminalStore.setState({ sessions: {}, sessionByRun: {} });
+    render(
+      <SelectedTicketContent
+        bucket="story-1"
+        projectId="project-1"
+        moduleId="module-1"
+        owner="studio"
+        details={<div>Issue details</div>}
+      />,
+    );
+
+    await screen.findByRole("button", { name: "Resume Spec codex terminal" });
+    await waitFor(() => {
+      expect(Object.values(useTerminalStore.getState().sessions).filter(
+        (tab) => tab.agentRunId === "run-grill-successor",
+      )).toHaveLength(1);
+    });
+    expect(terminalApi.resumeTerminal).toHaveBeenCalledTimes(1);
   });
 
 });

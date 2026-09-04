@@ -15,7 +15,6 @@ use sha2::{Digest, Sha256};
 use super::ownership_manifest::{owned_tables, SchemaGeneration, CURRENT_DJANGO_LEAF, VERSION};
 
 const SNAPSHOT_GENERATIONS: usize = 3;
-const WORKFLOW_HANDOFF_LEDGER_TABLE: &str = "ticketry_workflow_handoff_migration";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -379,7 +378,8 @@ async fn effective_owned_tables(
         super::launch_binding_entry_skill_migration::LEDGER_TABLE,
     )
     .await?;
-    let workflow_handoff_installed = table_exists(database, WORKFLOW_HANDOFF_LEDGER_TABLE).await?;
+    let workflow_handoff_installed =
+        table_exists(database, super::workflow_handoff_migration::LEDGER_TABLE).await?;
     Ok(owned_tables(generation)
         .into_iter()
         .map(|(table, columns)| {

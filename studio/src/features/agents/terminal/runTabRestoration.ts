@@ -32,3 +32,27 @@ export function selectWorkspaceTerminalRuns(
       left.agent_run_id.localeCompare(right.agent_run_id)
     );
 }
+
+/**
+ * Resolve disagreement windows between pushed status and resumable holdings.
+ * A run already proven resumable stays out of restoration even if status calls
+ * it live. Within one provider conversation, only its newest run may restore,
+ * which prevents a stale predecessor reopening beside its live successor.
+ */
+export function excludeResumableTerminalRuns(
+  runs: readonly RunRecord[],
+  knownResumableRunIds: ReadonlySet<string>,
+): readonly RunRecord[] {
+  const latestByConversation = new Map<string, string>();
+  for (const run of runs) {
+    if (run.provider_session_id) {
+      latestByConversation.set(run.provider_session_id, run.agent_run_id);
+    }
+  }
+  const filtered = runs.filter((run) =>
+    !knownResumableRunIds.has(run.agent_run_id) &&
+    (!run.provider_session_id ||
+      latestByConversation.get(run.provider_session_id) === run.agent_run_id)
+  );
+  return filtered.length === runs.length ? runs : filtered;
+}

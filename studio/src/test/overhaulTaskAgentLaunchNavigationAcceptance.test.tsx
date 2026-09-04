@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import {
   terminalApi,
@@ -49,7 +49,8 @@ describe("overhaul acceptance — pending task agent launch navigation", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "＋ Agent" }));
-    fireEvent.click(await screen.findByRole("menuitem", { name: "codex" }));
+    const picker = await screen.findByRole("dialog", { name: "Select Agent" });
+    fireEvent.click(within(picker).getByText("codex"));
     await waitFor(() => expect(terminalApi.createTerminalRun).toHaveBeenCalledOnce());
 
     fireEvent.click(screen.getByRole("tab", { name: "Details" }));

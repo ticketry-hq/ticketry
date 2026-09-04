@@ -93,6 +93,8 @@ vi.doMock("@xterm/addon-web-links", () => ({
 const { SelectedTicketContent } = await import(
   "../app/shell/ticket-workspace/selected-ticket/SelectedTicketContent"
 );
+const { ModalHost } = await import("../app/modal/ModalHost");
+const { useModalStore } = await import("../app/modal/modalStore");
 const { useTerminalStore } = await import("../features/agents/terminal");
 const { setProviderCapabilities } = await import(
   "../features/workflows/providerQueries"
@@ -132,6 +134,7 @@ beforeEach(() => {
     sidebarVisible: true,
   });
   useTerminalStore.setState({ sessions: {}, sessionByRun: {} });
+  useModalStore.setState({ modalStack: [] });
   terminalApi.getDocuments.mockResolvedValue({ documents: [] });
   terminalApi.createTerminalRun.mockResolvedValue({ agent_run_id: "run-570" });
   terminalTransport.attach.mockImplementation((_params, onEvent) => {
@@ -184,6 +187,7 @@ function workspaceView({
         details={<div>Task details</div>}
         launchContext={launchContext}
       />
+      <ModalHost />
     </>
   );
 }

@@ -387,5 +387,23 @@ describe("overhaul acceptance, server-owned workspace tab order", () => {
     ]));
     expect(useClientStore.getState().toasts.at(-1)?.message)
       .toContain("Workspace tabs could not be reordered");
+
+    const transfer = beginDrag("DESIGN", "NOTES", "near");
+    dispatchDrag(workspaceTab("NOTES"), "dragleave", transfer);
+    transfer.dropEffect = "none";
+    dispatchDrag(workspaceTab("DESIGN"), "dragend", transfer);
+
+    await waitFor(() => expect(visibleTabNames()).toEqual([
+      "DESIGN",
+      "NOTES",
+      "codex terminal",
+      "Details",
+    ]));
+    expect(saves).toHaveBeenCalledWith([
+      { kind: "doc", id: "design" },
+      { kind: "doc", id: "notes" },
+      { kind: "terminal", id: "run-1" },
+      { kind: "details" },
+    ]);
   });
 });

@@ -113,7 +113,7 @@ export function SettingsModal() {
               />
               <RailItem
                 active={activeSection === "instant"}
-                label="Instant"
+                label="Conversations"
                 onClick={() => setActiveSection("instant")}
               />
               <RailItem

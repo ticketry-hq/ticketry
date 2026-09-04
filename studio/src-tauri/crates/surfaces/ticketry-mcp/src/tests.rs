@@ -88,6 +88,65 @@ async fn prepare_projects(directory: &tempfile::TempDir) {
 }
 
 #[tokio::test]
+async fn occupied_loopback_listener_is_a_typed_address_in_use_failure() {
+    let directory = tempfile::tempdir().unwrap();
+    let occupied = tokio::net::TcpListener::bind(loopback(0).unwrap())
+        .await
+        .expect("bind occupied listener");
+    let address = occupied.local_addr().expect("read occupied address");
+    let database_path = directory.path().join("state.db");
+    let database = Database::connect(format!("sqlite:{}?mode=rwc", database_path.display()))
+        .await
+        .expect("create empty fixture database");
+    database.close().await.expect("close fixture writer");
+
+    let failure = match McpRuntime::start(McpConfiguration {
+        address,
+        database_path,
+        media_root: directory.path().join("media"),
+        ingress_credential: "fixture-key".to_owned(),
+    })
+    .await
+    {
+        Ok(_) => panic!("occupied listener must reject MCP startup"),
+        Err(failure) => failure,
+    };
+
+    assert!(failure.is_address_in_use());
+    assert!(matches!(failure, McpStartupError::AddressInUse { .. }));
+    let diagnostic = failure.to_string();
+    let detail = diagnostic
+        .strip_prefix("could not bind WorkTracker MCP listener:")
+        .unwrap_or_else(|| panic!("{diagnostic}"));
+    assert!(!detail.trim().is_empty(), "{diagnostic}");
+}
+
+#[tokio::test]
+async fn database_startup_failure_retains_context_without_collision_classification() {
+    let directory = tempfile::tempdir().unwrap();
+
+    let failure = match McpRuntime::start(McpConfiguration {
+        address: loopback(0).unwrap(),
+        database_path: directory.path().to_path_buf(),
+        media_root: directory.path().join("media"),
+        ingress_credential: "fixture-key".to_owned(),
+    })
+    .await
+    {
+        Ok(_) => panic!("a directory cannot be opened as the MCP database"),
+        Err(failure) => failure,
+    };
+
+    assert!(!failure.is_address_in_use());
+    assert!(matches!(failure, McpStartupError::Other { .. }));
+    let diagnostic = failure.to_string();
+    let detail = diagnostic
+        .strip_prefix("could not open WorkTracker commands for MCP:")
+        .unwrap_or_else(|| panic!("{diagnostic}"));
+    assert!(!detail.trim().is_empty(), "{diagnostic}");
+}
+
+#[tokio::test]
 async fn listener_lists_the_thirty_one_tools_and_recovers_on_the_same_port() {
     let directory = tempfile::tempdir().unwrap();
     prepare_projects(&directory).await;

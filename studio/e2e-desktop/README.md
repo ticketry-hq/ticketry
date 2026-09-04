@@ -26,22 +26,22 @@ The UI observes the active run, task and module lifecycle indicators, terminal
 activity, every state move, and the completed run. It also verifies that the
 module aggregate clears after completion. The suite reloads the webview,
 restarts the Rust process over the same isolated data directory, and verifies
-that Done and the completed terminal remain visible. Success and failure both
-stop the app and private tmux server; success removes the temporary profile and
-database.
+that Done and the completed terminal remain visible. Success, failure, and
+interruption stop the app and private tmux server and remove the temporary
+profile and database.
 
-Before the successful run, the harness deliberately occupies Ticketry's MCP
-port. It verifies the native outage warning, proves a local module shell still
-starts, and proves the visible agent action fails closed. It then releases the
-port and restarts the same isolated profile before exercising recovery through
-the successful agent run.
+The harness does not set `MUXED_DESKTOP_MCP_PORT` and holds port 8123 from
+before desktop startup through provider execution. It requires the desktop MCP
+listener to answer on port 8124, checks that the disposable provider receives
+that exact endpoint with non-empty launch authority, and observes the provider
+move the Story through that Ticketry instance.
 
-On failure the temporary directory is retained and its path is printed. Its
-`artifacts/` directory contains a screenshot, DOM and frontend diagnostics,
-Rust stdout/stderr, private tmux inventory and pane output, and disposable
-provider evidence. Direct macOS WKWebView automation cannot produce a
-Playwright trace; the browser-only suite retains Playwright tracing for its own
-seam.
+On failure, diagnostics are copied to the ignored `studio/test-results/`
+directory before the isolated runtime directory is removed. They include a
+screenshot, DOM and frontend diagnostics, Rust stdout/stderr, private tmux
+inventory and pane output, and disposable provider evidence. Direct macOS
+WKWebView automation cannot produce a Playwright trace; the browser-only suite
+retains Playwright tracing for its own seam.
 
 Prerequisites are macOS, Node.js, Rust/Tauri build dependencies, and tmux.
 `TICKETRY_DESKTOP_ACCEPTANCE_TMUX` may point to a nonstandard tmux executable.

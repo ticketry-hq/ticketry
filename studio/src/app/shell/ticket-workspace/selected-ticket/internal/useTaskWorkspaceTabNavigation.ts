@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type RefObject } from "react";
 import { isTypingTarget } from "../../../../../shared/utilities/keyboard";
 import { useClientStore } from "../../../../../state/clientStore";
 import type { WorkspaceTabIdentity } from "../../../../../features/workspace-tabs/types";
@@ -101,6 +101,7 @@ export function useTaskWorkspaceTabNavigation({
   selectTab,
   diveTab,
   engageTab,
+  launcherTriggerRef,
   onBeforeFirst,
   modal = false,
 }: {
@@ -111,6 +112,7 @@ export function useTaskWorkspaceTabNavigation({
   selectTab: (tab: TaskWorkspaceTabIdentity) => void;
   diveTab: (tab: TaskWorkspaceTabIdentity, activate: boolean) => void;
   engageTab: (tab: TaskWorkspaceTabIdentity) => void;
+  launcherTriggerRef: RefObject<HTMLButtonElement>;
   /** Continue a host's horizontal axis left of the pinned Details tab. */
   onBeforeFirst?: () => void;
   /** Mounted overlay workspaces take modal ownership ahead of background hosts. */
@@ -149,6 +151,10 @@ export function useTaskWorkspaceTabNavigation({
         return "acted";
       }
       if (actionId === "commit-highlight") {
+        if (document.activeElement === launcherTriggerRef.current) {
+          launcherTriggerRef.current?.click();
+          return "acted";
+        }
         diveTab(highlightedTab, true);
         return "acted";
       }
@@ -157,11 +163,31 @@ export function useTaskWorkspaceTabNavigation({
         return "acted";
       }
 
+      const launcher = launcherTriggerRef.current;
+      if (
+        actionId === "highlight-previous" &&
+        launcher &&
+        document.activeElement === launcher
+      ) {
+        highlightTab(tabs[tabs.length - 1]);
+        launcher.closest<HTMLElement>('[role="tablist"]')?.focus({
+          preventScroll: true,
+        });
+        return "acted";
+      }
       const currentIndex = Math.max(
         0,
         tabs.findIndex((tab) => sameTab(tab, highlightedTab)),
       );
       const delta = actionId === "highlight-next" ? 1 : -1;
+      if (
+        delta > 0 &&
+        currentIndex === tabs.length - 1 &&
+        launcher
+      ) {
+        launcher.focus({ preventScroll: true });
+        return "acted";
+      }
       const nextIndex = Math.min(
         tabs.length - 1,
         Math.max(0, currentIndex + delta),

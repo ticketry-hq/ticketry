@@ -17,6 +17,15 @@ export type {
   ModuleLifecycleState,
   TaskLifecycleChip,
 } from "./selectors";
+export {
+  AUTOMATION_DELIVERY_PRESENTATION,
+  selectTaskAutomationDelivery,
+} from "./automationDelivery";
+export type {
+  AutomationDelivery,
+  AutomationDeliveryMode,
+  AutomationDeliveryPresentation,
+} from "./automationDelivery";
 export { isAgentlessRun, SHELL_RUN_SCOPE } from "./runScopes";
 export { ModuleLifecycleChicklets } from "./ModuleLifecycleChicklets";
 export {
@@ -29,6 +38,7 @@ export {
   useScratchRunIds,
   useTaskAgentLifecycle,
   useTaskAutomationAttempts,
+  useTaskAutomationDelivery,
   useTaskLifecycleChips,
   useTaskRunCount,
 } from "./hooks";

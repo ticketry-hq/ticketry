@@ -1,65 +1,40 @@
-//! One launch attempt, traced through to a timed report.
+//! One policy-driven launch, traced through to a timed report.
 //!
-//! This is the Story's purpose asserted directly: a launch driven through the
-//! probes produces a report that names the last stage reached and the elapsed
-//! time between stages — for a launch that completes, and for one made to fail
-//! at a chosen stage.
-//!
-//! The probes write to the process log and the reader reads it back, so the
-//! record contract, the log, and the reader are exercised together rather than
-//! separately.
+//! The backend half runs through the desktop execution composition: a real
+//! database, launch policy, `TerminalLaunchService`, disposable provider, and
+//! private tmux server. Launch execution stops at prompt delivery; the report
+//! also includes commit-time visibility records. Workspace render belongs to
+//! the webview.
 
+mod common;
+
+use common::execution_fixture as fixture;
+use common::execution_harness::ExecutionHarness;
+use sea_orm::{ConnectionTrait, DbBackend, Statement};
 use ticketry_diagnostics::configure_process_file_log;
 use ticketry_diagnostics::{
-    self as trace, launch_trace_for_launch_attempt as report_for_launch_attempt,
-    launch_trace_records_from_log as records_from_log, render_launch_trace as render,
-    LaunchSurface, TraceVerdict,
+    self as trace, launch_trace_for_agent_run as report_for_agent_run,
+    launch_trace_records_from_log as records_from_log, render_launch_trace as render, TraceVerdict,
 };
 
-/// Drives every stage of one launch, refusing at `refuse_at` when given.
-async fn drive_launch(agent_run_id: &str, refuse_at: Option<&'static str>) -> String {
-    trace::requested_by(LaunchSurface::RunNow, async {
-        let attempt = trace::current().expect("an attempt");
-        attempt.note(|facts| {
-            facts.project_id = Some("project-1".to_owned());
-            facts.work_item_id = Some("item-1".to_owned());
-            facts.provider = Some("claude".to_owned());
-            facts.model = Some("opus".to_owned());
-            facts.scope = Some("task".to_owned());
-        });
-        for stage in [
-            trace::REQUESTED,
-            trace::POLICY_EVALUATED,
-            trace::AUTHORITY_RESOLVED,
-        ] {
-            if refuse_at == Some(stage) {
-                trace::refused(stage, "refused_for_this_test").record();
-                return attempt.id().to_owned();
-            }
-            trace::admitted(stage).record();
-        }
-        trace::attempt_committed(agent_run_id);
-        for stage in [
-            trace::DIRECTORY_PREFLIGHTED,
-            trace::EXECUTABLE_RESOLVED,
-            trace::PROVIDER_VALIDATED,
-            trace::ARGV_MATERIALISED,
-            trace::RUNTIME_SPAWNED,
-            trace::PROMPT_DELIVERED,
-        ] {
-            if refuse_at == Some(stage) {
-                trace::refused(stage, "refused_for_this_test").record();
-                return attempt.id().to_owned();
-            }
-            trace::admitted(stage).record();
-        }
-        attempt.id().to_owned()
-    })
-    .await
+#[test]
+fn one_policy_launch_produces_one_ordered_timed_backend_report() {
+    std::thread::Builder::new()
+        .name("launch-trace-acceptance".to_owned())
+        .stack_size(8 * 1024 * 1024)
+        .spawn(|| {
+            tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .expect("a Tokio runtime")
+                .block_on(assert_policy_launch_trace());
+        })
+        .expect("a test thread")
+        .join()
+        .expect("the launch-trace acceptance thread");
 }
 
-#[tokio::test]
-async fn one_development_launch_produces_one_ordered_timed_report() {
+async fn assert_policy_launch_trace() {
     let directory = tempfile::tempdir().expect("a log directory");
     let log = configure_process_file_log(true, directory.path(), None);
     assert!(
@@ -67,76 +42,93 @@ async fn one_development_launch_produces_one_ordered_timed_report() {
         "the probes need a log to write to for this assertion"
     );
 
-    let completed = drive_launch("run-completed", None).await;
-    let refused = drive_launch("run-refused", Some(trace::EXECUTABLE_RESOLVED)).await;
+    let mut harness = ExecutionHarness::start().await;
+    let moved = harness.set_state(fixture::READY_FIRST, "Implement").await;
+    assert_eq!(moved["ok"].as_bool(), Some(true), "{moved}");
+    harness.restart().await;
+    let database = harness.database().await;
+    let agent_run_id: String = database
+        .query_one_raw(Statement::from_string(
+            DbBackend::Sqlite,
+            format!(
+                "SELECT id AS agent_run_id FROM agent_runs WHERE issue_id='{}'",
+                fixture::READY_FIRST
+            ),
+        ))
+        .await
+        .expect("read the launched run")
+        .expect("the auto-start transition launches one run")
+        .try_get("", "agent_run_id")
+        .expect("read the Agent Run identity");
+    harness.shutdown().await;
 
     let text = std::fs::read_to_string(log.path().expect("a log path")).expect("read the log");
     let records = records_from_log(&text);
-    assert!(
-        !records.is_empty(),
-        "the probes must have written records: {text}"
-    );
+    let report = report_for_agent_run(&records, &agent_run_id);
 
-    // A launch that travelled the whole path.
-    let report = report_for_launch_attempt(&records, &completed);
-    assert_eq!(report.agent_run_id.as_deref(), Some("run-completed"));
-    assert_eq!(report.provider.as_deref(), Some("claude"));
+    assert_eq!(report.agent_run_id.as_deref(), Some(agent_run_id.as_str()));
+    assert_eq!(
+        report.provider.as_deref(),
+        Some("codex"),
+        "{}",
+        render(&report)
+    );
     assert_eq!(
         report.last_stage_reached.as_deref(),
-        Some(trace::PROMPT_DELIVERED),
-        "the report must name the last stage reached: {}",
+        Some("wake-up-published"),
+        "{}",
         render(&report)
     );
     assert!(
         matches!(report.verdict, TraceVerdict::Incomplete { .. }),
-        "a launch with no workspace render has not completed its path: {:?}",
-        report.verdict
+        "a backend launch is incomplete until the webview renders it: {}",
+        render(&report)
     );
+
+    let expected_stages = [
+        trace::REQUESTED,
+        trace::POLICY_EVALUATED,
+        trace::COMMIT_STAGES[0],
+        trace::JOIN_STAGE,
+        trace::DIRECTORY_PREFLIGHTED,
+        trace::EXECUTABLE_RESOLVED,
+        trace::PROVIDER_VALIDATED,
+        trace::ARGV_MATERIALISED,
+        trace::RUNTIME_SPAWNED,
+        trace::PROMPT_DELIVERED,
+        trace::VISIBILITY_STAGES[0],
+    ];
+    let actual = report
+        .stages
+        .iter()
+        .map(|stage| stage.event.as_str())
+        .collect::<Vec<_>>();
     assert_eq!(
-        report.stages.first().map(|stage| stage.event.as_str()),
-        Some(trace::REQUESTED)
+        actual,
+        expected_stages,
+        "the report must reflect the production policy-launch path: {}",
+        render(&report)
     );
     assert!(
+        report.stages.iter().all(|stage| stage.occurrences == 1),
+        "each backend stage must be emitted exactly once per launch: {}",
+        render(&report)
+    );
+    assert_eq!(
         report
             .stages
             .iter()
-            .skip(1)
-            .all(|stage| stage.elapsed_from_previous_ms.is_some()),
-        "every stage after the first must carry its elapsed time"
+            .filter(|stage| stage.elapsed_from_previous_ms.is_none())
+            .count(),
+        1,
+        "one wall-clock stage starts the timer and every other stage has a delta: {}",
+        render(&report)
     );
     assert!(
         report.total_elapsed_ms.is_some(),
-        "the report must time the whole launch"
+        "the report must time the launch"
     );
 
-    // A launch made to fail at a chosen stage.
-    let refused_report = report_for_launch_attempt(&records, &refused);
-    assert_eq!(
-        refused_report.verdict,
-        TraceVerdict::Refused {
-            stage: trace::EXECUTABLE_RESOLVED.to_owned(),
-            reason: Some("refused_for_this_test".to_owned()),
-        },
-        "{}",
-        render(&refused_report)
-    );
-    assert_eq!(
-        refused_report.last_stage_reached.as_deref(),
-        Some(trace::EXECUTABLE_RESOLVED)
-    );
-    assert!(
-        refused_report
-            .stages
-            .iter()
-            .any(|stage| stage.event == trace::ARGV_MATERIALISED)
-            .eq(&false),
-        "a refused launch must not report stages it never reached"
-    );
-
-    // The two launches are separate reports, not one merged path.
-    assert_ne!(report.launch_attempt_id, refused_report.launch_attempt_id);
-
-    // The trace carries no prompt text, credentials, environment, or argv.
     for forbidden in ["--permission-mode", "--dangerously", "Authorization"] {
         assert!(
             !text.contains(forbidden),

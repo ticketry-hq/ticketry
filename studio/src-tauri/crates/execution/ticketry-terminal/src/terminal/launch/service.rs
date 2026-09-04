@@ -188,21 +188,6 @@ impl TerminalLaunchService {
             return Err(error);
         }
         trace::admitted(trace::REQUESTED).record();
-        if participant.is_none() && policy_launch_state.is_none() {
-            if let Some(surface) = interactive_launch_surface(&request) {
-                trace::LaunchRequestedRecord {
-                    launch_attempt_id: &request.client_request_id,
-                    surface,
-                    project_id: Some(&request.project_id),
-                    work_item_id: Some(&request.issue_id),
-                    provider_slug: request.provider.as_deref(),
-                    model: request.model.as_deref(),
-                    reasoning_level: request.reasoning.as_deref(),
-                    scope: Some(request.kind.scope()),
-                }
-                .record();
-            }
-        }
         crate::terminal::resume::validate_resume_request(&self.database, &request).await?;
         self.validate_scope(&request).await?;
         self.runtime.preflight(&request).await?;
@@ -423,21 +408,6 @@ impl TerminalLaunchService {
             .await?;
         Ok(authoritative)
     }
-}
-
-fn interactive_launch_surface(
-    request: &CreateTerminalSession,
-) -> Option<trace::LaunchRequestSurface> {
-    if request.kind == ticketry_launch::TerminalLaunchKind::Shell
-        || request.resume_from_agent_run_id.is_some()
-    {
-        return None;
-    }
-    if request.provider.is_some() {
-        return Some(trace::LaunchRequestSurface::StudioLaunchPicker);
-    }
-    (request.kind == ticketry_launch::TerminalLaunchKind::Task)
-        .then_some(trace::LaunchRequestSurface::DefaultCodingAgent)
 }
 
 pub(super) fn compact(value: &str) -> String {

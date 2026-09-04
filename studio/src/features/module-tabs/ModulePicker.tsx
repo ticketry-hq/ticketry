@@ -81,8 +81,13 @@ export function ModulePicker({
   }
 
   function closeAndRestoreFocus() {
+    // Move focus before unmounting the dialog. Waiting for a post-render effect
+    // lets the edit-view pane focus effects win the same commit intermittently.
+    triggerRef.current?.focus({ preventScroll: true });
     setOpen(false);
-    requestAnimationFrame(() => triggerRef.current?.focus());
+    requestAnimationFrame(() => {
+      triggerRef.current?.focus({ preventScroll: true });
+    });
   }
 
   function handleFocusLeave(event: FocusEvent<HTMLDivElement>) {
@@ -104,6 +109,7 @@ export function ModulePicker({
   function handlePickerKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     if (event.key === "Escape") {
       event.preventDefault();
+      event.stopPropagation();
       closeAndRestoreFocus();
       return;
     }

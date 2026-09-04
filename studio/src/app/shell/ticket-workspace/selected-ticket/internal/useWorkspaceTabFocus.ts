@@ -12,6 +12,7 @@ import {
 import type { EditViewZone } from "../../../../../state/clientStore";
 import type { TabKind } from "../../../../../features/agents/types";
 import type { TaskWorkspaceTabIdentity } from "./useTaskWorkspaceTabNavigation";
+import { isDialogFocusTarget } from "../../../../../shared/utilities/keyboard";
 
 export function useRekeyedTerminalFocus({
   activeTerminalId,
@@ -99,6 +100,7 @@ export function useEditViewWorkspaceFocus({
 
   useEffect(() => {
     if (!isEditView) return;
+    if (isDialogFocusTarget(document.activeElement)) return;
     if (editViewZone === "tab-strip") {
       if (document.activeElement !== tabStripRef.current) {
         tabStripRef.current?.focus({ preventScroll: true });

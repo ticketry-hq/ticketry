@@ -2,13 +2,13 @@ import type { WorkItem, WorkItemCreate } from "../../shared/api/types";
 import { compactWorktrackerId } from "../../shared/api/generatedWorktracker";
 import { studioApolloClient } from "../../shared/apollo/client";
 import {
+  UpdateWorkTrackerWorkItemDetailsDocument,
   CreateWorkTrackerWorkItemDocument,
   DeleteWorkTrackerWorkItemDocument,
   ReorderWorkTrackerWorkItemDocument,
   ReparentWorkTrackerWorkItemDocument,
   SetWorkTrackerBlockersDocument,
   TransitionWorkTrackerWorkItemDocument,
-  UpdateWorkTrackerWorkItemDocument,
   WorkTrackerModuleOpenDocument,
 } from "./generated/workItems.documents";
 import type { GeneratedWorkTrackerWorkItemFieldsFragment } from "./generated/workItems.documents";
@@ -75,7 +75,7 @@ export async function updateWorkItem(
   options: WorkItemWriteOptions = {},
 ): Promise<WorkItem> {
   const { data } = await studioApolloClient().mutate({
-    mutation: UpdateWorkTrackerWorkItemDocument,
+    mutation: UpdateWorkTrackerWorkItemDetailsDocument,
     variables: {
       id: compactWorktrackerId(id),
       name: patch.name,
@@ -168,6 +168,8 @@ export async function setWorkItemBlockers(
     optimisticResponse: options.optimistic
       ? { update_work_item: options.optimistic }
       : undefined,
+    refetchQueries: [WorkTrackerModuleOpenDocument],
+    awaitRefetchQueries: true,
   });
   return workItemFromIssue(data!.update_work_item);
 }

@@ -129,7 +129,14 @@ describe("Ghostty WASM surface activity", () => {
     expect(nextFrame).toBe(requestsBeforeHiddenOutput);
     expect(doubles.renderer.paint).not.toHaveBeenCalled();
 
-    doubles.core.frame.mockReturnValueOnce({ dirty: "full" } as never);
+    doubles.core.frame.mockReturnValueOnce({
+      dirty: "full",
+      rows: 1,
+      dirtyRows: [{
+        y: 0,
+        cells: [{ text: "hi" }],
+      }],
+    } as never);
     surface.setActive(true);
     paintFrames();
 
@@ -139,6 +146,8 @@ describe("Ghostty WASM surface activity", () => {
     expect(doubles.coreConstructions).toHaveBeenCalledTimes(1);
     expect(transport.attach).toHaveBeenCalledTimes(1);
     expect(host.querySelector("canvas")).not.toBeNull();
+    expect(host.querySelector('[data-testid="ghostty-wasm-output"]'))
+      .toHaveTextContent("hi");
 
     surface.detach();
     expect(client.detach).toHaveBeenCalledTimes(1);

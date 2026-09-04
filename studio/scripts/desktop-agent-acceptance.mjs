@@ -24,7 +24,9 @@ const builtBinary = process.env.TICKETRY_DESKTOP_ACCEPTANCE_BINARY
   ?? path.join(studioRoot, "src-tauri", "target", "debug", "ticketry");
 const tmux = process.env.TICKETRY_DESKTOP_ACCEPTANCE_TMUX
   ?? ["/opt/homebrew/bin/tmux", "/usr/local/bin/tmux", "/usr/bin/tmux"].find(existsSync);
-const rotatedMcpUrl = "http://127.0.0.1:8124/mcp";
+const mcpPort = 8123;
+const rotatedMcpPort = 8124;
+const rotatedMcpUrl = `http://127.0.0.1:${rotatedMcpPort}/mcp`;
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
@@ -56,6 +58,17 @@ async function occupyPort(port) {
     server.listen({ host: "127.0.0.1", port }, resolve);
   });
   return server;
+}
+
+async function portIsOccupied(port) {
+  return await new Promise((resolve) => {
+    const socket = net.createConnection({ host: "127.0.0.1", port });
+    socket.once("connect", () => {
+      socket.destroy();
+      resolve(true);
+    });
+    socket.once("error", () => resolve(false));
+  });
 }
 
 async function closeServer(server) {
@@ -493,9 +506,13 @@ async function main() {
       TMPDIR: runtimeTempDirectory,
       MUXED_OUTPUT_SWEEP_SECONDS: "1",
     };
-    const nextPortReservation = await occupyPort(8124);
+    const nextPortReservation = await occupyPort(rotatedMcpPort);
     await closeServer(nextPortReservation);
-    mcpBlocker = await occupyPort(8123);
+    try {
+      mcpBlocker = await occupyPort(mcpPort);
+    } catch (error) {
+      if (error?.code !== "EADDRINUSE") throw error;
+    }
     child = spawnTicketry(binary, {
       ...applicationEnvironment,
       TAURI_WEBDRIVER_PORT: String(port),
@@ -503,8 +520,10 @@ async function main() {
     }, stdout, stderr);
     browser = await connectToStudio(port, child);
     await waitForMcpPing(rotatedMcpUrl, child);
-    if (!mcpBlocker.listening) {
-      throw new Error("the port 8123 reservation ended before desktop startup completed");
+    if (!(mcpBlocker?.listening || await portIsOccupied(mcpPort))) {
+      throw new Error(
+        `the port ${mcpPort} reservation ended before desktop startup completed`,
+      );
     }
     const story = await createStoryThroughStudio(browser, workspaceDirectory);
     await waitForState(browser, "Ideas");
@@ -548,7 +567,8 @@ async function main() {
     await moduleActivity.waitForDisplayed({ timeout: 30_000 });
     const terminalTab = await browser.$("aria/Ideas codex terminal");
     await terminalTab.waitForDisplayed({ timeout: 30_000 });
-    await (await browser.$("aria/Agent is actively working")).waitForDisplayed({ timeout: 30_000 });
+    await (await terminalTab.$("aria/Agent is actively working"))
+      .waitForDisplayed({ timeout: 30_000 });
 
     for (const state of ["Implement", "Review", "Done"]) {
       writeFileSync(path.join(root, `advance-${state}`), "");
@@ -564,19 +584,27 @@ async function main() {
       timeoutMsg: "the module lifecycle badge did not clear after completion",
     });
 
-    const openTerminalPanel = await browser.$("aria/Open terminal panel");
-    if (await openTerminalPanel.isDisplayed().catch(() => false)) {
-      await click(openTerminalPanel);
+    if (!await (await browser.$('[data-testid="terminal-panel"]'))
+      .isDisplayed().catch(() => false)) {
+      await click(await browser.$("aria/Open terminal panel"));
     }
-    const completedShell = await browser.$("aria/Shell 1");
-    if (await completedShell.isDisplayed().catch(() => false)) {
-      await click(await browser.$("aria/Close shell 1"));
-      await completedShell.waitForDisplayed({ timeout: 20_000, reverse: true });
-    }
-    const minimizeCompletedPanel = await browser.$("aria/Minimize terminal panel");
-    if (await minimizeCompletedPanel.isDisplayed().catch(() => false)) {
-      await click(minimizeCompletedPanel);
-    }
+    await (await browser.$("aria/Shell 1")).waitForDisplayed({ timeout: 20_000 });
+    await click(await browser.$("aria/Close shell 1"));
+    await browser.waitUntil(async () =>
+      !await (await browser.$("aria/Shell 1")).isDisplayed().catch(() => false), {
+      timeout: 20_000,
+      timeoutMsg: "the closed module shell tab remained visible",
+    });
+    // Closing the shell replaces the panel header. Resolve the minimize
+    // control afterward so WebDriver cannot silently keep a stale element and
+    // leave the panel persisted open for the restart check.
+    await click(await browser.$("aria/Minimize terminal panel"));
+    await (await browser.$("aria/Open terminal panel"))
+      .waitForDisplayed({ timeout: 20_000 });
+    // Panel visibility is intentionally debounced for local persistence. Let
+    // that write settle before reloading or the new webview restores it open
+    // and creates a fresh shell during the restart assertion.
+    await new Promise((resolve) => setTimeout(resolve, 500));
 
     await browser.refresh();
     await openExistingStory(browser, story.taskId);

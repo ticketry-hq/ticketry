@@ -38,6 +38,18 @@ describe("Apollo normalized entity identities", () => {
     });
   });
 
+  it("gives compact and hyphenated UUIDs one cache identity", () => {
+    const cache = new InMemoryCache({ typePolicies });
+
+    expect(cache.identify({
+      __typename: "WorktrackerIssue",
+      id: "8f6aee39-ade4-41ff-9d4c-26f8a504f8de",
+    })).toBe(cache.identify({
+      __typename: "WorktrackerIssue",
+      id: "8f6aee39ade441ff9d4c26f8a504f8de",
+    }));
+  });
+
   it("replaces Seaography connection wrappers instead of normalizing them", () => {
     const cache = new InMemoryCache({ typePolicies });
     const query = gql`

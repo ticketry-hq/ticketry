@@ -319,7 +319,9 @@ async function callMcpTool<TResult>(
   name: string,
   arguments_: Record<string, unknown>,
 ): Promise<TResult> {
-  const mcpPort = process.env.MUXED_DESKTOP_MCP_PORT ?? "8123";
+  const mcpPort = process.env.TICKETRY_E2E_MCP_PORT
+    ?? process.env.MUXED_DESKTOP_MCP_PORT
+    ?? "8123";
   const response = await request.post(`http://127.0.0.1:${mcpPort}/mcp`, {
     headers: {
       accept: "application/json, text/event-stream",
@@ -339,6 +341,17 @@ async function callMcpTool<TResult>(
   };
   expect(envelope.result?.structuredContent, responseText).toBeTruthy();
   return envelope.result!.structuredContent!;
+}
+
+async function clearModuleLinkEventually(
+  request: APIRequestContext,
+  moduleId: string,
+): Promise<void> {
+  // A preceding browser terminal can still be releasing its SQLite-backed
+  // viewer lease. Keep this direct fixture mutation outside that brief window.
+  await expect(async () => {
+    await graphql(request, ClearModuleLinkDocument, { moduleId });
+  }).toPass({ timeout: 5_000, intervals: [100, 250, 500] });
 }
 
 test.beforeAll(async ({ request }) => {
@@ -1544,6 +1557,30 @@ test.describe("complete browser application", () => {
       await selectState(page, state);
     }
 
+    // Start the assertion from a settled Review snapshot and an accepted
+    // subscription, rather than racing its five preceding transition events.
+    let statusCaughtUp = false;
+    page.on("console", async (message) => {
+      const values = await Promise.all(
+        message.args().map((argument) => argument.jsonValue()),
+      );
+      const trace = values[1];
+      if (
+        values[0] === "[launch-discovery]"
+        && typeof trace === "object"
+        && trace !== null
+        && "event" in trace
+        && trace.event === "caught-up"
+      ) statusCaughtUp = true;
+    });
+    const subscribed = page.waitForResponse((response) =>
+      response.url().endsWith("/graphql/subscribe") && response.ok()
+    );
+    await page.reload();
+    await subscribed;
+    await expect.poll(() => statusCaughtUp).toBe(true);
+    await expect(page.getByTestId("status-row")).toContainText("Review");
+
     const result = await callMcpTool<{ ok?: boolean; task_id?: string }>(
       request,
       2,
@@ -1678,7 +1715,13 @@ test.describe("complete browser application", () => {
     await expect(actions).toBeFocused();
 
     await page.getByRole("button", { name: "Add blocker" }).click();
+    const blockerRelationshipsRefreshed = page.waitForResponse((response) =>
+      response.url().endsWith("/graphql") &&
+      response.request().postDataJSON()?.operationName ===
+        "WorkTrackerModuleOpen"
+    );
     await page.getByRole("button", { name: new RegExp(names.blocker) }).click();
+    await blockerRelationshipsRefreshed;
     await expect(page.getByTestId("blocked-by-row")).toContainText(
       fixture.blocker.key,
     );
@@ -1809,12 +1852,16 @@ test.describe("complete browser application", () => {
     await expect(handle).toHaveAttribute("role", "separator");
     await expect(handle).toHaveAttribute("aria-label", "Resize adjacent panes");
     const before = Number(await handle.getAttribute("aria-valuenow"));
+    const minimum = Number(await handle.getAttribute("aria-valuemin"));
+    const maximum = Number(await handle.getAttribute("aria-valuemax"));
     const box = await handle.boundingBox();
     expect(box).toBeTruthy();
+    const delta = before + 5 < maximum ? 90 : before - 5 > minimum ? -90 : 0;
+    expect(delta).not.toBe(0);
 
     await page.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 2);
     await page.mouse.down();
-    await page.mouse.move(box!.x + 90, box!.y + box!.height / 2, { steps: 12 });
+    await page.mouse.move(box!.x + delta, box!.y + box!.height / 2, { steps: 12 });
     await page.mouse.up();
     await expect.poll(async () => Number(
       await handle.getAttribute("aria-valuenow"),
@@ -2049,6 +2096,7 @@ test.describe("complete browser application", () => {
         await graphql(request, CreateWorkTrackerTransitionDocument, {
           issueTypeId: fixture.storyType.id,
           agentAllowed: false,
+          handoff: false,
           workflowRevision: await workflowRevision(),
           ...edge,
         });
@@ -2378,6 +2426,7 @@ test.describe("complete browser application", () => {
         fromStateId: origin!.id,
         toStateId: created.id,
         agentAllowed: false,
+        handoff: false,
         workflowRevision: await workflowRevision(),
       });
       const refusedReferenced = await graphqlRefusal(
@@ -2483,6 +2532,7 @@ test.describe("complete browser application", () => {
         fromStateId: from,
         toStateId: to,
         agentAllowed: false,
+        handoff: false,
         workflowRevision: (await workflow()).workflow_revision,
       });
     };
@@ -2583,7 +2633,7 @@ test.describe("complete browser application", () => {
     await expect(crumb).toHaveText(fixture.project.name);
   });
 
-  test("opens and cancels every keyboard launch entry without starting a run", async ({
+  test("opens and cancels keyboard launch dialogs without starting a run", async ({
     page,
   }) => {
     await openModule(page, names.module);
@@ -2601,7 +2651,7 @@ test.describe("complete browser application", () => {
     await expect(picker).toHaveCount(0);
 
     const openPromptAndCancelProvider = async (
-      chord: "Shift+Enter" | "n" | "i",
+      chord: "Shift+Enter" | "n",
       promptText: string,
     ): Promise<void> => {
       await focusCommandLayer();
@@ -2626,8 +2676,6 @@ test.describe("complete browser application", () => {
       "Task-scoped prompt that must not launch.",
     );
     await openPromptAndCancelProvider("n", "Planning prompt that must not launch.");
-    await openPromptAndCancelProvider("i", "Instant prompt that must not launch.");
-
     await expect(page.getByTestId("issue-name")).toContainText(names.blocker);
     await expect(workspaceTabs.getByRole("tab")).toHaveCount(initialTabCount);
   });
@@ -2724,9 +2772,7 @@ test.describe("complete browser application", () => {
     await expect(runNow).toBeVisible();
     await expect(page.getByTestId("status-row")).toContainText("Ideas");
 
-    await graphql(request, ClearModuleLinkDocument, {
-      moduleId: fixture.module.id,
-    });
+    await clearModuleLinkEventually(request, fixture.module.id);
 
     try {
       const refused = page.waitForResponse((response) =>
@@ -2776,8 +2822,8 @@ test.describe("complete browser application", () => {
     );
     await expect(panel.getByRole("tab", { name: "Shell 1" })).toBeVisible();
 
-    const terminalInput = panel.locator(".xterm-helper-textarea");
-    const terminalRows = panel.locator(".xterm-rows");
+    const terminalInput = panel.getByTestId("ghostty-wasm-input");
+    const terminalRows = panel.getByTestId("ghostty-wasm-output");
     await expect(terminalInput).toBeVisible();
     await terminalInput.click();
     await page.keyboard.type("pwd");
@@ -2789,13 +2835,17 @@ test.describe("complete browser application", () => {
     await page.keyboard.press("Enter");
     await expect(terminalRows).toContainText("TICKETRY_PTY_OK");
 
+    // Leave terminal typing mode before exercising the WebView-owned grip.
+    await page.keyboard.press("Meta+Escape");
     const resizeGrip = panel.getByRole("separator", {
       name: "Resize the terminal panel",
     });
     const ordinaryHeight = Number(
       await resizeGrip.getAttribute("aria-valuenow"),
     );
-    await resizeGrip.press("ArrowUp");
+    await resizeGrip.focus();
+    await expect(resizeGrip).toBeFocused();
+    await page.keyboard.press("ArrowUp");
     await expect(resizeGrip).toHaveAttribute(
       "aria-valuenow",
       String(ordinaryHeight + 24),
@@ -2808,7 +2858,8 @@ test.describe("complete browser application", () => {
       String(ordinaryHeight + 24),
     );
     await expect(panel.getByRole("tab", { name: "Shell 1" })).toBeVisible();
-    await expect(panel.locator(".xterm-rows")).toContainText("TICKETRY_PTY_OK");
+    await expect(panel.getByTestId("ghostty-wasm-output"))
+      .toContainText("TICKETRY_PTY_OK");
 
     await panel.getByRole("button", { name: "Maximize terminal panel" }).click();
     await expect(panel.getByRole("button", {
@@ -2915,9 +2966,7 @@ test.describe("complete browser application", () => {
     request,
   }) => {
     await openModule(page, names.secondModule);
-    await graphql(request, ClearModuleLinkDocument, {
-      moduleId: fixture.secondModule.id,
-    });
+    await clearModuleLinkEventually(request, fixture.secondModule.id);
     await page.getByRole("button", { name: "Open terminal panel" }).click();
     const panel = page.getByTestId("terminal-panel");
     const recovery = panel.getByTestId("terminal-panel-folder-required");
@@ -3012,13 +3061,13 @@ test.describe("complete browser application", () => {
     await openModule(page, names.module);
     await page.getByRole("button", { name: "Open terminal panel" }).click();
     const panel = page.getByTestId("terminal-panel");
-    const input = panel.locator(".xterm-helper-textarea");
+    const input = panel.getByTestId("ghostty-wasm-input");
     await expect(input).toBeVisible();
     await input.click();
-    await page.keyboard.insertText("exit 7");
+    await page.keyboard.type("exit 7");
     await page.keyboard.press("Enter");
 
-    await expect(panel.locator(".xterm-rows"))
+    await expect(panel)
       .toContainText("Pane is dead (status 7", { timeout: 15_000 });
     await panel.getByRole("button", { name: "Minimize terminal panel" }).click();
   });
@@ -3050,12 +3099,12 @@ test.describe("complete browser application", () => {
 
     await page.getByRole("button", { name: "Open terminal panel" }).click();
     const panel = page.getByTestId("terminal-panel");
-    const terminalInput = panel.locator(".xterm-helper-textarea");
+    const terminalInput = panel.getByTestId("ghostty-wasm-input");
     await expect(terminalInput).toBeVisible();
     await terminalInput.click();
     await page.keyboard.type("pwd");
     await page.keyboard.press("Enter");
-    await expect(panel.locator(".xterm-rows"))
+    await expect(panel.getByTestId("ghostty-wasm-output"))
       .toContainText(fixture.alternateFolder);
     await panel.getByRole("button", { name: "Close shell 1" }).click();
     await panel.getByRole("button", { name: "Minimize terminal panel" }).click();
@@ -3268,10 +3317,17 @@ test.describe("complete browser application", () => {
       await expect(page.getByRole("status").filter({
         hasText: "Serial subtree run started.",
       })).toBeVisible();
+      const parallelRequested = page.waitForResponse((response) => {
+        const request = response.request();
+        if (!request.url().endsWith("/graphql")) return false;
+        const body = request.postDataJSON();
+        return (
+          body?.operationName === "CreateExecutionGraphRun" ||
+          body?.operationName === "UpdateExecutionGraphRun"
+        ) && body?.variables?.executionMode == null;
+      });
       await runSubtree.click();
-      await expect(page.getByRole("status").filter({
-        hasText: "Subtree run started.",
-      })).toBeVisible();
+      await parallelRequested;
 
       expect(requestedModes).toEqual(["serial", null]);
     } finally {
@@ -3505,6 +3561,19 @@ test.describe("complete browser application", () => {
   test("surfaces and dismisses an agent-launch failure without leaving the workspace", async ({
     page,
   }) => {
+    await page.route("**/graphql", async (route) => {
+      const body = route.request().postDataJSON();
+      if (body?.operationName !== "CreateTerminalSession") {
+        await route.continue();
+        return;
+      }
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          errors: [{ message: "forced browser launch failure" }],
+        }),
+      });
+    });
     await openModule(page, names.module);
     await page.getByRole("treeitem", { name: new RegExp(fixture.parent.key) })
       .click();
@@ -3518,6 +3587,7 @@ test.describe("complete browser application", () => {
     await expect(alert).toHaveCount(0);
     await expect(page.getByTestId("issue-name"))
       .toContainText(/Complete parent(?: renamed)?/);
+    await page.unroute("**/graphql");
   });
 
   test("says whether an automated transition continued a session or started a fresh one", async ({

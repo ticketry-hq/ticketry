@@ -1,5 +1,7 @@
 import type { TypePolicies } from "@apollo/client";
 
+import { compactWorktrackerId } from "../api/generatedWorktracker";
+
 const normalizedEntityKeyFields = {
   WorktrackerProject: ["id"],
   WorktrackerIssue: ["id"],
@@ -30,7 +32,18 @@ export function normalizedEntityPolicies(): TypePolicies {
   const policies: TypePolicies = Object.fromEntries(
     Object.entries(normalizedEntityKeyFields).map(([typename, keyFields]) => [
       typename,
-      { keyFields: [...keyFields] },
+      {
+        keyFields: keyFields.length === 1 && keyFields[0] === "id"
+          ? (object: Readonly<Record<string, unknown>>) => {
+              const id = object.id;
+              if (typeof id !== "string" && typeof id !== "number") return false;
+              const canonicalId = typeof id === "string"
+                ? compactWorktrackerId(id)
+                : id;
+              return `${typename}:${JSON.stringify({ id: canonicalId })}`;
+            }
+          : [...keyFields],
+      },
     ]),
   );
   policies.ProjectRunStatus = {

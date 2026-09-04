@@ -97,6 +97,18 @@ mutation UpdateWorkTrackerWorkItem($id: String!, $name: String, $description: St
   }
 }
 
+mutation UpdateWorkTrackerWorkItemDetails($id: String!, $name: String, $description: String, $issueTypeId: String) {
+  update_work_item(id: $id, name: $name, description: $description, issue_type_id: $issueTypeId) {
+    ...GeneratedWorkTrackerWorkItemFields
+  }
+}
+
+mutation ArchiveWorkTrackerWorkItem($id: String!, $isArchived: Boolean!) {
+  update_work_item(id: $id, is_archived: $isArchived) {
+    ...GeneratedWorkTrackerWorkItemFields
+  }
+}
+
 mutation UpdateWorkTrackerWorkspaceTabOrder($id: String!, $workspaceTabOrder: Json!) {
   update_work_item(id: $id, workspace_tab_order: $workspaceTabOrder) {
     ...GeneratedWorkTrackerWorkItemFields

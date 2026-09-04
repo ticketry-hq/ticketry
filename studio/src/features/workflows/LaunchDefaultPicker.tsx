@@ -44,16 +44,23 @@ export function LaunchDefaultPicker({
   ) => {
     // A model belongs to exactly one provider, and reasoning compatibility is
     // model-specific, so switching provider clears both dependent fields.
+    const nextProvider = field === "provider"
+      ? providerCapabilities.find((candidate) =>
+          candidate.agent === nextFieldValue)
+      : undefined;
     const nextValue = field === "provider"
       ? {
           ...value,
           provider: nextFieldValue,
-          model: "",
+          model: nextProvider?.model_aliases?.[0] ?? "",
           reasoning: "",
         }
       : { ...value, [field]: nextFieldValue };
     onChange(nextValue);
-    if (commit) {
+    // A provider is persisted through its model. Prefer the first catalog
+    // model; if none exists, keep the local selection editable until a model
+    // is entered instead of submitting an invalid provider-only binding.
+    if (commit && (field !== "provider" || !nextValue.provider || nextValue.model)) {
       onCommit?.(nextValue, field);
     }
   };

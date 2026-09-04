@@ -51,7 +51,9 @@ describe("overhaul acceptance — selected Story description", () => {
     ]);
     const updates: Array<Record<string, unknown>> = [];
     const execute: typeof http.executeGraphQl = async (document, variables) => {
-      if (documentOperationName(document) === "UpdateWorkTrackerWorkItem") {
+      if (
+        documentOperationName(document) === "UpdateWorkTrackerWorkItemDetails"
+      ) {
         updates.push(variables as Record<string, unknown>);
       }
       return http.executeGraphQl(document, variables);

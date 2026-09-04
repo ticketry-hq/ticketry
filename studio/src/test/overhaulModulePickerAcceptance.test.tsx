@@ -238,7 +238,11 @@ describe("restore-aware module picker acceptance", () => {
       }),
     );
 
-    expect(useClientStore.getState().selectModule).toHaveBeenCalledWith("module-b");
+    await waitFor(() =>
+      expect(useClientStore.getState().selectModule).toHaveBeenCalledWith(
+        "module-b",
+      )
+    );
     await waitFor(() =>
       expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual([
         "Alpha",
@@ -300,7 +304,11 @@ describe("restore-aware module picker acceptance", () => {
     fireEvent.keyDown(search, { key: "Enter" });
 
     expect(screen.queryByRole("dialog", { name: "Module picker" })).toBeNull();
-    expect(useClientStore.getState().selectModule).toHaveBeenCalledWith("module-b");
+    await waitFor(() =>
+      expect(useClientStore.getState().selectModule).toHaveBeenCalledWith(
+        "module-b",
+      )
+    );
     await waitFor(() =>
       expect(screen.getByRole("tab", { name: "Bravo" })).toHaveAttribute(
         "aria-selected",

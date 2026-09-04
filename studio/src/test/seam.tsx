@@ -562,7 +562,7 @@ class BoundaryFixture implements StudioFixture {
         size: attachment.size, created_at: attachment.created_at,
       })) } } as TResult;
     }
-    if (["UpdateWorkTrackerWorkItem", "TransitionWorkTrackerWorkItem", "ReparentWorkTrackerWorkItem", "SetWorkTrackerBlockers"].includes(documentOperationName(document))) {
+    if (["UpdateWorkTrackerWorkItemDetails", "TransitionWorkTrackerWorkItem", "ReparentWorkTrackerWorkItem", "SetWorkTrackerBlockers"].includes(documentOperationName(document))) {
       const id = fixtureKey(this.items, input.id) ?? input.id!;
       const current = fixtureItem(id);
       if (!current) throw new FoundationGraphQlError("not_found", "Not found");

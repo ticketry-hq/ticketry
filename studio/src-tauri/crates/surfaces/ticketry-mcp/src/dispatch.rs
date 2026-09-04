@@ -511,6 +511,7 @@ async fn create_review_finding(
 ) -> Result<DispatchOutput, CommandError> {
     let project = scope::project(database, principal, string(arguments, "project_id")?).await?;
     let parent = scope::task(database, principal, string(arguments, "parent_id")?).await?;
+    let facts = work_facts(database).await;
     let id = work_items::create_review_finding(
         database,
         work_items::CreateReviewFinding {
@@ -528,6 +529,7 @@ async fn create_review_finding(
                 .unwrap_or_default(),
             note: optional_string(arguments, "note").map(str::to_owned),
         },
+        facts.as_ref(),
     )
     .await?;
     let created = projection::resolve_task(database, &id)

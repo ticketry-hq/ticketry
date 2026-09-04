@@ -1,10 +1,12 @@
 import { expect, test } from "@playwright/test";
 import {
+  ArchiveWorkTrackerWorkItemDocument,
   DeleteWorkTrackerWorkItemDocument,
   UpdateWorkTrackerWorkItemDocument,
 } from "../src/features/work-items/generated/workItems.documents";
 import {
   createWorkItem,
+  getModules,
   getProjects,
   getWorkflowCatalog,
   getWorkItem,
@@ -125,7 +127,7 @@ test.describe("WorkItem update paths", () => {
 
       const archived = (await graphql(
         request,
-        UpdateWorkTrackerWorkItemDocument,
+        ArchiveWorkTrackerWorkItemDocument,
         { id: parent.id, isArchived: true },
       )).update_work_item;
       expect(archived.is_archived).toBe(true);
@@ -136,12 +138,14 @@ test.describe("WorkItem update paths", () => {
           .toBe(true);
       }
       // The module above the archived parent is untouched.
-      expect((await getWorkItem(request, module.id)).is_archived).toBe(false);
+      expect((await getModules(request, project.id))
+        .find((candidate) => candidate.id === module.id)?.is_archived)
+        .toBe(false);
 
       // Archiving is one-way through this patch, by contract.
       const restore = await graphqlRefusal(
         request,
-        UpdateWorkTrackerWorkItemDocument,
+        ArchiveWorkTrackerWorkItemDocument,
         { id: parent.id, isArchived: false },
       );
       expect(restore.message).toContain("cannot be restored by this patch");
@@ -176,7 +180,7 @@ test.describe("WorkItem update paths", () => {
       for (let attempt = 0; attempt < 2; attempt += 1) {
         const result = (await graphql(
           request,
-          UpdateWorkTrackerWorkItemDocument,
+          ArchiveWorkTrackerWorkItemDocument,
           { id: story.id, isArchived: true },
         )).update_work_item;
         expect(result.is_archived, `attempt ${attempt + 1}`).toBe(true);

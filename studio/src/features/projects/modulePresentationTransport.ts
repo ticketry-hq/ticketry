@@ -45,7 +45,8 @@ export async function setModuleTabHidden(
     optimistic: true,
   });
   const rank = current?.module_presentations.nodes.find(
-    (presentation) => presentation.module_id === compactModuleId,
+    (presentation) =>
+      compactWorktrackerId(presentation.module_id) === compactModuleId,
   )?.rank ?? "";
   const { data } = await client.mutate({
     mutation: UpdateWorkTrackerModulePresentationDocument,
@@ -67,24 +68,27 @@ export async function setModuleTabHidden(
           if (!cached) return cached;
           const next = {
             ...presentation,
+            module_id: compactModuleId,
             module: {
               __typename: "WorktrackerIssue" as const,
               id: compactModuleId,
               project_id: variables.projectId,
             },
           };
-          const exists = cached.module_presentations.nodes.some(
-            (row) => row.module_id === compactModuleId,
-          );
+          let replaced = false;
+          const nodes = cached.module_presentations.nodes.flatMap((row) => {
+            if (compactWorktrackerId(row.module_id) !== compactModuleId) {
+              return [row];
+            }
+            if (replaced) return [];
+            replaced = true;
+            return [next];
+          });
           return {
             ...cached,
             module_presentations: {
               ...cached.module_presentations,
-              nodes: exists
-                ? cached.module_presentations.nodes.map((row) =>
-                    row.module_id === compactModuleId ? next : row
-                  )
-                : [...cached.module_presentations.nodes, next],
+              nodes: replaced ? nodes : [...nodes, next],
             },
           };
         },

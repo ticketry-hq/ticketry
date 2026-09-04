@@ -4,7 +4,7 @@ import {
   type APIRequestContext,
   type Page,
 } from "@playwright/test";
-import { UpdateWorkTrackerWorkItemDocument } from "../src/features/work-items/generated/workItems.documents";
+import { UpdateWorkTrackerWorkItemDetailsDocument } from "../src/features/work-items/generated/workItems.documents";
 import {
   acknowledgeOnboarding,
   captureLegacyProductApiRequests,
@@ -190,7 +190,7 @@ test("[overhaul-web-04] refused write visibly rolls back", async ({ page }) => {
       variables?: { id?: string };
     };
     if (
-      body.operationName === "UpdateWorkTrackerWorkItem"
+      body.operationName === "UpdateWorkTrackerWorkItemDetails"
       && body.variables?.id === ids.first.replaceAll("-", "")
     ) {
       await route.fulfill({
@@ -210,7 +210,7 @@ test("[overhaul-web-04] refused write visibly rolls back", async ({ page }) => {
 
 test("[overhaul-web-05] external GraphQL edit appears after canonical refresh", async ({ page, request }) => {
   await openItem(page, "E2E external before");
-  await graphql(request, UpdateWorkTrackerWorkItemDocument, {
+  await graphql(request, UpdateWorkTrackerWorkItemDetailsDocument, {
     id: ids.external,
     name: "E2E external after",
   });
@@ -248,7 +248,7 @@ test("[overhaul-web-12] expansion and collapsed sections survive reload", async 
 test("[overhaul-web-14] reconnect replay closes an offline edit gap", async ({ page, request, context }) => {
   await openItem(page, "E2E second");
   await context.setOffline(true);
-  await graphql(request, UpdateWorkTrackerWorkItemDocument, {
+  await graphql(request, UpdateWorkTrackerWorkItemDetailsDocument, {
     id: ids.second,
     name: "E2E replayed",
   });

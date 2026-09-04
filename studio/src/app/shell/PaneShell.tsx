@@ -1,6 +1,7 @@
 import { forwardRef, useEffect, useRef } from "react";
 import type { FocusedPane } from "../../state/clientStore";
 import { useClientStore } from "../../state/clientStore";
+import { isDialogFocusTarget } from "../../shared/utilities/keyboard";
 
 interface PaneShellProps {
   title?: string;
@@ -47,7 +48,10 @@ export const PaneShell = forwardRef<HTMLDivElement, PaneShellProps>(
     // Bring DOM focus into the pane wrapper when focusedPane changes to us.
     useEffect(() => {
       if (focused && !isWorkspaceZoneHost && innerRef.current) {
-        if (!innerRef.current.contains(document.activeElement)) {
+        if (
+          !isDialogFocusTarget(document.activeElement)
+          && !innerRef.current.contains(document.activeElement)
+        ) {
           innerRef.current.focus({ preventScroll: true });
         }
       }

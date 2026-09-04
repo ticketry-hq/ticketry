@@ -34,7 +34,14 @@ export function routeThreeZoneNavigation(
     return true;
   }
 
-  if (!actionId?.startsWith("edit-view.") || isTypingTarget(event.target)) {
+  if (
+    !actionId?.startsWith("edit-view.")
+    || isTypingTarget(event.target)
+    // ARIA separators own their arrow keys for keyboard resizing. Capturing
+    // those keys here would prevent the focused grip from ever receiving them.
+    || event.target instanceof HTMLElement
+      && event.target.getAttribute("role") === "separator"
+  ) {
     return false;
   }
 

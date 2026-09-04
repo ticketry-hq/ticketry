@@ -618,31 +618,52 @@ test.describe.serial("Documents and Local scratch workspace", () => {
       .getByRole("tab", { name: "REPORT" })).toBeVisible();
   });
 
-  test("[web-scratch-01] exposes scratch modes and Escape restores launcher focus", async ({
+  test("[web-scratch-01] starts a new conversation through the default launch policy", async ({
     page,
   }) => {
     await openModule(page, moduleRow.name);
+    let launchVariables: Record<string, unknown> | undefined;
+    await page.route("**/graphql", async (route) => {
+      const body = route.request().postDataJSON();
+      if (body?.operationName !== "CreateTerminalSession") {
+        await route.continue();
+        return;
+      }
+      launchVariables = body.variables;
+      const runId = "e2e-scratch-run";
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          data: {
+            terminal_session: {
+              __typename: "AgentTerminalSessions",
+              agent_run_id: runId,
+              module_id: body.variables.moduleId,
+              scope: "instant",
+              doc_rel_path: null,
+              created_at: "2026-09-04T12:00:00Z",
+              agent_run: {
+                __typename: "AgentRuns",
+                id: runId,
+                agent: "codex",
+                launch_state: null,
+                launch_model: null,
+              },
+            },
+          },
+        }),
+      });
+    });
     await page
-      .getByRole("treeitem", { name: /Local scratch workspace/ })
+      .getByRole("treeitem", { name: "New conversation" })
       .click();
 
-    const workspaceTabs = page.getByRole("tablist", {
-      name: "Workspace tabs",
-    });
-    const launch = workspaceTabs.getByRole("button", { name: "＋ Agent" });
-    await expect(launch).toBeEnabled();
-    await launch.click();
-
-    const menu = page.getByRole("menu", { name: "Launch agent" });
-    const plan = menu.getByRole("menuitem", { name: "Plan" });
-    await expect(plan).toBeFocused();
-    await expect(menu.getByRole("menuitem", { name: "Instant" })).toBeVisible();
-
-    await page.keyboard.press("Escape");
-    await expect(menu).toHaveCount(0);
-    await expect(launch).toBeFocused();
-    await expect(workspaceTabs.getByRole("tab")).toHaveCount(1);
-    await expect(page.getByText("No active Scratch runs.")).toBeVisible();
+    await expect.poll(() => launchVariables).toMatchObject({ kind: "instant" });
+    expect(launchVariables).not.toHaveProperty("provider");
+    expect(launchVariables).not.toHaveProperty("model");
+    expect(launchVariables).not.toHaveProperty("reasoning");
+    expect(launchVariables).not.toHaveProperty("prompt");
     await expect(page.getByRole("dialog")).toHaveCount(0);
+    await page.unroute("**/graphql");
   });
 });

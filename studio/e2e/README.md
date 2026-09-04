@@ -70,9 +70,9 @@ retired `/api/work-tracker` surface.
   stale-digest overwrite, and reload persistence, plus sandboxed HTML rendering
   with Rust-served sibling assets, symlink-escape refusal, and verified
   parent-page isolation;
-- Local scratch workspace Plan/Instant launcher-menu behavior without starting
-  a real provider process, plus keyboard task-agent, prompted-task, Plan, and
-  Instant Change entry with cancel-safe provider handoff, and live Agent Picker
+- New conversation's direct default-policy launch without starting a real
+  provider process, plus keyboard task-agent, prompted-task, and Plan entry
+  with cancel-safe provider handoff, and live Agent Picker
   convergence after Rust-backed provider activation changes;
 - real Git worktree creation, filesystem dirty-state detection, reload
   persistence, nested-task checkout sharing, cancel-safe confirmation,

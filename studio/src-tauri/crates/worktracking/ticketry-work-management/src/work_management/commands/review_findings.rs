@@ -5,6 +5,9 @@ use sea_orm::{
 
 use super::arrival_rank;
 use super::identifiers::{database_uuid, new_database_uuid};
+use super::status_facts::{
+    record_work_item, stamp, WorkFactRecorder, WorkItemChange, WorkItemFact,
+};
 use super::{work_items, CommandError};
 use ticketry_entities::{issue, issue_type, project, state};
 
@@ -22,6 +25,7 @@ pub struct CreateReviewFinding {
 pub async fn create_review_finding(
     database: &DatabaseConnection,
     input: CreateReviewFinding,
+    facts: Option<&WorkFactRecorder>,
 ) -> Result<String, CommandError> {
     let project_id = database_uuid(&input.project_id, "project_id")?;
     let parent_id = database_uuid(&input.parent_id, "parent_id")?;
@@ -139,14 +143,15 @@ pub async fn create_review_finding(
     }
     let id = new_database_uuid();
     let now = super::timestamp::now();
+    let occurred_at = stamp(now);
     issue::ActiveModel {
         id: Set(id.clone()),
-        project_id: Set(project_id),
+        project_id: Set(project_id.clone()),
         r#type: Set("task".to_owned()),
         issue_type_id: Set(implementation.id),
-        parent_id: Set(Some(parent.id)),
-        module_id: Set(parent.module_id),
-        state_id: Set(state_id),
+        parent_id: Set(Some(parent.id.clone())),
+        module_id: Set(parent.module_id.clone()),
+        state_id: Set(state_id.clone()),
         state_revision: Set(state_revision),
         name: Set(name),
         sequence_id: Set(sequence_id),
@@ -159,7 +164,26 @@ pub async fn create_review_finding(
     }
     .insert(&transaction)
     .await?;
+    record_work_item(
+        facts,
+        &transaction,
+        WorkItemFact {
+            project_id: &project_id,
+            work_item_id: &id,
+            change: WorkItemChange::Created,
+            revision: state_revision,
+            occurred_at: &occurred_at,
+            parent_id: Some(&parent.id),
+            module_id: parent.module_id.as_deref(),
+            state_id: state_id.as_deref(),
+            is_archived: false,
+        },
+    )
+    .await?;
     transaction.commit().await?;
+    if let Some(facts) = facts {
+        facts.wake();
+    }
     Ok(id)
 }
 

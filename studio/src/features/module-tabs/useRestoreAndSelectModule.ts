@@ -14,14 +14,15 @@ export function useRestoreAndSelectModule() {
   const setTabHidden = useSetModuleTabHidden();
 
   return useCallback(
-    (moduleId: string) => {
+    async (moduleId: string) => {
       const hiddenIds = hiddenModuleIds(
         getModulePresentationsSnapshot(projectId),
       );
       if (hiddenIds.has(moduleId)) {
-        void setTabHidden(moduleId, false);
+        const restored = await setTabHidden(moduleId, false);
+        if (!restored) return;
       }
-      void selectModule(moduleId);
+      await selectModule(moduleId);
     },
     [projectId, selectModule, setTabHidden],
   );

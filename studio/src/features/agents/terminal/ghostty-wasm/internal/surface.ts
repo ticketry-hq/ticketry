@@ -78,7 +78,13 @@ export function openGhosttyWasmSurface(
   // Kept in the layout but visually empty: it is the focus and IME target.
   input.style.cssText =
     "position:absolute;left:0;top:0;width:1px;height:1px;opacity:0;border:0;padding:0;resize:none;overflow:hidden;";
-  host.append(canvas, input);
+  const accessibleOutput = document.createElement("pre");
+  accessibleOutput.dataset.testid = "ghostty-wasm-output";
+  accessibleOutput.setAttribute("role", "log");
+  accessibleOutput.setAttribute("aria-label", "Terminal output");
+  accessibleOutput.style.cssText =
+    "position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:pre;border:0;";
+  host.append(canvas, input, accessibleOutput);
 
   let disposed = false;
   let active = options.active ?? true;
@@ -93,6 +99,7 @@ export function openGhosttyWasmSurface(
   let firstPaintPending = true;
   let pendingPaintKind: "cold" | "warm" = "cold";
   let geometry = { cols: 80, rows: 24 };
+  let accessibleRows: string[] = [];
   // The durable run ended; a new viewer would only fail the same way.
   let retired = false;
   const recovery = createViewerRecovery();
@@ -117,6 +124,13 @@ export function openGhosttyWasmSurface(
       wheelPolicy?.reconcile();
       const frame = core.frame();
       if (frame.dirty === "none") return;
+      if (accessibleRows.length !== frame.rows) {
+        accessibleRows = Array.from({ length: frame.rows }, () => "");
+      }
+      for (const row of frame.dirtyRows) {
+        accessibleRows[row.y] = row.cells.map((cell) => cell.text).join("");
+      }
+      accessibleOutput.textContent = accessibleRows.join("\n");
       // The sub-row part of a scroll-back position is a paint-time shift: the
       // terminal's viewport only moves in whole rows.
       const offsetPx = wheelPolicy?.offsetPx ?? 0;
@@ -352,6 +366,7 @@ export function openGhosttyWasmSurface(
     core?.dispose();
     canvas.remove();
     input.remove();
+    accessibleOutput.remove();
   }
 
   function setActive(nextActive: boolean): void {

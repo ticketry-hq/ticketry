@@ -39,7 +39,7 @@ describe("WorkTracker write runtime acceptance", () => {
       }
       const field = ({
         CreateWorkTrackerProject: ["create_project", { id: "project-1", name: "Project", slug: "PRJ", description: "" }],
-        CreateWorkTrackerWorkItem: ["create_work_item", issue], UpdateWorkTrackerWorkItem: ["update_work_item", issue],
+        CreateWorkTrackerWorkItem: ["create_work_item", issue], UpdateWorkTrackerWorkItemDetails: ["update_work_item", issue],
         TransitionWorkTrackerWorkItem: ["update_work_item", issue], ReparentWorkTrackerWorkItem: ["update_work_item", issue],
         SetWorkTrackerBlockers: ["update_work_item", issue], ReorderWorkTrackerWorkItem: ["reorder_work_item", issue],
         DeleteWorkTrackerWorkItem: ["delete_work_item", true], CreateWorkTrackerState: ["create_state", state],
@@ -72,7 +72,7 @@ describe("WorkTracker write runtime acceptance", () => {
     await setIssueTypeWorkflowStartState("type-1", "state-1", 1);
 
     expect(operations).toEqual([
-      "CreateWorkTrackerProject", "CreateWorkTrackerWorkItem", "UpdateWorkTrackerWorkItem",
+      "CreateWorkTrackerProject", "CreateWorkTrackerWorkItem", "UpdateWorkTrackerWorkItemDetails",
       "TransitionWorkTrackerWorkItem", "ReparentWorkTrackerWorkItem", "SetWorkTrackerBlockers",
       "ReorderWorkTrackerWorkItem", "DeleteWorkTrackerWorkItem", "CreateWorkTrackerState",
       "UpdateWorkTrackerState", "ReorderWorkTrackerStates", "CreateWorkTrackerIssueType",

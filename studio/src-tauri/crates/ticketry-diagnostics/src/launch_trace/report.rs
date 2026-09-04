@@ -28,7 +28,8 @@ pub enum TraceVerdict {
     Empty,
 }
 
-/// One stage as reported: when it happened and how long since the one before.
+/// One stage as reported: when it happened and how long since the previous
+/// stage in wall-clock order.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ReportedStage {
     pub event: String,
@@ -166,9 +167,11 @@ fn report_for(records: Vec<&LaunchTraceRecord>) -> LaunchTraceReport {
     });
 
     let mut stages: Vec<ReportedStage> = Vec::with_capacity(path.len());
-    let mut previous: Option<DateTime<Utc>> = None;
     for record in &path {
-        if let Some(reached) = stages.last_mut().filter(|stage| stage.event == record.event) {
+        if let Some(reached) = stages
+            .last_mut()
+            .filter(|stage| stage.event == record.event)
+        {
             // A later record of a stage already reached is a recurrence, not a
             // new step on the path. A refusal among the recurrences still ends
             // the trace, so it is kept.
@@ -182,22 +185,32 @@ fn report_for(records: Vec<&LaunchTraceRecord>) -> LaunchTraceReport {
         stages.push(ReportedStage {
             event: record.event.clone(),
             timestamp: record.timestamp,
-            elapsed_from_previous_ms: previous
-                .map(|earlier| (record.timestamp - earlier).num_milliseconds()),
+            elapsed_from_previous_ms: None,
             outcome: record.outcome,
             refusal_reason: record.refusal_reason.clone(),
             provider: record.provider.clone(),
             occurrences: 1,
         });
-        previous = Some(record.timestamp);
+    }
+
+    let mut chronological: Vec<usize> = (0..stages.len()).collect();
+    chronological.sort_by(|left, right| {
+        stages[*left]
+            .timestamp
+            .cmp(&stages[*right].timestamp)
+            .then_with(|| left.cmp(right))
+    });
+    let mut previous: Option<DateTime<Utc>> = None;
+    for index in chronological {
+        let timestamp = stages[index].timestamp;
+        stages[index].elapsed_from_previous_ms =
+            previous.map(|earlier| (timestamp - earlier).num_milliseconds());
+        previous = Some(timestamp);
     }
 
     let last_stage_reached = stages.last().map(|stage| stage.event.clone());
     let verdict = verdict_for(&stages);
-    let total_elapsed_ms = match (stages.first(), stages.last()) {
-        (Some(first), Some(last)) => Some((last.timestamp - first.timestamp).num_milliseconds()),
-        _ => None,
-    };
+    let total_elapsed_ms = chronological_span_ms(&records);
 
     LaunchTraceReport {
         launch_attempt_id: first_present(&records, |record| record.launch_attempt_id.clone()),
@@ -210,6 +223,12 @@ fn report_for(records: Vec<&LaunchTraceRecord>) -> LaunchTraceReport {
         verdict,
         end_of_life: end_of_life_for(&records),
     }
+}
+
+fn chronological_span_ms(records: &[&LaunchTraceRecord]) -> Option<i64> {
+    let earliest = records.iter().map(|record| record.timestamp).min()?;
+    let latest = records.iter().map(|record| record.timestamp).max()?;
+    Some((latest - earliest).num_milliseconds())
 }
 
 fn verdict_for(stages: &[ReportedStage]) -> TraceVerdict {

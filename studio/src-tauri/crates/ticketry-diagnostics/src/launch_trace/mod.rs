@@ -18,6 +18,8 @@ mod surface;
 #[cfg(test)]
 mod probe_tests;
 #[cfg(test)]
+mod report_timing_tests;
+#[cfg(test)]
 mod tests;
 
 pub use attempt::{current, requested_by, within, AttemptFacts, LaunchAttempt};

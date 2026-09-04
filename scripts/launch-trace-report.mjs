@@ -235,14 +235,21 @@ export function buildLaunchTraceReport(records) {
   ordered.push(...unknownBefore.at(-1));
   const traceProviderSlug =
     ordered.map(recordProviderSlug).find((slug) => slug !== null) ?? null;
-  const stages = ordered.map((record, index) => ({
+  const chronological = ordered.toSorted(compareChronology);
+  const elapsedByRecord = new Map(
+    chronological.map((record, index) => [
+      record,
+      index === 0
+        ? null
+        : Date.parse(record.timestamp) -
+          Date.parse(chronological[index - 1].timestamp),
+    ]),
+  );
+  const stages = ordered.map((record) => ({
     name: record.event,
     providerSlug: recordProviderSlug(record) ?? traceProviderSlug,
     timestamp: record.timestamp,
-    elapsedMs:
-      index === 0
-        ? null
-        : Date.parse(record.timestamp) - Date.parse(ordered[index - 1].timestamp),
+    elapsedMs: elapsedByRecord.get(record),
   }));
   const lastRecord = ordered.at(-1);
   const lastStage = stages.at(-1)?.name ?? null;

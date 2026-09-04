@@ -31,9 +31,9 @@ fn run_stage(event: &str, millisecond: u32) -> LaunchTraceRecord {
     record(event, millisecond, json!({"agentRunId": RUN}))
 }
 
-fn commit(millisecond: u32) -> LaunchTraceRecord {
+fn join(millisecond: u32) -> LaunchTraceRecord {
     record(
-        "launch-transaction-committed",
+        "launch-attempt-committed",
         millisecond,
         json!({"launchAttemptId": ATTEMPT, "agentRunId": RUN}),
     )
@@ -46,7 +46,7 @@ fn complete_trace() -> Vec<LaunchTraceRecord> {
         .map(|(index, stage)| {
             let at = index as u32 * 10;
             match stage {
-                "launch-attempt-committed" => commit(at),
+                "launch-attempt-committed" => join(at),
                 "launch-transaction-committed" => run_stage(stage, at),
                 stage if attempt_keyed_stages().any(|keyed| keyed == stage) => {
                     attempt_stage(stage, at)
@@ -386,8 +386,7 @@ fn an_agent_run_claimed_twice_stays_with_the_launch_that_claimed_it_first() {
     assert_eq!(first.agent_run_id.as_deref(), Some(RUN));
     assert_eq!(first.stages.len(), 1);
     assert_eq!(
-        first.stages[0].occurrences,
-        2,
+        first.stages[0].occurrences, 2,
         "both claims are counted, under the launch that claimed the run first"
     );
 }
@@ -423,16 +422,40 @@ fn a_commit_record_carrying_the_request_identity_does_not_split_the_launch_in_tw
     let report = &reports[0];
     assert_eq!(report.launch_attempt_id.as_deref(), Some(ATTEMPT));
     assert_eq!(report.agent_run_id.as_deref(), Some(RUN));
-    let reported: Vec<&str> = report.stages.iter().map(|stage| stage.event.as_str()).collect();
+    let reported: Vec<&str> = report
+        .stages
+        .iter()
+        .map(|stage| stage.event.as_str())
+        .collect();
     assert_eq!(reported.first(), Some(&"launch-requested"));
     assert!(reported.contains(&"launch-transaction-committed"));
     assert!(reported.contains(&"prompt-delivered"));
     assert_eq!(reported.last(), Some(&"workspace-render-committed"));
 }
 
+#[test]
+fn the_completed_verdict_reports_the_full_chronological_span() {
+    let records = vec![
+        attempt_stage("launch-requested", 149),
+        record(
+            "launch-attempt-committed",
+            200,
+            json!({"launchAttemptId": ATTEMPT, "agentRunId": RUN}),
+        ),
+        attempt_stage("prompt-delivered", 52_690),
+        run_stage("workspace-render-committed", 246),
+    ];
+
+    let report = report_for_agent_run(&records, RUN);
+    let text = super::render::render(&report);
+
+    assert_eq!(report.total_elapsed_ms, Some(52_541));
+    assert!(text.contains("verdict: completed in 52541 ms"), "{text}");
+}
+
 /// The visibility stages fire again on every status event for as long as the
-/// run lives. The path is the first time each stage was reached; the repeats
-/// are counted, not walked, so the elapsed times stay those of the launch.
+/// run lives. The path is the first time each stage was reached and the repeats
+/// are counted rather than added as rows. The total still spans every record.
 #[test]
 fn a_stage_reached_repeatedly_is_reported_once_at_its_first_reach_with_its_repeat_count() {
     let mut records = complete_trace();
@@ -457,38 +480,17 @@ fn a_stage_reached_repeatedly_is_reported_once_at_its_first_reach_with_its_repea
     assert_eq!(reread.timestamp, first_reach);
     assert_eq!(reread.occurrences, 4);
     assert_eq!(
-        report.stages.iter().filter(|stage| stage.event == "durable-event-reread").count(),
+        report
+            .stages
+            .iter()
+            .filter(|stage| stage.event == "durable-event-reread")
+            .count(),
         1
     );
     assert_eq!(report.verdict, TraceVerdict::Completed);
     assert_eq!(
         report.total_elapsed_ms,
-        Some((path_stages().count() as i64 - 1) * 10),
-        "the total is the launch's own duration, not the run's lifetime"
+        Some(30_100),
+        "the total spans the raw records even though repeated rows collapse"
     );
-}
-
-/// Path order is the order a launch is meant to travel; a stage that really
-/// happened earlier than its predecessor reads as a negative elapsed time, and
-/// a recurring stage says how often it recurred.
-#[test]
-fn the_rendered_report_signs_elapsed_time_and_counts_recurrences() {
-    let mut records = complete_trace();
-    // Executable discovery observed 7 ms before the directory preflight.
-    let preflight_at = records
-        .iter()
-        .find(|record| record.event == "launch-directory-preflighted")
-        .map(|record| record.timestamp)
-        .expect("the preflight");
-    records.retain(|record| record.event != "launch-executable-resolved");
-    let mut early = attempt_stage("launch-executable-resolved", 0);
-    early.timestamp = preflight_at - chrono::Duration::milliseconds(7);
-    records.push(early);
-    records.push(run_stage("durable-event-reread", 5_000));
-
-    let text = super::render::render(&report_for_agent_run(&records, RUN));
-
-    assert!(text.contains("     -7 ms  launch-executable-resolved"), "{text}");
-    assert!(text.contains("durable-event-reread ×2"), "{text}");
-    assert!(!text.contains("+-"), "{text}");
 }

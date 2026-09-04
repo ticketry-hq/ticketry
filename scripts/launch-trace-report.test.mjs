@@ -103,7 +103,7 @@ test("correlates a null-identity delivered frame through its received frame", ()
   );
 });
 
-test("reports shuffled launch records in timed path order", () => {
+test("reports path order with elapsed time derived from chronology", () => {
   const report = buildLaunchTraceReport([
     {
       event: "graphql-frame-received",
@@ -127,27 +127,24 @@ test("reports shuffled launch records in timed path order", () => {
       name: "launch-transaction-committed",
       providerSlug: null,
       timestamp: "2026-08-31T08:30:00.170Z",
-      elapsedMs: null,
+      elapsedMs: 10,
     },
     {
       name: "durable-event-reread",
       providerSlug: null,
       timestamp: "2026-08-31T08:30:00.160Z",
-      elapsedMs: -10,
+      elapsedMs: null,
     },
     {
       name: "graphql-frame-received",
       providerSlug: null,
       timestamp: "2026-08-31T08:30:00.190Z",
-      elapsedMs: 30,
+      elapsedMs: 20,
     },
   ]);
   assert.equal(report.lastStage, "graphql-frame-received");
   assert.deepEqual(report.outcome, { status: "incomplete" });
-  assert.match(
-    renderLaunchTraceReport("run-1373", report),
-    /durable-event-reread .* \| -10 ms/,
-  );
+  assert.doesNotMatch(renderLaunchTraceReport("run-1373", report), /\| -\d+ ms/);
 });
 
 test("reports a repeated stage once and preserves a terminal refusal", () => {

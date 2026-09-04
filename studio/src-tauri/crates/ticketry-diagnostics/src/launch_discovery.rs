@@ -57,6 +57,10 @@ impl LaunchRequestedRecord<'_> {
     }
 
     fn into_record(self, runtime_instance: &str) -> LaunchDiscoveryRecord {
+        let current_attempt = crate::launch_trace::current();
+        let launch_attempt_id = current_attempt
+            .as_ref()
+            .map_or(self.launch_attempt_id, |attempt| attempt.id());
         LaunchDiscoveryRecord::new(
             "launch-requested",
             runtime_instance,
@@ -66,7 +70,7 @@ impl LaunchRequestedRecord<'_> {
             None,
             None,
         )
-        .with_detail("launchAttemptId", json_string(self.launch_attempt_id))
+        .with_detail("launchAttemptId", json_string(launch_attempt_id))
         .with_detail("launchSurface", json_string(self.surface.as_str()))
         .with_detail("requestedProviderSlug", optional_string(self.provider_slug))
         .with_detail("requestedModel", optional_string(self.model))
@@ -217,5 +221,34 @@ mod tests {
                 "leaked {forbidden}: {value}"
             );
         }
+    }
+
+    #[tokio::test]
+    async fn launch_requests_use_the_ambient_trace_attempt_identity() {
+        let (trace_attempt_id, value) = crate::launch_trace::requested_by(
+            crate::launch_trace::LaunchSurface::RunNow,
+            async {
+                let trace_attempt_id = crate::launch_trace::current()
+                    .expect("a launch attempt inside the request scope")
+                    .id()
+                    .to_owned();
+                let value = LaunchRequestedRecord {
+                    launch_attempt_id: "supplied-client-request-id",
+                    surface: LaunchRequestSurface::RunNow,
+                    project_id: Some("project-1"),
+                    work_item_id: Some("task-1"),
+                    provider_slug: Some("codex"),
+                    model: None,
+                    reasoning_level: None,
+                    scope: Some("task"),
+                }
+                .into_record("runtime-1")
+                .into_value();
+                (trace_attempt_id, value)
+            },
+        )
+        .await;
+
+        assert_eq!(value["launchAttemptId"], trace_attempt_id);
     }
 }

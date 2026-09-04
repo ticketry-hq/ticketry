@@ -14,6 +14,7 @@ use super::schema::{self, AGENT_RUN_COLUMNS, ATTEMPT_BASE_COLUMNS, DJANGO_MIGRAT
 use super::{RunsPersistenceError, RunsPersistenceErrorCode};
 
 const SNAPSHOT_GENERATIONS: usize = 3;
+const WORKFLOW_HANDOFF_LEDGER_TABLE: &str = "ticketry_workflow_handoff_migration";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -301,6 +302,9 @@ async fn validate_manifest(
         expected_attempt.insert("dismissed_at".to_owned());
     }
     let attempt = schema::columns(database, "automation_attempts").await?;
+    if workflow_handoff_delivery_mode_is_known(database, &attempt).await? {
+        expected_attempt.insert("delivery_mode".to_owned());
+    }
     if attempt != expected_attempt {
         return Err(incompatible(format!(
             "unknown schema for automation_attempts: observed {attempt:?}"
@@ -318,6 +322,17 @@ async fn validate_manifest(
     }
     validate_adopted_column_shapes(database, source).await?;
     Ok(())
+}
+
+/// A workflow-handoff release added this nullable audit column before this
+/// integration line shipped. Its ledger distinguishes that known shape from
+/// an arbitrary extra Runs column, while this build leaves the values intact.
+async fn workflow_handoff_delivery_mode_is_known(
+    database: &impl ConnectionTrait,
+    attempt_columns: &BTreeSet<String>,
+) -> Result<bool, RunsPersistenceError> {
+    Ok(attempt_columns.contains("delivery_mode")
+        && table_exists(database, WORKFLOW_HANDOFF_LEDGER_TABLE).await?)
 }
 
 async fn validate_adopted_column_shapes(
@@ -767,4 +782,35 @@ fn incompatible(message: impl Into<String>) -> RunsPersistenceError {
 }
 fn invalid(message: impl Into<String>) -> RunsPersistenceError {
     RunsPersistenceError::new(RunsPersistenceErrorCode::InvalidHistory, message)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeSet;
+
+    use sea_orm::{ConnectionTrait, Database};
+
+    use super::{workflow_handoff_delivery_mode_is_known, WORKFLOW_HANDOFF_LEDGER_TABLE};
+
+    #[tokio::test]
+    async fn delivery_mode_requires_the_workflow_handoff_ledger() {
+        let database = Database::connect("sqlite::memory:").await.unwrap();
+        let columns = BTreeSet::from(["delivery_mode".to_owned()]);
+        assert!(
+            !workflow_handoff_delivery_mode_is_known(&database, &columns)
+                .await
+                .unwrap()
+        );
+
+        database
+            .execute_unprepared(&format!(
+                "CREATE TABLE {WORKFLOW_HANDOFF_LEDGER_TABLE} (singleton INTEGER PRIMARY KEY)"
+            ))
+            .await
+            .unwrap();
+
+        assert!(workflow_handoff_delivery_mode_is_known(&database, &columns)
+            .await
+            .unwrap());
+    }
 }

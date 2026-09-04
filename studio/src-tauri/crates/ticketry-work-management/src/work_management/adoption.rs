@@ -15,6 +15,7 @@ use sha2::{Digest, Sha256};
 use super::ownership_manifest::{owned_tables, SchemaGeneration, CURRENT_DJANGO_LEAF, VERSION};
 
 const SNAPSHOT_GENERATIONS: usize = 3;
+const WORKFLOW_HANDOFF_LEDGER_TABLE: &str = "ticketry_workflow_handoff_migration";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -365,8 +366,10 @@ async fn stable_digest(
 }
 
 /// First-launch ownership transfer precedes the final migration chain. Once
-/// that chain has committed, its ledger makes LaunchBinding.entry_skill part
-/// of the exact Work Management shape accepted on every later launch.
+/// that chain has committed, its ledgers make migrated columns part of the
+/// exact Work Management shape accepted on every later launch. Recognising
+/// the workflow-handoff ledger also lets this build reopen data written by a
+/// release that added the inert-by-default transition column.
 async fn effective_owned_tables(
     database: &DatabaseConnection,
     generation: SchemaGeneration,
@@ -376,12 +379,16 @@ async fn effective_owned_tables(
         super::launch_binding_entry_skill_migration::LEDGER_TABLE,
     )
     .await?;
+    let workflow_handoff_installed = table_exists(database, WORKFLOW_HANDOFF_LEDGER_TABLE).await?;
     Ok(owned_tables(generation)
         .into_iter()
         .map(|(table, columns)| {
             let mut columns = columns.to_vec();
             if table == "worktracker_launchbinding" && entry_skill_installed {
                 columns.push("entry_skill");
+            }
+            if table == "worktracker_issuetypetransition" && workflow_handoff_installed {
+                columns.push("handoff");
             }
             (table, columns)
         })
@@ -535,4 +542,42 @@ fn sqlite_error(error: impl std::fmt::Display) -> AdoptionError {
 }
 fn io_error(error: std::io::Error) -> AdoptionError {
     AdoptionError::new(format!("WorkTracker adoption filesystem failure: {error}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use sea_orm::{ConnectionTrait, Database};
+
+    use super::{effective_owned_tables, SchemaGeneration, WORKFLOW_HANDOFF_LEDGER_TABLE};
+
+    #[tokio::test]
+    async fn workflow_handoff_column_is_expected_only_when_its_ledger_exists() {
+        let database = Database::connect("sqlite::memory:").await.unwrap();
+        let before = effective_owned_tables(&database, SchemaGeneration::ProjectOnly)
+            .await
+            .unwrap();
+        assert!(!transition_columns(&before).contains(&"handoff"));
+
+        database
+            .execute_unprepared(&format!(
+                "CREATE TABLE {WORKFLOW_HANDOFF_LEDGER_TABLE} (singleton INTEGER PRIMARY KEY)"
+            ))
+            .await
+            .unwrap();
+
+        let after = effective_owned_tables(&database, SchemaGeneration::ProjectOnly)
+            .await
+            .unwrap();
+        assert!(transition_columns(&after).contains(&"handoff"));
+    }
+
+    fn transition_columns<'a>(
+        tables: &'a [(&'static str, Vec<&'static str>)],
+    ) -> &'a [&'static str] {
+        tables
+            .iter()
+            .find(|(table, _)| *table == "worktracker_issuetypetransition")
+            .map(|(_, columns)| columns.as_slice())
+            .unwrap()
+    }
 }

@@ -40,6 +40,10 @@ const AddProject = lazy(async () => ({
 const NotifyUserModal = lazy(async () => ({
   default: (await import("./NotifyUserModal")).NotifyUserModal,
 }));
+const RunConfigurationDialog = lazy(async () => ({
+  default: (await import("../../features/app-run/RunConfigurationDialog"))
+    .RunConfigurationDialog,
+}));
 
 function useRuntimeUserNotices(): void {
   const notifyUser = useModalStore((state) => state.notifyUser);
@@ -121,6 +125,14 @@ export function ModalHost() {
       return (
         <Suspense fallback={null}>
           <NotifyUserModal notice={top.payload} />
+        </Suspense>
+      );
+    case "run-configuration":
+      return (
+        <Suspense fallback={null}>
+          <RunConfigurationDialog
+            moduleId={String(top.payload?.moduleId ?? "")}
+          />
         </Suspense>
       );
   }

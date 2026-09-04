@@ -95,16 +95,7 @@ describe("worktree status desktop runtime acceptance", () => {
     const requests: { operationName: string; variables: Record<string, unknown> }[] = [];
     await installDesktopRuntime(requests);
 
-    const live = render(
-      <WorktreeBlock
-        taskId={PARENT}
-        parentId={null}
-        moduleId="m1"
-        projectId="p1"
-        ticketSeq={881}
-        taskName="Parent story"
-      />,
-    );
+    const live = render(<WorktreeBlock taskId={PARENT} />);
 
     expect(
       await screen.findByText("wt/CODIN-881-parent-story → main"),
@@ -114,16 +105,7 @@ describe("worktree status desktop runtime acceptance", () => {
     expect(screen.getByText("↓1")).toBeTruthy();
     live.unmount();
 
-    render(
-      <WorktreeBlock
-        taskId={CHILD}
-        parentId={PARENT}
-        moduleId="m2"
-        projectId="p1"
-        ticketSeq={882}
-        taskName="Child task"
-      />,
-    );
+    render(<WorktreeBlock taskId={CHILD} />);
 
     await waitFor(() =>
       expect(screen.getByText(/Changes are not isolated/)).toBeTruthy(),

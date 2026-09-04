@@ -170,7 +170,7 @@ export function openTauriTerminalClient(
     const generation = ++attachGeneration;
     state = "connecting";
     onEvent({ type: "connecting", attempt: 0 });
-    const nextLease = leaseClient
+    const nextLease = !params.unleased && leaseClient
       ? createViewerLease(leaseClient, params.agentRunId, "xterm")
       : null;
     viewerLease = nextLease;

@@ -1,6 +1,6 @@
 ---
 name: glm
-description: "Implement code changes through 2-4 parallel GLM writers working on small, disjoint slices that the main agent reviews and verifies. Use only when the user explicitly invokes $glm."
+description: "Implement code changes through parallel GLM writers working on small, disjoint slices that the main agent reviews and verifies. Use only when the user explicitly invokes $glm."
 ---
 
 # GLM iterative coding
@@ -20,9 +20,9 @@ the parent on OpenAI and routes only worker processes through OpenCodex.
   the worker to the `glm_worker` profile and the workspace-write sandbox.
 - Run the launcher with approval for loopback access. The worker keeps Codex's
   normal approval policy, so actions outside the workspace remain gated.
-- Maintain 2-4 active implementation workers when the task has that many
-  independent slices. Use fewer workers when dependencies or shared files make
-  safe parallelism impossible. Do not invent low-value work to fill the pool.
+- There is no fixed worker cap. Launch every ready independent slice whose write
+  set does not overlap active work, subject to dependency order and actual
+  provider or machine capacity. Do not invent low-value work to fill the pool.
 - Give every active writer an exclusive write set. Two writers must not edit the
   same file, migration, generated contract, snapshot, or shared artifact. Merge
   overlapping slices under one writer or run them sequentially.
@@ -38,7 +38,7 @@ the parent on OpenAI and routes only worker processes through OpenCodex.
 ## Slice the work
 
 Before spawning GLM, inspect enough of the repository to map dependencies and
-define 2-4 ready slices with disjoint write sets. Each slice should:
+define ready slices with disjoint write sets. Each slice should:
 
 - implement one behavior or one focused internal concern;
 - have a narrow write set, usually a few named files;
@@ -63,7 +63,7 @@ Run the work as a bounded pool:
    files directly in the shared workspace and report changed paths and test
    results. Tell it other workers may be active and it must stay within its
    exclusive write set.
-2. Launch 2-4 ready writers in the same round when the execution tool supports
+2. Launch every ready writer concurrently when the execution tool supports
    parallel calls. Track each process separately. Continue useful read-only
    analysis while they work, then collect whichever result is ready first.
 3. Review each uploaded diff as it arrives. Check correctness, ownership scope,

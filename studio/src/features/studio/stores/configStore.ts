@@ -104,7 +104,7 @@ export function useConfig(): ConfigSnapshot {
   const { data } = useQuery(LoadLocalSettingsDocument, {
     client: studioApolloClient(),
   });
-  return data
+  return data?.local_settings
     ? toSnapshot(data.local_settings as unknown as ConfigPayload)
     : EMPTY_CONFIG;
 }

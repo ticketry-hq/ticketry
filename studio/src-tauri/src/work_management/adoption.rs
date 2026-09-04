@@ -9,6 +9,7 @@ use std::time::Duration;
 use sea_orm::{
     ConnectOptions, ConnectionTrait, Database, DatabaseConnection, DbBackend, Statement,
 };
+use sea_orm_migration::MigratorTrait;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 
@@ -68,6 +69,9 @@ pub async fn adopt(data_directory: &Path) -> Result<AdoptionEvidence, AdoptionEr
     let before = stable_digest(&database).await?;
 
     if source == SourceClassification::RustOwned {
+        super::migrations::Migrator::up(&database, None)
+            .await
+            .map_err(sqlite_error)?;
         return Ok(AdoptionEvidence {
             version: VERSION,
             source,
@@ -95,6 +99,9 @@ pub async fn adopt(data_directory: &Path) -> Result<AdoptionEvidence, AdoptionEr
     prove_restoration(data_directory, &snapshot_path, &before).await?;
 
     let writable = connect(&database_path, false).await?;
+    super::migrations::Migrator::up(&writable, None)
+        .await
+        .map_err(sqlite_error)?;
     super::transition_occurrences::ensure_schema(&writable)
         .await
         .map_err(sqlite_error)?;

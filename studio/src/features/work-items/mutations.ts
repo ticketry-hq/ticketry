@@ -269,6 +269,7 @@ function optimisticCreatedIssue(
     project_id: compactWorktrackerId(membership.projectId),
     sequence_id: -optimisticSequence,
     state_id: body.state_id ? compactWorktrackerId(body.state_id) : null,
+    stateRevision: 0,
     description: body.description ?? "",
     parent_id: body.parent_id ? compactWorktrackerId(body.parent_id) : compactWorktrackerId(membership.moduleId),
     module_id: compactWorktrackerId(membership.moduleId),

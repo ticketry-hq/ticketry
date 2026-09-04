@@ -132,7 +132,7 @@ named gate before the full Studio suite, typecheck, and build.
 | 123 | Opening Settings from the footer over the selected terminal in a mounted Task workspace hides the retained native viewer without detaching, releasing its lease, closing its session, or replacing its handle, and closing Settings remeasures and reveals that same handle; the browser compatibility renderer stays mounted in the WebView without native visibility traffic. |
 | 124 | Task workspace Settings occlusion converges on the newest navigation and presentation intent: a pending modal hide shields a newer Details destination until native completion, and a close/reopen/close sequence cannot accept an older reveal merely because the newest request uses the same retained handle. Together with the shared mounted Settings cases 117–118, the gate preserves native-chord singleton routing, hidden-viewer focus exclusion, late attachment suppression, owner/geometry convergence, compatibility fallback, and failure recovery. |
 | 125 | Module creation refuses a missing folder before creating the module. |
-| 126 | Opening state configuration over a selected Task terminal hides the retained native viewer without detaching or replacing it, and closing state configuration remeasures and reveals the same handle. |
+| 126 | Clicking a real Stories-header state configuration button opens the panel for that state over the mounted Task workspace, and the panel close button dismisses it. |
 | 153 | The desktop xterm fallback attaches, exchanges bytes, resizes, scrolls, suspends, resumes, and detaches through Tauri viewer commands instead of the Python terminal WebSocket. |
 | 154 | Desktop Run Now, agent and module-shell discovery and control use caller-owned GraphQL over TauRPC, deliberate launches get fresh request IDs while retries retain them, mutations refresh canonical terminal holdings, and native plus xterm viewers share generation-bound lease authority. |
 | 155 | Studio snapshots and live output events consume the same Rust run projection, including Shell scope, nullable provider, launch metadata, effective state, output sequence, and output time. |
@@ -149,8 +149,23 @@ named gate before the full Studio suite, typecheck, and build.
 | 166 | Worktree confirmation and mutation errors do not leak across task selection. |
 | 167 | Apollo is Studio's only application-state owner; client-only UI state lives in the same cache as server records. |
 | 168 | A module drag rejected because its cached neighbors are stale refreshes the authoritative order, recomputes the same gesture, and completes without asking the person to retry. |
-| 169 | Native Ghostty reads standard macOS pasteboard text and completes ordinary and multiline paste against the exact surface and opaque request state that requested it. |
-| 170 | Concurrent retained native terminals keep separate paste owners, and teardown invalidates only the departing owner before its Ghostty surface is destroyed. |
+| 169 | Closing an orphaned terminal tab treats an already-absent Terminal Session as confirmed cleanup, dismisses the tab, and shows no false close error. |
+| 170 | Long worktree branch, base, and conflict-path text stays inside the fixed-width Details column; a shared child conflict keeps its ownership, recovery guidance, and path without offering Discard. |
+| 171 | Reparenting the selected Work Item does not close its open worktree discard confirmation. |
+| 172 | Every rapid or held-key repeat Arrow Up and Arrow Down event in Stories moves one visible row, preserves the idea-entry boundary, and shows the final Story from Apollo's loaded module data without per-selection detail, attachment, or git-backed worktree requests. |
+| 173 | Clicking Run for an unconfigured module opens Run configuration instead of attempting a launch. |
+| 174 | Clicking a configured Run control starts the module App run and opens the App run segment of the terminal panel. |
+| 175 | Clicking Run while that module's App run is live focuses the existing run and never launches a duplicate. |
+| 176 | A live App run exposes Stop, and the Stop affordance disappears after the run ends. |
+| 177 | A module without a configured folder disables Run with an explanation while leaving Run configuration available. |
+| 178 | A configured preview URL appears as a link only while the module App run is live. |
+| 179 | Run and Terminal have the same selected-module availability in the footer. |
+| 180 | App runs occupy their own terminal-panel segment and never appear among ordinary shell tabs. |
+| 181 | Returning to a worktree owner after creating its shared checkout from a child shows the owner's authoritative worktree state. |
+| 182 | Module-open tree and item derivation stays stable across unrelated renders, and each Stories row reads its own normalized Apollo fragment without opening another module query. |
+| 183 | A child with a shared worktree shows the top-level owner in production Details without offering Discard. |
+| 184 | Native Ghostty reads standard macOS pasteboard text and completes ordinary and multiline paste against the exact surface and opaque request state that requested it. |
+| 185 | Concurrent retained native terminals keep separate paste owners, and teardown invalidates only the departing owner before its Ghostty surface is destroyed. |
 
 Each executable case carries one stable `[overhaul-NN]` marker. The gate has a
 contract test that fails if a marker is missing or duplicated. When a Studio UI

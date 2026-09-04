@@ -1,6 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@apollo/client/react";
-import { type WorktreeContext } from "./internal/types";
 import {
   adaptWorktreeStatus,
   type WorktreeStatusPayload,
@@ -12,6 +11,10 @@ import {
 import { requestWorktreeDiscard } from "./internal/discardTransport";
 import { studioApolloClient } from "../../../shared/apollo/client";
 import {
+  SELECTION_DELAY_MS,
+  useDelayedSelectionId,
+} from "../../../shared/selection/useDelayedSelectionId";
+import {
   WorktreeStatusDocument,
   type WorktreeStatusQuery,
 } from "./generated/worktreeStatus.documents";
@@ -19,11 +22,6 @@ import type { WorktreeStatus } from "./internal/types";
 
 interface WorktreeBlockProps {
   taskId: string;
-  parentId?: string | null;
-  moduleId?: string | null;
-  projectId?: string | null;
-  ticketSeq?: number | null;
-  taskName?: string | null;
 }
 
 function worktreeQueryData(status: WorktreeStatus): WorktreeStatusQuery {
@@ -53,44 +51,41 @@ function worktreeQueryData(status: WorktreeStatus): WorktreeStatusQuery {
  * second one sends. The request itself carries no path, branch, or repository
  * — the runtime removes exactly the checkout Ticketry indexed.
  */
-export function WorktreeBlock({
-  taskId,
-  parentId,
-  moduleId,
-  projectId,
-  ticketSeq,
-  taskName,
-}: WorktreeBlockProps) {
+export function WorktreeBlock({ taskId }: WorktreeBlockProps) {
   const [busy, setBusy] = useState(false);
   const [mutationError, setMutationError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
-
-  const ctx: WorktreeContext = {
-    parentId,
-    moduleId,
-    projectId,
-    ticketSeq,
-    taskName,
-  };
+  const latestTaskId = useRef(taskId);
+  latestTaskId.current = taskId;
 
   const client = studioApolloClient();
+  // Each status read runs a live `git status` in Rust. Let rapid task changes
+  // settle so intermediate selections do not start work that no one will see.
+  const queryTaskId = useDelayedSelectionId(taskId, SELECTION_DELAY_MS);
   const statusQuery = useQuery(WorktreeStatusDocument, {
     client,
-    variables: { taskId },
+    variables: { taskId: queryTaskId ?? taskId },
+    skip: queryTaskId === null,
+    // Rust answers from the top-level owner's row, but Apollo caches each
+    // requested task id separately. Reconcile that identity on every mount.
+    fetchPolicy: "cache-and-network",
   });
-  const status = statusQuery.data
+  const status = queryTaskId === taskId && statusQuery.data
     ? adaptWorktreeStatus(
       statusQuery.data.worktree_status as WorktreeStatusPayload,
     )
     : null;
   const error =
     mutationError ??
-    (statusQuery.error ? "Could not load worktree status" : null);
+    (queryTaskId === taskId && statusQuery.error
+      ? "Could not load worktree status"
+      : null);
 
   useEffect(() => {
+    setBusy(false);
     setConfirming(false);
     setMutationError(null);
-  }, [moduleId, parentId, taskId]);
+  }, [taskId]);
 
   const onCreate = async () => {
     setBusy(true);
@@ -99,16 +94,18 @@ export function WorktreeBlock({
     // converges on the same worktree rather than cutting a second branch.
     const operationId = newOperationId();
     try {
-      const created = await requestWorktreeCreate(taskId, operationId, ctx);
+      const created = await requestWorktreeCreate(taskId, operationId);
       client.writeQuery<WorktreeStatusQuery>({
         query: WorktreeStatusDocument,
         variables: { taskId },
         data: worktreeQueryData(created),
       });
     } catch {
-      setMutationError("Create failed");
+      if (latestTaskId.current === taskId) {
+        setMutationError("Create failed");
+      }
     } finally {
-      setBusy(false);
+      if (latestTaskId.current === taskId) setBusy(false);
     }
   };
 
@@ -119,8 +116,8 @@ export function WorktreeBlock({
     // same durable removal rather than throwing anything else away.
     const operationId = newOperationId();
     try {
-      const result = await requestWorktreeDiscard(taskId, operationId, ctx);
-      setConfirming(false);
+      const result = await requestWorktreeDiscard(taskId, operationId);
+      if (latestTaskId.current === taskId) setConfirming(false);
       // The mutation's own response is authoritative for this window; a
       // transport that cannot answer with one falls back to a refetch.
       if (result.status) {
@@ -129,18 +126,20 @@ export function WorktreeBlock({
           variables: { taskId },
           data: worktreeQueryData(result.status),
         });
-      } else {
+      } else if (latestTaskId.current === taskId) {
         await statusQuery.refetch();
       }
     } catch {
-      setMutationError("Discard failed");
+      if (latestTaskId.current === taskId) {
+        setMutationError("Discard failed");
+      }
     } finally {
-      setBusy(false);
+      if (latestTaskId.current === taskId) setBusy(false);
     }
   };
 
   const labelCls = "text-text-muted";
-  const monoCls = "font-mono text-text-primary";
+  const monoCls = "min-w-0 break-all font-mono text-text-primary";
 
   let body: React.ReactNode;
 
@@ -151,12 +150,6 @@ export function WorktreeBlock({
       <div className="text-text-muted">
         Changes are not isolated — no git repo encloses this task's path, so
         there's nothing to create. Runs work directly in the path.
-      </div>
-    );
-  } else if (status.is_shared) {
-    body = (
-      <div className="text-text-muted">
-        Shares the worktree owned by top-level task ({status.top_level_task_id}).
       </div>
     );
   } else if (status.kind === "none") {
@@ -178,6 +171,11 @@ export function WorktreeBlock({
     body = (
       <div className="space-y-1">
         <div className="text-lifecycle-danger">Conflict</div>
+        {status.is_shared ? (
+          <div className="text-text-muted">
+            Shares the worktree owned by top-level task ({status.top_level_task_id}).
+          </div>
+        ) : null}
         <div className="text-text-muted">
           Auto-land hit a merge conflict. Resolve it{" "}
           <span className="text-text-primary">in the worktree</span> and commit
@@ -185,14 +183,20 @@ export function WorktreeBlock({
           retries.
         </div>
         <div className={monoCls}>{status.path}</div>
-        {renderDiscard()}
+        {status.is_shared ? null : renderDiscard()}
+      </div>
+    );
+  } else if (status.is_shared) {
+    body = (
+      <div className="text-text-muted">
+        Shares the worktree owned by top-level task ({status.top_level_task_id}).
       </div>
     );
   } else {
     // kind=worktree, active.
     body = (
       <div className="space-y-1">
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
           <span className={monoCls}>
             {status.branch} → {status.base_branch}
           </span>
@@ -248,7 +252,7 @@ export function WorktreeBlock({
 
   return (
     <div
-      className="mt-3 border border-pane-border bg-pane-bg/40 p-2 text-xs"
+      className="mt-3 min-w-0 border border-pane-border bg-pane-bg/40 p-2 text-xs"
       data-testid="worktree-block"
     >
       <div className={`mb-1 ${labelCls}`}>Worktree</div>

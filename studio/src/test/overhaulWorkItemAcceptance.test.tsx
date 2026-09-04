@@ -1,14 +1,20 @@
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { useApolloClient } from "@apollo/client/react";
 import { useEffect, useState } from "react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { fixture, mountStudio, workItem } from "./seam";
 import { WorkTrackerAttachmentsDocument } from "../features/work-items/generated/workItems.documents";
 import { useWorkItemAttachments } from "../features/work-items";
 import { compactWorktrackerId } from "../shared/api/generatedWorktracker";
 import { useClientStore } from "../state/clientStore";
 import { setStatesSorted } from "../features/projects";
+import { useStoriesTree } from "../features/work-items";
+import { useGlobalKeymap } from "../app/navigation/useGlobalKeymap";
+import { TEMP_TASK_ID } from "../features/agents/types";
+import { documentOperationName } from "../graphql-foundation/typedDocument";
 import { finishWorkItemDragWithoutDrop } from "./workItemDragGestures";
+import { SelectedTicket } from "../app/shell/ticket-workspace/selected-ticket/SelectedTicket";
+import { useWorkflowEditorStore } from "../features/workflows/workflowEditorStore";
 
 function AttachmentCacheProbe({ issueId }: { issueId: string }) {
   const client = useApolloClient();
@@ -36,7 +42,255 @@ function AttachmentErrorProbe() {
   return <output data-testid="attachment-error">{code}:{message}</output>;
 }
 
+function StoriesKeyboardHarness() {
+  const { rows } = useStoriesTree();
+  useGlobalKeymap(rows);
+  return null;
+}
+
+async function pressStoryArrow(
+  key: "ArrowDown" | "ArrowUp",
+  repeat = false,
+): Promise<void> {
+  act(() => {
+    window.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key,
+        repeat,
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+  });
+}
+
 describe("overhaul acceptance — Stories and details", () => {
+  it("[overhaul-172] accepts every rapid and repeated Stories arrow keydown", async () => {
+    Element.prototype.scrollIntoView = vi.fn();
+    const http = fixture();
+    const graphQlRequests: Array<{
+      operationName: string | null;
+      variables: unknown;
+    }> = [];
+    const worktreeRequests: string[] = [];
+    http.tree("module-1", {
+      rootIds: ["story-1", "story-2", "story-3", "story-4"],
+      children: {
+        "story-1": [],
+        "story-2": [],
+        "story-3": [],
+        "story-4": [],
+      },
+      order: ["story-1", "story-2", "story-3", "story-4"],
+    });
+    http.workItems([
+      workItem({ id: "story-1", name: "First", rank: "A" }),
+      workItem({ id: "story-2", name: "Second", key: "MEML-2", rank: "B" }),
+      workItem({ id: "story-3", name: "Third", key: "MEML-3", rank: "C" }),
+      workItem({ id: "story-4", name: "Fourth", key: "MEML-4", rank: "D" }),
+    ]);
+    http.attachments("story-4", [
+      {
+        id: "attachment-4",
+        issue: "story-4",
+        filename: "fourth.md",
+        mime_type: "text/markdown",
+        size: 512,
+        url: "/media/fourth.md",
+        created_at: "2026-08-27T12:00:00Z",
+      },
+    ]);
+    const executeGraphQl = http.executeGraphQl.bind(http);
+    mountStudio({
+      http,
+      selectedTaskId: "story-1",
+      children: <StoriesKeyboardHarness />,
+      graphQlExecute: async (document, variables) => {
+        const operationName = documentOperationName(document);
+        if (operationName === "WorktreeStatus") {
+          const taskId = (variables as { taskId: string }).taskId;
+          worktreeRequests.push(taskId);
+          return {
+            worktree_status: {
+              __typename: "WorktreeStatusView",
+              kind: "none",
+              task_id: taskId,
+              top_level_task_id: taskId,
+              is_shared: false,
+              branch: null,
+              base_branch: null,
+              path: null,
+              state: null,
+              clean: null,
+              dirty: null,
+              ahead: null,
+              behind: null,
+              conflict: null,
+              checkout_present: null,
+              ephemeral: false,
+              reason: null,
+            },
+          } as never;
+        }
+        graphQlRequests.push({ operationName, variables });
+        return executeGraphQl(document, variables);
+      },
+    });
+    useClientStore.setState({
+      sidebarVisible: false,
+      editViewZone: "stories",
+      editViewBodyEngaged: false,
+    });
+
+    const stories = await screen.findByRole("region", { name: "Stories" });
+    const details = screen.getByRole("region", { name: "Details" });
+    await within(details).findByText("First");
+    await waitFor(() => expect(worktreeRequests).toEqual(["story-1"]));
+    worktreeRequests.length = 0;
+    graphQlRequests.length = 0;
+
+    const selectedIds: Array<string | null> = [];
+    const unsubscribe = useClientStore.subscribe((state, previous) => {
+      if (state.selectedTaskId !== previous.selectedTaskId) {
+        selectedIds.push(state.selectedTaskId);
+      }
+    });
+
+    await pressStoryArrow("ArrowDown");
+    await pressStoryArrow("ArrowDown", true);
+    await pressStoryArrow("ArrowDown", true);
+    await pressStoryArrow("ArrowUp", true);
+    await pressStoryArrow("ArrowUp", true);
+    await pressStoryArrow("ArrowUp", true);
+    await pressStoryArrow("ArrowUp", true);
+    await pressStoryArrow("ArrowUp", true);
+
+    expect(selectedIds).toEqual([
+      "story-2",
+      "story-3",
+      "story-4",
+      "story-3",
+      "story-2",
+      "story-1",
+      TEMP_TASK_ID,
+    ]);
+    expect(document.activeElement).toBe(
+      within(stories).getByRole("textbox", { name: "Capture an idea" }),
+    );
+
+    fireEvent.keyDown(document.activeElement!, { key: "ArrowDown" });
+    selectedIds.length = 0;
+    await pressStoryArrow("ArrowDown");
+    await pressStoryArrow("ArrowDown", true);
+    await pressStoryArrow("ArrowDown", true);
+    await pressStoryArrow("ArrowDown", true);
+
+    expect(selectedIds).toEqual(["story-1", "story-2", "story-3", "story-4"]);
+    expect(
+      within(stories).getByRole("treeitem", { name: /Fourth/ }),
+    ).toHaveAttribute("aria-selected", "true");
+    expect(await within(details).findByText("Fourth")).toBeVisible();
+    expect(await within(details).findByRole("link", { name: /fourth\.md/ }))
+      .toBeVisible();
+
+    const attachmentCalls = graphQlRequests.filter(
+      ({ operationName }) => operationName === "WorkTrackerAttachments",
+    );
+    expect(attachmentCalls.map(({ variables }) => variables)).toEqual([
+      { issueId: "story-4" },
+    ]);
+    expect(
+      graphQlRequests.filter(
+        ({ operationName }) => operationName === "WorkTrackerWorkItem",
+      ),
+    ).toEqual([]);
+    await waitFor(() => expect(worktreeRequests).toEqual(["story-4"]));
+
+    unsubscribe();
+  });
+
+  it("[overhaul-126] opens and closes the correct state configuration from its Stories header", async () => {
+    useWorkflowEditorStore.setState({
+      projectId: "project-1",
+      issueTypes: [],
+      states: [],
+      stateWorkItemCounts: {},
+      providerCapabilities: [],
+      selectedTypeId: null,
+      workflows: {},
+      stagedStateIds: {},
+      loading: false,
+      action: null,
+      notice: null,
+      error: null,
+      controlErrors: {},
+    });
+    const http = fixture();
+    const review = {
+      id: "review",
+      name: "Review",
+      group: "started",
+      color: null,
+      sort_order: 2,
+    };
+    http.tree("module-1", {
+      rootIds: ["story-1", "story-2"],
+      children: { "story-1": [], "story-2": [] },
+      order: ["story-1", "story-2"],
+    });
+    http.workItems([
+      workItem({ id: "story-1", name: "Idea story" }),
+      workItem({
+        id: "story-2",
+        name: "Review story",
+        key: "MEML-2",
+        state: review,
+      }),
+    ]);
+    mountStudio({
+      http,
+      selectedTaskId: "story-1",
+      children: <SelectedTicket />,
+    });
+
+    const stories = await screen.findByRole("region", { name: "Stories" });
+    const configureReview = await within(stories).findByRole("button", {
+      name: "Configure Review state",
+    });
+
+    fireEvent.click(configureReview);
+    await screen.findByRole("region", {
+      name: "Review state configuration",
+    });
+    expect(useClientStore.getState().workspaceSelection).toEqual({
+      kind: "state-configuration",
+      projectId: "project-1",
+      stateId: "review",
+    });
+    await waitFor(() =>
+      expect(
+        screen.getByRole("region", { name: "Review state configuration" }),
+      ).toBeVisible(),
+    );
+    expect(
+      screen.queryByRole("region", { name: "Ideas state configuration" }),
+    ).toBeNull();
+
+    const panel = screen.getByRole("region", {
+      name: "Review state configuration",
+    });
+    fireEvent.click(
+      within(panel).getByRole("button", {
+        name: "Close Review state configuration",
+      }),
+    );
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("region", { name: "Review state configuration" }),
+      ).toBeNull(),
+    );
+  }, 15_000);
+
   it("[overhaul-25] keeps held work items in a state section after its catalog name changes", async () => {
     const http = fixture();
     http.tree("module-1", {

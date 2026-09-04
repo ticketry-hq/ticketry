@@ -39,6 +39,7 @@ export {
 } from "./queries";
 export { useStoriesTree } from "./queries/useStoriesTree";
 export {
+  descendantIdsByWorkItem,
   deriveEpic,
   orderedTaskSections,
   orderIdsByRank,

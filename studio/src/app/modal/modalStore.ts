@@ -17,7 +17,8 @@ export type StandardModalType =
     | "status-update"
     | "parent-update"
     | "add-project"
-    | "add-module";
+    | "add-module"
+    | "run-configuration";
 
 export interface StandardModalDescriptor {
   type: StandardModalType;

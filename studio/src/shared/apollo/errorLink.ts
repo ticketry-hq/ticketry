@@ -45,6 +45,7 @@ export type FoundationDomainErrorCode =
   | "terminal_launch_conflict"
   | "terminal_launch_busy"
   | "terminal_runtime_unavailable"
+  | "terminal_runtime_start_failed"
   | "terminal_runtime_identity_conflict"
   | "terminal_runtime_exited"
   | "terminal_cleanup_invalid"
@@ -85,6 +86,7 @@ const knownDomainErrorCodes = new Set<FoundationDomainErrorCode>([
   "automation_attempt_not_found", "automation_attempt_not_failed",
   "automation_attempt_not_retryable", "terminal_launch_invalid", "module_folder_unusable",
   "terminal_launch_conflict", "terminal_launch_busy", "terminal_runtime_unavailable",
+  "terminal_runtime_start_failed",
   "terminal_runtime_identity_conflict", "terminal_runtime_exited", "terminal_cleanup_invalid",
   "terminal_session_not_found", "terminal_cleanup_conflict", "terminal_cleanup_busy",
   "terminal_cleanup_pending", "terminal_launch_storage_failed", "terminal_cleanup_storage_failed",

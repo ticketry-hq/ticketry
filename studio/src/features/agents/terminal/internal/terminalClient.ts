@@ -52,6 +52,8 @@ export interface TerminalClientAttachParams {
   agentRunId: string;
   cols: number;
   rows: number;
+  /** App runs deliberately have no Agent Run-backed viewer lease row. */
+  unleased?: boolean;
 }
 
 export type TerminalClientEvent =

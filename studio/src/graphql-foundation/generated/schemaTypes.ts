@@ -224,6 +224,13 @@ export type AgentTerminalSessionsOrderInput = {
   terminatedAt?: InputMaybe<OrderByEnum>;
 };
 
+export type AppRunStatus = {
+  __typename?: 'AppRunStatus';
+  live: Scalars['Boolean']['output'];
+  module_id: Scalars['String']['output'];
+  run_id: Scalars['String']['output'];
+};
+
 export type AutomationAttemptProjection = {
   __typename?: 'AutomationAttemptProjection';
   agent_run_id?: Maybe<Scalars['String']['output']>;
@@ -561,8 +568,11 @@ export type Mutation = {
   __typename?: 'Mutation';
   acknowledge_onboarding: WorktrackerWorkspace;
   add_local_profile: LocalSettings;
+  app_run_start: AppRunStatus;
+  app_run_stop: AppRunStatus;
   create_issue_type_transition: WorktrackerIssuetypetransition;
   create_project: WorktrackerProject;
+  create_run_configuration: WorktrackerRunconfiguration;
   create_state: WorktrackerState;
   create_viewer_lease: AgentRunViewerLeases;
   create_work_item: WorktrackerIssue;
@@ -570,6 +580,7 @@ export type Mutation = {
   delete_issue_type_transition: Scalars['Boolean']['output'];
   delete_local_profile: LocalSettings;
   delete_project: Scalars['Boolean']['output'];
+  delete_run_configuration: Scalars['Boolean']['output'];
   delete_state: Scalars['Boolean']['output'];
   delete_viewer_lease?: Maybe<AgentRunViewerLeases>;
   delete_work_item: Scalars['Boolean']['output'];
@@ -599,6 +610,7 @@ export type Mutation = {
   update_keybinding_setting: KeybindingSetting;
   update_project: WorktrackerProject;
   update_provider_catalog: ProviderCatalog;
+  update_run_configuration: WorktrackerRunconfiguration;
   update_state: WorktrackerState;
   update_viewer_lease: AgentRunViewerLeases;
   update_work_item: WorktrackerIssue;
@@ -611,6 +623,18 @@ export type Mutation = {
 
 export type MutationAdd_Local_ProfileArgs = {
   profile: LocalProfileInput;
+};
+
+
+export type MutationApp_Run_StartArgs = {
+  columns: Scalars['Int']['input'];
+  module_id: Scalars['String']['input'];
+  rows: Scalars['Int']['input'];
+};
+
+
+export type MutationApp_Run_StopArgs = {
+  module_id: Scalars['String']['input'];
 };
 
 
@@ -628,6 +652,14 @@ export type MutationCreate_ProjectArgs = {
   name: Scalars['String']['input'];
   slug: Scalars['String']['input'];
   workspace_slug?: InputMaybe<Scalars['String']['input']>;
+};
+
+
+export type MutationCreate_Run_ConfigurationArgs = {
+  command: Scalars['String']['input'];
+  environment: Scalars['Json']['input'];
+  module_id: Scalars['String']['input'];
+  preview_url?: InputMaybe<Scalars['String']['input']>;
 };
 
 
@@ -677,6 +709,11 @@ export type MutationDelete_Local_ProfileArgs = {
 
 export type MutationDelete_ProjectArgs = {
   id: Scalars['String']['input'];
+};
+
+
+export type MutationDelete_Run_ConfigurationArgs = {
+  module_id: Scalars['String']['input'];
 };
 
 
@@ -879,6 +916,14 @@ export type MutationUpdate_Provider_CatalogArgs = {
 };
 
 
+export type MutationUpdate_Run_ConfigurationArgs = {
+  command: Scalars['String']['input'];
+  environment: Scalars['Json']['input'];
+  module_id: Scalars['String']['input'];
+  preview_url?: InputMaybe<Scalars['String']['input']>;
+};
+
+
 export type MutationUpdate_StateArgs = {
   color?: InputMaybe<Scalars['String']['input']>;
   group?: InputMaybe<Scalars['String']['input']>;
@@ -986,6 +1031,7 @@ export type Query = {
   agentRuns: AgentRunsConnection;
   agentTerminalSessions: AgentTerminalSessionsConnection;
   agent_run_holdings: Array<AgentRunHolding>;
+  app_run: AppRunStatus;
   automation_attempts: Array<AutomationAttemptProjection>;
   designDocuments: DesignDocumentsConnection;
   directory_completions: Array<Scalars['String']['output']>;
@@ -1006,6 +1052,7 @@ export type Query = {
   worktrackerProject: WorktrackerProjectConnection;
   worktrackerProvider: WorktrackerProviderConnection;
   worktrackerReasoninglevel: WorktrackerReasoninglevelConnection;
+  worktrackerRunconfiguration: WorktrackerRunconfigurationConnection;
   worktrackerState: WorktrackerStateConnection;
   worktrackerWorkspace: WorktrackerWorkspaceConnection;
   worktree_status: WorktreeStatusView;
@@ -1040,6 +1087,11 @@ export type QueryAgentTerminalSessionsArgs = {
 export type QueryAgent_Run_HoldingsArgs = {
   project_id: Scalars['String']['input'];
   task_id?: InputMaybe<Scalars['String']['input']>;
+};
+
+
+export type QueryApp_RunArgs = {
+  module_id: Scalars['String']['input'];
 };
 
 
@@ -1169,6 +1221,14 @@ export type QueryWorktrackerReasoninglevelArgs = {
   filters?: InputMaybe<WorktrackerReasoninglevelFilterInput>;
   having?: InputMaybe<WorktrackerReasoninglevelHavingInput>;
   orderBy?: InputMaybe<WorktrackerReasoninglevelOrderInput>;
+  pagination?: InputMaybe<PaginationInput>;
+};
+
+
+export type QueryWorktrackerRunconfigurationArgs = {
+  filters?: InputMaybe<WorktrackerRunconfigurationFilterInput>;
+  having?: InputMaybe<WorktrackerRunconfigurationHavingInput>;
+  orderBy?: InputMaybe<WorktrackerRunconfigurationOrderInput>;
   pagination?: InputMaybe<PaginationInput>;
 };
 
@@ -1499,6 +1559,7 @@ export type WorktrackerIssue = {
   project?: Maybe<WorktrackerProject>;
   projectId: Scalars['String']['output'];
   rank: Scalars['String']['output'];
+  runConfiguration?: Maybe<WorktrackerRunconfiguration>;
   sequenceId: Scalars['Int']['output'];
   state?: Maybe<WorktrackerState>;
   stateId?: Maybe<Scalars['String']['output']>;
@@ -1546,6 +1607,13 @@ export type WorktrackerIssueChildrenArgs = {
 export type WorktrackerIssueModuleMembersArgs = {
   filters?: InputMaybe<WorktrackerIssueFilterInput>;
   orderBy?: InputMaybe<WorktrackerIssueOrderInput>;
+  pagination?: InputMaybe<PaginationInput>;
+};
+
+
+export type WorktrackerIssueRunConfigurationArgs = {
+  filters?: InputMaybe<WorktrackerRunconfigurationFilterInput>;
+  orderBy?: InputMaybe<WorktrackerRunconfigurationOrderInput>;
   pagination?: InputMaybe<PaginationInput>;
 };
 
@@ -1638,6 +1706,7 @@ export type WorktrackerIssueHavingInput = {
   moduleMembers?: InputMaybe<WorktrackerIssueFilterInput>;
   parent?: InputMaybe<WorktrackerIssueFilterInput>;
   project?: InputMaybe<WorktrackerProjectFilterInput>;
+  runConfiguration?: InputMaybe<WorktrackerRunconfigurationFilterInput>;
   state?: InputMaybe<WorktrackerStateFilterInput>;
 };
 
@@ -2089,6 +2158,56 @@ export type WorktrackerReasoninglevelHavingInput = {
 export type WorktrackerReasoninglevelOrderInput = {
   id?: InputMaybe<OrderByEnum>;
   name?: InputMaybe<OrderByEnum>;
+};
+
+export type WorktrackerRunconfiguration = {
+  __typename?: 'WorktrackerRunconfiguration';
+  command: Scalars['String']['output'];
+  createdAt: Scalars['String']['output'];
+  environment: Scalars['Json']['output'];
+  issue?: Maybe<WorktrackerIssue>;
+  moduleId: Scalars['String']['output'];
+  previewUrl?: Maybe<Scalars['String']['output']>;
+  updatedAt: Scalars['String']['output'];
+};
+
+export type WorktrackerRunconfigurationConnection = {
+  __typename?: 'WorktrackerRunconfigurationConnection';
+  edges: Array<WorktrackerRunconfigurationEdge>;
+  nodes: Array<WorktrackerRunconfiguration>;
+  pageInfo: PageInfo;
+  paginationInfo?: Maybe<PaginationInfo>;
+};
+
+export type WorktrackerRunconfigurationEdge = {
+  __typename?: 'WorktrackerRunconfigurationEdge';
+  cursor: Scalars['String']['output'];
+  node: WorktrackerRunconfiguration;
+};
+
+export type WorktrackerRunconfigurationFilterInput = {
+  and?: InputMaybe<Array<WorktrackerRunconfigurationFilterInput>>;
+  command?: InputMaybe<StringFilterInput>;
+  createdAt?: InputMaybe<TextFilterInput>;
+  environment?: InputMaybe<JsonFilterInput>;
+  moduleId?: InputMaybe<StringFilterInput>;
+  not?: InputMaybe<WorktrackerRunconfigurationFilterInput>;
+  or?: InputMaybe<Array<WorktrackerRunconfigurationFilterInput>>;
+  previewUrl?: InputMaybe<StringFilterInput>;
+  updatedAt?: InputMaybe<TextFilterInput>;
+};
+
+export type WorktrackerRunconfigurationHavingInput = {
+  issue?: InputMaybe<WorktrackerIssueFilterInput>;
+};
+
+export type WorktrackerRunconfigurationOrderInput = {
+  command?: InputMaybe<OrderByEnum>;
+  createdAt?: InputMaybe<OrderByEnum>;
+  environment?: InputMaybe<OrderByEnum>;
+  moduleId?: InputMaybe<OrderByEnum>;
+  previewUrl?: InputMaybe<OrderByEnum>;
+  updatedAt?: InputMaybe<OrderByEnum>;
 };
 
 export type WorktrackerState = {

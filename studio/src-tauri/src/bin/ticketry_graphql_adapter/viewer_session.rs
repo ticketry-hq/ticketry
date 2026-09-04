@@ -233,6 +233,25 @@ pub(super) async fn start(
     ownership: ViewerOwnershipService,
     agent_run_id: String,
     attachment: TerminalAttachment,
+    socket: WebSocket,
+) -> SessionClose {
+    start_inner(Some(ownership), agent_run_id, attachment, socket).await
+}
+
+/// App runs have no Agent Run or Terminal Session row by design, so their
+/// single panel viewer attaches without the agent-viewer lease table.
+pub(super) async fn start_unleased(
+    agent_run_id: String,
+    attachment: TerminalAttachment,
+    socket: WebSocket,
+) -> SessionClose {
+    start_inner(None, agent_run_id, attachment, socket).await
+}
+
+async fn start_inner(
+    ownership: Option<ViewerOwnershipService>,
+    agent_run_id: String,
+    attachment: TerminalAttachment,
     mut socket: WebSocket,
 ) -> SessionClose {
     let viewer_id = new_viewer_id();
@@ -269,26 +288,31 @@ pub(super) async fn start(
     let mechanics: Arc<dyn PreparedViewerMechanics> = Arc::new(SessionMechanics {
         shutdown: shutdown_sender,
     });
+    let _unleased_mechanics = ownership.is_none().then(|| Arc::clone(&mechanics));
 
     let lease_request = CreateViewerLease {
         agent_run_id: agent_run_id.clone(),
         viewer_id: viewer_id.clone(),
         transport: TRANSPORT.to_owned(),
     };
-    let established = match ownership.stage_prepared(&lease_request, mechanics) {
-        Ok(()) => ownership.create(lease_request.clone()).await,
-        Err(error) => Err(error),
-    };
-    let generation = match established {
-        Ok(model) => model.generation,
-        Err(error) => {
-            // The service may have detached our staged mechanics already; drain
-            // any queued signal before tearing down inline.
-            while shutdown_receiver.try_recv().is_ok() {}
-            let close = SessionClose::LeaseRejected(error.to_string());
-            control.detach_and_release().await;
-            return finish_socket(socket, close).await;
+    let generation = if let Some(ownership) = ownership.as_ref() {
+        let established = match ownership.stage_prepared(&lease_request, mechanics) {
+            Ok(()) => ownership.create(lease_request.clone()).await,
+            Err(error) => Err(error),
+        };
+        match established {
+            Ok(model) => Some(model.generation),
+            Err(error) => {
+                // The service may have detached our staged mechanics already; drain
+                // any queued signal before tearing down inline.
+                while shutdown_receiver.try_recv().is_ok() {}
+                let close = SessionClose::LeaseRejected(error.to_string());
+                control.detach_and_release().await;
+                return finish_socket(socket, close).await;
+            }
         }
+    } else {
+        None
     };
 
     let ready = ServerFrame::Ready {
@@ -296,7 +320,14 @@ pub(super) async fn start(
         agent_run_id: agent_run_id.clone(),
     };
     if socket.send(ready.to_message()).await.is_err() {
-        release(&ownership, &agent_run_id, &viewer_id, &generation, &control).await;
+        release(
+            ownership.as_ref(),
+            &agent_run_id,
+            &viewer_id,
+            generation.as_deref(),
+            &control,
+        )
+        .await;
         return SessionClose::TransportGone;
     }
 
@@ -332,13 +363,17 @@ pub(super) async fn start(
                 command_failure.unwrap_or_else(|| "terminal command worker stopped".to_owned()),
             ),
             _ = renewal.tick() => {
-                let renewal = UpdateViewerLease {
-                    agent_run_id: agent_run_id.clone(),
-                    viewer_id: viewer_id.clone(),
-                    generation: generation.clone(),
-                };
-                if ownership.update(renewal).await.is_err() {
-                    break SessionClose::LeaseLost;
+                if let (Some(ownership), Some(generation)) =
+                    (ownership.as_ref(), generation.as_ref())
+                {
+                    let renewal = UpdateViewerLease {
+                        agent_run_id: agent_run_id.clone(),
+                        viewer_id: viewer_id.clone(),
+                        generation: generation.clone(),
+                    };
+                    if ownership.update(renewal).await.is_err() {
+                        break SessionClose::LeaseLost;
+                    }
                 }
             }
             _ = exit_poll.tick() => match poll_client_exit(control.clone()).await {
@@ -373,7 +408,14 @@ pub(super) async fn start(
         }
     };
 
-    release(&ownership, &agent_run_id, &viewer_id, &generation, &control).await;
+    release(
+        ownership.as_ref(),
+        &agent_run_id,
+        &viewer_id,
+        generation.as_deref(),
+        &control,
+    )
+    .await;
     finish_socket(socket, close).await
 }
 
@@ -412,19 +454,21 @@ fn client_outcome_close(outcome: AttachmentOutcome) -> SessionClose {
 /// Release the exact lease this viewer created and end only its transient
 /// client. Both halves are idempotent, so every exit path can call them.
 async fn release(
-    ownership: &ViewerOwnershipService,
+    ownership: Option<&ViewerOwnershipService>,
     agent_run_id: &str,
     viewer_id: &str,
-    generation: &str,
+    generation: Option<&str>,
     control: &LiveControl,
 ) {
-    let delete_request = DeleteViewerLease {
-        agent_run_id: agent_run_id.to_owned(),
-        viewer_id: viewer_id.to_owned(),
-        generation: generation.to_owned(),
-    };
-    // A replaced or expired lease is an idempotent no-op here.
-    let _: Result<Option<_>, ViewerOwnershipError> = ownership.delete(delete_request).await;
+    if let (Some(ownership), Some(generation)) = (ownership, generation) {
+        let delete_request = DeleteViewerLease {
+            agent_run_id: agent_run_id.to_owned(),
+            viewer_id: viewer_id.to_owned(),
+            generation: generation.to_owned(),
+        };
+        // A replaced or expired lease is an idempotent no-op here.
+        let _: Result<Option<_>, ViewerOwnershipError> = ownership.delete(delete_request).await;
+    }
     control.clone().detach_and_release().await;
 }
 

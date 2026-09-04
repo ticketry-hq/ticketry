@@ -2,6 +2,7 @@ import { useLayoutEffect, useMemo } from "react";
 import { useClientStore } from "../../../state/clientStore";
 import { useStudioStore } from "../../projects";
 import {
+  descendantIdsByWorkItem,
   type PlanningTreeRow,
   LOADING_PLACEHOLDER,
   orderedTaskSections,
@@ -17,16 +18,10 @@ import { useModuleOpen } from ".";
 
 const EMPTY_EXPANDED_IDS: string[] = [];
 
-const recordSelectionProfilePoint = (point: string) => {
-  (globalThis as typeof globalThis & {
-    __ticketrySelectionProfileProbe?: (point: string) => void;
-  }).__ticketrySelectionProfileProbe?.(point);
-};
-
 export function useStoriesTree() {
-  recordSelectionProfilePoint("stories-tree-render");
   const selectedProjectId = useStudioStore((s) => s.selectedProjectId);
   const selectedModuleId = useClientStore((s) => s.selectedModuleId);
+  const selectedTaskId = useClientStore((s) => s.selectedTaskId);
   const { tree, items } = useModuleOpen(selectedModuleId);
   const states = useCachedStates(selectedProjectId);
   const loadingTasks = false;
@@ -44,7 +39,6 @@ export function useStoriesTree() {
   const isSearchActive = normalizedQuery.length > 0;
 
   const itemsById = useMemo(() => {
-    recordSelectionProfilePoint("items-by-id-build");
     const resolved: Record<string, TreeWorkItem> = {};
     for (const item of items) {
       resolved[item.id] = item as unknown as TreeWorkItem;
@@ -52,17 +46,25 @@ export function useStoriesTree() {
     return resolved;
   }, [items]);
   const loadingRecords = items.length < tree.order.length;
+  const descendantIdsById = useMemo(
+    () => descendantIdsByWorkItem(tree),
+    [tree],
+  );
   const expandedIds = useMemo(() => {
-    recordSelectionProfilePoint("expanded-ids-build");
-    return new Set(rememberedExpandedIds);
-  }, [rememberedExpandedIds]);
+    const visible = new Set(rememberedExpandedIds);
+    if (selectedModuleId && selectedTaskId) {
+      for (const id of taskRevealPath(selectedTaskId, tree, itemsById, states).ancestorIds) {
+        visible.add(id);
+      }
+    }
+    return visible;
+  }, [itemsById, rememberedExpandedIds, selectedModuleId, selectedTaskId, states, tree]);
 
   useLayoutEffect(() => {
     migrateCollapsedStateNames(states);
   }, [migrateCollapsedStateNames, states]);
 
   const derived = useMemo(() => {
-    recordSelectionProfilePoint("visible-rows-build");
     const out: PlanningTreeRow[] = [];
     const sectionIdsByState: Record<string, string[]> = {};
 
@@ -142,6 +144,7 @@ export function useStoriesTree() {
   return {
     rows: derived.rows,
     tree,
+    descendantIdsById,
     sectionIdsByState: derived.sectionIdsByState,
     loadingTasks: loadingTasks || loadingRecords,
     isSearchActive,

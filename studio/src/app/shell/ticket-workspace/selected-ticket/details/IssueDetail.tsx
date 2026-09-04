@@ -41,6 +41,7 @@ import { LaunchAgentAction } from "./LaunchAgentAction";
 import { SubtreeRunActions } from "./SubtreeRunActions";
 import { RunNowAction } from "./RunNowAction";
 import { readVersionedItem } from "../../../../../shared/storage/versioned";
+import { SELECTION_DELAY_MS } from "../../../../../shared/selection/useDelayedSelectionId";
 
 const DescriptionEditor = lazy(() => import("../documents/DescriptionEditor"));
 
@@ -64,7 +65,9 @@ export default function IssueDetail({ issueId }: { issueId: string }) {
     isPending: loading,
     error: undefined as Error | undefined,
   };
-  const attachments = useWorkItemAttachments(task?.id ?? null).data ?? [];
+  const attachments = useWorkItemAttachments(task?.id ?? null, {
+    delayMs: SELECTION_DELAY_MS,
+  }).data ?? [];
   const displayedChildIds = task
     ? membership.children[task.id] ?? NO_CHILD_IDS
     : NO_CHILD_IDS;
@@ -318,7 +321,6 @@ export default function IssueDetail({ issueId }: { issueId: string }) {
         <IssueSidebar
           task={task}
           epic={epic}
-          moduleId={epic?.id ?? selectedModuleId}
           saving={saving}
           blockedByChips={blockedByChips}
           blocksChips={blocksChips}

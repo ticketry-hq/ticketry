@@ -30,6 +30,7 @@ export {
   setStatesSorted,
   stateById,
   upsertState,
+  useCachedState,
   useCachedStates,
 } from "./stateCatalog";
 export { useReorderModule } from "./mutations";

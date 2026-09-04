@@ -417,7 +417,7 @@ describe("overhaul acceptance — Task workspace Settings occlusion", () => {
     view.unmount();
   });
 
-  it("[overhaul-126] hides and restores the retained Task viewer through state configuration", async () => {
+  it("hides and restores the retained Task viewer through state configuration", async () => {
     seedTaskWorkspace("session-792", "run-792");
     const view = mountTaskWorkspace();
     await waitFor(() =>

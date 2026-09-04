@@ -92,6 +92,10 @@ impl TmuxAdapter {
         for (name, value) in &request.command.environment {
             command.args(["-e", &format!("{name}={value}")]);
         }
+        // Keep the pane alive until the bounded hosted command replaces it. A
+        // detached default shell may exit before tmux reaches the ownership
+        // options later in this command queue.
+        command.args(["--", "/bin/sleep", "86400"]);
         for (key, value) in [
             ("remain-on-exit", "on"),
             ("window-size", "manual"),
@@ -102,27 +106,19 @@ impl TmuxAdapter {
         ] {
             command.args([";", "set-option", "-t", &session, key, value]);
         }
+        command
+            .args([";", "respawn-pane", "-k", "-t", &session, "--"])
+            .arg(hosted.tmux_command());
         // Keep creation and ownership publication in one tmux command queue.
         // A concurrent reconciliation client can otherwise observe the new
         // session between `new-session` and the first `set-option` and treat
         // the incomplete identity as an orphan.
-        checked(command, "create detached session")?;
-
-        let mut start = self.command();
-        start
-            .args(["respawn-pane", "-k", "-t", &session, "--"])
-            .arg(hosted.tmux_command());
-        if let Err(error) = checked(start, "start hosted command") {
-            let cleanup = checked(
+        if let Err(error) = checked(command, "create detached session") {
+            let _ = checked(
                 self.command_with(["kill-session", "-t", &session]),
                 "remove partial session",
             );
-            return match cleanup {
-                Ok(_) => Err(error),
-                Err(cleanup_error) => Err(TmuxAdapterError::Unavailable(format!(
-                    "{error}; {cleanup_error}"
-                ))),
-            };
+            return Err(error);
         }
         hosted.release_to_process();
         match self.observe(&request.identity) {

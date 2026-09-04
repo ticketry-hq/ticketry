@@ -20,7 +20,7 @@ import {
   adaptWorktreeStatus,
   type WorktreeStatusPayload,
 } from "./statusTransport";
-import type { WorktreeContext, WorktreeStatus } from "./types";
+import type { WorktreeStatus } from "./types";
 
 /** A stable identity for one user intent, reused across its retries. */
 export function newOperationId(): string {
@@ -30,9 +30,7 @@ export function newOperationId(): string {
 export function requestWorktreeCreate(
   taskId: string,
   operationId: string,
-  ctx: WorktreeContext,
 ): Promise<WorktreeStatus> {
-  void ctx;
   return studioRuntime().writeWorkTracker({
     graphQl: async (execute) =>
       adaptWorktreeStatus(

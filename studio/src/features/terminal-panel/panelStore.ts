@@ -1,6 +1,6 @@
 /**
- * The terminal panel's state: which modules are showing it, and how tall it is
- * (#667, #669, #730).
+ * The terminal panel's state: which modules are showing it, which module
+ * terminal segment is active, and how tall it is (#667, #669, #730, #1101).
  *
  * The toggle is strictly two-state: closed opens the panel and focuses its
  * shell; open closes it wherever focus currently sits. VS Code's three-state
@@ -51,11 +51,14 @@ interface TerminalPanelState {
    * one keystroke both reveals the shell and lands the caret in it.
    */
   focusSignal: number;
+  activeSegmentByModule: Record<string, "shells" | "app-run">;
   openPanel: (moduleId: string) => void;
   closePanel: (moduleId: string) => void;
   togglePanel: (moduleId: string) => void;
   /** Puts the keyboard back in the shell without changing open state. */
   focusShell: () => void;
+  showShells: (moduleId: string) => void;
+  showAppRun: (moduleId: string) => void;
   /**
    * Sets the ordinary height. Direct manipulation is authoritative, so this
    * also leaves maximized mode: fine resizing never fights a hidden flag.
@@ -104,6 +107,7 @@ export const useTerminalPanelStore = createApolloStore<TerminalPanelState>("term
     // ordinary panel at the height the clamping policy already produced.
     maximized: restored.maximized ?? false,
     focusSignal: 0,
+    activeSegmentByModule: {},
 
     openPanel(moduleId) {
       setOpen(moduleId, true);
@@ -119,6 +123,30 @@ export const useTerminalPanelStore = createApolloStore<TerminalPanelState>("term
 
     focusShell() {
       set((state) => ({ focusSignal: state.focusSignal + 1 }));
+    },
+
+    showShells(moduleId) {
+      if (!moduleId) return;
+      set((state) => ({
+        activeSegmentByModule: {
+          ...state.activeSegmentByModule,
+          [moduleId]: "shells",
+        },
+        focusSignal: state.focusSignal + 1,
+      }));
+    },
+
+    showAppRun(moduleId) {
+      if (!moduleId) return;
+      set((state) => ({
+        openModules: { ...state.openModules, [moduleId]: true },
+        activeSegmentByModule: {
+          ...state.activeSegmentByModule,
+          [moduleId]: "app-run",
+        },
+        focusSignal: state.focusSignal + 1,
+      }));
+      rememberPanelOpen(moduleId, true);
     },
 
     setHeight(height) {
@@ -182,4 +210,12 @@ export function isTerminalPanelOpen(): boolean {
 export function useTerminalPanelOpen(): boolean {
   const moduleId = useClientStore((state) => state.selectedModuleId);
   return useTerminalPanelStore((state) => isOpenIn(state.openModules, moduleId));
+}
+
+export function useTerminalPanelSegment(): "shells" | "app-run" {
+  const moduleId = useClientStore((state) => state.selectedModuleId);
+  return useTerminalPanelStore(
+    (state) =>
+      (moduleId ? state.activeSegmentByModule[moduleId] : undefined) ?? "shells",
+  );
 }

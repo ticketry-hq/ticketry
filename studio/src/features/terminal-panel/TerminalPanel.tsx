@@ -1,10 +1,10 @@
 /**
- * The bottom terminal panel: plain login shells for the selected module
- * (#667, #668).
+ * The bottom terminal panel: the selected module's App run and plain login
+ * shells (#667, #668, #1101).
  *
- * It is a shell surface, not a dock. Agent runs keep their terminal tabs in the
- * task workspace and never appear here, so the live-terminal cycle, subtree
- * chicklets and per-work-item active-tab memory are untouched.
+ * It is a module terminal surface, not a dock. App runs and shells occupy
+ * distinct segments; agent runs keep their tabs in the task workspace and
+ * never appear here.
  *
  * Nothing below this component mounts while the panel is closed, and only the
  * active tab's terminal mounts while it is open. That is the lazy-attachment
@@ -16,6 +16,7 @@ import { useEffect } from "react";
 import type { ReactNode } from "react";
 
 import { Terminal, useTerminalStore } from "../agents/terminal";
+import { AppRunPanel } from "../app-run";
 import { useStudioStore } from "../projects";
 import { useClientStore } from "../../state/clientStore";
 import { DeadShell } from "./DeadShell";
@@ -24,7 +25,11 @@ import { useModuleShellStore } from "./moduleShellStore";
 import { usePanelDisplayHeight } from "./panelDisplayHeight";
 import { PanelHeader } from "./PanelHeader";
 import { PanelResizeGrip } from "./PanelResizeGrip";
-import { useTerminalPanelOpen, useTerminalPanelStore } from "./panelStore";
+import {
+  useTerminalPanelOpen,
+  useTerminalPanelSegment,
+  useTerminalPanelStore,
+} from "./panelStore";
 import { useShellExitWatch } from "./shellExitWatch";
 import { ShellTabStrip } from "./ShellTabStrip";
 import { deadShell, EMPTY_SHELL_SET } from "./shellTabSet";
@@ -58,6 +63,7 @@ function TerminalPanelBody() {
   const moduleId = useClientStore((state) => state.selectedModuleId);
   const projectId = useStudioStore((state) => state.selectedProjectId);
   const focusSignal = useTerminalPanelStore((state) => state.focusSignal);
+  const segment = useTerminalPanelSegment();
   const shells = useModuleShellStore((state) =>
     moduleId ? state.byModule[moduleId] ?? EMPTY_SHELL_SET : EMPTY_SHELL_SET,
   );
@@ -81,9 +87,9 @@ function TerminalPanelBody() {
   // Switching modules re-enters here with the new module's strip: its shells
   // are rediscovered once, and its remembered active tab comes back with them.
   useEffect(() => {
-    if (!moduleId || !projectId) return;
+    if (!moduleId || !projectId || segment !== "shells") return;
     void openModule(moduleId, projectId);
-  }, [openModule, moduleId, projectId]);
+  }, [openModule, moduleId, projectId, segment]);
 
   // Endings come from the run projection, never from a viewer closing, so the
   // panel behaves the same under either renderer (#670).
@@ -102,9 +108,19 @@ function TerminalPanelBody() {
     );
   }
 
+  const segments = <PanelSegments moduleId={moduleId} active={segment} />;
+
+  if (segment === "app-run") {
+    return (
+      <PanelFrame tabs={segments}>
+        <AppRunPanel moduleId={moduleId} />
+      </PanelFrame>
+    );
+  }
+
   if (shells.problem?.kind === "needs-folder") {
     return (
-      <PanelFrame>
+      <PanelFrame tabs={segments}>
         <ModuleFolderRequired
           moduleId={moduleId}
           reason={shells.problem.reason}
@@ -116,7 +132,7 @@ function TerminalPanelBody() {
 
   if (shells.problem?.kind === "failed") {
     return (
-      <PanelFrame>
+      <PanelFrame tabs={segments}>
         <div
           data-testid="terminal-panel-failure"
           role="alert"
@@ -139,12 +155,16 @@ function TerminalPanelBody() {
   return (
     <PanelFrame
       tabs={
-        <ShellTabStrip
-          shells={shells}
-          onSelect={(runId) => selectShell(moduleId, runId)}
-          onClose={(runId) => void closeShell(moduleId, runId)}
-          onCreate={() => void createShell(moduleId, projectId)}
-        />
+        <>
+          {segments}
+          <div className="border-l border-pane-border" />
+          <ShellTabStrip
+            shells={shells}
+            onSelect={(runId) => selectShell(moduleId, runId)}
+            onClose={(runId) => void closeShell(moduleId, runId)}
+            onCreate={() => void createShell(moduleId, projectId)}
+          />
+        </>
       }
     >
       <>
@@ -186,6 +206,46 @@ function TerminalPanelBody() {
         )}
       </>
     </PanelFrame>
+  );
+}
+
+function PanelSegments({
+  moduleId,
+  active,
+}: {
+  moduleId: string;
+  active: "shells" | "app-run";
+}) {
+  const showShells = useTerminalPanelStore((state) => state.showShells);
+  const showAppRun = useTerminalPanelStore((state) => state.showAppRun);
+  return (
+    <div
+      role="tablist"
+      aria-label="Terminal panel segments"
+      data-testid="terminal-panel-segments"
+      className="flex shrink-0 items-stretch"
+    >
+      <button
+        type="button"
+        role="tab"
+        aria-selected={active === "app-run"}
+        data-testid="terminal-panel-app-run-segment"
+        onClick={() => showAppRun(moduleId)}
+        className={`px-3 py-1 ${active === "app-run" ? "bg-pane-panel text-text-primary" : "text-text-muted hover:bg-pane-bg"}`}
+      >
+        App run
+      </button>
+      <button
+        type="button"
+        role="tab"
+        aria-selected={active === "shells"}
+        data-testid="terminal-panel-shells-segment"
+        onClick={() => showShells(moduleId)}
+        className={`px-3 py-1 ${active === "shells" ? "bg-pane-panel text-text-primary" : "text-text-muted hover:bg-pane-bg"}`}
+      >
+        Shells
+      </button>
+    </div>
   );
 }
 

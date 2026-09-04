@@ -214,6 +214,7 @@ export function ensureConnected(sessionId: string, meta: SessionMeta): void {
       agentRunId: entry.agentRunId,
       cols,
       rows,
+      unleased: meta.isAppRun,
     },
     (event) => {
       if (event.type === "ready") {

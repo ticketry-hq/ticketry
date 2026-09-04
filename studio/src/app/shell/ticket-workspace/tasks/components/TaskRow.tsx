@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React from "react";
 import { formatWorkItemDisplayIdentifier } from "../../../../../features/work-items";
 import {
   type Row,
@@ -13,11 +13,8 @@ import {
 import { TEMP_TASK_ID } from "../../../../../features/agents/types";
 import { useStudioStore } from "../../../../../features/projects";
 import { WorkItemRowLabel } from "./WorkItemRowLabel";
-import { useClientStore } from "../../../../../state/clientStore";
-import {
-  useModuleOpen,
-} from "../../../../../features/work-items";
-import { stateById, useCachedStates } from "../../../../../features/projects";
+import { useWorkItem } from "../../../../../features/work-items";
+import { useCachedState } from "../../../../../features/projects";
 import type { DragSourceProps } from "../../../../../shared/dragDrop/useAxisDragAndDrop";
 
 // Warm the description-editor chunk on first row hover so it is already
@@ -29,14 +26,9 @@ const preloadDescriptionEditor = () => {
   void import("../../selected-ticket/documents/DescriptionEditor");
 };
 
-const recordSelectionProfilePoint = (point: string) => {
-  (globalThis as typeof globalThis & {
-    __ticketrySelectionProfileProbe?: (point: string) => void;
-  }).__ticketrySelectionProfileProbe?.(point);
-};
-
 interface TaskRowProps {
   row: Row;
+  descendantIds: string[];
   isSelected: boolean;
   // Id-taking handlers keep the parent's props referentially stable across
   // renders, so React.memo actually skips unchanged rows.
@@ -45,14 +37,48 @@ interface TaskRowProps {
   dragSourceProps?: DragSourceProps;
 }
 
+function sameIds(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length &&
+    left.every((id, index) => id === right[index]);
+}
+
+function sameRow(left: Row, right: Row): boolean {
+  if (left.kind !== right.kind) return false;
+  if (left.kind === "scratch" && right.kind === "scratch") {
+    return left.moduleId === right.moduleId;
+  }
+  return left.kind === "work-item" && right.kind === "work-item" &&
+    left.id === right.id &&
+    left.depth === right.depth &&
+    left.parentId === right.parentId &&
+    left.expandable === right.expandable &&
+    left.expanded === right.expanded;
+}
+
+function sameTaskRowProps(left: TaskRowProps, right: TaskRowProps): boolean {
+  if (
+    !sameRow(left.row, right.row) ||
+    left.isSelected !== right.isSelected ||
+    left.onClick !== right.onClick ||
+    left.onToggleExpand !== right.onToggleExpand ||
+    left.dragSourceProps?.draggable !== right.dragSourceProps?.draggable ||
+    left.dragSourceProps?.onDragStart !== right.dragSourceProps?.onDragStart ||
+    left.dragSourceProps?.onDragEnd !== right.dragSourceProps?.onDragEnd
+  ) {
+    return false;
+  }
+  if (left.row.kind === "scratch" || right.row.kind === "scratch") return true;
+  return sameIds(left.descendantIds, right.descendantIds);
+}
+
 export const TaskRow = React.memo(function TaskRow({
   row,
+  descendantIds,
   isSelected,
   onClick,
   onToggleExpand,
   dragSourceProps,
 }: TaskRowProps) {
-  recordSelectionProfilePoint("task-row-render");
   return row.kind === "scratch" ? (
     <ScratchPlanningRow
       row={row}
@@ -63,39 +89,25 @@ export const TaskRow = React.memo(function TaskRow({
   ) : (
     <WorkItemPlanningRow
       row={row}
+      descendantIds={descendantIds}
       isSelected={isSelected}
       onClick={onClick}
       onToggleExpand={onToggleExpand}
       dragSourceProps={dragSourceProps}
     />
   );
-});
+}, sameTaskRowProps);
 
 function WorkItemPlanningRow({
   row,
+  descendantIds,
   isSelected,
   onClick,
   onToggleExpand,
   dragSourceProps,
 }: Omit<TaskRowProps, "row"> & { row: WorkItemRow }) {
-  const projectId = useStudioStore((state) => state.selectedProjectId);
-  const states = useCachedStates(projectId);
-  const moduleId = useClientStore((state) => state.selectedModuleId);
-  const { tree, items } = useModuleOpen(moduleId);
-  const task = items.find((item) => item.id === row.id);
-  const descendantIds = useMemo(() => {
-    const ids: string[] = [];
-    const seen = new Set([row.id]);
-    const pending = [...(tree.children[row.id] ?? [])];
-    while (pending.length) {
-      const id = pending.pop();
-      if (!id || seen.has(id)) continue;
-      seen.add(id);
-      ids.push(id);
-      pending.push(...(tree.children[id] ?? []));
-    }
-    return ids;
-  }, [row.id, tree]);
+  const { data: task } = useWorkItem(row.id);
+  const state = useCachedState(task?.state ?? null);
   if (!task) return null;
 
   return (
@@ -105,7 +117,7 @@ function WorkItemPlanningRow({
       expandable={row.expandable}
       expanded={row.expanded}
       identifier={formatWorkItemDisplayIdentifier(task.sequence_id)}
-      stateColor={stateById(states, task.state)?.color ?? null}
+      stateColor={state?.color ?? null}
       name={task.name}
       isSelected={isSelected}
       onClick={onClick}

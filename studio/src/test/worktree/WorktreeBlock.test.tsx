@@ -72,16 +72,7 @@ function seed(status: WorktreeStatus): void {
 }
 
 function renderBlock() {
-  return render(
-    <WorktreeBlock
-      taskId="t1"
-      parentId={null}
-      moduleId="m1"
-      projectId="p1"
-      ticketSeq={589}
-      taskName="Worktree UI"
-    />,
-  );
+  return render(<WorktreeBlock taskId="t1" />);
 }
 
 describe("WorktreeBlock (#589, shared CODIN-922)", () => {
@@ -104,7 +95,6 @@ describe("WorktreeBlock (#589, shared CODIN-922)", () => {
     expect(create).toHaveBeenCalledWith(
       "t1",
       "operation-1",
-      expect.objectContaining({ moduleId: "m1", ticketSeq: 589 }),
     );
   });
 

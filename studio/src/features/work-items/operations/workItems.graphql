@@ -4,6 +4,7 @@ fragment GeneratedWorkTrackerWorkItemFields on WorktrackerIssue {
   project_id: projectId
   sequence_id: sequenceId
   state_id: stateId
+  stateRevision
   description
   parent_id: parentId
   module_id: moduleId

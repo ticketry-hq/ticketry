@@ -93,16 +93,7 @@ describe("worktree creation desktop runtime acceptance", () => {
     const requests: Request[] = [];
     await installDesktopRuntime(requests);
 
-    render(
-      <WorktreeBlock
-        taskId={TASK}
-        parentId={null}
-        moduleId="m1"
-        projectId="p1"
-        ticketSeq={881}
-        taskName="Parent story"
-      />,
-    );
+    render(<WorktreeBlock taskId={TASK} />);
 
     const create = await screen.findByRole("button", {
       name: "+ Create worktree",
@@ -143,16 +134,14 @@ describe("worktree creation desktop runtime acceptance", () => {
     const requests: Request[] = [];
     await installDesktopRuntime(requests);
 
-    const first = render(
-      <WorktreeBlock taskId={TASK} moduleId="m1" ticketSeq={881} />,
-    );
+    const first = render(<WorktreeBlock taskId={TASK} />);
     fireEvent.click(
       await screen.findByRole("button", { name: "+ Create worktree" }),
     );
     await screen.findByText("wt/CODIN-881-parent-story → main");
     first.unmount();
 
-    render(<WorktreeBlock taskId={TASK} moduleId="m1" ticketSeq={881} />);
+    render(<WorktreeBlock taskId={TASK} />);
     await waitFor(() =>
       expect(
         screen.queryByRole("button", { name: "+ Create worktree" }),

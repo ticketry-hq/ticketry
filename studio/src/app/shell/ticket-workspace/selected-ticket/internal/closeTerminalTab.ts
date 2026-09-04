@@ -3,7 +3,10 @@ import {
   useTerminalStore,
 } from "../../../../../features/agents/terminal/appNavigation";
 import { toast } from "../../../../../state/clientStore";
-import { apiErrorMessage } from "../../../../../shared/api/errors";
+import {
+  apiErrorMessage,
+  isTerminalSessionMissing,
+} from "../../../../../shared/api/errors";
 import { refreshTerminalHoldings } from "../../../../../features/agents/terminal";
 import type { SessionId } from "../../../../../features/agents/types";
 
@@ -21,6 +24,11 @@ export async function closeTerminalTab(
     try {
       await term.terminatePersisted(meta.agentRunId, bucket);
     } catch (error) {
+      if (isTerminalSessionMissing(error)) {
+        term.closeTab(sessionId);
+        if (!isScratchBucket(bucket)) await refreshTerminalHoldings();
+        return;
+      }
       toast.error(`Terminal could not be closed: ${apiErrorMessage(error)}`);
       return;
     }

@@ -165,6 +165,8 @@ export interface SessionMeta {
   // The viewer of a shell run: hosted by the terminal panel, never an agent
   // terminal tab, and never counted as agent activity.
   isShell?: boolean;
+  /** The module's App run is neither a panel shell nor an agent run. */
+  isAppRun?: boolean;
   initialPrompt: string | null;
   // Set when this tab reattaches to a persisted tmux session rather than
   // spawning a fresh agent. Drives the attach-mode init frame in ws.ts.
@@ -188,6 +190,12 @@ export interface OpenShellSessionArgs {
   projectId: string;
   /** The shell run the backend already launched; a shell never spawns here. */
   agentRunId: string;
+}
+
+export interface OpenAppRunSessionArgs {
+  moduleId: string;
+  projectId: string;
+  runId: string;
 }
 
 // A session's *bucket* is its real taskId when set, else a per-module scratch
@@ -257,6 +265,7 @@ interface TerminalStoreState {
    * workspace tab store anything. The panel owns where a shell is presented.
    */
   openShellSession: (args: OpenShellSessionArgs) => SessionId;
+  openAppRunSession: (args: OpenAppRunSessionArgs) => SessionId;
   setReady: (
     tempId: SessionId,
     sessionId: SessionId,
@@ -355,6 +364,31 @@ export const useTerminalStore = createApolloStore<TerminalStoreState>("terminal-
     return tempId;
   },
 
+  openAppRunSession({ moduleId, projectId, runId }) {
+    const existing = get().sessionByRun[runId];
+    if (existing && get().sessions[existing]) return existing;
+    const tempId = makeTempId();
+    const meta: SessionMeta = {
+      sessionId: tempId,
+      taskId: null,
+      projectId,
+      moduleId,
+      agent: null,
+      status: "connecting",
+      transport: "connecting",
+      isPlanning: false,
+      isInstant: false,
+      isAppRun: true,
+      initialPrompt: null,
+      agentRunId: runId,
+    };
+    set((state) => ({
+      sessions: { ...state.sessions, [tempId]: meta },
+      sessionByRun: { ...state.sessionByRun, [runId]: tempId },
+    }));
+    return tempId;
+  },
+
   setReady(tempId, sessionId, agentRunId) {
     // Capture the pre-rekey identity so the foreground claim (if any) can be
     // migrated to the durable key below, surviving the tmp -> serverId/runId
@@ -377,7 +411,7 @@ export const useTerminalStore = createApolloStore<TerminalStoreState>("terminal-
       sessions[sessionId] = updated;
 
       // A tab that reached ready with a durable id is auto-reattach eligible.
-      if (updated.agentRunId) addLiveRun(updated.agentRunId);
+      if (updated.agentRunId && !updated.isAppRun) addLiveRun(updated.agentRunId);
 
       const sessionByRun = { ...s.sessionByRun };
       if (existing.agentRunId && existing.agentRunId !== updated.agentRunId) {

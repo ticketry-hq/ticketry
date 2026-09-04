@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use sea_orm::{ConnectOptions, Database, DatabaseConnection, DbErr};
+use sea_orm_migration::MigratorTrait;
 
 use crate::data_directory::{established_data_directory, OwnershipError};
 
@@ -64,6 +65,12 @@ pub async fn open_for_commands(path: &Path) -> Result<DatabaseConnection, ReadDa
         });
 
     let database = Database::connect(options)
+        .await
+        .map_err(|source| ReadDatabaseError::Open {
+            path: path.to_owned(),
+            source,
+        })?;
+    crate::work_management::migrations::Migrator::up(&database, None)
         .await
         .map_err(|source| ReadDatabaseError::Open {
             path: path.to_owned(),

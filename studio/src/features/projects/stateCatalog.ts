@@ -1,5 +1,4 @@
-import { skipToken, useQuery } from "@apollo/client/react";
-import { useMemo } from "react";
+import { skipToken, useFragment, useQuery } from "@apollo/client/react";
 import type { State } from "../../shared/api/types";
 import {
   compactWorktrackerId,
@@ -7,7 +6,10 @@ import {
 } from "../../shared/api/generatedWorktracker";
 import { studioApolloClient } from "../../shared/apollo/client";
 import { readProjectOpen } from "./queries/readTransport";
-import { WorkTrackerProjectStatesDocument } from "./generated/projects.documents";
+import {
+  GeneratedWorkTrackerStateFieldsFragmentDoc,
+  WorkTrackerProjectStatesDocument,
+} from "./generated/projects.documents";
 import type {
   GeneratedWorkTrackerStateFieldsFragment,
   WorkTrackerProjectStatesQuery,
@@ -89,10 +91,21 @@ export function useCachedStates(projectId: string | null): State[] {
         }
       : skipToken,
   );
-  return useMemo(
-    () => query.data ? statesFromData(query.data) : EMPTY_STATES,
-    [query.data],
-  );
+  return query.data ? statesFromData(query.data) : EMPTY_STATES;
+}
+
+/** Subscribe to one normalized workflow-state row without depending on a list query. */
+export function useCachedState(stateId: string | null): State | null {
+  const fragment = useFragment({
+    client: studioApolloClient(),
+    fragment: GeneratedWorkTrackerStateFieldsFragmentDoc,
+    from: stateId
+      ? { __typename: "WorktrackerState", id: cacheId(stateId) }
+      : null,
+  });
+  return stateId && fragment.complete
+    ? stateFromRow(fragment.data as GeneratedWorkTrackerStateFieldsFragment)
+    : null;
 }
 
 export function setStates(projectId: string, states: State[]): void {

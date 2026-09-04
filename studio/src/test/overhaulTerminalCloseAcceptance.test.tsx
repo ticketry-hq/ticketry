@@ -14,6 +14,7 @@ import {
   installDesktopGraphQlRuntime,
   terminalSessionReadExecutor,
 } from "./desktopGraphQlRuntime";
+import { ApiError } from "../shared/api/errors";
 
 const terminalApi = vi.hoisted(() => ({
   getDocuments: vi.fn(),
@@ -202,5 +203,24 @@ describe("overhaul acceptance — terminal close synchronization", () => {
     expect(terminalReads.readTaskResumableTerminalSessions).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole("button", { name: "Resume codex terminal" }))
       .not.toBeInTheDocument();
+  });
+
+  it("[overhaul-169] dismisses an orphaned tab when its Terminal Session is already absent", async () => {
+    terminalApi.terminateTerminal.mockRejectedValue(new ApiError(
+      404,
+      "The Terminal Session does not exist.",
+      { code: "terminal_session_not_found" },
+    ));
+    mountLiveTerminal();
+
+    fireEvent.click(screen.getByRole("button", {
+      name: "Close codex terminal",
+    }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole("tab", { name: "codex terminal" }))
+        .not.toBeInTheDocument();
+    });
+    expect(useClientStore.getState().toasts).toEqual([]);
   });
 });

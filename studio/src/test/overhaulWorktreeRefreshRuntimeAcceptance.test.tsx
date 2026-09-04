@@ -33,6 +33,7 @@ const startup = {
 };
 
 const base = {
+  __typename: "WorktreeStatusView",
   kind: "none",
   task_id: OWNER,
   top_level_task_id: OWNER,
@@ -56,14 +57,15 @@ type Held = "absent" | "active" | "conflict";
 
 function statusFor(taskId: string, held: Held) {
   const owner = taskId === CHILD ? OWNER : taskId;
+  const isShared = taskId !== owner;
   if (held === "absent") {
-    return { ...base, task_id: taskId, top_level_task_id: owner, is_shared: false };
+    return { ...base, task_id: taskId, top_level_task_id: owner, is_shared: isShared };
   }
   return {
     ...base,
     task_id: taskId,
     top_level_task_id: owner,
-    is_shared: taskId === CHILD,
+    is_shared: isShared,
     kind: "worktree",
     branch: "wt/CODIN-881-parent-story",
     base_branch: "main",
@@ -197,9 +199,9 @@ async function installRuntime(host: ReturnType<typeof runtime>) {
 function renderViews() {
   return render(
     <>
-      <WorktreeBlock taskId={OWNER} parentId={null} moduleId="m1" ticketSeq={881} />
-      <WorktreeBlock taskId={CHILD} parentId={OWNER} moduleId="m1" ticketSeq={882} />
-      <WorktreeBlock taskId={UNRELATED} parentId={null} moduleId="m1" ticketSeq={889} />
+      <WorktreeBlock taskId={OWNER} />
+      <WorktreeBlock taskId={CHILD} />
+      <WorktreeBlock taskId={UNRELATED} />
     </>,
   );
 }

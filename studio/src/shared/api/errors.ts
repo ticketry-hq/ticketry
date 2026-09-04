@@ -31,3 +31,11 @@ export function isNoOpTransition(error: unknown): boolean {
   const { from, to } = error.body as { from?: unknown; to?: unknown };
   return typeof from === "string" && from === to;
 }
+
+export function isTerminalSessionMissing(error: unknown): boolean {
+  if (error instanceof FoundationGraphQlError) {
+    return error.code === "terminal_session_not_found";
+  }
+  if (!(error instanceof ApiError) || !error.body || typeof error.body !== "object") return false;
+  return (error.body as { code?: unknown }).code === "terminal_session_not_found";
+}

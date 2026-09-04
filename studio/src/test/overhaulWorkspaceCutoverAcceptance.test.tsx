@@ -184,14 +184,14 @@ describe("workspace cutover desktop runtime acceptance", () => {
         operationId: newSaveOperationId(),
       }),
     ).resolves.toMatchObject({ saved: true, stale: false });
-    await expect(readWorktreeStatus(TASK, { moduleId: MODULE })).resolves.toMatchObject({
+    await expect(readWorktreeStatus(TASK)).resolves.toMatchObject({
       kind: "worktree",
     });
     await expect(
-      requestWorktreeCreate(TASK, newOperationId(), { moduleId: MODULE, ticketSeq: 766 }),
+      requestWorktreeCreate(TASK, newOperationId()),
     ).resolves.toMatchObject({ kind: "worktree", branch: liveWorktree.branch });
     await expect(
-      requestWorktreeDiscard(TASK, newOperationId(), { moduleId: MODULE }),
+      requestWorktreeDiscard(TASK, newOperationId()),
     ).resolves.toMatchObject({ removed: true });
     // Every capability answered, and each one answered through GraphQL.
     expect(operations).toEqual([

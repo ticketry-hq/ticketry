@@ -27,12 +27,6 @@ const issueReference = (id: string) => ({
   id: compactWorktrackerId(id),
 });
 
-const recordSelectionProfilePoint = (point: string) => {
-  (globalThis as typeof globalThis & {
-    __ticketrySelectionProfileProbe?: (point: string) => void;
-  }).__ticketrySelectionProfileProbe?.(point);
-};
-
 function moduleTreeFromResult(
   moduleId: string,
   rows: readonly GeneratedWorkTrackerWorkItemFieldsFragment[],
@@ -78,7 +72,6 @@ export function useModuleOpen(moduleId: string | null): {
   items: WorkItem[];
   loading: boolean;
 } {
-  recordSelectionProfilePoint("module-open-hook");
   const query = useQuery(
     WorkTrackerModuleOpenDocument,
     moduleId
@@ -95,7 +88,6 @@ export function useModuleOpen(moduleId: string | null): {
       return { tree: EMPTY_MODULE_TREE, items: [] };
     }
     const items = orderedWorkItems(query.data.work_items.nodes);
-    recordSelectionProfilePoint("module-open-materialize");
     return {
       tree: moduleTreeFromWorkItems(moduleId, items),
       items,

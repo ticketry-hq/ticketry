@@ -202,6 +202,12 @@ input AgentTerminalSessionsOrderInput {
 	agent: OrderByEnum
 }
 
+type AppRunStatus {
+	module_id: String!
+	run_id: String!
+	live: Boolean!
+}
+
 type AutomationAttemptProjection {
 	attempt_id: String!
 	root_attempt_id: String!
@@ -541,6 +547,9 @@ type Mutation {
 	remove_state_from_issue_type_workflow(issue_type_id: String!, state_id: String!, workflow_revision: Int!): Boolean!
 	upsert_issue_type_launch_binding(issue_type_id: String!, state_id: String!, workflow_revision: Int!, prompt: String, required_skills: [String!], model_id: String, reasoning_id: String, auto_start: Boolean, subtree_run_enabled: Boolean): WorktrackerLaunchbinding!
 	delete_state(state_id: String!): Boolean!
+	create_run_configuration(module_id: String!, command: String!, environment: Json!, preview_url: String): WorktrackerRunconfiguration!
+	update_run_configuration(module_id: String!, command: String!, environment: Json!, preview_url: String): WorktrackerRunconfiguration!
+	delete_run_configuration(module_id: String!): Boolean!
 	update_keybinding_setting(value: Json!): KeybindingSetting!
 	update_provider_catalog(activated_providers: [String!]!, default_provider: String, default_model: String, default_reasoning: String): ProviderCatalog!
 	add_local_profile(profile: LocalProfileInput!): LocalSettings!
@@ -552,6 +561,8 @@ type Mutation {
 	dismiss_automation_attempt(attempt_id: String!): AutomationAttemptProjection!
 	ingest_agent_lifecycle(agent_run_id: String!, kind: String!, occurred_at: String!, provider_session_id: String): LifecycleAccepted!
 	terminal_session_create(client_request_id: String!, project_id: String, issue_id: String, module_id: String!, target_id: String, kind: String!, provider: String, working_directory_identity: String, columns: Int!, rows: Int!, model: String, reasoning: String, policy_reference: String, prompt: String, resume_from_agent_run_id: String, automation_attempt_id: String, required_skills: [String!], design_directory_identity: String, document_relative_path: String): AgentTerminalSessions!
+	app_run_start(module_id: String!, columns: Int!, rows: Int!): AppRunStatus!
+	app_run_stop(module_id: String!): AppRunStatus!
 	terminal_session_update(agent_run_id: String!, termination_request_id: String): AgentTerminalSessions!
 	terminal_output_observe(agent_run_id: String!): TerminalOutputObservation!
 	run_now(id_or_key: String!, request_identity: String!): RunNowPayload!
@@ -624,6 +635,7 @@ type Query {
 	worktrackerAgentmodel(filters: WorktrackerAgentmodelFilterInput, having: WorktrackerAgentmodelHavingInput, orderBy: WorktrackerAgentmodelOrderInput, pagination: PaginationInput): WorktrackerAgentmodelConnection!
 	worktrackerAgentmodelreasoninglevel(filters: WorktrackerAgentmodelreasoninglevelFilterInput, having: WorktrackerAgentmodelreasoninglevelHavingInput, orderBy: WorktrackerAgentmodelreasoninglevelOrderInput, pagination: PaginationInput): WorktrackerAgentmodelreasoninglevelConnection!
 	worktrackerReasoninglevel(filters: WorktrackerReasoninglevelFilterInput, having: WorktrackerReasoninglevelHavingInput, orderBy: WorktrackerReasoninglevelOrderInput, pagination: PaginationInput): WorktrackerReasoninglevelConnection!
+	worktrackerRunconfiguration(filters: WorktrackerRunconfigurationFilterInput, having: WorktrackerRunconfigurationHavingInput, orderBy: WorktrackerRunconfigurationOrderInput, pagination: PaginationInput): WorktrackerRunconfigurationConnection!
 	graphRuns(filters: GraphRunsFilterInput, having: GraphRunsHavingInput, orderBy: GraphRunsOrderInput, pagination: PaginationInput): GraphRunsConnection!
 	worktrees(filters: WorktreesFilterInput, having: WorktreesHavingInput, orderBy: WorktreesOrderInput, pagination: PaginationInput): WorktreesConnection!
 	worktree_status(task_id: String!): WorktreeStatusView!
@@ -636,6 +648,7 @@ type Query {
 	agentTerminalSessions(filters: AgentTerminalSessionsFilterInput, having: AgentTerminalSessionsHavingInput, orderBy: AgentTerminalSessionsOrderInput, pagination: PaginationInput): AgentTerminalSessionsConnection!
 	agentRunViewerLeases(filters: AgentRunViewerLeasesFilterInput, having: AgentRunViewerLeasesHavingInput, orderBy: AgentRunViewerLeasesOrderInput, pagination: PaginationInput): AgentRunViewerLeasesConnection!
 	resumable_terminal_sessions(task_id: String, project_id: String, module_id: String): [AgentRuns!]!
+	app_run(module_id: String!): AppRunStatus!
 	designDocuments(filters: DesignDocumentsFilterInput, having: DesignDocumentsHavingInput, orderBy: DesignDocumentsOrderInput, pagination: PaginationInput): DesignDocumentsConnection!
 	directory_completions(path: String!): [String!]!
 }
@@ -904,6 +917,7 @@ type WorktrackerIssue {
 	blocksEdges(filters: WorktrackerIssueBlockedByFilterInput, orderBy: WorktrackerIssueBlockedByOrderInput, pagination: PaginationInput): WorktrackerIssueBlockedByConnection!
 	agentRuns(filters: AgentRunsFilterInput, orderBy: AgentRunsOrderInput, pagination: PaginationInput): AgentRunsConnection!
 	attachment(filters: WorktrackerAttachmentFilterInput, orderBy: WorktrackerAttachmentOrderInput, pagination: PaginationInput): WorktrackerAttachmentConnection!
+	runConfiguration(filters: WorktrackerRunconfigurationFilterInput, orderBy: WorktrackerRunconfigurationOrderInput, pagination: PaginationInput): WorktrackerRunconfiguration
 }
 
 type WorktrackerIssueBlockedBy {
@@ -991,6 +1005,7 @@ input WorktrackerIssueHavingInput {
 	blocksEdges: WorktrackerIssueBlockedByFilterInput
 	agentRuns: AgentRunsFilterInput
 	attachment: WorktrackerAttachmentFilterInput
+	runConfiguration: WorktrackerRunconfigurationFilterInput
 }
 
 input WorktrackerIssueOrderInput {
@@ -1359,6 +1374,53 @@ input WorktrackerReasoninglevelHavingInput {
 input WorktrackerReasoninglevelOrderInput {
 	id: OrderByEnum
 	name: OrderByEnum
+}
+
+type WorktrackerRunconfiguration {
+	moduleId: String!
+	command: String!
+	environment: Json!
+	previewUrl: String
+	createdAt: String!
+	updatedAt: String!
+	issue: WorktrackerIssue
+}
+
+type WorktrackerRunconfigurationConnection {
+	pageInfo: PageInfo!
+	paginationInfo: PaginationInfo
+	nodes: [WorktrackerRunconfiguration!]!
+	edges: [WorktrackerRunconfigurationEdge!]!
+}
+
+type WorktrackerRunconfigurationEdge {
+	cursor: String!
+	node: WorktrackerRunconfiguration!
+}
+
+input WorktrackerRunconfigurationFilterInput {
+	moduleId: StringFilterInput
+	command: StringFilterInput
+	environment: JsonFilterInput
+	previewUrl: StringFilterInput
+	createdAt: TextFilterInput
+	updatedAt: TextFilterInput
+	and: [WorktrackerRunconfigurationFilterInput!]
+	or: [WorktrackerRunconfigurationFilterInput!]
+	not: WorktrackerRunconfigurationFilterInput
+}
+
+input WorktrackerRunconfigurationHavingInput {
+	issue: WorktrackerIssueFilterInput
+}
+
+input WorktrackerRunconfigurationOrderInput {
+	moduleId: OrderByEnum
+	command: OrderByEnum
+	environment: OrderByEnum
+	previewUrl: OrderByEnum
+	createdAt: OrderByEnum
+	updatedAt: OrderByEnum
 }
 
 type WorktrackerState {

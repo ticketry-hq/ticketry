@@ -13,16 +13,14 @@ import {
   WorktreeStatusDocument,
 } from "../generated/worktreeStatus.documents";
 import type { WorktreeStatusQuery } from "../generated/worktreeStatus.documents";
-import type { WorktreeContext, WorktreeStatus } from "./types";
+import type { WorktreeStatus } from "./types";
 
 export type WorktreeStatusPayload = WorktreeStatusQuery["worktree_status"];
 
 export function readWorktreeStatus(
   taskId: string,
-  ctx: WorktreeContext,
   signal?: AbortSignal,
 ): Promise<WorktreeStatus> {
-  void ctx;
   void signal;
   return studioApolloClient()
     .query({

@@ -19,14 +19,12 @@ import {
   adaptWorktreeStatus,
   type WorktreeStatusPayload,
 } from "./statusTransport";
-import type { DiscardResult, WorktreeContext } from "./types";
+import type { DiscardResult } from "./types";
 
 export function requestWorktreeDiscard(
   taskId: string,
   operationId: string,
-  ctx: WorktreeContext,
 ): Promise<DiscardResult> {
-  void ctx;
   return studioRuntime().writeWorkTracker({
     graphQl: async (execute) => {
       const payload = (

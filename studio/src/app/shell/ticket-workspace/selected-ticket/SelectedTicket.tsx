@@ -4,7 +4,7 @@ import { PaneShell } from "../../PaneShell";
 import { useConfig } from "../../../../features/studio/stores/configStore";
 import { useStudioStore } from "../../../../features/projects";
 import { useClientStore } from "../../../../state/clientStore";
-import { useCachedStates } from "../../../../features/projects";
+import { useCachedState } from "../../../../features/projects";
 import { useWorkItem } from "../../../../features/work-items";
 import type { WorkspaceLauncherContext } from "./SelectedTicketContent";
 import { SelectedTicketDetails } from "./details/SelectedTicketDetails";
@@ -21,7 +21,6 @@ export function SelectedTicket() {
   const selectedProjectId = useStudioStore((s) => s.selectedProjectId);
   const selectedModuleId = useClientStore((s) => s.selectedModuleId);
   const workspaceSelection = useClientStore((s) => s.workspaceSelection);
-  const states = useCachedStates(selectedProjectId);
   const dismissStateConfiguration = useClientStore(
     (s) => s.dismissStateConfiguration,
   );
@@ -56,11 +55,12 @@ export function SelectedTicket() {
             },
           }
         : null;
-  const configuredState =
+  const configuredStateId =
     workspaceSelection.kind === "state-configuration" &&
     workspaceSelection.projectId === selectedProjectId
-      ? states.find((state) => state.id === workspaceSelection.stateId) ?? null
+      ? workspaceSelection.stateId
       : null;
+  const configuredState = useCachedState(configuredStateId);
 
   return (
     <PaneShell pane="details-or-terminal">

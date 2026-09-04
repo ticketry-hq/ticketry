@@ -97,7 +97,7 @@ describe("worktree discard desktop runtime acceptance", () => {
     const requests: Request[] = [];
     await installDesktopRuntime(requests);
 
-    render(<WorktreeBlock taskId={TASK} moduleId="m1" ticketSeq={881} />);
+    render(<WorktreeBlock taskId={TASK} />);
 
     // The first click asks; nothing has been sent yet.
     fireEvent.click(await screen.findByRole("button", { name: "Discard" }));
@@ -140,7 +140,7 @@ describe("worktree discard desktop runtime acceptance", () => {
     const requests: Request[] = [];
     await installDesktopRuntime(requests);
 
-    render(<WorktreeBlock taskId={TASK} moduleId="m1" ticketSeq={881} />);
+    render(<WorktreeBlock taskId={TASK} />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Discard" }));
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));

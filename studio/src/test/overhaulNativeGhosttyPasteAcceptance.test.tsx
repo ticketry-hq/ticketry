@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
 
 describe("native Ghostty paste acceptance", () => {
-  it("[overhaul-169] keeps multiline paste with its focused owner across workspace navigation", () => {
+  it("[overhaul-184] keeps multiline paste with its focused owner across workspace navigation", () => {
     const output = execFileSync(
       "sh",
       ["scripts/test-native-clipboard.sh", "workspace-navigation"],
@@ -16,7 +16,7 @@ describe("native Ghostty paste acceptance", () => {
     expect(output).toContain("workspace-navigation: ok");
   }, 60_000);
 
-  it("[overhaul-170] rejects stale paste after retained viewer replacement and teardown", () => {
+  it("[overhaul-185] rejects stale paste after retained viewer replacement and teardown", () => {
     const output = execFileSync(
       "sh",
       ["scripts/test-native-clipboard.sh", "retained-viewer-teardown"],

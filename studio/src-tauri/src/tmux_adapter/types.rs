@@ -67,6 +67,40 @@ impl ApprovedArgv {
             environment: BTreeMap::new(),
         })
     }
+
+    pub(crate) fn for_app_command(
+        shell: PathBuf,
+        command: String,
+        working_directory: PathBuf,
+        environment: BTreeMap<String, String>,
+    ) -> Result<Self, TmuxAdapterError> {
+        if !shell.is_absolute()
+            || !shell.is_file()
+            || command.trim().is_empty()
+            || command.contains('\0')
+            || !working_directory.is_absolute()
+            || !working_directory.is_dir()
+            || environment
+                .iter()
+                .any(|(name, value)| !valid_app_environment_name(name) || value.contains('\0'))
+        {
+            return Err(TmuxAdapterError::InvalidOperation);
+        }
+        Ok(Self {
+            executable: shell,
+            arguments: vec![OsString::from("-lc"), OsString::from(command)],
+            working_directory,
+            environment,
+        })
+    }
+}
+
+fn valid_app_environment_name(name: &str) -> bool {
+    let mut bytes = name.bytes();
+    bytes
+        .next()
+        .is_some_and(|byte| byte == b'_' || byte.is_ascii_alphabetic())
+        && bytes.all(|byte| byte == b'_' || byte.is_ascii_alphanumeric())
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -185,6 +219,45 @@ impl fmt::Display for TmuxAdapterError {
     }
 }
 impl std::error::Error for TmuxAdapterError {}
+
+#[cfg(test)]
+mod app_command_tests {
+    use super::*;
+
+    #[test]
+    fn app_command_preserves_shell_command_folder_and_environment() {
+        let directory = tempfile::tempdir().unwrap();
+        let command = ApprovedArgv::for_app_command(
+            PathBuf::from("/bin/sh"),
+            "npm run dev".to_owned(),
+            directory.path().to_owned(),
+            BTreeMap::from([("PORT".to_owned(), "5174".to_owned())]),
+        )
+        .unwrap();
+
+        assert_eq!(command.executable, PathBuf::from("/bin/sh"));
+        assert_eq!(
+            command.arguments,
+            vec![OsString::from("-lc"), OsString::from("npm run dev")]
+        );
+        assert_eq!(command.working_directory, directory.path());
+        assert_eq!(command.environment["PORT"], "5174");
+    }
+
+    #[test]
+    fn app_command_rejects_environment_names_the_process_cannot_receive() {
+        let directory = tempfile::tempdir().unwrap();
+        let error = ApprovedArgv::for_app_command(
+            PathBuf::from("/bin/sh"),
+            "npm run dev".to_owned(),
+            directory.path().to_owned(),
+            BTreeMap::from([("NOT-AN-ENV".to_owned(), "value".to_owned())]),
+        )
+        .unwrap_err();
+
+        assert!(matches!(error, TmuxAdapterError::InvalidOperation));
+    }
+}
 
 pub(super) fn validate_identifier(value: &str) -> Result<(), TmuxAdapterError> {
     let valid = !value.is_empty()

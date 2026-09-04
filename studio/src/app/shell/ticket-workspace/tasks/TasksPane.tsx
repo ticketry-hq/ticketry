@@ -47,12 +47,6 @@ interface TicketDragPayload {
 
 const stateDropTargetId = (stateId: string) => `state:${stateId}`;
 
-const recordSelectionProfilePoint = (point: string) => {
-  (globalThis as typeof globalThis & {
-    __ticketrySelectionProfileProbe?: (point: string) => void;
-  }).__ticketrySelectionProfileProbe?.(point);
-};
-
 const ticketDragCodec: DragPayloadCodec<TicketDragPayload> = {
   type: "application/x-ticketry-workflow-ticket",
   serialize: JSON.stringify,
@@ -90,7 +84,6 @@ function groupRootBlocks(rows: TreeRow[]): RenderBlock[] {
 }
 
 export function TasksPane() {
-  recordSelectionProfilePoint("tasks-pane-render");
   const selectedProjectId = useStudioStore((s) => s.selectedProjectId);
   const selectedTaskId = useClientStore((s) => s.selectedTaskId);
   const selectedModuleId = useClientStore((s) => s.selectedModuleId);
@@ -110,6 +103,7 @@ export function TasksPane() {
   const {
     rows,
     tree,
+    descendantIdsById,
     sectionIdsByState,
     loadingTasks,
     isSearchActive,
@@ -322,6 +316,11 @@ export function TasksPane() {
             <TaskRow
               key={planningRowId(row)}
               row={row}
+              descendantIds={
+                row.kind === "work-item"
+                  ? descendantIdsById[row.id] ?? []
+                  : []
+              }
               isSelected={planningRowId(row) === selectedTaskId}
               onClick={handleSelect}
               onToggleExpand={handleToggleExpand}

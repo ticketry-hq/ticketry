@@ -1,0 +1,79 @@
+fragment RunConfigurationFields on WorktrackerRunconfiguration {
+  module_id: moduleId
+  command
+  environment
+  preview_url: previewUrl
+  created_at: createdAt
+  updated_at: updatedAt
+}
+
+query ModuleRunConfiguration($moduleId: String!) {
+  run_configurations: worktrackerRunconfiguration(
+    filters: { moduleId: { eq: $moduleId } }
+    pagination: { offset: { limit: 1, offset: 0 } }
+  ) {
+    nodes {
+      ...RunConfigurationFields
+    }
+  }
+}
+
+query ModuleAppRunStatus($moduleId: String!) {
+  app_run(module_id: $moduleId) {
+    module_id
+    run_id
+    live
+  }
+}
+
+mutation CreateRunConfiguration(
+  $moduleId: String!
+  $command: String!
+  $environment: Json!
+  $previewUrl: String
+) {
+  run_configuration: create_run_configuration(
+    module_id: $moduleId
+    command: $command
+    environment: $environment
+    preview_url: $previewUrl
+  ) {
+    ...RunConfigurationFields
+  }
+}
+
+mutation UpdateRunConfiguration(
+  $moduleId: String!
+  $command: String!
+  $environment: Json!
+  $previewUrl: String
+) {
+  run_configuration: update_run_configuration(
+    module_id: $moduleId
+    command: $command
+    environment: $environment
+    preview_url: $previewUrl
+  ) {
+    ...RunConfigurationFields
+  }
+}
+
+mutation StartAppRun($moduleId: String!, $columns: Int!, $rows: Int!) {
+  app_run: app_run_start(
+    module_id: $moduleId
+    columns: $columns
+    rows: $rows
+  ) {
+    module_id
+    run_id
+    live
+  }
+}
+
+mutation StopAppRun($moduleId: String!) {
+  app_run: app_run_stop(module_id: $moduleId) {
+    module_id
+    run_id
+    live
+  }
+}

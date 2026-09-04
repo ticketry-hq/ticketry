@@ -2,6 +2,7 @@ import type { Module, State, WorkItem } from "../../../shared/api/types";
 import { RESOLVED_GROUPS } from "../../../shared/utilities/display";
 
 export {
+  descendantIdsByWorkItem,
   orderedTaskSections,
   orderIdsByRank,
   searchHits,

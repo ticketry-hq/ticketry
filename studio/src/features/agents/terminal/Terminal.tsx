@@ -121,6 +121,7 @@ export function Terminal({
 
   if (
     nativeAvailable &&
+    !session?.isAppRun &&
     sessionId &&
     session?.agentRunId &&
     nativeViewerSessionIsLive(session.status) &&

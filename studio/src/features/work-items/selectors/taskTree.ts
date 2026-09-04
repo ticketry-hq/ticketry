@@ -104,6 +104,27 @@ export interface WorkItemRow {
   expanded: boolean;
 }
 
+/** Build the one descendant lookup shared by every row in a Module task tree. */
+export function descendantIdsByWorkItem(
+  tree: ModuleTree,
+): Readonly<Record<TaskId, TaskId[]>> {
+  const descendants: Record<TaskId, TaskId[]> = {};
+  for (const rootId of tree.order) {
+    const ids: TaskId[] = [];
+    const seen = new Set([rootId]);
+    const pending = [...(tree.children[rootId] ?? [])];
+    while (pending.length > 0) {
+      const id = pending.pop();
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      ids.push(id);
+      pending.push(...(tree.children[id] ?? []));
+    }
+    descendants[rootId] = ids;
+  }
+  return descendants;
+}
+
 export function searchHits(
   tree: ModuleTree,
   itemsById: Readonly<Record<TaskId, TreeWorkItem>>,

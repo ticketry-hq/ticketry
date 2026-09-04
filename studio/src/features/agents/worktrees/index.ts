@@ -2,7 +2,6 @@
 // Public interface of the module — import only from here.
 export { WorktreeBlock } from "./WorktreeBlock";
 export type {
-  WorktreeContext,
   WorktreeStatus,
   DiscardResult,
 } from "./internal/types";

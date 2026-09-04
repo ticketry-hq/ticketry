@@ -1,4 +1,5 @@
 import { FooterTerminalToggle } from "../../features/terminal-panel";
+import { FooterRunControl } from "../../features/app-run";
 import { IconSettings } from "../../shared/ui/icons";
 import { useModalStore } from "../modal/modalStore";
 
@@ -12,6 +13,7 @@ export function StudioFooterActions() {
 
   return (
     <div className="ml-auto flex items-center gap-3">
+      <FooterRunControl />
       <FooterTerminalToggle />
       <button
         type="button"

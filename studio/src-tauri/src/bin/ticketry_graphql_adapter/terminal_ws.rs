@@ -378,13 +378,17 @@ impl TerminalBridge {
             }
         };
 
-        viewer_session::start(
-            self.ownership.clone(),
-            request.agent_run_id,
-            attachment,
-            socket,
-        )
-        .await
+        if muxed_studio_lib::app_run::is_app_run_id(&request.agent_run_id) {
+            viewer_session::start_unleased(request.agent_run_id, attachment, socket).await
+        } else {
+            viewer_session::start(
+                self.ownership.clone(),
+                request.agent_run_id,
+                attachment,
+                socket,
+            )
+            .await
+        }
     }
 
     async fn finish(&self, socket: WebSocket, close: SessionClose) -> SessionClose {

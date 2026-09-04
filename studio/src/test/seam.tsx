@@ -363,6 +363,7 @@ class BoundaryFixture implements StudioFixture {
         __typename: "WorktrackerIssue",
         ...item,
         state_id: item.state,
+        stateRevision: 0,
         issue_type_id: item.issue_type,
         module_id: moduleId,
         project: {

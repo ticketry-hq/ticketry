@@ -54,6 +54,8 @@ pub struct Model {
     pub agent_runs: HasMany<crate::entities::runs::agent_run::Entity>,
     #[sea_orm(has_many)]
     pub attachments: HasMany<super::attachment::Entity>,
+    #[sea_orm(has_one)]
+    pub run_configuration: HasOne<super::run_configuration::Entity>,
 }
 
 impl ActiveModelBehavior for ActiveModel {}

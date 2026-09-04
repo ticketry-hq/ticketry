@@ -164,6 +164,14 @@ fn build_schema(
         }
         _ => None,
     };
+    let app_run_service = match (worktracker_commands.as_ref(), settings_stores.as_ref()) {
+        (Some(work_items), Some(settings)) => Some(crate::app_run::AppRunService::new(
+            work_items.0.clone(),
+            settings.profiles().clone(),
+            std::sync::Arc::new(crate::app_run::TmuxAppRunRuntime),
+        )),
+        _ => None,
+    };
     let mut builder = Builder::new(&CONTEXT, entity_database.clone());
     builder.mutation = Object::new("Mutation");
     // The Runs status stream registers the only subscription field, so the
@@ -200,6 +208,7 @@ fn build_schema(
     let builder = crate::terminal_persistence::register_graphql(builder);
     let builder = crate::terminal_resume::register_graphql(builder);
     let builder = crate::terminal_launch::register_graphql(builder);
+    let builder = crate::app_run::register_graphql(builder);
     let builder = crate::terminal_cleanup::register_graphql(builder);
     let builder = crate::terminal_output_activity::register_graphql(builder);
     let builder = crate::run_now::register_graphql(builder);
@@ -220,6 +229,9 @@ fn build_schema(
     }
     if let Some(run_now_service) = run_now_service {
         schema = schema.data(run_now_service);
+    }
+    if let Some(app_run_service) = app_run_service {
+        schema = schema.data(app_run_service);
     }
     // Document discovery reconciles the registry against the filesystem, so it
     // needs the same WorkTracker store the rows live in. The selected profile

@@ -26,6 +26,7 @@ export function toggleTerminalPanel(): void {
   if (!wasOpen) {
     restoreActiveBodyEngagement =
       ui.editViewZone === "active-tab-body" && ui.editViewBodyEngaged;
+    useTerminalPanelStore.getState().showShells(moduleId);
   }
   useTerminalPanelStore.getState().togglePanel(moduleId);
   // The panel is a navigation zone while it is showing, so the toggle also

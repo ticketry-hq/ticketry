@@ -101,6 +101,10 @@ pub(super) fn builder_context() -> BuilderContext {
         &mut context,
         [entities::reasoning_level::Column::Id],
     );
+    add_uuid_columns::<entities::run_configuration::Entity>(
+        &mut context,
+        [entities::run_configuration::Column::ModuleId],
+    );
     add_uuid_columns::<worktree::Entity>(
         &mut context,
         [

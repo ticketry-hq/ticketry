@@ -22,11 +22,3 @@ export interface DiscardResult {
   reason: string;
   status?: WorktreeStatus;
 }
-
-export interface WorktreeContext {
-  parentId?: string | null;
-  moduleId?: string | null;
-  projectId?: string | null;
-  ticketSeq?: number | null;
-  taskName?: string | null;
-}

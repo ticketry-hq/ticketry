@@ -13,6 +13,7 @@ pub mod launch_policy_rejection;
 pub mod project;
 pub mod provider;
 pub mod reasoning_level;
+pub mod run_configuration;
 pub mod state;
 pub mod transition_occurrence;
 pub mod workspace;
@@ -34,5 +35,6 @@ pub fn register_entity_modules(mut builder: seaography::Builder) -> seaography::
     seaography::register_entity!(builder, agent_model, mutation: false);
     seaography::register_entity!(builder, agent_model_reasoning_level, mutation: false);
     seaography::register_entity!(builder, reasoning_level, mutation: false);
+    seaography::register_entity!(builder, run_configuration, mutation: false);
     builder
 }

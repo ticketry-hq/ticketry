@@ -93,7 +93,6 @@ describe("worktree status transport", () => {
 
     const status = await readWorktreeStatus(
       "60000000-0000-0000-0000-000000000002",
-      { parentId: "60000000-0000-0000-0000-000000000001", moduleId: "m1" },
     );
 
     expect(status.kind).toBe("worktree");

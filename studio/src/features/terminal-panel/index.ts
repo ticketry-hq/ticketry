@@ -1,8 +1,7 @@
-// Terminal panel — the bottom shell surface of the ticket workspace (#667).
+// Terminal panel — the bottom module terminal surface (#667, #1101).
 //
-// It hosts hand-driven login shells for the selected module. Agent runs are not
-// its business: they keep their terminal tabs in the task workspace, and this
-// panel never shows one.
+// App runs and hand-driven login shells have separate segments. Agent runs keep
+// their terminal tabs in the task workspace, and this panel never shows one.
 
 export { TerminalPanel } from "./TerminalPanel";
 export { FooterTerminalToggle } from "./FooterTerminalToggle";
@@ -10,6 +9,7 @@ export {
   isTerminalPanelOpenIn,
   useTerminalPanelOpen,
   useTerminalPanelStore,
+  useTerminalPanelSegment,
 } from "./panelStore";
 export {
   routeTerminalPanelToggle,

@@ -31,6 +31,7 @@ pub struct LaunchTraceRecord {
     pub end_of_life_origin: Option<String>,
     pub exit_code: Option<i64>,
     pub terminating_signal: Option<String>,
+    pub swept_agent_run_ids: Vec<String>,
     pub swept_run_count: Option<i64>,
 }
 
@@ -64,6 +65,7 @@ impl LaunchTraceRecord {
             end_of_life_origin: text(value, "endOfLifeOrigin"),
             exit_code: number(value, "exitCode"),
             terminating_signal: text(value, "terminatingSignal"),
+            swept_agent_run_ids: strings(value, "sweptAgentRunIds"),
             swept_run_count: number(value, "sweptRunCount"),
         })
     }
@@ -75,6 +77,17 @@ fn text(value: &Value, key: &str) -> Option<String> {
 
 fn number(value: &Value, key: &str) -> Option<i64> {
     value.get(key)?.as_i64()
+}
+
+fn strings(value: &Value, key: &str) -> Vec<String> {
+    value
+        .get(key)
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .map(str::to_owned)
+        .collect()
 }
 
 #[cfg(test)]

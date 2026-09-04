@@ -80,28 +80,40 @@ pub fn record_run_ended(
 
 /// Records one sweep, carrying its cause and how many runs it ended, so a
 /// batch of runs ending at one instant reads as one event.
-pub fn record_sweep_ended(cause: &str, ended_run_count: usize) {
-    record_launch_discovery(
-        LaunchDiscoveryRecord::new(
-            "runtime-liveness-sweep-ended",
-            runtime_instance(),
-            None,
-            None,
-            None,
-            None,
-            None,
-        )
-        .with_detail(
-            "endOfLifeOrigin",
-            Value::String(
-                EndOfLifeOrigin::RuntimeLivenessSweep
-                    .recorded_name()
-                    .to_owned(),
-            ),
-        )
-        .with_detail("sweepCause", Value::String(cause.to_owned()))
-        .with_detail("sweptRunCount", Value::from(ended_run_count)),
-    );
+pub fn record_sweep_ended(cause: &str, ended_run_ids: &[&str]) {
+    record_launch_discovery(sweep_record(cause, ended_run_ids));
+}
+
+fn sweep_record(cause: &str, ended_run_ids: &[&str]) -> LaunchDiscoveryRecord {
+    LaunchDiscoveryRecord::new(
+        "runtime-liveness-sweep-ended",
+        runtime_instance(),
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
+    .with_detail("launchAttemptId", Value::Null)
+    .with_detail(
+        "endOfLifeOrigin",
+        Value::String(
+            EndOfLifeOrigin::RuntimeLivenessSweep
+                .recorded_name()
+                .to_owned(),
+        ),
+    )
+    .with_detail("sweepCause", Value::String(cause.to_owned()))
+    .with_detail(
+        "sweptAgentRunIds",
+        Value::Array(
+            ended_run_ids
+                .iter()
+                .map(|run_id| Value::String((*run_id).to_owned()))
+                .collect(),
+        ),
+    )
+    .with_detail("sweptRunCount", Value::from(ended_run_ids.len()))
 }
 
 /// The signal an exit code was derived from, where the shell convention makes
@@ -163,5 +175,19 @@ mod tests {
         );
         assert_eq!(terminating_signal(Some(0)), None);
         assert_eq!(terminating_signal(None), None);
+    }
+
+    #[test]
+    fn a_sweep_record_names_every_run_in_the_batch() {
+        let value =
+            sweep_record("runtime_liveness_reconciliation", &["run-1", "run-2"]).into_value();
+
+        assert_eq!(value["agentRunId"], Value::Null);
+        assert_eq!(value["launchAttemptId"], Value::Null);
+        assert_eq!(
+            value["sweptAgentRunIds"],
+            serde_json::json!(["run-1", "run-2"])
+        );
+        assert_eq!(value["sweptRunCount"], 2);
     }
 }

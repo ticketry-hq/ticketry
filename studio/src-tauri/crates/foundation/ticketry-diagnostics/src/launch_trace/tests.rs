@@ -224,24 +224,32 @@ fn a_provider_exit_keeps_its_exit_code_and_signal() {
 }
 
 #[test]
-fn a_sweep_reports_how_many_runs_it_ended() {
+fn a_sweep_uses_its_ended_run_ids_to_report_one_batch_event() {
     let mut records = complete_trace();
     records.push(record(
         SWEEP_STAGE,
         300,
         json!({
-            "agentRunId": RUN,
+            "projectId": serde_json::Value::Null,
+            "agentRunId": serde_json::Value::Null,
+            "launchAttemptId": serde_json::Value::Null,
             "endOfLifeOrigin": "runtime_liveness_sweep",
-            "sweptRunCount": 21,
+            "sweptAgentRunIds": [RUN, "run-2"],
+            "sweptRunCount": 2,
         }),
     ));
 
-    let end = report_for_agent_run(&records, RUN)
-        .end_of_life
-        .expect("a sweep record");
+    let reports = correlate(&records);
 
-    assert_eq!(end.swept_run_count, Some(21));
+    assert_eq!(reports.len(), 1, "one sweep must remain one batch event");
+    let end = reports[0].end_of_life.as_ref().expect("a sweep record");
+
+    assert_eq!(end.swept_run_count, Some(2));
     assert_eq!(end.origin, "runtime_liveness_sweep");
+    assert!(
+        super::render::render(&reports[0]).contains("sweep ended 2 runs"),
+        "the rendered report must expose the batch"
+    );
 }
 
 #[test]

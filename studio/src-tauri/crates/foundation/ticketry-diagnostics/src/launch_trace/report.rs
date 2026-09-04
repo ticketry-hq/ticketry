@@ -151,7 +151,14 @@ fn group_key(
                 .unwrap_or_else(|| run.clone()),
         );
     }
-    record.launch_attempt_id.clone()
+    record.launch_attempt_id.clone().or_else(|| {
+        record.swept_agent_run_ids.first().map(|run| {
+            attempt_of_run
+                .get(run)
+                .cloned()
+                .unwrap_or_else(|| run.clone())
+        })
+    })
 }
 
 fn report_for(records: Vec<&LaunchTraceRecord>) -> LaunchTraceReport {

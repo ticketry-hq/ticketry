@@ -332,7 +332,15 @@ fn checkpoint(
 /// The sweep is recorded whenever it ended anything. A sweep that ended
 /// nothing is not an event worth a record.
 fn record_sweep(sessions: &[ReconciledSession]) {
-    let ended = sessions
+    let ended_run_ids = swept_run_ids(sessions);
+    if ended_run_ids.is_empty() {
+        return;
+    }
+    ticketry_runs::record_sweep_ended("runtime_liveness_reconciliation", &ended_run_ids);
+}
+
+fn swept_run_ids(sessions: &[ReconciledSession]) -> Vec<&str> {
+    sessions
         .iter()
         .filter(|session| {
             matches!(
@@ -340,20 +348,17 @@ fn record_sweep(sessions: &[ReconciledSession]) {
                 RecordedSessionDecision::Exited | RecordedSessionDecision::Lost
             )
         })
-        .count();
-    if ended == 0 {
-        return;
-    }
-    ticketry_runs::record_sweep_ended("runtime_liveness_reconciliation", ended);
+        .map(|session| session.agent_run_id.as_str())
+        .collect()
 }
 
 #[cfg(test)]
 mod sweep_tests {
     use super::*;
 
-    fn session(decision: RecordedSessionDecision) -> ReconciledSession {
+    fn session(agent_run_id: &str, decision: RecordedSessionDecision) -> ReconciledSession {
         ReconciledSession {
-            agent_run_id: "run".to_owned(),
+            agent_run_id: agent_run_id.to_owned(),
             decision,
         }
     }
@@ -361,30 +366,26 @@ mod sweep_tests {
     #[test]
     fn only_the_runs_the_sweep_ended_are_counted_as_ended_by_it() {
         let sessions = [
-            session(RecordedSessionDecision::Exited),
-            session(RecordedSessionDecision::Lost),
-            session(RecordedSessionDecision::Running),
-            session(RecordedSessionDecision::Recovered),
-            session(RecordedSessionDecision::Unavailable),
-            session(RecordedSessionDecision::Conflict),
-            session(RecordedSessionDecision::Unchanged),
+            session("exited-run", RecordedSessionDecision::Exited),
+            session("lost-run", RecordedSessionDecision::Lost),
+            session("running-run", RecordedSessionDecision::Running),
+            session("recovered-run", RecordedSessionDecision::Recovered),
+            session("unavailable-run", RecordedSessionDecision::Unavailable),
+            session("conflict-run", RecordedSessionDecision::Conflict),
+            session("unchanged-run", RecordedSessionDecision::Unchanged),
         ];
 
-        let ended = sessions
-            .iter()
-            .filter(|session| {
-                matches!(
-                    session.decision,
-                    RecordedSessionDecision::Exited | RecordedSessionDecision::Lost
-                )
-            })
-            .count();
+        let ended = swept_run_ids(&sessions);
 
-        assert_eq!(ended, 2, "a sweep ends only the runs it found dead");
+        assert_eq!(
+            ended,
+            vec!["exited-run", "lost-run"],
+            "a sweep identifies only the runs it found dead"
+        );
     }
 
     #[test]
     fn a_sweep_that_ended_nothing_records_nothing() {
-        record_sweep(&[session(RecordedSessionDecision::Running)]);
+        record_sweep(&[session("running-run", RecordedSessionDecision::Running)]);
     }
 }

@@ -36,7 +36,6 @@ import {
   useRekeyedTerminalFocus,
 } from "./internal/useWorkspaceTabFocus";
 import { useWorkspaceTabPresentation } from "./internal/useWorkspaceTabPresentation";
-import { useActivatedProviders } from "../../../../features/workflows";
 import { useWorkspaceTabOrdering } from "../../../../features/workspace-tabs/useWorkspaceTabOrdering";
 import { useWorkspaceTabOrder } from "../../../../features/workspace-tabs/queries";
 import { useTaskWorktreeChangesTabLifecycle } from "./internal/useTaskWorktreeChangesTabLifecycle";
@@ -93,11 +92,6 @@ export function SelectedTicketContent({
     moduleId,
     conversationRunId,
   );
-  const {
-    slugs: activatedProviders,
-    loaded: providersLoaded,
-    failed: providersFailed,
-  } = useActivatedProviders();
   const ensureWorkspace = useTicketWorkspaceStore((s) => s.ensureWorkspace);
   const setActive = useTicketWorkspaceStore((s) => s.setActive);
   const setActiveDoc = useTicketWorkspaceStore((s) => s.setActiveDoc);
@@ -376,9 +370,6 @@ export function SelectedTicketContent({
         reorderDrag={workspaceTabReorder}
         bucket={bucket}
         launchContext={launchContext}
-        activatedProviders={activatedProviders}
-        providersLoaded={providersLoaded}
-        providersFailed={providersFailed}
         onClaimPointerZone={claimPointerZone}
         onSetEditViewZone={setEditViewZone}
         onSelectTab={selectWorkspaceTab}

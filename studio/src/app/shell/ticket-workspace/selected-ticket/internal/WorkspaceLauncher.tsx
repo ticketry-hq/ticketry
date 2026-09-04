@@ -7,21 +7,20 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { useModalStore } from "../../../../../app/modal/modalStore";
-import type { SessionMeta } from "../../../../../features/agents/terminal";
-import { providerListPlaceholder } from "../../../../../features/workflows";
 import { loadSelectedTicketTerminal } from "../terminals/selectedTicketTerminalLoader";
-
-// Providers only: this menu launches agent runs, and a session with no
-// provider is a shell that never appears here (#667).
-const AVAILABLE_AGENTS: NonNullable<SessionMeta["agent"]>[] = [
-  "claude",
-  "agy",
-  "codex",
-  "gemini",
-];
 
 /** Taskless scratch run intents offered by the scratch launcher menu. */
 export type ScratchLaunchMode = "plan" | "instant";
+
+// The inline menu is the scratch launcher and nothing else, so its whole item
+// list is these two fixed modes. A task workspace never populates it: the
+// trigger hands that kind straight to the shared agent picker, which owns the
+// provider allowlist (`AGENTS` in `features/agents/terminal/AgentPicker.tsx`)
+// (CODING-1437).
+const SCRATCH_LAUNCH_MODES: { id: ScratchLaunchMode; label: string }[] = [
+  { id: "plan", label: "Plan" },
+  { id: "instant", label: "Instant" },
+];
 
 export interface TicketLaunchContext {
   projectId: string;
@@ -31,34 +30,31 @@ export interface TicketLaunchContext {
   taskName: string;
 }
 
+export interface ScratchLaunchContext {
+  kind: "scratch";
+  onChooseMode: (mode: ScratchLaunchMode) => void;
+}
+
 /**
  * The tab strip's `＋ Agent` capability, discriminated by workspace kind
- * (CODIN-1020): a task workspace lists providers directly and launches a
- * task-bound run; a scratch workspace asks for the run mode first and hands
- * mode selection back to its host, which owns module choice and the shared
- * folder → prompt → provider create flow.
+ * (CODIN-1020): a task workspace opens the shared agent picker, which lists
+ * providers and launches the task-bound run; a scratch workspace asks for the
+ * run mode first in an inline menu and hands mode selection back to its host,
+ * which owns module choice and the shared folder → prompt → provider create
+ * flow.
  */
 export type WorkspaceLauncherContext =
   | ({ kind: "task" } & TicketLaunchContext)
-  | {
-      kind: "scratch";
-      onChooseMode: (mode: ScratchLaunchMode) => void;
-    };
+  | ScratchLaunchContext;
 
 export function WorkspaceLauncher({
   bucket,
   launchContext,
-  activatedProviders,
-  providersLoaded,
-  providersFailed,
   triggerRef,
   onTaskAgentLaunched,
 }: {
   bucket: string;
   launchContext: WorkspaceLauncherContext;
-  activatedProviders: ReadonlySet<string>;
-  providersLoaded: boolean;
-  providersFailed: boolean;
   triggerRef: React.RefObject<HTMLButtonElement>;
   /**
    * Called once the agent picker has placed a task run in this workspace, so
@@ -87,7 +83,7 @@ export function WorkspaceLauncher({
   const currentLauncherIdentityRef = useRef(launcherIdentity);
   const openLauncherRef = useRef<{
     identity: string;
-    context: WorkspaceLauncherContext;
+    context: ScratchLaunchContext;
   } | null>(null);
   currentLauncherIdentityRef.current = launcherIdentity;
 
@@ -120,25 +116,6 @@ export function WorkspaceLauncher({
     document.addEventListener("pointerdown", onPointerDown);
     return () => document.removeEventListener("pointerdown", onPointerDown);
   }, [launchOpen]);
-
-  const launcherItems: { id: string; label: string }[] =
-    launchContext.kind === "scratch"
-      ? [
-          { id: "plan", label: "Plan" },
-          { id: "instant", label: "Instant" },
-        ]
-      : providersLoaded && !providersFailed
-        ? AVAILABLE_AGENTS.filter((agent) => activatedProviders.has(agent)).map(
-            (agent) => ({ id: agent, label: agent }),
-          )
-        : [];
-  const launcherNotice =
-    launchContext.kind === "scratch" || launcherItems.length > 0
-      ? null
-      : providerListPlaceholder({
-          loaded: providersLoaded,
-          failed: providersFailed,
-        });
 
   useLayoutEffect(() => {
     if (!launchOpen) return;
@@ -190,7 +167,7 @@ export function WorkspaceLauncher({
       window.removeEventListener("resize", updatePosition);
       window.removeEventListener("scroll", updatePosition, true);
     };
-  }, [launchOpen, launcherItems.length, launcherNotice]);
+  }, [launchOpen]);
 
   function activateLauncherItem(id: string) {
     if (launchCommittedRef.current) return;
@@ -202,11 +179,7 @@ export function WorkspaceLauncher({
     launchCommittedRef.current = true;
     openLauncherRef.current = null;
     setLaunchOpen(false);
-    // This menu is the scratch launcher only: a task workspace opens the agent
-    // picker modal straight from the trigger and never populates the menu.
-    if (opened.context.kind === "scratch") {
-      opened.context.onChooseMode(id as ScratchLaunchMode);
-    }
+    opened.context.onChooseMode(id as ScratchLaunchMode);
   }
 
   function onLauncherMenuKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
@@ -267,12 +240,13 @@ export function WorkspaceLauncher({
             });
             return;
           }
+          const scratchContext: ScratchLaunchContext = launchContext;
           setLaunchOpen((open) => {
             if (!open) {
               launchCommittedRef.current = false;
               openLauncherRef.current = {
                 identity: launcherIdentity,
-                context: launchContext,
+                context: scratchContext,
               };
             } else {
               openLauncherRef.current = null;
@@ -302,24 +276,18 @@ export function WorkspaceLauncher({
           style={launchMenuPosition}
           className="fixed z-50 flex min-w-[10ch] flex-col border border-pane-border bg-pane-panel py-1 shadow-lg"
         >
-          {launcherNotice ? (
-            <p className="px-3 py-1 text-xs text-text-muted">
-              {launcherNotice}
-            </p>
-          ) : (
-            launcherItems.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                role="menuitem"
-                data-launcher-item={item.id}
-                onClick={() => activateLauncherItem(item.id)}
-                className="px-3 py-1 text-left text-xs font-medium text-text-muted hover:bg-pane-title hover:text-text-primary"
-              >
-                {item.label}
-              </button>
-            ))
-          )}
+          {SCRATCH_LAUNCH_MODES.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              role="menuitem"
+              data-launcher-item={item.id}
+              onClick={() => activateLauncherItem(item.id)}
+              className="px-3 py-1 text-left text-xs font-medium text-text-muted hover:bg-pane-title hover:text-text-primary"
+            >
+              {item.label}
+            </button>
+          ))}
         </div>,
         document.body,
       )}

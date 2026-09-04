@@ -43,9 +43,6 @@ export function WorkspaceTabStrip({
   reorderDrag,
   bucket,
   launchContext,
-  activatedProviders,
-  providersLoaded,
-  providersFailed,
   onClaimPointerZone,
   onSetEditViewZone,
   onSelectTab,
@@ -71,9 +68,6 @@ export function WorkspaceTabStrip({
   reorderDrag: WorkspaceTabReorderDrag;
   bucket: string;
   launchContext: WorkspaceLauncherContext | null;
-  activatedProviders: ReadonlySet<string>;
-  providersLoaded: boolean;
-  providersFailed: boolean;
   onClaimPointerZone: (zone: "tab-strip") => void;
   onSetEditViewZone: (zone: "tab-strip") => void;
   onSelectTab: (tab: TaskWorkspaceTabIdentity) => void;
@@ -263,9 +257,6 @@ export function WorkspaceTabStrip({
         <WorkspaceLauncher
           bucket={bucket}
           launchContext={launchContext}
-          activatedProviders={activatedProviders}
-          providersLoaded={providersLoaded}
-          providersFailed={providersFailed}
           triggerRef={launcherTriggerRef}
           onTaskAgentLaunched={onTaskAgentLaunched}
         />

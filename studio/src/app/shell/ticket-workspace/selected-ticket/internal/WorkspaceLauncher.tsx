@@ -26,8 +26,6 @@ export interface TicketLaunchContext {
   projectId: string;
   moduleId: string | null;
   taskId: string;
-  taskKey: string;
-  taskName: string;
 }
 
 export interface ScratchLaunchContext {

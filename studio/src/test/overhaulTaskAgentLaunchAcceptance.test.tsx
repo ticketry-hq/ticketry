@@ -25,8 +25,6 @@ describe("overhaul acceptance — task agent launch", () => {
           taskId: "task-570",
           projectId: "project-570",
           moduleId: "module-570",
-          taskKey: "CODING-570",
-          taskName: "Launch a fresh task-scoped agent",
         },
       }),
     );
@@ -73,8 +71,6 @@ describe("overhaul acceptance — task agent launch", () => {
       taskId: "task-571",
       projectId: "project-571",
       moduleId: "module-571",
-      taskKey: "CODING-571",
-      taskName: "Honor provider availability in task agent launches",
     };
     const renderLauncher = (launchContext: WorkspaceLauncherContext = taskContext) =>
       render(

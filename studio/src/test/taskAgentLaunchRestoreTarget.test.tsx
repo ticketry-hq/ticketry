@@ -15,8 +15,6 @@ const TASK_CONTEXT = {
   taskId: "task-570",
   projectId: "project-570",
   moduleId: "module-570",
-  taskKey: "CODING-570",
-  taskName: "Remember the launched run as the workspace target",
 };
 
 const OTHER_TASK_CONTEXT = {
@@ -24,8 +22,6 @@ const OTHER_TASK_CONTEXT = {
   taskId: "task-575",
   projectId: "project-575",
   moduleId: "module-575",
-  taskKey: "CODING-575",
-  taskName: "Some other ticket visited in between",
 };
 
 describe("launched task run as the studio workspace restore target", () => {

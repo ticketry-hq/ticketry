@@ -4,7 +4,6 @@ import { PaneShell } from "../../PaneShell";
 import { useStudioStore } from "../../../../features/projects";
 import { useClientStore } from "../../../../state/clientStore";
 import { useCachedStates } from "../../../../features/projects";
-import { useWorkItem } from "../../../../features/work-items";
 import type { WorkspaceLauncherContext } from "./SelectedTicketContent";
 import { SelectedTicketDetails } from "./details/SelectedTicketDetails";
 import { SelectedTicketContent } from "./SelectedTicketContent";
@@ -24,9 +23,6 @@ export function SelectedTicket() {
   const dismissStateConfiguration = useClientStore(
     (s) => s.dismissStateConfiguration,
   );
-  const { data: task } = useWorkItem(
-    selectedTaskId && selectedTaskId !== TEMP_TASK_ID ? selectedTaskId : null,
-  );
   const bucket =
     selectedTaskId === TEMP_TASK_ID
       ? scratchBucketId(selectedModuleId ?? "")
@@ -38,8 +34,6 @@ export function SelectedTicket() {
           taskId: selectedTaskId,
           projectId: selectedProjectId,
           moduleId: selectedModuleId,
-          taskKey: task?.id ?? selectedTaskId,
-          taskName: task?.name ?? "",
         }
       : null;
   const configuredState =

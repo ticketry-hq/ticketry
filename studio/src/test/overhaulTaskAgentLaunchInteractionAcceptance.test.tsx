@@ -24,8 +24,6 @@ describe("overhaul acceptance — task agent launch interaction", () => {
           taskId: "task-572",
           projectId: "project-572",
           moduleId: "module-572",
-          taskKey: "CODING-572",
-          taskName: "Harden launcher",
         },
         bucket: "task-572",
         projectId: "project-572",
@@ -89,8 +87,6 @@ describe("overhaul acceptance — task agent launch interaction", () => {
       taskId: "task-572",
       projectId: "project-572",
       moduleId: "module-572",
-      taskKey: "CODING-572",
-      taskName: "Harden launcher",
     };
     const view = (launchContext: WorkspaceLauncherContext, bucket = "task-572") =>
       workspaceView({
@@ -113,7 +109,7 @@ describe("overhaul acceptance — task agent launch interaction", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "＋ Agent" }));
     mounted.rerender(
-      view({ ...context, taskId: "replacement-task", taskKey: "CODING-999" }),
+      view({ ...context, taskId: "replacement-task" }),
     );
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
     expect(terminalApi.createTerminalRun).not.toHaveBeenCalled();

@@ -19,8 +19,12 @@ pub fn render(report: &LaunchTraceReport) -> String {
     ));
     for stage in &report.stages {
         let elapsed = match stage.elapsed_from_previous_ms {
-            Some(elapsed) => format!("+{elapsed} ms"),
+            Some(elapsed) => format!("{elapsed:+} ms"),
             None => "start".to_owned(),
+        };
+        let recurrence = match stage.occurrences {
+            0 | 1 => String::new(),
+            count => format!(" ×{count}"),
         };
         let refusal = match (stage.outcome, stage.refusal_reason.as_deref()) {
             (StageOutcome::Refused, Some(reason)) => format!(" refused: {reason}"),
@@ -28,10 +32,11 @@ pub fn render(report: &LaunchTraceReport) -> String {
             (StageOutcome::Admitted, _) => String::new(),
         };
         lines.push(format!(
-            "  {} {:>10}  {}{}",
+            "  {} {:>10}  {}{}{}",
             stage.timestamp.to_rfc3339(),
             elapsed,
             stage.event,
+            recurrence,
             refusal,
         ));
     }

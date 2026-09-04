@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use chrono::{DateTime, Utc};
 
 use super::record::{LaunchTraceRecord, StageOutcome};
-use super::stages::{stage_index, FINAL_STAGE, RUN_ENDED_STAGE, SWEEP_STAGE};
+use super::stages::{stage_index, FINAL_STAGE, JOIN_STAGE, RUN_ENDED_STAGE, SWEEP_STAGE};
 
 /// What the trace as a whole says happened.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -37,6 +37,10 @@ pub struct ReportedStage {
     pub outcome: StageOutcome,
     pub refusal_reason: Option<String>,
     pub provider: Option<String>,
+    /// How many records reached this stage. The visibility stages recur on
+    /// every status event for as long as the run lives; the path reports the
+    /// first reach and counts the rest.
+    pub occurrences: usize,
 }
 
 /// How an Agent Run's life ended, when it has ended.
@@ -107,10 +111,20 @@ pub fn report_for_launch_attempt(
         .unwrap_or_else(|| empty_report(Some(launch_attempt_id.to_owned()), None))
 }
 
-/// The commit stage carries both identities; that pairing joins the two halves.
+/// The join stage carries both identities; that pairing joins the two halves.
+///
+/// Only the join record is trusted first. The older launch-discovery commit
+/// record also writes a `launchAttemptId`, but it is the launch request's
+/// identity, not the trace attempt's, and it is logged before the join record;
+/// letting it claim the run split one live launch into two reports. Any other
+/// pairing is a fallback for a run no join record ever claimed.
 fn join_identities(records: &[LaunchTraceRecord]) -> HashMap<String, String> {
     let mut attempt_of_run: HashMap<String, String> = HashMap::new();
-    for record in records {
+    let pairings = records
+        .iter()
+        .filter(|record| record.event == JOIN_STAGE)
+        .chain(records.iter().filter(|record| record.event != JOIN_STAGE));
+    for record in pairings {
         if let (Some(attempt), Some(run)) = (&record.launch_attempt_id, &record.agent_run_id) {
             // The first attempt to claim a run keeps it. An Agent Run belongs
             // to one launch, so a second claim is corruption in the records
@@ -154,6 +168,17 @@ fn report_for(records: Vec<&LaunchTraceRecord>) -> LaunchTraceReport {
     let mut stages: Vec<ReportedStage> = Vec::with_capacity(path.len());
     let mut previous: Option<DateTime<Utc>> = None;
     for record in &path {
+        if let Some(reached) = stages.last_mut().filter(|stage| stage.event == record.event) {
+            // A later record of a stage already reached is a recurrence, not a
+            // new step on the path. A refusal among the recurrences still ends
+            // the trace, so it is kept.
+            reached.occurrences += 1;
+            if record.outcome == StageOutcome::Refused && reached.outcome != StageOutcome::Refused {
+                reached.outcome = StageOutcome::Refused;
+                reached.refusal_reason = record.refusal_reason.clone();
+            }
+            continue;
+        }
         stages.push(ReportedStage {
             event: record.event.clone(),
             timestamp: record.timestamp,
@@ -162,6 +187,7 @@ fn report_for(records: Vec<&LaunchTraceRecord>) -> LaunchTraceReport {
             outcome: record.outcome,
             refusal_reason: record.refusal_reason.clone(),
             provider: record.provider.clone(),
+            occurrences: 1,
         });
         previous = Some(record.timestamp);
     }

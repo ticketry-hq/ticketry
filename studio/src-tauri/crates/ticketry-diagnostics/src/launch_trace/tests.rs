@@ -384,9 +384,111 @@ fn an_agent_run_claimed_twice_stays_with_the_launch_that_claimed_it_first() {
     let first = report_for_launch_attempt(&records, "first");
 
     assert_eq!(first.agent_run_id.as_deref(), Some(RUN));
+    assert_eq!(first.stages.len(), 1);
     assert_eq!(
-        first.stages.len(),
+        first.stages[0].occurrences,
         2,
-        "both claims are reported, under the launch that claimed the run first"
+        "both claims are counted, under the launch that claimed the run first"
     );
+}
+
+/// The launch-discovery commit record predates the trace and writes the launch
+/// request identity under `launchAttemptId`. It is logged before the join
+/// record, and a live development log read as two reports per launch because of
+/// it. The join record is the pairing the reader trusts.
+#[test]
+fn a_commit_record_carrying_the_request_identity_does_not_split_the_launch_in_two() {
+    let records = vec![
+        attempt_stage("launch-requested", 0),
+        attempt_stage("launch-authority-resolved", 5),
+        record(
+            "launch-transaction-committed",
+            11,
+            json!({"launchAttemptId": "e46a9a17-launch-request", "agentRunId": RUN}),
+        ),
+        record(
+            "launch-attempt-committed",
+            11,
+            json!({"launchAttemptId": ATTEMPT, "agentRunId": RUN}),
+        ),
+        attempt_stage("launch-directory-preflighted", 188),
+        attempt_stage("prompt-delivered", 714),
+        run_stage("wake-up-published", 11),
+        run_stage("workspace-render-committed", 97),
+    ];
+
+    let reports = correlate(&records);
+
+    assert_eq!(reports.len(), 1, "one launch must read as one report");
+    let report = &reports[0];
+    assert_eq!(report.launch_attempt_id.as_deref(), Some(ATTEMPT));
+    assert_eq!(report.agent_run_id.as_deref(), Some(RUN));
+    let reported: Vec<&str> = report.stages.iter().map(|stage| stage.event.as_str()).collect();
+    assert_eq!(reported.first(), Some(&"launch-requested"));
+    assert!(reported.contains(&"launch-transaction-committed"));
+    assert!(reported.contains(&"prompt-delivered"));
+    assert_eq!(reported.last(), Some(&"workspace-render-committed"));
+}
+
+/// The visibility stages fire again on every status event for as long as the
+/// run lives. The path is the first time each stage was reached; the repeats
+/// are counted, not walked, so the elapsed times stay those of the launch.
+#[test]
+fn a_stage_reached_repeatedly_is_reported_once_at_its_first_reach_with_its_repeat_count() {
+    let mut records = complete_trace();
+    let later_rereads = [5_000, 9_000, 30_000];
+    for at in later_rereads {
+        records.push(run_stage("durable-event-reread", at));
+        records.push(run_stage("workspace-render-committed", at + 100));
+    }
+
+    let report = report_for_agent_run(&records, RUN);
+
+    let reread = report
+        .stages
+        .iter()
+        .find(|stage| stage.event == "durable-event-reread")
+        .expect("the reread stage");
+    let first_reach = complete_trace()
+        .iter()
+        .find(|record| record.event == "durable-event-reread")
+        .map(|record| record.timestamp)
+        .expect("the first reread");
+    assert_eq!(reread.timestamp, first_reach);
+    assert_eq!(reread.occurrences, 4);
+    assert_eq!(
+        report.stages.iter().filter(|stage| stage.event == "durable-event-reread").count(),
+        1
+    );
+    assert_eq!(report.verdict, TraceVerdict::Completed);
+    assert_eq!(
+        report.total_elapsed_ms,
+        Some((path_stages().count() as i64 - 1) * 10),
+        "the total is the launch's own duration, not the run's lifetime"
+    );
+}
+
+/// Path order is the order a launch is meant to travel; a stage that really
+/// happened earlier than its predecessor reads as a negative elapsed time, and
+/// a recurring stage says how often it recurred.
+#[test]
+fn the_rendered_report_signs_elapsed_time_and_counts_recurrences() {
+    let mut records = complete_trace();
+    // Executable discovery observed 7 ms before the directory preflight.
+    let preflight_at = records
+        .iter()
+        .find(|record| record.event == "launch-directory-preflighted")
+        .map(|record| record.timestamp)
+        .expect("the preflight");
+    records.retain(|record| record.event != "launch-executable-resolved");
+    let mut early = attempt_stage("launch-executable-resolved", 0);
+    early.timestamp = preflight_at - chrono::Duration::milliseconds(7);
+    records.push(early);
+    records.push(run_stage("durable-event-reread", 5_000));
+
+    let text = super::render::render(&report_for_agent_run(&records, RUN));
+
+    assert!(text.contains("     -7 ms  launch-executable-resolved"), "{text}");
+    assert!(text.contains("durable-event-reread ×2"), "{text}");
+    assert!(!text.contains("+-"), "{text}");
 }

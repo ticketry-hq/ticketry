@@ -30,6 +30,10 @@ name = "prepare_terminal_generation_db"
 path = "src/bin/prepare_terminal_generation_db.rs"
 
 [[bin]]
+name = "report_launch_trace"
+path = "src/bin/report_launch_trace.rs"
+
+[[bin]]
 name = "ticketry_graphql_adapter"
 path = "src/bin/ticketry_graphql_adapter.rs"
 

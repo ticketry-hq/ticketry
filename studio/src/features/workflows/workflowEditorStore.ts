@@ -36,8 +36,6 @@ import {
   loadWorkflowProjectItems,
   loadWorkflowSettings,
   loadWorkflowStates,
-  setWorkflowSettings,
-  setProjectWorkflowSettings,
   setWorkflowIssueTypes,
   setWorkflowProviderCapabilities,
   setWorkflowStateCounts,
@@ -205,9 +203,7 @@ export const useWorkflowEditorStore = createApolloStore<WorkflowEditorState>("wo
       } = await loadWorkflowEditorResources(projectId);
       const workflowIssueTypes = issueTypes.filter((type) => type.level !== "module");
       const selectedTypeId = workflowIssueTypes[0]?.id ?? null;
-      const selectedWorkflow = selectedTypeId
-        ? await loadWorkflowSettings(projectId, selectedTypeId)
-        : null;
+      if (selectedTypeId) await loadWorkflowSettings(projectId, selectedTypeId);
       if (generation !== loadGeneration) return;
       set({
         issueTypes: workflowIssueTypes,
@@ -220,9 +216,6 @@ export const useWorkflowEditorStore = createApolloStore<WorkflowEditorState>("wo
         stateWorkItemCounts: countWorkItemsByState(workItems),
         providerCapabilities,
         selectedTypeId,
-        workflows: selectedWorkflow
-          ? { [selectedWorkflow.issue_type_id]: selectedWorkflow }
-          : {},
         loading: false,
       });
     } catch (error) {
@@ -254,15 +247,9 @@ export const useWorkflowEditorStore = createApolloStore<WorkflowEditorState>("wo
     if (!projectId) return;
     set({ action: "load:workflows", notice: null, error: null });
     try {
-      const rows = await loadAllWorkflowSettings(projectId, missingTypeIds);
+      await loadAllWorkflowSettings(projectId, missingTypeIds);
       if (get().projectId !== projectId) return;
-      set((state) => ({
-        workflows: {
-          ...state.workflows,
-          ...Object.fromEntries(rows.map((row) => [row.issue_type_id, row])),
-        },
-        action: null,
-      }));
+      set({ action: null });
     } catch (error) {
       if (get().projectId === projectId) {
         set({ action: null, error: errorMessage(error) });
@@ -283,12 +270,9 @@ export const useWorkflowEditorStore = createApolloStore<WorkflowEditorState>("wo
     if (!projectId) return;
     set({ action: `load:${typeId}` });
     try {
-      const workflow = await loadWorkflowSettings(projectId, typeId);
+      await loadWorkflowSettings(projectId, typeId);
       if (get().selectedTypeId !== typeId) return;
-      set((state) => ({
-        workflows: { ...state.workflows, [typeId]: workflow },
-        action: null,
-      }));
+      set({ action: null });
     } catch (error) {
       if (get().selectedTypeId === typeId) {
         set({ action: null, error: errorMessage(error) });
@@ -322,7 +306,6 @@ export const useWorkflowEditorStore = createApolloStore<WorkflowEditorState>("wo
       await operation(workflow.workflow_revision);
       if (get().projectId !== projectId) return null;
       const next = await loadWorkflowSettings(projectId, typeId, "network-only");
-      setWorkflowSettings(next);
       synchronizeSubtreeRunCapabilities(
         projectId,
         next.issue_type_id,
@@ -331,7 +314,6 @@ export const useWorkflowEditorStore = createApolloStore<WorkflowEditorState>("wo
           .map((binding) => binding.state_id),
       );
       set((state) => ({
-        workflows: { ...state.workflows, [typeId]: next },
         action: null,
         controlErrors: { ...state.controlErrors, [control]: "" },
       }));
@@ -340,7 +322,6 @@ export const useWorkflowEditorStore = createApolloStore<WorkflowEditorState>("wo
       if (error instanceof ApiError && error.status === 409) {
         try {
           const latest = await loadWorkflowSettings(projectId, typeId, "network-only");
-          setWorkflowSettings(latest);
           synchronizeSubtreeRunCapabilities(
             projectId,
             latest.issue_type_id,
@@ -349,7 +330,6 @@ export const useWorkflowEditorStore = createApolloStore<WorkflowEditorState>("wo
               .map((binding) => binding.state_id),
           );
           set((state) => ({
-            workflows: { ...state.workflows, [typeId]: latest },
             action: null,
             notice: "Workflow changed elsewhere. Latest settings loaded.",
             controlErrors: { ...state.controlErrors, [control]: "" },
@@ -572,7 +552,7 @@ export const useWorkflowEditorStore = createApolloStore<WorkflowEditorState>("wo
       if (get().projectId !== projectId) return;
       removeStateFromCatalog(projectId, command.stateId);
       set({ states: getWorkflowStatesSnapshot(projectId) });
-      const [states, workflowRows, workItems] = await Promise.all([
+      const [states, , workItems] = await Promise.all([
         loadWorkflowStates(projectId),
         loadAllWorkflowSettings(projectId, issueTypes.map((type) => type.id)),
         loadWorkflowProjectItems(projectId),
@@ -583,10 +563,6 @@ export const useWorkflowEditorStore = createApolloStore<WorkflowEditorState>("wo
       set({
         states: getWorkflowStatesSnapshot(projectId),
         stateWorkItemCounts: countWorkItemsByState(workItems),
-        workflows: Object.fromEntries(workflowRows.map((row) => [
-          row.issue_type_id,
-          row,
-        ])),
         action: null,
         notice: `State ${command.stateName} deleted.`,
       });
@@ -646,7 +622,10 @@ export const useWorkflowEditorStore = createApolloStore<WorkflowEditorState>("wo
       set({ states, action: null, error: errorMessage(error) });
     }
   },
-}));
+}), {
+  prepare: routeAndAttachWorkflowServerState,
+  derive: (state) => attachWorkflowServerState({ ...state }),
+});
 
 function ownValue<T>(state: WorkflowEditorState, key: keyof WorkflowEditorState): T | undefined {
   const descriptor = Object.getOwnPropertyDescriptor(state, key);
@@ -680,14 +659,6 @@ function routeAndAttachWorkflowServerState(
       "stateWorkItemCounts",
     );
     if (counts !== undefined) setWorkflowStateCounts(projectId, counts);
-    const workflows = changedOwnValue<Record<string, ScopedWorkflowSettings>>(
-      state,
-      previousState,
-      "workflows",
-    );
-    if (workflows !== undefined) {
-      setProjectWorkflowSettings(projectId, workflows);
-    }
   }
   const providerCapabilities = changedOwnValue<ProviderCapabilities[]>(
     state,
@@ -698,6 +669,10 @@ function routeAndAttachWorkflowServerState(
     setWorkflowProviderCapabilities(providerCapabilities);
   }
 
+  attachWorkflowServerState(state);
+}
+
+function attachWorkflowServerState(state: WorkflowEditorState): WorkflowEditorState {
   Object.defineProperties(state, {
     issueTypes: {
       configurable: true,
@@ -737,7 +712,5 @@ function routeAndAttachWorkflowServerState(
           : EMPTY_WORKFLOWS,
     },
   });
+  return state;
 }
-
-routeAndAttachWorkflowServerState(useWorkflowEditorStore.getState());
-useWorkflowEditorStore.subscribe(routeAndAttachWorkflowServerState);

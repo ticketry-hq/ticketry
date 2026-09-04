@@ -12,6 +12,7 @@ import { LaunchConfigurationForm } from "./LaunchConfigurationForm";
 import { validateLaunchBindingOptions } from "./launchBindingValidation";
 import { useStudioStore } from "../projects";
 import { useWorkflowEditorStore } from "./workflowEditorStore";
+import { useProjectWorkflowSettings } from "./queries/workflowSnapshots";
 import { workflowMemberStateIds } from "./workflowMembership";
 
 const launchControl = (typeId: string, stateId: string) =>
@@ -32,7 +33,7 @@ export function StateConfigurationPanel({
   const selectedProjectId = useStudioStore((store) => store.selectedProjectId);
   const issueTypes = useWorkflowEditorStore((store) => store.issueTypes);
   const states = useWorkflowEditorStore((store) => store.states);
-  const workflows = useWorkflowEditorStore((store) => store.workflows);
+  const workflows = useProjectWorkflowSettings(selectedProjectId);
   const providerCapabilities = useWorkflowEditorStore(
     (store) => store.providerCapabilities,
   );

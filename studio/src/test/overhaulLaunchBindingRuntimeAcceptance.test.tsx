@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { getCapabilitiesSnapshot } from "../features/settings";
 import { upsertIssueTypeWorkflowLaunchBinding } from "../features/workflows/mutationTransport";
 import { useWorkflowEditorStore } from "../features/workflows/workflowEditorStore";
+import { readWorkflowSettings } from "../features/workflows/queries/readTransport";
 import { initializeStudioRuntime } from "../runtime";
 import { createBrowserRuntime } from "../runtime/browserRuntime";
 import { createDesktopRuntime } from "../runtime/desktopRuntime";
@@ -106,22 +107,13 @@ describe("launch-binding desktop runtime acceptance", () => {
         graphql_unsubscribe: vi.fn(),
       }),
     }));
+    await readWorkflowSettings("project-1", "story");
     useWorkflowEditorStore.setState({
       projectId: "project-1",
       issueTypes: [issueType],
       states: [state],
       stateWorkItemCounts: {},
-      providerCapabilities: [],
       selectedTypeId: "story",
-      workflows: { story: {
-        issue_type_id: "story", start_state_id: "build", workflow_revision: 8,
-        transitions: [], launch_bindings: [{
-          state_id: "build", prompt: "Implement it.", required_skills: ["tdd"],
-          entry_skill: "tdd",
-          agent: "codex", model: model.name, reasoning: "medium",
-          auto_start: false, subtree_run_enabled: false,
-        }], warnings: [],
-      } },
       stagedStateIds: {}, loading: false, action: null, notice: null,
       error: null, controlErrors: {},
     });

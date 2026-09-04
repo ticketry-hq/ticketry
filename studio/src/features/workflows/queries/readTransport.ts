@@ -7,23 +7,7 @@ import type {
 import type { FetchPolicy } from "@apollo/client";
 import { publicWorktrackerId } from "../../../shared/api/generatedWorktracker";
 import { assembleScopedWorkflowSettings } from "./scopedWorkflowSettings";
-import { issueType, readWorkflowCatalog } from "./projectCatalog";
-
-export async function readWorkflowTransitions(
-  projectId: string,
-  issueTypeId: string,
-): Promise<ScopedWorkflowSettings["transitions"]> {
-  const catalog = await readWorkflowCatalog(projectId);
-  const type = catalog.issueTypes.find(
-    (candidate) => publicWorktrackerId(candidate.id) === issueTypeId,
-  );
-  return type?.transitions.nodes.map((transition) => ({
-    from_state_id: publicWorktrackerId(transition.from_state),
-    to_state_id: publicWorktrackerId(transition.to_state),
-    agent_allowed: transition.agent_allowed,
-    handoff: transition.handoff,
-  })) ?? [];
-}
+import { issueType, readWorkflowCatalog, type WorkflowCatalog } from "./projectCatalog";
 
 export async function readWorkflowStates(projectId: string): Promise<State[]> {
   return (await readWorkflowCatalog(projectId)).states;
@@ -54,6 +38,13 @@ export async function readWorkflowSettings(
   fetchPolicy: FetchPolicy = "cache-first",
 ): Promise<ScopedWorkflowSettings> {
   const catalog = await readWorkflowCatalog(projectId, fetchPolicy);
+  return workflowSettingsFromCatalog(catalog, issueTypeId);
+}
+
+export function workflowSettingsFromCatalog(
+  catalog: WorkflowCatalog,
+  issueTypeId: string,
+): ScopedWorkflowSettings {
   const selectedType = catalog.issueTypes.find(
     (candidate) => publicWorktrackerId(candidate.id) === issueTypeId,
   );

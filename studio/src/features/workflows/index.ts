@@ -39,7 +39,6 @@ export {
   getWorkflowProviderCapabilitiesSnapshot,
   getWorkflowStateCountsSnapshot,
   getWorkflowStatesSnapshot,
-  getWorkflowSettingsSnapshot,
   loadAllWorkflowSettings,
   loadStateImpact,
   loadWorkflowEditorResources,
@@ -50,12 +49,10 @@ export {
   readWorkflowSettings,
   readWorkflowStates,
   readSubtreeRunCapabilities,
-  setProjectWorkflowSettings,
   setWorkflowIssueTypes,
   setWorkflowProviderCapabilities,
   setWorkflowStateCounts,
   setWorkflowStates,
-  setWorkflowSettings,
 } from "./queries";
 export {
   createIssueType,

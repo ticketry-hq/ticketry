@@ -16,8 +16,9 @@ import {
   setStates as setApolloStates,
 } from "../../../features/projects";
 import {
-  WorkTrackerProjectIssueTypesDocument,
-} from "../../projects";
+  WorkTrackerProjectIssueTypeMetadataDocument,
+  type WorkTrackerProjectIssueTypeMetadataQuery,
+} from "./issueTypeMetadata";
 import { loadProviderCapabilities } from "../providerQueries";
 import {
   getProviderCapabilitiesSnapshot,
@@ -35,9 +36,6 @@ import { readProjectWorkItems } from "../../work-items";
 const EMPTY_ISSUE_TYPES: IssueType[] = [];
 const EMPTY_CAPABILITIES: WorkflowEditorResources["providerCapabilities"] = [];
 const EMPTY_COUNTS: Record<string, number> = {};
-const EMPTY_WORKFLOWS: Record<string, ScopedWorkflowSettings> = {};
-
-const projectWorkflowSettings = new Map<string, Record<string, ScopedWorkflowSettings>>();
 const stateCounts = new Map<string, Record<string, number>>();
 
 export interface WorkflowEditorResources {
@@ -52,106 +50,17 @@ export async function loadWorkflowSettings(
   issueTypeId: string,
   fetchPolicy: FetchPolicy = "cache-first",
 ): Promise<ScopedWorkflowSettings> {
-  const workflow = await readWorkflowSettings(projectId, issueTypeId, fetchPolicy);
-  projectWorkflowSettings.set(projectId, {
-    ...(projectWorkflowSettings.get(projectId) ?? {}),
-    [workflow.issue_type_id]: workflow,
-  });
-  return workflow;
+  return readWorkflowSettings(projectId, issueTypeId, fetchPolicy);
 }
 
-export function setWorkflowSettings(workflow: ScopedWorkflowSettings): void {
-  for (const [projectId, workflows] of projectWorkflowSettings) {
-    if (getWorkflowIssueTypesSnapshot(projectId).some(
-      (type) => type.id === workflow.issue_type_id,
-    )) {
-      projectWorkflowSettings.set(projectId, {
-        ...workflows,
-        [workflow.issue_type_id]: workflow,
-      });
-      return;
-    }
-  }
-}
-
-export function getWorkflowSettingsSnapshot(
-  issueTypeId: string,
-): ScopedWorkflowSettings | undefined {
-  for (const workflows of projectWorkflowSettings.values()) {
-    if (workflows[issueTypeId]) return workflows[issueTypeId];
-  }
-  return undefined;
-}
-
-export function setProjectWorkflowSettings(
-  projectId: string,
-  workflows: Record<string, ScopedWorkflowSettings>,
-): void {
-  projectWorkflowSettings.set(projectId, workflows);
-}
-
-export function getProjectWorkflowSettingsSnapshot(
-  projectId: string,
-): Record<string, ScopedWorkflowSettings> {
-  return projectWorkflowSettings.get(projectId) ?? EMPTY_WORKFLOWS;
-}
-
-export function setWorkflowIssueTypes(
-  projectId: string,
-  issueTypes: IssueType[],
-): void {
-  const variables = { projectId: compactWorktrackerId(projectId) };
-  const current = studioApolloClient().readQuery({
-    query: WorkTrackerProjectIssueTypesDocument,
-    variables,
-    optimistic: true,
-  });
-  const currentById = new Map(
-    current?.issue_types.nodes.map((row) => [row.id, row]) ?? [],
-  );
-  studioApolloClient().writeQuery({
-    query: WorkTrackerProjectIssueTypesDocument,
-    variables,
-    data: {
-      issue_types: {
-        __typename: "WorktrackerIssuetypeConnection",
-        nodes: issueTypes.map((type, index) => {
-          const id = compactWorktrackerId(type.id);
-          const existing = currentById.get(id);
-          return {
-            __typename: "WorktrackerIssuetype",
-            id,
-            project: compactWorktrackerId(type.project ?? projectId),
-            name: type.name,
-            level: type.level,
-            color: type.color ?? "",
-            sort_order: type.sort_order ?? index,
-            start_state: type.start_state
-              ? compactWorktrackerId(type.start_state)
-              : null,
-            workflow_revision: type.workflow_revision ?? 0,
-            is_pathfind: existing?.is_pathfind ?? false,
-            created_at: existing?.created_at ?? new Date(index).toISOString(),
-            updated_at: existing?.updated_at ?? new Date(index).toISOString(),
-            transitions: existing?.transitions ?? {
-              __typename: "WorktrackerIssuetypetransitionConnection",
-              nodes: [],
-            },
-            launch_bindings: existing?.launch_bindings ?? {
-              __typename: "WorktrackerLaunchbindingConnection",
-              nodes: [],
-            },
-          };
-        }),
-      },
-    } as never,
-  });
-}
+export { getProjectWorkflowSettingsSnapshot } from "./workflowSnapshots";
+export { setIssueTypeMetadata as setWorkflowIssueTypes } from "./issueTypeMetadata";
 
 export function getWorkflowIssueTypesSnapshot(projectId: string): IssueType[] {
   const projectRows = getWorkflowCatalogSnapshot(projectId)?.issueTypes;
-  const auxiliaryRows = studioApolloClient().readQuery({
-    query: WorkTrackerProjectIssueTypesDocument,
+  const auxiliaryRows = studioApolloClient()
+    .readQuery<WorkTrackerProjectIssueTypeMetadataQuery>({
+    query: WorkTrackerProjectIssueTypeMetadataDocument,
     variables: { projectId: compactWorktrackerId(projectId) },
     optimistic: true,
   })?.issue_types.nodes;

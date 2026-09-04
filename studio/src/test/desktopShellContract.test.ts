@@ -97,7 +97,9 @@ describe("desktop shell security contract", () => {
         "allow-native-terminal-hide",
         "allow-native-terminal-show",
         "allow-native-terminal-focus",
+        "allow-native-terminal-set-webview-interaction",
         "allow-native-terminal-detach",
+        "allow-native-terminal-retention-benchmark",
         "core:event:allow-listen",
         "core:event:allow-unlisten",
         "core:webview:allow-set-webview-zoom",
@@ -302,7 +304,7 @@ describe("desktop shell security contract", () => {
     expect(view.indexOf("self.hidden = YES")).toBeLessThan(
       view.indexOf("ghostty_surface_new(runtime->app, &config)"),
     );
-    expect(view.indexOf("[parent addSubview:self")).toBeLessThan(
+    expect(view.indexOf("muxed_ghostty_place_sibling(self, _webview, true)")).toBeLessThan(
       view.indexOf("CGFloat scale = self.window.backingScaleFactor"),
     );
     expect(view).toContain("- (void)viewDidChangeBackingProperties");

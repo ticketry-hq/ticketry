@@ -56,6 +56,13 @@ pub fn validate_native_frame(frame: NativeTerminalFrame) -> Result<(), String> {
     )
 }
 
+pub fn validate_webview_interaction_frames(frames: &[NativeTerminalFrame]) -> Result<(), String> {
+    for frame in frames {
+        validate_native_frame(*frame)?;
+    }
+    Ok(())
+}
+
 /// The newest frame Studio published for each preparing viewer, keyed by run.
 ///
 /// A preparing viewer has no handle yet, so its live geometry arrives under
@@ -132,5 +139,12 @@ mod tests {
         pending.discard("run-1");
 
         assert!(pending.take("run-1").is_none());
+    }
+
+    #[test]
+    fn webview_interaction_accepts_empty_or_valid_overlay_frames_only() {
+        assert!(validate_webview_interaction_frames(&[]).is_ok());
+        assert!(validate_webview_interaction_frames(&[frame(800.0, 600.0)]).is_ok());
+        assert!(validate_webview_interaction_frames(&[frame(0.0, 600.0)]).is_err());
     }
 }

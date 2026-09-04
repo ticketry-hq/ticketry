@@ -51,6 +51,10 @@ impl NativeTerminalVisibility {
         Ok(changed)
     }
 
+    pub(crate) fn is_presented(self) -> bool {
+        self.presented
+    }
+
     /// Consumes a pending restoration so one hide returns focus exactly once.
     pub fn take_focus_restoration(&mut self) -> bool {
         if !self.presented {

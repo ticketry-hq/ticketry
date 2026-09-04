@@ -254,6 +254,7 @@ export function WorkspaceTabBody({
           aria-hidden="true"
           data-testid="native-viewer-transition-shield"
           className="absolute inset-0 z-[60] bg-pane-panel"
+          data-native-terminal-overlay
         />
       ) : null}
       {showZoneChrome && editViewZone === "active-tab-body" && !bodyEngaged && (

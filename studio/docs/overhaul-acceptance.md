@@ -214,6 +214,11 @@ named gate before the full Studio suite, typecheck, and build.
 | 229 | Task badges omit terminal history and quietly announce newly lost runs. |
 | 230 | Codex alternate-screen scrolling uses durable terminal history without sending cursor-key input to Codex. |
 | 231 | Run agent selects its terminal from the authoritative status event before launch returns, then attaches its viewer only after runtime acknowledgement. |
+| 232 | Native Ghostty sends key presses directly to the terminal, routes captured wheel gestures to their program, and keeps ordinary shell scrollback in tmux. |
+| 233 | Normal native Ghostty terminals present above WebKit with input enabled so click-drag selection works immediately; the WebView-underlay comparison remains opt-in. |
+| 234 | The opt-in WebView-underlay comparison coordinates retained native Ghostty terminals through one generation-fenced window selection. |
+| 235 | Native Ghostty warm retention caps the total mounted set at the measured 20-view limit, keeps the selected run, refreshes recency on revisit, and evicts the least recently viewed inactive viewer. |
+| 236 | A bottom-left toast stays outside the selected native Ghostty host and above the Studio footer and safe areas; stacked notifications remain actionable without lowering, detaching, recreating, or focusing the terminal. |
 
 Each executable case carries one stable `[overhaul-NN]` marker. The gate has a
 contract test that fails if a marker is missing or duplicated. When a Studio UI

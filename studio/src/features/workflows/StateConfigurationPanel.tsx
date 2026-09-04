@@ -106,6 +106,7 @@ export function StateConfigurationPanel({
     <section
       aria-label={`${state.name} state configuration`}
       data-testid="state-configuration-panel"
+      data-native-terminal-overlay
       className="absolute inset-0 z-[60] overflow-y-auto bg-pane-panel p-4 text-sm"
     >
       <header className="flex items-center justify-between gap-4 border-b border-pane-border pb-3">

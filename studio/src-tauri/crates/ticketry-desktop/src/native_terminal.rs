@@ -8,7 +8,10 @@
 mod chords;
 pub(crate) mod focus_trace;
 pub(crate) mod frames;
+mod ordering;
 mod preparation;
+#[cfg(feature = "desktop-acceptance")]
+mod retention_benchmark;
 pub(crate) mod scroll;
 #[cfg(any(test, all(target_os = "macos", feature = "native-libghostty")))]
 mod visibility;
@@ -117,11 +120,34 @@ mod imp {
     }
 
     #[tauri::command]
+    pub fn native_terminal_set_webview_interaction(
+        _window: tauri::WebviewWindow,
+        _state: tauri::State<'_, NativeTerminalState>,
+        _handle: String,
+        _webview_focus: bool,
+        _overlay_frames: Vec<NativeTerminalFrame>,
+        _generation: u64,
+    ) -> Result<(), String> {
+        Err("native libghostty support is unavailable in this build".to_owned())
+    }
+
+    #[tauri::command]
     pub fn native_terminal_detach(
         _window: tauri::WebviewWindow,
         _state: tauri::State<'_, NativeTerminalState>,
         _handle: String,
     ) -> Result<(), String> {
+        Err("native libghostty support is unavailable in this build".to_owned())
+    }
+
+    #[cfg(feature = "desktop-acceptance")]
+    #[tauri::command]
+    pub fn native_terminal_retention_benchmark(
+        _window: tauri::WebviewWindow,
+        _state: tauri::State<'_, NativeTerminalState>,
+        _count: u16,
+        _frame: NativeTerminalFrame,
+    ) -> Result<super::retention_benchmark::NativeRetentionBenchmarkStatus, String> {
         Err("native libghostty support is unavailable in this build".to_owned())
     }
 }

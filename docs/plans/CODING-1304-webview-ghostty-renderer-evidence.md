@@ -1,11 +1,8 @@
 # CODING-1304 WebView-hosted Ghostty renderer — evidence
 
-Post-release experiment. Not a release blocker, and not a migration: the
-deliverable is evidence and one recommendation.
-
-The current order of work and the native fallback are recorded in
-[`terminal-renderer-strategy.md`](terminal-renderer-strategy.md). This file
-remains the evidence log and comparison matrix for the WASM attempt.
+Post-release experiment. Not a release blocker, and not a migration. The final
+native-underlay comparison and renderer decision are recorded in
+[`CODING-1394-renderer-decision.md`](CODING-1394-renderer-decision.md).
 
 ## What shipped in this branch
 
@@ -15,9 +12,11 @@ frames onto a Canvas 2D surface inside Ticketry's WKWebView, fed by the
 existing Rust tmux attachment over the existing Tauri byte channel.
 
 - tmux remains the durable session owner.
-- Native libghostty remains the desktop default; xterm remains the fallback.
-- The gate is development-only (`import.meta.env.DEV`), read from
-  `?terminalRenderer=` then `localStorage["ticketry:terminal-renderer"]`.
+- `ghostty-wasm` is now the product default. Native libghostty remains an
+  explicit packaged capture override and a development diagnostic renderer;
+  xterm remains the fallback.
+- Development renderer selection reads `?terminalRenderer=` then
+  `localStorage["ticketry:terminal-renderer"]`.
 - Switching renderers changes no run, no tmux session identity, and no
   persisted terminal record. No GraphQL contract changed.
 - Experiment failures are deliberately excluded from the window-scoped native
@@ -126,7 +125,9 @@ browser.
 ## Comparison matrix
 
 Run every case against native Ghostty, xterm and `ghostty-wasm` in the same
-Ticketry build on the same machine. Nothing below has been filled in yet.
+Ticketry build on the same machine. This original matrix remains as the capture
+protocol. CODING-1394 records missing cases explicitly rather than filling the
+cells with unmatched runs.
 
 ### Startup and resource use
 
@@ -216,7 +217,7 @@ here proves the ownership rule itself must change.
 
 ## Recommendation
 
-Not yet written. It must be exactly one of: promote the WebView renderer in a
-follow-up, keep native and borrow selected ideas, or abandon the experiment —
-supported by the filled matrix above. Any production migration is a separate
-ticket.
+Keep `ghostty-wasm` as the default. The final rationale, native-only packaged
+measurements, selection-gate evidence, UX costs, and unsupported cases are in
+[`CODING-1394-renderer-decision.md`](CODING-1394-renderer-decision.md). Any
+native production migration is a separate task.

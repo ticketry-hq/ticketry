@@ -44,6 +44,7 @@ fn spawn_worker(setup: WorkerSetup) {
         commands,
         window,
         entries,
+        ordering,
         handle,
         run_id,
         preparation_phase,
@@ -52,7 +53,7 @@ fn spawn_worker(setup: WorkerSetup) {
         NativeWorkerExit::AttachmentExited => {
             let phase = preparation_phase.swap(FAILED, Ordering::AcqRel);
             if phase == PRESENTED {
-                close_worker_entry(&entries, &window, &handle);
+                close_worker_entry(&entries, &ordering, &window, &handle);
             }
             let _ = window.emit(
                 "native-terminal-closed",
@@ -66,7 +67,7 @@ fn spawn_worker(setup: WorkerSetup) {
         NativeWorkerExit::ResizeFailed(reason) => {
             let phase = preparation_phase.swap(FAILED, Ordering::AcqRel);
             if phase == PRESENTED {
-                close_worker_entry(&entries, &window, &handle);
+                close_worker_entry(&entries, &ordering, &window, &handle);
             }
             let _ = window.emit(
                 "native-terminal-failed",
@@ -166,12 +167,17 @@ fn cleanup_entry(
 
 fn close_worker_entry(
     entries: &Arc<Mutex<HashMap<String, NativeEntry>>>,
+    ordering: &Arc<Mutex<NativeWindowOrdering>>,
     window: &tauri::WebviewWindow,
     handle: &str,
 ) {
     let Some(entry) = take_native_entry(entries, handle) else {
         return;
     };
+    ordering
+        .lock()
+        .expect("native terminal ordering poisoned")
+        .clear_selected(handle);
     entry.stop_accepting_events();
     let _ = free_view(window, entry.view, entry.contexts);
 }

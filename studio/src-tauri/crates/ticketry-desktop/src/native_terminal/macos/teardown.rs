@@ -52,6 +52,19 @@ impl NativeTerminalState {
     }
 
     fn detach_every_viewer(&self, mut timing: NativeTeardownTiming<'_>) {
+        self.ordering
+            .lock()
+            .expect("native terminal ordering poisoned")
+            .reset();
+        #[cfg(feature = "desktop-acceptance")]
+        for view in self
+            .retention_benchmark_views
+            .lock()
+            .expect("native retention benchmark registry poisoned")
+            .drain(..)
+        {
+            free_view_with_timing(&mut timing, view, NativeViewContexts::default());
+        }
         let (entries, has_in_flight_attachments) = {
             let mut attaching = self
                 .attaching

@@ -266,6 +266,7 @@ pub fn native_terminal_attach(
         commands,
         window: window.clone(),
         entries: Arc::clone(&state.entries),
+        ordering: Arc::clone(&state.ordering),
         handle: handle.clone(),
         run_id: run_id.clone(),
         preparation_phase: Arc::clone(&preparation_phase),
@@ -297,19 +298,18 @@ pub fn native_terminal_attach(
         Arc::new(NativePreparedViewerMechanics {
             window: window.clone(),
             entries: Arc::clone(&state.entries),
+            ordering: Arc::clone(&state.ordering),
             handle: handle.clone(),
         }),
     ) {
-        let _ = detach_native_handle(&window, &state.entries, &handle);
+        let _ = detach_native_handle(&window, &state.entries, &state.ordering, &handle);
         return Err(error.to_string());
     }
     if let Ok(output_activity) = launch.output_activity() {
         let observed_run_id = run_id.clone();
         tokio::spawn(async move {
             if let Err(error) = output_activity.observe(&observed_run_id).await {
-                eprintln!(
-                    "Terminal output observation failed for {observed_run_id}: {error}"
-                );
+                eprintln!("Terminal output observation failed for {observed_run_id}: {error}");
             }
         });
     }

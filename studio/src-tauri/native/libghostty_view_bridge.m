@@ -64,18 +64,19 @@ muxed_ghostty_view_set_frame(void *opaque, double x, double y, double width,
   // area and the fullscreen safe area without changing the WKWebView bounds'
   // origin. Map into safeAreaRect so the missing top translation is not baked
   // into the scale or retained from the previous window mode.
-  NSRect viewport = parent.safeAreaRect;
+  NSView *coordinateView = view->_webview ?: parent;
+  NSRect viewport = coordinateView.safeAreaRect;
   if (viewport.size.width <= 0 || viewport.size.height <= 0)
-    viewport = parent.bounds;
+    viewport = coordinateView.bounds;
   double scale_x = viewport.size.width / viewport_width;
   double scale_y = viewport.size.height / viewport_height;
   NSRect frame = NSMakeRect(NSMinX(viewport) + x * scale_x, 0,
                             width * scale_x, height * scale_y);
-  if (parent.isFlipped)
+  if (coordinateView.isFlipped)
     frame.origin.y = NSMinY(viewport) + y * scale_y;
   else
     frame.origin.y = NSMaxY(viewport) - (y + height) * scale_y;
-  view.frame = frame;
+  view.frame = [coordinateView convertRect:frame toView:parent];
   [view updateGhosttySize];
 
   ghostty_surface_size_s size = ghostty_surface_size(view->_surface);
@@ -118,14 +119,16 @@ bool muxed_ghostty_view_wait_for_redraw(void *opaque, uint64_t generation,
   }
 }
 
-void muxed_ghostty_view_present(void *opaque) {
+bool muxed_ghostty_view_present(void *opaque) {
   MuxedGhosttyView *view = opaque;
-  if (view == nil) return;
+  if (view == nil || view->_webview == nil) return false;
+  if (!muxed_ghostty_place_sibling(view, view->_webview, false)) return false;
   view->_reportsGridResize = YES;
   view->_acceptsInput = YES;
   view.hidden = NO;
   [view reportGridResize];
   muxed_focus_trace(view, "presented", view->_acceptsInput);
+  return true;
 }
 
 void muxed_ghostty_view_hide(void *opaque) {
@@ -137,6 +140,8 @@ void muxed_ghostty_view_hide(void *opaque) {
   if (view.window.firstResponder == view)
     [view.window makeFirstResponder:view.superview];
   if (view->_surface != NULL) ghostty_surface_set_focus(view->_surface, false);
+  if (view->_webview != nil)
+    muxed_ghostty_place_sibling(view, view->_webview, true);
   view.hidden = YES;
 }
 
@@ -147,7 +152,8 @@ muxed_ghostty_view_show(void *opaque, double x, double y, double width,
   muxed_ghostty_grid_size_s size = muxed_ghostty_view_set_frame(
       opaque, x, y, width, height, viewport_width, viewport_height);
   if (size.columns == 0 || size.rows == 0) return size;
-  muxed_ghostty_view_present(opaque);
+  if (!muxed_ghostty_view_present(opaque))
+    return (muxed_ghostty_grid_size_s){0, 0};
   return size;
 }
 
@@ -156,12 +162,61 @@ bool muxed_ghostty_view_is_focused(void *opaque) {
   return view != nil && view.window.firstResponder == view;
 }
 
+bool muxed_ghostty_view_is_hidden(void *opaque) {
+  MuxedGhosttyView *view = opaque;
+  return view == nil || view.hidden;
+}
+
+bool muxed_ghostty_view_accepts_input(void *opaque) {
+  MuxedGhosttyView *view = opaque;
+  return view != nil && !view.hidden && view->_acceptsInput;
+}
+
 void muxed_ghostty_view_focus(void *opaque) {
   MuxedGhosttyView *view = opaque;
   if (view == nil) return;
   muxed_focus_trace(view, "focus requested", view->_acceptsInput);
   if (view->_acceptsInput) [view.window makeFirstResponder:view];
   muxed_focus_trace_settled(view, "focus requested");
+}
+
+bool muxed_ghostty_view_set_webview_interaction(void *opaque,
+                                                bool webview_owns_input) {
+  MuxedGhosttyView *view = opaque;
+  if (view == nil || view->_webview == nil) return false;
+  if (view.hidden && !webview_owns_input) return false;
+
+  if (webview_owns_input) {
+    view->_acceptsInput = NO;
+    if (view.window.firstResponder == view)
+      [view.window makeFirstResponder:view->_webview];
+    if (view->_surface != NULL) ghostty_surface_set_focus(view->_surface, false);
+  }
+  if (!muxed_ghostty_place_sibling(view, view->_webview,
+                                    webview_owns_input))
+    return false;
+  if (!webview_owns_input) {
+    view->_acceptsInput = YES;
+    [view.window makeFirstResponder:view];
+    // The selection starts in WKWebView's pointer handler. WebKit may finish
+    // that event by restoring its own content view as first responder after
+    // this command returns, so settle the handoff once more next run-loop.
+    // A meanwhile-opened overlay flips _acceptsInput back to NO and cancels
+    // this guarded retry.
+    MuxedGhosttyView *focusView = [view retain];
+    dispatch_async(dispatch_get_main_queue(), ^{
+      if (!focusView.hidden && focusView->_acceptsInput)
+        [focusView.window makeFirstResponder:focusView];
+      muxed_focus_trace(focusView, "terminal focus handoff settled",
+                        focusView->_acceptsInput);
+      [focusView release];
+    });
+  }
+  muxed_focus_trace(view,
+                    webview_owns_input ? "WebView owns overlay input"
+                                       : "Ghostty owns terminal input",
+                    view->_acceptsInput);
+  return true;
 }
 
 muxed_ghostty_scroll_intent_s

@@ -38,6 +38,7 @@ import {
   recordFirstPaint,
 } from "./ghostty-wasm/internal/rendererMeasurement";
 import { activeElementLabel, traceViewerFocus } from "./internal/focusTrace";
+import { useNativeWebViewSiblingInteraction } from "./internal/useNativeWebViewSiblingInteraction";
 
 const OWNER_LABEL: Record<ForegroundOwner, string> = {
   studio: "the fallback workspace",
@@ -54,6 +55,7 @@ export function NativeGhosttyTerminal({
   onReady,
   onUnavailable,
   onVisibilityPendingChange,
+  webviewSiblingSpike = false,
 }: {
   sessionId: string;
   owner: ForegroundOwner;
@@ -63,6 +65,8 @@ export function NativeGhosttyTerminal({
   onReady?: () => void;
   onUnavailable?: (reason: string) => void;
   onVisibilityPendingChange?: (runId: string, pending: boolean) => void;
+  /** CODING-1391 comparison spike: keep this native view below the WebView. */
+  webviewSiblingSpike?: boolean;
 }) {
   const sessions = useTerminalStore((state) => state.sessions);
   const registerHost = useTerminalForegroundStore((state) => state.registerHost);
@@ -161,11 +165,20 @@ export function NativeGhosttyTerminal({
     visible,
     modalOpen,
   });
+  useNativeWebViewSiblingInteraction(
+    sharedHandle,
+    hostRef,
+    webviewSiblingSpike && visible && presentedHere,
+    modalOpen,
+    (error) => {
+      if (runId) failNativeViewerMount(runId, nativeFailureMessage(error));
+    },
+  );
 
   useLayoutEffect(() => {
     const handle = sharedHandle;
     if (!retained || !runId) return;
-    const hidden = !visible || modalOpen;
+    const hidden = !visible || (modalOpen && !webviewSiblingSpike);
     if (!handle) return;
     traceViewerFocus(hidden ? "wants hidden" : "wants presented", {
       run: runId,
@@ -181,7 +194,7 @@ export function NativeGhosttyTerminal({
     // Modal occlusion is window-level and has no destination host: while the
     // stack is non-empty nobody may present, so the deferral would otherwise
     // leave the losing host's view uncovered over the dialog.
-    if (hidden && !modalOpen && resolvedOwner !== owner) return;
+    if (hidden && (!modalOpen || webviewSiblingSpike) && resolvedOwner !== owner) return;
     if (hidden && !presentedHere) return;
     if (!hidden && presentedHere) return;
     const blocksDestination = hidden && !active && !modalOpen;
@@ -240,6 +253,7 @@ export function NativeGhosttyTerminal({
     sharedHandle,
     token,
     visible,
+    webviewSiblingSpike,
   ]);
 
   useEffect(() => {
@@ -262,18 +276,26 @@ export function NativeGhosttyTerminal({
       sessionId,
       token,
       host: () => hostRef.current,
-      shouldPresent: () => visibleRef.current && !modalOpenRef.current,
+      shouldPresent: () =>
+        visibleRef.current && (webviewSiblingSpike || !modalOpenRef.current),
     });
-  }, [mayOwnAttachment, retained, runId, sessionId, token]);
+  }, [mayOwnAttachment, retained, runId, sessionId, token, webviewSiblingSpike]);
 
   const presentedElsewhere = session !== null && resolvedOwner !== owner;
   return (
-    <div className="relative h-full w-full bg-pane-panel">
+    <div
+      className={`relative h-full w-full ${
+        webviewSiblingSpike ? "bg-transparent" : "bg-pane-panel"
+      }`}
+    >
       <div
         ref={hostRef}
-        className="absolute bottom-0 left-2 right-2 top-[10px] bg-pane-panel"
+        className={`absolute bottom-0 left-2 right-2 top-[10px] ${
+          webviewSiblingSpike ? "bg-transparent" : "bg-pane-panel"
+        }`}
         data-testid="native-terminal-host"
         data-terminal-renderer="libghostty"
+        data-native-terminal-presented={visible && presentedHere ? "" : undefined}
       />
       {presentedElsewhere && resolvedOwner ? (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-pane-bg p-4 text-center text-sm text-text-muted">

@@ -35,7 +35,9 @@
     "allow-native-terminal-hide",
     "allow-native-terminal-show",
     "allow-native-terminal-focus",
+    "allow-native-terminal-set-webview-interaction",
     "allow-native-terminal-detach",
+    "allow-native-terminal-retention-benchmark",
     "core:event:allow-listen",
     "core:event:allow-unlisten",
     "core:webview:allow-set-webview-zoom"

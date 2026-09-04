@@ -45,7 +45,15 @@ unsafe extern "C" {
         viewport_height: f64,
     ) -> GhosttyGridSize;
     fn muxed_ghostty_view_is_focused(view: *mut c_void) -> bool;
+    #[cfg(feature = "desktop-acceptance")]
+    fn muxed_ghostty_view_is_hidden(view: *mut c_void) -> bool;
+    #[cfg(feature = "desktop-acceptance")]
+    fn muxed_ghostty_view_accepts_input(view: *mut c_void) -> bool;
     fn muxed_ghostty_view_focus(view: *mut c_void);
+    fn muxed_ghostty_view_set_webview_interaction(
+        view: *mut c_void,
+        webview_owns_input: bool,
+    ) -> bool;
     fn muxed_ghostty_view_set_scroll_callback(
         view: *mut c_void,
         callback: Option<unsafe extern "C" fn(*mut c_void, u8, u16)>,
@@ -72,10 +80,7 @@ unsafe extern "C" {
     // The native view normalizes its own gestures; Ticketry calls this only
     // to assert the policy the view applies.
     #[cfg(test)]
-    fn muxed_ghostty_normalize_scroll(
-        vertical_delta: f64,
-        precise: bool,
-    ) -> GhosttyScrollIntent;
+    fn muxed_ghostty_normalize_scroll(vertical_delta: f64, precise: bool) -> GhosttyScrollIntent;
 }
 
 #[cfg(test)]

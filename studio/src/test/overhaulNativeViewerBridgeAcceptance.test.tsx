@@ -236,9 +236,14 @@ describe("native viewer attachment acceptance", () => {
     expect(nativeTerminalSource).toMatch(
       /fn detach_all[\s\S]{0,180}detach_every_viewer/,
     );
-    expect(nativeTerminalSource).toMatch(
-      /fn detach_every_viewer[\s\S]{0,500}attaching\.cancel_all\(\)[\s\S]{0,500}registry\.drain/,
+    const detachEveryViewerSource = nativeTerminalSource.slice(
+      nativeTerminalSource.indexOf("fn detach_every_viewer"),
+      nativeTerminalSource.indexOf("fn free_view_with_timing"),
     );
+    expect(detachEveryViewerSource).toContain("attaching.cancel_all()");
+    expect(detachEveryViewerSource).toContain("registry.drain()");
+    expect(detachEveryViewerSource.indexOf("attaching.cancel_all()"))
+      .toBeLessThan(detachEveryViewerSource.indexOf("registry.drain()"));
     // Tauri handles a main-thread dispatch inline when page-load teardown is
     // already on AppKit's thread. Cross a worker first so native frees run on
     // the next event-loop turn, after WebKit finishes committing navigation.
@@ -277,7 +282,7 @@ describe("native viewer attachment acceptance", () => {
       "if (!_reportsGridResize || _surface == NULL || _resizeCallback == NULL)",
     );
     expect(viewBridgeSource).toMatch(
-      /muxed_ghostty_view_present[\s\S]{0,180}_reportsGridResize = YES[\s\S]{0,180}\[view reportGridResize\]/,
+      /muxed_ghostty_view_present[\s\S]{0,500}_reportsGridResize = YES[\s\S]{0,180}\[view reportGridResize\]/,
     );
     expect(viewBridgeSource).toMatch(
       /muxed_ghostty_view_hide[\s\S]{0,180}_reportsGridResize = NO/,
@@ -289,5 +294,32 @@ describe("native viewer attachment acceptance", () => {
     expect(bridgeSource).toContain(
       "muxed_ghostty_view_disable_resize_callback(view as *mut c_void)",
     );
+  });
+
+  it("[overhaul-232] gives captured wheel gestures to the program and keeps shell scrollback in tmux", async () => {
+    const { readFile } = await import("node:fs/promises");
+    const viewSource = await readFile(
+      `${process.cwd()}/src-tauri/native/libghostty_view.m`,
+      "utf8",
+    );
+    const scrollMethod = viewSource.match(
+      /- \(void\)scrollWheel:\(NSEvent \*\)event \{[\s\S]*?\n\}/,
+    )?.[0];
+    if (scrollMethod === undefined) {
+      throw new Error("libghostty view must implement scrollWheel");
+    }
+
+    expect(scrollMethod).toContain("ghostty_surface_mouse_captured(_surface)");
+    expect(scrollMethod).toContain("ghostty_surface_mouse_scroll(_surface");
+    expect(scrollMethod).toContain("muxed_ghostty_normalize_scroll");
+    expect(scrollMethod).toContain("_scrollCallback(_scrollContext");
+    expect(scrollMethod.indexOf("ghostty_surface_mouse_captured(_surface)"))
+      .toBeLessThan(scrollMethod.indexOf("muxed_ghostty_normalize_scroll"));
+
+    const keyDownMethod = viewSource.match(
+      /- \(void\)keyDown:\(NSEvent \*\)event \{[\s\S]*?\n\}/,
+    )?.[0];
+    expect(keyDownMethod).toContain("ghostty_surface_key(_surface, key)");
+    expect(keyDownMethod).not.toContain("interpretKeyEvents");
   });
 });

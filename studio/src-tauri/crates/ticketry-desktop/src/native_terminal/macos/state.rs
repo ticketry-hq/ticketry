@@ -38,6 +38,10 @@ struct NativeTerminalFailure {
 pub struct NativeTerminalState {
     runtime: Mutex<Option<usize>>,
     entries: Arc<Mutex<HashMap<String, NativeEntry>>>,
+    /// Window-wide sibling ordering. The generation fence and selected handle
+    /// live together so concurrent WebView publications cannot raise two
+    /// retained views or let an older publication win.
+    ordering: Arc<Mutex<NativeWindowOrdering>>,
     /// Run ids reserved by attach commands that have not yet inserted an
     /// entry. Keeping this separate from the completed entry map closes
     /// the multi-second check/create race without exposing half-built
@@ -47,6 +51,8 @@ pub struct NativeTerminalState {
     /// layout change during preparation reaches the surface before it is
     /// presented rather than after its first visible redraw.
     pending_frames: PendingFrames,
+    #[cfg(feature = "desktop-acceptance")]
+    retention_benchmark_views: Mutex<Vec<usize>>,
 }
 
 /// Callback contexts leaked to one native view. Each is released only after
@@ -76,18 +82,20 @@ struct NativeEntry {
 struct NativePreparedViewerMechanics {
     window: tauri::WebviewWindow,
     entries: Arc<Mutex<HashMap<String, NativeEntry>>>,
+    ordering: Arc<Mutex<NativeWindowOrdering>>,
     handle: String,
 }
 
 impl ticketry_terminal::PreparedViewerMechanics for NativePreparedViewerMechanics {
     fn detach(&self, _reason: ticketry_terminal::ViewerDetachReason) {
-        let _ = detach_native_handle(&self.window, &self.entries, &self.handle);
+        let _ = detach_native_handle(&self.window, &self.entries, &self.ordering, &self.handle);
     }
 }
 
 fn detach_native_handle(
     window: &tauri::WebviewWindow,
     entries: &Arc<Mutex<HashMap<String, NativeEntry>>>,
+    ordering: &Arc<Mutex<NativeWindowOrdering>>,
     handle: &str,
 ) -> Result<(), String> {
     let entry = entries
@@ -95,6 +103,10 @@ fn detach_native_handle(
         .expect("native terminal registry poisoned")
         .remove(handle)
         .ok_or_else(|| "native terminal handle was not found".to_owned())?;
+    ordering
+        .lock()
+        .expect("native terminal ordering poisoned")
+        .clear_selected(handle);
     entry.stop_accepting_events();
     let _ = entry.worker.send(NativeViewerCommand::Detach);
     free_view(window, entry.view, entry.contexts).map_err(|error| error.to_string())
@@ -208,6 +220,7 @@ struct WorkerSetup {
     commands: Receiver<NativeViewerCommand>,
     window: tauri::WebviewWindow,
     entries: Arc<Mutex<HashMap<String, NativeEntry>>>,
+    ordering: Arc<Mutex<NativeWindowOrdering>>,
     handle: String,
     run_id: String,
     preparation_phase: Arc<AtomicU8>,
@@ -229,8 +242,11 @@ impl NativeTerminalState {
         Self {
             runtime: Mutex::new(None),
             entries: Arc::new(Mutex::new(HashMap::new())),
+            ordering: Arc::new(Mutex::new(NativeWindowOrdering::default())),
             attaching: Arc::new(Mutex::new(NativeAttachRegistry::default())),
             pending_frames: PendingFrames::default(),
+            #[cfg(feature = "desktop-acceptance")]
+            retention_benchmark_views: Mutex::new(Vec::new()),
         }
     }
 }

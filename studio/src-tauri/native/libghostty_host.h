@@ -77,14 +77,20 @@ muxed_ghostty_view_set_frame(void *view, double x, double y, double width,
 uint64_t muxed_ghostty_view_arm_redraw(void *view);
 bool muxed_ghostty_view_wait_for_redraw(void *view, uint64_t generation,
                                         uint32_t timeout_milliseconds);
-void muxed_ghostty_view_present(void *view);
+bool muxed_ghostty_view_present(void *view);
 void muxed_ghostty_view_hide(void *view);
 muxed_ghostty_grid_size_s
 muxed_ghostty_view_show(void *view, double x, double y, double width,
                        double height, double viewport_width,
                        double viewport_height);
 bool muxed_ghostty_view_is_focused(void *view);
+bool muxed_ghostty_view_is_hidden(void *view);
+bool muxed_ghostty_view_accepts_input(void *view);
 void muxed_ghostty_view_focus(void *view);
+// Dynamic sibling ordering is the CODING-1391 fallback. WebKit stays above
+// while a DOM overlay owns input; otherwise Ghostty is raised for native input.
+bool muxed_ghostty_view_set_webview_interaction(void *view,
+                                                bool webview_owns_input);
 
 // Normalization policy shared with the browser Terminal viewer: pixel deltas
 // are divided by one line's worth of scrolling, line deltas count directly,

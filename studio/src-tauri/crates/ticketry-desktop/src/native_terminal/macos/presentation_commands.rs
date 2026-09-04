@@ -60,6 +60,11 @@ pub fn native_terminal_hide(
     state: tauri::State<'_, NativeTerminalState>,
     handle: String,
 ) -> Result<(), String> {
+    state
+        .ordering
+        .lock()
+        .expect("native terminal ordering poisoned")
+        .clear_selected(&handle);
     let view = {
         let registry = state
             .entries
@@ -238,10 +243,83 @@ pub fn native_terminal_focus(
 }
 
 #[tauri::command]
+pub fn native_terminal_set_webview_interaction(
+    window: tauri::WebviewWindow,
+    state: tauri::State<'_, NativeTerminalState>,
+    handle: String,
+    webview_focus: bool,
+    overlay_frames: Vec<NativeTerminalFrame>,
+    generation: u64,
+) -> Result<(), String> {
+    validate_webview_interaction_frames(&overlay_frames)?;
+    let entries = Arc::clone(&state.entries);
+    let ordering = Arc::clone(&state.ordering);
+    let (ordering_sender, ordering_receiver) = mpsc::channel();
+    window
+        .run_on_main_thread(move || {
+            let registry = entries.lock().expect("native terminal registry poisoned");
+            let selection_eligible = !webview_focus
+                && registry
+                    .get(&handle)
+                    .is_some_and(|entry| entry.visibility.is_presented());
+            let mut handles = registry.keys().cloned().collect::<Vec<_>>();
+            handles.sort();
+            let requested = (!webview_focus).then_some(handle.as_str());
+            let operations = ordering
+                .lock()
+                .expect("native terminal ordering poisoned")
+                .transition(generation, requested, selection_eligible, &handles);
+
+            let mut ordered = true;
+            for operation in operations {
+                let (operation_handle, webview_owns_input) = match operation {
+                    NativeOrderingOperation::Lower(handle) => (handle, true),
+                    NativeOrderingOperation::Raise(handle) => (handle, false),
+                };
+                // A failed lower means another view may still own native
+                // input. Never raise the requested view in that state.
+                if !webview_owns_input && !ordered {
+                    continue;
+                }
+                let Some(entry) = registry.get(&operation_handle) else {
+                    ordered = false;
+                    continue;
+                };
+                if !unsafe {
+                    muxed_ghostty_view_set_webview_interaction(
+                        entry.view as *mut c_void,
+                        webview_owns_input,
+                    )
+                } {
+                    ordered = false;
+                }
+            }
+            if !ordered {
+                ordering
+                    .lock()
+                    .expect("native terminal ordering poisoned")
+                    .clear_selected(&handle);
+            }
+            let _ = ordering_sender.send(ordered);
+        })
+        .map_err(|error| error.to_string())?;
+    let ordered = ordering_receiver
+        .recv_timeout(Duration::from_secs(2))
+        .map_err(|_| "timed out changing native terminal sibling order".to_owned())?;
+    sibling_ordering_result(ordered)
+}
+
+fn sibling_ordering_result(ordered: bool) -> Result<(), String> {
+    ordered
+        .then_some(())
+        .ok_or_else(|| "failed to change native terminal sibling order".to_owned())
+}
+
+#[tauri::command]
 pub fn native_terminal_detach(
     window: tauri::WebviewWindow,
     state: tauri::State<'_, NativeTerminalState>,
     handle: String,
 ) -> Result<(), String> {
-    detach_native_handle(&window, &state.entries, &handle)
+    detach_native_handle(&window, &state.entries, &state.ordering, &handle)
 }

@@ -49,19 +49,34 @@ static bool runtime_action(ghostty_app_t app, ghostty_target_s target,
 
 static bool runtime_read_clipboard(void *userdata, ghostty_clipboard_e clipboard,
                                    void *state) {
-  (void)userdata;
-  (void)clipboard;
-  (void)state;
-  return false;
+  // Paste bindings originate on AppKit's main thread. Keep pasteboard access
+  // there and refuse unsupported selection-clipboard or OSC requests instead
+  // of handing libghostty an owner that may outlive its view.
+  if (![NSThread isMainThread] || clipboard != GHOSTTY_CLIPBOARD_STANDARD)
+    return false;
+  ghostty_surface_t surface = muxed_ghostty_owned_surface(userdata);
+  if (surface == NULL) return false;
+
+  NSString *value =
+      [[NSPasteboard generalPasteboard] stringForType:NSPasteboardTypeString];
+  if (value == nil) return false;
+  ghostty_surface_complete_clipboard_request(surface, value.UTF8String, state,
+                                             false);
+  return true;
 }
 
 static void runtime_confirm_clipboard(
     void *userdata, const char *value, void *state,
     ghostty_clipboard_request_e request) {
-  (void)userdata;
-  (void)value;
-  (void)state;
-  (void)request;
+  ghostty_surface_t surface = muxed_ghostty_owned_surface(userdata);
+  if (surface == NULL || state == NULL) return;
+
+  // Ticketry already requires an explicit Cmd+V while the terminal is
+  // engaged. Complete Ghostty's multiline-paste safety round trip in place;
+  // terminal-initiated OSC 52 reads remain denied.
+  const char *confirmed =
+      request == GHOSTTY_CLIPBOARD_REQUEST_PASTE && value != NULL ? value : "";
+  ghostty_surface_complete_clipboard_request(surface, confirmed, state, true);
 }
 
 static void runtime_write_clipboard(
@@ -69,7 +84,7 @@ static void runtime_write_clipboard(
     const ghostty_clipboard_content_s *content, size_t count, bool confirm) {
   (void)userdata;
   (void)clipboard;
-  (void)confirm;
+  if (confirm) return;
   if (count == 0 || content == NULL || content[0].data == NULL) return;
   NSString *value = [NSString stringWithUTF8String:content[0].data];
   if (value == nil) return;

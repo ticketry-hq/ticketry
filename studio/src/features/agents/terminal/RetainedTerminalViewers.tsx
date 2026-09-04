@@ -7,19 +7,26 @@ import {
   bucketOfMeta,
   useTerminalStore,
 } from "./internal/sessionStore";
+import { retainMostRecentRunIds } from "./internal/retainedViewerLru";
 
-/** Keeps every opened run mounted while presenting only the selected session. */
+/** Packaged 1/5/20-view measurements selected this total mounted-view cap. */
+export const RETAINED_TERMINAL_VIEW_LIMIT = 20;
+
+/** Keeps recently opened runs mounted while presenting only the selected session. */
 export function RetainedTerminalViewers({
   bucket,
   owner,
   focusSignal,
   active,
+  retentionLimit = RETAINED_TERMINAL_VIEW_LIMIT,
   onNativeVisibilityPendingChange,
 }: {
   bucket: string | null;
   owner: ForegroundOwner;
   focusSignal: number;
   active: boolean;
+  /** Total mounted viewers, including the selected viewer. */
+  retentionLimit?: number;
   onNativeVisibilityPendingChange?: (runId: string, pending: boolean) => void;
 }) {
   const activeByTask = useClientStore((state) => state.activeByTask);
@@ -74,13 +81,30 @@ export function RetainedTerminalViewers({
       ...(openedRunId ? [openedRunId] : []),
       ...acknowledgedPendingRunIds,
     ];
-    if (!openedRunIds.length) return;
-    setRetainedRunIds((current) =>
-      openedRunIds.every((runId) => current.includes(runId))
-        ? current
-        : [...new Set([...current, ...openedRunIds])],
+    const liveRunIds = new Set(
+      Object.entries(sessionByRun)
+        .filter(([, sessionId]) => sessions[sessionId])
+        .map(([runId]) => runId),
     );
-  }, [acknowledgedPendingRunIds, openedRunId]);
+    setRetainedRunIds((current) => {
+      const retained = retainMostRecentRunIds({
+        currentRunIds: current,
+        openedRunIds,
+        liveRunIds,
+        retentionLimit,
+      });
+      return retained.length === current.length &&
+        retained.every((runId, index) => runId === current[index])
+        ? current
+        : retained;
+    });
+  }, [
+    acknowledgedPendingRunIds,
+    openedRunId,
+    retentionLimit,
+    sessionByRun,
+    sessions,
+  ]);
 
   const presentedRunIds = useMemo(
     () => [

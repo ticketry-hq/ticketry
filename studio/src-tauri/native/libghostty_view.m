@@ -3,6 +3,35 @@
 static const double kMuxedScrollPixelsPerLine = 24.0;
 static const uint16_t kMuxedScrollMaxLines = 20;
 
+static ghostty_input_mouse_momentum_e
+muxed_ghostty_mouse_momentum(NSEventPhase phase) {
+  switch (phase) {
+    case NSEventPhaseBegan:
+      return GHOSTTY_MOUSE_MOMENTUM_BEGAN;
+    case NSEventPhaseStationary:
+      return GHOSTTY_MOUSE_MOMENTUM_STATIONARY;
+    case NSEventPhaseChanged:
+      return GHOSTTY_MOUSE_MOMENTUM_CHANGED;
+    case NSEventPhaseEnded:
+      return GHOSTTY_MOUSE_MOMENTUM_ENDED;
+    case NSEventPhaseCancelled:
+      return GHOSTTY_MOUSE_MOMENTUM_CANCELLED;
+    case NSEventPhaseMayBegin:
+      return GHOSTTY_MOUSE_MOMENTUM_MAY_BEGIN;
+    default:
+      return GHOSTTY_MOUSE_MOMENTUM_NONE;
+  }
+}
+
+static ghostty_input_scroll_mods_t
+muxed_ghostty_scroll_mods(NSEvent *event) {
+  // libghostty's packed ScrollMods stores precision in bit zero and the
+  // three-bit momentum enum immediately above it.
+  int precision = event.hasPreciseScrollingDeltas ? 1 : 0;
+  int momentum = (int)muxed_ghostty_mouse_momentum(event.momentumPhase);
+  return precision | (momentum << 1);
+}
+
 @interface MuxedGhosttyView : NSView {
  @public
   ghostty_surface_t _surface;
@@ -22,6 +51,7 @@ static const uint16_t kMuxedScrollMaxLines = 20;
   void *_chordContext;
   BOOL _acceptsInput;
   BOOL _reportsGridResize;
+  NSView *_webview;
 }
 - (instancetype)initWithRuntime:(MuxedGhosttyRuntime *)runtime
                          parent:(NSView *)parent
@@ -59,7 +89,12 @@ static const uint16_t kMuxedScrollMaxLines = 20;
   _processExitCallback = processExitCallback;
   _processExitContext = processExitContext;
   muxed_ghostty_surface_owner_init(&_surfaceOwner, self);
-  [parent addSubview:self positioned:NSWindowAbove relativeTo:nil];
+  _webview = parent;
+  muxed_ghostty_prepare_transparent_webview(_webview);
+  if (!muxed_ghostty_place_sibling(self, _webview, true)) {
+    [self release];
+    return nil;
+  }
 
   // The target window is authoritative. The view must already belong to it
   // before libghostty chooses its first cell metrics and backing size.
@@ -120,6 +155,46 @@ static const uint16_t kMuxedScrollMaxLines = 20;
   muxed_focus_trace(self, "resignFirstResponder", _acceptsInput);
   muxed_focus_trace_settled(self, "resignFirstResponder");
   return resigned;
+}
+
+- (void)updateTrackingAreas {
+  [super updateTrackingAreas];
+  NSArray<NSTrackingArea *> *existingAreas = [self.trackingAreas copy];
+  for (NSTrackingArea *area in existingAreas) {
+    [self removeTrackingArea:area];
+  }
+  [existingAreas release];
+  NSTrackingArea *area = [[NSTrackingArea alloc]
+      initWithRect:NSZeroRect
+           options:NSTrackingMouseEnteredAndExited | NSTrackingMouseMoved |
+                   NSTrackingInVisibleRect | NSTrackingActiveAlways
+             owner:self
+          userInfo:nil];
+  [self addTrackingArea:area];
+  [area release];
+}
+
+- (void)reportMousePosition:(NSEvent *)event {
+  if (!_acceptsInput || _surface == NULL) return;
+  NSPoint point = [self convertPoint:event.locationInWindow fromView:nil];
+  ghostty_surface_mouse_pos(_surface, point.x, self.bounds.size.height - point.y,
+                           ghostty_mods(event.modifierFlags));
+}
+
+- (void)mouseEntered:(NSEvent *)event {
+  [super mouseEntered:event];
+  [self reportMousePosition:event];
+}
+
+- (void)mouseExited:(NSEvent *)event {
+  [super mouseExited:event];
+  if (_acceptsInput && _surface != NULL && NSEvent.pressedMouseButtons == 0)
+    ghostty_surface_mouse_pos(_surface, -1, -1,
+                             ghostty_mods(event.modifierFlags));
+}
+
+- (void)mouseMoved:(NSEvent *)event {
+  [self reportMousePosition:event];
 }
 
 - (void)viewDidChangeBackingProperties {
@@ -217,11 +292,70 @@ static const uint16_t kMuxedScrollMaxLines = 20;
                            ghostty_mods(event.modifierFlags));
 }
 
+- (void)rightMouseDown:(NSEvent *)event {
+  if (!_acceptsInput || _surface == NULL) return;
+  [self reportMousePosition:event];
+  ghostty_surface_mouse_button(_surface, GHOSTTY_MOUSE_PRESS,
+                              GHOSTTY_MOUSE_RIGHT,
+                              ghostty_mods(event.modifierFlags));
+}
+
+- (void)rightMouseUp:(NSEvent *)event {
+  if (!_acceptsInput || _surface == NULL) return;
+  ghostty_surface_mouse_button(_surface, GHOSTTY_MOUSE_RELEASE,
+                              GHOSTTY_MOUSE_RIGHT,
+                              ghostty_mods(event.modifierFlags));
+}
+
+- (void)rightMouseDragged:(NSEvent *)event {
+  [self reportMousePosition:event];
+}
+
+- (void)otherMouseDown:(NSEvent *)event {
+  if (!_acceptsInput || _surface == NULL) return;
+  [self reportMousePosition:event];
+  ghostty_surface_mouse_button(_surface, GHOSTTY_MOUSE_PRESS,
+                              GHOSTTY_MOUSE_MIDDLE,
+                              ghostty_mods(event.modifierFlags));
+}
+
+- (void)otherMouseUp:(NSEvent *)event {
+  if (!_acceptsInput || _surface == NULL) return;
+  ghostty_surface_mouse_button(_surface, GHOSTTY_MOUSE_RELEASE,
+                              GHOSTTY_MOUSE_MIDDLE,
+                              ghostty_mods(event.modifierFlags));
+}
+
+- (void)otherMouseDragged:(NSEvent *)event {
+  [self reportMousePosition:event];
+}
+
 - (void)scrollWheel:(NSEvent *)event {
-  if (!_acceptsInput) return;
-  // Wheel and trackpad gestures express Scroll bridge intent. They are never
-  // forwarded to libghostty, whose fallback would write keys to the hosted
-  // command, and a horizontal-only gesture produces no terminal action.
+  if (muxed_focus_trace_enabled()) {
+    NSLog(@"[focus-trace] scrollWheel view=%p acceptsInput=%d surface=%p "
+          @"precise=%d delta=(%.3f,%.3f) phase=%lu momentum=%lu",
+          self, _acceptsInput, _surface, event.hasPreciseScrollingDeltas,
+          event.scrollingDeltaX, event.scrollingDeltaY,
+          (unsigned long)event.phase, (unsigned long)event.momentumPhase);
+  }
+  if (!_acceptsInput || _surface == NULL) return;
+  // A mouse-tracking program owns its viewport. Match the WASM renderer by
+  // letting libghostty encode that wheel event for the program. Ordinary shell
+  // scrollback remains durable in tmux.
+  if (ghostty_surface_mouse_captured(_surface)) {
+    [self reportMousePosition:event];
+    double x = event.scrollingDeltaX;
+    double y = event.scrollingDeltaY;
+    if (event.hasPreciseScrollingDeltas) {
+      // Match Ghostty's macOS host, which doubles trackpad travel before
+      // handing the gesture to the terminal core.
+      x *= 2;
+      y *= 2;
+    }
+    ghostty_surface_mouse_scroll(_surface, x, y,
+                                 muxed_ghostty_scroll_mods(event));
+    return;
+  }
   muxed_ghostty_scroll_intent_s intent = muxed_ghostty_normalize_scroll(
       event.scrollingDeltaY, event.hasPreciseScrollingDeltas);
   if (intent.direction == MUXED_GHOSTTY_SCROLL_NONE) return;

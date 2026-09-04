@@ -1,6 +1,9 @@
 //! macOS native Terminal implementation, split by lifecycle concern.
 
-use super::frames::{validate_frame, validate_native_frame, PendingFrames};
+use super::frames::{
+    validate_frame, validate_native_frame, validate_webview_interaction_frames, PendingFrames,
+};
+use super::ordering::{NativeOrderingOperation, NativeWindowOrdering};
 use super::preparation::{PreparationGate, TerminalGrid};
 use super::scroll::ScrollGestureSink;
 use super::visibility::NativeTerminalVisibility;
@@ -32,6 +35,8 @@ include!("platform_bridge.rs");
 include!("state.rs");
 include!("attach_commands.rs");
 include!("presentation_commands.rs");
+#[cfg(feature = "desktop-acceptance")]
+include!("retention_benchmark_commands.rs");
 include!("lifecycle.rs");
 include!("teardown.rs");
 include!("platform_tests.rs");

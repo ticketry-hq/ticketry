@@ -1,7 +1,11 @@
-import { act, fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SelectedTicketTerminal } from "../app/shell/ticket-workspace/selected-ticket/terminals/SelectedTicketTerminal";
+import {
+  RETAINED_TERMINAL_VIEW_LIMIT,
+  RetainedTerminalViewers,
+} from "../features/agents/terminal/RetainedTerminalViewers";
 import { useModalStore } from "../app/modal/modalStore";
 import { useTerminalForegroundStore } from "../features/agents/terminal/internal/foregroundStore";
 import { useTerminalStore } from "../features/agents/terminal/internal/sessionStore";
@@ -9,6 +13,7 @@ import { useClientStore } from "../state/clientStore";
 import { fixture, mountStudio, workItem } from "./seam";
 import {
   grantsEveryLease,
+  installDesktopGraphQlRuntime,
   type RecordedGraphQlOperation,
 } from "./desktopGraphQlRuntime";
 import { documentOperationName } from "../graphql-foundation/typedDocument";
@@ -319,6 +324,93 @@ describe("native viewer attachment acceptance", () => {
     )).toHaveLength(0);
     expect(leases("CreateViewerLease")).toHaveLength(3);
     expect(leases("DeleteViewerLease")).toHaveLength(0);
+  });
+
+  it("[overhaul-235] evicts the least recently viewed native terminal when the measured total-view limit is reached", async () => {
+    expect(RETAINED_TERMINAL_VIEW_LIMIT).toBe(20);
+    installDesktopGraphQlRuntime();
+    const baseSession = useTerminalStore.getState().sessions["session-1"];
+    useTerminalStore.setState({
+      sessions: {
+        "session-1": baseSession,
+        "session-2": {
+          ...baseSession,
+          sessionId: "session-2",
+          taskId: "task-2",
+          agentRunId: "run-2",
+        },
+        "session-3": {
+          ...baseSession,
+          sessionId: "session-3",
+          taskId: "task-3",
+          agentRunId: "run-3",
+        },
+      },
+      sessionByRun: {
+        "run-1": "session-1",
+        "run-2": "session-2",
+        "run-3": "session-3",
+      },
+    });
+    useClientStore.setState({
+      activeByTask: {
+        "task-1": "session-1",
+        "task-2": "session-2",
+        "task-3": "session-3",
+      },
+    });
+    tauri.invoke.mockImplementation((command: string, args?: Record<string, unknown>) => {
+      if (command === "native_terminal_available") return Promise.resolve(true);
+      if (command === "native_terminal_attach") {
+        const runId = String(args?.runId);
+        return Promise.resolve({
+          handle: `native-${runId}`,
+          runId,
+          columns: 100,
+          rows: 30,
+        });
+      }
+      if (command === "native_terminal_show") {
+        return Promise.resolve({
+          handle: String(args?.handle),
+          runId: String(args?.handle).replace("native-", ""),
+          columns: 100,
+          rows: 30,
+        });
+      }
+      return Promise.resolve();
+    });
+
+    const viewers = (bucket: string) => (
+      <RetainedTerminalViewers
+        bucket={bucket}
+        owner="studio"
+        focusSignal={0}
+        active
+        retentionLimit={2}
+      />
+    );
+    const view = render(viewers("task-1"));
+    const attachedRuns = () => tauri.invoke.mock.calls
+      .filter(([command]) => command === "native_terminal_attach")
+      .map(([, args]) => (args as { runId: string }).runId);
+    const detachedHandles = () => tauri.invoke.mock.calls
+      .filter(([command]) => command === "native_terminal_detach")
+      .map(([, args]) => (args as { handle: string }).handle);
+
+    await waitFor(() => expect(attachedRuns()).toEqual(["run-1"]));
+    view.rerender(viewers("task-2"));
+    await waitFor(() => expect(attachedRuns()).toEqual(["run-1", "run-2"]));
+
+    // Revisiting run 1 makes run 2 the least recently viewed warm entry.
+    view.rerender(viewers("task-1"));
+    view.rerender(viewers("task-3"));
+    await waitFor(() => {
+      expect(attachedRuns()).toEqual(["run-1", "run-2", "run-3"]);
+      expect(detachedHandles()).toContain("native-run-2");
+    });
+    expect(detachedHandles()).not.toContain("native-run-1");
+    expect(screen.getAllByTestId("retained-terminal-viewer")).toHaveLength(2);
   });
 
 });

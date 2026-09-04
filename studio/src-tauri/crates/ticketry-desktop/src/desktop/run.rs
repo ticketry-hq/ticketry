@@ -21,6 +21,57 @@ use crate::desktop::startup::initialize_services;
 use crate::{app_updates, native_terminal};
 use ticketry_terminal::ViewerCommandState;
 
+macro_rules! native_invoke_handler {
+    ($($acceptance_command:path),* $(,)?) => {
+        tauri::generate_handler![
+            commands::desktop_runtime_configuration,
+            commands::desktop_launch_default_coding_agent,
+            commands::desktop_append_frontend_log,
+            commands::desktop_file_logging_enabled,
+            commands::desktop_retry_services,
+            commands::desktop_pick_folder,
+            commands::desktop_validate_module_folder,
+            commands::desktop_preflight_report,
+            commands::desktop_approve_executable_path,
+            crate::desktop::embedded_assets::desktop_ghostty_vt_artifact,
+            app_updates::desktop_update_check,
+            app_updates::install::desktop_update_download_and_install,
+            app_updates::install::desktop_update_restart,
+            crate::desktop::crash_reports::desktop_latest_crash_collection_outcome,
+            crate::desktop::crash_reports::desktop_reveal_crash_report_folder,
+            commands::terminal_viewer::viewer_attach,
+            commands::terminal_viewer::viewer_input,
+            commands::terminal_viewer::viewer_resize,
+            commands::terminal_viewer::viewer_scroll,
+            commands::terminal_viewer::viewer_detach,
+            commands::terminal_viewer::viewer_status,
+            native_terminal::native_terminal_available,
+            native_terminal::native_terminal_attach,
+            native_terminal::native_terminal_reconcile_frame,
+            native_terminal::native_terminal_set_frame,
+            native_terminal::native_terminal_hide,
+            native_terminal::native_terminal_show,
+            native_terminal::native_terminal_focus,
+            native_terminal::native_terminal_set_webview_interaction,
+            native_terminal::native_terminal_detach,
+            native_terminal::focus_trace::native_terminal_trace,
+            $($acceptance_command),*
+        ]
+    };
+}
+
+#[cfg(feature = "desktop-acceptance")]
+fn native_invoke_handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Send + Sync + 'static
+{
+    native_invoke_handler![native_terminal::native_terminal_retention_benchmark]
+}
+
+#[cfg(not(feature = "desktop-acceptance"))]
+fn native_invoke_handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Send + Sync + 'static
+{
+    native_invoke_handler![]
+}
+
 /// Builds and runs the desktop application.
 ///
 /// The `context` is produced by `tauri::generate_context!()` in the root
@@ -60,6 +111,7 @@ pub fn run(context: tauri::Context, file_logging_requested: bool) {
         .plugin(tauri_plugin_updater::Builder::new().build());
     #[cfg(feature = "desktop-acceptance")]
     let builder = builder.plugin(tauri_plugin_wdio_webdriver::init());
+    let native_handler = native_invoke_handler();
     let application = match builder
         .manage(ownership)
         .manage(crash_reports)
@@ -69,38 +121,7 @@ pub fn run(context: tauri::Context, file_logging_requested: bool) {
         .manage(ViewerCommandState::new())
         .manage(native_terminal::NativeTerminalState::new())
         .invoke_handler(ticketry_graphql_schema::combine_with_native_handler(
-            tauri::generate_handler![
-                commands::desktop_runtime_configuration,
-                commands::desktop_launch_default_coding_agent,
-                commands::desktop_append_frontend_log,
-                commands::desktop_file_logging_enabled,
-                commands::desktop_retry_services,
-                commands::desktop_pick_folder,
-                commands::desktop_validate_module_folder,
-                commands::desktop_preflight_report,
-                commands::desktop_approve_executable_path,
-                crate::desktop::embedded_assets::desktop_ghostty_vt_artifact,
-                app_updates::desktop_update_check,
-                app_updates::install::desktop_update_download_and_install,
-                app_updates::install::desktop_update_restart,
-                crate::desktop::crash_reports::desktop_latest_crash_collection_outcome,
-                crate::desktop::crash_reports::desktop_reveal_crash_report_folder,
-                commands::terminal_viewer::viewer_attach,
-                commands::terminal_viewer::viewer_input,
-                commands::terminal_viewer::viewer_resize,
-                commands::terminal_viewer::viewer_scroll,
-                commands::terminal_viewer::viewer_detach,
-                commands::terminal_viewer::viewer_status,
-                native_terminal::native_terminal_available,
-                native_terminal::native_terminal_attach,
-                native_terminal::native_terminal_reconcile_frame,
-                native_terminal::native_terminal_set_frame,
-                native_terminal::native_terminal_hide,
-                native_terminal::native_terminal_show,
-                native_terminal::native_terminal_focus,
-                native_terminal::native_terminal_detach,
-                native_terminal::focus_trace::native_terminal_trace
-            ],
+            native_handler,
             graphql_api,
         ))
         .register_asynchronous_uri_scheme_protocol(

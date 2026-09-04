@@ -42,6 +42,15 @@
     margin: 0;
     -webkit-font-smoothing: antialiased;
   }
+
+  /* CODING-1391: AppKit clears WKWebView itself. Clearing these two root
+     paints lets the native sibling show only through the terminal component,
+     whose surrounding Studio panes keep their normal opaque backgrounds. */
+  html.native-webview-sibling-spike body,
+  html.native-webview-sibling-spike .studio-surface,
+  html.native-webview-sibling-spike [data-pane="details-or-terminal"] {
+    background-color: transparent;
+  }
 }
 
 @layer components {

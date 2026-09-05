@@ -1,14 +1,20 @@
 /**
- * Modal occlusion convergence across viewers, races, and failures (CODING-723).
+ * Modal occlusion convergence across viewers, races, and failures (CODING-723,
+ * CODING-1498).
  *
  * Case 117 proves the single-viewer Settings integration. What is asserted here
- * is that the window-level occlusion policy *converges*: every presentable
- * native viewer — from any Studio surface — hides for any open modal, work that
- * finishes while the stack is non-empty cannot commit a late reveal, out-of-order
- * native promises still settle on the latest modal/active/ownership intent, only
- * viewers still entitled to presentation come back, hidden viewers take no focus,
- * and a native visibility failure leaves Settings usable behind the established
- * compatibility fallback.
+ * is that the window-level occlusion policy *converges* on the production path:
+ * `Terminal` renders native libghostty as a WebView sibling, so an open modal
+ * hides no presented viewer — from any Studio surface — and issues no native
+ * show when it closes. What the modal does take is input: the interaction map
+ * lowers the selected native view and gives the WebView focus, keyboard
+ * ownership and focus registration drop while the stack is non-empty, and a
+ * focus request banked before the dialog opened is discarded. Attachment work
+ * that lands under an open modal still presents beneath it, a pending
+ * deactivation hide still settles on the latest activation intent, a
+ * deactivated viewer is still hidden by its own owner change, and a failing
+ * interaction hand-off — not a hide — leaves Settings usable behind the
+ * established compatibility fallback.
  */
 
 import {
@@ -24,11 +30,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ModalHost } from "../app/modal/ModalHost";
 import { useModalStore } from "../app/modal/modalStore";
 import { StudioFooter } from "../app/shell/StudioFooter";
-import { NativeGhosttyTerminal } from "../features/agents/terminal/NativeGhosttyTerminal";
+import { Terminal } from "../features/agents/terminal/Terminal";
 import { useTerminalForegroundStore } from "../features/agents/terminal/internal/foregroundStore";
 import { useTerminalStore } from "../features/agents/terminal/internal/sessionStore";
 import { focusTerminal } from "../features/agents/terminal/internal/terminalRegistry";
 import { useStudioStore } from "../features/projects/store";
+import { isNativeTerminalKeyboardOwner } from "../runtime/nativeTerminalKeyboard";
 import { useClientStore } from "../state/clientStore";
 import { installDesktopGraphQlRuntime } from "./desktopGraphQlRuntime";
 
@@ -125,6 +132,24 @@ function showsOf(handle: string): Record<string, unknown>[] {
   );
 }
 
+function interactionsOf(handle: string): Record<string, unknown>[] {
+  return invocations("native_terminal_set_webview_interaction").filter(
+    (args) => args.handle === handle,
+  );
+}
+
+/** The WebView owns input for this viewer (overlay geometry is incidental). */
+function webviewOwnsInput(handle: string): Record<string, unknown> {
+  return {
+    handle,
+    webviewFocus: true,
+    overlayFrames: expect.any(Array),
+    generation: expect.any(Number),
+  };
+}
+
+const KEYBOARD_OWNER_1 = { handle: "native-1", runId: "run-1" };
+
 function session(sessionId: string, taskId: string, runId: string) {
   return {
     sessionId,
@@ -141,6 +166,8 @@ function session(sessionId: string, taskId: string, runId: string) {
   };
 }
 
+// The production surface: `Terminal` selects native libghostty and renders it
+// as a WebView sibling. Cases never mount `NativeGhosttyTerminal` directly.
 function TwoSurfaceStudio({
   panelActive = true,
 }: {
@@ -148,13 +175,8 @@ function TwoSurfaceStudio({
 }) {
   return (
     <>
-      <NativeGhosttyTerminal sessionId="session-1" owner="studio" />
-      <NativeGhosttyTerminal
-        sessionId="session-2"
-        owner="panel"
-        active={panelActive}
-        manageForegroundHost={false}
-      />
+      <Terminal sessionId="session-1" owner="studio" />
+      <Terminal sessionId="session-2" owner="panel" active={panelActive} />
       <StudioFooter />
       <ModalHost />
     </>
@@ -164,11 +186,17 @@ function TwoSurfaceStudio({
 function SingleSurfaceStudio() {
   return (
     <>
-      <NativeGhosttyTerminal sessionId="session-1" owner="studio" />
+      <Terminal sessionId="session-1" owner="studio" />
       <StudioFooter />
       <ModalHost />
     </>
   );
+}
+
+function presentedHosts(): HTMLElement[] {
+  return screen
+    .getAllByTestId("native-terminal-host")
+    .filter((host) => host.hasAttribute("data-native-terminal-presented"));
 }
 
 async function openSettings(): Promise<HTMLElement> {
@@ -185,9 +213,18 @@ async function closeSettings(dialog: HTMLElement): Promise<void> {
   });
 }
 
+/** A pointer press on the host hands input to the native view. */
+async function selectNative(host: HTMLElement, handle: string): Promise<void> {
+  fireEvent.pointerDown(host);
+  await waitFor(() => {
+    expect(interactionsOf(handle).at(-1)).toMatchObject({ webviewFocus: false });
+  });
+}
+
 describe("overhaul acceptance — modal occlusion convergence", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    window.history.replaceState({}, "", "/?terminalRenderer=native");
     installDesktopGraphQlRuntime();
     gates = {};
     deferredCommands = new Set();
@@ -272,59 +309,60 @@ describe("overhaul acceptance — modal occlusion convergence", () => {
     vi.unstubAllGlobals();
   });
 
-  it("[overhaul-118] hides every presentable native viewer for an open modal and restores only the viewers that are still active and owned", async () => {
+  it("[overhaul-118] keeps every presented native viewer on screen under an open modal, hands input to the WebView, and hides only a viewer its own surface deactivates", async () => {
     const view = render(<TwoSurfaceStudio />);
 
-    // Two viewers from different Studio surfaces are presented together.
+    // Two viewers from different Studio surfaces are presented together and
+    // both register in the window interaction map with the WebView in charge.
     await waitFor(() => {
       expect(showsOf("native-1")).toHaveLength(1);
       expect(showsOf("native-2")).toHaveLength(1);
+      expect(presentedHosts()).toHaveLength(2);
+      expect(interactionsOf("native-1").at(-1)).toEqual(webviewOwnsInput("native-1"));
+      expect(interactionsOf("native-2").at(-1)).toEqual(webviewOwnsInput("native-2"));
     });
+    await selectNative(presentedHosts()[0]!, "native-1");
 
     const dialog = await openSettings();
+    // The modal lowers the selected native view behind its own frame …
     await waitFor(() => {
-      expect(hidesOf("native-1")).toHaveLength(1);
-      expect(hidesOf("native-2")).toHaveLength(1);
+      expect(interactionsOf("native-1").at(-1)).toEqual(webviewOwnsInput("native-1"));
     });
-    // Occlusion is presentation only, for every viewer.
+    // … and that is all it does: nothing is hidden, detached, or re-attached.
+    expect(hidesOf("native-1")).toHaveLength(0);
+    expect(hidesOf("native-2")).toHaveLength(0);
+    expect(presentedHosts()).toHaveLength(2);
     expect(invocations("native_terminal_detach")).toHaveLength(0);
     expect(invocations("native_terminal_attach")).toHaveLength(2);
 
     await closeSettings(dialog);
 
-    // Both come back, each measured freshly against its own current host.
-    await waitFor(() => {
-      expect(showsOf("native-1")).toHaveLength(2);
-      expect(showsOf("native-2")).toHaveLength(2);
-    });
-    expect(showsOf("native-1").at(-1)).toEqual({ handle: "native-1", frame: FRAME });
-    expect(showsOf("native-2").at(-1)).toEqual({ handle: "native-2", frame: FRAME });
+    // Closing reveals nothing because nothing was concealed.
+    expect(showsOf("native-1")).toHaveLength(1);
+    expect(showsOf("native-2")).toHaveLength(1);
+    expect(presentedHosts()).toHaveLength(2);
 
-    // Ownership of the panel run moves away in the same commit that opens the
-    // modal: the window-level rule still hides it, and it is no longer entitled
-    // to come back when the modal closes.
+    // The panel deactivates its surface while the modal is open. Its own owner
+    // change hides that viewer alone; the modal never joins in.
     const reopened = await openSettings();
-    act(() => {
-      useTerminalForegroundStore.setState({
-        claims: { "run-2": "drawer" },
-      });
-    });
+    view.rerender(<TwoSurfaceStudio panelActive={false} />);
     await waitFor(() => {
-      expect(hidesOf("native-1")).toHaveLength(2);
-      expect(hidesOf("native-2")).toHaveLength(2);
+      expect(hidesOf("native-2")).toHaveLength(1);
     });
+    expect(hidesOf("native-1")).toHaveLength(0);
+    await waitFor(() => expect(presentedHosts()).toHaveLength(1));
 
     await closeSettings(reopened);
 
-    await waitFor(() => {
-      expect(showsOf("native-1")).toHaveLength(3);
-    });
-    expect(showsOf("native-2")).toHaveLength(2);
+    // A deactivated viewer is not entitled to come back when the modal closes.
+    expect(showsOf("native-1")).toHaveLength(1);
+    expect(showsOf("native-2")).toHaveLength(1);
+    expect(hidesOf("native-1")).toHaveLength(0);
 
     view.unmount();
   });
 
-  it("[overhaul-118-late] refuses a reveal from attachment work that completes while the modal stack is non-empty", async () => {
+  it("[overhaul-118-late] presents attachment work that completes while the modal stack is non-empty beneath the WebView", async () => {
     deferredCommands.add("native_terminal_attach");
     const view = render(<SingleSurfaceStudio />);
 
@@ -336,96 +374,121 @@ describe("overhaul acceptance — modal occlusion convergence", () => {
 
     await releaseGate("native_terminal_attach");
 
-    // The attachment completed — and committed no show behind the dialog.
+    // The attachment completes and presents under the dialog: a sibling view
+    // has no reason to wait, and the WebView already owns its input.
     await waitFor(() => {
-      expect(useModalStore.getState().modalStack).toHaveLength(1);
+      expect(showsOf("native-1")).toHaveLength(1);
+      expect(interactionsOf("native-1").at(-1)).toEqual(webviewOwnsInput("native-1"));
     });
-    expect(showsOf("native-1")).toHaveLength(0);
+    expect(showsOf("native-1").at(-1)).toEqual({ handle: "native-1", frame: FRAME });
+    expect(hidesOf("native-1")).toHaveLength(0);
+    expect(useModalStore.getState().modalStack).toHaveLength(1);
     expect(dialog).toBeVisible();
 
     await closeSettings(dialog);
 
-    // Only an empty modal stack lets the prepared viewer take the screen.
-    await waitFor(() => {
-      expect(showsOf("native-1")).toHaveLength(1);
-    });
-    expect(showsOf("native-1").at(-1)).toEqual({ handle: "native-1", frame: FRAME });
+    // Closing issues no second show for a viewer that never left the screen.
+    expect(showsOf("native-1")).toHaveLength(1);
+    expect(hidesOf("native-1")).toHaveLength(0);
+    expect(presentedHosts()).toHaveLength(1);
 
     view.unmount();
   });
 
-  it("[overhaul-118-race] settles on the latest modal intent when native hide and show resolve out of order", async () => {
-    const view = render(<SingleSurfaceStudio />);
+  it("[overhaul-118-race] settles a pending deactivation hide on the latest activation intent across a modal episode", async () => {
+    const view = render(<TwoSurfaceStudio />);
     await waitFor(() => {
       expect(showsOf("native-1")).toHaveLength(1);
+      expect(showsOf("native-2")).toHaveLength(1);
     });
 
-    // Close/reopen: the reveal is queued behind a hide that has not resolved,
-    // and the modal comes back before the queue reaches it.
+    // The panel deactivates and its hide stalls in native code.
     deferredCommands.add("native_terminal_hide");
-    const dialog = await openSettings();
+    view.rerender(<TwoSurfaceStudio panelActive={false} />);
     await waitFor(() => {
-      expect(invocations("native_terminal_hide")).toHaveLength(1);
+      expect(hidesOf("native-2")).toHaveLength(1);
     });
-    await closeSettings(dialog);
-    const reopened = await openSettings();
 
-    // The pending hide now resolves, releasing the queued reveal behind it.
+    // Settings opens and closes, and the panel reactivates, all while that
+    // hide is still unresolved. No reveal may run ahead of the queued hide.
+    const dialog = await openSettings();
+    view.rerender(<TwoSurfaceStudio panelActive />);
+    await closeSettings(dialog);
+    expect(showsOf("native-2")).toHaveLength(1);
+
+    // The pending hide resolves; the latest intent is "active", so exactly one
+    // reveal follows it, measured against the panel's own host.
     deferredCommands.delete("native_terminal_hide");
     await releaseGate("native_terminal_hide");
-
-    // Latest intent is "modal open", so nothing was revealed over the dialog.
-    expect(showsOf("native-1")).toHaveLength(1);
-    expect(reopened).toBeVisible();
-
-    // Closing for real converges the other way.
-    await closeSettings(reopened);
     await waitFor(() => {
-      expect(showsOf("native-1")).toHaveLength(2);
+      expect(showsOf("native-2")).toHaveLength(2);
     });
+    expect(showsOf("native-2").at(-1)).toEqual({ handle: "native-2", frame: FRAME });
+    // Every hide the deactivation produced settled before that reveal ran.
+    const panelCalls = tauri.invoke.mock.calls
+      .filter((call) => (call[1] as { handle?: string } | undefined)?.handle === "native-2")
+      .map((call) => call[0] as string)
+      .filter((command) => command === "native_terminal_hide" || command === "native_terminal_show");
+    expect(panelCalls.at(-1)).toBe("native_terminal_show");
+    expect(panelCalls.filter((command) => command === "native_terminal_show")).toHaveLength(2);
+
+    // The other surface's viewer was never part of the episode.
+    expect(showsOf("native-1")).toHaveLength(1);
+    expect(hidesOf("native-1")).toHaveLength(0);
+    expect(presentedHosts()).toHaveLength(2);
 
     view.unmount();
   });
 
-  it("[overhaul-118-focus] keeps focus away from hidden viewers and returns it to the Settings opener", async () => {
+  it("[overhaul-118-focus] releases focus and keyboard ownership to the modal without hiding the viewer, and returns focus to the Settings opener", async () => {
     const view = render(<SingleSurfaceStudio />);
     await waitFor(() => {
       expect(showsOf("native-1")).toHaveLength(1);
+      expect(interactionsOf("native-1")).toHaveLength(1);
     });
 
-    // The presented viewer takes focus normally.
+    // The presented viewer takes focus and keyboard ownership normally.
     act(() => focusTerminal("session-1"));
     await waitFor(() => {
       expect(invocations("native_terminal_focus")).toHaveLength(1);
     });
+    expect(isNativeTerminalKeyboardOwner(KEYBOARD_OWNER_1)).toBe(true);
+    await selectNative(screen.getByTestId("native-terminal-host"), "native-1");
 
     // A real pointer activation focuses the action it presses; jsdom's
     // synthetic click does not, so model the focus the opener actually holds.
     const opener = screen.getByRole("button", { name: "Open Settings" });
     act(() => opener.focus());
     const dialog = await openSettings();
-    await waitFor(() => {
-      expect(hidesOf("native-1")).toHaveLength(1);
-    });
 
-    // A hidden viewer neither registers for focus nor consumes a focus signal.
+    // Input moves to the WebView: the selected view is lowered, keyboard
+    // ownership is released, and the viewer itself stays presented.
+    await waitFor(() => {
+      expect(interactionsOf("native-1").at(-1)).toEqual(webviewOwnsInput("native-1"));
+    });
+    expect(isNativeTerminalKeyboardOwner(KEYBOARD_OWNER_1)).toBe(false);
+    expect(hidesOf("native-1")).toHaveLength(0);
+    expect(presentedHosts()).toHaveLength(1);
+
+    // While the modal owns the foreground a focus request reaches no viewer.
     act(() => focusTerminal("session-1"));
     expect(invocations("native_terminal_focus")).toHaveLength(1);
 
     await closeSettings(dialog);
 
-    // A pointer-opened dialog restores focus to the action that opened it, and
-    // the reveal alone does not steal focus back into the terminal.
+    // A pointer-opened dialog restores focus to the action that opened it;
+    // ownership returns to the viewer, but no focus is stolen back into it.
     await waitFor(() => expect(document.activeElement).toBe(opener));
     await waitFor(() => {
-      expect(showsOf("native-1")).toHaveLength(2);
+      expect(isNativeTerminalKeyboardOwner(KEYBOARD_OWNER_1)).toBe(true);
     });
+    expect(showsOf("native-1")).toHaveLength(1);
     expect(invocations("native_terminal_focus")).toHaveLength(1);
 
     view.unmount();
   });
 
-  it("[overhaul-118-focus-banked] drops a focus request banked before the dialog opened instead of delivering it on the post-close reveal", async () => {
+  it("[overhaul-118-focus-banked] drops a focus request banked before the dialog opened instead of delivering it when the modal closes", async () => {
     // The tab is selected while its viewer is still attaching, so the request
     // is banked with no focuser to take it.
     deferredCommands.add("native_terminal_attach");
@@ -439,20 +502,21 @@ describe("overhaul acceptance — modal occlusion convergence", () => {
     act(() => opener.focus());
     const dialog = await openSettings();
 
-    // The attachment lands behind the dialog: no reveal, and no focus.
+    // The attachment lands under the dialog: it presents, but takes no focus.
     deferredCommands.delete("native_terminal_attach");
     await releaseGate("native_terminal_attach");
-    expect(showsOf("native-1")).toHaveLength(0);
+    await waitFor(() => {
+      expect(showsOf("native-1")).toHaveLength(1);
+    });
     expect(invocations("native_terminal_focus")).toHaveLength(0);
 
     await closeSettings(dialog);
 
-    // The reveal commits and the viewer registers — but the banked request did
-    // not survive the occlusion episode, so focus stays with the opener.
-    await waitFor(() => {
-      expect(showsOf("native-1")).toHaveLength(1);
-    });
+    // The viewer registers for focus once the modal closes — but the banked
+    // request did not survive the occlusion episode, so focus stays with the
+    // opener and no second show is issued.
     await waitFor(() => expect(document.activeElement).toBe(opener));
+    expect(showsOf("native-1")).toHaveLength(1);
     expect(invocations("native_terminal_focus")).toHaveLength(0);
 
     // The registry is still live: an explicit request now reaches the viewer.
@@ -464,29 +528,26 @@ describe("overhaul acceptance — modal occlusion convergence", () => {
     view.unmount();
   });
 
-  it("[overhaul-118-failure] keeps Settings visible and interactive when the native hide fails, falling back to the compatibility renderer", async () => {
-    const unavailable = vi.fn();
-    const view = render(
-      <>
-        <NativeGhosttyTerminal
-          sessionId="session-1"
-          owner="studio"
-          onUnavailable={unavailable}
-        />
-        <StudioFooter />
-        <ModalHost />
-      </>,
-    );
+  it("[overhaul-118-failure] keeps Settings visible and interactive when the input hand-off to the WebView fails, falling back to the compatibility renderer", async () => {
+    const view = render(<SingleSurfaceStudio />);
     await waitFor(() => {
       expect(showsOf("native-1")).toHaveLength(1);
     });
+    await selectNative(screen.getByTestId("native-terminal-host"), "native-1");
 
-    failingCommands.add("native_terminal_hide");
+    // Opening the modal must lower the selected native view. That hand-off —
+    // not a hide, which no longer happens — is what fails here.
+    failingCommands.add("native_terminal_set_webview_interaction");
     const dialog = await openSettings();
 
-    // The established fallback seam takes the failed viewer out of service.
+    // The established fallback seam takes the failed viewer out of service and
+    // the production surface swaps in the compatibility renderer.
+    const notice = await screen.findByTestId("native-terminal-fallback-notice");
+    expect(notice).toHaveTextContent("native_terminal_set_webview_interaction failed");
+    expect(screen.queryByTestId("native-terminal-host")).not.toBeInTheDocument();
+    expect(hidesOf("native-1")).toHaveLength(0);
     await waitFor(() => {
-      expect(unavailable).toHaveBeenCalledWith(expect.stringContaining("failed"));
+      expect(invocations("native_terminal_detach")).toHaveLength(1);
     });
 
     // Settings survives the native failure: still mounted, still operable.
@@ -501,6 +562,7 @@ describe("overhaul acceptance — modal occlusion convergence", () => {
     });
     // A failed viewer is not revealed again once the modal stack empties.
     expect(showsOf("native-1")).toHaveLength(1);
+    expect(screen.getByTestId("native-terminal-fallback-notice")).toBeInTheDocument();
 
     view.unmount();
   });

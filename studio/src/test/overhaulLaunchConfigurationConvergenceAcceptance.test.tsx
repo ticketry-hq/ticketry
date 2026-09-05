@@ -26,11 +26,11 @@ function catalog(): WorkTrackerProjectOpenQuery {
   fixture.states.nodes.push({ ...fixture.states.nodes[0], id: reviewId, name: "Review", sort_order: 1 });
   const implementation = fixture.issue_types.nodes[0];
   implementation.transitions.nodes = [{
-    __typename: "WorktrackerIssuetypetransition", id: 12,
+    id: 12,
     issue_type: ISSUE_TYPE_ID, from_state: STATE_ID, to_state: reviewId,
     agent_allowed: true, handoff: false,
-    fromState: { __typename: "WorktrackerState", id: STATE_ID, sort_order: 0 },
-    toState: { __typename: "WorktrackerState", id: reviewId, sort_order: 1 },
+    fromState: { id: STATE_ID, sort_order: 0 },
+    toState: { id: reviewId, sort_order: 1 },
   }];
   const story = structuredClone(implementation);
   story.id = storyId;

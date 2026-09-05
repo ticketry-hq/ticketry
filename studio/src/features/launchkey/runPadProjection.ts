@@ -29,21 +29,17 @@ type PadOutput = Pick<LaunchkeyMiniMK3["output"]["pads"], "set">;
 const ELIGIBLE_SCOPES: ReadonlySet<AgentRunScope> = new Set([
   "task",
   "plan",
-  "instant",
   "docchat",
 ]);
 
 const OFF: ProjectedLight = { color: PALETTE.off, effect: "steady" };
-// The adaptor has no named amber. Index 11 is the hardware palette entry
-// between its named orange (9) and yellow (13).
-const AMBER = 11;
 const LIGHTS: Record<RunPresentationState, ProjectedLight> = {
-  working: { color: PALETTE.green, effect: "steady" },
+  working: { color: PALETTE.white, effect: "steady" },
   needs_input: { color: PALETTE.yellow, effect: "pulse" },
-  permission_required: { color: PALETTE.orange, effect: "flash" },
-  turn_complete: { color: PALETTE.blue, effect: "steady" },
+  permission_required: { color: PALETTE.white, effect: "flash" },
+  turn_complete: { color: PALETTE.green, effect: "steady" },
   quiet: { color: PALETTE.blue, effect: "steady" },
-  stalled: { color: AMBER, effect: "steady" },
+  stalled: { color: PALETTE.yellow, effect: "steady" },
   starting: { color: PALETTE.white, effect: "pulse" },
   reconnecting: { color: PALETTE.white, effect: "pulse" },
   error: { color: PALETTE.red, effect: "steady" },
@@ -84,6 +80,9 @@ export function createRunPadProjection(
   const rendered: Array<ProjectedLight | undefined> = Array(PAD_COUNT);
   const assignments: Array<PadAssignment | undefined> = Array(PAD_COUNT);
   const acknowledgedFailures = new Set<string>();
+  // Only failures of runs seen live during this connection may occupy pads.
+  // A fresh status snapshot also includes historical failures.
+  const observedLiveRuns = new Set<string>();
   let waiting: PadAssignment[] = [];
   let projectId: string | null = null;
 
@@ -120,6 +119,7 @@ export function createRunPadProjection(
 
   return {
     update(status) {
+      if (status.projectId !== projectId) observedLiveRuns.clear();
       const candidates = (status.projectId === null
         ? []
         : Object.values(status.runs)
@@ -129,7 +129,12 @@ export function createRunPadProjection(
         .map((run): PadAssignment => ({
           runId: run.agent_run_id,
           state: projectRunPresentation(run),
-        }));
+        }))
+        .filter((run) => {
+          if (isFailure(run.state)) return observedLiveRuns.has(run.runId);
+          if (run.state !== "exited") observedLiveRuns.add(run.runId);
+          return true;
+        });
 
       if (status.projectId !== projectId) {
         assignments.fill(undefined);

@@ -8,7 +8,7 @@ import {
 // from the focus-accent blue used by running-agent counts, keeping the two
 // axes visually separate as the ticket requires.
 const TONE_CLASS: Record<LifecycleTone, string> = {
-  active: "border-lifecycle-active/60 text-lifecycle-active",
+  active: "border-text-primary/60 text-text-primary",
   attention: "border-lifecycle-attention/70 text-lifecycle-attention",
   danger: "border-lifecycle-danger/70 text-lifecycle-danger",
   idle: "border-lifecycle-idle/70 text-lifecycle-idle",

@@ -64,11 +64,11 @@ describe("Launchkey run pad projection", () => {
 
     expect(transport.sent).toContainEqual({
       port: "daw",
-      data: [0x90, 96, 21],
+      data: [0x90, 96, 3],
     });
     expect(transport.sent).not.toContainEqual({
       port: "daw",
-      data: [0x90, 97, 21],
+      data: [0x90, 97, 3],
     });
   });
 
@@ -76,7 +76,7 @@ describe("Launchkey run pad projection", () => {
     const transport = new RecordingMidiTransport();
     const projection = projectionOn(transport);
 
-    projection.update(holding([
+    const presentations = [
       run({ agent_run_id: "working", state: "working" }),
       run({ agent_run_id: "input", state: "needs_input" }),
       run({ agent_run_id: "permission", state: "permission_required" }),
@@ -90,15 +90,21 @@ describe("Launchkey run pad projection", () => {
     ].map((record, index) => ({
       ...record,
       started_at: `2026-09-04T08:00:${String(index).padStart(2, "0")}.000Z`,
-    }))));
+    }));
+    projection.update(holding(presentations.map((record) => ({ ...record, state: "working" }))));
+    projection.update(holding(presentations));
 
-    expect(transport.sent.filter(({ data }) => data[2] > 0)).toEqual([
-      { port: "daw", data: [0x90, 96, 21] },
+    const latestLights = new Map(
+      transport.sent.filter(({ data }) => data[2] > 0)
+        .map((message) => [message.data[1], message]),
+    );
+    expect([...latestLights.values()]).toEqual([
+      { port: "daw", data: [0x90, 96, 3] },
       { port: "daw", data: [0x92, 97, 13] },
-      { port: "daw", data: [0x91, 98, 9] },
-      { port: "daw", data: [0x90, 99, 41] },
+      { port: "daw", data: [0x91, 98, 3] },
+      { port: "daw", data: [0x90, 99, 21] },
       { port: "daw", data: [0x90, 100, 41] },
-      { port: "daw", data: [0x90, 101, 11] },
+      { port: "daw", data: [0x90, 101, 13] },
       { port: "daw", data: [0x92, 102, 3] },
       { port: "daw", data: [0x92, 103, 3] },
       { port: "daw", data: [0x90, 112, 5] },
@@ -131,7 +137,7 @@ describe("Launchkey run pad projection", () => {
     ]));
 
     expect(transport.sent.filter(({ data }) => data[2] > 0)).toEqual([
-      { port: "daw", data: [0x91, 96, 9] },
+      { port: "daw", data: [0x91, 96, 3] },
       { port: "daw", data: [0x92, 97, 13] },
     ]);
   });
@@ -146,6 +152,7 @@ describe("Launchkey run pad projection", () => {
       started_at: `2026-09-04T08:00:${String(index).padStart(2, "0")}.000Z`,
     }));
 
+    projection.update(holding(runs.map((record) => ({ ...record, state: "working" }))));
     projection.update(holding(runs));
     transport.sent.length = 0;
     projection.update(holding(runs));
@@ -178,6 +185,7 @@ describe("Launchkey run pad projection", () => {
       started_at: "2026-09-04T08:00:01.000Z",
     });
 
+    projection.update(holding([{ ...failed, state: "working" }, live]));
     projection.update(holding([failed, live]));
     transport.sent.length = 0;
     projection.update(holding([live]));
@@ -209,7 +217,7 @@ describe("Launchkey run pad projection", () => {
       run({
         agent_run_id: "new",
         project_id: "project-2",
-        state: "error",
+        state: "permission_required",
       }),
     ], "project-2"));
 
@@ -217,7 +225,7 @@ describe("Launchkey run pad projection", () => {
       { port: "daw", data: [0x90, 96, 0] },
       { port: "daw", data: [0x91, 96, 0] },
       { port: "daw", data: [0x92, 96, 0] },
-      { port: "daw", data: [0x90, 96, 5] },
+      { port: "daw", data: [0x91, 96, 3] },
       { port: "daw", data: [0x90, 97, 0] },
       { port: "daw", data: [0x91, 97, 0] },
       { port: "daw", data: [0x92, 97, 0] },
@@ -243,7 +251,7 @@ describe("Launchkey run pad projection", () => {
     ]));
 
     expect(transport.sent.filter(({ data }) => data[2] > 0)).toEqual([
-      { port: "daw", data: [0x91, 96, 9] },
+      { port: "daw", data: [0x91, 96, 3] },
     ]);
   });
 });

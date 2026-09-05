@@ -6,3 +6,4 @@ Studio's shortcuts were handled by four independent listeners (global keymap, ca
 
 - Chords are stored as modifiers + layout-aware `event.key`; only user overrides persist, host-level in the backend settings store, so defaults evolve with the app.
 - The reserved-chord set is runtime-dependent (browser build vs desktop app), so binding validation must know its host runtime.
+- Non-keyboard input sources dispatch registered action ids directly. They do not synthesize DOM keyboard events, so action routing and focus authority remain shared with keyboard input.

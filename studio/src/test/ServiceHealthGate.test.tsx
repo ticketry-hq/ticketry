@@ -6,6 +6,7 @@ import type {
   ServiceHealthListener,
   StudioRuntime,
 } from "../runtime";
+import { inertLaunchkeyRuntime } from "../runtime";
 import { quietAppUpdatesRuntime } from "./appUpdatesRuntimeFixture";
 
 function health(state: ServiceHealth["state"]): ServiceHealth {
@@ -23,6 +24,7 @@ function runtimeHealthHarness() {
   const runtime = {
     platform: "desktop",
     graphQlTransport: () => { throw new Error("not used"); },
+    launchkey: inertLaunchkeyRuntime,
     capabilities: {
       statusFeed: true,
       nativeLifecycle: false,

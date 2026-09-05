@@ -117,7 +117,7 @@ import { ModulesPane } from "../app/shell/sidebar/modules/ModulesPane";
 import { useStudioStore } from "../features/projects/store";
 import { AddModule } from "../features/studio/modals/AddModule";
 import { getModuleLinks, seedModuleLinks } from "../features/module-links";
-import type { StudioRuntime } from "../runtime";
+import { inertLaunchkeyRuntime, type StudioRuntime } from "../runtime";
 import { useClientStore } from "../state/clientStore";
 import { quietAppUpdatesRuntime } from "./appUpdatesRuntimeFixture";
 
@@ -125,6 +125,7 @@ function folderPickerRuntime(): StudioRuntime {
   return {
     platform: "desktop",
     graphQlTransport: () => { throw new Error("not used"); },
+    launchkey: inertLaunchkeyRuntime,
     capabilities: {
       statusFeed: true,
       nativeLifecycle: false,

@@ -76,6 +76,7 @@ describe("desktop shell security contract", () => {
         "allow-desktop-preflight-report",
         "allow-desktop-approve-executable-path",
         "allow-desktop-launch-default-coding-agent",
+        "allow-desktop-toggle-handy-transcription",
         "allow-desktop-update-check",
         "allow-desktop-update-download-and-install",
         "allow-desktop-update-restart",
@@ -99,6 +100,7 @@ describe("desktop shell security contract", () => {
         "allow-native-terminal-set-webview-interaction",
         "allow-native-terminal-detach",
         "allow-native-terminal-retention-benchmark",
+        "launchkey-adaptor:default",
         "core:event:allow-listen",
         "core:event:allow-unlisten",
         "core:webview:allow-set-webview-zoom",
@@ -110,6 +112,57 @@ describe("desktop shell security contract", () => {
     expect(JSON.stringify(capability)).not.toContain("remote");
     expect(JSON.stringify(capability)).not.toContain("shell");
     expect(JSON.stringify(capability)).not.toContain("dialog:");
+  });
+
+  it("pins and registers the Launchkey adaptor with its default permission", async () => {
+    const revision = "60e7b541ba1225491f2b3083960bdf1f1f362b8c";
+    const studioPackage = await json("../../package.json");
+    const cargo = await text("../../src-tauri/Cargo.toml");
+    const desktopCargo = await text(
+      "../../src-tauri/crates/app/ticketry-desktop/Cargo.toml",
+    );
+    const run = await text(
+      "../../src-tauri/crates/app/ticketry-desktop/src/desktop/run.rs",
+    );
+    const capability = await json("../../src-tauri/capabilities/studio-main.json");
+
+    expect((studioPackage.dependencies as Record<string, string>)[
+      "@bandwati/launchkey-adaptor"
+    ]).toBe(
+      `git+https://github.com/charleeagni/launchkey-adaptor.git#${revision}`,
+    );
+    expect(cargo).toContain(
+      `tauri-plugin-launchkey-adaptor = { git = "https://github.com/charleeagni/launchkey-adaptor", rev = "${revision}" }`,
+    );
+    expect(desktopCargo).toContain("tauri-plugin-launchkey-adaptor.workspace = true");
+    expect(run).toContain("tauri_plugin_launchkey_adaptor::init()");
+
+    const permissions = capability.permissions as string[];
+    expect(permissions.filter((permission) => permission.startsWith("launchkey-adaptor:")))
+      .toEqual(["launchkey-adaptor:default"]);
+  });
+
+  it("returns the Launchkey to standalone mode before desktop shutdown", async () => {
+    const lifecycle = await text(
+      "../../src-tauri/crates/app/ticketry-desktop/src/desktop/lifecycle.rs",
+    );
+    const shutdown = lifecycle.match(
+      /pub(?:\(crate\))? fn shutdown_rust_runtime[\s\S]*?\n}/,
+    )?.[0];
+    const dawExit = shutdown?.match(
+      /launchkey\.send\(\s*PortName::Daw,\s*&\[\s*0x9f,\s*0x0c,\s*(?:0x00|0)\s*\]\s*\)/i,
+    )?.[0];
+
+    expect(lifecycle).toContain("LaunchkeyAdaptorExt");
+    expect(shutdown).toContain("application.launchkey_adaptor()");
+    expect(dawExit).toBeDefined();
+    expect(shutdown).toContain("launchkey.disconnect()");
+    expect(shutdown!.indexOf(dawExit!)).toBeLessThan(
+      shutdown!.indexOf("launchkey.disconnect()"),
+    );
+    expect(shutdown!.indexOf("launchkey.disconnect()")).toBeLessThan(
+      shutdown!.indexOf("state.stopping.store"),
+    );
   });
 
   it("exposes only the permissioned desktop update actions through the updater plugin", async () => {

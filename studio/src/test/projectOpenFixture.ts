@@ -1,7 +1,10 @@
 import type { IssueType, Module, Project, State, WorkItem } from "../shared/api/types";
 import type { ProjectOpenResult } from "../features/projects/queries/readTransport";
 import { WorkTrackerModuleOpenDocument } from "../features/work-items/generated/workItems.documents";
-import { compactWorktrackerId } from "../shared/api/generatedWorktracker";
+import {
+  compactWorktrackerId,
+  publicWorktrackerId,
+} from "../shared/api/generatedWorktracker";
 import { studioApolloClient } from "../shared/apollo/client";
 
 export function projectOpenFixture(
@@ -12,6 +15,7 @@ export function projectOpenFixture(
   const projectRow = {
     __typename: "WorktrackerProject",
     ...graphqlProject,
+    id: publicWorktrackerId(graphqlProject.id),
     created_at: "2026-01-01T00:00:00Z",
   };
   return {
@@ -23,16 +27,16 @@ export function projectOpenFixture(
         __typename: "WorktrackerIssueConnection",
         nodes: modules.map((module, index) => ({
           __typename: "WorktrackerIssue",
-          id: module.id,
+          id: publicWorktrackerId(module.id),
           name: module.name,
-          project_id: module.project_id,
+          project_id: publicWorktrackerId(module.project_id),
           sequence_id: module.sequence_id,
           is_archived: module.is_archived,
-          issue_type: module.issue_type,
+          issue_type: publicWorktrackerId(module.issue_type),
           rank: String(index),
           project: {
             __typename: "WorktrackerProject",
-            id: project.id,
+            id: publicWorktrackerId(project.id),
             slug: project.slug,
           },
         })),
@@ -41,13 +45,13 @@ export function projectOpenFixture(
         __typename: "WorktrackerModulepresentationConnection",
         nodes: manualModuleOrder ? modules.map((module, index) => ({
           __typename: "WorktrackerModulepresentation",
-          module_id: module.id,
+          module_id: publicWorktrackerId(module.id),
           rank: String(index).padStart(8, "0"),
           tab_hidden: false,
           module: {
             __typename: "WorktrackerIssue",
-            id: module.id,
-            project_id: project.id,
+            id: publicWorktrackerId(module.id),
+            project_id: publicWorktrackerId(project.id),
           },
         })) : [],
       },

@@ -45,6 +45,7 @@ path = "src/main.rs"
 # crate needs it even though no line of this package names it.
 serde_json.workspace = true
 tauri.workspace = true
+tauri-plugin-launchkey-adaptor.workspace = true
 ticketry-desktop.workspace = true
 ticketry-diagnostics.workspace = true
 ticketry-terminal.workspace = true
@@ -117,6 +118,7 @@ sha2 = "0.10"
 specta = { version = "=2.0.0-rc.25", features = ["derive"] }
 tauri = "=2.11.5"
 tauri-graphql = { path = "crates/foundation/tauri-graphql" }
+tauri-plugin-launchkey-adaptor = { git = "https://github.com/charleeagni/launchkey-adaptor", rev = "60e7b541ba1225491f2b3083960bdf1f1f362b8c" }
 taurpc = "=0.8.2"
 tempfile = "=3.23.0"
 ticketry-agent-execution = { path = "crates/execution/ticketry-agent-execution" }

@@ -34,6 +34,7 @@ macro_rules! native_invoke_handler {
             commands::desktop_preflight_report,
             commands::desktop_approve_executable_path,
             crate::desktop::embedded_assets::desktop_ghostty_vt_artifact,
+            crate::desktop::handy::desktop_toggle_handy_transcription,
             app_updates::desktop_update_check,
             app_updates::install::desktop_update_download_and_install,
             app_updates::install::desktop_update_restart,
@@ -108,6 +109,7 @@ pub fn run(context: tauri::Context, file_logging_requested: bool) {
     let setup_graphql_api = graphql_api.clone();
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_launchkey_adaptor::init())
         .plugin(tauri_plugin_updater::Builder::new().build());
     #[cfg(feature = "desktop-acceptance")]
     let builder = builder.plugin(tauri_plugin_wdio_webdriver::init());

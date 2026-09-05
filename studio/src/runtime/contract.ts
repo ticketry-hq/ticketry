@@ -1,6 +1,7 @@
 import type { UserNotice } from "./userNotice";
 import type { TypedDocumentNode } from "../graphql-foundation/typedDocument";
 import type { CreateGraphQlTransportProxy } from "./graphQlTransport";
+import type { LaunchkeyRuntime } from "./launchkey";
 
 export type StudioPlatform = "browser" | "desktop";
 
@@ -128,6 +129,7 @@ export interface StudioRuntime {
   readonly crashReports?: CrashReportsRuntime;
   /** The configured GraphQL transport used by both imperative reads and Apollo. */
   readonly graphQlTransport: CreateGraphQlTransportProxy;
+  readonly launchkey: LaunchkeyRuntime;
   readWorkTracker<TResult>(
     routes: WorkTrackerReadRoutes<TResult>,
   ): Promise<TResult>;

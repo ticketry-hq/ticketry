@@ -5,7 +5,7 @@ import {
   compactWorktrackerId,
   publicWorktrackerId,
 } from "../../../shared/api/generatedWorktracker";
-import { WorkTrackerProjectOpenDocument } from "../../projects/generated/projects.documents";
+import { WorkTrackerProjectOpenDocument } from "../../projects";
 import {
   WorkTrackerModuleOpenDocument,
   type GeneratedWorkTrackerWorkItemFieldsFragment,

@@ -21,6 +21,8 @@ import {
 } from "./graphQlTransport";
 import { createTauRPCProxy } from "../graphql-foundation/generated/taurpc";
 import { desktopDocumentUrl } from "./documentAssetUrl";
+import { desktopLaunchkeyMidi } from "./desktopLaunchkeyMidi";
+import type { LaunchkeyMidiRuntime } from "./launchkey";
 import {
   validateUserNotice,
   validateUserNotices,
@@ -34,9 +36,14 @@ type DesktopCommand =
   | "desktop_update_download_and_install"
   | "desktop_update_restart"
   | "desktop_latest_crash_collection_outcome"
-  | "desktop_reveal_crash_report_folder";
+  | "desktop_reveal_crash_report_folder"
+  | "desktop_toggle_handy_transcription"
+  | "viewer_input";
 
-export type DesktopInvoke = <T>(command: DesktopCommand) => Promise<T>;
+export type DesktopInvoke = <T>(
+  command: DesktopCommand,
+  args?: Record<string, unknown>,
+) => Promise<T>;
 export type DesktopRuntimeListen = (
   event:
     | "desktop-service-health"
@@ -49,6 +56,7 @@ export interface DesktopRuntimeOptions {
   readonly invoke: DesktopInvoke;
   readonly listen?: DesktopRuntimeListen;
   readonly createGraphQlProxy?: CreateGraphQlTransportProxy;
+  readonly launchkeyMidi?: LaunchkeyMidiRuntime;
 }
 
 function initializationError(field: string, expectation: string): never {
@@ -245,6 +253,7 @@ export async function createDesktopRuntime({
   invoke,
   listen,
   createGraphQlProxy = createTauRPCProxy,
+  launchkeyMidi = desktopLaunchkeyMidi,
 }: DesktopRuntimeOptions): Promise<StudioRuntime> {
   const startup = validateConfiguration(
     await invoke<unknown>("desktop_runtime_configuration"),
@@ -262,6 +271,15 @@ export async function createDesktopRuntime({
   return Object.freeze({
     platform: "desktop" as const,
     graphQlTransport: createGraphQlProxy,
+    launchkey: Object.freeze({
+      midi: () => launchkeyMidi,
+      toggleHandyTranscription: async () => {
+        await invoke<void>("desktop_toggle_handy_transcription").catch(() => {});
+      },
+      submitTerminal: async (viewerHandle: string) => {
+        await invoke<void>("viewer_input", { viewerHandle, data: [13] });
+      },
+    }),
     capabilities: Object.freeze({
       statusFeed: true,
       nativeLifecycle: false,

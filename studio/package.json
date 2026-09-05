@@ -55,6 +55,7 @@
     "perf:typecheck": "tsc --noEmit --project tsconfig.performance.json"
   },
   "dependencies": {
+    "@bandwati/launchkey-adaptor": "git+https://github.com/charleeagni/launchkey-adaptor.git#60e7b541ba1225491f2b3083960bdf1f1f362b8c",
     "@apollo/client": "^4.2.12",
     "@codemirror/language": "6.12.4",
     "@codemirror/state": "6.7.1",

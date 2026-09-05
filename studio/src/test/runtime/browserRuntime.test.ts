@@ -40,6 +40,24 @@ describe("browser runtime contract", () => {
     await expect(runtime.pickFolder()).resolves.toBeNull();
   });
 
+  it("keeps Launchkey native operations inert", async () => {
+    const requestMIDIAccess = vi.fn();
+    const nativeInvoke = vi.fn();
+    vi.stubGlobal("navigator", { requestMIDIAccess });
+    vi.stubGlobal("__TAURI_INTERNALS__", { invoke: nativeInvoke });
+    const runtime = createBrowserRuntime({ environment: {} });
+
+    expect(runtime.launchkey.midi()).toBeNull();
+    await expect(
+      runtime.launchkey.toggleHandyTranscription(),
+    ).resolves.toBeUndefined();
+    await expect(
+      runtime.launchkey.submitTerminal("viewer-1"),
+    ).resolves.toBeUndefined();
+    expect(requestMIDIAccess).not.toHaveBeenCalled();
+    expect(nativeInvoke).not.toHaveBeenCalled();
+  });
+
   it("streams and cancels GraphQL subscriptions through the Rust adapter", async () => {
     let stream!: ReadableStreamDefaultController<Uint8Array>;
     const fetch = vi.fn().mockResolvedValue(new Response(new ReadableStream({

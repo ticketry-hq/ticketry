@@ -1,3 +1,6 @@
+import { studioApolloClient } from "../shared/apollo/client";
+import { WorkTrackerProjectOpenDocument } from "../features/projects";
+import { projectOpenFixture } from "./projectOpenFixture";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { StateCatalog } from "../features/workflows/StateCatalog";
@@ -103,21 +106,44 @@ describe("workflow settings acceptance", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
     workflowReads.readWorkflowSettings.mockReset().mockResolvedValue(workflow);
+    const base = projectOpenFixture({ id: "project-1", name: "Project", slug: "PROJECT", description: "" }, []).data;
+    studioApolloClient().writeQuery({
+      query: WorkTrackerProjectOpenDocument,
+      variables: { projectId: "project-1" },
+      data: {
+        ...base,
+        states: { __typename: "WorktrackerStateConnection", nodes: states.map((state) => ({
+          __typename: "WorktrackerState", ...state, project: "project-1",
+          is_protected: false, created_at: "", updated_at: "",
+        })) },
+        issue_types: { __typename: "WorktrackerIssuetypeConnection", nodes: [{
+          __typename: "WorktrackerIssuetype", id: "story", project: "project-1", name: "Story",
+          level: "task", color: "", sort_order: 0, start_state: "todo", workflow_revision: 4,
+          is_pathfind: false, created_at: "", updated_at: "",
+          transitions: { __typename: "WorktrackerIssuetypetransitionConnection", nodes: workflow.transitions.map((edge, id) => ({
+            __typename: "WorktrackerIssuetypetransition", id, issue_type: "story",
+            from_state: edge.from_state_id, to_state: edge.to_state_id,
+            agent_allowed: edge.agent_allowed, handoff: edge.handoff,
+            fromState: null, toState: null,
+          })) },
+          launch_bindings: { __typename: "WorktrackerLaunchbindingConnection", nodes: [] },
+        }] },
+      } as never,
+    });
     setStatesSorted("project-1", states);
     setWorkflowIssueTypes("project-1", [
-      { id: "story", name: "Story", level: "task", color: null, sort_order: 0 },
+      { id: "story", name: "Story", level: "task", color: null, sort_order: 0, start_state: "todo", workflow_revision: 4 },
     ]);
     setWorkflowStateCounts("project-1", { review: 2 });
     useWorkflowEditorStore.setState({
       projectId: "project-1",
       issueTypes: [
-        { id: "story", name: "Story", level: "task", color: null, sort_order: 0 },
+        { id: "story", name: "Story", level: "task", color: null, sort_order: 0, start_state: "todo", workflow_revision: 4 },
       ],
       states,
       stateWorkItemCounts: { review: 2 },
       providerCapabilities: [],
       selectedTypeId: "story",
-      workflows: { story: workflow },
       stagedStateIds: {},
       loading: false,
       action: null,
@@ -156,7 +182,7 @@ describe("workflow settings acceptance", () => {
     useWorkflowEditorStore.setState(useWorkflowEditorStore.getInitialState(), true);
     setStatesSorted("project-1", states);
     setWorkflowIssueTypes("project-1", [
-      { id: "story", name: "Story", level: "task", color: null, sort_order: 0 },
+      { id: "story", name: "Story", level: "task", color: null, sort_order: 0, start_state: "todo", workflow_revision: 4 },
     ]);
 
     const loading = useWorkflowEditorStore.getState().load("project-1");
@@ -175,7 +201,6 @@ describe("workflow settings acceptance", () => {
     useWorkflowEditorStore.setState({
       projectId: "project-1",
       issueTypes: [],
-      workflows: {},
       loading: true,
       loadWorkflows,
     });
@@ -188,7 +213,7 @@ describe("workflow settings acceptance", () => {
     act(() => {
       useWorkflowEditorStore.setState({
         issueTypes: [
-          { id: "story", name: "Story", level: "task", color: null, sort_order: 0 },
+          { id: "story", name: "Story", level: "task", color: null, sort_order: 0, start_state: "todo", workflow_revision: 4 },
         ],
         loading: false,
       });

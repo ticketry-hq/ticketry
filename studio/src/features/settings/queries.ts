@@ -1,3 +1,4 @@
+import { setIssueTypeMetadata as setIssueTypes } from "../workflows/queries/issueTypeMetadata";
 import { skipToken, useQuery } from "@apollo/client/react";
 import type { IssueType, SubtreeRunCapabilityMap } from "../../shared/api/types";
 import { compactWorktrackerId } from "../../shared/api/generatedWorktracker";
@@ -64,54 +65,7 @@ export function getCapabilitiesSnapshot(
   return projectId ? capabilitiesFromProject(projectId) : {};
 }
 
-export function setIssueTypes(projectId: string, issueTypes: IssueType[]): void {
-  const variables = { projectId: compactWorktrackerId(projectId) };
-  const current = studioApolloClient().readQuery({
-    query: WorkTrackerProjectIssueTypesDocument,
-    variables,
-    optimistic: true,
-  });
-  const currentById = new Map(
-    current?.issue_types.nodes.map((row) => [row.id, row]) ?? [],
-  );
-  studioApolloClient().writeQuery({
-    query: WorkTrackerProjectIssueTypesDocument,
-    variables,
-    data: {
-      issue_types: {
-        __typename: "WorktrackerIssuetypeConnection",
-        nodes: issueTypes.map((type, index) => {
-          const id = compactWorktrackerId(type.id);
-          const existing = currentById.get(id);
-          return {
-            __typename: "WorktrackerIssuetype",
-            id,
-            project: compactWorktrackerId(type.project ?? projectId),
-            name: type.name,
-            level: type.level,
-            color: type.color ?? "",
-            sort_order: type.sort_order ?? index,
-            start_state: type.start_state
-              ? compactWorktrackerId(type.start_state)
-              : null,
-            workflow_revision: type.workflow_revision ?? 0,
-            is_pathfind: existing?.is_pathfind ?? false,
-            created_at: existing?.created_at ?? new Date(index).toISOString(),
-            updated_at: existing?.updated_at ?? new Date(index).toISOString(),
-            transitions: existing?.transitions ?? {
-              __typename: "WorktrackerIssuetypetransitionConnection",
-              nodes: [],
-            },
-            launch_bindings: existing?.launch_bindings ?? {
-              __typename: "WorktrackerLaunchbindingConnection",
-              nodes: [],
-            },
-          };
-        }),
-      },
-    } as never,
-  });
-}
+export { setIssueTypes };
 
 export function setIssueTypesSorted(
   projectId: string,

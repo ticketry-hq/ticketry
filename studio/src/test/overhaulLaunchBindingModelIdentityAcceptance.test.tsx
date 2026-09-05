@@ -69,7 +69,7 @@ const catalog = {
     launch_bindings: { __typename: "WorktrackerLaunchbindingConnection", nodes: [{
       __typename: "WorktrackerLaunchbinding",
       id: 1, issue_type: ISSUE_TYPE_ID, state: STATE_ID,
-      prompt: "Implement it.", required_skills: ["tdd"],
+      prompt: "Implement it.", entry_skill: null, required_skills: ["tdd"],
       model: MODEL_ID, reasoning: REASONING_ID,
       auto_start: false, subtree_run_enabled: false,
       created_at: "2026-01-01T00:00:00", updated_at: "2026-01-01T00:00:00",
@@ -150,18 +150,11 @@ describe("launch-binding model identity acceptance", () => {
     }));
     const issueTypeId = publicWorktrackerId(ISSUE_TYPE_ID);
     const stateId = publicWorktrackerId(STATE_ID);
+    await readWorkflowSettings(PROJECT_ID, issueTypeId);
     useWorkflowEditorStore.setState({
       projectId: PROJECT_ID,
-      issueTypes: [],
-      states: [],
       stateWorkItemCounts: {},
-      providerCapabilities: [],
       selectedTypeId: issueTypeId,
-      workflows: { [issueTypeId]: {
-        issue_type_id: issueTypeId, start_state_id: stateId,
-        workflow_revision: 8, transitions: [], launch_bindings: [],
-        warnings: [],
-      } },
       stagedStateIds: {}, loading: false, action: null, notice: null,
       error: null, controlErrors: {},
     });
@@ -216,16 +209,9 @@ describe("launch-binding model identity acceptance", () => {
 
     useWorkflowEditorStore.setState({
       projectId: PROJECT_ID,
-      issueTypes: [],
-      states: [],
       stateWorkItemCounts: {},
       providerCapabilities: capabilities,
       selectedTypeId: issueTypeId,
-      workflows: { [issueTypeId]: {
-        issue_type_id: issueTypeId, start_state_id: stateId,
-        workflow_revision: 8, transitions: [], launch_bindings: [],
-        warnings: [],
-      } },
       stagedStateIds: {}, loading: false, action: null, notice: null,
       error: null, controlErrors: {},
     });

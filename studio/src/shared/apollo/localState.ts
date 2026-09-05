@@ -45,8 +45,23 @@ interface LocalStateRecord<T> {
 export function createApolloStore<T>(
   id: string,
   createState: StateCreator<T>,
+  // Route writes before caching; rebuild derived accessors after Apollo copies a row.
+  adapters?: {
+    prepare: (state: T, previousState?: T) => void;
+    derive: (state: T) => T;
+  },
 ): ApolloStore<T> {
   const listeners = new Set<StateListener<T>>();
+  const derived = new WeakMap<object, T>();
+  const derive = (state: T): T => {
+    if (!adapters) return state;
+    const key = state as object;
+    const existing = derived.get(key);
+    if (existing) return existing;
+    const value = adapters.derive(state);
+    derived.set(key, value);
+    return value;
+  };
   let initialState: T;
 
   const cacheId = () =>
@@ -72,9 +87,9 @@ export function createApolloStore<T>(
       id: cacheId(),
       fragment: LocalStateFragment,
     });
-    if (record) return record.value;
+    if (record) return derive(record.value);
     write(initialState);
-    return initialState;
+    return derive(initialState);
   };
 
   const setState: SetState<T> = (change, replace = false) => {
@@ -87,14 +102,15 @@ export function createApolloStore<T>(
       ? (changed as T)
       : ({ ...previousState, ...changed } as T);
     if (Object.is(nextState, previousState)) return;
+    adapters?.prepare(nextState, previousState);
     write(nextState);
-    // Notify with the written value before Apollo produces its immutable read
-    // result. Existing subscribers may attach derived accessors to the value;
-    // those accessors then become part of the cache row before React reads it.
-    for (const listener of listeners) listener(nextState, previousState);
+    // Adapted stores expose derived fields on read wrappers. Legacy subscribers
+    // still receive the mutable written value before Apollo copies it.
+    for (const listener of listeners) listener(adapters ? getState() : nextState, previousState);
   };
 
   initialState = createState(setState, getState);
+  adapters?.prepare(initialState);
 
   const subscribe = (listener: StateListener<T>): (() => void) => {
     listeners.add(listener);

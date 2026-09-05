@@ -1,3 +1,4 @@
+import { gql } from "@apollo/client";
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
@@ -41,4 +42,27 @@ describe("Apollo local state", () => {
     );
     unsubscribe();
   });
+});
+
+it("keeps derived server fields live without storing a second server snapshot", () => {
+  const query = gql`query AdapterProbe { probeCount }`;
+  const client = studioApolloClient();
+  client.writeQuery({ query, data: { probeCount: 1 } });
+  const store = createApolloStore("adapter-probe", () => ({ selected: true, serverCount: 0 }), {
+    prepare: (state) => {
+      Object.defineProperty(state, "serverCount", { configurable: true, enumerable: false, value: 0 });
+    },
+    derive: (state) => Object.defineProperty({ ...state }, "serverCount", {
+      get: () => client.readQuery<{ probeCount: number }>({ query })!.probeCount,
+    }),
+  });
+  store.setState({ selected: false });
+  const current = store.getState();
+  expect(current.serverCount).toBe(1);
+  expect(store.getState()).toBe(current);
+  client.writeQuery({ query, data: { probeCount: 2 } });
+  expect(store.getState().serverCount).toBe(2);
+  const rows = client.cache.extract() as Record<string, { value: Record<string, unknown> }>;
+  const stored = rows['TicketryLocalState:{"id":"adapter-probe"}'].value;
+  expect(stored).toEqual({ selected: false });
 });

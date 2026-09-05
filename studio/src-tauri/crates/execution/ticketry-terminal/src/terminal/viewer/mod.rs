@@ -7,6 +7,7 @@
 //! reach tmux directly.
 
 mod attachment;
+mod native_terminal_profile;
 mod tmux_client;
 mod webview_commands;
 mod worker_diagnostics;

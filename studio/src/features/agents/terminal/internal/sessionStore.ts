@@ -217,36 +217,6 @@ export function bucketOfMeta(
   return bucketFor(meta.taskId, meta.moduleId);
 }
 
-// Live running-agent count for the synthetic scratch bucket (#496). The count
-// is derived purely from local sessions (including reattached scratch tabs) —
-// never from task-bound persisted-session hydration.
-export function selectScratchAgentCount(
-  state: TerminalStoreState,
-  moduleId?: string,
-  projectId?: string,
-): number {
-  let count = 0;
-
-  // Count only active no-task (scratch) sessions.
-  for (const meta of Object.values(state.sessions)) {
-    if (meta.taskId !== null) continue;
-    // A shell is not an agent. It shares the taskless shape of a scratch run,
-    // so without this it would silently inflate a module's agent count (#667).
-    if (meta.isShell) continue;
-    if (moduleId && meta.moduleId !== moduleId) continue;
-    if (projectId && meta.projectId !== projectId) continue;
-    if (
-      meta.status === "connecting" ||
-      meta.status === "ready" ||
-      meta.status === "reconnecting"
-    ) {
-      count += 1;
-    }
-  }
-
-  return count;
-}
-
 interface TerminalStoreState {
   sessions: Record<SessionId, SessionMeta>;
   sessionByRun: Record<string, SessionId>;

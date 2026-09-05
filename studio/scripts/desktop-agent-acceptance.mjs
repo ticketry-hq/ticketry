@@ -1,5 +1,4 @@
-import { spawn, spawnSync } from "node:child_process";
-import { once } from "node:events";
+import { spawnSync } from "node:child_process";
 import {
   chmodSync,
   copyFileSync,
@@ -16,12 +15,18 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
-import { remote } from "webdriverio";
+import {
+  availablePort,
+  connectToStudio,
+  defaultDesktopBinary,
+  spawnTicketry,
+  stopProcess,
+  waitForPort,
+} from "./desktop-webdriver-session.mjs";
 
 const studioRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const repositoryRoot = path.resolve(studioRoot, "..");
-const builtBinary = process.env.TICKETRY_DESKTOP_ACCEPTANCE_BINARY
-  ?? path.join(studioRoot, "src-tauri", "target", "debug", "ticketry");
+const builtBinary = defaultDesktopBinary();
 const tmux = process.env.TICKETRY_DESKTOP_ACCEPTANCE_TMUX
   ?? ["/opt/homebrew/bin/tmux", "/usr/local/bin/tmux", "/usr/bin/tmux"].find(existsSync);
 const mcpPort = 8123;
@@ -38,17 +43,6 @@ function run(command, args, options = {}) {
   if (result.status !== 0) {
     throw new Error(`${command} ${args.join(" ")} exited ${result.status}`);
   }
-}
-
-async function availablePort() {
-  return await new Promise((resolve, reject) => {
-    const server = net.createServer();
-    server.once("error", reject);
-    server.listen({ host: "127.0.0.1", port: 0 }, () => {
-      const address = server.address();
-      server.close((error) => error ? reject(error) : resolve(address.port));
-    });
-  });
 }
 
 async function occupyPort(port) {
@@ -75,26 +69,6 @@ async function closeServer(server) {
   if (!server?.listening) return;
   await new Promise((resolve, reject) =>
     server.close((error) => error ? reject(error) : resolve()));
-}
-
-async function waitForPort(port, child, timeoutMs = 90_000) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    if (child.exitCode !== null) {
-      throw new Error(`Ticketry exited before WebDriver started (${child.exitCode})`);
-    }
-    const connected = await new Promise((resolve) => {
-      const socket = net.createConnection({ host: "127.0.0.1", port });
-      socket.once("connect", () => {
-        socket.destroy();
-        resolve(true);
-      });
-      socket.once("error", () => resolve(false));
-    });
-    if (connected) return;
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  }
-  throw new Error(`WebDriver did not listen on port ${port}`);
 }
 
 async function waitForMcpPing(url, child, timeoutMs = 30_000) {
@@ -139,71 +113,6 @@ async function waitForMcpPing(url, child, timeoutMs = 30_000) {
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   throw new Error(`Ticketry MCP did not answer at the selected endpoint ${url}`);
-}
-
-async function stopProcess(child) {
-  if (!child || child.exitCode !== null || child.signalCode !== null) return;
-  const exited = once(child, "exit");
-  child.kill("SIGTERM");
-  await Promise.race([
-    exited,
-    new Promise((resolve) => setTimeout(resolve, 5_000)),
-  ]);
-  if (child.exitCode !== null || child.signalCode !== null) return;
-  const killed = once(child, "exit");
-  child.kill("SIGKILL");
-  await killed;
-}
-
-function spawnTicketry(binary, environment, stdout, stderr) {
-  const childEnvironment = { ...process.env, ...environment };
-  if (!Object.hasOwn(environment, "MUXED_DESKTOP_MCP_PORT")) {
-    delete childEnvironment.MUXED_DESKTOP_MCP_PORT;
-  }
-  const child = spawn(binary, [], {
-    cwd: repositoryRoot,
-    env: childEnvironment,
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  child.stdout.on("data", (chunk) => stdout.push(chunk));
-  child.stderr.on("data", (chunk) => stderr.push(chunk));
-  return child;
-}
-
-async function connectToStudio(port, child) {
-  await waitForPort(port, child);
-  const browser = await remote({
-    hostname: "127.0.0.1",
-    port,
-    logLevel: "warn",
-    capabilities: {
-      "wdio:tauriServiceOptions": { windowLabel: "main" },
-    },
-  });
-  if (await browser.getUrl() === "about:blank") {
-    await browser.url("tauri://localhost/");
-  }
-  await browser.waitUntil(async () =>
-    await browser.execute(() => document.readyState === "complete"), {
-    timeout: 20_000,
-    timeoutMsg: "the embedded Studio document did not finish loading",
-  });
-  await browser.execute(() => {
-    const messages = [];
-    window.__ticketryAcceptanceDiagnostics = messages;
-    window.addEventListener("error", (event) => {
-      messages.push({ type: "error", message: event.message });
-    });
-    window.addEventListener("unhandledrejection", (event) => {
-      messages.push({ type: "unhandledrejection", message: String(event.reason) });
-    });
-    const original = console.error.bind(console);
-    console.error = (...values) => {
-      messages.push({ type: "console.error", message: values.map(String).join(" ") });
-      original(...values);
-    };
-  });
-  return browser;
 }
 
 function provisionDisposableTools(root) {
@@ -435,6 +344,54 @@ async function openExistingStory(browser, taskId) {
   });
 }
 
+/**
+ * CODING-1486 — native libghostty reads its configuration and pinned runtime
+ * resources through NSBundle, which for an unbundled executable resolves to the
+ * directory holding it. This harness runs a copy of the built binary from a
+ * temporary directory, so the resources have to travel with it; without them
+ * native initialization fails and the shell silently renders with xterm.
+ */
+function stageNativeGhosttyResources(applicationDirectory) {
+  copyFileSync(
+    path.join(studioRoot, "src-tauri", "native", "ticketry-ghostty.conf"),
+    path.join(applicationDirectory, "ticketry-ghostty.conf"),
+  );
+  const resources = path.join(studioRoot, "src-tauri", "vendor", "libghostty", "resources");
+  for (const resource of ["ghostty", "terminfo"]) {
+    cpSync(
+      path.join(resources, resource),
+      path.join(applicationDirectory, resource),
+      { recursive: true },
+    );
+  }
+}
+
+/**
+ * CODING-1486 — a packaged desktop build renders its terminals with embedded
+ * native libghostty, with no build flag, URL parameter, or stored setting.
+ *
+ * This checks the running artifact rather than a source constant: the native
+ * host must be mounted and no fallback notice may be showing. It also proves
+ * the run's bytes are not crossing into the WebView: a native run mounts no
+ * streamed viewer, so the compatibility renderer's xterm screen must not exist
+ * alongside it.
+ */
+async function assertNativeRendererOwnsTheRun(browser) {
+  const nativeHost = await browser.$('[data-testid="native-terminal-host"]');
+  await nativeHost.waitForDisplayed({
+    timeout: 30_000,
+    timeoutMsg: "the packaged build did not mount the native libghostty host",
+  });
+  for (const [selector, complaint] of [
+    ['[data-testid="native-terminal-fallback-notice"]', "the packaged build reported a native renderer failure"],
+    ['[data-testid="terminal-host"]', "a streamed xterm viewer is attached alongside the native viewer"],
+  ]) {
+    if (await (await browser.$(selector)).isExisting().catch(() => false)) {
+      throw new Error(complaint);
+    }
+  }
+}
+
 async function main() {
   if (!tmux) {
     throw new Error(
@@ -442,6 +399,9 @@ async function main() {
     );
   }
   if (process.env.TICKETRY_DESKTOP_ACCEPTANCE_SKIP_BUILD !== "1") {
+    // CODING-1486 — the acceptance shell renders with native libghostty, a
+    // default Cargo feature, so the pinned static library must exist first.
+    run("npm", ["run", "libghostty:prepare"], { cwd: studioRoot });
     run("npm", [
       "exec",
       "tauri",
@@ -450,7 +410,7 @@ async function main() {
       "--debug",
       "--no-bundle",
       "--features",
-      "native-libghostty,desktop-acceptance",
+      "desktop-acceptance",
     ], { cwd: studioRoot });
   }
 
@@ -497,6 +457,7 @@ async function main() {
     copyFileSync(tools.hook, hook);
     chmodSync(binary, 0o755);
     chmodSync(hook, 0o755);
+    stageNativeGhosttyResources(applicationDirectory);
     let port = await availablePort();
     const applicationEnvironment = {
       MUXED_DATA_DIR: tools.dataDirectory,
@@ -569,6 +530,7 @@ async function main() {
     await terminalTab.waitForDisplayed({ timeout: 30_000 });
     await (await terminalTab.$("aria/Agent is actively working"))
       .waitForDisplayed({ timeout: 30_000 });
+    await assertNativeRendererOwnsTheRun(browser);
 
     for (const state of ["Implement", "Review", "Done"]) {
       writeFileSync(path.join(root, `advance-${state}`), "");

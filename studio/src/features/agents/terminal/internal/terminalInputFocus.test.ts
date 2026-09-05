@@ -17,13 +17,6 @@ function mount(html: string): HTMLDivElement {
 }
 
 describe("isTerminalInputElement", () => {
-  it("recognises the ghostty-wasm hidden textarea", () => {
-    const container = mount(
-      '<textarea data-testid="ghostty-wasm-input"></textarea>',
-    );
-    expect(isTerminalInputElement(container.firstElementChild)).toBe(true);
-  });
-
   it("recognises xterm's helper textarea", () => {
     const container = mount('<div class="xterm"><textarea></textarea></div>');
     expect(isTerminalInputElement(container.querySelector("textarea"))).toBe(
@@ -35,25 +28,21 @@ describe("isTerminalInputElement", () => {
     const container = mount("<button></button>");
     expect(isTerminalInputElement(container.firstElementChild)).toBe(false);
     expect(isTerminalInputElement(null)).toBe(false);
-    expect(isTerminalInputElement("ghostty-wasm-input")).toBe(false);
+    expect(isTerminalInputElement(".xterm")).toBe(false);
   });
 });
 
 describe("hasFocusedTerminalInput", () => {
   it("is true when a contained terminal input holds focus", () => {
-    const container = mount(
-      '<textarea data-testid="ghostty-wasm-input"></textarea>',
-    );
-    (container.firstElementChild as HTMLTextAreaElement).focus();
+    const container = mount('<div class="xterm"><textarea></textarea></div>');
+    container.querySelector("textarea")!.focus();
     expect(hasFocusedTerminalInput(container)).toBe(true);
   });
 
   it("is false when the focused input lives outside the container", () => {
     const container = mount("<div></div>");
-    const outside = mount(
-      '<textarea data-testid="ghostty-wasm-input"></textarea>',
-    );
-    (outside.firstElementChild as HTMLTextAreaElement).focus();
+    const outside = mount('<div class="xterm"><textarea></textarea></div>');
+    outside.querySelector("textarea")!.focus();
     expect(hasFocusedTerminalInput(container)).toBe(false);
   });
 

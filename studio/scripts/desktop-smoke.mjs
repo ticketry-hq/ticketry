@@ -112,6 +112,8 @@ async function assertPackagedAssets() {
 
 const guiSmokeSupported = supportsGuiSmoke();
 
+// CODING-1486 — native libghostty is a default Cargo feature, so both smoke
+// builds need the pinned static library in place before cargo runs.
 await runCommandWithTimeout(
   "pinned libghostty preparation",
   "sh",
@@ -132,8 +134,6 @@ if (mode === "all" || mode === "dev") {
           "--no-watch",
           "--config",
           developmentConfig,
-          "--features",
-          "native-libghostty",
         ],
         180_000,
         developmentSmokeEnvironment,
@@ -149,7 +149,7 @@ if (mode === "all" || mode === "packaged") {
     await runCommandWithTimeout(
       "desktop production build",
       process.execPath,
-      [tauriCli, "build", "--no-bundle", "--features", "native-libghostty"],
+      [tauriCli, "build", "--no-bundle"],
       300_000,
       packagedSmokeEnvironment,
     );

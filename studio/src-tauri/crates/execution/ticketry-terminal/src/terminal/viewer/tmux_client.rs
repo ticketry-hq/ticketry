@@ -4,10 +4,15 @@
 //! client used by the desktop renderer, so detaching a viewer cannot kill an
 //! agent run's session.
 
+use super::native_terminal_profile::NativeTerminalProfile;
 use crate::tmux_adapter::{ScrollDirection, TmuxAdapter, TmuxAdapterError};
 use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
 use std::fmt;
 use std::io::{self, Read, Write};
+/// The streamed viewer's protocol. Its emulator is xterm.js in the WebView,
+/// not native libghostty, so it stays on the system entry.
+/// The native command viewer picks its own profile; see
+/// [`NativeTerminalProfile`].
 const VIEWER_TERM: &str = "xterm-256color";
 #[cfg(target_os = "macos")]
 const VIEWER_TERMINFO: &str = "/usr/share/terminfo";
@@ -289,7 +294,10 @@ impl TmuxCommandViewer {
         }
         let command = format!(
             "/usr/bin/env {}",
-            adapter.attach_shell_command(run_id, &viewer_shell_environment())
+            adapter.attach_shell_command(
+                run_id,
+                &viewer_shell_environment(&NativeTerminalProfile::resolve()),
+            )
         );
         Ok(Self {
             command,
@@ -362,21 +370,28 @@ fn configure_viewer_environment(command: &mut CommandBuilder) {
     command.env_remove("TERMINFO_DIRS");
 }
 
-fn viewer_shell_environment() -> Vec<String> {
-    let mut environment = vec!["-u".to_owned(), "LC_ALL".to_owned()];
-    #[cfg(not(target_os = "macos"))]
-    environment.extend([
+/// The environment for the attach command native libghostty runs in its own
+/// PTY.
+///
+/// CODING-1486 — libghostty is the emulator here, so the client advertises
+/// Ghostty against Ticketry's pinned terminfo database when this build carries
+/// one. `TERMINFO_DIRS` is always unset so a development shell cannot redirect
+/// the lookup away from the profile's database.
+fn viewer_shell_environment(profile: &NativeTerminalProfile) -> Vec<String> {
+    let mut environment = vec![
         "-u".to_owned(),
-        "TERMINFO".to_owned(),
+        "LC_ALL".to_owned(),
         "-u".to_owned(),
         "TERMINFO_DIRS".to_owned(),
-    ]);
+    ];
+    match &profile.terminfo {
+        Some(terminfo) => environment.push(format!("TERMINFO={}", terminfo.display())),
+        None => environment.extend(["-u".to_owned(), "TERMINFO".to_owned()]),
+    }
     environment.extend([
-        format!("TERM={VIEWER_TERM}"),
+        format!("TERM={}", profile.term),
         format!("LC_CTYPE={VIEWER_LC_CTYPE}"),
     ]);
-    #[cfg(target_os = "macos")]
-    environment.push(format!("TERMINFO={VIEWER_TERMINFO}"));
 
     environment
 }
@@ -404,6 +419,45 @@ mod tests {
             TmuxAdapter::validate_run_id("run; kill-server"),
             Err(TmuxAdapterError::InvalidIdentifier)
         ));
+    }
+
+    #[test]
+    fn native_attach_advertises_ghostty_against_the_pinned_database() {
+        let environment = viewer_shell_environment(&NativeTerminalProfile {
+            term: "xterm-ghostty".to_owned(),
+            terminfo: Some(std::path::PathBuf::from(
+                "/Ticketry.app/Contents/Resources/terminfo",
+            )),
+        });
+
+        assert_eq!(
+            environment,
+            vec![
+                "-u".to_owned(),
+                "LC_ALL".to_owned(),
+                "-u".to_owned(),
+                "TERMINFO_DIRS".to_owned(),
+                "TERMINFO=/Ticketry.app/Contents/Resources/terminfo".to_owned(),
+                "TERM=xterm-ghostty".to_owned(),
+                format!("LC_CTYPE={VIEWER_LC_CTYPE}"),
+            ],
+        );
+    }
+
+    #[test]
+    fn native_attach_unsets_terminfo_without_a_pinned_database() {
+        let environment = viewer_shell_environment(&NativeTerminalProfile {
+            term: "xterm-256color".to_owned(),
+            terminfo: None,
+        });
+
+        assert!(environment
+            .windows(2)
+            .any(|pair| pair == ["-u", "TERMINFO"]));
+        assert!(environment.contains(&"TERM=xterm-256color".to_owned()));
+        assert!(!environment
+            .iter()
+            .any(|value| value.starts_with("TERMINFO=")));
     }
 
     #[test]

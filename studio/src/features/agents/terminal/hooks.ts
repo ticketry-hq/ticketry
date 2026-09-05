@@ -1,10 +1,8 @@
 import { useMemo } from "react";
 import {
   useTerminalStore,
-  type OpenSessionArgs,
   type SessionMeta,
 } from "./internal/sessionStore";
-import { launchAgent } from "./internal/actions";
 import type { SessionId, TaskId } from "../types";
 import type { TerminalPresentationState } from "./lifecycle";
 import {
@@ -20,13 +18,6 @@ import { useClientStore as useWorkspaceTabsStore } from "../../../state/clientSt
 // tab strip, a badge, or a launch button import these — never the store
 // internals. Each hook subscribes narrowly so callers re-render only on the
 // slice they read.
-
-// Launch verbs. Spawning is deliberately separate from presenting: `<Terminal>`
-// only displays an existing session; these create one and return its id (the
-// pre-ready temp id — the store rekeys it centrally once the server acks).
-export function launchSession(args: OpenSessionArgs): SessionId {
-  return launchAgent(args);
-}
 
 // One terminal tab of a task bucket, ready to render: the session meta plus
 // the lifecycle the strip shows ("reconnecting" transport state beats the

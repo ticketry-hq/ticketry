@@ -48,16 +48,6 @@ vi.mock(
   () => ({ nativeGhosttyAvailable: async () => runtime.nativeAvailable }),
 );
 
-vi.mock("../features/agents/terminal/ghostty-wasm/GhosttyWasmTerminal", () => ({
-  GhosttyWasmTerminal: () => (
-    <div
-      className="bg-inherit"
-      data-testid="ghostty-wasm-host"
-      data-terminal-renderer="ghostty-wasm"
-    />
-  ),
-}));
-
 vi.mock("../features/terminal-panel/api/moduleShellApi", async (importOriginal) => ({
   ...(await importOriginal<
     typeof import("../features/terminal-panel/api/moduleShellApi")
@@ -323,7 +313,7 @@ describe("terminal panel acceptance", () => {
     });
   });
 
-  it("[overhaul-149] uses Ghostty WASM in browser and desktop builds", async () => {
+  it("[overhaul-149] uses the native renderer on desktop and xterm in the browser", async () => {
     window.history.replaceState({}, "", "/");
     localStorage.removeItem("ticketry:terminal-renderer");
     const browser = render(
@@ -334,7 +324,7 @@ describe("terminal panel acceptance", () => {
     );
     pressTogglePanel();
     await shellSessionId();
-    await waitFor(() => expect(screen.getByTestId("ghostty-wasm-host")).toBeTruthy());
+    await waitFor(() => expect(screen.getAllByTestId("terminal-host").length).toBeGreaterThan(0));
     expect(screen.queryByTestId("native-terminal-host")).toBeNull();
     browser.unmount();
 
@@ -353,13 +343,8 @@ describe("terminal panel acceptance", () => {
     );
     pressTogglePanel();
     await shellSessionId();
-    await waitFor(() => expect(screen.getByTestId("ghostty-wasm-host")).toBeTruthy());
-    expect(screen.queryByTestId("native-terminal-host")).toBeNull();
-
-    const { readFile } = await import("node:fs/promises");
-    const tauriConfig = JSON.parse(
-      await readFile(`${process.cwd()}/src-tauri/tauri.conf.json`, "utf8"),
-    );
-    expect(tauriConfig.app.security.csp["script-src"]).toContain("'wasm-unsafe-eval'");
+    // CODING-1486 — a desktop build selects embedded native libghostty without
+    // a URL parameter, a stored setting, or a diagnostic build override.
+    await waitFor(() => expect(screen.getByTestId("native-terminal-host")).toBeTruthy());
   });
 });

@@ -19,7 +19,7 @@ import {
   recordAttachStart,
   recordBytes,
   recordFirstPaint,
-} from "../ghostty-wasm/internal/rendererMeasurement";
+} from "./rendererMeasurement";
 
 // CODIN-749 — shared terminal entry pool.
 //
@@ -435,9 +435,4 @@ export function disposeAll(): void {
     entry.term.dispose();
   }
   entries.clear();
-}
-
-// Test-only: the live entry count, for asserting create-once / dispose.
-export function _entryCount(): number {
-  return entries.size;
 }

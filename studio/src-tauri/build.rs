@@ -1,7 +1,9 @@
 use std::env;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
+
+mod build_provenance;
 
 const GHOSTTY_REVISION: &str = "332b2aefc6e72d363aa93ab6ecfc86eeeeb5ed28";
 
@@ -21,7 +23,6 @@ fn main() {
             "desktop_preflight_report",
             "desktop_approve_executable_path",
             "desktop_launch_default_coding_agent",
-            "desktop_ghostty_vt_artifact",
             "desktop_update_check",
             "desktop_update_download_and_install",
             "desktop_update_restart",
@@ -54,22 +55,27 @@ fn main() {
 
 fn record_build_commit() {
     println!("cargo:rerun-if-env-changed=TICKETRY_COMMIT");
+    println!("cargo:rerun-if-env-changed=TICKETRY_ALLOW_DIRTY_BUILD");
     let manifest = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").unwrap());
-    let commit = env::var("TICKETRY_COMMIT")
-        .ok()
-        .filter(|commit| !commit.trim().is_empty())
-        .or_else(|| {
-            Command::new("git")
-                .args(["rev-parse", "HEAD"])
-                .current_dir(&manifest)
-                .output()
-                .ok()
-                .filter(|output| output.status.success())
-                .and_then(|output| String::from_utf8(output.stdout).ok())
-                .map(|commit| commit.trim().to_owned())
-                .filter(|commit| !commit.is_empty())
-        })
-        .unwrap_or_else(|| "unknown".to_owned());
+    let explicit = env::var("TICKETRY_COMMIT").ok();
+    let allow_dirty = env::var("TICKETRY_ALLOW_DIRTY_BUILD").as_deref() == Ok("true");
+    let profile = env::var("PROFILE").unwrap_or_default();
+    if profile == "release" {
+        // A missing watched path makes Cargo rerun this check for every release build.
+        println!(
+            "cargo:rerun-if-changed={}",
+            manifest
+                .join(".ticketry-release-provenance-always")
+                .display()
+        );
+    }
+    let commit = build_provenance::resolve_build_commit(
+        &profile,
+        allow_dirty,
+        explicit.as_deref(),
+        |arguments| git(&manifest, arguments),
+    )
+    .unwrap_or_else(|error| panic!("invalid Ticketry build provenance: {error}"));
     println!("cargo:rustc-env=TICKETRY_COMMIT={commit}");
     if let Ok(git_head) = Command::new("git")
         .args(["rev-parse", "--git-path", "HEAD"])
@@ -82,6 +88,20 @@ fn record_build_commit() {
             }
         }
     }
+}
+
+fn git(repository: &std::path::Path, arguments: &[&str]) -> Result<String, String> {
+    let output = Command::new("git")
+        .args(arguments)
+        .current_dir(repository)
+        .output()
+        .map_err(|error| format!("could not run git: {error}"))?;
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).trim().to_owned());
+    }
+    String::from_utf8(output.stdout)
+        .map(|output| output.trim().to_owned())
+        .map_err(|error| format!("git returned non-UTF-8 output: {error}"))
 }
 
 fn build_native_libghostty() {
@@ -161,4 +181,50 @@ fn build_native_libghostty() {
         "cargo:rerun-if-changed={}",
         vendor.join("REVISION").display()
     );
+
+    stage_unbundled_ghostty_resources(&manifest, &vendor);
+}
+
+/// CODING-1486 — native libghostty reads its configuration and pinned runtime
+/// resources through `NSBundle.mainBundle`. A packaged `.app` gets them from
+/// `bundle.resources` in `tauri.conf.json`, but `tauri dev` and `tauri build
+/// --no-bundle` run a bare executable whose "bundle" is the directory holding
+/// it. Staging the same files beside the binary makes native initialization
+/// work the same way in every build, instead of silently falling back to xterm
+/// outside a packaged bundle.
+fn stage_unbundled_ghostty_resources(manifest: &Path, vendor: &Path) {
+    // OUT_DIR is `<target>/<profile>/build/<package>-<hash>/out`; the built
+    // executable sits three levels up.
+    let out_dir = PathBuf::from(env::var_os("OUT_DIR").unwrap());
+    let Some(profile) = out_dir.ancestors().nth(3) else {
+        return;
+    };
+
+    let configuration = manifest.join("native/ticketry-ghostty.conf");
+    if let Err(error) = fs::copy(&configuration, profile.join("ticketry-ghostty.conf")) {
+        println!("cargo:warning=could not stage ticketry-ghostty.conf: {error}");
+        return;
+    }
+    for resource in ["ghostty", "terminfo"] {
+        let destination = profile.join(resource);
+        let _ = fs::remove_dir_all(&destination);
+        if let Err(error) = copy_directory(&vendor.join("resources").join(resource), &destination) {
+            println!("cargo:warning=could not stage libghostty {resource} resources: {error}");
+            return;
+        }
+    }
+}
+
+fn copy_directory(source: &Path, destination: &Path) -> std::io::Result<()> {
+    fs::create_dir_all(destination)?;
+    for entry in fs::read_dir(source)? {
+        let entry = entry?;
+        let target = destination.join(entry.file_name());
+        if entry.file_type()?.is_dir() {
+            copy_directory(&entry.path(), &target)?;
+        } else {
+            fs::copy(entry.path(), target)?;
+        }
+    }
+    Ok(())
 }

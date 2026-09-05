@@ -1,13 +1,13 @@
 /**
  * CODING-1304 — renderer comparison measurements.
  *
- * The experiment's deliverable is evidence, so every renderer records the same
- * counters through the same seam: attach latency, painted frames, paint
- * duration and bytes parsed. Measurements are collected in the Studio process
- * and read back by `scripts/renderer-comparison-report.mjs`, so the numbers
- * come from Ticketry's own WebView rather than a standalone browser.
+ * The native and xterm renderers record the same counters through the same
+ * seam: attach latency, painted frames, paint duration and bytes parsed.
+ * Measurements are collected in the Studio process and read back by
+ * `scripts/renderer-comparison-report.mjs`, so the numbers come from
+ * Ticketry's own WebView rather than a standalone browser.
  */
-import type { TerminalRendererChoice } from "../rendererSelection";
+import type { TerminalRendererChoice } from "./rendererSelection";
 
 export interface RendererSampleSummary {
   renderer: TerminalRendererChoice;
@@ -22,8 +22,6 @@ export interface RendererSampleSummary {
   paintMsMax: number;
   paintMsP50: number;
   paintMsP95: number;
-  /** WebAssembly linear memory in bytes; null for renderers without one. */
-  wasmMemoryBytes: number | null;
 }
 
 interface Sample {
@@ -35,7 +33,6 @@ interface Sample {
   frames: number;
   bytes: number;
   paintDurations: number[];
-  wasmMemoryBytes: number | null;
 }
 
 /** Cap retained durations so a long-running terminal cannot grow without bound. */
@@ -64,7 +61,6 @@ function sample(renderer: TerminalRendererChoice, runId: string): Sample {
       frames: 0,
       bytes: 0,
       paintDurations: [],
-      wasmMemoryBytes: null,
     };
     samples.set(id, existing);
   }
@@ -115,10 +111,6 @@ export function recordPaint(
   entry.paintDurations.push(durationMs);
 }
 
-export function recordWasmMemory(runId: string, bytes: number): void {
-  sample("ghostty-wasm", runId).wasmMemoryBytes = bytes;
-}
-
 /** Time one paint and record it. */
 export function measurePaint<T>(
   renderer: TerminalRendererChoice,
@@ -154,13 +146,8 @@ export function rendererMeasurements(): RendererSampleSummary[] {
       paintMsMax: sorted.length ? sorted[sorted.length - 1] : 0,
       paintMsP50: percentile(sorted, 0.5),
       paintMsP95: percentile(sorted, 0.95),
-      wasmMemoryBytes: entry.wasmMemoryBytes,
     };
   });
-}
-
-export function resetRendererMeasurements(): void {
-  samples.clear();
 }
 
 /**

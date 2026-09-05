@@ -8,7 +8,7 @@
 // internals, and foreground registry — remains implementation.
 //
 // The interface, by intent:
-//   launchSession                 creates a run (the spawn verb, separate from display)
+//   launchAgent                   creates a run (the spawn verb, separate from display)
 //   useTaskSessions / useActiveSession
 //                                  the tab-strip queries: a bucket's ordered
 //                                  terminal tabs (with lifecycle) + focused tab
@@ -44,7 +44,6 @@ export type {
 export type { ModuleFolderPayload } from "./ModuleFolder";
 
 export {
-  launchSession,
   useTaskSessions,
   useActiveSession,
   type SessionTab,
@@ -94,10 +93,10 @@ export {
   launchAgent,
   attachToRun,
   ackTerminal,
-  closeTerminal,
 } from "./internal/actions";
 export { launchInstantConversation } from "./instantConversationLaunch";
 export { useInstantRunTickets } from "./instantRunTickets";
+export { useInstantRunTicketTitle } from "./instantRunTicketTitle";
 
 // Shared terminal-create launcher (CODIN-839): folder gate → optional prompt →
 // required agent → scratch planning launch. Studio create surfaces consume the

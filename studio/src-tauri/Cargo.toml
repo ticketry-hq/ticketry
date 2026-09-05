@@ -16,7 +16,10 @@ cc = "1"
 tauri-build = { version = "=2.6.3", features = [] }
 
 [features]
-default = []
+# CODING-1486 — embedded native libghostty is the shipping desktop renderer, so
+# every ordinary build of this package links it. `build.rs` and the desktop
+# crate both gate on macOS, so the feature is inert on other platforms.
+default = ["native-libghostty"]
 # The developer command line lives in `crates/app/ticketry-dev-tools` now, so this
 # feature gates nothing. It stays declared, and empty, so the generation and
 # verification scripts that still pass `--features development-tools` to this
@@ -65,6 +68,7 @@ syn = { version = "=2.0.119", features = ["full", "visit"] }
 tauri-graphql.workspace = true
 tempfile.workspace = true
 ticketry-agent-execution.workspace = true
+ticketry-codex-app-server.workspace = true
 ticketry-data-directory.workspace = true
 ticketry-documents.workspace = true
 ticketry-entities.workspace = true
@@ -116,6 +120,7 @@ tauri-graphql = { path = "crates/foundation/tauri-graphql" }
 taurpc = "=0.8.2"
 tempfile = "=3.23.0"
 ticketry-agent-execution = { path = "crates/execution/ticketry-agent-execution" }
+ticketry-codex-app-server = { path = "crates/execution/ticketry-codex-app-server" }
 ticketry-data-directory = { path = "crates/foundation/ticketry-data-directory" }
 ticketry-desktop = { path = "crates/app/ticketry-desktop" }
 ticketry-dev-tools = { path = "crates/app/ticketry-dev-tools" }

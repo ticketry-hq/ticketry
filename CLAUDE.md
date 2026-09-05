@@ -12,9 +12,14 @@ Use the application's canonical runtime scripts. `npm run desktop:dev` and
 `pnpm dev` rebuild and launch the desktop application. `npm run web` starts the
 frontend with the supporting Rust GraphQL adapter.
 
-`ghostty-wasm` is the default terminal renderer (CODIN-1514). Normal frontend
-and desktop commands prepare its pinned WebAssembly artifact. Native libghostty
-and xterm remain diagnostic and fallback renderers.
+Embedded native libghostty is the terminal renderer on supported macOS desktop
+builds, development and packaged alike (CODING-1486). Ordinary desktop and
+release commands prepare and link the pinned library; no URL parameter, stored
+setting, or build flag is needed. Browser development renders with xterm over
+the `browserTerminalClient` WebSocket adapter to the Rust terminal adapter, and
+xterm is the compatibility fallback everywhere. CODING-1487 removed the
+`ghostty-wasm` renderer; its snapshot and recovery steps are in
+[`docs/archive/ghostty-wasm-restore.md`](docs/archive/ghostty-wasm-restore.md).
 
 ## Code structure — governing rules
 
@@ -101,10 +106,15 @@ Ticketry's Rust GraphQL surface is migration-first and generated-contract-first:
 
 ## Runtime validation
 
-Native libghostty is the default terminal renderer in desktop builds.
-`ghostty-wasm` is the browser default and a desktop diagnostic renderer, while
-xterm remains the compatibility fallback. tmux owns durable terminal sessions
-under every renderer.
+Embedded native libghostty is the terminal renderer in development desktop and
+packaged desktop builds. It runs Ticketry's validated tmux attach command inside
+its own PTY and draws in a native view inside the Ticketry window, so terminal
+output never enters the WebView. Lifecycle, layout, visibility and focus control
+messages still travel over IPC — "no output IPC" does not mean "no IPC".
+Browser development renders with xterm over the `browserTerminalClient`
+WebSocket adapter to the Rust terminal adapter. xterm is also the compatibility
+fallback everywhere, including when native rendering is unavailable or fails.
+tmux owns durable terminal sessions under every renderer.
 
 Install from the repository root, then run:
 

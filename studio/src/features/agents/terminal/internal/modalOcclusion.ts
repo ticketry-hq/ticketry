@@ -1,4 +1,5 @@
 import { useModalStore } from "../../../../app/modal/modalStore";
+import { useDialogStore } from "../../../../app/shell/dialogStore";
 import { useClientStore } from "../../../../state/clientStore";
 
 /**
@@ -13,7 +14,7 @@ import { useClientStore } from "../../../../state/clientStore";
 export function modalOcclusionActive(): boolean {
   return (
     useModalStore.getState().modalStack.length > 0 ||
-    useClientStore.getState().dialogs.length > 0 ||
+    useDialogStore.getState().dialogs.length > 0 ||
     useClientStore.getState().workspaceSelection.kind === "state-configuration"
   );
 }
@@ -24,12 +25,11 @@ export function modalOcclusionActive(): boolean {
  */
 export function useModalOcclusionActive(): boolean {
   const modalOpen = useModalStore((state) => state.modalStack.length > 0);
-  const clientOverlayOpen = useClientStore(
-    (state) =>
-      state.dialogs.length > 0 ||
-      state.workspaceSelection.kind === "state-configuration",
+  const dialogOpen = useDialogStore((state) => state.dialogs.length > 0);
+  const workspaceOverlayOpen = useClientStore(
+    (state) => state.workspaceSelection.kind === "state-configuration",
   );
-  return modalOpen || clientOverlayOpen;
+  return modalOpen || dialogOpen || workspaceOverlayOpen;
 }
 
 /**
@@ -48,6 +48,7 @@ export function onModalOcclusionBegin(listener: () => void): () => void {
   };
   const releases = [
     useModalStore.subscribe(observe),
+    useDialogStore.subscribe(observe),
     useClientStore.subscribe(observe),
   ];
   return () => {

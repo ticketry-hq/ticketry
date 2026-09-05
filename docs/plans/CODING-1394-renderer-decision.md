@@ -1,14 +1,24 @@
 # CODING-1394 renderer decision
 
+Status: **historical.** Superseded by CODING-1487, which removed the
+`ghostty-wasm` renderer from the product. Desktop development and packaged
+builds render with embedded native libghostty, browser development renders with
+xterm over the `browserTerminalClient` WebSocket adapter, and xterm is the
+compatibility fallback everywhere. The archived renderer and its recovery steps
+are in
+[`../archive/ghostty-wasm-restore.md`](../archive/ghostty-wasm-restore.md).
+What follows is the decision as written on 2026-09-04, kept for the evidence it
+records rather than as current guidance.
+
 Decision date: 2026-09-04
 
 Original evidence-based decision: keep `ghostty-wasm` as the default.
 
-Superseded on 2026-09-04 by explicit product direction. Native libghostty is
-now the desktop default. `ghostty-wasm` remains the browser default and a
-desktop diagnostic option; xterm remains the compatibility fallback. The
-evidence and limitations below remain the historical record behind the earlier
-recommendation.
+Superseded on 2026-09-04 by explicit product direction. Native libghostty became
+the desktop default, `ghostty-wasm` stayed the browser default and a desktop
+diagnostic option, and xterm stayed the compatibility fallback. CODING-1487
+later removed `ghostty-wasm` altogether. The evidence and limitations below
+remain the historical record behind the earlier recommendation.
 
 The original task did not change renderer selection. Native libghostty was an
 explicit packaged capture override and a development diagnostic renderer.
@@ -113,8 +123,11 @@ native experiment, not a new certification of the existing renderer.
 
 ## Follow-up rule
 
-A future renderer comparison should repeat native and WASM measurements with
-the same Terminal Sessions, commands, dimensions, machine, build, input device,
-and sample windows. It should include the full packaged selection-gate capture
-set above. The later product direction promoted native libghostty without
-claiming that the missing comparison evidence had been collected.
+A renderer comparison written at the time of this decision would repeat native
+and WASM measurements with the same Terminal Sessions, commands, dimensions,
+machine, build, input device, and sample windows, and include the full packaged
+selection-gate capture set above. The later product direction promoted native
+libghostty without claiming that the missing comparison evidence had been
+collected, and CODING-1487 then removed the WASM renderer, so that comparison is
+no longer runnable from the active branch. Anyone who needs it must build the
+WASM side from `archive/CODING-1487-ghostty-wasm`.

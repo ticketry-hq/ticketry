@@ -36,7 +36,7 @@ import {
   publishRendererMeasurements,
   recordAttachStart,
   recordFirstPaint,
-} from "./ghostty-wasm/internal/rendererMeasurement";
+} from "./internal/rendererMeasurement";
 import { activeElementLabel, traceViewerFocus } from "./internal/focusTrace";
 import { useNativeWebViewSiblingInteraction } from "./internal/useNativeWebViewSiblingInteraction";
 

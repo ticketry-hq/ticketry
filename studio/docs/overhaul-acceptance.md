@@ -44,28 +44,28 @@ named gate before the full Studio suite, typecheck, and build.
 | 35 | Live and restored task-bound terminal tabs and their close affordances read the launch state their own durable run captured, with no ticket identifier, while scratch plan/instant runs keep their lowercase modes and an unrecorded state stays blank. |
 | 36 | A live terminal falsely tombstoned by legacy runtime reconciliation returns to its active lifecycle when the repaired status snapshot arrives. |
 | 37 | The sidebar, Module tab strip, keyboard position shortcuts, and backlog grouping all render the one Canonical module order. |
-| 38 | Agent activity reorders an automatic project's modules but leaves a project in Manual module order on its persisted order. |
-| 39 | An agent-activity lookup failure leaves an automatic project on the server's fallback module order. |
+| 38 | Agent activity does not overlay a second client-side order on the canonical module order. |
+| 39 | An automatic project keeps the server's canonical creation order when auxiliary project metadata cannot be read. |
 | 40 | A module list loaded before the project cache is warm still reads the project's durable ordering mode. |
 | 41 | A project whose ordering mode cannot be read is treated as automatic. |
 | 42 | The first sidebar module drag sends the exact visible order as its baseline and shows the move in the sidebar and Module tab strip at once. |
 | 43 | A pending module reorder disables further drag sources and converges on authoritative project and module data once it settles. |
 | 44 | A refused module reorder restores the previous order, reports the failure, and a retry succeeds. |
 | 45 | Cancelled and no-op module drops write nothing, and a drop does not select the module it landed on. |
-| 46 | A module created in an automatic project leads every module surface, and selection, its folder link, and the sidebar add control are unchanged. |
-| 47 | A module created in a project with Manual module order leads every module surface without leaving that mode, and agent activity cannot demote it. |
+| 46 | A module created in an automatic project follows every existing module, and selection, its folder link, and the sidebar add control are unchanged. |
+| 47 | A module created in a project with Manual module order follows every existing module without leaving that mode. |
 | 48 | A live desktop run waits for the direct native libghostty-to-tmux viewer without opening the xterm/WebSocket fallback in parallel. |
 | 49 | A terminal tab appears directly from ProjectRunStatus when its run projection arrives after the workspace first mounts, without a separate terminal-discovery read. |
 | 50 | Details and document navigation keep the same opened terminal mounted, then reactivate it in place. |
 | 51 | A tab-strip drag places a module at the indicated tab edge and every module surface follows. |
-| 52 | Tab navigation and the fixed add-module control remain intact across tab-strip reordering. |
+| 52 | Tab navigation and the trailing add-module control remain intact across tab-strip reordering. |
 | 53 | A running client adopts a Manual module order established elsewhere. |
 | 54 | A failed project read retains the last known module ordering mode. |
-| 55 | A newly created module returns to activity-based recency once it receives activity of its own. |
+| 55 | A newly created module remains at the end of the canonical order after a reload. |
 | 56 | Native first attach and reattach remain pending until exact clipped-frame presentation, while preparation failure retains fallback behavior. |
 | 57 | Run serially sits beside Run subtree under one capability, sends serial mode with independent pending and feedback, reports launched work as success and a press that launches nothing as nothing started, and both actions disappear together after a stale capability refresh. |
 | 58 | A native viewer resized while it prepares is presented at the pane's live geometry, and the pooled fallback is retired only once that grid is applied. |
-| 59 | A projects read started before an accepted first Module drag cannot restore recency over the resulting Manual module order. |
+| 59 | A projects read started before an accepted first Module drag cannot restore automatic creation order over the resulting Manual module order. |
 | 60 | State transitions consume the authoritative landing rank, while cross-state drag finishes at its explicit drop seam. |
 | 61 | A StrictMode remount never overlaps two native attachments for the same durable terminal run. |
 | 62 | The native terminal clears the workspace tab boundary, sits flush against the pane's bottom edge, and retains its side pane insets. |
@@ -189,7 +189,7 @@ named gate before the full Studio suite, typecheck, and build.
 | 204 | Past Agent Runs remain independently resumable. |
 | 205 | A cold Changes restoration clears when the resolved worktree has no checkout. |
 | 206 | Browser update checks defer quietly to the desktop application. |
-| 207 | After a Dirty Shutdown, Studio shows a dismissible, non-modal Crash Notice that reveals the fixed Crash Report folder; clean launches stay silent. |
+| 207 | A collected Crash Report does not add a Crash Notice, banner, or file prompt to Studio. |
 | 208 | Desktop launch checks contact the update feed once, show available updates on the Settings entry point, retain the result in App updates, and keep launch failures quiet until that section opens. |
 | 209 | An update check reports the installed version and confirms when Ticketry is current. |
 | 210 | An available update shows its version and release notes without installing it. |
@@ -210,20 +210,20 @@ named gate before the full Studio suite, typecheck, and build.
 | 225 | A saved launch model configuration reads back with its provider, model, and reasoning after reopening the workflow settings. |
 | 226 | A launch configuration naming an agent/provider without a model is refused with that reason rather than saved as unconfigured. |
 | 227 | Saving a launch configuration after the workflow editor loads sends the catalog's model and reasoning UUIDs, not name-keyed placeholders the host rejects with "Enter a valid UUID.". |
-| 228 | A retained live Ghostty viewer restores without rebuilding or reattaching it. |
+| 228 | A retained live terminal viewer restores without rebuilding or reattaching it. Covered by the combined case 67 test after CODING-1487 retired the Ghostty WASM renderer. |
 | 229 | Task badges omit terminal history and quietly announce newly lost runs. |
-| 230 | Codex alternate-screen scrolling uses durable terminal history without sending cursor-key input to Codex. |
+| 230 | Codex alternate-screen scrolling uses durable terminal history without sending cursor-key input to Codex. Covered by the combined case 232 test after CODING-1487 retired the Ghostty WASM renderer. |
 | 231 | Run agent selects its terminal from the authoritative status event before launch returns, then attaches its viewer only after runtime acknowledgement. |
 | 232 | Native Ghostty sends key presses directly to the terminal, routes captured wheel gestures to their program, and keeps ordinary shell scrollback in tmux. |
 | 233 | Normal native Ghostty terminals present above WebKit with input enabled so click-drag selection works immediately; the WebView-underlay comparison remains opt-in. |
 | 234 | The opt-in WebView-underlay comparison coordinates retained native Ghostty terminals through one generation-fenced window selection. |
 | 235 | Native Ghostty warm retention caps the total mounted set at the measured 20-view limit, keeps the selected run, refreshes recency on revisit, and evicts the least recently viewed inactive viewer. |
 | 236 | A bottom-left toast stays outside the selected native Ghostty host and above the Studio footer and safe areas; stacked notifications remain actionable without lowering, detaching, recreating, or focusing the terminal. |
-| 237 | The Modules pane toggle sits at the top of the workspace immediately left of module creation and no longer occupies the footer. |
+| 237 | The Modules pane toggle sits at the left edge of the workspace, while module creation sits immediately beside the last module tab without stretching the tab list into spare space. Overflowing tabs remain horizontally scrollable. |
 | 238 | An authoritative snapshot that reports an agent run exited closes its mounted terminal tab and clears the local terminal session. |
 | 239 | Module Changes occupies the footer's left slot with a version-control symbol, stays disabled without a selected Module, and no longer appears beside Terminal and Settings. |
 | 240 | A newly captured Story appears first in its issue type's initial workflow state while creation is pending and remains first after the authoritative persisted result replaces it. |
-| 241 | Normal development and packaged builds select ghostty-wasm by default, retain development-only native and xterm overrides, and require the pinned WASM artifact in release output. |
+| 241 | Normal desktop development and packaged builds select embedded native libghostty by default and link and ship the pinned library; browser development selects xterm; development-only renderer overrides remain, and packaged builds ignore them. |
 | 242 | Development builds can compare three Conversations designs in the real Stories pane; each makes New chat obvious, caps the initial list at ten, and expands or hides the remaining chats. |
 | 243 | A workflow launch binding can set, reload, and clear one required skill as its entry skill, and each change uses the existing binding upsert. |
 | 244 | Incoming and outgoing workflow transition rows show and save each edge's handoff setting. |
@@ -233,12 +233,34 @@ named gate before the full Studio suite, typecheck, and build.
 | 248 | Changing the selected Story discards its unsaved description draft, opens the new Story's saved description in view mode, and keeps later description updates bound to the new Story. |
 | 249 | Resuming one stopped terminal conversation opens and focuses one successor while every unselected stopped conversation stays independently resumable through holding refreshes and reload. |
 | 250 | The Stories pane says whether an automated transition continued the Story's live agent session or started a fresh one, and follows the newest delivery across the rolled-up subtree. |
-| 251 | Clicking + Agent opens the same provider picker used by Cmd+Enter instead of an inline dropdown. |
+| 251 | The + Agent launcher follows every workspace tab inside the shared horizontal scroller and opens the same provider picker used by Cmd+Enter instead of an inline dropdown. |
 | 252 | Opening the Modules pane gives it keyboard focus; arrow keys move its cursor without snapping back, and Enter activates the cursor. |
 | 253 | Edit-view keyboard navigation reaches the + Agent launcher after the final workspace tab and opens it with Enter. |
+| 254 | A long task Changes page scrolls its summary, actions, notices, and complete file list through one workspace owner without a false blank tail. |
+| 255 | Long module Changes keeps current worktrees and checkout files bounded in separate columns with one vertical owner per column. |
+| 256 | Module Changes owns horizontal overflow below the workspace pane so checkout actions and files remain reachable in a narrow pane. |
+| 257 | Dormant workspace chips stay within their own bounded vertical scroller so accumulated closed documents and past runs cannot squeeze the active workspace tab. |
+| 258 | A long Details body stays reachable through the selected workspace's single vertical scroll owner. |
+| 259 | A selected non-Codex conversation never requests a thread title; a Codex conversation keeps its safe title through an unusable answer, adopts an accepted name in all three displays, and preserves that name when a later request fails. |
+| 260 | The + Agent launcher warms the provider catalog while it is on screen, so the first agent picker of a session opens on a usable provider list instead of an inert "Loading providers…". |
+| 261 | A settled Codex conversation selection refreshes its title once on first selection, return, and startup restoration; rapid selection changes coalesce, while visibility changes and terminal focus do not read titles. |
+| 262 | Implementation launch configuration and transitions survive optimistic ticket creation, issue-type metadata updates, and reopening the state editor. Covered by the combined case 246 test. |
+| 263 | An open Implementation editor follows authoritative Apollo workflow updates without retaining a stale snapshot. Covered by the combined case 246 test. |
+| 264 | A selected Codex conversation keeps its safe title while the title reader is unavailable, then refreshes the row, header, and terminal tab once its resident reader restarts. |
+| 265 | An obsolete document response cannot replace newer content or edits made while a reload is pending. |
+| 266 | A cross-module Work Item move received from another client refreshes both the source and destination module collections. |
+| 267 | Workspace focus, task selection, and status cursors leave pending dialogs and toasts intact without notifying their stores. |
+| 268 | Matching mutation/event timestamps skip duplicate refreshes while distinct sub-millisecond external edits still converge. |
+| 269 | Desktop builds render terminals with embedded native libghostty and browser development renders with xterm over the WebSocket adapter; the archived Ghostty WASM renderer is absent from source, build hooks, and selectable overrides. |
 
 Each executable case carries one stable `[overhaul-NN]` marker. The gate has a
-contract test that fails if a marker is missing or duplicated. When a Studio UI
+contract test that fails if a marker is missing or duplicated. A case whose
+behavior belongs to a Rust crate rather than the Studio UI carries its marker on
+the Rust test that exercises it, and the contract test counts those markers too.
+Case 245 is the current example: the runtime-path case lives in
+`studio/src-tauri/crates/execution/ticketry-terminal/src/terminal/lifecycle/work.rs`,
+with failed-delivery pane teardown covered beside the delivery helper, so
+`cargo test` runs it rather than the Vitest gate. When a Studio UI
 change affects one of these behaviors, update that case in the same change. If
 the change introduces a new durable user behavior, add a new acceptance case
 and extend this matrix rather than returning to a manual checklist.

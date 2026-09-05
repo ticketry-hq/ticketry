@@ -32,7 +32,7 @@
         "font-src": "'self' data:",
         "img-src": "'self' asset: http://asset.localhost data: blob:",
         "style-src": "'self' 'unsafe-inline'",
-        "script-src": "'self' 'wasm-unsafe-eval'"
+        "script-src": "'self'"
       }
     }
   },

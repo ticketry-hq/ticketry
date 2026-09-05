@@ -1,8 +1,16 @@
 # Terminal renderer strategy: WASM first, native fallback
 
-Status: working direction as of 2026-09-01. This document records the order of
-experiments and the conditions for choosing a renderer. It is not evidence that
-either approach has passed.
+Status: **historical — superseded by CODING-1486 and CODING-1487.** This
+document records the order of experiments and the conditions for choosing a
+renderer as of 2026-09-01. It is not evidence that either approach passed, and
+it does not describe the shipping policy. Desktop development and packaged
+builds render with embedded native libghostty, browser development renders with
+xterm over the `browserTerminalClient` WebSocket adapter, and xterm is the
+compatibility fallback everywhere. CODING-1487 removed the `ghostty-wasm`
+renderer; see
+[`../archive/ghostty-wasm-restore.md`](../archive/ghostty-wasm-restore.md).
+Nothing below is an instruction to build, prepare, or select that renderer
+today. Read it as the reasoning that led to the current policy.
 
 ## Decision
 
@@ -380,6 +388,7 @@ tests to match what actually ships.
 
 - `docs/plans/CODING-1304-webview-ghostty-renderer-evidence.md` contains the
   original comparison matrix and known WASM gaps.
-- `studio/src/features/agents/terminal/ghostty-wasm/README.md` describes the
-  current implementation, including its present suspend and scrolling policy.
+- `studio/src/features/agents/terminal/ghostty-wasm/README.md` described the
+  WASM implementation, including its suspend and scrolling policy. It now lives
+  only on `archive/CODING-1487-ghostty-wasm`.
 - `docs/research/t3-code-terminals.md` records earlier renderer research.

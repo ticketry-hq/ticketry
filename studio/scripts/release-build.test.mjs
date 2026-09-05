@@ -44,17 +44,24 @@ function latestJson(overrides = {}) {
   };
 }
 
-test("the release ships native libghostty with the browser Ghostty WASM artifact", () => {
+test("the release leaves native crash reporting to macOS", () => {
   assert.equal(manifest.release_version, "0.2.0");
   assert.deepEqual(Object.keys(manifest.artifacts).sort(), [
     "frontend", "runtime_resources", "tauri", "updater",
   ]);
-  assert.deepEqual(manifest.artifacts.tauri.command.slice(-2), [
-    "--features", "native-libghostty",
-  ]);
-  assert.ok(manifest.artifacts.frontend.required_outputs.includes(
-    "dist/ghostty-vt/ghostty-vt.wasm",
-  ));
+  // CODING-1487 — the retired WASM renderer produced the only build artifact
+  // the frontend step could not make on its own; nothing in the manifest may
+  // demand it back.
+  assert.equal(JSON.stringify(manifest).includes("ghostty-vt"), false);
+  // CODING-1486 — native libghostty ships as a default Cargo feature, so the
+  // release command needs no flag but must never opt out of default features.
+  assert.equal(manifest.artifacts.tauri.command.includes("--no-default-features"), false);
+  const withoutDefaultFeatures = structuredClone(manifest);
+  withoutDefaultFeatures.artifacts.tauri.command.push("--no-default-features");
+  assert.throws(
+    () => validateManifest(withoutDefaultFeatures),
+    /must not disable default features/,
+  );
   assert.equal(JSON.stringify(manifest).includes("python"), false);
   assert.equal(JSON.stringify(manifest).includes("sidecar"), false);
   assert.doesNotThrow(() => validateManifest(manifest));
@@ -101,13 +108,12 @@ test("the release builds the target-specific hook runner expected by Tauri", () 
 });
 
 test("manifest validation requires Rust runtime and release policy declarations", () => {
-  const withoutNativeRenderer = structuredClone(manifest);
-  withoutNativeRenderer.artifacts.tauri.command =
-    withoutNativeRenderer.artifacts.tauri.command.slice(0, -2);
-  assert.throws(() => validateManifest(withoutNativeRenderer), /native-libghostty/);
-  const withoutWasm = structuredClone(manifest);
-  withoutWasm.artifacts.frontend.required_outputs = ["dist/index.html"];
-  assert.throws(() => validateManifest(withoutWasm), /ghostty-vt\/ghostty-vt\.wasm/);
+  const withoutFrontendOutputs = structuredClone(manifest);
+  withoutFrontendOutputs.artifacts.frontend.required_outputs = [];
+  assert.throws(
+    () => validateManifest(withoutFrontendOutputs),
+    /artifacts\.frontend\.required_outputs/,
+  );
   const withoutArchitecture = structuredClone(manifest);
   delete withoutArchitecture.targets[0].build_architecture;
   assert.throws(() => validateManifest(withoutArchitecture), ReleaseManifestError);
@@ -236,10 +242,21 @@ test("Tauri builds only the shipping desktop binary", () => {
 
 test("release arguments preserve validation and unsigned controls", () => {
   assert.deepEqual(parseArguments(["--target", "macos-aarch64", "--validate"]), {
-    target: "macos-aarch64", validateOnly: true, allowUnsigned: false,
+    target: "macos-aarch64", validateOnly: true, allowUnsigned: false, allowDirty: false,
   });
   assert.equal(parseArguments(["--allow-unsigned"]).allowUnsigned, true);
   assert.throws(() => parseArguments(["--unknown"]), /Unknown release build option/);
+});
+
+test("dirty builds require unsigned local mode", () => {
+  assert.equal(
+    parseArguments(["--allow-unsigned", "--allow-dirty"]).allowDirty,
+    true,
+  );
+  assert.throws(
+    () => parseArguments(["--allow-dirty"]),
+    /--allow-dirty requires --allow-unsigned/,
+  );
 });
 
 test("repository release inputs validate without a packaged service", async () => {
@@ -326,9 +343,9 @@ test("release inputs reject a Tauri updater endpoint that differs from the manif
 test("unsigned bundle verification checks only the app and hook binaries", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "ticketry-release-"));
   const app = path.join(root, "Ticketry.app");
-  const resources = path.join(app, "Contents", "Resources");
   const executable = path.join(app, "Contents", "MacOS", "ticketry");
   const hook = path.join(app, "Contents", "MacOS", "ticketry-hook");
+  const resources = path.join(app, "Contents", "Resources");
   await Promise.all([
     mkdir(path.dirname(executable), { recursive: true }),
     mkdir(path.join(resources, "terminfo", "78"), { recursive: true }),
@@ -337,8 +354,12 @@ test("unsigned bundle verification checks only the app and hook binaries", async
   await Promise.all([
     writeFile(executable, ""),
     writeFile(hook, ""),
+    // CODING-1486 — the shipping bundle carries the pinned libghostty runtime.
     writeFile(path.join(resources, "terminfo", "78", "xterm-ghostty"), ""),
-    writeFile(path.join(resources, "ghostty", "shell-integration", "zsh", "ghostty-integration"), ""),
+    writeFile(
+      path.join(resources, "ghostty", "shell-integration", "zsh", "ghostty-integration"),
+      "",
+    ),
   ]);
   const calls = [];
   try {

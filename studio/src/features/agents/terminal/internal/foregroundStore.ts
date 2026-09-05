@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from "react";
+import { createApolloStore } from "../../../../shared/apollo/localState";
 import type { SessionMeta } from "./sessionStore";
 
 // `panel` is the bottom terminal panel (#667). Claims are keyed by run, and a
@@ -6,94 +6,97 @@ import type { SessionMeta } from "./sessionStore";
 // presented at the same time without competing for the same claim.
 export type ForegroundOwner = "studio" | "drawer" | "panel";
 
-interface TerminalForegroundRegistry {
+interface ForegroundClaimsState {
   claims: Record<string, ForegroundOwner>;
-  hostTargets: Partial<Record<ForegroundOwner, HTMLElement | null>>;
   acquire: (key: string, owner: ForegroundOwner) => void;
   release: (key: string) => void;
   releaseOwner: (owner: ForegroundOwner) => void;
   rekey: (oldKey: string, newKey: string) => void;
+}
+
+interface TerminalForegroundRegistry extends ForegroundClaimsState {
+  hostTargets: Partial<Record<ForegroundOwner, HTMLElement | null>>;
   registerHost: (owner: ForegroundOwner, el: HTMLElement | null) => void;
   unregisterHost: (owner: ForegroundOwner) => void;
 }
 
-type Listener = () => void;
-const listeners = new Set<Listener>();
-let claims: Record<string, ForegroundOwner> = {};
-let hostTargets: Partial<Record<ForegroundOwner, HTMLElement | null>> = {};
+const useForegroundClaims = createApolloStore<ForegroundClaimsState>(
+  "terminal-foreground-claims",
+  (set) => ({
+    claims: {},
+    acquire(key, owner) {
+      set((state) => {
+        if (owner === "studio") {
+          if (!(key in state.claims)) return state;
+          const claims = { ...state.claims };
+          delete claims[key];
+          return { claims };
+        }
+        if (state.claims[key] === owner) return state;
+        return { claims: { ...state.claims, [key]: owner } };
+      });
+    },
+    release(key) {
+      set((state) => {
+        if (!(key in state.claims)) return state;
+        const claims = { ...state.claims };
+        delete claims[key];
+        return { claims };
+      });
+    },
+    releaseOwner(owner) {
+      set((state) => {
+        const claims = Object.fromEntries(
+          Object.entries(state.claims).filter(([, value]) => value !== owner),
+        );
+        return Object.keys(claims).length === Object.keys(state.claims).length
+          ? state
+          : { claims };
+      });
+    },
+    rekey(oldKey, newKey) {
+      set((state) => {
+        if (oldKey === newKey || state.claims[oldKey] === undefined) return state;
+        const claims = { ...state.claims };
+        const owner = claims[oldKey];
+        delete claims[oldKey];
+        claims[newKey] = owner;
+        return { claims };
+      });
+    },
+  }),
+);
 
-function publish(): void {
-  snapshot = { ...actions, claims, hostTargets };
-  for (const listener of listeners) listener();
-}
+// DOM nodes are runtime handles. They never enter Apollo's serializable state.
+let hostTargets: TerminalForegroundRegistry["hostTargets"] = {};
 
-const actions = {
-  acquire(key: string, owner: ForegroundOwner) {
-    if (owner === "studio") {
-      actions.release(key);
-      return;
-    }
-    if (claims[key] === owner) return;
-    claims = { ...claims, [key]: owner };
-    publish();
-  },
-  release(key: string) {
-    if (!(key in claims)) return;
-    const next = { ...claims };
-    delete next[key];
-    claims = next;
-    publish();
-  },
-  releaseOwner(owner: ForegroundOwner) {
-    const next = Object.fromEntries(
-      Object.entries(claims).filter(([, value]) => value !== owner),
-    );
-    if (Object.keys(next).length === Object.keys(claims).length) return;
-    claims = next;
-    publish();
-  },
-  rekey(oldKey: string, newKey: string) {
-    if (oldKey === newKey || claims[oldKey] === undefined) return;
-    const next = { ...claims };
-    const owner = next[oldKey];
-    delete next[oldKey];
-    next[newKey] = owner;
-    claims = next;
-    publish();
-  },
+const hostActions = {
   registerHost(owner: ForegroundOwner, el: HTMLElement | null) {
     hostTargets = { ...hostTargets, [owner]: el };
-    publish();
   },
   unregisterHost(owner: ForegroundOwner) {
     if (!(owner in hostTargets)) return;
     const next = { ...hostTargets };
     delete next[owner];
     hostTargets = next;
-    publish();
   },
 };
 
-let snapshot: TerminalForegroundRegistry = { ...actions, claims, hostTargets };
-
-function subscribe(listener: Listener): () => void {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
+function registry(state = useForegroundClaims.getState()): TerminalForegroundRegistry {
+  return { ...state, ...hostActions, hostTargets };
 }
 
 function useRegistry<T>(selector: (state: TerminalForegroundRegistry) => T): T {
-  const state = useSyncExternalStore(subscribe, () => snapshot, () => snapshot);
-  return selector(state);
+  return useForegroundClaims((state) => selector(registry(state)));
 }
 
 export const useTerminalForegroundStore = Object.assign(useRegistry, {
-  getState: () => snapshot,
+  getState: registry,
   setState: (next: Partial<TerminalForegroundRegistry>) => {
-    if (next.claims) claims = next.claims;
     if (next.hostTargets) hostTargets = next.hostTargets;
-    publish();
+    if (next.claims) useForegroundClaims.setState({ claims: next.claims });
   },
-  subscribe,
+  subscribe: useForegroundClaims.subscribe,
 });
 
 export function foregroundKey(

@@ -1,5 +1,5 @@
 import { isTauri } from "@tauri-apps/api/core";
-import { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import "xterm/css/xterm.css";
 
 import {
@@ -25,13 +25,7 @@ import {
 } from "./internal/nativeViewerFailure";
 import { nativeViewerSessionIsLive } from "./internal/nativeViewerSessionLiveness";
 import { ensureTerminalRunCreated } from "./internal/terminalRunCreation";
-import { currentTerminalRenderer } from "./ghostty-wasm/rendererSelection";
-
-// CODIN-1514 — keep the default renderer in its own chunk so Studio can paint
-// the workspace shell while the WASM terminal code loads.
-const GhosttyWasmTerminal = lazy(async () => ({
-  default: (await import("./ghostty-wasm/GhosttyWasmTerminal")).GhosttyWasmTerminal,
-}));
+import { currentTerminalRenderer } from "./internal/rendererSelection";
 
 const OWNER_LABEL: Record<ForegroundOwner, string> = {
   studio: "the fallback workspace",
@@ -61,21 +55,11 @@ export function Terminal({
     sessionId ? state.sessions[sessionId] ?? null : null,
   );
   const desktop = isTauri();
-  // CODIN-1514 — ghostty-wasm is the product default. Development builds may
-  // still force native or xterm for diagnostics.
-  const [rendererChoice] = useState(() => currentTerminalRenderer());
-  // The WASM renderer's failures stay out of `nativeFailure`: the
-  // window-scoped native recovery campaign reloads the WebView, which can
-  // neither produce a missing wasm artifact nor fix a Canvas renderer fault.
-  const [wasmFailure, setWasmFailure] = useState<{
-    sessionId: string | null;
-    reason: string;
-  } | null>(null);
-  const markWasmUnavailable = useCallback((reason: string) => {
-    setWasmFailure({ sessionId, reason });
-  }, [sessionId]);
-  const wasmFailureReason =
-    wasmFailure?.sessionId === sessionId ? wasmFailure.reason : null;
+  // CODING-1486 — embedded native libghostty is the desktop product default
+  // and xterm is its compatibility fallback; browser development renders with
+  // xterm. Development builds may still force the other renderer for
+  // diagnostics.
+  const [rendererChoice] = useState(() => currentTerminalRenderer(desktop));
   const [nativeAvailable, setNativeAvailable] = useState<boolean | null>(() =>
     desktop && rendererChoice === "native" ? null : false,
   );
@@ -142,28 +126,6 @@ export function Terminal({
   }
 
   if (
-    rendererChoice === "ghostty-wasm" &&
-    sessionId &&
-    session?.agentRunId &&
-    nativeViewerSessionIsLive(session.status) &&
-    !wasmFailureReason
-  ) {
-    return (
-      <Suspense
-        fallback={<div className="h-full w-full bg-inherit" data-testid="terminal-renderer-pending" />}
-      >
-        <GhosttyWasmTerminal
-          sessionId={sessionId}
-          agentRunId={session.agentRunId}
-          active={active}
-          focusSignal={focusSignal}
-          onUnavailable={markWasmUnavailable}
-        />
-      </Suspense>
-    );
-  }
-
-  if (
     rendererChoice === "native" &&
     desktop &&
     (nativeAvailable === null || !session?.agentRunId)
@@ -202,9 +164,6 @@ export function Terminal({
       focusSignal={focusSignal}
     />
   );
-  if (wasmFailureReason) {
-    return withFallbackNotice(fallback, wasmFailureReason, "Ghostty WASM");
-  }
   if (!nativeFailureReason) return fallback;
   return withFallbackNotice(fallback, nativeFailureReason, "Native terminal");
 }

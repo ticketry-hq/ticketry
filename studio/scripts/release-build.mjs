@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { inspectReleaseBundle } from "./release-bundle-inspection.mjs";
+import { resolveReleaseCommit } from "./release-provenance.mjs";
 
 // The update feed manifest keeps its own module; this re-export keeps one
 // release-script entry point for callers.
@@ -39,18 +40,13 @@ export function validateManifest(manifest) {
   requireArray(artifacts.frontend?.command, "artifacts.frontend.command");
   requireArray(artifacts.frontend?.required_outputs, "artifacts.frontend.required_outputs");
   const tauriCommand = requireArray(artifacts.tauri?.command, "artifacts.tauri.command");
-  if (!tauriCommand.includes("native-libghostty")) {
+  // CODING-1486 — native libghostty is a default feature of the shipping Cargo
+  // package, so the release command must not opt out of default features.
+  if (tauriCommand.some((argument) => argument.includes("--no-default-features"))) {
     throw new ReleaseManifestError(
-      "artifacts.tauri.command must enable the native-libghostty feature",
+      "artifacts.tauri.command must not disable default features; the release "
+      + "build ships native libghostty",
     );
-  }
-  for (const asset of [
-    "dist/ghostty-vt/ghostty-vt.wasm",
-    "dist/ghostty-vt/LICENSE",
-  ]) {
-    if (!artifacts.frontend.required_outputs.includes(asset)) {
-      throw new ReleaseManifestError(`artifacts.frontend.required_outputs must include ${asset}`);
-    }
   }
   requireValue(artifacts.tauri?.binary_name, "artifacts.tauri.binary_name");
   requireArray(artifacts.tauri?.bundle_formats, "artifacts.tauri.bundle_formats");
@@ -232,6 +228,23 @@ export function macosTauriBuildEnvironment(environment = process.env, { allowUns
   return { ...environment, CI: "true" };
 }
 
+export async function releaseTauriBuildEnvironment(
+  environment = process.env,
+  { allowUnsigned = false, allowDirty = false, capture = runCapture } = {},
+) {
+  let resolved;
+  try {
+    resolved = await resolveReleaseCommit(environment, capture, { allowDirty });
+  } catch (error) {
+    throw new ReleaseManifestError(error.message);
+  }
+  return {
+    ...macosTauriBuildEnvironment(environment, { allowUnsigned }),
+    TICKETRY_COMMIT: resolved,
+    ...(allowDirty ? { TICKETRY_ALLOW_DIRTY_BUILD: "true" } : {}),
+  };
+}
+
 export function tauriBuildArguments(manifest, target, environment = process.env, { allowUnsigned = false } = {}) {
   const [, ...tauriArgs] = manifest.artifacts.tauri.command;
   return [
@@ -330,15 +343,6 @@ export async function validateReleaseInputs(
   if (tauriConfiguration.bundle?.resources?.["vendor/libghostty/resources/"] !== "") {
     throw new ReleaseManifestError(
       "Tauri bundle must install the pinned libghostty resources at the macOS Resources root",
-    );
-  }
-  if (
-    !tauriConfiguration.app?.security?.csp?.["script-src"]
-      ?.split(/\s+/)
-      .includes("'wasm-unsafe-eval'")
-  ) {
-    throw new ReleaseManifestError(
-      "Tauri CSP must allow wasm-unsafe-eval for the Ghostty WASM renderer",
     );
   }
   const updaterEndpoint = tauriConfiguration.plugins?.updater?.endpoints?.[0];
@@ -681,9 +685,14 @@ export async function stageTarget(
 export async function buildRelease(
   manifest,
   targets,
-  { allowUnsigned = false, execute = run } = {},
+  { allowUnsigned = false, allowDirty = false, execute = run, capture = runCapture } = {},
 ) {
   validateMacOSReleaseEnvironment(process.env, { allowUnsigned });
+  const tauriEnvironment = await releaseTauriBuildEnvironment(process.env, {
+    allowUnsigned,
+    allowDirty,
+    capture,
+  });
   await validateReleaseInputs(manifest, studioRoot, {
     includeFrontendOutputs: false,
     allowUnsigned,
@@ -708,7 +717,7 @@ export async function buildRelease(
       tauriCommand,
       tauriBuildArguments(manifest, target, process.env, { allowUnsigned }),
       `Tauri build for ${target.id}`,
-      { environment: macosTauriBuildEnvironment(process.env, { allowUnsigned }) },
+      { environment: tauriEnvironment },
     );
     const artifacts = await bundleArtifacts(manifest, target, { allowUnsigned });
     await verifyMacOSBundle(manifest, target, artifacts, { allowUnsigned });
@@ -734,6 +743,7 @@ export function parseArguments(arguments_) {
   let target = "all";
   let validateOnly = false;
   let allowUnsigned = false;
+  let allowDirty = false;
   for (let index = 0; index < arguments_.length; index += 1) {
     const argument = arguments_[index];
     if (argument === "--target") {
@@ -743,16 +753,21 @@ export function parseArguments(arguments_) {
       validateOnly = true;
     } else if (argument === "--allow-unsigned") {
       allowUnsigned = true;
+    } else if (argument === "--allow-dirty") {
+      allowDirty = true;
     } else {
       throw new ReleaseManifestError(`Unknown release build option: ${argument}`);
     }
   }
   if (!target) throw new ReleaseManifestError("--target requires a manifest target id or all");
-  return { target, validateOnly, allowUnsigned };
+  if (allowDirty && !allowUnsigned) {
+    throw new ReleaseManifestError("--allow-dirty requires --allow-unsigned");
+  }
+  return { target, validateOnly, allowUnsigned, allowDirty };
 }
 
 async function main() {
-  const { target, validateOnly, allowUnsigned } = parseArguments(process.argv.slice(2));
+  const { target, validateOnly, allowUnsigned, allowDirty } = parseArguments(process.argv.slice(2));
   const manifest = await loadManifest();
   const targets = selectTargets(manifest, target);
   if (validateOnly) {
@@ -760,7 +775,7 @@ async function main() {
     console.log(`Release manifest is valid for: ${targets.map(({ id }) => id).join(", ")}`);
     return;
   }
-  await buildRelease(manifest, targets, { allowUnsigned });
+  await buildRelease(manifest, targets, { allowUnsigned, allowDirty });
   console.log(`Release ${manifest.release_version} built for: ${targets.map(({ id }) => id).join(", ")}`);
 }
 

@@ -1,25 +1,18 @@
 /**
  * One place that answers "is this element a terminal's keyboard target?".
  *
- * Both renderers park focus on a hidden element rather than on the drawing
- * surface: xterm builds its helper textarea inside `.xterm`, and the
- * ghostty-wasm surface creates a 1px textarea tagged
- * `data-testid="ghostty-wasm-input"`. Shell navigation needs to recognise
- * both — otherwise a focus-restoring effect blurs a terminal the user just
- * clicked into — so the selectors live here instead of being sprinkled
- * through the workspace shell.
+ * xterm parks focus on a helper textarea inside `.xterm` rather than on the
+ * drawing surface. Shell navigation needs to recognise it — otherwise a
+ * focus-restoring effect blurs a terminal the user just clicked into — so the
+ * selector lives here instead of being sprinkled through the workspace shell.
  */
 
-const GHOSTTY_WASM_INPUT_SELECTOR = '[data-testid="ghostty-wasm-input"]';
 const XTERM_SELECTOR = ".xterm";
 
 /** True when `element` is (or sits inside) a terminal's keyboard target. */
 export function isTerminalInputElement(element: unknown): boolean {
   if (!(element instanceof Element)) return false;
-  return (
-    element.closest(GHOSTTY_WASM_INPUT_SELECTOR) !== null ||
-    element.closest(XTERM_SELECTOR) !== null
-  );
+  return element.closest(XTERM_SELECTOR) !== null;
 }
 
 /**

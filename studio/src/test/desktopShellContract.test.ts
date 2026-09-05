@@ -76,7 +76,6 @@ describe("desktop shell security contract", () => {
         "allow-desktop-preflight-report",
         "allow-desktop-approve-executable-path",
         "allow-desktop-launch-default-coding-agent",
-        "allow-desktop-ghostty-vt-artifact",
         "allow-desktop-update-check",
         "allow-desktop-update-download-and-install",
         "allow-desktop-update-restart",
@@ -105,6 +104,9 @@ describe("desktop shell security contract", () => {
         "core:webview:allow-set-webview-zoom",
       ],
     });
+    // CODING-1487 — the retired WASM renderer was the only caller that needed
+    // a prepared artifact from the desktop host; no command serves it now.
+    expect(JSON.stringify(capability)).not.toContain("ghostty-vt");
     expect(JSON.stringify(capability)).not.toContain("remote");
     expect(JSON.stringify(capability)).not.toContain("shell");
     expect(JSON.stringify(capability)).not.toContain("dialog:");
@@ -263,7 +265,7 @@ describe("desktop shell security contract", () => {
     expect(presenter).toContain("onUnavailable={markNativeUnavailable}");
   });
 
-  it("initializes packaged libghostty from Ticketry's bundled resources", async () => {
+  it("initializes retained native libghostty from its prepared resources", async () => {
     const runtime = await text("../../src-tauri/native/libghostty_runtime.m");
 
     expect(runtime).toContain('setenv("GHOSTTY_RESOURCES_DIR"');
@@ -407,10 +409,10 @@ describe("desktop shell security contract", () => {
       "desktop:deploy": "node scripts/desktop-deploy.mjs",
       "release:build": "node scripts/release-build.mjs",
       "release:validate": "node scripts/release-build.mjs --validate",
-      "release:test": "node --test scripts/release-build.test.mjs scripts/desktop-deploy.test.mjs scripts/installed-artifact-acceptance.test.mjs scripts/installed-artifact-acceptance-driver.test.mjs scripts/packaged-update-build.test.mjs scripts/packaged-update-feed.test.mjs scripts/packaged-update-acceptance.test.mjs scripts/packaged-update-acceptance-command.test.mjs scripts/packaged-update-acceptance-environment.test.mjs scripts/packaged-update-acceptance-driver.test.mjs scripts/packaged-update-acceptance-runner.test.mjs scripts/packaged-update-webdriver.test.mjs scripts/release-publish.test.mjs scripts/public-update-publisher.test.mjs scripts/update-acceptance.test.mjs scripts/update-acceptance-driver.test.mjs",
+      "release:test": "node --test scripts/release-build.test.mjs scripts/release-provenance.test.mjs scripts/desktop-deploy.test.mjs scripts/installed-artifact-acceptance.test.mjs scripts/installed-artifact-acceptance-driver.test.mjs scripts/packaged-update-build.test.mjs scripts/packaged-update-feed.test.mjs scripts/packaged-update-acceptance.test.mjs scripts/packaged-update-acceptance-command.test.mjs scripts/packaged-update-acceptance-environment.test.mjs scripts/packaged-update-acceptance-driver.test.mjs scripts/packaged-update-acceptance-runner.test.mjs scripts/packaged-update-webdriver.test.mjs scripts/release-publish.test.mjs scripts/public-update-publisher.test.mjs scripts/update-acceptance.test.mjs scripts/update-acceptance-driver.test.mjs",
       "release:acceptance": "node scripts/installed-artifact-acceptance.mjs",
       "release:acceptance:update": "node scripts/packaged-update-acceptance.mjs",
-      "desktop:smoke": "vitest run src/test/desktopShellContract.test.ts && node --test scripts/desktop-concurrent-smoke.test.mjs && node scripts/desktop-smoke.mjs && cargo test --manifest-path src-tauri/Cargo.toml",
+      "desktop:smoke": "vitest run src/test/desktopShellContract.test.ts src/test/nativeLibghosttyShippingContract.test.ts && node --test scripts/desktop-concurrent-smoke.test.mjs && node scripts/desktop-smoke.mjs && cargo test --manifest-path src-tauri/Cargo.toml",
       "desktop:smoke:dev": "node scripts/desktop-smoke.mjs dev",
       "desktop:smoke:packaged": "node scripts/desktop-smoke.mjs packaged",
     });
@@ -424,6 +426,13 @@ describe("desktop shell security contract", () => {
       active: true,
       targets: ["app", "dmg"],
       icon: ["icons/icon.icns", "icons/icon.png"],
+      // CODING-1486 — the shipping desktop renderer is embedded native
+      // libghostty, so its configuration and pinned runtime resources are
+      // bundle contents, not a development-only extra.
+      resources: {
+        "native/ticketry-ghostty.conf": "ticketry-ghostty.conf",
+        "vendor/libghostty/resources/": "",
+      },
       externalBin: ["binaries/ticketry-hook"],
       macOS: {
         minimumSystemVersion: "11.0",

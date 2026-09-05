@@ -27,10 +27,6 @@ export function attachToRun(args: OpenSessionArgs & { agentRunId: string }): Ses
   return launchAgent(args);
 }
 
-export function closeTerminal(sessionId: SessionId): void {
-  useTerminalStore.getState().closeTab(sessionId);
-}
-
 export function ackTerminal(
   tempId: SessionId,
   sessionId: SessionId,

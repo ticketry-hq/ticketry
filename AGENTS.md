@@ -61,14 +61,21 @@ Apollo's `InMemoryCache` is the frontend's one state owner for server records
 and client-only state. Selector and persistence adapters may write cache rows,
 but must not retain a second application-state snapshot.
 
-Keep the Tauri/webview boundary narrow. `ghostty-wasm` is the terminal renderer
-in browser, development desktop, and packaged desktop builds. It draws pinned
-libghostty-vt frames on a Canvas surface inside the webview; prepare its artifact
-with `npm run ghostty-vt:prepare --workspace @worktracker/studio`. xterm is the
-compatibility fallback. tmux remains responsible for durable sessions, and a
-renderer change must not change a run, tmux session identity, or persisted
-terminal record. Native libghostty remains only as non-shipping migration code
-until a separate cleanup removes it.
+Keep the Tauri/webview boundary narrow. Embedded native libghostty is the
+terminal renderer in development desktop and packaged desktop builds. It runs
+the validated tmux attach command in its own PTY and draws in a native view
+inside the Ticketry window, so terminal output stays out of the webview;
+lifecycle, layout, visibility and focus control messages still use IPC. It links
+from the shipping Cargo package's default features, and `npm run
+libghostty:prepare --workspace @worktracker/studio` stages the pinned static
+library that every desktop and release build needs. Browser development renders
+with xterm over the `browserTerminalClient` WebSocket adapter to the Rust
+terminal adapter. xterm is also the compatibility fallback everywhere, including
+when native rendering is unavailable or fails. CODING-1487 removed the
+`ghostty-wasm` renderer, its prepare hooks, and its selectable override; the
+snapshot and recovery steps are in `docs/archive/ghostty-wasm-restore.md`. tmux
+remains responsible for durable sessions, and a renderer change must not change
+a run, tmux session identity, or persisted terminal record.
 
 Development data must remain isolated from live application data. Generated
 databases, caches, native libraries, and build output must not be

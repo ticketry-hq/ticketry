@@ -65,7 +65,6 @@ export function NativeGhosttyTerminal({
   onReady?: () => void;
   onUnavailable?: (reason: string) => void;
   onVisibilityPendingChange?: (runId: string, pending: boolean) => void;
-  /** CODING-1391 comparison spike: keep this native view below the WebView. */
   webviewSiblingSpike?: boolean;
 }) {
   const sessions = useTerminalStore((state) => state.sessions);
@@ -81,6 +80,10 @@ export function NativeGhosttyTerminal({
   const blockingHideCountRef = useRef(0);
   modalOpenRef.current = modalOpen;
   activeRef.current = active;
+  // The one presentation gate, re-read at commit time by every queued show.
+  const shouldPresentRef = useRef<() => boolean>(() => false);
+  shouldPresentRef.current = () =>
+    visibleRef.current && (webviewSiblingSpike || !modalOpenRef.current);
 
   const session = sessions[sessionId] ?? null;
   const runId = session?.agentRunId ?? null;
@@ -130,6 +133,16 @@ export function NativeGhosttyTerminal({
     if (presentedHere && visible && runId) reportNativeRenderSuccess(runId);
   }, [presentedHere, runId, visible]);
 
+  useNativeWebViewSiblingInteraction(
+    sharedHandle,
+    hostRef,
+    webviewSiblingSpike && visible && presentedHere,
+    modalOpen,
+    (error) => {
+      if (runId) failNativeViewerMount(runId, nativeFailureMessage(error));
+    },
+  );
+
   useNativeViewerFocusRegistration({
     sessionId,
     handle: sharedHandle,
@@ -151,7 +164,7 @@ export function NativeGhosttyTerminal({
     currentHandleRef: presentedHandleRef,
     presented: presentedHere,
     visible,
-    modalOpen,
+    modalOpen: modalOpen && !webviewSiblingSpike,
     onFailure: (error) => {
       console.error("native libghostty frame update failed", error);
       if (runId) failNativeViewerMount(runId, nativeFailureMessage(error));
@@ -165,15 +178,6 @@ export function NativeGhosttyTerminal({
     visible,
     modalOpen,
   });
-  useNativeWebViewSiblingInteraction(
-    sharedHandle,
-    hostRef,
-    webviewSiblingSpike && visible && presentedHere,
-    modalOpen,
-    (error) => {
-      if (runId) failNativeViewerMount(runId, nativeFailureMessage(error));
-    },
-  );
 
   useLayoutEffect(() => {
     const handle = sharedHandle;
@@ -208,11 +212,12 @@ export function NativeGhosttyTerminal({
           return null;
         })
       : showNativeViewer(runId, handle, async () => {
-          // Re-read presentation intent at commit time. This closure is queued
-          // behind every other retained hide/show, so a modal opened (or the
-          // surface deactivated) while it waited must cancel the reveal rather
-          // than uncover a native island over the dialog.
-          if (modalOpenRef.current || !visibleRef.current) return null;
+          // Re-read presentation intent at commit time with the same gate the
+          // lifecycle's first show uses. This closure is queued behind every
+          // other retained hide/show, so a surface deactivated while it waited
+          // cancels the reveal. A modal cancels it only off the sibling path:
+          // as a WebView sibling the viewer presents beneath the dialog.
+          if (!shouldPresentRef.current()) return null;
           const host = hostRef.current;
           if (!host) return null;
           const frame = clippedNativeTerminalFrame(host);
@@ -276,10 +281,9 @@ export function NativeGhosttyTerminal({
       sessionId,
       token,
       host: () => hostRef.current,
-      shouldPresent: () =>
-        visibleRef.current && (webviewSiblingSpike || !modalOpenRef.current),
+      shouldPresent: () => shouldPresentRef.current(),
     });
-  }, [mayOwnAttachment, retained, runId, sessionId, token, webviewSiblingSpike]);
+  }, [mayOwnAttachment, retained, runId, sessionId, token]);
 
   const presentedElsewhere = session !== null && resolvedOwner !== owner;
   return (

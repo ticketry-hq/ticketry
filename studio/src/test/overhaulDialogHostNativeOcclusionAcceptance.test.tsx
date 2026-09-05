@@ -102,6 +102,11 @@ function PanelShellStudio() {
   );
 }
 
+// A zero-size host yields no clipped frame, so the lifecycle's first show is
+// deferred exactly as it is when a run attaches before its panel has laid out.
+let hostHasFrame = true;
+let deferFirstShow = false;
+
 describe("overhaul acceptance — DialogHost confirms over a native viewer", () => {
   beforeEach(() => {
     vi.resetAllMocks();
@@ -118,17 +123,23 @@ describe("overhaul acceptance — DialogHost confirms over a native viewer", () 
           }),
       ),
     );
-    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
-      x: 0,
-      y: 0,
-      top: 0,
-      left: 0,
-      right: 800,
-      bottom: 600,
-      width: 800,
-      height: 600,
-      toJSON: () => ({}),
-    });
+    hostHasFrame = true;
+    deferFirstShow = false;
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(
+      () => {
+        const edge = hostHasFrame ? { right: 800, bottom: 600 } : { right: 0, bottom: 0 };
+        return {
+          x: 0,
+          y: 0,
+          top: 0,
+          left: 0,
+          width: edge.right,
+          height: edge.bottom,
+          toJSON: () => ({}),
+          ...edge,
+        };
+      },
+    );
     Object.defineProperty(window, "innerWidth", { value: 800, configurable: true });
     Object.defineProperty(window, "innerHeight", { value: 600, configurable: true });
 
@@ -158,6 +169,12 @@ describe("overhaul acceptance — DialogHost confirms over a native viewer", () 
     tauri.invoke.mockImplementation(
       async (command: string, args?: Record<string, unknown>) => {
         if (command === "native_terminal_available") return true;
+        if (command === "native_terminal_attach" && deferFirstShow) {
+          // The panel loses its frame between attach and first show — the
+          // lifecycle attaches, then finds nothing to present into.
+          hostHasFrame = false;
+          deferFirstShow = false;
+        }
         if (
           command === "native_terminal_attach" ||
           command === "native_terminal_show" ||
@@ -240,6 +257,47 @@ describe("overhaul acceptance — DialogHost confirms over a native viewer", () 
     expect(shows()[0]).toEqual({ handle: "native-shell", frame: FRAME });
     expect(presented()).toBe(true);
     expect(invocations("native_terminal_attach")).toHaveLength(1);
+
+    view.unmount();
+  });
+
+  it("[overhaul-118-deferred] presents a late-attaching panel viewer beneath an open Settings modal without waiting for it to close (CODING-1500)", async () => {
+    act(() => useModalStore.getState().openSettings());
+    expect(useModalStore.getState().modalStack).toHaveLength(1);
+
+    // The host loses its frame right after attach: the lifecycle's first
+    // show finds nothing to present into and defers.
+    deferFirstShow = true;
+    const view = render(<Terminal sessionId="shell-1" owner="panel" active />);
+    await waitFor(() => {
+      expect(invocations("native_terminal_attach")).toHaveLength(1);
+    });
+    await act(async () => {});
+    expect(shows()).toHaveLength(0);
+    expect(presented()).toBe(false);
+
+    // The host lays out and the surface re-commits visibility while Settings
+    // is still up. On the sibling path the modal is not an occluder, so the
+    // queued reveal must present beneath the dialog rather than cancel.
+    hostHasFrame = true;
+    view.rerender(<Terminal sessionId="shell-1" owner="panel" active={false} />);
+    view.rerender(<Terminal sessionId="shell-1" owner="panel" active />);
+    await waitFor(() => {
+      expect(shows()).toHaveLength(1);
+    });
+    expect(shows()[0]).toEqual({ handle: "native-shell", frame: FRAME });
+    expect(useModalStore.getState().modalStack).toHaveLength(1);
+    await waitFor(() => {
+      expect(presented()).toBe(true);
+    });
+    expect(hides()).toHaveLength(0);
+
+    // Closing Settings changes nothing: the viewer was already on screen.
+    act(() => useModalStore.getState().popModal());
+    await act(async () => {});
+    expect(shows()).toHaveLength(1);
+    expect(hides()).toHaveLength(0);
+    expect(presented()).toBe(true);
 
     view.unmount();
   });

@@ -6,17 +6,18 @@
  * renders from the client store's dialog bus (Delete issue, Discard document).
  * What is asserted here is that the occlusion rule is the OR over both surfaces
  * — a confirm raised while the terminal panel presents a native shell viewer
- * hides that viewer without tearing it down, keeps it hidden while the confirm
- * is up, and reveals the same handle against a fresh measurement once the
- * person answers.
+ * hands input to the WebView without hiding or tearing the viewer down, keeps
+ * it presented and focus-free while the confirm is up, and leaves its measured
+ * frame untouched once the person answers. `DialogHost` is the only coverage
+ * of the dialog-bus branch of `modalOcclusionActive`, so the case stays here.
  */
 
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DialogHost } from "../app/shell/DialogHost";
 import { useModalStore } from "../app/modal/modalStore";
-import { NativeGhosttyTerminal } from "../features/agents/terminal/NativeGhosttyTerminal";
+import { Terminal } from "../features/agents/terminal/Terminal";
 import { useTerminalForegroundStore } from "../features/agents/terminal/internal/foregroundStore";
 import { useTerminalStore } from "../features/agents/terminal/internal/sessionStore";
 import { focusTerminal } from "../features/agents/terminal/internal/terminalRegistry";
@@ -76,11 +77,26 @@ function shows(): Record<string, unknown>[] {
   );
 }
 
-/** The bottom terminal panel's presented shell viewer. */
+function interactions(): Record<string, unknown>[] {
+  return invocations("native_terminal_set_webview_interaction").filter(
+    (args) => args.handle === "native-shell",
+  );
+}
+
+function presented(): boolean {
+  return screen
+    .getByTestId("native-terminal-host")
+    .hasAttribute("data-native-terminal-presented");
+}
+
+/**
+ * The bottom terminal panel's presented shell viewer, through the production
+ * `Terminal` surface (native libghostty as a WebView sibling).
+ */
 function PanelShellStudio() {
   return (
     <>
-      <NativeGhosttyTerminal sessionId="shell-1" owner="panel" />
+      <Terminal sessionId="shell-1" owner="panel" />
       <DialogHost />
     </>
   );
@@ -89,6 +105,7 @@ function PanelShellStudio() {
 describe("overhaul acceptance — DialogHost confirms over a native viewer", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    window.history.replaceState({}, "", "/?terminalRenderer=native");
     installDesktopGraphQlRuntime();
     vi.stubGlobal("ResizeObserver", ResizeObserverStub);
     vi.stubGlobal(
@@ -166,11 +183,18 @@ describe("overhaul acceptance — DialogHost confirms over a native viewer", () 
     vi.unstubAllGlobals();
   });
 
-  it("[overhaul-118-dialog] hides a presented panel viewer for a DialogHost confirm and reveals it again when the confirm is answered", async () => {
+  it("[overhaul-118-dialog] keeps a presented panel viewer on screen under a DialogHost confirm, hands input to the WebView, and leaves its frame untouched when the confirm is answered", async () => {
     const view = render(<PanelShellStudio />);
 
     await waitFor(() => {
       expect(shows()).toHaveLength(1);
+    });
+    expect(presented()).toBe(true);
+
+    // The viewer owns input before the confirm is raised.
+    fireEvent.pointerDown(screen.getByTestId("native-terminal-host"));
+    await waitFor(() => {
+      expect(interactions().at(-1)).toMatchObject({ webviewFocus: false });
     });
 
     // The Details tab's delete path: a confirm raised on the client store's
@@ -188,14 +212,16 @@ describe("overhaul acceptance — DialogHost confirms over a native viewer", () 
     const dialog = await screen.findByRole("dialog", { name: "Delete issue" });
     expect(useModalStore.getState().modalStack).toHaveLength(0);
 
-    // The native viewer is hidden — presentation only, no teardown.
+    // Input moves to the WebView; the viewer is neither hidden nor torn down.
     await waitFor(() => {
-      expect(hides()).toHaveLength(1);
+      expect(interactions().at(-1)).toMatchObject({ webviewFocus: true });
     });
+    expect(hides()).toHaveLength(0);
+    expect(presented()).toBe(true);
     expect(invocations("native_terminal_detach")).toHaveLength(0);
     expect(invocations("native_terminal_attach")).toHaveLength(1);
 
-    // While the confirm is up the hidden viewer takes no focus either.
+    // While the confirm is up the viewer takes no focus.
     act(() => focusTerminal("shell-1"));
     expect(invocations("native_terminal_focus")).toHaveLength(0);
 
@@ -205,12 +231,14 @@ describe("overhaul acceptance — DialogHost confirms over a native viewer", () 
     });
     await expect(answer!).resolves.toBe(true);
 
-    // Answering the confirm empties the last overlay surface, so the same
-    // handle comes back measured against its current host.
-    await waitFor(() => {
-      expect(shows()).toHaveLength(2);
-    });
-    expect(shows().at(-1)).toEqual({ handle: "native-shell", frame: FRAME });
+    // Nothing was hidden, so nothing is re-shown, the measured frame is
+    // unchanged, and focus is not stolen back into the viewer.
+    await act(async () => {});
+    expect(hides()).toHaveLength(0);
+    expect(invocations("native_terminal_focus")).toHaveLength(0);
+    expect(shows()).toHaveLength(1);
+    expect(shows()[0]).toEqual({ handle: "native-shell", frame: FRAME });
+    expect(presented()).toBe(true);
     expect(invocations("native_terminal_attach")).toHaveLength(1);
 
     view.unmount();

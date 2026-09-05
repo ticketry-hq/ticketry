@@ -1,7 +1,9 @@
-import { act, render, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { NativeGhosttyTerminal } from "../features/agents/terminal/NativeGhosttyTerminal";
+import { Terminal } from "../features/agents/terminal/Terminal";
+import { focusTerminal } from "../features/agents/terminal/internal/terminalRegistry";
 import { useModalStore } from "../app/modal/modalStore";
 import { useTerminalForegroundStore } from "../features/agents/terminal/internal/foregroundStore";
 import { useTerminalStore } from "../features/agents/terminal/internal/sessionStore";
@@ -138,22 +140,19 @@ describe("native viewer attachment acceptance", () => {
     view.unmount();
 
     const { readFile } = await import("node:fs/promises");
-    const [runtimeSource, viewSource, themeSource, tauriConfig] = await Promise.all([
+    const [runtimeSource, viewSource, themeSource] = await Promise.all([
       readFile(`${process.cwd()}/src-tauri/native/libghostty_runtime.m`, "utf8"),
       readFile(`${process.cwd()}/src-tauri/native/libghostty_view.m`, "utf8"),
       readFile(`${process.cwd()}/src-tauri/native/ticketry-ghostty.conf`, "utf8"),
-      readFile(`${process.cwd()}/src-tauri/tauri.conf.json`, "utf8"),
     ]);
     expect(themeSource).toContain("background = #111317");
-    expect(tauriConfig).toContain('"native/ticketry-ghostty.conf"');
-    expect(tauriConfig).toContain('"vendor/libghostty/resources/"');
     expect(runtimeSource).toContain("load_ticketry_ghostty_theme(runtime->config)");
     expect(runtimeSource).toContain("ghostty_config_load_file(config");
     expect(runtimeSource).toContain("ticketry_ghostty_background_is_configured");
     expect(viewSource).toContain("muxed_ghostty_background_color().CGColor");
   });
 
-  it("[overhaul-66] hides Ghostty behind Studio modals and restores its measured pane", async () => {
+  it("[overhaul-66] keeps Ghostty presented behind Studio modals, hands input to the WebView, and leaves its measured pane untouched", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () =>
@@ -163,41 +162,62 @@ describe("native viewer attachment acceptance", () => {
         }),
       ),
     );
-    const ready = vi.fn();
-    const view = render(
-      <NativeGhosttyTerminal
-        sessionId="session-1"
-        owner="studio"
-        onReady={ready}
-      />,
-    );
-    await waitFor(() => expect(ready).toHaveBeenCalledOnce());
+    const calls = (command: string) =>
+      tauri.invoke.mock.calls
+        .filter((call) => call[0] === command && (call[1] as { handle?: string })?.handle === "native-1")
+        .map((call) => call[1] as Record<string, unknown>);
+    const presented = () =>
+      screen.getByTestId("native-terminal-host").hasAttribute("data-native-terminal-presented");
+
+    // The production surface: `Terminal` renders native libghostty as a
+    // WebView sibling. Never mount `NativeGhosttyTerminal` directly here.
+    const view = render(<Terminal sessionId="session-1" owner="studio" />);
+    await waitFor(() => expect(calls("native_terminal_show")).toHaveLength(1));
+    expect(presented()).toBe(true);
+
+    // The viewer owns input before the modal opens.
+    fireEvent.pointerDown(screen.getByTestId("native-terminal-host"));
+    await waitFor(() => {
+      expect(calls("native_terminal_set_webview_interaction").at(-1)).toMatchObject({
+        webviewFocus: false,
+      });
+    });
 
     act(() => {
       useModalStore.setState({ modalStack: [{ type: "settings" }] });
     });
+    // Input moves to the WebView; the viewer stays presented and is not hidden.
     await waitFor(() => {
-      expect(tauri.invoke).toHaveBeenCalledWith("native_terminal_hide", {
-        handle: "native-1",
+      expect(calls("native_terminal_set_webview_interaction").at(-1)).toMatchObject({
+        webviewFocus: true,
       });
     });
+    expect(calls("native_terminal_hide")).toHaveLength(0);
+    expect(presented()).toBe(true);
+    act(() => focusTerminal("session-1"));
+    expect(calls("native_terminal_focus")).toHaveLength(0);
 
     act(() => {
       useModalStore.setState({ modalStack: [] });
     });
-    await waitFor(() => {
-      expect(tauri.invoke).toHaveBeenCalledWith("native_terminal_show", {
-        handle: "native-1",
-        frame: {
-          x: 0,
-          y: 0,
-          width: 800,
-          height: 600,
-          viewportWidth: 800,
-          viewportHeight: 600,
-        },
-      });
+    // Closing changes nothing about presentation: no re-show, same frame, and
+    // focus is not stolen back into the viewer.
+    await act(async () => {});
+    expect(calls("native_terminal_hide")).toHaveLength(0);
+    expect(calls("native_terminal_focus")).toHaveLength(0);
+    expect(calls("native_terminal_show")).toHaveLength(1);
+    expect(calls("native_terminal_show")[0]).toEqual({
+      handle: "native-1",
+      frame: {
+        x: 0,
+        y: 0,
+        width: 800,
+        height: 600,
+        viewportWidth: 800,
+        viewportHeight: 600,
+      },
     });
+    expect(presented()).toBe(true);
     view.unmount();
   });
 
@@ -286,7 +306,7 @@ describe("native viewer attachment acceptance", () => {
       /muxed_ghostty_view_present[\s\S]{0,500}_reportsGridResize = YES[\s\S]{0,180}\[view reportGridResize\]/,
     );
     expect(viewBridgeSource).toMatch(
-      /muxed_ghostty_view_hide[\s\S]{0,180}_reportsGridResize = NO/,
+      /void muxed_ghostty_view_hide\([^}]*_reportsGridResize = NO/,
     );
     expect(bridgeSource).toContain("Some(report_grid_resize)");
     expect(bridgeSource).toContain(
@@ -297,7 +317,7 @@ describe("native viewer attachment acceptance", () => {
     );
   });
 
-  it("[overhaul-232] gives captured wheel gestures to the program and keeps shell scrollback in tmux", async () => {
+  it("[overhaul-232] [overhaul-230] gives captured wheel gestures to the program and keeps shell scrollback in tmux", async () => {
     const { readFile } = await import("node:fs/promises");
     const viewSource = await readFile(
       `${process.cwd()}/src-tauri/native/libghostty_view.m`,

@@ -544,14 +544,14 @@ class BoundaryFixture implements StudioFixture {
     }
     if (documentOperationName(document) === "WorkTrackerWorkItem") {
       const item = fixtureItem(input.id);
-      return { work_item: { nodes: item ? [issueRow(item)] : [] } } as TResult;
+      return { work_item: { __typename: "WorktrackerIssueConnection", nodes: item ? [issueRow(item)] : [] } } as TResult;
     }
     if (documentOperationName(document) === "WorkTrackerWorkItemByKey") {
       const item = [...this.items.values()].find((candidate) =>
         candidate.sequence_id === input.sequenceId
         && candidate.key.split("-")[0]?.toUpperCase() === input.projectSlug,
       );
-      return { work_item: { nodes: item ? [issueRow(item)] : [] } } as TResult;
+      return { work_item: { __typename: "WorktrackerIssueConnection", nodes: item ? [issueRow(item)] : [] } } as TResult;
     }
     if (documentOperationName(document) === "WorkTrackerAttachments") {
       const issueKey = fixtureKey(this.attachmentRows, input.issueId);

@@ -115,9 +115,18 @@ unsafe extern "C" fn report_studio_chord(context: *mut c_void, chord: u8) {
     sink.report(chord);
 }
 
-unsafe extern "C" fn report_process_exit(context: *mut c_void, _exit_code: u32) {
+unsafe extern "C" fn report_process_exit(context: *mut c_void, exit_code: u32) {
     if context.is_null() {
         return;
+    }
+    let log = ticketry_diagnostics::process_file_log();
+    if log.is_enabled() {
+        let _ = log.record(
+            "native-terminal",
+            "warn",
+            "attachment-process-exit",
+            serde_json::json!({ "exitCode": exit_code }),
+        );
     }
     let worker = unsafe { &*(context as *const mpsc::Sender<NativeViewerCommand>) };
     let _ = worker.send(NativeViewerCommand::AttachmentExited);

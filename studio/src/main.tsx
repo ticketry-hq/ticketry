@@ -25,6 +25,7 @@ import "./app/styles/tailwind.css";
 import "./app/styles/studio-surface.css";
 import { createDesktopRuntime } from "./runtime/desktopRuntime";
 import { suppressNativeContextMenu } from "./app/startup/suppressNativeContextMenu";
+import { reportPendingStudioReload } from "./app/startup/reloadStudio";
 import {
   initializeBrowserRuntime,
   initializeStudioRuntime,
@@ -60,6 +61,7 @@ async function startStudio(): Promise<void> {
       await installWebFileLogging();
       initializeBrowserRuntime();
     }
+    reportPendingStudioReload();
     setLaunchDiscoveryRuntimeInstance(runtimeConfiguration().runtimeInstance ?? null);
     root.render(
       <React.StrictMode>

@@ -4,7 +4,7 @@ import {
   type ServiceHealth,
   type StudioRuntime,
 } from "../../runtime";
-import { reloadStudio } from "./reloadStudio";
+import { reloadStudio, type StudioReloadCause } from "./reloadStudio";
 import { SettingsAccess } from "./SettingsAccess";
 
 export function ServiceHealthGate({
@@ -14,7 +14,7 @@ export function ServiceHealthGate({
 }: {
   children: ReactNode;
   runtime?: StudioRuntime;
-  reload?: () => void;
+  reload?: (cause: StudioReloadCause) => void;
 }) {
   const initialHealth = runtime.startup().serviceHealth;
   const [health, setHealth] = useState(initialHealth);
@@ -33,7 +33,7 @@ export function ServiceHealthGate({
 
       if (recoveryObserved.current) {
         recoveryObserved.current = false;
-        reload();
+        reload({ source: "service-health-recovered", details: nextHealth });
       }
     }), [reload, runtime]);
 
@@ -105,7 +105,7 @@ export function ServiceHealthGate({
         <p className="mt-2 text-sm text-text-muted">
           {recovering
             ? "Studio will refresh when the local server is ready."
-            : "Studio opens after snapshot verification, event publication, and runtime reconciliation finish."}
+            : "Studio opens after snapshot verification and event publication finish. Terminal recovery finishes behind the open window."}
         </p>
         {!recovering && (
           <p className="mt-2 text-sm text-text-muted">

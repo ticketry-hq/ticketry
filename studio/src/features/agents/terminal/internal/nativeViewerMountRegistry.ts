@@ -1,5 +1,9 @@
 import { useEffect, useRef, useSyncExternalStore } from "react";
 
+import {
+  recordNativeViewerFailureEvidence,
+  type NativeViewerFailureReport,
+} from "./nativeViewerFailureEvidence";
 import { nativeViewerSessionIsLive } from "./nativeViewerSessionLiveness";
 import { useTerminalStore } from "./sessionStore";
 
@@ -163,8 +167,17 @@ export function beginNativeViewerRelease(runId: string, token: symbol): void {
   publish();
 }
 
-export function failNativeViewerMount(runId: string, reason: string): void {
+export function failNativeViewerMount(
+  runId: string,
+  reason: string,
+  evidence: Omit<NativeViewerFailureReport, "reason"> = { origin: "unspecified" },
+): void {
   watchSessionLiveness();
+  recordNativeViewerFailureEvidence(runId, {
+    ...evidence,
+    reason,
+    handle: evidence.handle ?? entries.get(runId)?.handle ?? null,
+  });
   if (!failedRuns.has(runId)) {
     failedRuns.set(runId, reason);
     publish();

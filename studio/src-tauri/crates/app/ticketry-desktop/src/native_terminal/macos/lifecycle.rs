@@ -52,6 +52,13 @@ fn spawn_worker(setup: WorkerSetup) {
     thread::spawn(move || match run_native_worker(control, &commands) {
         NativeWorkerExit::AttachmentExited => {
             let phase = preparation_phase.swap(FAILED, Ordering::AcqRel);
+            record_native_terminal_exit(
+                "attachment-process-exited",
+                &handle,
+                &run_id,
+                phase,
+                None,
+            );
             if phase == PRESENTED {
                 close_worker_entry(&entries, &ordering, &window, &handle);
             }
@@ -66,6 +73,13 @@ fn spawn_worker(setup: WorkerSetup) {
         }
         NativeWorkerExit::ResizeFailed(reason) => {
             let phase = preparation_phase.swap(FAILED, Ordering::AcqRel);
+            record_native_terminal_exit(
+                "resize-failed",
+                &handle,
+                &run_id,
+                phase,
+                Some(&reason),
+            );
             if phase == PRESENTED {
                 close_worker_entry(&entries, &ordering, &window, &handle);
             }
@@ -80,6 +94,37 @@ fn spawn_worker(setup: WorkerSetup) {
         }
         NativeWorkerExit::Detached | NativeWorkerExit::CommandsDisconnected => {}
     });
+}
+
+/// Evidence for the desktop file log: the WebView reloads itself after a
+/// native failure, so the cause has to be recorded on this side as well.
+fn record_native_terminal_exit(
+    event: &str,
+    handle: &str,
+    run_id: &str,
+    phase_before: u8,
+    reason: Option<&str>,
+) {
+    let log = ticketry_diagnostics::process_file_log();
+    if !log.is_enabled() {
+        return;
+    }
+    let phase = match phase_before {
+        PREPARING => "preparing",
+        PRESENTED => "presented",
+        _ => "failed",
+    };
+    let _ = log.record(
+        "native-terminal",
+        "warn",
+        &format!("worker-exit.{event}"),
+        serde_json::json!({
+            "handle": handle,
+            "runId": run_id,
+            "phaseBefore": phase,
+            "reason": reason,
+        }),
+    );
 }
 
 /// Builds the sink that forwards each recognised Studio chord to the WebView.

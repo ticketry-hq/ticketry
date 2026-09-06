@@ -1,4 +1,8 @@
-import { reloadStudio } from "../../../../app/startup/reloadStudio";
+import {
+  reloadStudio,
+  type StudioReloadCause,
+} from "../../../../app/startup/reloadStudio";
+import { nativeViewerFailureEvidence } from "./nativeViewerFailureEvidence";
 import {
   clearNativeRenderRecoveryAttempt,
   readNativeRenderRecoveryAttempt,
@@ -49,7 +53,9 @@ let timer: ReturnType<typeof setTimeout> | null = null;
  * reload a terminal that has recovered in the meantime.
  */
 let campaign = 0;
-let reload: () => void = reloadStudio;
+let reload: (cause: StudioReloadCause) => void = reloadStudio;
+/** Every failure report of the current campaign, in order — reload evidence. */
+let reports: { at: string; runId: string; reason: string; attempt: number }[] = [];
 /**
  * The mounted terminal surfaces currently stranded on the compatibility
  * renderer, as `report token → run`. A failure report can never repeat itself:
@@ -63,7 +69,7 @@ let nextFailureToken = 0;
 
 /** Replaces the reload boundary for tests. Returns the restore function. */
 export function configureNativeRenderRecovery(overrides: {
-  reload: () => void;
+  reload: (cause: StudioReloadCause) => void;
 }): () => void {
   const previous = reload;
   reload = overrides.reload;
@@ -86,6 +92,7 @@ export function resetNativeRenderRecovery(): void {
   timer = null;
   campaign += 1;
   failingSurfaces.clear();
+  reports = [];
   clearNativeRenderRecoveryAttempt();
 }
 
@@ -110,6 +117,7 @@ export function reportNativeRenderFailure(
     failingSurfaces.delete(token);
   };
   const attempt = readNativeRenderRecoveryAttempt();
+  reports.push({ at: new Date().toISOString(), runId, reason, attempt });
   if (timer !== null) {
     // One actual reload consumes one attempt: a repeat report while the
     // refresh is already booked neither re-arms the timer nor advances it.
@@ -122,6 +130,7 @@ export function reportNativeRenderFailure(
   }
   const delayMs = nativeRenderRecoveryDelayMs(attempt);
   const scheduled = campaign;
+  const scheduledAt = new Date().toISOString();
   console.warn("native render recovery scheduled", {
     runId,
     reason,
@@ -136,7 +145,19 @@ export function reportNativeRenderFailure(
     // grown attempt, and a reload boundary that throws still consumed one.
     writeNativeRenderRecoveryAttempt(attempt + 1);
     console.warn("native render recovery refreshing studio", { attempt });
-    reload();
+    const cause: StudioReloadCause = {
+      source: "native-render-recovery",
+      details: {
+        attempt,
+        delayMs,
+        scheduledAt,
+        reports,
+        outstandingRuns: [...new Set(failingSurfaces.values())],
+        viewerFailures: nativeViewerFailureEvidence(),
+      },
+    };
+    reports = [];
+    reload(cause);
   }, delayMs);
   return release;
 }
@@ -173,6 +194,7 @@ export function reportNativeRenderSuccess(runId: string): void {
     clearTimeout(timer);
     timer = null;
     campaign += 1;
+    reports = [];
   }
   const carried = readNativeRenderRecoveryAttempt();
   if (!pending && carried === 0) return;

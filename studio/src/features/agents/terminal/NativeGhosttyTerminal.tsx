@@ -139,7 +139,12 @@ export function NativeGhosttyTerminal({
     webviewSiblingSpike && visible && presentedHere,
     modalOpen,
     (error) => {
-      if (runId) failNativeViewerMount(runId, nativeFailureMessage(error));
+      if (runId) {
+        failNativeViewerMount(runId, nativeFailureMessage(error), {
+          origin: "webview-sibling-interaction",
+          error,
+        });
+      }
     },
   );
 
@@ -167,7 +172,12 @@ export function NativeGhosttyTerminal({
     modalOpen: modalOpen && !webviewSiblingSpike,
     onFailure: (error) => {
       console.error("native libghostty frame update failed", error);
-      if (runId) failNativeViewerMount(runId, nativeFailureMessage(error));
+      if (runId) {
+        failNativeViewerMount(runId, nativeFailureMessage(error), {
+          origin: "frame-sync",
+          error,
+        });
+      }
     },
   });
   useNativeViewerFocusSignal({
@@ -237,7 +247,10 @@ export function NativeGhosttyTerminal({
     void command
       .catch((error) => {
         console.error("native libghostty visibility change failed", error);
-        failNativeViewerMount(runId, nativeFailureMessage(error));
+        failNativeViewerMount(runId, nativeFailureMessage(error), {
+          origin: "visibility-change",
+          error,
+        });
       })
       .finally(() => {
         if (!blocksDestination) return;

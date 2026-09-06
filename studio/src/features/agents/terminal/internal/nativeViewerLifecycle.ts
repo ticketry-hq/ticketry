@@ -137,6 +137,7 @@ export function ensureNativeViewerLifecycle({
             failNativeViewerMount(
               runId,
               event.payload.reason ?? "the native terminal process disconnected",
+              { origin: "native-worker-event", handle: event.payload.handle },
             );
           }
         },
@@ -273,12 +274,21 @@ export function ensureNativeViewerLifecycle({
       reportNativeViewerAttached(outputActivity, runId);
       leaseTimer = setInterval(() => {
         void viewerLease.renew().catch((error) => {
-          if (!disposed) failNativeViewerMount(runId, nativeFailureMessage(error));
+          if (!disposed) {
+            failNativeViewerMount(runId, nativeFailureMessage(error), {
+              origin: "lease-renewal",
+              error,
+              handle,
+            });
+          }
         });
       }, 10_000);
     } catch (error) {
       console.error("native libghostty attach failed", error);
-      failNativeViewerMount(runId, nativeFailureMessage(error));
+      failNativeViewerMount(runId, nativeFailureMessage(error), {
+        origin: "attach",
+        error,
+      });
     }
   };
 

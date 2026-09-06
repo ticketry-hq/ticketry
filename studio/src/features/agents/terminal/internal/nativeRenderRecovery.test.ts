@@ -8,6 +8,10 @@ import {
   reportNativeRenderSuccess,
   resetNativeRenderRecovery,
 } from "./nativeRenderRecovery";
+import {
+  recordNativeViewerFailureEvidence,
+  resetNativeViewerFailureEvidence,
+} from "./nativeViewerFailureEvidence";
 
 describe("native render recovery policy", () => {
   const reload = vi.fn();
@@ -21,6 +25,7 @@ describe("native render recovery policy", () => {
 
   afterEach(() => {
     resetNativeRenderRecovery();
+    resetNativeViewerFailureEvidence();
     vi.useRealTimers();
     restore();
   });
@@ -331,5 +336,48 @@ describe("native render recovery across documents", () => {
     expect(reload).toHaveBeenCalledTimes(refreshes);
     expect(window.sessionStorage.getItem("ticketry.terminal.nativeRenderRecovery"))
       .toBeNull();
+  });
+});
+
+describe("native render recovery reload evidence", () => {
+  const reload = vi.fn();
+  let restore: () => void;
+
+  beforeEach(() => {
+    reload.mockReset();
+    restore = configureNativeRenderRecovery({ reload });
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    resetNativeRenderRecovery();
+    resetNativeViewerFailureEvidence();
+    vi.useRealTimers();
+    restore();
+  });
+
+  it("hands every failure report and the viewer ledger to the reload", () => {
+    recordNativeViewerFailureEvidence("run-1", {
+      origin: "attach",
+      reason: "attachment failed",
+      handle: "h-1",
+    });
+    reportNativeRenderFailure("run-1", "attachment failed");
+    reportNativeRenderFailure("run-2", "lease renewal failed");
+
+    vi.advanceTimersByTime(INITIAL_NATIVE_RENDER_RECOVERY_DELAY_MS);
+
+    expect(reload).toHaveBeenCalledOnce();
+    const cause = reload.mock.calls[0][0];
+    expect(cause.source).toBe("native-render-recovery");
+    expect(cause.details).toMatchObject({
+      attempt: 0,
+      delayMs: INITIAL_NATIVE_RENDER_RECOVERY_DELAY_MS,
+      reports: [
+        { runId: "run-1", reason: "attachment failed" },
+        { runId: "run-2", reason: "lease renewal failed" },
+      ],
+      viewerFailures: [{ runId: "run-1", origin: "attach", handle: "h-1" }],
+    });
   });
 });

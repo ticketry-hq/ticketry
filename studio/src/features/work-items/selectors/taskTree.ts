@@ -1,4 +1,5 @@
 import type { ModuleTree, State as TaskState } from "../../../shared/api/types";
+import { fuzzyMatches } from "./fuzzyMatch";
 
 export type TaskId = string;
 
@@ -121,12 +122,10 @@ export function searchHits(
   for (const id of tree.order) {
     const item = itemsById[id];
     if (!item) continue;
-    const sequence = item.sequence_id === null ? "" : String(item.sequence_id);
-    const matches =
-      item.name.toLowerCase().includes(normalized) ||
-      (item.key?.toLowerCase().includes(normalized) ?? false) ||
-      sequence.includes(normalized);
-    if (!matches) continue;
+    const haystack = [item.key ?? "", item.sequence_id ?? "", item.name]
+      .join(" ")
+      .toLowerCase();
+    if (!fuzzyMatches(haystack, normalized)) continue;
 
     let current: TaskId | undefined = id;
     const visited = new Set<TaskId>();

@@ -1,4 +1,3 @@
-import { useId } from "react";
 import type { ProviderCapabilities } from "../../shared/api/types";
 import { SETTINGS_FIELD_CLASS } from "../../shared/ui/SettingsPrimitives";
 
@@ -24,10 +23,12 @@ export function LaunchDefaultPicker({
   providerCapabilities,
   value,
 }: LaunchDefaultPickerProps) {
-  const modelSuggestionsId = useId();
   const selectedCapability = providerCapabilities.find((candidate) =>
     candidate.agent === value.provider);
   const modelAliases = selectedCapability?.model_aliases ?? [];
+  const unsupportedCurrentModel = Boolean(
+    value.model && !modelAliases.includes(value.model),
+  );
   const reasoningLevels = value.model
     ? selectedCapability?.model_reasoning_levels?.[value.model]
       ?? selectedCapability?.reasoning_levels
@@ -86,20 +87,20 @@ export function LaunchDefaultPicker({
 
       <label className="grid gap-1 text-sm text-text-muted">
         Model
-        <input
+        <select
           aria-label="Model"
           value={value.model}
-          onChange={(event) => update("model", event.target.value, false)}
-          onBlur={() => onCommit?.(value, "model")}
+          onChange={(event) => update("model", event.target.value, true)}
           className={SETTINGS_FIELD_CLASS}
-          placeholder="Provider default"
-          list={modelSuggestionsId}
-        />
-        <datalist id={modelSuggestionsId}>
+        >
+          <option value="">Provider default</option>
+          {unsupportedCurrentModel ? (
+            <option value={value.model}>{value.model} (unsupported)</option>
+          ) : null}
           {modelAliases.map((model) => (
-            <option key={model} value={model} />
+            <option key={model} value={model}>{model}</option>
           ))}
-        </datalist>
+        </select>
       </label>
 
       <label className="grid gap-1 text-sm text-text-muted">

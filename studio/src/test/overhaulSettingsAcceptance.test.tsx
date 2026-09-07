@@ -242,12 +242,12 @@ describe("overhaul acceptance — settings", () => {
     const discard = within(dialog).getByRole("button", { name: "Discard" });
     const save = within(dialog).getByRole("button", { name: "Save changes" });
 
-    fireEvent.change(model, { target: { value: "not-a-claude-model" } });
+    // The model is a dropdown of catalog models, so an incompatible model
+    // cannot be entered; only catalog aliases are offered.
     expect(
-      await within(dialog).findByText(
-        "Model 'not-a-claude-model' is not compatible with agent/provider 'claude'.",
-      ),
-    ).toBeInTheDocument();
+      within(model).queryByRole("option", { name: "not-a-claude-model" }),
+    ).toBeNull();
+    fireEvent.change(model, { target: { value: "opus" } });
     expect(within(dialog).getByText("1 unsaved change")).toBeInTheDocument();
     expect(discard).toBeEnabled();
     expect(save).toBeEnabled();

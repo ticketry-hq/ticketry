@@ -145,6 +145,25 @@ impl RunAuthority {
         Ok(principal)
     }
 
+    /// Bind one MCP socket connection to the run its credential names.
+    ///
+    /// The connection is accepted for an ended run so that its owner can still
+    /// reach `terminate_current_run`; every later tool call re-authorizes
+    /// through [`Self::authorize`], which keeps the active-run rule for
+    /// everything else. A credential for a different run is a foreign-run
+    /// failure, never a downgrade to global authority.
+    pub async fn authenticate_claimed_run(
+        &self,
+        authorization: Option<&str>,
+        claimed_run_id: &str,
+    ) -> Result<RunPrincipal, AuthorizationFailure> {
+        let (principal, _) = self.authenticate_grant(authorization, true).await?;
+        if principal.agent_run_id != claimed_run_id {
+            return Err(failure("caller_run_unbound", "authorization_foreign_run"));
+        }
+        Ok(principal)
+    }
+
     async fn active_run(
         &self,
         agent_run_id: &str,

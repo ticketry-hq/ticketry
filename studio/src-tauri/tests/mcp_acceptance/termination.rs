@@ -11,9 +11,9 @@ use tokio::time::{timeout, Duration};
 use super::{
     prepare_command_database, terminal_record, wait_for_terminal_record, MissingTerminalRuntime,
 };
+use ticketry_data_directory::DataDirectoryGuard;
 use ticketry_entities::session;
-use ticketry_mcp::post;
-use ticketry_mcp::{allowed_provider_operations, loopback, McpConfiguration, McpRuntime};
+use ticketry_mcp::{allowed_provider_operations, McpConfiguration, McpRuntime, SocketClient};
 use ticketry_terminal::{CleanupKillResult, CleanupRuntimeObservation, TerminalCleanupRuntime};
 
 struct BlockingTerminalRuntime {
@@ -50,29 +50,25 @@ impl TerminalCleanupRuntime for BlockingTerminalRuntime {
     }
 }
 
-async fn move_run_ticket_to_validation(url: &str, authorization: &str) {
-    let response = post(
-        url,
-        Some(authorization),
-        json!({
-            "jsonrpc": "2.0",
-            "id": 90,
-            "method": "tools/call",
-            "params": {
-                "name": "update_task_status",
-                "arguments": {
-                    "project_id": "10000000-0000-0000-0000-000000000000",
-                    "task_id": "AUTH-900",
-                    "status_name": "Validation"
-                }
-            }
-        }),
-    )
-    .await
-    .json::<Value>()
-    .await
-    .unwrap();
-    let transitioned = &response["result"]["structuredContent"];
+fn configuration(directory: &tempfile::TempDir) -> McpConfiguration {
+    McpConfiguration {
+        database_path: directory.path().join("state.db"),
+        media_root: directory.path().join("media"),
+    }
+}
+
+async fn move_run_ticket_to_validation(client: &mut SocketClient) {
+    let transitioned = client
+        .structured(
+            90,
+            "update_task_status",
+            json!({
+                "project_id": "10000000-0000-0000-0000-000000000000",
+                "task_id": "AUTH-900",
+                "status_name": "Validation"
+            }),
+        )
+        .await;
     assert_eq!(transitioned["ok"], true, "{transitioned}");
     assert_eq!(transitioned["status"], "Validation", "{transitioned}");
 }
@@ -81,13 +77,10 @@ async fn move_run_ticket_to_validation(url: &str, authorization: &str) {
 async fn ticket_run_cannot_terminate_before_reaching_a_configured_destination_state() {
     let directory = tempfile::tempdir().unwrap();
     prepare_command_database(&directory).await;
+    let ownership = DataDirectoryGuard::acquire(directory.path()).unwrap();
     let runtime = McpRuntime::start_for_test(
-        McpConfiguration {
-            address: loopback(0).unwrap(),
-            database_path: directory.path().join("state.db"),
-            media_root: directory.path().join("media"),
-            ingress_credential: "fixture-key".to_owned(),
-        },
+        configuration(&directory),
+        &ownership,
         Arc::new(MissingTerminalRuntime),
     )
     .await
@@ -97,21 +90,11 @@ async fn ticket_run_cannot_terminate_before_reaching_a_configured_destination_st
         .issue("run-valid", allowed_provider_operations())
         .await
         .unwrap();
-    let response = post(
-        &format!("http://{}/mcp", runtime.address()),
-        Some(&authorization),
-        json!({
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "tools/call",
-            "params": {"name": "terminate_current_run", "arguments": {}}
-        }),
-    )
-    .await
-    .json::<Value>()
-    .await
-    .unwrap();
-    let rejected = &response["result"]["structuredContent"];
+    let mut client =
+        SocketClient::connect_run(runtime.socket_path(), "run-valid", &authorization).await;
+    let rejected = client
+        .structured(1, "terminate_current_run", json!({}))
+        .await;
     assert_eq!(rejected["ok"], false, "{rejected}");
     assert_eq!(
         rejected["error"], "ticket_transition_required",
@@ -119,25 +102,23 @@ async fn ticket_run_cannot_terminate_before_reaching_a_configured_destination_st
     );
     assert_eq!(rejected["launch_state"], "Building", "{rejected}");
     assert_eq!(rejected["current_state"], "Building", "{rejected}");
+    assert_eq!(
+        rejected["allowed_states"],
+        json!(["Validation"]),
+        "{rejected}"
+    );
+    assert!(
+        rejected["detail"]
+            .as_str()
+            .is_some_and(|detail| detail.contains("Validation")),
+        "{rejected}"
+    );
     assert_eq!(terminal_record(&directory).await, (None, 0));
 
-    let url = format!("http://{}/mcp", runtime.address());
-    move_run_ticket_to_validation(&url, &authorization).await;
-    let response = post(
-        &url,
-        Some(&authorization),
-        json!({
-            "jsonrpc": "2.0",
-            "id": 2,
-            "method": "tools/call",
-            "params": {"name": "terminate_current_run", "arguments": {}}
-        }),
-    )
-    .await
-    .json::<Value>()
-    .await
-    .unwrap();
-    let accepted = &response["result"]["structuredContent"];
+    move_run_ticket_to_validation(&mut client).await;
+    let accepted = client
+        .structured(2, "terminate_current_run", json!({}))
+        .await;
     assert_eq!(accepted["ok"], true, "{accepted}");
     assert_eq!(accepted["termination_requested"], true, "{accepted}");
     assert_eq!(wait_for_terminal_record(&directory).await.1, 1);
@@ -149,41 +130,36 @@ async fn ticket_run_cannot_terminate_before_reaching_a_configured_destination_st
 async fn terminate_current_run_survives_an_mcp_listener_restart() {
     let directory = tempfile::tempdir().unwrap();
     prepare_command_database(&directory).await;
-    let configuration = McpConfiguration {
-        address: loopback(0).unwrap(),
-        database_path: directory.path().join("state.db"),
-        media_root: directory.path().join("media"),
-        ingress_credential: "fixture-key".to_owned(),
-    };
-    let first = McpRuntime::start_for_test(configuration.clone(), Arc::new(MissingTerminalRuntime))
-        .await
-        .unwrap();
+    let ownership = DataDirectoryGuard::acquire(directory.path()).unwrap();
+    let first = McpRuntime::start_for_test(
+        configuration(&directory),
+        &ownership,
+        Arc::new(MissingTerminalRuntime),
+    )
+    .await
+    .unwrap();
     let authorization = first
         .authority()
         .issue("run-valid", allowed_provider_operations())
         .await
         .unwrap();
-    move_run_ticket_to_validation(&format!("http://{}/mcp", first.address()), &authorization).await;
+    let mut client =
+        SocketClient::connect_run(first.socket_path(), "run-valid", &authorization).await;
+    move_run_ticket_to_validation(&mut client).await;
     first.shutdown().await;
 
-    let second = McpRuntime::start_for_test(configuration, Arc::new(MissingTerminalRuntime))
-        .await
-        .unwrap();
-    let response = post(
-        &format!("http://{}/mcp", second.address()),
-        Some(&authorization),
-        json!({
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "tools/call",
-            "params": {"name": "terminate_current_run", "arguments": {}}
-        }),
+    let second = McpRuntime::start_for_test(
+        configuration(&directory),
+        &ownership,
+        Arc::new(MissingTerminalRuntime),
     )
     .await
-    .json::<Value>()
-    .await
     .unwrap();
-    let terminated = &response["result"]["structuredContent"];
+    let mut client =
+        SocketClient::connect_run(second.socket_path(), "run-valid", &authorization).await;
+    let terminated = client
+        .structured(1, "terminate_current_run", json!({}))
+        .await;
     assert_eq!(terminated["ok"], true, "{terminated}");
     assert_eq!(terminated["agent_run_id"], "run-valid", "{terminated}");
     assert_eq!(terminated["termination_requested"], true, "{terminated}");
@@ -198,40 +174,21 @@ async fn terminate_current_run_responds_before_stopping_its_caller() {
     let directory = tempfile::tempdir().unwrap();
     prepare_command_database(&directory).await;
     let terminal = Arc::new(BlockingTerminalRuntime::new());
-    let runtime = McpRuntime::start_for_test(
-        McpConfiguration {
-            address: loopback(0).unwrap(),
-            database_path: directory.path().join("state.db"),
-            media_root: directory.path().join("media"),
-            ingress_credential: "fixture-key".to_owned(),
-        },
-        terminal.clone(),
-    )
-    .await
-    .unwrap();
+    let ownership = DataDirectoryGuard::acquire(directory.path()).unwrap();
+    let runtime =
+        McpRuntime::start_for_test(configuration(&directory), &ownership, terminal.clone())
+            .await
+            .unwrap();
     let authorization = runtime
         .authority()
         .issue("run-valid", allowed_provider_operations())
         .await
         .unwrap();
-    let url = format!("http://{}/mcp", runtime.address());
-    move_run_ticket_to_validation(&url, &authorization).await;
-    let mut request = tokio::spawn(async move {
-        post(
-            &url,
-            Some(&authorization),
-            json!({
-                "jsonrpc": "2.0",
-                "id": 1,
-                "method": "tools/call",
-                "params": {"name": "terminate_current_run", "arguments": {}}
-            }),
-        )
-        .await
-        .json::<Value>()
-        .await
-        .unwrap()
-    });
+    let mut client =
+        SocketClient::connect_run(runtime.socket_path(), "run-valid", &authorization).await;
+    move_run_ticket_to_validation(&mut client).await;
+    let mut request =
+        tokio::spawn(async move { client.call(1, "terminate_current_run", json!({})).await });
 
     let response = match timeout(Duration::from_secs(1), &mut request).await {
         Ok(response) => response.unwrap(),
@@ -251,4 +208,87 @@ async fn terminate_current_run_responds_before_stopping_its_caller() {
     assert_eq!(wait_for_terminal_record(&directory).await.1, 1);
 
     runtime.shutdown().await;
+}
+
+/// Rewrite the fixture before the listener opens, so a gate branch that no
+/// caller could satisfy can be exercised end to end.
+async fn amend_fixture(directory: &tempfile::TempDir, statement: &str) {
+    use sea_orm::ConnectionTrait;
+    let database = sea_orm::Database::connect(format!(
+        "sqlite:{}?mode=rwc",
+        directory.path().join("state.db").display()
+    ))
+    .await
+    .expect("open MCP command fixture");
+    database
+        .execute_unprepared(statement)
+        .await
+        .expect("amend MCP command fixture");
+    database.close().await.expect("close MCP command fixture");
+}
+
+async fn terminate_after(directory: &tempfile::TempDir, statement: &str) -> Value {
+    prepare_command_database(directory).await;
+    amend_fixture(directory, statement).await;
+    let ownership = DataDirectoryGuard::acquire(directory.path()).unwrap();
+    let runtime = McpRuntime::start_for_test(
+        configuration(directory),
+        &ownership,
+        Arc::new(MissingTerminalRuntime),
+    )
+    .await
+    .unwrap();
+    let authorization = runtime
+        .authority()
+        .issue("run-valid", allowed_provider_operations())
+        .await
+        .unwrap();
+    let mut client =
+        SocketClient::connect_run(runtime.socket_path(), "run-valid", &authorization).await;
+    let accepted = client
+        .structured(1, "terminate_current_run", json!({}))
+        .await;
+    runtime.shutdown().await;
+    accepted
+}
+
+#[tokio::test]
+async fn a_run_without_a_recorded_launch_state_still_terminates() {
+    let directory = tempfile::tempdir().unwrap();
+    let accepted = terminate_after(
+        &directory,
+        "UPDATE agent_runs SET launch_state = NULL WHERE id = 'run-valid';",
+    )
+    .await;
+    assert_eq!(accepted["ok"], true, "{accepted}");
+    assert_eq!(accepted["termination_requested"], true, "{accepted}");
+    assert_eq!(wait_for_terminal_record(&directory).await.1, 1);
+}
+
+#[tokio::test]
+async fn a_renamed_launch_state_does_not_strand_the_run() {
+    let directory = tempfile::tempdir().unwrap();
+    let accepted = terminate_after(
+        &directory,
+        "UPDATE worktracker_state SET name = 'Building (retired)' \
+         WHERE id = '40000000000000000000000000000003';",
+    )
+    .await;
+    assert_eq!(accepted["ok"], true, "{accepted}");
+    assert_eq!(accepted["termination_requested"], true, "{accepted}");
+    assert_eq!(wait_for_terminal_record(&directory).await.1, 1);
+}
+
+#[tokio::test]
+async fn a_launch_state_with_no_configured_destination_does_not_strand_the_run() {
+    let directory = tempfile::tempdir().unwrap();
+    let accepted = terminate_after(
+        &directory,
+        "DELETE FROM worktracker_issuetypetransition \
+         WHERE from_state_id = '40000000000000000000000000000003';",
+    )
+    .await;
+    assert_eq!(accepted["ok"], true, "{accepted}");
+    assert_eq!(accepted["termination_requested"], true, "{accepted}");
+    assert_eq!(wait_for_terminal_record(&directory).await.1, 1);
 }

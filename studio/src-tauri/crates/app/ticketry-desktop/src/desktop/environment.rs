@@ -5,7 +5,6 @@ use std::env;
 
 pub const SMOKE_EXIT_AFTER_STARTUP: &str = "MUXED_DESKTOP_SMOKE_EXIT_AFTER_STARTUP";
 pub const ACCEPTANCE_EXIT_AFTER_STARTUP: &str = "MUXED_DESKTOP_ACCEPTANCE_EXIT_AFTER_STARTUP";
-pub const DEVELOPMENT_MCP_PORT_ENV: &str = "MUXED_DESKTOP_MCP_PORT";
 pub const DEVELOPMENT_LOG_PATH_ENV: &str = "MUXED_DEVELOPMENT_LOG_PATH";
 pub const STARTUP_TRACE_ID_ENV: &str = "MUXED_STARTUP_TRACE_ID";
 #[cfg(debug_assertions)]
@@ -32,21 +31,6 @@ pub fn smoke_startup_exit_requested() -> bool {
 
 pub fn automated_startup_exit_requested() -> bool {
     smoke_startup_exit_requested() || env::var(ACCEPTANCE_EXIT_AFTER_STARTUP).as_deref() == Ok("1")
-}
-
-pub fn optional_port(name: &str) -> Result<Option<u16>, String> {
-    let Some(value) = env::var_os(name) else {
-        return Ok(None);
-    };
-    let value = value
-        .into_string()
-        .map_err(|_| format!("{name} must contain valid UTF-8"))?;
-    value
-        .parse::<u16>()
-        .ok()
-        .filter(|port| *port > 0)
-        .map(Some)
-        .ok_or_else(|| format!("{name} must be a valid TCP port (1-65535)"))
 }
 
 #[cfg(test)]

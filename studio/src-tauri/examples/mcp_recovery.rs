@@ -1,15 +1,17 @@
-use std::net::{Ipv4Addr, SocketAddr};
+use ticketry_data_directory::DataDirectoryGuard;
 use ticketry_mcp::{McpConfiguration, McpRuntime};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let data_directory = ticketry_data_directory::established_data_directory()?;
-    let runtime = McpRuntime::start(McpConfiguration {
-        address: SocketAddr::from((Ipv4Addr::LOCALHOST, 8123)),
-        database_path: data_directory.join("state.db"),
-        media_root: data_directory.join("media"),
-        ingress_credential: "recovery-only".to_owned(),
-    })
+    let ownership = DataDirectoryGuard::acquire(&data_directory)?;
+    let runtime = McpRuntime::start(
+        McpConfiguration {
+            database_path: data_directory.join("state.db"),
+            media_root: data_directory.join("media"),
+        },
+        &ownership,
+    )
     .await?;
     let token = runtime
         .authority()

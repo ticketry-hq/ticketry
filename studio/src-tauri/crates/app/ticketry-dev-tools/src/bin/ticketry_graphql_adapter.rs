@@ -73,7 +73,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // from here, so the adapter opens the same process log directly.
     let log_path = std::env::var_os("MUXED_DEVELOPMENT_LOG_PATH").map(PathBuf::from);
     ticketry_diagnostics::configure_process_file_log(log_path.is_some(), &data_directory, log_path);
-    let _data_directory_guard =
+    let data_directory_guard =
         ticketry_data_directory::DataDirectoryGuard::acquire(&data_directory).map_err(|error| {
             format!(
                 "could not own browser development data directory {}: {error}",
@@ -112,13 +112,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             granted_operations: ticketry_mcp::allowed_provider_operations(),
         });
 
-    let mcp_runtime = Arc::new(mcp::start(&data_directory).await?);
+    let mcp_runtime = Arc::new(mcp::start(&data_directory, &data_directory_guard).await?);
     eprintln!(
-        "Ticketry WorkTracker MCP listening at http://{}/mcp",
-        mcp_runtime.address()
+        "Ticketry WorkTracker MCP listening on {}",
+        mcp_runtime.socket_path().display()
     );
+    // CODING-1559 replaces this URL-shaped field with the socket location and
+    // bearer value the stdio bridge needs.
     adopted.runtime.terminal_runtime().replace_mcp_authority(
-        format!("http://{}/mcp", mcp_runtime.address()),
+        mcp_runtime.socket_path().to_string_lossy().into_owned(),
         mcp_runtime.authority(),
     )?;
 

@@ -4885,25 +4885,17 @@ checksum = "fcd2b6dd3b18129368955f32661a7718969e8c152c7d8866434c09cf15a512e0"
 dependencies = [
  "async-trait",
  "base64 0.23.0",
- "bytes",
  "chrono",
  "futures",
- "http",
- "http-body",
- "http-body-util",
  "pastey",
  "pin-project-lite",
- "rand 0.10.2",
  "rmcp-macros",
  "schemars 1.2.1",
  "serde",
  "serde_json",
- "sse-stream",
  "thiserror 2.0.19",
  "tokio",
- "tokio-stream",
  "tokio-util",
- "tower-service",
  "tracing",
  "uuid",
 ]
@@ -6084,19 +6076,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sse-stream"
-version = "0.2.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c123f296ade4ec4b8b0f6162116e6629f5146922ca5ab40ca9d3c2e73ab4761e"
-dependencies = [
- "bytes",
- "futures-util",
- "http-body",
- "http-body-util",
- "pin-project-lite",
-]
-
-[[package]]
 name = "stable_deref_trait"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7133,19 +7112,15 @@ dependencies = [
 name = "ticketry-mcp"
 version = "0.0.0"
 dependencies = [
- "axum",
  "chrono",
- "http",
- "reqwest",
  "rmcp",
  "sea-orm",
  "serde",
  "serde_json",
  "tempfile",
  "ticketry-agent-execution",
- "ticketry-diagnostics",
+ "ticketry-data-directory",
  "ticketry-entities",
- "ticketry-launch",
  "ticketry-runs",
  "ticketry-settings",
  "ticketry-terminal",

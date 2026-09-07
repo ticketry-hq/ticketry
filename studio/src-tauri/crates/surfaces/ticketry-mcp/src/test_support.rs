@@ -1,196 +1,132 @@
-//! Fixture MCP authorizer and HTTP helpers shared by this crate's own tests and
-//! by the root package's `mcp_acceptance` integration binary, which drives the
+//! A line-oriented socket client shared by this crate's own tests and by the
+//! root package's `mcp_acceptance` integration binary, which drives the
 //! listener against the assembled GraphQL schema and therefore cannot live in
 //! this crate. Compiled only for this crate's tests and for the `test-support`
 //! feature that dev-dependencies turn on.
 
-use std::net::SocketAddr;
+use std::path::Path;
+use std::time::Duration;
 
-use axum::{
-    extract::Request,
-    http::StatusCode,
-    response::{IntoResponse, Response},
-    routing::post as route_post,
-    Router,
-};
 use serde_json::{json, Value};
-use tokio::task::JoinHandle;
-use tokio_util::sync::CancellationToken;
-
-use super::loopback;
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::net::UnixStream;
 
 pub const PROJECT: &str = "10000000-0000-0000-0000-000000000000";
 
-pub async fn post(url: &str, authorization: Option<&str>, body: Value) -> reqwest::Response {
-    let mut request = reqwest::Client::new()
-        .post(url)
-        .header("content-type", "application/json")
-        .header("accept", "application/json, text/event-stream")
-        .header("mcp-protocol-version", "2025-03-26")
-        .json(&body);
-    if let Some(authorization) = authorization {
-        request = request.header("authorization", authorization);
-    }
-    request.send().await.expect("call in-process MCP")
+const RESPONSE_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// One authenticated, initialized MCP connection over the data-directory socket.
+pub struct SocketClient {
+    reader: BufReader<tokio::net::unix::OwnedReadHalf>,
+    writer: tokio::net::unix::OwnedWriteHalf,
 }
 
-async fn authorize(request: Request) -> Response {
-    match request
-        .headers()
-        .get("authorization")
-        .and_then(|value| value.to_str().ok())
-    {
-        Some("Bearer valid") => axum::Json(json!({
-            "agent_run_id": "run-valid",
-            "issue_id": "30000000-0000-0000-0000-000000000000",
-            "project_id": PROJECT,
-            "scope": "task"
-        }))
-        .into_response(),
-        Some("Bearer expired") => (
-            StatusCode::UNAUTHORIZED,
-            axum::Json(json!({
-                "detail": "authorization_expired",
-                "code": "caller_run_unbound"
-            })),
-        )
-            .into_response(),
-        _ => (
-            StatusCode::NOT_FOUND,
-            axum::Json(json!({
-                "detail": "caller_run_unknown",
-                "code": "caller_run_unknown"
-            })),
-        )
-            .into_response(),
+impl SocketClient {
+    /// Connect, send the handshake envelope, and return the verdict line
+    /// without initializing MCP. Lets a test look at refusals directly.
+    pub async fn handshake(socket: &Path, envelope: Value) -> (Self, Value) {
+        let stream = UnixStream::connect(socket)
+            .await
+            .expect("connect to the WorkTracker MCP socket");
+        let (read, writer) = stream.into_split();
+        let mut client = Self {
+            reader: BufReader::new(read),
+            writer,
+        };
+        client
+            .write_raw(&serde_json::to_string(&envelope).unwrap())
+            .await;
+        let verdict = client
+            .read_line()
+            .await
+            .expect("read the handshake verdict");
+        (client, verdict)
     }
-}
 
-async fn forwarded_run_control(request: Request) -> Response {
-    let authorized = request
-        .headers()
-        .get("authorization")
-        .and_then(|value| value.to_str().ok())
-        == Some("Bearer valid");
-    let api_key = request
-        .headers()
-        .get("x-api-key")
-        .and_then(|value| value.to_str().ok())
-        == Some("fixture-key");
-    if !authorized || !api_key {
-        return (
-            StatusCode::UNAUTHORIZED,
-            axum::Json(json!({"detail": "authorization_missing"})),
-        )
-            .into_response();
+    /// Whether the server closed the stream after its handshake verdict.
+    pub async fn is_closed(&mut self) -> bool {
+        self.read_line().await.is_none()
     }
-    let path = request.uri().path();
-    if path.ends_with("/self-terminate") {
-        return axum::Json(json!({
-            "ok": true,
-            "terminated": true,
-            "already_terminated": false,
-            "agent_run_id": "run-valid"
-        }))
-        .into_response();
-    }
-    let target_id = path.split('/').nth(4).unwrap_or_default();
-    if path.ends_with("/launch-agent") {
-        return axum::Json(json!({
-            "target_id": target_id,
-            "agent": "codex",
-            "agent_run_id": "run-launched"
-        }))
-        .into_response();
-    }
-    axum::Json(json!({"root_id": target_id, "launched": []})).into_response()
-}
 
-async fn launch_policy_effect(request: Request) -> Response {
-    let api_key = request
-        .headers()
-        .get("x-api-key")
-        .and_then(|value| value.to_str().ok())
-        == Some("fixture-key");
-    if !api_key {
-        return (
-            StatusCode::UNAUTHORIZED,
-            axum::Json(json!({"detail": "authorization_missing"})),
+    /// Connect as a provider bridge speaking for `agent_run_id` and finish
+    /// MCP initialization.
+    pub async fn connect_run(socket: &Path, agent_run_id: &str, authorization: &str) -> Self {
+        Self::connect_initialized(
+            socket,
+            json!({
+                "ticketry_mcp_auth": 1,
+                "mode": "run",
+                "agent_run_id": agent_run_id,
+                "authorization": authorization,
+            }),
         )
-            .into_response();
-    }
-    let body = axum::body::to_bytes(request.into_body(), usize::MAX)
         .await
-        .ok()
-        .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
-        .unwrap_or_default();
-    let target_id = body["task_id"].as_str().unwrap_or_default();
-    if body["caller_scope"] == "subtree" {
-        return axum::Json(json!({"root_id": target_id, "launched": []})).into_response();
     }
-    axum::Json(json!({
-        "target_id": target_id,
-        "agent": body["provider"],
-        "agent_run_id": "run-launched"
-    }))
-    .into_response()
-}
 
-async fn launch_policy_readiness(request: Request) -> Response {
-    let api_key = request
-        .headers()
-        .get("x-api-key")
-        .and_then(|value| value.to_str().ok())
-        == Some("fixture-key");
-    if !api_key {
-        return (
-            StatusCode::UNAUTHORIZED,
-            axum::Json(json!({"detail": "authorization_missing"})),
-        )
-            .into_response();
+    /// Connect as local tooling without a run and finish MCP initialization.
+    pub async fn connect_global(socket: &Path) -> Self {
+        Self::connect_initialized(socket, json!({"ticketry_mcp_auth": 1, "mode": "global"})).await
     }
-    axum::Json(json!({
-        "version": 1,
-        "ready": true,
-        "policy_owner": "rust",
-        "effect_owner": "django",
-        "django_write_fallback": false
-    }))
-    .into_response()
-}
 
-pub async fn start_authorizer() -> (SocketAddr, CancellationToken, JoinHandle<()>) {
-    let listener = tokio::net::TcpListener::bind(loopback(0).unwrap())
+    async fn connect_initialized(socket: &Path, envelope: Value) -> Self {
+        let (mut client, verdict) = Self::handshake(socket, envelope).await;
+        assert_eq!(verdict["ok"], true, "handshake refused: {verdict}");
+        let initialized = client
+            .request(json!({
+                "jsonrpc": "2.0", "id": "init", "method": "initialize",
+                "params": {
+                    "protocolVersion": "2025-03-26",
+                    "capabilities": {},
+                    "clientInfo": {"name": "ticketry-test", "version": "0"}
+                }
+            }))
+            .await;
+        assert!(
+            initialized["result"]["serverInfo"].is_object(),
+            "{initialized}"
+        );
+        client
+            .write_raw(r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#)
+            .await;
+        client
+    }
+
+    /// Send one JSON-RPC request and return its response.
+    pub async fn request(&mut self, message: Value) -> Value {
+        self.write_raw(&serde_json::to_string(&message).unwrap())
+            .await;
+        self.read_line()
+            .await
+            .expect("the server closed the connection")
+    }
+
+    /// Call one WorkTracker tool and return the full JSON-RPC response.
+    pub async fn call(&mut self, id: u64, name: &str, arguments: Value) -> Value {
+        self.request(json!({
+            "jsonrpc": "2.0", "id": id, "method": "tools/call",
+            "params": {"name": name, "arguments": arguments}
+        }))
         .await
-        .expect("bind fixture authorizer");
-    let address = listener.local_addr().unwrap();
-    let cancellation = CancellationToken::new();
-    let shutdown = cancellation.clone();
-    let task = tokio::spawn(async move {
-        axum::serve(
-            listener,
-            Router::new()
-                .route("/api/runs/mcp-authorize", route_post(authorize))
-                .route(
-                    "/api/terminals/self-terminate",
-                    route_post(forwarded_run_control),
-                )
-                .route(
-                    "/api/work-tracker/work-items/{task_id}/graph-run",
-                    route_post(forwarded_run_control).delete(forwarded_run_control),
-                )
-                .route(
-                    "/api/work-tracker/work-items/{task_id}/launch-agent",
-                    route_post(forwarded_run_control),
-                )
-                .route(
-                    "/api/execution/launch-policy-effects",
-                    route_post(launch_policy_effect).get(launch_policy_readiness),
-                ),
-        )
-        .with_graceful_shutdown(async move { shutdown.cancelled_owned().await })
-        .await
-        .unwrap();
-    });
-    (address, cancellation, task)
+    }
+
+    /// Call one WorkTracker tool and return only its structured content.
+    pub async fn structured(&mut self, id: u64, name: &str, arguments: Value) -> Value {
+        self.call(id, name, arguments).await["result"]["structuredContent"].clone()
+    }
+
+    async fn write_raw(&mut self, line: &str) {
+        self.writer
+            .write_all(format!("{line}\n").as_bytes())
+            .await
+            .expect("write to the WorkTracker MCP socket");
+    }
+
+    async fn read_line(&mut self) -> Option<Value> {
+        let mut line = String::new();
+        let read = tokio::time::timeout(RESPONSE_TIMEOUT, self.reader.read_line(&mut line))
+            .await
+            .expect("the WorkTracker MCP socket did not answer in time")
+            .expect("read from the WorkTracker MCP socket");
+        (read > 0).then(|| serde_json::from_str(&line).expect("decode a JSON line"))
+    }
 }

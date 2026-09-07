@@ -11,7 +11,7 @@ import {
 } from "./foregroundStore";
 import { useClientStore as useWorkspaceTabsStore } from "../../../../state/clientStore";
 import { readVersionedItem } from "../../../../shared/storage/versioned";
-import { readAgentStatusHolding } from "../../status/apolloHolding";
+import { readAgentRun } from "../../status/apolloHolding";
 import type { RunRecord } from "../../status";
 import { rekeyTerminalFocus } from "./terminalRegistry";
 import { isTerminalProvider } from "../presentation/providerPresentation";
@@ -657,7 +657,9 @@ export const useTerminalStore = createApolloStore<TerminalStoreState>("terminal-
   },
 
   attachRun(agentRunId) {
-    const run = readAgentStatusHolding().runs[agentRunId];
+    // Live runs come from the projection, ended ones from the WorkItem read
+    // that retained them on the shared cache entity; both reopen the same way.
+    const run = readAgentRun(agentRunId);
     if (!run) {
       throw new Error(`run projection missing for terminal ${agentRunId}`);
     }

@@ -269,6 +269,36 @@ export function readAgentStatusHolding(): AgentStatusData {
   return lastHolding;
 }
 
+/**
+ * One run by id, from wherever Apollo holds it: the live projection first, then
+ * the shared `AgentRuns:{id}` entity a WorkItem restore retained. Ended runs
+ * reach the client only through the WorkItem read and never join the live
+ * projection, so anything that reopens a run resolves it here rather than off
+ * `readAgentStatusHolding().runs`.
+ */
+export function readAgentRun(runId: string): RunRecord | null {
+  const held = readAgentStatusHolding().runs[runId];
+  if (held) return held;
+  const client = studioApolloClient();
+  const cached = client.cache.readFragment<CachedRun>({
+    id: client.cache.identify({ __typename: "AgentRuns", id: runId }),
+    fragment: AgentRunStatusFragment,
+  });
+  return cached ? runRecord(cached) : null;
+}
+
+/**
+ * Retain a run restored from a WorkItem read on its shared cache entity, so it
+ * can be reopened without joining the live projection — `runs` stays the live
+ * set. The projection wins wherever it already holds the run: its row is the
+ * fresher one, and it reads through this very entity, so stamping an ended read
+ * row over it would rewrite the projection itself.
+ */
+export function retainRestoredAgentRun(run: RunRecord): void {
+  if (readAgentStatusHolding().runs[run.agent_run_id]) return;
+  writeRun(run);
+}
+
 export function subscribeAgentStatusHolding(onChange: () => void): () => void {
   return studioApolloClient().cache.watch({
     query: ActiveProjectRunStatusDocument,

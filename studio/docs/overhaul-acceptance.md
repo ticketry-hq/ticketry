@@ -269,6 +269,8 @@ named gate before the full Studio suite, typecheck, and build.
 
 | 280 | A module scratch workspace restores its ended plan, instant, and shell runs from the module WorkItem that owns them, across a reload and with an empty live holding; a module whose ended runs have no terminal session record restores none, and a run the event already settled stays one chip. |
 
+| 281 | Reopening a restored ended run works from either surface: clicking an ended instant Conversation row opens its terminal in the scratch bucket instead of falling back to Details, because run resolution reads the shared AgentRuns cache entity the WorkItem restore retains rather than the live-only holding. |
+
 | 282 | A selected instant conversation whose run has already left the live holding is still titled: eligibility comes from the module WorkItem ended-runs read, so a Codex conversation that ended keeps refreshing its thread title. |
 | 283 | Success, info, and error toasts paint an opaque panel beneath their lifecycle tint. |
 

@@ -53,7 +53,9 @@ export {
   setLaunchDiscoveryRuntimeInstance,
 } from "./launchDiscoveryTrace";
 export {
+  readAgentRun,
   readAgentStatusHolding,
+  retainRestoredAgentRun,
   subscribeAgentStatusHolding,
 } from "./apolloHolding";
 // stream/statusStreamFeed (subscription wiring, transport client, and cursor

@@ -15,12 +15,10 @@
  *   5. response  the read from step 2 lands → description "Original…"
  *                Apollo writes the older row over the newer one. Rollback.
  *
- * Revision: the WorktrackerIssue fragment does not select `stateRevision`, so
- * every row arrives without a revision and `createIssueRevisionGuardLink`
- * never compares anything. No client-side rule orders step 5 after step 4.
- *
- * The convergence tests are `it.fails`: they assert the wanted behaviour and
- * fail on the current code. CODING-1526 flips them to `it` when the fix lands.
+ * CODING-1526: every row now carries `stateRevision`, and the WorktrackerIssue
+ * type policy keeps the cached row when a lower revision arrives, so step 5
+ * lands without repainting. The evidence tests keep the recorded wire order
+ * and assert the saved description stays visible.
  */
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -240,11 +238,13 @@ afterEach(() => {
 });
 
 describe("CODING-1524 reproduction — description rollback under live fact traffic", () => {
-  it("[evidence A] a stale per-item read landing after Save paints the old description back", async () => {
+  it("[evidence A] a stale per-item read landing after Save leaves the saved description in place", async () => {
     const { wire, details } = await justSavedThenStaleItemRead();
 
-    expect(await within(details).findByText(ORIGINAL)).toBeVisible();
-    expect(within(details).queryByText(SAVED)).toBeNull();
+    await waitFor(() => expect(wire.journal).toHaveLength(4));
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(within(details).getByText(SAVED)).toBeVisible();
+    expect(within(details).queryByText(ORIGINAL)).toBeNull();
     expect(wire.journal).toEqual([
       'request  WorkTrackerWorkItem {"id":"story-a"}',
       'request  UpdateWorkTrackerWorkItemDetails {"id":"story-a","description":"Saved description"}',
@@ -253,11 +253,13 @@ describe("CODING-1524 reproduction — description rollback under live fact traf
     ]);
   });
 
-  it("[evidence B] a stale module-open read landing after Save paints the old description back", async () => {
+  it("[evidence B] a stale module-open read landing after Save leaves the saved description in place", async () => {
     const { wire, details } = await dirtyEditorThenStaleModuleRead();
 
-    expect(await within(details).findByText(ORIGINAL)).toBeVisible();
-    expect(within(details).queryByText(SAVED)).toBeNull();
+    await waitFor(() => expect(wire.journal).toHaveLength(6));
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(within(details).getByText(SAVED)).toBeVisible();
+    expect(within(details).queryByText(ORIGINAL)).toBeNull();
     expect(wire.journal).toEqual([
       'request  WorkTrackerWorkItem {"id":"story-b"}',
       'request  WorkTrackerModuleOpen {"moduleId":"module-1"}',
@@ -268,13 +270,13 @@ describe("CODING-1524 reproduction — description rollback under live fact traf
     ]);
   });
 
-  it.fails("[convergence A] a just-saved description survives a late per-item read", async () => {
+  it("[convergence A] a just-saved description survives a late per-item read", async () => {
     const { details } = await justSavedThenStaleItemRead();
     await new Promise((resolve) => setTimeout(resolve, 100));
     expect(within(details).getByText(SAVED)).toBeVisible();
   });
 
-  it.fails("[convergence B] a description saved from a dirty editor survives a late module-open read", async () => {
+  it("[convergence B] a description saved from a dirty editor survives a late module-open read", async () => {
     const { details } = await dirtyEditorThenStaleModuleRead();
     await new Promise((resolve) => setTimeout(resolve, 100));
     expect(within(details).getByText(SAVED)).toBeVisible();

@@ -23,6 +23,7 @@ function issue(
     project_id: "project",
     sequence_id: sequenceId,
     state_id: "state",
+    state_revision: 1,
     description: "",
     workspace_tab_order: [],
     parent_id: "module",

@@ -18,6 +18,7 @@ function issue(order: readonly WorkspaceTabIdentity[]) {
     project_id: "22222222222222222222222222222222",
     sequence_id: 1,
     state_id: null,
+    state_revision: 1,
     workspace_tab_order: order,
     parent_id: null,
     module_id: "33333333333333333333333333333333",

@@ -86,6 +86,7 @@ function issue(id: string, rank: string, stateId: string, isArchived = false) {
     project_id: membership.projectId,
     sequence_id: 1,
     state_id: stateId,
+    state_revision: 1,
     description: "",
     workspace_tab_order: [],
     parent_id: membership.moduleId,

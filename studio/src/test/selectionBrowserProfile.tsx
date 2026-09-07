@@ -53,6 +53,7 @@ const workItems = ids.map((id, index) => ({
   project_id: "project-1",
   sequence_id: index + 1,
   state_id: state.id,
+  state_revision: 1,
   description: "",
   workspace_tab_order: [],
   parent_id: "module-1",

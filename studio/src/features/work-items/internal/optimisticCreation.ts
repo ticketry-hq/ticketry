@@ -62,6 +62,7 @@ export function optimisticCreatedIssue(
     project_id: publicWorktrackerId(membership.projectId),
     sequence_id: -sequence,
     state_id: destinationId ? publicWorktrackerId(destinationId) : null,
+    state_revision: 1,
     description: body.description ?? "",
     workspace_tab_order: [],
     parent_id: body.parent_id

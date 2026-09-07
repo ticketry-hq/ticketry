@@ -115,6 +115,8 @@ const json = (body: unknown, status = 200) =>
 class BoundaryFixture implements StudioFixture {
   readonly trees = new Map<string, ModuleTree>();
   readonly items = new Map<string, WorkItem>();
+  /** Server `state_revision` per Work Item; every fixture write bumps it. */
+  readonly revisions = new Map<string, number>();
   readonly states = new Map<string, State>();
   readonly issueTypes = new Map<string, IssueType>();
   readonly runRows = new Map<string, RunRecord[]>();
@@ -372,6 +374,7 @@ class BoundaryFixture implements StudioFixture {
         __typename: "WorktrackerIssue",
         ...item,
         id: compactWorktrackerId(item.id),
+        state_revision: this.revisions.get(item.id) ?? 1,
         workspace_tab_order: [],
         state_id: item.state,
         issue_type_id: item.issue_type,
@@ -595,6 +598,7 @@ class BoundaryFixture implements StudioFixture {
         rank: body.state_id === undefined ? current.rank : this.transitionRanks.get(id) ?? current.rank,
       };
       this.items.set(id, updated);
+      this.revisions.set(id, (this.revisions.get(id) ?? 1) + 1);
       this.patches.push({ id, body });
       for (const waiter of this.patchWaiters.splice(0)) {
         if (waiter.id === id && deepEqual(waiter.body, body)) waiter.resolve(); else this.patchWaiters.push(waiter);

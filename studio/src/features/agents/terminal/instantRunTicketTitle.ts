@@ -164,6 +164,15 @@ export function useInstantRunTicketTitle(
     };
   }, [queueTitleRead]);
 
+  // Codex names a thread during its first turn and may rename it on later
+  // ones, so every lifecycle transition of the selected run rereads the title.
+  const runState = run?.state ?? null;
+  const lastRunState = useRef(runState);
+  if (lastRunState.current !== runState) {
+    lastRunState.current = runState;
+    selection.current.requested = false;
+  }
+
   useEffect(() => {
     if (
       !agentRunId ||
@@ -180,7 +189,7 @@ export function useInstantRunTicketTitle(
       clearTimeout(queuedRead.current.timer);
       queuedRead.current = null;
     };
-  }, [agentRunId, eligibleRunId, hasCachedTicket, queueTitleRead]);
+  }, [agentRunId, eligibleRunId, hasCachedTicket, runState, queueTitleRead]);
 
   return cachedTitle;
 }

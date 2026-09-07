@@ -627,6 +627,91 @@ describe("overhaul acceptance — Conversations", () => {
     expect(titleReads).toHaveLength(3);
   });
 
+  it("[CODING-1512] rereads the selected conversation's title when its run changes lifecycle state", async () => {
+    const titleReads: string[] = [];
+    let codexTitle: string | null = null;
+    const terminalExecutor = terminalSessionReadExecutor(emptyTerminalReads);
+    installDesktopGraphQlRuntime(async (document, variables) => {
+      const operationName = documentOperationName(document);
+      if (operationName === "InstantRunTickets") {
+        return {
+          tickets: [{
+            __typename: "InstantRunTicket",
+            agent_run_id: "instant-run-2",
+            title: "Safe launch title",
+            started_at: "2026-08-30T11:00:00Z",
+          }],
+        } as never;
+      }
+      if (operationName === "InstantRunTicketTitle") {
+        titleReads.push((variables as { agentRunId: string }).agentRunId);
+        return { title: codexTitle } as never;
+      }
+      if (operationName === "WorkTrackerModuleOpen") {
+        return {
+          module: { __typename: "WorktrackerIssueConnection", nodes: [] },
+          work_items: { __typename: "WorktrackerIssueConnection", nodes: [] },
+        } as never;
+      }
+      return terminalExecutor(document, variables);
+    });
+    const run = (state: "working" | "turn_complete" | "needs_input") => ({
+      agent_run_id: "instant-run-2",
+      project_id: "project-1",
+      task_id: null,
+      module_id: "module-1",
+      agent: "codex",
+      scope: "instant" as const,
+      state,
+      provider_session_id: "codex-thread-2",
+      started_at: "2026-08-30T11:00:00Z",
+      updated_at: `2026-08-30T11:0${state.length % 10}:00Z`,
+    });
+    render(
+      <StudioApolloProvider>
+        <TasksPane />
+        <SelectedTicket />
+      </StudioApolloProvider>,
+    );
+    const selected = await screen.findByRole("treeitem", {
+      name: /Safe launch title/,
+    });
+    act(() => useAgentStatusStore.setState({
+      projectId: "project-1",
+      runs: { "instant-run-2": run("working") },
+      automationAttempts: {},
+      automationByTask: {},
+    }));
+    fireEvent.click(selected);
+    await waitFor(() => expect(titleReads).toEqual(["instant-run-2"]));
+    expect(screen.getAllByText("Safe launch title").length).toBeGreaterThan(0);
+
+    // Codex names the thread during its first turn; the run settles afterwards.
+    codexTitle = "Named by Codex after the first turn";
+    act(() => useAgentStatusStore.setState({
+      runs: { "instant-run-2": run("turn_complete") },
+    }));
+    await waitFor(() => expect(titleReads).toEqual([
+      "instant-run-2",
+      "instant-run-2",
+    ]));
+    await waitFor(() => {
+      expect(screen.getAllByText("Named by Codex after the first turn").length)
+        .toBeGreaterThan(0);
+    });
+
+    // A later turn may rename the thread; every settle rereads it.
+    codexTitle = "Renamed on a later turn";
+    act(() => useAgentStatusStore.setState({
+      runs: { "instant-run-2": run("needs_input") },
+    }));
+    await waitFor(() => {
+      expect(screen.getAllByText("Renamed on a later turn").length)
+        .toBeGreaterThan(0);
+    });
+    expect(titleReads).toHaveLength(3);
+  });
+
   it("waits for the selected conversation's Apollo cache row before reading its title", async () => {
     const operations: string[] = [];
     let resolveTickets!: (value: unknown) => void;

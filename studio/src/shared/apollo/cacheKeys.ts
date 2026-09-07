@@ -19,6 +19,7 @@ const normalizedEntityKeyFields = {
   ProjectRunStatus: ["projectId"],
   AutomationAttemptStatus: ["rootAttemptId"],
   AgentTerminalSessions: ["agentRunId"],
+  InstantRunTicket: ["agent_run_id"],
   GraphRuns: ["rootId"],
   Worktrees: ["id"],
   DesignDocuments: ["id"],
@@ -51,6 +52,15 @@ export function normalizedEntityPolicies(): TypePolicies {
     fields: {
       runs: { merge: false },
       automationAttempts: { merge: false },
+    },
+  };
+  policies.InstantRunTicket = {
+    ...policies.InstantRunTicket,
+    fields: {
+      title: {
+        read: (serverTitle, { readField }) =>
+          readField<string>("acceptedTitle") ?? serverTitle,
+      },
     },
   };
   policies.TicketryLocalState = {

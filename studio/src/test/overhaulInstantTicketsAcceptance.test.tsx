@@ -1,11 +1,13 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ModalHost, useModalStore } from "../app/modal";
 import { SelectedTicketContent } from "../app/shell/ticket-workspace/selected-ticket/SelectedTicketContent";
+import { SelectedTicket } from "../app/shell/ticket-workspace/selected-ticket/SelectedTicket";
 import { TasksPane } from "../app/shell/ticket-workspace/tasks/TasksPane";
 import { useAgentStatusStore } from "../features/agents/status/testStore";
 import { useSelectedInstantRunId } from "../app/shell/ticket-workspace/tasks/internal/instantRunTicketNavigation";
 import {
+  refreshTerminalHoldings,
   scratchBucketId,
   useTerminalStore,
   type SessionMeta,
@@ -26,7 +28,9 @@ vi.mock(
   "../app/shell/ticket-workspace/selected-ticket/terminals/selectedTicketTerminalLoader",
   () => ({
     loadSelectedTicketTerminal: async () => {},
-    LazySelectedTicketTerminal: () => <div data-testid="selected-conversation-terminal" />,
+    LazySelectedTicketTerminal: () => (
+      <div data-testid="selected-conversation-terminal" tabIndex={0} />
+    ),
   }),
 );
 
@@ -368,5 +372,505 @@ describe("overhaul acceptance — Conversations", () => {
     );
     expect(useClientStore.getState().activeByTask[bucket]).toBe("session-2");
     expect(row).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("[overhaul-259] keeps safe conversation titles unless Codex returns an accepted name", async () => {
+    const operations: Array<{ operationName: string; variables: unknown }> = [];
+    let titleReads = 0;
+    const terminalExecutor = terminalSessionReadExecutor(emptyTerminalReads);
+    installDesktopGraphQlRuntime(async (document, variables) => {
+      const operationName = documentOperationName(document);
+      operations.push({ operationName, variables });
+      if (operationName === "InstantRunTickets") {
+        return {
+          tickets: [{
+            __typename: "InstantRunTicket",
+            agent_run_id: "instant-run-2",
+            title: "Safe launch title",
+            started_at: "2026-08-30T11:00:00Z",
+          }],
+        } as never;
+      }
+      if (operationName === "InstantRunTicketTitle") {
+        titleReads += 1;
+        if (titleReads === 3) throw new Error("app-server unavailable");
+        return {
+          title: titleReads === 1 ? null : "Name the selected Codex thread",
+        } as never;
+      }
+      if (operationName === "WorkTrackerModuleOpen") {
+        return {
+          module: { __typename: "WorktrackerIssueConnection", nodes: [] },
+          work_items: { __typename: "WorktrackerIssueConnection", nodes: [] },
+        } as never;
+      }
+      return terminalExecutor(document, variables);
+    });
+    useAgentStatusStore.setState({
+      projectId: "project-1",
+      runs: {
+        "instant-run-2": {
+          agent_run_id: "instant-run-2",
+          project_id: "project-1",
+          task_id: null,
+          module_id: "module-1",
+          agent: "claude",
+          scope: "instant",
+          state: "working",
+          provider_session_id: "claude-thread-2",
+          started_at: "2026-08-30T11:00:00Z",
+          updated_at: "2026-08-30T11:00:00Z",
+        },
+      },
+      automationAttempts: {},
+      automationByTask: {},
+    });
+
+    const view = render(
+      <StudioApolloProvider>
+        <TasksPane />
+        <SelectedTicket />
+      </StudioApolloProvider>,
+    );
+
+    fireEvent.click(await screen.findByRole("treeitem", {
+      name: /Safe launch title/,
+    }));
+
+    await waitFor(() => expect(screen.getByRole("treeitem", {
+      name: /Safe launch title/,
+    })).toHaveAttribute("aria-selected", "true"));
+    expect(operations.filter(
+      ({ operationName }) => operationName === "InstantRunTicketTitle",
+    )).toEqual([]);
+
+    act(() => {
+      const status = useAgentStatusStore.getState();
+      status.upsertRun({
+        ...status.runs["instant-run-2"],
+        agent: "codex",
+        provider_session_id: "codex-thread-2",
+        updated_at: "2026-08-30T11:00:01Z",
+      });
+    });
+
+    await waitFor(() => expect(operations.filter(
+      ({ operationName }) => operationName === "InstantRunTicketTitle",
+    )).toHaveLength(1));
+    expect(screen.getAllByText("Safe launch title")).toHaveLength(3);
+
+    act(() => {
+      useClientStore.getState().setActive(scratchBucketId("module-1"), "details");
+    });
+    fireEvent.click(screen.getByRole("treeitem", { name: /Safe launch title/ }));
+
+    await waitFor(() => {
+      expect(operations.filter(
+        ({ operationName }) => operationName === "InstantRunTicketTitle",
+      )).toEqual([
+        {
+          operationName: "InstantRunTicketTitle",
+          variables: { agentRunId: "instant-run-2" },
+        },
+        {
+          operationName: "InstantRunTicketTitle",
+          variables: { agentRunId: "instant-run-2" },
+        },
+      ]);
+      expect(screen.getAllByText("Name the selected Codex thread")).toHaveLength(3);
+    });
+    expect(screen.getByTestId("details-or-terminal-pane-title")).toHaveAttribute(
+      "data-title-casing",
+      "preserve",
+    );
+    expect(JSON.stringify(localStorage)).not.toContain("Name the selected Codex thread");
+
+    await act(refreshTerminalHoldings);
+    expect(screen.getAllByText("Name the selected Codex thread")).toHaveLength(3);
+
+    view.unmount();
+    render(
+      <StudioApolloProvider>
+        <TasksPane />
+        <SelectedTicket />
+      </StudioApolloProvider>,
+    );
+
+    await waitFor(() => expect(operations.filter(
+      ({ operationName }) => operationName === "InstantRunTicketTitle",
+    )).toHaveLength(3));
+    expect(screen.getAllByText("Name the selected Codex thread")).toHaveLength(3);
+  });
+
+  it("[overhaul-261] refreshes the settled Codex conversation on return and startup", async () => {
+    const titleReads: string[] = [];
+    let codexTitle = "Initial Codex name";
+    let resolveRename!: () => void;
+    const renamedResponse = new Promise<void>((resolve) => {
+      resolveRename = resolve;
+    });
+    const terminalExecutor = terminalSessionReadExecutor(emptyTerminalReads);
+    installDesktopGraphQlRuntime(async (document, variables) => {
+      const operationName = documentOperationName(document);
+      if (operationName === "InstantRunTickets") {
+        return {
+          tickets: [
+            {
+              __typename: "InstantRunTicket",
+              agent_run_id: "instant-run-2",
+              title: "Safe launch title",
+              started_at: "2026-08-30T11:00:00Z",
+            },
+            {
+              __typename: "InstantRunTicket",
+              agent_run_id: "instant-run-1",
+              title: "Other conversation",
+              started_at: "2026-08-30T10:00:00Z",
+            },
+          ],
+        } as never;
+      }
+      if (operationName === "InstantRunTicketTitle") {
+        titleReads.push((variables as { agentRunId: string }).agentRunId);
+        if (titleReads.length === 2) await renamedResponse;
+        return { title: codexTitle } as never;
+      }
+      if (operationName === "WorkTrackerModuleOpen") {
+        return {
+          module: { __typename: "WorktrackerIssueConnection", nodes: [] },
+          work_items: { __typename: "WorktrackerIssueConnection", nodes: [] },
+        } as never;
+      }
+      return terminalExecutor(document, variables);
+    });
+    const view = render(
+      <StudioApolloProvider>
+        <TasksPane />
+        <SelectedTicket />
+      </StudioApolloProvider>,
+    );
+    const selected = await screen.findByRole("treeitem", {
+      name: /Safe launch title/,
+    });
+    const other = screen.getByRole("treeitem", { name: /Other conversation/ });
+    act(() => useAgentStatusStore.setState({
+      projectId: "project-1",
+      runs: Object.fromEntries(["1", "2"].map((suffix) => [
+        `instant-run-${suffix}`,
+        {
+          agent_run_id: `instant-run-${suffix}`,
+          project_id: "project-1",
+          task_id: null,
+          module_id: "module-1",
+          agent: "codex",
+          scope: "instant",
+          state: "working",
+          provider_session_id: `codex-thread-${suffix}`,
+          started_at: `2026-08-30T1${suffix}:00:00Z`,
+          updated_at: `2026-08-30T1${suffix}:00:00Z`,
+        },
+      ])),
+      automationAttempts: {},
+      automationByTask: {},
+    }));
+
+    fireEvent.click(selected);
+    expect(titleReads).toEqual([]);
+    await waitFor(() => expect(titleReads).toEqual(["instant-run-2"]));
+    expect(screen.getAllByText("Initial Codex name")).toHaveLength(3);
+
+    codexTitle = "Renamed in Codex";
+    fireEvent.click(other);
+    fireEvent.click(selected);
+    fireEvent.click(other);
+    fireEvent.click(selected);
+    expect(titleReads).toEqual(["instant-run-2"]);
+    await waitFor(() => expect(titleReads).toEqual([
+      "instant-run-2",
+      "instant-run-2",
+    ]));
+    fireEvent.click(other);
+    fireEvent.click(selected);
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(titleReads).toHaveLength(2);
+    await act(async () => resolveRename());
+    await waitFor(() => {
+      expect(screen.getAllByText("Renamed in Codex")).toHaveLength(3);
+    });
+
+    document.dispatchEvent(new Event("visibilitychange"));
+    screen.getByTestId("selected-conversation-terminal").focus();
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(titleReads).toEqual(["instant-run-2", "instant-run-2"]);
+
+    view.unmount();
+    useClientStore.setState({
+      selectedTaskId: TEMP_TASK_ID,
+      workspaces: {},
+      activeByTask: {},
+    });
+    expect(localStorage.getItem("studio.activeWorkspaceByBucket:v1"))
+      .toContain("instant-run-2");
+
+    render(
+      <StudioApolloProvider>
+        <TasksPane />
+        <SelectedTicket />
+      </StudioApolloProvider>,
+    );
+    await waitFor(() => expect(titleReads).toEqual([
+      "instant-run-2",
+      "instant-run-2",
+      "instant-run-2",
+    ]));
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(titleReads).toHaveLength(3);
+  });
+
+  it("waits for the selected conversation's Apollo cache row before reading its title", async () => {
+    const operations: string[] = [];
+    let resolveTickets!: (value: unknown) => void;
+    const ticketsResponse = new Promise((resolve) => {
+      resolveTickets = resolve;
+    });
+    const terminalExecutor = terminalSessionReadExecutor(emptyTerminalReads);
+    installDesktopGraphQlRuntime(async (document, variables) => {
+      const operationName = documentOperationName(document);
+      operations.push(operationName);
+      if (operationName === "InstantRunTickets") {
+        return (await ticketsResponse) as never;
+      }
+      if (operationName === "InstantRunTicketTitle") {
+        return { title: "Cached only after the row exists" } as never;
+      }
+      if (operationName === "WorkTrackerModuleOpen") {
+        return {
+          module: { __typename: "WorktrackerIssueConnection", nodes: [] },
+          work_items: { __typename: "WorktrackerIssueConnection", nodes: [] },
+        } as never;
+      }
+      return terminalExecutor(document, variables);
+    });
+    useAgentStatusStore.setState({
+      projectId: "project-1",
+      runs: {
+        "instant-run-2": {
+          agent_run_id: "instant-run-2",
+          project_id: "project-1",
+          task_id: null,
+          module_id: "module-1",
+          agent: "codex",
+          scope: "instant",
+          state: "working",
+          provider_session_id: "codex-thread-2",
+          started_at: "2026-08-30T11:00:00Z",
+          updated_at: "2026-08-30T11:00:01Z",
+        },
+      },
+      automationAttempts: {},
+      automationByTask: {},
+    });
+    const bucket = scratchBucketId("module-1");
+    useClientStore.setState({
+      selectedTaskId: TEMP_TASK_ID,
+      workspaces: {
+        [bucket]: { active: "terminal", activeDocId: null, closedDocIds: [] },
+      },
+      activeByTask: { [bucket]: "session-2" },
+    });
+
+    render(
+      <StudioApolloProvider>
+        <TasksPane />
+        <SelectedTicket />
+      </StudioApolloProvider>,
+    );
+
+    await waitFor(() => expect(operations).toContain("InstantRunTickets"));
+    expect(operations).not.toContain("InstantRunTicketTitle");
+
+    await act(async () => resolveTickets({
+      tickets: [{
+        __typename: "InstantRunTicket",
+        agent_run_id: "instant-run-2",
+        title: "Safe launch title",
+        started_at: "2026-08-30T11:00:00Z",
+      }],
+    }));
+
+    await waitFor(() => {
+      expect(operations.filter(
+        (operationName) => operationName === "InstantRunTicketTitle",
+      )).toHaveLength(1);
+      expect(screen.getAllByText("Cached only after the row exists")).toHaveLength(3);
+    });
+  });
+
+  it("[overhaul-282] titles a selected instant conversation whose run already left the live holding", async () => {
+    const titleReads: string[] = [];
+    installDesktopGraphQlRuntime(async (document, variables) => {
+      const operationName = documentOperationName(document);
+      if (operationName === "InstantRunTickets") {
+        return {
+          tickets: [{
+            __typename: "InstantRunTicket",
+            agent_run_id: "instant-run-2",
+            title: "Safe launch title",
+            started_at: "2026-08-30T11:00:00Z",
+          }],
+        } as never;
+      }
+      if (operationName === "InstantRunTicketTitle") {
+        titleReads.push((variables as { agentRunId: string }).agentRunId);
+        return { title: "Ended Codex thread name" } as never;
+      }
+      if (operationName === "WorkTrackerModuleOpen") {
+        // The module read and the ended-runs read address the same
+        // `worktrackerIssue` root field, so the module has to come back the way
+        // the host returns it or the ended runs are read off an empty list.
+        return {
+          module: {
+            __typename: "WorktrackerIssueConnection",
+            nodes: [{
+              __typename: "WorktrackerIssue",
+              id: "module-1",
+              name: "Ticketry",
+              project_id: "project-1",
+              sequence_id: 1,
+              is_archived: false,
+              issue_type: "module-type",
+              rank: "0",
+              project: {
+                __typename: "WorktrackerProject",
+                id: "project-1",
+                slug: "ticketry",
+              },
+            }],
+          },
+          work_items: { __typename: "WorktrackerIssueConnection", nodes: [] },
+        } as never;
+      }
+      return terminalSessionReadExecutor({
+        ...emptyTerminalReads,
+        readModuleScratchEndedRuns: async () => [{
+          agent_run_id: "instant-run-2",
+          agent: "codex",
+          scope: "instant",
+          provider_session_id: "codex-thread-2",
+          started_at: "2026-08-30T11:00:00Z",
+          ended_at: "2026-08-30T11:30:00Z",
+          terminated_at: null,
+        }],
+      })(document, variables);
+    });
+    // The live-only snapshot no longer holds the ended run (overhaul-278).
+    useAgentStatusStore.setState({
+      projectId: "project-1",
+      runs: {},
+      automationAttempts: {},
+      automationByTask: {},
+    });
+
+    render(
+      <StudioApolloProvider>
+        <TasksPane />
+        <SelectedTicket />
+      </StudioApolloProvider>,
+    );
+
+    fireEvent.click(await screen.findByRole("treeitem", {
+      name: /Safe launch title/,
+    }));
+
+    await waitFor(() => expect(titleReads).toEqual(["instant-run-2"]));
+    await waitFor(() => expect(
+      screen.getByTestId("details-or-terminal-pane-title"),
+    ).toHaveTextContent("Ended Codex thread name"));
+  });
+
+  it("[overhaul-264] refreshes the selected Codex conversation after its title reader restarts", async () => {
+    let titleReads = 0;
+    let publishRestart: (() => void) | undefined;
+    const terminalExecutor = terminalSessionReadExecutor(emptyTerminalReads);
+    installDesktopGraphQlRuntime(
+      async (document, variables) => {
+        const operationName = documentOperationName(document);
+        if (operationName === "InstantRunTickets") {
+          return {
+            tickets: [{
+              __typename: "InstantRunTicket",
+              agent_run_id: "instant-run-2",
+              title: "Safe launch title",
+              started_at: "2026-08-30T11:00:00Z",
+            }],
+          } as never;
+        }
+        if (operationName === "InstantRunTicketTitle") {
+          titleReads += 1;
+          return {
+            title: titleReads === 1 ? null : "Recovered Codex title",
+          } as never;
+        }
+        if (operationName === "WorkTrackerModuleOpen") {
+          return {
+            module: { __typename: "WorktrackerIssueConnection", nodes: [] },
+            work_items: { __typename: "WorktrackerIssueConnection", nodes: [] },
+          } as never;
+        }
+        return terminalExecutor(document, variables);
+      },
+      (operation, next) => {
+        if (operation.operationName !== "InstantRunTicketTitleRestarted") return;
+        publishRestart = () => next({ instant_run_ticket_title_restarted: true });
+      },
+    );
+    useAgentStatusStore.setState({
+      projectId: "project-1",
+      runs: {
+        "instant-run-2": {
+          agent_run_id: "instant-run-2",
+          project_id: "project-1",
+          task_id: null,
+          module_id: "module-1",
+          agent: "codex",
+          scope: "instant",
+          state: "working",
+          provider_session_id: "codex-thread-2",
+          started_at: "2026-08-30T11:00:00Z",
+          updated_at: "2026-08-30T11:00:01Z",
+        },
+      },
+      automationAttempts: {},
+      automationByTask: {},
+    });
+
+    render(
+      <StudioApolloProvider>
+        <TasksPane />
+        <SelectedTicket />
+      </StudioApolloProvider>,
+    );
+    fireEvent.click(await screen.findByRole("treeitem", {
+      name: /Safe launch title/,
+    }));
+
+    await waitFor(() => {
+      expect(titleReads).toBe(1);
+      expect(publishRestart).toBeTypeOf("function");
+    });
+    expect(screen.getAllByText("Safe launch title")).toHaveLength(3);
+
+    act(() => publishRestart?.());
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    act(() => publishRestart?.());
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    act(() => publishRestart?.());
+
+    expect(titleReads).toBe(1);
+
+    await waitFor(() => {
+      expect(screen.getAllByText("Recovered Codex title")).toHaveLength(3);
+    });
+    expect(titleReads).toBe(2);
   });
 });

@@ -236,8 +236,8 @@ named gate before the full Studio suite, typecheck, and build.
 | 251 | The + Agent launcher follows every workspace tab inside the shared horizontal scroller and opens the same provider picker used by Cmd+Enter instead of an inline dropdown. |
 | 252 | Opening the Modules pane gives it keyboard focus; arrow keys move its cursor without snapping back, and Enter activates the cursor. |
 | 253 | Edit-view keyboard navigation reaches the + Agent launcher after the final workspace tab and opens it with Enter. |
-| 254 | A long task Changes page scrolls its summary, actions, notices, and complete file list through one workspace owner without a false blank tail. |
-| 255 | Long module Changes keeps current worktrees and checkout files bounded in separate columns with one vertical owner per column. |
+| 254 | Focusing an agent reveals its selected Story by expanding the containing status group and all ancestors, clearing a hiding search, and scrolling the row into view even on repeated pad presses, while keeping terminal typing focus. |
+| 255 | Novation pads exclude instant chats and historical failures on startup, retain newly observed failures until acknowledged, and show running in white, stalled in red, done in green, and permission requests in flashing white. |
 | 256 | Module Changes owns horizontal overflow below the workspace pane so checkout actions and files remain reachable in a narrow pane. |
 | 257 | Dormant workspace chips stay within their own bounded vertical scroller so accumulated closed documents and past runs cannot squeeze the active workspace tab. |
 | 258 | A long Details body stays reachable through the selected workspace's single vertical scroll owner. |
@@ -252,6 +252,25 @@ named gate before the full Studio suite, typecheck, and build.
 | 267 | Workspace focus, task selection, and status cursors leave pending dialogs and toasts intact without notifying their stores. |
 | 268 | Matching mutation/event timestamps skip duplicate refreshes while distinct sub-millisecond external edits still converge. |
 | 269 | Desktop builds render terminals with embedded native libghostty and browser development renders with xterm over the WebSocket adapter; the archived Ghostty WASM renderer is absent from source, build hooks, and selectable overrides. |
+| 270 | Queued native terminal commands are ignored after their view is detached. |
+| 271 | A long task Changes page scrolls through one workspace owner. |
+| 272 | Long module Changes columns remain bounded with one scroll owner per column. |
+| 273 | Module Changes horizontal overflow stays inside the workspace. |
+| 274 | Dormant chips remain in a bounded scroll owner above the active tab. |
+| 275 | Refresh restores run status through a unique subscription identity; refused subscriptions retry. |
+
+| 276 | An explicit agent selection overrides remembered Details on the first press, and clicking a terminal tab engages its keyboard input. |
+
+| 277 | Native terminal selection transfers input ownership from the WebView before requesting first-responder focus, including repeated programmatic selection. |
+
+| 278 | The run status snapshot carries live runs only: a terminal outcome updates its run in place through the run's own event, a run the snapshot omits leaves the live holding without being presented as exited, and each snapshot costs one summary log record instead of one per run. |
+
+| 279 | Opening a Story restores its ended runs from the generated WorkItem-to-AgentRuns read: a run is restored because it still has a terminal session record and not because it ended recently, a Story whose ended runs have no record restores none, and a run the event already settled stays one chip because both paths share the AgentRuns cache identity. |
+
+| 280 | A module scratch workspace restores its ended plan, instant, and shell runs from the module WorkItem that owns them, across a reload and with an empty live holding; a module whose ended runs have no terminal session record restores none, and a run the event already settled stays one chip. |
+
+| 282 | A selected instant conversation whose run has already left the live holding is still titled: eligibility comes from the module WorkItem ended-runs read, so a Codex conversation that ended keeps refreshing its thread title. |
+| 283 | Success, info, and error toasts paint an opaque panel beneath their lifecycle tint. |
 
 Each executable case carries one stable `[overhaul-NN]` marker. The gate has a
 contract test that fails if a marker is missing or duplicated. A case whose

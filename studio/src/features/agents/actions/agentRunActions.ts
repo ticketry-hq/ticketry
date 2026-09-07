@@ -1,5 +1,5 @@
 import { useStudioStore } from "../../projects";
-import { readAgentStatusHolding } from "../status";
+import { readAgentRun } from "../status";
 import {
   bucketFor,
   foregroundKey,
@@ -9,6 +9,9 @@ import {
 import { TEMP_TASK_ID } from "../types";
 import { studioRuntime } from "../../../runtime";
 import { useClientStore } from "../../../state/clientStore";
+import { revealRunStory } from "./revealRunStory";
+import { selectedRunSession } from "./selectedAgentRun";
+import { rememberStudioWorkspaceTarget } from "../../workspace-state/studioWorkspaceTarget";
 import {
   AGENT_RUN_ACTIONS,
   type AgentRunActionId,
@@ -25,7 +28,7 @@ async function focusAgentRun(payload?: unknown): Promise<boolean> {
   const runId = runIdFrom(payload);
   if (!runId) return false;
 
-  const run = readAgentStatusHolding().runs[runId];
+  const run = readAgentRun(runId);
   if (!run) return false;
   const selectedProjectId = useStudioStore.getState().selectedProjectId;
   if (run.project_id && run.project_id !== selectedProjectId) return false;
@@ -39,7 +42,6 @@ async function focusAgentRun(payload?: unknown): Promise<boolean> {
 
   const taskId = run.scope === "task" ? run.task_id : null;
   if (run.scope === "task" && !taskId) return false;
-  workspace.selectTask(taskId ?? TEMP_TASK_ID);
 
   const terminal = useTerminalStore.getState();
   let sessionId = terminal.sessionByRun[runId] ?? null;
@@ -55,7 +57,12 @@ async function focusAgentRun(payload?: unknown): Promise<boolean> {
   if (!session) return false;
   const bucket = bucketFor(session.taskId, session.moduleId);
   workspace = useClientStore.getState();
+  // Commit the explicit destination before selecting the Story mounts its
+  // workspace and restores the previously remembered surface.
+  rememberStudioWorkspaceTarget(bucket, { kind: "terminal", agentRunId: runId });
   workspace.setActive(bucket, "terminal");
+  workspace.selectTask(taskId ?? TEMP_TASK_ID);
+  if (taskId) revealRunStory(selectedProjectId, run.module_id, taskId);
   if (workspace.sidebarVisible) {
     workspace.setFocusedPane("details-or-terminal");
   } else {
@@ -75,17 +82,7 @@ async function toggleVoiceTranscription(): Promise<boolean> {
 }
 
 function selectedRunViewerHandle(): string | null {
-  const workspace = useClientStore.getState();
-  if (!workspace.selectedTaskId) return null;
-  const bucket = workspace.selectedTaskId === TEMP_TASK_ID
-    ? bucketFor(null, workspace.selectedModuleId)
-    : bucketFor(workspace.selectedTaskId, workspace.selectedModuleId);
-  if (workspace.workspaces[bucket]?.active !== "terminal") return null;
-
-  const sessionId = workspace.activeByTask[bucket];
-  const session = sessionId
-    ? useTerminalStore.getState().sessions[sessionId]
-    : null;
+  const session = selectedRunSession();
   if (
     !session?.agentRunId ||
     session.status !== "ready" ||
@@ -93,7 +90,7 @@ function selectedRunViewerHandle(): string | null {
   ) {
     return null;
   }
-  return sessionId;
+  return session.sessionId;
 }
 
 async function submitSelectedRunTerminal(): Promise<boolean> {
@@ -102,6 +99,11 @@ async function submitSelectedRunTerminal(): Promise<boolean> {
   await studioRuntime().launchkey.submitTerminal(viewerHandle);
   return true;
 }
+
+export {
+  readSelectedAgentRunId,
+  subscribeSelectedAgentRun,
+} from "./selectedAgentRun";
 
 export function dispatchAgentRunAction(
   actionId: AgentRunActionId,

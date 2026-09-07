@@ -18,6 +18,7 @@ use crate::desktop::lifecycle::{
 };
 use crate::desktop::service_state::DesktopServiceState;
 use crate::desktop::startup::initialize_services;
+use crate::desktop::startup_trace::DesktopStartupTrace;
 use crate::{app_updates, native_terminal};
 use ticketry_terminal::ViewerCommandState;
 
@@ -33,7 +34,6 @@ macro_rules! native_invoke_handler {
             commands::desktop_validate_module_folder,
             commands::desktop_preflight_report,
             commands::desktop_approve_executable_path,
-            crate::desktop::embedded_assets::desktop_ghostty_vt_artifact,
             crate::desktop::handy::desktop_toggle_handy_transcription,
             app_updates::desktop_update_check,
             app_updates::install::desktop_update_download_and_install,
@@ -73,6 +73,15 @@ fn native_invoke_handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + 
     native_invoke_handler![]
 }
 
+fn trace_plugin(stage: &'static str) -> tauri::plugin::TauriPlugin<tauri::Wry> {
+    tauri::plugin::Builder::new(stage)
+        .setup(move |application, _| {
+            application.state::<DesktopStartupTrace>().record(stage);
+            Ok(())
+        })
+        .build()
+}
+
 /// Builds and runs the desktop application.
 ///
 /// The `context` is produced by `tauri::generate_context!()` in the root
@@ -80,22 +89,24 @@ fn native_invoke_handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + 
 /// into its own `OUT_DIR`, and `tauri-build` stays with `tauri.conf.json` in
 /// the root package. Passing the context in is the one seam that lets the
 /// shell itself live here.
-pub fn run(context: tauri::Context, file_logging_requested: bool) {
+pub fn run(context: tauri::Context, file_logging_requested: bool, app_version: &str, commit: &str) {
     let ownership = data_directory_ownership_for_startup();
     let file_log = ticketry_diagnostics::configure_process_file_log(
         file_logging_requested,
         &ownership.data_directory,
         development_log_path(),
     );
+    let startup_trace = DesktopStartupTrace::begin(file_log.clone());
     let diagnostic_reports_directory = ticketry_diagnostics::system_diagnostic_reports_directory();
-    let sentry_database_directory = ticketry_diagnostics::ghostty_sentry_database_directory();
     let crash_report = ticketry_diagnostics::collect_dirty_shutdown(
         &ownership.data_directory,
         &diagnostic_reports_directory,
-        &sentry_database_directory,
         file_log.path(),
+        app_version,
+        commit,
         Utc::now,
     );
+    startup_trace.record("dirty-shutdown-collected");
     ticketry_diagnostics::install_panic_attribution_hook(&ownership.data_directory);
     #[cfg(debug_assertions)]
     if development_panic_abort_requested() {
@@ -114,10 +125,15 @@ pub fn run(context: tauri::Context, file_logging_requested: bool) {
     #[cfg(feature = "desktop-acceptance")]
     let builder = builder.plugin(tauri_plugin_wdio_webdriver::init());
     let native_handler = native_invoke_handler();
+    // Registered last so its setup marks the end of plugin initialization.
+    // Tauri creates the configured windows right after it and before `setup`,
+    // so the gap to `tauri-setup-entered` is native window and WebView creation.
+    let builder = builder.plugin(trace_plugin("plugins-initialized"));
     let application = match builder
         .manage(ownership)
         .manage(crash_reports)
         .manage(file_log)
+        .manage(startup_trace)
         .manage(DesktopServiceState::new())
         .manage(DesktopLaunchRuntime::new())
         .manage(ViewerCommandState::new())

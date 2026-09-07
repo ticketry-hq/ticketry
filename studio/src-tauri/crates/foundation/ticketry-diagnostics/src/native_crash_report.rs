@@ -113,8 +113,13 @@ fn matching_capture_time(path: &Path) -> Option<DateTime<Utc>> {
         return None;
     }
     let header = serde_json::from_str::<IpsHeader>(&header).ok()?;
-    let body = serde_json::from_reader::<_, IpsBody>(&mut reader).ok()?;
     let process_matches = |name: &str| name == TICKETRY_APP_NAME || name == TICKETRY_PROCESS_NAME;
+    // The header names the process; skip the multi-megabyte body of every
+    // other application's report instead of parsing it on the startup path.
+    if !process_matches(&header.app_name) {
+        return None;
+    }
+    let body = serde_json::from_reader::<_, IpsBody>(&mut reader).ok()?;
     let bundle_matches = [
         header.bundle_id.as_deref(),
         body.bundle_info
@@ -124,8 +129,7 @@ fn matching_capture_time(path: &Path) -> Option<DateTime<Utc>> {
     .into_iter()
     .flatten()
     .all(|bundle_id| bundle_id == TICKETRY_BUNDLE_ID);
-    if !process_matches(&header.app_name) || !process_matches(&body.process_name) || !bundle_matches
-    {
+    if !process_matches(&body.process_name) || !bundle_matches {
         return None;
     }
     DateTime::parse_from_str(&body.capture_time, "%Y-%m-%d %H:%M:%S%.f %z")

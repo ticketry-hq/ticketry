@@ -10,7 +10,16 @@ export function instantRunPlanningRowId(runId: string): string {
   return `${INSTANT_ROW_PREFIX}${runId}`;
 }
 
-export function selectPlanningRowId(rowId: string): void {
+/**
+ * Selects a Stories row. A click on a Conversations row also drops focus into
+ * its terminal; keyboard navigation passes `focusTerminal: false` so Up/Down
+ * only select the row, exactly as they do for work items. Right then engages
+ * the terminal and Cmd+Escape leaves it.
+ */
+export function selectPlanningRowId(
+  rowId: string,
+  { focusTerminal = true }: { focusTerminal?: boolean } = {},
+): void {
   const ui = useClientStore.getState();
   const moduleId = ui.selectedModuleId;
   const runId = rowId.startsWith(INSTANT_ROW_PREFIX)
@@ -40,7 +49,7 @@ export function selectPlanningRowId(rowId: string): void {
   const bucket = scratchBucketId(moduleId);
   ui.tabSelected(bucket, sessionId);
   ui.setActive(bucket, "terminal");
-  terminal.focusSession(sessionId);
+  if (focusTerminal) terminal.focusSession(sessionId);
   // Clicking a Conversations row is a durable choice of surface, exactly like
   // clicking its workspace tab, so a reload returns to the same conversation.
   rememberStudioWorkspaceTarget(bucket, { kind: "terminal", agentRunId: runId });

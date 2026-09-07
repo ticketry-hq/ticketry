@@ -6,6 +6,7 @@ import { isTypingTarget } from "../../../shared/utilities/keyboard";
 import {
   consume,
   createNavigationContext,
+  currentPlanningRow,
   currentTaskRow,
   moveTaskSelection,
 } from "../navigationContext";
@@ -218,10 +219,19 @@ function workspaceActionHandled(
  * Only the expand branch needs a work-item row: rows without expansion of
  * their own (the scratch workspace row) fall through to the same dive Enter
  * takes, so Right always lands where Enter lands.
+ *
+ * A Conversations row has one body, its terminal, so Right engages it directly
+ * (CODING-1542); Cmd+Escape is the route back out.
  */
 function expandTaskOrDiveActiveBody(
   ctx: ReturnType<typeof createNavigationContext>,
 ): boolean {
+  if (currentPlanningRow(ctx)?.kind === "instant-run") {
+    ctx.ui.setEditViewZone("active-tab-body");
+    return workspaceActionHandled(
+      routeTaskWorkspaceEditViewAction(ctx.event, "engage-active"),
+    );
+  }
   const row = currentTaskRow(ctx);
   if (row?.expandable && !row.expanded) {
     consume(ctx.event);

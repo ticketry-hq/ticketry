@@ -8,6 +8,7 @@ import { getStatesSnapshot } from "../../features/projects";
 import type { Module, ModuleTree, Project, State, WorkItem } from "../../shared/api/types";
 import { useClientStore } from "../../state/clientStore";
 import type {
+  Row,
   TreeRow,
   WorkItemRow,
 } from "../shell/ticket-workspace/tasks/TasksPane";
@@ -95,7 +96,7 @@ export function selectedTaskIndex(
 export function selectTaskAt(rows: TreeRow[], index: number): void {
   const row = rows[index];
   if (!row || !isPlanningRow(row)) return;
-  selectPlanningRowId(planningRowId(row));
+  selectPlanningRowId(planningRowId(row), { focusTerminal: false });
 }
 
 export function moveTaskSelection(
@@ -124,12 +125,18 @@ export function moveTaskSelection(
 }
 
 export function currentTaskRow(ctx: NavigationContext): WorkItemRow | null {
+  const row = currentPlanningRow(ctx);
+  return row?.kind === "work-item" ? row : null;
+}
+
+/** The selected Stories row of any kind, including Conversations rows. */
+export function currentPlanningRow(ctx: NavigationContext): Row | null {
   const selected = selectedTaskIndex(
     ctx.taskRows,
     ctx.tasks.selectedPlanningRowId,
   );
   const row = ctx.taskRows[selected];
-  return row?.kind === "work-item" ? row : null;
+  return row && isPlanningRow(row) ? row : null;
 }
 
 function taskIndexFrom(

@@ -34,6 +34,7 @@ import {
 import {
   consume,
   createNavigationContext,
+  currentPlanningRow,
   currentTaskRow,
   moveTaskSelection,
   type NavigationContext,
@@ -292,6 +293,16 @@ function openAgentPicker(ctx: NavigationContext): boolean {
 }
 
 function expandOrEnterTask(ctx: NavigationContext): boolean {
+  const planningRow = currentPlanningRow(ctx);
+  if (planningRow?.kind === "instant-run") {
+    // Up/Down only selected the conversation; Right enters its terminal.
+    consume(ctx.event);
+    const sessionId = useTerminalStore.getState().sessionByRun[planningRow.runId];
+    if (!sessionId) return true;
+    useTerminalStore.getState().focusSession(sessionId);
+    ctx.ui.setFocusedPane("details-or-terminal");
+    return true;
+  }
   const row = currentTaskRow(ctx);
   if (!row) return false;
 

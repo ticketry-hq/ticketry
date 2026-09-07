@@ -6,6 +6,7 @@ import { useModalStore } from "../app/modal/modalStore";
 import { SelectedTicketContent } from "../app/shell/ticket-workspace/selected-ticket/SelectedTicketContent";
 import type { WorkspaceLauncherContext } from "../app/shell/ticket-workspace/selected-ticket/SelectedTicketContent";
 import type {
+  InstantRunRow,
   ScratchRow,
   TreeRow,
   WorkItemRow,
@@ -76,6 +77,15 @@ const EXPANDED_ROWS: WorkItemRow[] = [
 /** The Local scratch workspace row: selectable in Stories, never expandable. */
 const SCRATCH_ROW: ScratchRow = { kind: "scratch", moduleId: "module-1" };
 
+/** One Conversations row: its terminal is the only body it has (CODING-1542). */
+const INSTANT_ROW: InstantRunRow = {
+  kind: "instant-run",
+  runId: "instant-1",
+  moduleId: "module-1",
+  name: "Tighten the launch prompt",
+  startedAt: "2026-08-07T12:00:00Z",
+};
+
 function session(): SessionMeta {
   return {
     sessionId: "session-1",
@@ -89,6 +99,16 @@ function session(): SessionMeta {
     isInstant: false,
     initialPrompt: null,
     agentRunId: "run-1",
+  };
+}
+
+function instantSession(): SessionMeta {
+  return {
+    ...session(),
+    sessionId: "session-instant",
+    taskId: null,
+    isInstant: true,
+    agentRunId: "instant-1",
   };
 }
 
@@ -332,6 +352,95 @@ describe("overhaul acceptance — Edit view navigation zones", () => {
       engaged: useClientStore.getState().editViewBodyEngaged,
       focused: document.activeElement,
     }).toEqual(afterRight);
+  });
+
+  /**
+   * Mounts the Conversations workspace with one instant terminal, the Stories
+   * selection resting on the scratch row above it.
+   */
+  async function renderConversationWorkspace(): Promise<{
+    focusSession: ReturnType<typeof vi.fn>;
+  }> {
+    const bucket = scratchBucketId("module-1");
+    const focusSession = vi.fn();
+    useClientStore.setState({
+      selectedTaskId: TEMP_TASK_ID,
+      workspaces: { [bucket]: { active: "details", activeDocId: null, closedDocIds: [] } },
+      activeByTask: {},
+    });
+    useTerminalStore.setState({
+      sessions: { "session-instant": instantSession() },
+      sessionByRun: { "instant-1": "session-instant" },
+      focusSession,
+    });
+    render(
+      <>
+        <KeymapHarness rows={[SCRATCH_ROW, INSTANT_ROW]} />
+        <SelectedTicketContent
+          bucket={bucket}
+          projectId="project-1"
+          moduleId="module-1"
+          owner="studio"
+          details={<div>Details surface</div>}
+        />
+      </>,
+    );
+    await waitFor(() => {
+      expect(screen.getByRole("tab", { name: "instant codex terminal" })).toBeTruthy();
+    });
+    return { focusSession };
+  }
+
+  it("[CODING-1542] Down selects a conversation without entering its terminal", async () => {
+    const { focusSession } = await renderConversationWorkspace();
+    const bucket = scratchBucketId("module-1");
+
+    press("ArrowDown");
+
+    expect(useClientStore.getState().activeByTask[bucket]).toBe("session-instant");
+    expect(useClientStore.getState().workspaces[bucket]?.active).toBe("terminal");
+    expect(useClientStore.getState().editViewZone).toBe("stories");
+    expect(useClientStore.getState().editViewBodyEngaged).toBe(false);
+    expect(focusSession).not.toHaveBeenCalled();
+  });
+
+  it("[CODING-1542] Right enters the selected conversation's terminal and Cmd+Escape leaves it", async () => {
+    await renderConversationWorkspace();
+    press("ArrowDown");
+
+    press("ArrowRight");
+    expect(useClientStore.getState().editViewZone).toBe("active-tab-body");
+    expect(useClientStore.getState().editViewBodyEngaged).toBe(true);
+
+    const terminalInput = screen.getByRole("textbox", { name: "Terminal input" });
+    terminalInput.focus();
+    fireEvent.keyDown(terminalInput, { key: "Escape", metaKey: true });
+    expect(useClientStore.getState().editViewBodyEngaged).toBe(false);
+    expect(useClientStore.getState().editViewZone).toBe("active-tab-body");
+    expect(bodyElement()).toHaveFocus();
+  });
+
+  it("[CODING-1542] Right focuses the selected conversation's terminal in Full sidebar view", () => {
+    const bucket = scratchBucketId("module-1");
+    const focusSession = vi.fn();
+    useClientStore.setState({
+      sidebarVisible: true,
+      focusedPane: "tasks",
+      selectedTaskId: TEMP_TASK_ID,
+      workspaces: { [bucket]: { active: "terminal", activeDocId: null, closedDocIds: [] } },
+      activeByTask: { [bucket]: "session-instant" },
+    });
+    useTerminalStore.setState({
+      sessions: { "session-instant": instantSession() },
+      sessionByRun: { "instant-1": "session-instant" },
+      focusSession,
+    });
+    render(<KeymapHarness rows={[SCRATCH_ROW, INSTANT_ROW]} />);
+
+    press("ArrowRight");
+
+    expect(focusSession).toHaveBeenCalledWith("session-instant");
+    expect(useClientStore.getState().focusedPane).toBe("details-or-terminal");
   });
 
   it("keeps Right in the Stories zone when no navigable Task workspace is mounted", () => {

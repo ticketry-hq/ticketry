@@ -183,7 +183,12 @@ export const DEFAULT_BINDINGS: readonly BindingDefinition[] = [
   // that chord resolves to this same action on the WebView route.
   globalBinding("settings", "e"),
   globalBinding("set-folder", "f"),
-  globalBinding("close-tab", "q"),
+  // `Cmd+W` is the platform's close-tab chord; the desktop menu no longer
+  // binds it to "Close Window", so it reaches this action (CODING-1547).
+  {
+    ...globalBinding("close-tab", "q"),
+    fixedAliases: [chord("w", { meta: true })],
+  },
   {
     context: "global",
     actionId: "open-with-prompt-command",

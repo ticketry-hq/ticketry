@@ -27,6 +27,7 @@ pub(crate) mod service_health;
 pub(crate) mod service_state;
 pub(crate) mod startup;
 pub(crate) mod user_notices;
+pub(crate) mod window_menu;
 pub(crate) mod workspace_handoff;
 
 pub use run::run;

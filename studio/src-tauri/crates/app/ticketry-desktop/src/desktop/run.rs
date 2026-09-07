@@ -130,6 +130,7 @@ pub fn run(context: tauri::Context, file_logging_requested: bool) {
             document_protocol::DOCUMENT_SCHEME,
             document_protocol::serve_document_request,
         )
+        .menu(crate::desktop::window_menu::build)
         .setup(move |application| initialize_services(application, &setup_graphql_api))
         .on_page_load(|webview, payload| {
             if webview.label() == MAIN_WINDOW_LABEL

@@ -23,6 +23,8 @@ import {
   stopProcess,
   waitForPort,
 } from "./desktop-webdriver-session.mjs";
+import { proveDescriptionSaveAndStorySwitch } from "./desktop-description-acceptance.mjs";
+import { captureIdea, click, openExistingStory } from "./desktop-studio-ui.mjs";
 
 const studioRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const repositoryRoot = path.resolve(studioRoot, "..");
@@ -228,11 +230,6 @@ printf 'Ticketry desktop acceptance provider completed\\n'
   return { codex, dataDirectory, hook, marker };
 }
 
-async function click(element) {
-  await element.waitForDisplayed({ timeout: 20_000 });
-  await element.click();
-}
-
 async function createStoryThroughStudio(browser, workspaceDirectory) {
   const welcome = await browser.$('[data-testid="onboarding-welcome"]');
   await welcome.waitForDisplayed({ timeout: 60_000 });
@@ -252,25 +249,7 @@ async function createStoryThroughStudio(browser, workspaceDirectory) {
   const skipTour = await browser.$('[data-testid="onboarding-skip-tour"]');
   await click(skipTour);
 
-  const idea = await browser.$("aria/Capture an idea");
-  await idea.waitForDisplayed({ timeout: 20_000 });
-  await idea.setValue("Prove desktop agent execution");
-  await browser.keys("Enter");
-  const storySelector =
-    '//li[@role="treeitem"][.//*[@data-task-name="true" and normalize-space()="Prove desktop agent execution"]]';
-  let taskId;
-  await browser.waitUntil(async () => {
-    const story = await browser.$(storySelector);
-    if (!await story.isDisplayed().catch(() => false)) return false;
-    const candidate = await story.getAttribute("data-task-id");
-    if (!candidate || candidate.startsWith("optimistic:")) return false;
-    taskId = candidate;
-    return true;
-  }, {
-    interval: 100,
-    timeout: 20_000,
-    timeoutMsg: "the created Story did not receive its persisted identity",
-  });
+  const taskId = await captureIdea(browser, "Prove desktop agent execution");
   await openExistingStory(browser, taskId);
   return {
     launch: await browser.$("aria/Run agent"),
@@ -326,21 +305,6 @@ async function waitForState(browser, state) {
   await picker.waitUntil(async () => (await picker.getText()).includes(state), {
     timeout: 30_000,
     timeoutMsg: `ticket did not visibly move to ${state}`,
-  });
-}
-
-async function openExistingStory(browser, taskId) {
-  await browser.waitUntil(async () => {
-    const story = await browser.$(`[data-task-id="${taskId}"]`);
-    if (!await story.isDisplayed().catch(() => false)) return false;
-    await story.click().catch(() => {});
-    return await (await browser.$('[data-testid="issue-name"]'))
-      .isDisplayed()
-      .catch(() => false);
-  }, {
-    interval: 250,
-    timeout: 30_000,
-    timeoutMsg: `Story ${taskId} did not open in the details surface`,
   });
 }
 
@@ -488,6 +452,10 @@ async function main() {
     }
     const story = await createStoryThroughStudio(browser, workspaceDirectory);
     await waitForState(browser, "Ideas");
+    // CODING-1528: prove the description seam in WebKit before any run exists.
+    await proveDescriptionSaveAndStorySwitch(browser, story.taskId);
+    await openExistingStory(browser, story.taskId);
+    story.launch = await browser.$("aria/Run agent");
     writeFileSync(path.join(root, "provider-task"), `${story.taskId}\nCoding\n`);
     if (!existsSync(tools.marker)) {
       await click(story.launch);

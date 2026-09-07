@@ -1,15 +1,12 @@
-import { useMemo, useState } from "react";
-import { useStudioStore } from "../../../../../../features/projects";
-import { useModulesQuery } from "../../../../../../features/projects";
+import { useModulesQuery, useStudioStore } from "../../../../../../features/projects";
 import { formatWorkItemDisplayIdentifier } from "../../../../../../features/work-items";
+import type { Module, WorkItem } from "../../../../../../shared/api/types";
+import { IconCornerDownRight } from "../../../../../../shared/ui/icons";
+import Popover from "./Popover";
+import PickerTrigger from "./PickerTrigger";
+import WorkItemSearchList from "./WorkItemSearchList";
 
 const EMPTY_MODULES: Module[] = [];
-import type { Module, WorkItem } from "../../../../../../shared/api/types";
-import Popover, { PopoverOption } from "./Popover";
-import { IconCornerDownRight } from "../../../../../../shared/ui/icons";
-import PickerTrigger from "./PickerTrigger";
-import PopoverSearch from "./PopoverSearch";
-import PopoverContent from "./PopoverContent";
 
 interface Props {
   value: string | null;
@@ -38,21 +35,6 @@ function descendantIds(rootId: string, items: WorkItem[]): Set<string> {
   return out;
 }
 
-// Match a candidate against the search query by key (e.g. "MEML-7"), number
-// (the sequence id), or name. The query is matched case-insensitively, and a
-// bare number matches the sequence id so users can find an epic by its number.
-function matches(
-  item: { key: string; name: string; sequence_id: number | null },
-  q: string,
-): boolean {
-  const needle = q.trim().toLowerCase();
-  if (!needle) return true;
-  if (item.key.toLowerCase().includes(needle)) return true;
-  if (item.name.toLowerCase().includes(needle)) return true;
-  if (item.sequence_id != null && String(item.sequence_id).includes(needle)) return true;
-  return false;
-}
-
 // Parent picker: an Epic (module) or a task. Reparents the tree.
 export default function ParentPicker({ value, currentId, items, onChange, saving }: Props) {
   const selectedProjectId = useStudioStore((s) => s.selectedProjectId);
@@ -67,9 +49,7 @@ export default function ParentPicker({ value, currentId, items, onChange, saving
   // A resolved parent with no sequence identifier falls back to the same
   // neutral trigger text rather than showing a malformed identifier.
   const label =
-    formatWorkItemDisplayIdentifier(
-      (currentModule ?? currentTask)?.sequence_id,
-    ) || "No parent";
+    formatWorkItemDisplayIdentifier((currentModule ?? currentTask)?.sequence_id) || "No parent";
 
   return (
     <Popover
@@ -86,100 +66,15 @@ export default function ParentPicker({ value, currentId, items, onChange, saving
       )}
     >
       {(close) => (
-        <PickerBody
+        <WorkItemSearchList
           modules={modules}
-          taskOptions={taskOptions}
+          tasks={taskOptions}
           value={value}
-          onChange={onChange}
+          onSelect={onChange}
           close={close}
+          emptyLabel="No parent"
         />
       )}
     </Popover>
-  );
-}
-
-interface BodyProps {
-  modules: Module[];
-  taskOptions: WorkItem[];
-  value: string | null;
-  onChange: (parentId: string | null) => void;
-  close: () => void;
-}
-
-// The popover contents, with a search box that filters epics and tasks by key,
-// number, or name. Lives in its own component so the query resets each time the
-// popover (re)opens.
-function PickerBody({ modules, taskOptions, value, onChange, close }: BodyProps) {
-  const [query, setQuery] = useState("");
-  const matchingModules = useMemo(() => modules.filter((m) => matches(m, query)), [modules, query]);
-  const tasks = useMemo(
-    () => taskOptions.filter((t) => matches(t as unknown as Parameters<typeof matches>[0], query)),
-    [taskOptions, query],
-  );
-
-  return (
-    <div>
-      <PopoverSearch
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        placeholder="Search by number, key, or name…"
-      />
-      <PopoverContent>
-        {query.trim() === "" && (
-          <PopoverOption
-            selected={value === null}
-            onClick={() => {
-              onChange(null);
-              close();
-            }}
-          >
-            <span className="text-text-muted">No parent</span>
-          </PopoverOption>
-        )}
-        {matchingModules.length > 0 && (
-          <div className="px-3 pb-0.5 pt-2 text-xs font-bold uppercase tracking-wider text-text-secondary">
-            Modules
-          </div>
-        )}
-        {matchingModules.map((m) => (
-          <PopoverOption
-            key={m.id}
-            selected={m.id === value}
-            onClick={() => {
-              onChange(m.id);
-              close();
-            }}
-          >
-            <span className="w-20 flex-none text-xs text-text-muted">
-              {formatWorkItemDisplayIdentifier(m.sequence_id)}
-            </span>
-            <span className="truncate">{m.name}</span>
-          </PopoverOption>
-        ))}
-        {tasks.length > 0 && (
-          <div className="px-3 pb-0.5 pt-2 text-xs font-bold uppercase tracking-wider text-text-secondary">
-            Tasks
-          </div>
-        )}
-        {tasks.map((t) => (
-          <PopoverOption
-            key={t.id}
-            selected={t.id === value}
-            onClick={() => {
-              onChange(t.id);
-              close();
-            }}
-          >
-            <span className="w-20 flex-none text-xs text-text-muted">
-              {formatWorkItemDisplayIdentifier(t.sequence_id)}
-            </span>
-            <span className="truncate">{t.name}</span>
-          </PopoverOption>
-        ))}
-        {matchingModules.length === 0 && tasks.length === 0 && query.trim() !== "" && (
-          <div className="px-3 py-2 text-sm text-text-muted">No matches.</div>
-        )}
-      </PopoverContent>
-    </div>
   );
 }

@@ -1,13 +1,10 @@
-import {
-  formatWorkItemDisplayIdentifier,
-  reachable,
-} from "../../../../../../features/work-items";
+import { reachable } from "../../../../../../features/work-items";
+import { stateById, useCachedStates } from "../../../../../../features/projects";
 import type { WorkItem } from "../../../../../../shared/api/types";
 import { stateColor } from "../../../../../../shared/utilities/display";
-import Popover, { PopoverOption } from "./Popover";
-import PopoverContent from "./PopoverContent";
+import Popover from "./Popover";
 import { GhostChipAdd } from "./QuietChipControls";
-import { stateById, useCachedStates } from "../../../../../../features/projects";
+import WorkItemSearchList from "./WorkItemSearchList";
 
 interface Props {
   /** The issue being edited. */
@@ -22,8 +19,8 @@ interface Props {
 }
 
 // Blocker picker: project work-items minus self, current blockers, and any
-// candidate that would create a cycle. Mirrors the ParentPicker
-// idiom; selecting one folds it into the open issue's blocked_by replace-set.
+// candidate that would create a cycle, searched with the same list as the
+// Parent picker. Selecting one folds it into the issue's blocked_by replace-set.
 export default function BlockerPicker({ issueId, projectId, items, currentIds, onPick, saving }: Props) {
   const states = useCachedStates(projectId);
   const current = new Set(currentIds);
@@ -40,38 +37,22 @@ export default function BlockerPicker({ issueId, projectId, items, currentIds, o
       align="right"
       disabled={saving}
       trigger={({ onClick, disabled }) => (
-        <GhostChipAdd
-          onClick={onClick}
-          disabled={disabled}
-          label="Add blocker"
-        />
+        <GhostChipAdd onClick={onClick} disabled={disabled} label="Add blocker" />
       )}
     >
       {(close) => (
-        <PopoverContent>
-          {candidates.length === 0 ? (
-            <div className="px-3 py-2 text-sm text-text-muted">No eligible issues.</div>
-          ) : (
-            candidates.map((c) => (
-              <PopoverOption
-                key={c.id}
-                onClick={() => {
-                  onPick(c.id);
-                  close();
-                }}
-              >
-                <span
-                  className="h-2 w-2 flex-none"
-                  style={{ backgroundColor: stateColor(stateById(states, c.state)) }}
-                />
-                <span className="w-20 flex-none font-mono text-xs text-text-muted">
-                  {formatWorkItemDisplayIdentifier(c.sequence_id)}
-                </span>
-                <span className="flex-1 truncate">{c.name}</span>
-              </PopoverOption>
-            ))
+        <WorkItemSearchList
+          tasks={candidates}
+          value={null}
+          onSelect={(id) => id && onPick(id)}
+          close={close}
+          taskLeading={(c) => (
+            <span
+              className="h-2 w-2 flex-none"
+              style={{ backgroundColor: stateColor(stateById(states, c.state)) }}
+            />
           )}
-        </PopoverContent>
+        />
       )}
     </Popover>
   );

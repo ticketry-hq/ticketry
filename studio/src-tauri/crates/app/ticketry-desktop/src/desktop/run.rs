@@ -79,6 +79,11 @@ fn trace_plugin(stage: &'static str) -> tauri::plugin::TauriPlugin<tauri::Wry> {
             application.state::<DesktopStartupTrace>().record(stage);
             Ok(())
         })
+        .on_webview_ready(|webview| {
+            webview
+                .state::<DesktopStartupTrace>()
+                .record("main-webview-created");
+        })
         .build()
 }
 
@@ -90,13 +95,15 @@ fn trace_plugin(stage: &'static str) -> tauri::plugin::TauriPlugin<tauri::Wry> {
 /// the root package. Passing the context in is the one seam that lets the
 /// shell itself live here.
 pub fn run(context: tauri::Context, file_logging_requested: bool, app_version: &str, commit: &str) {
+    let process_started = std::time::Instant::now();
     let ownership = data_directory_ownership_for_startup();
     let file_log = ticketry_diagnostics::configure_process_file_log(
         file_logging_requested,
         &ownership.data_directory,
         development_log_path(),
     );
-    let startup_trace = DesktopStartupTrace::begin(file_log.clone());
+    let startup_trace = DesktopStartupTrace::begin(file_log.clone(), process_started);
+    startup_trace.record("ownership-and-file-log-ready");
     let diagnostic_reports_directory = ticketry_diagnostics::system_diagnostic_reports_directory();
     let crash_report = ticketry_diagnostics::collect_dirty_shutdown(
         &ownership.data_directory,
@@ -117,10 +124,14 @@ pub fn run(context: tauri::Context, file_logging_requested: bool, app_version: &
         eprintln!("Ticketry could not acquire data-directory ownership: {error}");
     }
     let graphql_api = ticketry_graphql_schema::transport_api();
+    startup_trace.record("graphql-transport-built");
     let setup_graphql_api = graphql_api.clone();
     let builder = tauri::Builder::default()
+        .plugin(trace_plugin("builder-started"))
         .plugin(tauri_plugin_dialog::init())
+        .plugin(trace_plugin("dialog-plugin-initialized"))
         .plugin(tauri_plugin_launchkey_adaptor::init())
+        .plugin(trace_plugin("launchkey-plugin-initialized"))
         .plugin(tauri_plugin_updater::Builder::new().build());
     #[cfg(feature = "desktop-acceptance")]
     let builder = builder.plugin(tauri_plugin_wdio_webdriver::init());

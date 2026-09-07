@@ -9,7 +9,7 @@ use tauri::Manager;
 const HOOK_RUNNER_BINARY: &str = "ticketry-hook";
 
 fn packaged_resource_binary(
-    application: &tauri::App,
+    application: &tauri::AppHandle,
     binary: &str,
     missing_message: &str,
 ) -> Result<PathBuf, String> {
@@ -55,7 +55,7 @@ fn packaged_binary_candidates(
     candidates
 }
 
-pub fn hook_runner_binary(application: &tauri::App) -> Result<PathBuf, String> {
+pub fn hook_runner_binary(application: &tauri::AppHandle) -> Result<PathBuf, String> {
     let binary = format!("{HOOK_RUNNER_BINARY}{}", env::consts::EXE_SUFFIX);
     packaged_resource_binary(
         application,

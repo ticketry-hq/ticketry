@@ -5,25 +5,29 @@ use std::time::Duration;
 
 use tauri::Manager;
 
+use crate::desktop::environment::automated_startup_exit_requested;
 use crate::desktop::launch_runtime::DesktopLaunchRuntime;
 use crate::desktop::mcp_runtime::{configured_mcp_ports, owned_mcp_url, start_in_process_mcp};
 use crate::desktop::packaged_binaries::hook_runner_binary;
 use crate::desktop::runtime_configuration::rust_runtime_configuration;
 use crate::desktop::service_health::ServiceHealth;
 use crate::desktop::service_state::DesktopServiceState;
+use crate::desktop::startup_trace::DesktopStartupTrace;
 use crate::desktop::{runs_handoff, workspace_handoff};
 use ticketry_data_directory::established_data_directory;
+use ticketry_graphql_schema::ComposedCommandRuntime;
 use ticketry_terminal::{
     ProductionTerminalLifecycleWork, TerminalLifecycleConfig, TerminalLifecycleRuntime,
 };
 
 pub fn launch_rust_runtime(
-    application: &tauri::App,
+    application: &tauri::AppHandle,
     graphql_api: &tauri_graphql::TransportApiImpl,
 ) -> Result<(), String> {
+    let startup_trace = application.state::<DesktopStartupTrace>();
     let state = application.state::<DesktopServiceState>();
-    state.publish(application.handle(), ServiceHealth::starting());
-    state.publish(application.handle(), ServiceHealth::migrating());
+    state.publish(application, ServiceHealth::starting());
+    state.publish(application, ServiceHealth::migrating());
 
     let data_directory = established_data_directory().map_err(|error| error.to_string())?;
     let hook_runner = hook_runner_binary(application)?;
@@ -65,6 +69,7 @@ pub fn launch_rust_runtime(
             None
         }
     };
+    startup_trace.record("mcp-listener-started");
     if let Some(runtime) = mcp_runtime.as_ref() {
         let mcp_url = owned_mcp_url(Some(runtime.address()))
             .ok_or_else(|| "the owned MCP listener did not publish an endpoint".to_owned())?;
@@ -76,6 +81,7 @@ pub fn launch_rust_runtime(
         &database,
         graphql_api,
     ))?;
+    startup_trace.record("runs-handoff-opened");
     let spool = ticketry_runs::HookSpool::new(
         spool_directory,
         ticketry_runs::RunsServices::new(database.clone())
@@ -89,82 +95,142 @@ pub fn launch_rust_runtime(
         Arc::new(composed.terminal_runtime().clone()),
         Arc::new(ticketry_terminal::TmuxCleanupRuntime::default()),
     );
-    let periodic_spool = spool.clone();
-    let terminal_runtime = Arc::new(
-        tauri::async_runtime::block_on(TerminalLifecycleRuntime::start(
-            Arc::new(ProductionTerminalLifecycleWork::new(
-                database.clone(),
-                spool,
-                reconciliation,
-                composed.viewer_ownership().clone(),
-            )),
-            TerminalLifecycleConfig {
-                sweep_interval: terminal_sweep_interval(),
-                ..TerminalLifecycleConfig::default()
-            },
-        ))
-        .map_err(|error| format!("terminal lifecycle startup failed: {error}"))?,
-    );
-    let (_, hook_spool_runtime) =
-        tauri::async_runtime::block_on(periodic_spool.start(provider_hook_sweep_interval()))
-            .map_err(|error| format!("provider hook ingestion startup failed: {error}"))?;
-    let execution_service =
-        ticketry_agent_execution::reconciliation::ExecutionReconciliationService::new(
-            database.clone(),
-            ticketry_work_management::launch_policy::LaunchPolicyResolver::new(database.clone()),
-            terminal_launch.clone(),
-        );
-    let execution_runtime = tauri::async_runtime::block_on(
-        ticketry_agent_execution::reconciliation::ExecutionReconciliationRuntime::start(
-            execution_service,
-            Arc::clone(&terminal_runtime),
-            ticketry_agent_execution::reconciliation::ExecutionReconciliationConfig::default(),
-        ),
-    )
-    .map_err(|error| format!("execution reconciliation startup failed: {error}"))?;
 
     tauri::async_runtime::block_on(workspace_handoff::open_gate(
         &data_directory,
         &composed,
         graphql_api,
-        application.handle(),
+        application,
     ))?;
-    let complete = ticketry_settings::Slice2Readiness::complete();
-    ticketry_settings::publish_readiness(&data_directory, &complete)
-        .map_err(|error| format!("could not publish Slice 2 readiness: {error}"))?;
-    state.readiness.record(&complete);
-
+    startup_trace.record("workspace-handoff-opened");
     *state
         .configuration
         .lock()
         .expect("runtime configuration lock poisoned") = Some(rust_runtime_configuration());
     *state.mcp_runtime.lock().expect("MCP runtime lock poisoned") = mcp_runtime.take();
-    *state
-        .terminal_runtime
-        .lock()
-        .expect("terminal runtime lock poisoned") = Some(terminal_runtime);
-    *state
-        .hook_spool_runtime
-        .lock()
-        .expect("hook spool runtime lock poisoned") = Some(hook_spool_runtime);
-    *state
-        .execution_runtime
-        .lock()
-        .expect("execution runtime lock poisoned") = Some(execution_runtime);
-    *state
-        .terminal_launch
-        .lock()
-        .expect("terminal launch lock poisoned") = Some(terminal_launch);
-    *state
-        .output_sweep
-        .lock()
-        .expect("output sweep lock poisoned") =
-        Some(ticketry_terminal::LiveOutputSweepRuntime::start(
-            composed.output_activity().clone(),
-            ticketry_terminal::configured_sweep_interval(),
-        ));
-    state.publish(application.handle(), ServiceHealth::ready());
+
+    // The shell renders on the `ready` health below. Terminal recovery and
+    // execution reconciliation take seconds on a large installation and gate
+    // only their own mutations, so they finish behind the open shell.
+    // Automated launches keep the synchronous order because their exit code
+    // reports startup failures.
+    let recovery = RecoveryRuntimes {
+        handle: application.clone(),
+        data_directory: data_directory.clone(),
+        database,
+        composed,
+        spool,
+        reconciliation,
+        terminal_launch,
+    };
+    if automated_startup_exit_requested() {
+        tauri::async_runtime::block_on(recovery.start())?;
+    } else {
+        let handle = application.clone();
+        tauri::async_runtime::spawn(async move {
+            if let Err(message) = recovery.start().await {
+                eprintln!("Ticketry desktop recovery runtimes failed to start: {message}");
+                let health =
+                    ServiceHealth::failed_runtime(message, &data_directory.join("ticketry.log"));
+                handle
+                    .state::<DesktopServiceState>()
+                    .publish(&handle, health);
+            }
+        });
+    }
+    state.publish(application, ServiceHealth::ready());
+    startup_trace.record("rust-runtime-ready");
     Ok(())
+}
+
+/// The runtimes that recover durable terminal and execution state after the
+/// window is already open.
+struct RecoveryRuntimes {
+    handle: tauri::AppHandle,
+    data_directory: std::path::PathBuf,
+    database: sea_orm::DatabaseConnection,
+    composed: ComposedCommandRuntime,
+    spool: ticketry_runs::HookSpool,
+    reconciliation: ticketry_terminal::TerminalReconciliationService,
+    terminal_launch: ticketry_terminal::TerminalLaunchService,
+}
+
+impl RecoveryRuntimes {
+    async fn start(self) -> Result<(), String> {
+        let startup_trace = self.handle.state::<DesktopStartupTrace>();
+        let state = self.handle.state::<DesktopServiceState>();
+        let periodic_spool = self.spool.clone();
+        let terminal_runtime = Arc::new(
+            TerminalLifecycleRuntime::start(
+                Arc::new(ProductionTerminalLifecycleWork::new(
+                    self.database.clone(),
+                    self.spool,
+                    self.reconciliation,
+                    self.composed.viewer_ownership().clone(),
+                )),
+                TerminalLifecycleConfig {
+                    sweep_interval: terminal_sweep_interval(),
+                    ..TerminalLifecycleConfig::default()
+                },
+            )
+            .await
+            .map_err(|error| format!("terminal lifecycle startup failed: {error}"))?,
+        );
+        startup_trace.record("terminal-lifecycle-started");
+        let (_, hook_spool_runtime) = periodic_spool
+            .start(provider_hook_sweep_interval())
+            .await
+            .map_err(|error| format!("provider hook ingestion startup failed: {error}"))?;
+        startup_trace.record("provider-hook-ingestion-started");
+        let execution_service =
+            ticketry_agent_execution::reconciliation::ExecutionReconciliationService::new(
+                self.database.clone(),
+                ticketry_work_management::launch_policy::LaunchPolicyResolver::new(
+                    self.database.clone(),
+                ),
+                self.terminal_launch.clone(),
+            );
+        let execution_runtime =
+            ticketry_agent_execution::reconciliation::ExecutionReconciliationRuntime::start(
+                execution_service,
+                Arc::clone(&terminal_runtime),
+                ticketry_agent_execution::reconciliation::ExecutionReconciliationConfig::default(),
+            )
+            .await
+            .map_err(|error| format!("execution reconciliation startup failed: {error}"))?;
+        startup_trace.record("execution-reconciliation-started");
+
+        let complete = ticketry_settings::Slice2Readiness::complete();
+        ticketry_settings::publish_readiness(&self.data_directory, &complete)
+            .map_err(|error| format!("could not publish Slice 2 readiness: {error}"))?;
+        state.readiness.record(&complete);
+        *state
+            .terminal_runtime
+            .lock()
+            .expect("terminal runtime lock poisoned") = Some(terminal_runtime);
+        *state
+            .hook_spool_runtime
+            .lock()
+            .expect("hook spool runtime lock poisoned") = Some(hook_spool_runtime);
+        *state
+            .execution_runtime
+            .lock()
+            .expect("execution runtime lock poisoned") = Some(execution_runtime);
+        *state
+            .terminal_launch
+            .lock()
+            .expect("terminal launch lock poisoned") = Some(self.terminal_launch);
+        *state
+            .output_sweep
+            .lock()
+            .expect("output sweep lock poisoned") =
+            Some(ticketry_terminal::LiveOutputSweepRuntime::start(
+                self.composed.output_activity().clone(),
+                ticketry_terminal::configured_sweep_interval(),
+            ));
+        startup_trace.record("recovery-runtimes-ready");
+        Ok(())
+    }
 }
 
 fn terminal_sweep_interval() -> Duration {

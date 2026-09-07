@@ -16,6 +16,11 @@ import {
   parseLaunchTraceRecords,
   renderLaunchTraceReport,
 } from "./launch-trace-report.mjs";
+import {
+  parseStartupTraceRecords,
+  renderStartupTraceReport,
+} from "./startup-trace-report.mjs";
+import { compareStartupTraces, renderStartupRegressionReport } from "./startup-trace-regression.mjs";
 
 export const workspaceRoot = fileURLToPath(new URL("..", import.meta.url));
 export const developmentLogPath = path.join(
@@ -126,6 +131,11 @@ function main(command = "show") {
         );
       }
       process.stdout.write(`${launchTraceReportFromLog(launchTraceIdentity)}\n`);
+      break;
+    }
+    case "startup": {
+      const records = parseStartupTraceRecords(recentLogLines({ limit: Infinity }));
+      process.stdout.write(`${renderStartupTraceReport(records)}\n\n${renderStartupRegressionReport(compareStartupTraces(records))}\n`);
       break;
     }
     default:

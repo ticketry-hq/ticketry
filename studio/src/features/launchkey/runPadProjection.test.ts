@@ -112,7 +112,28 @@ describe("Launchkey run pad projection", () => {
     ]);
   });
 
-  it("keeps surviving runs on their pads and gives the lowest freed pad to the next run", () => {
+  it("keeps the selected run bright and dims every other lit pad", () => {
+    const transport = new RecordingMidiTransport();
+    const projection = projectionOn(transport);
+    const runs = [
+      run({ agent_run_id: "run-1", started_at: "2026-09-04T08:00:01.000Z" }),
+      run({ agent_run_id: "run-2", state: "turn_complete", started_at: "2026-09-04T08:00:02.000Z" }),
+    ];
+
+    projection.update(holding(runs), "run-2");
+    expect(transport.sent.filter(({ data }) => data[2] > 0)).toEqual([
+      { port: "daw", data: [0x90, 96, 1] },
+      { port: "daw", data: [0x90, 97, 21] },
+    ]);
+
+    transport.sent.length = 0;
+    projection.update(holding(runs), null);
+    expect(transport.sent.filter(({ data }) => data[2] > 0)).toEqual([
+      { port: "daw", data: [0x90, 96, 3] },
+    ]);
+  });
+
+  it("closes the gap when a run exits and appends the next run in order", () => {
     const transport = new RecordingMidiTransport();
     const projection = projectionOn(transport);
     const runAt = (id: string, second: number, state: RunRecord["state"] = "working") =>
@@ -137,12 +158,35 @@ describe("Launchkey run pad projection", () => {
     ]));
 
     expect(transport.sent.filter(({ data }) => data[2] > 0)).toEqual([
-      { port: "daw", data: [0x91, 96, 3] },
-      { port: "daw", data: [0x92, 97, 13] },
+      { port: "daw", data: [0x92, 96, 13] },
+      { port: "daw", data: [0x91, 98, 3] },
     ]);
   });
 
-  it("holds failed runs until pressed, then drains overflow without reassigning acknowledged failures", () => {
+  it("orders pads like the Stories tree: conversations, tree order, then unknown tasks", () => {
+    const transport = new RecordingMidiTransport();
+    const projection = projectionOn(transport);
+
+    projection.update(holding([
+      run({ agent_run_id: "deep", task_id: "task-2", state: "turn_complete",
+        started_at: "2026-09-04T08:00:01.000Z" }),
+      run({ agent_run_id: "top", task_id: "task-1", state: "working",
+        started_at: "2026-09-04T08:00:02.000Z" }),
+      run({ agent_run_id: "chat", task_id: null, state: "needs_input",
+        started_at: "2026-09-04T08:00:03.000Z" }),
+      run({ agent_run_id: "elsewhere", task_id: "other-module-task",
+        state: "permission_required", started_at: "2026-09-04T08:00:00.000Z" }),
+    ]), null, ["task-1", "task-2"]);
+
+    expect(transport.sent.filter(({ data }) => data[2] > 0)).toEqual([
+      { port: "daw", data: [0x92, 96, 13] },
+      { port: "daw", data: [0x90, 97, 3] },
+      { port: "daw", data: [0x90, 98, 21] },
+      { port: "daw", data: [0x91, 99, 3] },
+    ]);
+  });
+
+  it("holds failed runs until pressed, then shifts the overflow up without reviving acknowledged failures", () => {
     const transport = new RecordingMidiTransport();
     const projection = projectionOn(transport);
     const runs = Array.from({ length: 17 }, (_, index) => run({
@@ -160,15 +204,24 @@ describe("Launchkey run pad projection", () => {
 
     expect(projection.press(1)).toBe("run-01");
     expect(transport.sent.filter(({ data }) => data[2] > 0)).toEqual([
-      { port: "daw", data: [0x92, 96, 13] },
+      { port: "daw", data: [0x90, 97, 3] },
+      { port: "daw", data: [0x92, 119, 13] },
     ]);
 
     transport.sent.length = 0;
-    expect(projection.press(2)).toBe("run-02");
+    expect(projection.press(1)).toBe("run-02");
     expect(transport.sent).toEqual([
-      { port: "daw", data: [0x90, 97, 0] },
-      { port: "daw", data: [0x91, 97, 0] },
-      { port: "daw", data: [0x92, 97, 0] },
+      { port: "daw", data: [0x90, 96, 0] },
+      { port: "daw", data: [0x91, 96, 0] },
+      { port: "daw", data: [0x92, 96, 0] },
+      { port: "daw", data: [0x90, 96, 3] },
+      { port: "daw", data: [0x90, 118, 0] },
+      { port: "daw", data: [0x91, 118, 0] },
+      { port: "daw", data: [0x92, 118, 0] },
+      { port: "daw", data: [0x92, 118, 13] },
+      { port: "daw", data: [0x90, 119, 0] },
+      { port: "daw", data: [0x91, 119, 0] },
+      { port: "daw", data: [0x92, 119, 0] },
     ]);
 
     transport.sent.length = 0;
@@ -196,6 +249,10 @@ describe("Launchkey run pad projection", () => {
       { port: "daw", data: [0x90, 96, 0] },
       { port: "daw", data: [0x91, 96, 0] },
       { port: "daw", data: [0x92, 96, 0] },
+      { port: "daw", data: [0x90, 96, 3] },
+      { port: "daw", data: [0x90, 97, 0] },
+      { port: "daw", data: [0x91, 97, 0] },
+      { port: "daw", data: [0x92, 97, 0] },
     ]);
   });
 

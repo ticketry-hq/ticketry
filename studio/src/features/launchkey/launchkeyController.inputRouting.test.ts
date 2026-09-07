@@ -36,6 +36,22 @@ describe("Launchkey controller input routing", () => {
     await controller.stop();
   });
 
+  it("re-lights the pads when the selected run changes", async () => {
+    const { controller, selection, transport } =
+      await startConnectedController([agentRun()]);
+
+    selection.publish("run-1");
+    expect(transport.sent).toEqual([]);
+
+    selection.publish(null);
+    expect(transport.sent).toEqual([]);
+
+    selection.publish("other-run");
+    expect(transport.sent).toEqual([]);
+
+    await controller.stop();
+  });
+
   it("focuses and frees error and lost pads when they are pressed", async () => {
     const failed = agentRun({ agent_run_id: "error-run", state: "error" });
     const lost = agentRun({
@@ -44,10 +60,13 @@ describe("Launchkey controller input routing", () => {
       started_at: "2026-09-04T08:00:01.000Z",
     });
     const { controller, dispatchAction, status, transport } =
-      await startConnectedController([failed, lost]);
+      await startConnectedController([{ ...failed, state: "working" }, { ...lost, state: "working" }]);
+    status.publish(agentStatusHolding([failed, lost]));
+    transport.sent.length = 0;
 
+    // The lost run moves up to pad 1 once the error run is acknowledged.
     transport.receive("daw", [0x90, 96, 127]);
-    transport.receive("daw", [0x90, 97, 127]);
+    transport.receive("daw", [0x90, 96, 127]);
     await settleInput();
 
     expect(dispatchAction.mock.calls).toEqual([
@@ -55,12 +74,12 @@ describe("Launchkey controller input routing", () => {
       [AGENT_RUN_ACTIONS.focusAgentRun, { runId: "lost-run" }],
     ]);
     expect(transport.sent).toEqual([
-      { port: "daw", data: [0x90, 96, 0] },
-      { port: "daw", data: [0x91, 96, 0] },
-      { port: "daw", data: [0x92, 96, 0] },
       { port: "daw", data: [0x90, 97, 0] },
       { port: "daw", data: [0x91, 97, 0] },
       { port: "daw", data: [0x92, 97, 0] },
+      { port: "daw", data: [0x90, 96, 0] },
+      { port: "daw", data: [0x91, 96, 0] },
+      { port: "daw", data: [0x92, 96, 0] },
     ]);
 
     transport.sent.length = 0;
@@ -79,11 +98,11 @@ describe("Launchkey controller input routing", () => {
 
     expect(transport.sent).toContainEqual({
       port: "daw",
-      data: [0x90, 96, 21],
+      data: [0x90, 96, 3],
     });
     expect(transport.sent).toContainEqual({
       port: "daw",
-      data: [0x90, 97, 21],
+      data: [0x90, 97, 3],
     });
 
     await controller.stop();

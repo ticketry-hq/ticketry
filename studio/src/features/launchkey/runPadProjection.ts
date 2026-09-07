@@ -19,9 +19,11 @@ interface ProjectedLight {
   readonly effect: PadEffect;
 }
 
-interface PadAssignment {
+interface PadCandidate {
   readonly runId: string;
   readonly state: RunPresentationState;
+  readonly taskId: string | null;
+  readonly startedAt: string;
 }
 
 type PadOutput = Pick<LaunchkeyMiniMK3["output"]["pads"], "set">;
@@ -33,6 +35,8 @@ const ELIGIBLE_SCOPES: ReadonlySet<AgentRunScope> = new Set([
 ]);
 
 const OFF: ProjectedLight = { color: PALETTE.off, effect: "steady" };
+// Launchkey velocity 1 is the dark grey the palette does not name.
+const DIM: ProjectedLight = { color: 1, effect: "steady" };
 const LIGHTS: Record<RunPresentationState, ProjectedLight> = {
   working: { color: PALETTE.white, effect: "steady" },
   needs_input: { color: PALETTE.yellow, effect: "pulse" },
@@ -50,11 +54,28 @@ const LIGHTS: Record<RunPresentationState, ProjectedLight> = {
   unknown: { color: PALETTE.white, effect: "pulse" },
 };
 
-function byStartOrder(left: RunRecord, right: RunRecord): number {
-  const leftStarted = left.started_at ?? left.updated_at;
-  const rightStarted = right.started_at ?? right.updated_at;
-  return leftStarted.localeCompare(rightStarted) ||
-    left.agent_run_id.localeCompare(right.agent_run_id);
+function toCandidate(run: RunRecord): PadCandidate {
+  return {
+    runId: run.agent_run_id,
+    state: projectRunPresentation(run),
+    taskId: run.task_id,
+    startedAt: run.started_at ?? run.updated_at,
+  };
+}
+
+/**
+ * Pads follow the Stories tree: taskless conversations first, then runs in
+ * tree order of their work item, then runs whose work item is not in the
+ * open module. Ties fall back to start order.
+ */
+function byTreeOrder(taskOrder: readonly string[]) {
+  const rank = new Map(taskOrder.map((id, index) => [id, index]));
+  const rankOf = (candidate: PadCandidate) =>
+    candidate.taskId === null ? -1 : rank.get(candidate.taskId) ?? Infinity;
+  return (left: PadCandidate, right: PadCandidate): number =>
+    rankOf(left) - rankOf(right) ||
+    left.startedAt.localeCompare(right.startedAt) ||
+    left.runId.localeCompare(right.runId);
 }
 
 function sameLight(
@@ -69,7 +90,15 @@ function isFailure(state: RunPresentationState): boolean {
 }
 
 export interface RunPadProjection {
-  update(status: AgentStatusData): void;
+  /**
+   * Re-lay pads out for `status`. Every other lit pad dims while
+   * `selectedRunId` occupies a pad; `taskOrder` is the Stories tree order.
+   */
+  update(
+    status: AgentStatusData,
+    selectedRunId?: string | null,
+    taskOrder?: readonly string[],
+  ): void;
   /** Return the run on a pressed pad and acknowledge it when it is red. */
   press(pad: number): string | null;
 }
@@ -78,102 +107,84 @@ export function createRunPadProjection(
   pads: PadOutput,
 ): RunPadProjection {
   const rendered: Array<ProjectedLight | undefined> = Array(PAD_COUNT);
-  const assignments: Array<PadAssignment | undefined> = Array(PAD_COUNT);
+  let assignments: Array<PadCandidate | undefined> = [];
   const acknowledgedFailures = new Set<string>();
   // Only failures of runs seen live during this connection may occupy pads.
   // A fresh status snapshot also includes historical failures.
   const observedLiveRuns = new Set<string>();
-  let waiting: PadAssignment[] = [];
+  // Failed runs stay on their pad until pressed, even once the status stream
+  // drops them.
+  const retainedFailures = new Map<string, PadCandidate>();
+  let candidates: PadCandidate[] = [];
+  let compare = byTreeOrder([]);
+  let selectedRunId: string | null = null;
   let projectId: string | null = null;
 
-  const render = () => {
+  const layout = () => {
+    assignments = candidates
+      .filter((candidate) =>
+        candidate.state !== "exited" &&
+        !(acknowledgedFailures.has(candidate.runId) && isFailure(candidate.state)))
+      .sort(compare)
+      .slice(0, PAD_COUNT);
+    const dimOthers = assignments.some((run) => run?.runId === selectedRunId);
     for (let index = 0; index < PAD_COUNT; index += 1) {
       const assignment = assignments[index];
-      const next = assignment ? LIGHTS[assignment.state] : OFF;
+      const next = !assignment
+        ? OFF
+        : dimOthers && assignment.runId !== selectedRunId
+        ? DIM
+        : LIGHTS[assignment.state];
       if (sameLight(rendered[index], next)) continue;
       pads.set(index + 1, next);
       rendered[index] = next;
     }
   };
 
-  const fillFreePads = (candidates: readonly PadAssignment[]) => {
-    const assignedIds = new Set(
-      assignments.flatMap((assignment) => assignment?.runId ?? []),
-    );
-    const available = candidates.filter((candidate) =>
-      candidate.state !== "exited" &&
-      !(acknowledgedFailures.has(candidate.runId) && isFailure(candidate.state)) &&
-      !assignedIds.has(candidate.runId)
-    );
-    let candidateIndex = 0;
-    for (let padIndex = 0; padIndex < PAD_COUNT; padIndex += 1) {
-      if (assignments[padIndex]) continue;
-      const candidate = available[candidateIndex];
-      if (!candidate) break;
-      assignments[padIndex] = candidate;
-      assignedIds.add(candidate.runId);
-      candidateIndex += 1;
-    }
-    waiting = available.slice(candidateIndex);
-  };
-
   return {
-    update(status) {
-      if (status.projectId !== projectId) observedLiveRuns.clear();
-      const candidates = (status.projectId === null
+    update(status, selected = null, taskOrder = []) {
+      selectedRunId = selected;
+      if (status.projectId !== projectId) {
+        observedLiveRuns.clear();
+        acknowledgedFailures.clear();
+        retainedFailures.clear();
+        projectId = status.projectId;
+      }
+      const live = (status.projectId === null
         ? []
         : Object.values(status.runs)
           .filter((run) => ELIGIBLE_SCOPES.has(run.scope))
           .filter((run) => !run.project_id || run.project_id === status.projectId)
-          .sort(byStartOrder))
-        .map((run): PadAssignment => ({
-          runId: run.agent_run_id,
-          state: projectRunPresentation(run),
-        }))
+          .map(toCandidate))
         .filter((run) => {
           if (isFailure(run.state)) return observedLiveRuns.has(run.runId);
           if (run.state !== "exited") observedLiveRuns.add(run.runId);
           return true;
         });
-
-      if (status.projectId !== projectId) {
-        assignments.fill(undefined);
-        acknowledgedFailures.clear();
-        projectId = status.projectId;
-      } else {
-        const current = new Map(candidates.map((candidate) => [candidate.runId, candidate]));
-        for (const candidate of candidates) {
-          if (acknowledgedFailures.has(candidate.runId) && !isFailure(candidate.state)) {
-            acknowledgedFailures.delete(candidate.runId);
-          }
-        }
-        for (let index = 0; index < PAD_COUNT; index += 1) {
-          const assigned = assignments[index];
-          if (!assigned) continue;
-          const next = current.get(assigned.runId);
-          if (!next) {
-            if (!isFailure(assigned.state)) assignments[index] = undefined;
-            continue;
-          }
-          assignments[index] = next.state === "exited" ||
-              acknowledgedFailures.has(next.runId) && isFailure(next.state)
-            ? undefined
-            : next;
+      for (const run of live) {
+        if (isFailure(run.state)) {
+          retainedFailures.set(run.runId, run);
+        } else {
+          retainedFailures.delete(run.runId);
+          acknowledgedFailures.delete(run.runId);
         }
       }
-
-      fillFreePads(candidates);
-      render();
+      const liveIds = new Set(live.map((run) => run.runId));
+      candidates = [
+        ...live,
+        ...[...retainedFailures.values()].filter((run) => !liveIds.has(run.runId)),
+      ];
+      compare = byTreeOrder(taskOrder);
+      layout();
     },
     press(pad) {
       if (!Number.isInteger(pad) || pad < 1 || pad > PAD_COUNT) return null;
-      const padIndex = pad - 1;
-      const assigned = assignments[padIndex];
+      const assigned = assignments[pad - 1];
       if (!assigned) return null;
       if (isFailure(assigned.state)) {
         acknowledgedFailures.add(assigned.runId);
-        assignments[padIndex] = waiting.shift();
-        render();
+        retainedFailures.delete(assigned.runId);
+        layout();
       }
       return assigned.runId;
     },

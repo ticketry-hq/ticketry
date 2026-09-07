@@ -152,19 +152,19 @@ export class DeferredDisconnectMidiRuntime extends MemoryMidiRuntime {
   }
 }
 
-export class MemoryStatusHolding {
+export class MemoryHolding<T> {
   private readonly listeners = new Set<() => void>();
 
-  constructor(private current: AgentStatusData) {}
+  constructor(private current: T) {}
 
-  readonly read = (): AgentStatusData => this.current;
+  readonly read = (): T => this.current;
 
   readonly subscribe = (listener: () => void): (() => void) => {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
   };
 
-  publish(current: AgentStatusData): void {
+  publish(current: T): void {
     this.current = current;
     for (const listener of [...this.listeners]) listener();
   }
@@ -207,13 +207,16 @@ export async function startConnectedController(
 ) {
   const midi = new MemoryMidiRuntime();
   midi.availablePorts = LAUNCHKEY_MINI_MK3_PORTS;
-  const status = new MemoryStatusHolding(agentStatusHolding(runs));
+  const status = new MemoryHolding(agentStatusHolding(runs));
+  const selection = new MemoryHolding<string | null>(null);
   const dispatchAction = vi.fn(async () => true);
   const controller = createLaunchkeyController({
     midi,
     discoveryIntervalMs: DISCOVERY_INTERVAL_MS,
     readStatus: status.read,
     subscribeStatus: status.subscribe,
+    readSelectedRunId: selection.read,
+    subscribeSelectedRunId: selection.subscribe,
     dispatchAction,
   });
 
@@ -221,5 +224,5 @@ export async function startConnectedController(
   const transport = midi.connectedTransports[0];
   if (!transport) throw new Error("Expected the Launchkey to connect");
   transport.sent.length = 0;
-  return { controller, dispatchAction, midi, status, transport };
+  return { controller, dispatchAction, midi, selection, status, transport };
 }

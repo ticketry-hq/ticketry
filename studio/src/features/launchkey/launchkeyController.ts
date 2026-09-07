@@ -8,6 +8,10 @@ import {
   AGENT_RUN_ACTIONS,
   type AgentRunActionId,
 } from "../../app/navigation/actionIds";
+import {
+  readSelectedAgentRunId,
+  subscribeSelectedAgentRun,
+} from "../agents/actions/agentRunActions";
 import { studioKeymapRegistry } from "../../app/navigation/keymapRegistry";
 import type {
   LaunchkeyMidiPorts,
@@ -19,6 +23,9 @@ import {
   subscribeAgentStatusHolding,
   type AgentStatusData,
 } from "../agents/status";
+import { useStudioStore } from "../projects";
+import { getModuleTaskOrderSnapshot } from "../work-items";
+import { useClientStore } from "../../state/clientStore";
 import { createRunPadProjection } from "./runPadProjection";
 
 const DEFAULT_DISCOVERY_INTERVAL_MS = 2_000;
@@ -83,7 +90,11 @@ interface LaunchkeyControllerOptions {
   readonly midi: LaunchkeyMidiRuntime;
   readonly discoveryIntervalMs?: number;
   readonly readStatus?: () => AgentStatusData;
+  /** Work-item ids in Stories tree order; pads follow it. */
+  readonly readTaskOrder?: () => readonly string[];
   readonly subscribeStatus?: (listener: () => void) => () => void;
+  readonly readSelectedRunId?: () => string | null;
+  readonly subscribeSelectedRunId?: (listener: () => void) => () => void;
   readonly dispatchAction?: ActionDispatcher;
 }
 
@@ -91,7 +102,13 @@ export function createLaunchkeyController({
   midi,
   discoveryIntervalMs = DEFAULT_DISCOVERY_INTERVAL_MS,
   readStatus = readAgentStatusHolding,
+  readTaskOrder = () => getModuleTaskOrderSnapshot(
+    useStudioStore.getState().selectedProjectId,
+    useClientStore.getState().selectedModuleId,
+  ),
   subscribeStatus = subscribeAgentStatusHolding,
+  readSelectedRunId = readSelectedAgentRunId,
+  subscribeSelectedRunId = subscribeSelectedAgentRun,
   dispatchAction = (actionId, payload) =>
     studioKeymapRegistry.dispatch(actionId, payload),
 }: LaunchkeyControllerOptions): LaunchkeyController {
@@ -157,14 +174,20 @@ export function createLaunchkeyController({
 
   const bind = (connected: LaunchkeyMiniMK3): void => {
     const projection = createRunPadProjection(connected.output.pads);
-    projection.update(readStatus());
+    // ponytail: tree order is re-read on each status or selection tick only;
+    // subscribe to the module tree if pads lag behind reorders between ticks.
+    const refresh = () => {
+      if (device === connected) {
+        projection.update(readStatus(), readSelectedRunId(), readTaskOrder());
+      }
+    };
+    refresh();
     if (recordLit) {
       connected.output.raw.send("daw", [0xbf, 117, 127]);
     }
     deviceSubscriptions = [
-      subscribeStatus(() => {
-        if (device === connected) projection.update(readStatus());
-      }),
+      subscribeStatus(refresh),
+      subscribeSelectedRunId(refresh),
       connected.input.on("pad", (event) => routePad(event, projection)),
       connected.input.on("button", (event) => routeButton(event, connected)),
       connected.on("connection", (event: unknown) => {

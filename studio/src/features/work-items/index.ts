@@ -38,6 +38,7 @@ export {
   useModuleTree,
 } from "./queries";
 export { useStoriesTree } from "./queries/useStoriesTree";
+export { getModuleTaskOrderSnapshot } from "./queries/moduleTaskOrderSnapshot";
 export {
   deriveEpic,
   orderedTaskSections,

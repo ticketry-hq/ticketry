@@ -1,4 +1,4 @@
-import { useClientStore } from "../../state/clientStore";
+import { useToastStore } from "./toastStore";
 import {
   IconAlertTriangle,
   IconCheckCircle,
@@ -14,8 +14,8 @@ import { useToastViewportPlacement } from "./useToastViewportPlacement";
 // (role=status / aria-live=polite); errors assert (role=alert) so they're read
 // even mid-action.
 export default function ToastHost() {
-  const toasts = useClientStore((s) => s.toasts);
-  const dismiss = useClientStore((s) => s.dismissToast);
+  const toasts = useToastStore((s) => s.toasts);
+  const dismiss = useToastStore((s) => s.dismissToast);
   const settingsOpen = useModalStore((state) =>
     state.modalStack.some((modal) => modal.type === "settings"));
   const placement = useToastViewportPlacement(toasts.length > 0 && !settingsOpen);
@@ -40,12 +40,15 @@ export default function ToastHost() {
             aria-live={isError ? "assertive" : "polite"}
             data-testid={`toast-${t.kind}`}
             onPointerDown={(event) => event.preventDefault()}
-            className={`pointer-events-auto flex items-start gap-2.5 border px-3 py-2.5 shadow-lg ${
+            // CODING-1546: opaque panel underneath; the lifecycle tint sits on
+            // top as a flat gradient (background-image paints over
+            // background-color), so the toast never shows through.
+            className={`pointer-events-auto flex items-start gap-2.5 border bg-pane-panel bg-gradient-to-r px-3 py-2.5 shadow-lg ${
               isError
-                ? "border-lifecycle-danger/40 bg-lifecycle-danger/15"
+                ? "border-lifecycle-danger/40 from-lifecycle-danger/15 to-lifecycle-danger/15"
                 : isInfo
-                  ? "border-lifecycle-active/40 bg-lifecycle-active/10"
-                  : "border-lifecycle-success/40 bg-lifecycle-success/15"
+                  ? "border-lifecycle-active/40 from-lifecycle-active/15 to-lifecycle-active/15"
+                  : "border-lifecycle-success/40 from-lifecycle-success/15 to-lifecycle-success/15"
             }`}
           >
             <span

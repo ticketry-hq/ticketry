@@ -137,7 +137,7 @@ async fn fixture(failure: Option<&str>) -> Fixture {
                 id integer PRIMARY KEY AUTOINCREMENT, issue_type_id char(32) NOT NULL,
                 state_id char(32) NOT NULL, prompt text NOT NULL,
                 required_skills text NOT NULL, entry_skill varchar(128),
-                model_id char(32), reasoning_id char(32),
+                profile varchar(128), model_id char(32), reasoning_id char(32),
                 auto_start bool NOT NULL, subtree_run_enabled bool NOT NULL,
                 created_at datetime NOT NULL, updated_at datetime NOT NULL,
                 UNIQUE(issue_type_id, state_id)
@@ -163,7 +163,9 @@ async fn fixture(failure: Option<&str>) -> Fixture {
                 started_at text NOT NULL, ended_at text, exit_code integer, error text,
                 cwd text, provider_session_id text, lifecycle_state text,
                 lifecycle_updated_at text, design_dir text, resumed_from text,
-                scope text NOT NULL, launch_state text, launch_model text
+                scope text NOT NULL, launch_state text, launch_model text,
+                initial_prompt text, launch_reasoning text,
+                launch_unattended bool NOT NULL DEFAULT 0
             );
             CREATE TABLE agent_terminal_sessions (
                 agent_run_id text PRIMARY KEY, tmux_session_name text NOT NULL,

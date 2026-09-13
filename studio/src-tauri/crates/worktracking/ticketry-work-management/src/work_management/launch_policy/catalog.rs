@@ -27,14 +27,6 @@ impl<'a> CatalogReader<'a> {
         binding: &BindingRow,
         provider_override: Option<&str>,
     ) -> Result<ProviderSelection, LaunchPolicyError> {
-        if binding.profile.is_some()
-            && provider_override.is_some_and(|provider| provider != "codex")
-        {
-            return Err(rejected(
-                "profile_provider_mismatch",
-                "A Codex profile cannot be used with another agent/provider.",
-            ));
-        }
         let configured_model = match binding.model_id.as_deref() {
             Some(model_id) => Some(self.model_by_id(model_id).await?),
             None => None,
@@ -59,6 +51,8 @@ impl<'a> CatalogReader<'a> {
         let mut reasoning_id = (!provider_changed)
             .then(|| binding.reasoning_id.clone())
             .flatten();
+        // A profile is a Codex-only option, so an override to another
+        // agent/provider drops it along with the model and reasoning it owns.
         let mut profile = (!provider_changed)
             .then(|| binding.profile.clone())
             .flatten();

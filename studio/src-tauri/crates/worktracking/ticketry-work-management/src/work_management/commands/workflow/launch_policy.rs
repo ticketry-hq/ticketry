@@ -39,6 +39,7 @@ pub struct PatchLaunchBinding {
     pub prompt: PatchValue<String>,
     pub required_skills: PatchValue<Vec<String>>,
     pub entry_skill: PatchValue<String>,
+    pub profile: PatchValue<String>,
     pub model_id: PatchValue<String>,
     pub reasoning_id: PatchValue<String>,
     pub auto_start: PatchValue<bool>,
@@ -64,6 +65,7 @@ pub async fn patch_launch_binding(
     let describes_a_binding = !matches!(input.prompt, PatchValue::Unset)
         || !matches!(input.required_skills, PatchValue::Unset)
         || !matches!(input.entry_skill, PatchValue::Unset)
+        || !matches!(input.profile, PatchValue::Unset)
         || !matches!(model_patch, PatchValue::Unset)
         || !matches!(reasoning_patch, PatchValue::Unset);
     let transaction = database.begin().await?;
@@ -122,6 +124,14 @@ pub async fn patch_launch_binding(
         input.entry_skill,
         current.as_ref().and_then(|row| row.entry_skill.clone()),
     );
+    // A blank or padded profile is stored verbatim by every caller but the
+    // Studio form, and then fails at launch planning. Normalize it here.
+    let profile = nullable_value(
+        input.profile,
+        current.as_ref().and_then(|row| row.profile.clone()),
+    )
+    .map(|value| value.trim().to_owned())
+    .filter(|value| !value.is_empty());
     let model_id = nullable_value(
         model_patch,
         current.as_ref().and_then(|row| row.model_id.clone()),
@@ -153,6 +163,7 @@ pub async fn patch_launch_binding(
             prompt: &prompt,
             required_skills: &required_skills,
             entry_skill: entry_skill.as_deref(),
+            profile: profile.as_deref(),
             model_id: model_id.as_deref(),
             reasoning_id: reasoning_id.as_deref(),
             auto_start,
@@ -164,6 +175,7 @@ pub async fn patch_launch_binding(
         if row.prompt == prompt
             && row.required_skills == serde_json::json!(required_skills)
             && row.entry_skill == entry_skill
+            && row.profile == profile
             && row.model_id == model_id
             && row.reasoning_id == reasoning_id
             && row.auto_start == auto_start
@@ -181,6 +193,7 @@ pub async fn patch_launch_binding(
             active.prompt = Set(prompt);
             active.required_skills = Set(serde_json::json!(required_skills));
             active.entry_skill = Set(entry_skill);
+            active.profile = Set(profile);
             active.model_id = Set(model_id);
             active.reasoning_id = Set(reasoning_id);
             active.auto_start = Set(auto_start);
@@ -196,6 +209,7 @@ pub async fn patch_launch_binding(
                 prompt: Set(prompt),
                 required_skills: Set(serde_json::json!(required_skills)),
                 entry_skill: Set(entry_skill),
+                profile: Set(profile),
                 model_id: Set(model_id),
                 reasoning_id: Set(reasoning_id),
                 auto_start: Set(auto_start),

@@ -240,6 +240,46 @@ async fn binding_profile_round_trips_and_rejects_model_combinations() {
 }
 
 #[tokio::test]
+async fn binding_profile_is_trimmed_and_blank_clears_it() {
+    let (_directory, database) = fixture().await;
+    let mut padded = patch(BUILD);
+    padded.profile = workflow::PatchValue::Value("  careful  ".to_owned());
+    padded.model_id = workflow::PatchValue::Null;
+    padded.reasoning_id = workflow::PatchValue::Null;
+    let id = workflow::patch_launch_binding(&database, padded)
+        .await
+        .unwrap();
+    assert_eq!(
+        launch_binding::Entity::find_by_id(id)
+            .one(&database)
+            .await
+            .unwrap()
+            .unwrap()
+            .profile
+            .as_deref(),
+        Some("careful")
+    );
+
+    let mut blank = patch(BUILD);
+    blank.workflow_revision = 2;
+    blank.profile = workflow::PatchValue::Value("  ".to_owned());
+    blank.model_id = workflow::PatchValue::Null;
+    blank.reasoning_id = workflow::PatchValue::Null;
+    workflow::patch_launch_binding(&database, blank)
+        .await
+        .unwrap();
+    assert_eq!(
+        launch_binding::Entity::find_by_id(id)
+            .one(&database)
+            .await
+            .unwrap()
+            .unwrap()
+            .profile,
+        None
+    );
+}
+
+#[tokio::test]
 async fn profile_only_automation_is_validated_against_codex() {
     let (_directory, database) = fixture().await;
     // No global default at all: the binding's own Codex profile must supply the

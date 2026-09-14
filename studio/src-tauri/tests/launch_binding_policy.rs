@@ -76,6 +76,7 @@ async fn fixture() -> (tempfile::TempDir, sea_orm::DatabaseConnection) {
                 id integer PRIMARY KEY AUTOINCREMENT, issue_type_id char(32) NOT NULL,
                 state_id char(32) NOT NULL, prompt text NOT NULL,
                 required_skills text NOT NULL, entry_skill varchar(128),
+                profile varchar(255),
                 model_id char(32), reasoning_id char(32),
                 auto_start bool NOT NULL, subtree_run_enabled bool NOT NULL,
                 created_at datetime NOT NULL, updated_at datetime NOT NULL,
@@ -123,6 +124,7 @@ fn patch(state_id: &str) -> workflow::PatchLaunchBinding {
         prompt: workflow::PatchValue::Value("Implement it.".to_owned()),
         required_skills: workflow::PatchValue::Value(vec!["tdd".to_owned()]),
         entry_skill: workflow::PatchValue::Value("tdd".to_owned()),
+        profile: workflow::PatchValue::Unset,
         model_id: workflow::PatchValue::Value(GPT.to_owned()),
         reasoning_id: workflow::PatchValue::Value(HIGH.to_owned()),
         auto_start: workflow::PatchValue::Value(true),
@@ -215,6 +217,59 @@ async fn binding_create_normalizes_and_round_trips_the_complete_policy() {
             .workflow_revision,
         3
     );
+}
+
+#[tokio::test]
+async fn binding_profile_round_trips_and_rejects_model_combinations() {
+    let (_directory, database) = fixture().await;
+    let mut input = patch(BUILD);
+    input.profile = workflow::PatchValue::Value("careful".to_owned());
+    input.model_id = workflow::PatchValue::Null;
+    input.reasoning_id = workflow::PatchValue::Null;
+    let id = workflow::patch_launch_binding(&database, input).await.unwrap();
+    assert_eq!(
+        launch_binding::Entity::find_by_id(id).one(&database).await.unwrap().unwrap().profile.as_deref(),
+        Some("careful")
+    );
+
+    let mut invalid = patch(REVIEW);
+    invalid.workflow_revision = 2;
+    invalid.profile = workflow::PatchValue::Value("fast".to_owned());
+    let error = workflow::patch_launch_binding(&database, invalid).await.unwrap_err();
+    assert_eq!(error.code(), "profile_conflicts_with_model");
+}
+
+#[tokio::test]
+async fn profile_only_automation_is_validated_against_codex() {
+    let (_directory, database) = fixture().await;
+    // No global default at all: the binding's own Codex profile must supply the
+    // provider the automation checks run against.
+    database
+        .execute_unprepared("DELETE FROM app_settings")
+        .await
+        .unwrap();
+    let mut input = patch(BUILD);
+    input.profile = workflow::PatchValue::Value("careful".to_owned());
+    input.model_id = workflow::PatchValue::Null;
+    input.reasoning_id = workflow::PatchValue::Null;
+    workflow::patch_launch_binding(&database, input)
+        .await
+        .expect("a profile-only binding launches as Codex");
+
+    let (_directory, database) = fixture().await;
+    database
+        .execute_unprepared("UPDATE worktracker_provider SET activated = 0 WHERE slug = 'codex'")
+        .await
+        .unwrap();
+    let mut deactivated = patch(BUILD);
+    deactivated.profile = workflow::PatchValue::Value("careful".to_owned());
+    deactivated.model_id = workflow::PatchValue::Null;
+    deactivated.reasoning_id = workflow::PatchValue::Null;
+    let error = workflow::patch_launch_binding(&database, deactivated)
+        .await
+        .unwrap_err();
+    assert_eq!(error.code(), "provider_not_activated");
+    assert_no_effect(&database).await;
 }
 
 #[tokio::test]

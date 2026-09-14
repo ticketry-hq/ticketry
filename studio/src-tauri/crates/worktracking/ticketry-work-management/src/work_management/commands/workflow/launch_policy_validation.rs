@@ -12,6 +12,7 @@ pub(super) struct LaunchBindingCandidate<'a> {
     pub prompt: &'a str,
     pub required_skills: &'a [String],
     pub entry_skill: Option<&'a str>,
+    pub profile: Option<&'a str>,
     pub model_id: Option<&'a str>,
     pub reasoning_id: Option<&'a str>,
     pub auto_start: bool,
@@ -54,10 +55,23 @@ pub(super) async fn validate_launch_binding(
             "Choose a catalog model before configuring reasoning.",
         ));
     }
+    if candidate.profile.is_some()
+        && (candidate.model_id.is_some() || candidate.reasoning_id.is_some())
+    {
+        return Err(rejected(
+            "profile",
+            "profile_conflicts_with_model",
+            "A Codex profile cannot be combined with model or reasoning overrides.",
+        ));
+    }
 
-    let provider = match candidate.model_id {
-        Some(model_id) => Some(provider_for_model(database, model_id).await?),
-        None => None,
+    // A profile is a Codex-only option, so a profile-only binding is a Codex
+    // binding even though it names no catalog model. Without this the
+    // automation checks below fall through to the global default's provider.
+    let provider = match (candidate.profile, candidate.model_id) {
+        (Some(_), _) => provider_by_slug(database, "codex").await?,
+        (None, Some(model_id)) => Some(provider_for_model(database, model_id).await?),
+        (None, None) => None,
     };
     if let (Some(model_id), Some(reasoning_id)) = (candidate.model_id, candidate.reasoning_id) {
         validate_reasoning(database, model_id, reasoning_id).await?;
@@ -209,8 +223,15 @@ async fn unattended_default_provider(
     let Some(default) = read_global_launch_default(database).await? else {
         return Ok(None);
     };
+    provider_by_slug(database, &default.provider).await
+}
+
+async fn provider_by_slug(
+    database: &impl ConnectionTrait,
+    slug: &str,
+) -> Result<Option<ProviderSelection>, CommandError> {
     Ok(provider::Entity::find()
-        .filter(provider::Column::Slug.eq(default.provider))
+        .filter(provider::Column::Slug.eq(slug))
         .one(database)
         .await?
         .map(|row| ProviderSelection {

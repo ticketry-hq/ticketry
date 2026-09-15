@@ -55,6 +55,13 @@ impl WorktreeChangesError {
         )
     }
 
+    pub fn file_path_invalid() -> Self {
+        Self::new(
+            "worktree_file_diff_path_invalid",
+            "This file is not part of the current bounded change set.",
+        )
+    }
+
     pub fn git_state_unavailable(message: impl Into<String>) -> Self {
         Self::new("worktree_changes_git_unavailable", message)
     }

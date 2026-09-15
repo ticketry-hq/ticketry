@@ -287,6 +287,7 @@ fn request(id: &str, kind: TerminalLaunchKind) -> CreateTerminalSession {
         target_id: target_id.to_owned(),
         kind,
         provider: Some("codex".to_owned()),
+        profile: None,
         model: Some("gpt-5".to_owned()),
         reasoning: Some("high".to_owned()),
         policy_reference: Some("workflow/review@7".to_owned()),
@@ -312,6 +313,7 @@ fn shell_request(id: &str) -> CreateTerminalSession {
         target_id: MODULE_ID.to_owned(),
         kind: TerminalLaunchKind::Shell,
         provider: None,
+        profile: None,
         model: None,
         reasoning: None,
         policy_reference: None,
@@ -446,7 +448,7 @@ async fn module_shell_derives_routing_and_persists_no_agent_metadata() {
         .query_one_raw(Statement::from_string(
             DbBackend::Sqlite,
             format!(
-                "SELECT agent, model, reasoning, launch_state, launch_model, provider_session_id FROM agent_runs WHERE id='{}'",
+                "SELECT agent, launch_reasoning, initial_prompt, launch_state, launch_model, provider_session_id FROM agent_runs WHERE id='{}'",
                 first.agent_run_id
             ),
         ))
@@ -455,8 +457,8 @@ async fn module_shell_derives_routing_and_persists_no_agent_metadata() {
         .unwrap();
     for column in [
         "agent",
-        "model",
-        "reasoning",
+        "launch_reasoning",
+        "initial_prompt",
         "launch_state",
         "launch_model",
         "provider_session_id",

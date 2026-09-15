@@ -3,6 +3,7 @@ pub(crate) mod composition;
 mod database;
 mod entity_registration;
 pub(crate) use ticketry_entities as entities;
+mod adoption_timing;
 pub(crate) mod error;
 mod migration_probe;
 pub(crate) mod migrations;
@@ -220,6 +221,9 @@ async fn initialize_with_worktracker_commands_and_install_inner(
     let viewer_ownership =
         ticketry_terminal::ViewerOwnershipService::new(worktracker_database.clone());
     let terminal_runtime = ticketry_terminal::InteractiveTerminalLaunchRuntime::new();
+    let instant_run_ticket_titles = Some(
+        ticketry_terminal::InstantRunTicketTitleService::production(worktracker_database.clone()),
+    );
     let terminal_services = Some(crate::query_root::TerminalServices {
         launch: ticketry_terminal::TerminalLaunchService::new(
             worktracker_database.clone(),
@@ -232,6 +236,7 @@ async fn initialize_with_worktracker_commands_and_install_inner(
         output_activity: ticketry_terminal::TerminalOutputActivityService::production(
             worktracker_database.clone(),
         ),
+        instant_run_ticket_titles,
     });
     let schema = crate::query_root::foundation_schema_with_terminal_services(
         foundation_database,
@@ -461,6 +466,7 @@ pub async fn adopt_worktracker_and_install(
     api: &tauri_graphql::TransportApiImpl,
     ownership: InstallationOwnership,
 ) -> Result<AdoptedWorktracker, FoundationInitializationError> {
+    let mut timing = adoption_timing::AdoptionTiming::new();
     // The installation itself changes hands first. Nothing below may touch a
     // database whose ownership has not transferred: the capability handoffs
     // write, and a write before the verified recovery snapshot exists is the
@@ -475,6 +481,7 @@ pub async fn adopt_worktracker_and_install(
                 .map_err(installation_adoption_error)?,
         ),
     };
+    timing.record("installation");
     // Check that the settings store can be carried forward before changing it.
     ticketry_settings::preflight(data_directory)
         .await
@@ -484,8 +491,9 @@ pub async fn adopt_worktracker_and_install(
                 error.to_string(),
             )
         })?;
+    timing.record("settings-preflight");
     // Adopt WorkTracker's state database and its Rust-owned schema changes.
-    ticketry_work_management::adoption::adopt(data_directory)
+    ticketry_work_management::ensure_adopted(data_directory)
         .await
         .map_err(|error| {
             FoundationInitializationError::new(
@@ -493,6 +501,7 @@ pub async fn adopt_worktracker_and_install(
                 error.to_string(),
             )
         })?;
+    timing.record("work-management");
     // Open the adopted state database for provider-catalog initialization.
     let provider_database =
         ticketry_work_management::open_for_commands(&data_directory.join("state.db"))
@@ -503,6 +512,14 @@ pub async fn adopt_worktracker_and_install(
                     error.to_string(),
                 )
             })?;
+    ticketry_installation::install_final_schema_migrations(&provider_database)
+        .await
+        .map_err(|error| {
+            FoundationInitializationError::new(
+                FoundationInitializationErrorCode::WorktrackerDatabaseOpen,
+                format!("final schema migration failed: {error}"),
+            )
+        })?;
     // Create or update the provider catalog against that adopted database.
     ticketry_settings::ProviderCatalogService::open(provider_database)
         .await
@@ -512,6 +529,7 @@ pub async fn adopt_worktracker_and_install(
                 error.to_string(),
             )
         })?;
+    timing.record("provider-catalog");
     // Adopt the settings store after its provider catalog is available.
     ticketry_settings::adopt(data_directory)
         .await
@@ -521,38 +539,34 @@ pub async fn adopt_worktracker_and_install(
                 error.to_string(),
             )
         })?;
+    timing.record("settings");
     // Typed Module Links are imported once the settings store is Rust-owned
     // and its profile snapshot is verified, so the rows commit while their
     // legacy source is still recoverable. The import is idempotent: every
     // later launch re-runs it and changes nothing.
     import_module_links(data_directory).await?;
+    timing.record("module-links");
     // The Runs write lease changes hands here, before any Rust Runs command is
     // reachable. An unknown or corrupt Runs schema refuses adoption and leaves
     // the pre-cutover snapshot restorable.
-    ticketry_runs::preflight(data_directory)
+    ticketry_runs::ensure_adopted(data_directory)
         .await
         .map_err(runs_adoption_error)?;
-    ticketry_runs::adopt(data_directory)
-        .await
-        .map_err(runs_adoption_error)?;
+    timing.record("runs");
     // Terminal persistence depends on the adopted Agent Run and Launch Effect
     // identities. Refuse an unknown Terminal leaf before the product schema or
     // any Rust terminal writer becomes reachable.
-    ticketry_terminal::preflight_terminal_persistence(data_directory)
+    ticketry_terminal::ensure_terminal_persistence_adopted(data_directory)
         .await
         .map_err(terminal_adoption_error)?;
-    ticketry_terminal::adopt_terminal_persistence(data_directory)
-        .await
-        .map_err(terminal_adoption_error)?;
+    timing.record("terminals");
     // Execution campaigns depend on adopted Work Management, Runs, and
     // Terminal identities. Classify and validate them only after those three
     // stores are ready, and before any future Graph Run command is composed.
-    ticketry_agent_execution::persistence::preflight(data_directory)
+    ticketry_agent_execution::ensure_adopted(data_directory)
         .await
         .map_err(execution_adoption_error)?;
-    ticketry_agent_execution::persistence::adopt(data_directory)
-        .await
-        .map_err(execution_adoption_error)?;
+    timing.record("execution");
     // The Documents and Worktrees write leases change hands here, after Runs
     // because document and worktree facts are appended to the Runs outbox, and
     // before any workspace command is composed. An unknown or malformed
@@ -561,6 +575,7 @@ pub async fn adopt_worktracker_and_install(
     ticketry_workspace_runtime::handoff::adopt(data_directory)
         .await
         .map_err(workspace_adoption_error)?;
+    timing.record("workspace");
     // Every capability has handed over, so the durable status-event ledger the
     // boundary is published into now exists. Readiness opens here, after the
     // last handoff and before the endpoint is installed, because the endpoint
@@ -570,6 +585,7 @@ pub async fn adopt_worktracker_and_install(
             .await
             .map_err(installation_adoption_error)?;
     }
+    timing.record("readiness");
     // Compose native command services and install their GraphQL endpoint.
     let composed = initialize_with_worktracker_commands_and_install_inner(
         foundation_database_path,
@@ -579,8 +595,10 @@ pub async fn adopt_worktracker_and_install(
         api,
     )
     .await?;
+    timing.record("graphql-composition");
     // Confirm the installed endpoint can answer its readiness query.
     verify_graphql_readiness(api).await?;
+    timing.record("graphql-readiness");
     // Return the services that the desktop runtime starts after initialization.
     Ok(AdoptedWorktracker {
         runtime: ComposedCommandRuntime::new(composed),

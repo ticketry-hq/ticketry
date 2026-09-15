@@ -56,12 +56,12 @@ impl DesktopLaunchRuntime {
 
     pub fn replace_terminal_mcp_authority(
         &self,
-        mcp_url: String,
+        mcp_data_directory: std::path::PathBuf,
         authority: ticketry_mcp::RunAuthority,
     ) -> Result<(), String> {
         self.composed()?
             .terminal_runtime()
-            .replace_mcp_authority(mcp_url, authority)
+            .replace_mcp_authority(mcp_data_directory, authority)
     }
 
     pub fn viewer_ownership(&self) -> Result<ticketry_terminal::ViewerOwnershipService, String> {

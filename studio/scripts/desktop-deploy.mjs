@@ -103,7 +103,7 @@ export async function deploy({ execute = run, installPath = defaultInstallPath }
 
   await execute(
     "npm",
-    ["run", "desktop:build", "--", "--target", target.id, "--allow-unsigned"],
+    ["run", "desktop:build", "--", "--target", target.id, "--allow-unsigned", "--allow-dirty"],
     "unsigned local desktop build",
   );
   const source = stagedAppPath(manifest, target);

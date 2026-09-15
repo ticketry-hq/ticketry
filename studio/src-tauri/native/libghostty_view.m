@@ -122,16 +122,6 @@ muxed_ghostty_scroll_mods(NSEvent *event) {
   return self;
 }
 
-- (void)dealloc {
-  if (_surface != NULL) {
-    ghostty_surface_t surface = _surface;
-    _surface = NULL;
-    muxed_ghostty_surface_owner_invalidate(&_surfaceOwner);
-    ghostty_surface_free(surface);
-  }
-  [super dealloc];
-}
-
 - (BOOL)acceptsFirstResponder {
   return _acceptsInput;
 }

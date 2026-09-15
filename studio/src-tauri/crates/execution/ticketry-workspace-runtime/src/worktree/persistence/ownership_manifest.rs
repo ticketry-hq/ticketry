@@ -5,8 +5,8 @@
 //! schema against this manifest, so the manifest is enforcement rather than
 //! documentation.
 
-use super::pull_request_url_migration;
 use super::schema::{LEDGER_TABLE, WORKTREE_COLUMNS};
+use super::{pull_request_url_migration, ship_record_migration};
 
 /// Version of the checked Worktree ownership contract.
 pub const VERSION: i32 = 1;
@@ -35,6 +35,20 @@ pub const AUTHORED_TABLES: &[(&str, &[&str])] = &[
             "source_commit",
             "applied_at",
         ],
+    ),
+    (
+        ship_record_migration::LEDGER_TABLE,
+        &[
+            "singleton",
+            "version",
+            "migration_id",
+            "source_commit",
+            "applied_at",
+        ],
+    ),
+    (
+        ship_record_migration::SHIP_RECORD_TABLE,
+        ship_record_migration::SHIP_RECORD_COLUMNS,
     ),
 ];
 

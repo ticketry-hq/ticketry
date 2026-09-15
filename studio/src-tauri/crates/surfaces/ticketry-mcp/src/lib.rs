@@ -143,6 +143,25 @@ impl McpRuntime {
         .await
     }
 
+    /// Starts the listener with both a caller-supplied terminal launch service
+    /// and a caller-supplied cleanup runtime. `mcp_acceptance` needs the
+    /// runtime seam; the kill-failure acceptance test needs both at once.
+    #[cfg(any(test, feature = "test-support"))]
+    pub async fn start_for_test_with_terminal_launch(
+        configuration: McpConfiguration,
+        ownership: &DataDirectoryGuard,
+        cleanup_runtime: std::sync::Arc<dyn ticketry_terminal::TerminalCleanupRuntime>,
+        terminal_launch: ticketry_terminal::TerminalLaunchService,
+    ) -> Result<Self, McpStartupError> {
+        Self::start_with_services(
+            configuration,
+            ownership,
+            cleanup_runtime,
+            Some(terminal_launch),
+        )
+        .await
+    }
+
     /// Starts the listener against a caller-supplied terminal cleanup runtime.
     /// The root package's `mcp_acceptance` integration binary needs this seam,
     /// so it ships behind `test-support` as well as this crate's own tests.
@@ -157,10 +176,28 @@ impl McpRuntime {
 
     async fn start_with_services(
         configuration: McpConfiguration,
-        _ownership: &DataDirectoryGuard,
+        ownership: &DataDirectoryGuard,
         cleanup_runtime: std::sync::Arc<dyn ticketry_terminal::TerminalCleanupRuntime>,
         terminal_launch: Option<ticketry_terminal::TerminalLaunchService>,
     ) -> Result<Self, McpStartupError> {
+        let data_directory = configuration.data_directory();
+        let owned_directory = ownership
+            .lock_path()
+            .parent()
+            .ok_or_else(|| McpStartupError::other("data-directory ownership has no directory"))?;
+        let canonical = |path: &std::path::Path| {
+            path.canonicalize().map_err(|error| {
+                McpStartupError::other(format!(
+                    "could not verify MCP data-directory ownership for {}: {error}",
+                    path.display()
+                ))
+            })
+        };
+        if canonical(&data_directory)? != canonical(owned_directory)? {
+            return Err(McpStartupError::other(
+                "MCP startup requires ownership of the selected data directory",
+            ));
+        }
         verify_registry().map_err(McpStartupError::other)?;
         let database = open_for_commands(&configuration.database_path)
             .await
@@ -169,7 +206,6 @@ impl McpRuntime {
                     "could not open WorkTracker commands for MCP: {error}"
                 ))
             })?;
-        let data_directory = configuration.data_directory();
         let authority = RunAuthority::persistent(database.clone(), &data_directory)
             .map_err(McpStartupError::other)?;
         let socket_path = mcp_socket_path(&data_directory);
@@ -292,10 +328,12 @@ async fn serve_connection(
 ) {
     let (read, mut write) = stream.into_split();
     let mut read = tokio::io::BufReader::new(read);
-    let Ok(connection) =
-        connection_handshake::authenticate(&mut read, &mut write, &authority).await
-    else {
-        return;
+    let connection = tokio::select! {
+        _ = cancellation.cancelled() => return,
+        connection = connection_handshake::authenticate(&mut read, &mut write, &authority) => {
+            let Ok(connection) = connection else { return };
+            connection
+        }
     };
     let running = match service
         .for_connection(connection)

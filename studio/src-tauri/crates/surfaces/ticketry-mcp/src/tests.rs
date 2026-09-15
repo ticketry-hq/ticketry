@@ -128,6 +128,22 @@ async fn socket_is_bound_privately_inside_the_data_directory_and_removed_on_shut
 }
 
 #[tokio::test]
+async fn shutdown_does_not_wait_for_an_unwritten_handshake() {
+    let directory = tempfile::tempdir().unwrap();
+    create_empty_database(directory.path()).await;
+    let ownership = own(directory.path());
+    let runtime = start(directory.path(), &ownership).await;
+    let _client = tokio::net::UnixStream::connect(runtime.socket_path())
+        .await
+        .unwrap();
+    tokio::task::yield_now().await;
+
+    tokio::time::timeout(std::time::Duration::from_millis(500), runtime.shutdown())
+        .await
+        .expect("shutdown must cancel a pending socket handshake");
+}
+
+#[tokio::test]
 async fn a_live_listener_is_not_displaced_by_a_second_start() {
     let directory = tempfile::tempdir().unwrap();
     create_empty_database(directory.path()).await;
@@ -148,6 +164,26 @@ async fn a_live_listener_is_not_displaced_by_a_second_start() {
         "the first listener must keep serving"
     );
     first.shutdown().await;
+}
+
+#[tokio::test]
+async fn a_guard_for_another_directory_cannot_reclaim_its_socket() {
+    let owned = tempfile::tempdir().unwrap();
+    let foreign = tempfile::tempdir().unwrap();
+    create_empty_database(foreign.path()).await;
+    let ownership = own(owned.path());
+    let socket = mcp_socket_path(foreign.path());
+    drop(std::os::unix::net::UnixListener::bind(&socket).unwrap());
+    use std::os::unix::fs::MetadataExt;
+    let inode = std::fs::metadata(&socket).unwrap().ino();
+
+    let result = McpRuntime::start(configuration(foreign.path()), &ownership).await;
+
+    assert!(
+        result.is_err(),
+        "a foreign directory guard must refuse startup"
+    );
+    assert_eq!(std::fs::metadata(&socket).unwrap().ino(), inode);
 }
 
 #[tokio::test]
@@ -225,10 +261,12 @@ async fn an_overlong_socket_path_is_an_explicit_startup_error() {
 async fn database_startup_failure_retains_context_without_collision_classification() {
     let directory = tempfile::tempdir().unwrap();
     let ownership = own(directory.path());
+    let invalid_database = directory.path().join("database-directory");
+    std::fs::create_dir(&invalid_database).unwrap();
 
     let failure = match McpRuntime::start(
         McpConfiguration {
-            database_path: directory.path().to_path_buf(),
+            database_path: invalid_database,
             media_root: directory.path().join("media"),
         },
         &ownership,
@@ -543,4 +581,22 @@ fn mcp_write_adapters_do_not_own_seaorm_queries_or_domain_sequencing() {
         .unwrap();
     assert_eq!(launch.matches("workflow::patch_launch_binding(").count(), 1);
     assert!(!launch.contains("read_queries::launch_bindings"));
+}
+
+#[test]
+fn a_launch_profile_is_refused_for_every_provider_but_codex() {
+    use ticketry_work_management::commands::workflow::PatchValue;
+    use workflow_tools::ensure_profile_supported;
+
+    let profile = PatchValue::Value("x".to_owned());
+    let error = ensure_profile_supported(Some("claude"), &profile)
+        .expect_err("a Claude binding must refuse a launch profile");
+    assert_eq!(error.code(), "incompatible_profile");
+    assert_eq!(error.field_name(), Some("profile"));
+    assert_eq!(error.to_string(), "Only Codex supports launch profiles.");
+
+    assert!(ensure_profile_supported(Some("codex"), &profile).is_ok());
+    assert!(ensure_profile_supported(None, &profile).is_ok());
+    assert!(ensure_profile_supported(Some("claude"), &PatchValue::Null).is_ok());
+    assert!(ensure_profile_supported(Some("claude"), &PatchValue::Unset).is_ok());
 }

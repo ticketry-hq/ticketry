@@ -14,7 +14,9 @@ use super::global_launch_default::{
     GlobalLaunchDefault, PROVIDER_CATALOG_KEY, PROVIDER_CATALOG_SCOPE,
 };
 use super::provider_catalog_read::load_from;
-use ticketry_entities::{agent_model, agent_model_reasoning_level, provider, reasoning_level};
+use ticketry_entities::{
+    agent_model, agent_model_reasoning_level, provider, reasoning_level, StringList,
+};
 
 const ADAPTER_SLUGS: [&str; 4] = ["claude", "agy", "codex", "gemini"];
 pub(super) const CONFIGURABLE_PROVIDER_SLUGS: [&str; 3] = ["claude", "codex", "gemini"];
@@ -31,12 +33,14 @@ pub struct ProviderCatalog {
     pub agent_models: Vec<agent_model::Model>,
     /// All reasoning rows in deterministic name order.
     pub reasoning_levels: Vec<reasoning_level::Model>,
+    pub codex_profiles: StringList,
     pub global_default: Option<GlobalLaunchDefault>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProviderCatalogUpdate {
     pub activated_providers: Vec<String>,
+    pub codex_profiles: Vec<String>,
     pub global_default: Option<GlobalLaunchDefault>,
 }
 
@@ -99,9 +103,16 @@ impl ProviderCatalogService {
         update: ProviderCatalogUpdate,
     ) -> Result<ProviderCatalog, ProviderCatalogError> {
         let activated = normalized_activation(update.activated_providers)?;
+        let codex_profiles = normalized_profiles(update.codex_profiles);
         let global_default = normalize_default(update.global_default)?;
         let transaction = self.database.begin().await?;
-        validate_update(&transaction, &activated, global_default.as_ref()).await?;
+        validate_update(
+            &transaction,
+            &activated,
+            &codex_profiles,
+            global_default.as_ref(),
+        )
+        .await?;
 
         for slug in CONFIGURABLE_PROVIDER_SLUGS {
             provider::Entity::update_many()
@@ -114,6 +125,7 @@ impl ProviderCatalogService {
                 .await?;
         }
         let value = serde_json::to_string(&PersistedProviderCatalog {
+            codex_profiles,
             global_default: global_default.clone(),
         })?;
         app_setting::Entity::insert(app_setting::ActiveModel {
@@ -189,7 +201,18 @@ impl From<serde_json::Error> for ProviderCatalogError {
 
 #[derive(Serialize)]
 struct PersistedProviderCatalog {
+    codex_profiles: Vec<String>,
     global_default: Option<GlobalLaunchDefault>,
+}
+
+fn normalized_profiles(values: Vec<String>) -> Vec<String> {
+    values
+        .into_iter()
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect()
 }
 
 fn normalized_activation(values: Vec<String>) -> Result<BTreeSet<String>, ProviderCatalogError> {
@@ -230,6 +253,7 @@ fn normalize_default(
     };
     Ok(Some(GlobalLaunchDefault {
         provider,
+        profile: optional(value.profile),
         model: optional(value.model),
         reasoning: optional(value.reasoning),
     }))
@@ -238,6 +262,7 @@ fn normalize_default(
 async fn validate_update(
     database: &impl ConnectionTrait,
     activated: &BTreeSet<String>,
+    codex_profiles: &[String],
     default: Option<&GlobalLaunchDefault>,
 ) -> Result<(), ProviderCatalogError> {
     let Some(default) = default else {
@@ -261,6 +286,26 @@ async fn validate_update(
                 default.provider
             ),
         ));
+    }
+    if let Some(profile) = default.profile.as_deref() {
+        if default.provider != "codex" {
+            return Err(validation(
+                "default_profile",
+                "Only Codex supports launch profiles.",
+            ));
+        }
+        if !codex_profiles.iter().any(|candidate| candidate == profile) {
+            return Err(validation(
+                "default_profile",
+                format!("Codex profile '{profile}' is not registered."),
+            ));
+        }
+        if default.model.is_some() || default.reasoning.is_some() {
+            return Err(validation(
+                "default_profile",
+                "A Codex profile cannot be combined with model or reasoning overrides.",
+            ));
+        }
     }
     let provider_id = provider.id;
     let model_id = match default.model.as_deref() {

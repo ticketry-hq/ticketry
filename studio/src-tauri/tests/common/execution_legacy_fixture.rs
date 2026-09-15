@@ -52,9 +52,54 @@ pub async fn provision_current(data_directory: &Path) {
         .await
         .expect("seed the historical execution fixture");
     database
+        .execute_unprepared("PRAGMA journal_mode=WAL")
+        .await
+        .expect("match the shipped Django journal mode");
+    database
         .close()
         .await
         .expect("close historical execution fixture");
+}
+
+/// Seed the two project/issue scopes shared by Runs adoption tests. The schema
+/// and migration ledger come from the checked Django fixture above, so tests
+/// do not require the retired Python backend to construct their input store.
+pub async fn provision_runs_fixture(data_directory: &Path) {
+    install_current_shape(data_directory)
+        .await
+        .close()
+        .await
+        .expect("close Runs fixture schema");
+    mutate(
+        data_directory,
+        r#"
+INSERT INTO worktracker_workspace
+    (id,slug,name,created_at,updated_at,onboarding_required)
+VALUES
+    ('00000000000000000000000000000320','runs-fixture','Runs Fixture','2026-08-19 17:00:00','2026-08-19 17:00:00',0);
+INSERT INTO worktracker_project
+    (id,name,slug,description,seq_counter,created_at,updated_at,workspace_id,state_revision,manual_module_order)
+VALUES
+    ('00000000000000000000000000000321','Project 800','P800','',800,'2026-08-19 17:00:00','2026-08-19 17:00:00','00000000000000000000000000000320',0,0),
+    ('0000000000000000000000000000032b','Project 810','P810','',810,'2026-08-19 17:00:00','2026-08-19 17:00:00','00000000000000000000000000000320',0,0);
+INSERT INTO worktracker_state
+    (id,name,"group",color,created_at,updated_at,project_id,sort_order,is_protected)
+VALUES
+    ('00000000000000000000000000000322','Todo','unstarted','','2026-08-19 17:00:00','2026-08-19 17:00:00','00000000000000000000000000000321',1,0),
+    ('0000000000000000000000000000032c','Todo','unstarted','','2026-08-19 17:00:00','2026-08-19 17:00:00','0000000000000000000000000000032b',1,0);
+INSERT INTO worktracker_issuetype
+    (id,name,level,color,sort_order,created_at,updated_at,project_id,start_state_id,workflow_revision,is_pathfind)
+VALUES
+    ('00000000000000000000000000000323','Story','task','',1,'2026-08-19 17:00:00','2026-08-19 17:00:00','00000000000000000000000000000321','00000000000000000000000000000322',0,0),
+    ('0000000000000000000000000000032d','Story','task','',1,'2026-08-19 17:00:00','2026-08-19 17:00:00','0000000000000000000000000000032b','0000000000000000000000000000032c',0,0);
+INSERT INTO worktracker_issue
+    (id,type,name,sequence_id,description,created_at,updated_at,project_id,state_id,is_archived,rank,state_revision,issue_type_id,parent_id,module_id)
+VALUES
+    ('00000000000000000000000000000324','task','Runs fixture',800,'','2026-08-19 17:00:00','2026-08-19 17:00:00','00000000000000000000000000000321','00000000000000000000000000000322',0,'z',0,'00000000000000000000000000000323',NULL,NULL),
+    ('0000000000000000000000000000032e','task','Runs fixture',810,'','2026-08-19 17:00:00','2026-08-19 17:00:00','0000000000000000000000000000032b','0000000000000000000000000000032c',0,'z',0,'0000000000000000000000000000032d',NULL,NULL);
+"#,
+    )
+    .await;
 }
 
 pub async fn mutate(data_directory: &Path, sql: &str) {
@@ -290,6 +335,14 @@ INSERT INTO agent_runs
     (id,ticket_seq,status,started_at,ended_at,cwd,lifecycle_state,lifecycle_updated_at,scope,issue_id,agent)
 VALUES
     ('run-893',893,'completed','2026-08-19 12:30:00','2026-08-19 12:45:00','/tmp','working','2026-08-19 12:45:00','task','00000000000000000000000000089307','codex');
+INSERT INTO design_documents
+    (id,module_id,task_id,scope,root_dir,rel_path,discovered_by_run_id,created_at,updated_at)
+VALUES
+    ('00000000000000000000000000089320','00000000-0000-0000-0000-000000089305','00000000-0000-0000-0000-000000089307','task','/tmp/ticketry','SPEC.md','run-893','2026-08-19 12:30:00','2026-08-19 12:45:00');
+INSERT INTO worktrees
+    (id,task_id,workspace_slug,project_id,module_id,ticket_seq,repo_root,path,branch,base_branch,base_commit,status,ephemeral,created_at,updated_at)
+VALUES
+    ('worktree-893','00000000000000000000000000089307','execution-adoption','00000000000000000000000000089301','00000000000000000000000000089305',893,'/tmp/ticketry','/tmp/ticketry/worktree','ticketry-893','main','0123456789abcdef','active',0,'2026-08-19 12:30:00','2026-08-19 12:45:00');
 INSERT INTO graph_runs
     (root_id,project_id,module_id,agent,execution_mode,launch_configuration,created_at,updated_at)
 VALUES

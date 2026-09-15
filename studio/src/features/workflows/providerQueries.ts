@@ -56,10 +56,12 @@ function holdingFromGraphQl(payload: ProviderCatalogPayload): ProviderHolding {
       activated_providers: payload.configurable_providers
         .filter((provider) => provider.activated && isConfigurable(provider.slug))
         .map((provider) => provider.slug as ConfigurableProvider),
+      codex_profiles: payload.codex_profiles ?? [],
       global_default: payload.global_default
         && isConfigurable(payload.global_default.provider)
         ? {
             provider: payload.global_default.provider,
+            profile: payload.global_default.profile ?? null,
             model: payload.global_default.model,
             reasoning: payload.global_default.reasoning,
           }
@@ -94,6 +96,20 @@ export async function loadConfigurableProviderCapabilities(): Promise<
   return (await fetchHolding()).configurableCapabilities;
 }
 
+/**
+ * Warm the catalog holding without subscribing to it (CODING-1463).
+ *
+ * Launch surfaces read the catalog out of the cache the instant they mount,
+ * and no long-lived surface subscribes to it, so a picker that mounts first
+ * mounts cold: it renders `providerListPlaceholder`'s "Loading providers…"
+ * and ignores confirm until the round trip lands. Cache-first makes a warm
+ * catalog free and a failed one retryable on the next call, and the rejection
+ * is swallowed because the surface's own query is what reports failure.
+ */
+export function prefetchProviderCatalog(): void {
+  void fetchHolding().catch(() => {});
+}
+
 export async function updateProviderCatalog(
   catalog: ProviderCatalog,
 ): Promise<ProviderCatalog> {
@@ -102,7 +118,9 @@ export async function updateProviderCatalog(
     mutation: UpdateProviderCatalogDocument,
     variables: {
       activatedProviders: catalog.activated_providers,
+      codexProfiles: catalog.codex_profiles,
       defaultProvider: catalog.global_default?.provider ?? null,
+      defaultProfile: catalog.global_default?.profile ?? null,
       defaultModel: catalog.global_default?.model ?? null,
       defaultReasoning: catalog.global_default?.reasoning ?? null,
     },
@@ -143,6 +161,7 @@ export function setProviderCatalog(catalog: ProviderCatalog): void {
           reasoning_levels: { nodes: [...model.reasoning_levels.nodes] },
         })),
         reasoning_levels: [...current.reasoning_levels],
+        codex_profiles: catalog.codex_profiles,
         global_default: catalog.global_default,
       },
     } as unknown as LoadProviderCatalogQuery,
@@ -217,6 +236,10 @@ export function setProviderCapabilities(capabilities: ProviderCapabilities[]): v
 export function getProviderCapabilitiesSnapshot(): ProviderCapabilities[] | undefined {
   const payload = providerPayloadSnapshot();
   return payload ? holdingFromGraphQl(payload).capabilities : undefined;
+}
+
+export function getCodexProfilesSnapshot(): string[] {
+  return providerPayloadSnapshot()?.codex_profiles ?? [];
 }
 
 export function useProviderCatalogQuery() {

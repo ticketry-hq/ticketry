@@ -16,7 +16,7 @@
 //! installation exclusively, snapshots it, records in one transaction that
 //! Rust owns it, provisions the Rust-only journals the source never had, and
 //! only then opens readiness. [`final_schema_migrations`] composes the 0044
-//! through 0052 parity chain, which spans work management, settings and
+//! through 0057 parity chain, which spans work management, settings and
 //! worktree schemas and so belongs to none of them.
 
 mod adoption;
@@ -48,6 +48,7 @@ pub use adoption::recovery::{
 };
 pub use adoption::snapshot::{verify as verify_snapshot, SnapshotRecord, PINNED_SNAPSHOT};
 pub use adoption::snapshot_manifest::{ExternalRoot, SnapshotManifest};
+pub use adoption::verification_policy::{VERIFY_STORE_ENV, VERIFY_STORE_FLAG};
 pub use adoption::{adopt, adopt_with};
 pub use classification::classify;
 pub use classification::manifest::{manifest, CorpusFixture, Generation, Manifest, MigrationStep};

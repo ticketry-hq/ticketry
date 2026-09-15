@@ -10,11 +10,11 @@ use sea_orm::{
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 
-use super::pull_request_url_migration;
 use super::schema::{
     self, ADOPTED_TABLE, CURRENT_DJANGO_LEAF, DJANGO_MIGRATIONS, LEDGER_TABLE,
     LEGACY_WORKTREE_COLUMNS, LIFECYCLE_STATES, WORKTREE_COLUMNS,
 };
+use super::{pull_request_url_migration, ship_record_migration};
 use super::{WorktreePersistenceError, WorktreePersistenceErrorCode};
 
 const SNAPSHOT_GENERATIONS: usize = 3;
@@ -60,7 +60,6 @@ pub async fn preflight(
 pub async fn adopt(data_directory: &Path) -> Result<AdoptionEvidence, WorktreePersistenceError> {
     let path = checked_database_path(data_directory)?;
     let database = connect(&path, true).await?;
-    integrity(&database).await?;
     let source = classify(&database).await?;
     validate_manifest(&database, source).await?;
     validate_semantics(&database).await?;
@@ -83,7 +82,9 @@ pub async fn adopt(data_directory: &Path) -> Result<AdoptionEvidence, WorktreePe
         });
     }
 
+    // Startup reopen skips this: installation preflight already verified the file.
     let checkpoint = connect(&path, false).await?;
+    integrity(&checkpoint).await?;
     checkpoint
         .execute_unprepared("PRAGMA wal_checkpoint(TRUNCATE)")
         .await
@@ -98,6 +99,9 @@ pub async fn adopt(data_directory: &Path) -> Result<AdoptionEvidence, WorktreePe
         schema::install(&writable, leaf, &before).await?;
     }
     pull_request_url_migration::install(&writable)
+        .await
+        .map_err(storage)?;
+    ship_record_migration::install(&writable)
         .await
         .map_err(storage)?;
     writable.close().await.map_err(storage)?;
@@ -349,6 +353,7 @@ pub async fn worktrees_adopted(database: &impl ConnectionTrait) -> bool {
         && pull_request_url_migration::installed(database)
             .await
             .unwrap_or(false)
+        && ship_record_migration::installed(database).await
 }
 
 async fn table_exists(

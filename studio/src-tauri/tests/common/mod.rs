@@ -4,6 +4,7 @@ pub mod execution_harness;
 pub mod execution_legacy_fixture;
 pub mod installation_corpus;
 pub mod isolated_tmux;
+pub mod mcp_database;
 pub mod runs_status_fixture;
 pub mod submitted_launch_authority;
 pub mod terminal_lifecycle_harness;

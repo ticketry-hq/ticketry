@@ -48,14 +48,6 @@ pub async fn adopt(data_directory: &Path) -> Result<HandoffEvidence, WorkspaceHa
         })?;
     database.close().await.map_err(storage)?;
 
-    ticketry_documents::preflight(data_directory)
-        .await
-        .map_err(|error| {
-            unknown(format!(
-                "Documents adoption refused this store ({}): {error}",
-                error.code_str()
-            ))
-        })?;
     let documents = ticketry_documents::adopt(data_directory)
         .await
         .map_err(|error| {
@@ -65,14 +57,6 @@ pub async fn adopt(data_directory: &Path) -> Result<HandoffEvidence, WorkspaceHa
             ))
         })?;
 
-    crate::worktree::persistence::preflight(data_directory)
-        .await
-        .map_err(|error| {
-            unknown(format!(
-                "Worktree adoption refused this store ({}): {error}",
-                error.code_str()
-            ))
-        })?;
     let worktrees = crate::worktree::persistence::adopt(data_directory)
         .await
         .map_err(|error| {

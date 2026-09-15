@@ -40,6 +40,10 @@ pub fn owned_ledgers() -> Vec<(&'static str, i32)> {
             ticketry_work_management::launch_binding_entry_skill_migration::VERSION,
         ),
         (
+            ticketry_work_management::launch_binding_profile_migration::LEDGER_TABLE,
+            ticketry_work_management::launch_binding_profile_migration::VERSION,
+        ),
+        (
             ticketry_work_management::workflow_color_migration::LEDGER_TABLE,
             ticketry_work_management::workflow_color_migration::VERSION,
         ),
@@ -53,6 +57,18 @@ pub fn owned_ledgers() -> Vec<(&'static str, i32)> {
         ),
         (
             ticketry_settings::CODEX_SPARK_LEDGER,
+            ticketry_settings::PROVIDER_CATALOG_MIGRATIONS_VERSION,
+        ),
+        (
+            ticketry_settings::CODEX_ASTRA_LEDGER,
+            ticketry_settings::PROVIDER_CATALOG_MIGRATIONS_VERSION,
+        ),
+        (
+            ticketry_settings::CODEX_6_ASTRA_LEDGER,
+            ticketry_settings::PROVIDER_CATALOG_MIGRATIONS_VERSION,
+        ),
+        (
+            ticketry_settings::CODEX_GLM_5_3_FLASH_LEDGER,
             ticketry_settings::PROVIDER_CATALOG_MIGRATIONS_VERSION,
         ),
         (

@@ -90,6 +90,7 @@ impl TerminalSessionMutations {
                 target_id: required(target_id, "target")?,
                 kind,
                 provider,
+                profile: None,
                 model,
                 reasoning,
                 policy_reference,

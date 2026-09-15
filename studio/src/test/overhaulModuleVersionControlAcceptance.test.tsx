@@ -30,6 +30,8 @@ function moduleCheckout(overrides: Record<string, unknown> = {}) {
     unpushed_count: 0,
     truncated: false,
     files: [],
+    insertions: 0,
+    deletions: 0,
     ...overrides,
   };
 }
@@ -202,7 +204,12 @@ describe("overhaul acceptance - module Changes and current worktrees", () => {
                   path: "studio/src/moduleChanges.tsx",
                   previous_path: null,
                   status: "modified",
+                  binary: false,
+                  insertions: 2,
+                  deletions: 1,
                 }],
+                insertions: 2,
+                deletions: 1,
               }),
               worktrees: [
                 moduleRow({
@@ -275,6 +282,8 @@ describe("overhaul acceptance - module Changes and current worktrees", () => {
               unpushed_count: 3,
               truncated: false,
               files: [],
+              insertions: 0,
+              deletions: 0,
             },
           } as never;
         }
@@ -398,6 +407,8 @@ describe("overhaul acceptance - module Changes and current worktrees", () => {
           return {
             module_checkout_commit: {
               operation_id: (variables as { operationId: string }).operationId,
+              subject: "Module work",
+              message_source: "codex",
               head_commit: "committed-head",
               dirty: false,
               unpushed_count: 1,
@@ -420,9 +431,6 @@ describe("overhaul acceptance - module Changes and current worktrees", () => {
     checkout = moduleCheckout({ clean: false, dirty: true, unpushed_count: 0 });
     await act(async () => {
       await studioApolloClient().refetchQueries({ include: [ModuleVersionControlDocument] });
-    });
-    fireEvent.change(screen.getByRole("textbox", { name: "Commit message" }), {
-      target: { value: "Module work" },
     });
     expect(commit).toBeEnabled();
     expect(push).toBeDisabled();
@@ -477,6 +485,9 @@ describe("overhaul acceptance - module Changes and current worktrees", () => {
             module_checkout_pull_request_create: {
               operation_id: (variables as { operationId: string }).operationId,
               url: "https://github.com/ticketry-hq/ticketry/pull/1325",
+              title: "Merge 2 commits from feature/module-pr",
+              body: "Merging `feature/module-pr` into `main`.",
+              message_source: "claude",
               branch: "feature/module-pr",
               base_branch: "main",
               pushed: true,

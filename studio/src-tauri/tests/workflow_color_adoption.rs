@@ -270,6 +270,10 @@ async fn production_startup_adopts_old_colors_before_generated_state_reads() {
         ))
         .await
         .expect("restore pre-upgrade colors");
+    database
+        .execute_unprepared("DROP TABLE ticketry_workflow_color_migration")
+        .await
+        .expect("restore the pre-upgrade migration boundary");
     database.close().await.expect("close pre-upgrade profile");
 
     let api = TransportApiImpl::new();

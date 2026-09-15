@@ -121,4 +121,74 @@ impl PullRequestStatusView {
         }
         view
     }
+
+    pub fn cached(
+        url: String,
+        state: &str,
+        target_branch: Option<&str>,
+        head_commit: Option<&str>,
+        recorded_base_branch: &str,
+        checkout_head: &str,
+    ) -> Self {
+        let mut view = Self {
+            url: Some(url),
+            state: state.to_owned(),
+            target_branch: target_branch.map(str::to_owned),
+            head_commit: head_commit.map(str::to_owned),
+            integrated: state == "merged" && target_branch == Some(recorded_base_branch),
+            post_merge_work: state == "merged"
+                && head_commit.is_some()
+                && head_commit != Some(checkout_head),
+            replacement_eligible: state == "closed",
+            follow_up_eligible: false,
+            merge_preparation_eligible: false,
+            reason: None,
+        };
+        view.follow_up_eligible = view.integrated && view.post_merge_work;
+        view
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::PullRequestStatusView;
+
+    #[test]
+    fn cached_merge_requires_the_recorded_target() {
+        let merged = PullRequestStatusView::cached(
+            "https://github.com/acme/repo/pull/1".into(),
+            "merged",
+            Some("main"),
+            Some(&"a".repeat(40)),
+            "main",
+            &"b".repeat(40),
+        );
+        assert!(merged.integrated);
+        assert!(merged.post_merge_work);
+
+        let retargeted = PullRequestStatusView::cached(
+            "https://github.com/acme/repo/pull/1".into(),
+            "merged",
+            Some("release"),
+            Some(&"b".repeat(40)),
+            "main",
+            &"b".repeat(40),
+        );
+        assert!(!retargeted.integrated);
+        assert!(!retargeted.follow_up_eligible);
+    }
+
+    #[test]
+    fn cached_closed_pr_never_becomes_cleanup_eligible() {
+        let closed = PullRequestStatusView::cached(
+            "https://github.com/acme/repo/pull/1".into(),
+            "closed",
+            Some("main"),
+            Some(&"a".repeat(40)),
+            "main",
+            &"a".repeat(40),
+        );
+        assert!(!closed.integrated);
+        assert!(closed.replacement_eligible);
+    }
 }

@@ -35,16 +35,6 @@ impl SupportedTool {
         }
     }
 
-    pub(super) fn environment_name(self) -> &'static str {
-        match self {
-            Self::Tmux => "MUXED_APPROVED_TMUX_PATH",
-            Self::Claude => "MUXED_APPROVED_CLAUDE_PATH",
-            Self::Agy => "MUXED_APPROVED_AGY_PATH",
-            Self::Codex => "MUXED_APPROVED_CODEX_PATH",
-            Self::Gemini => "MUXED_APPROVED_GEMINI_PATH",
-        }
-    }
-
     pub(super) fn version_argument(self) -> &'static str {
         match self {
             Self::Tmux => "-V",

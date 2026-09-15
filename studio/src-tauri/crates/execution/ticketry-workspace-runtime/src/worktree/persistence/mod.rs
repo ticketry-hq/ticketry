@@ -25,8 +25,12 @@ pub mod ownership_manifest;
 pub mod pull_request_url_migration;
 mod schema;
 
+pub mod graphql_scope;
+pub mod ship_record_migration;
+
 pub use adoption::{adopt, preflight, worktrees_adopted, AdoptionEvidence, SourceClassification};
 pub use error::{WorktreePersistenceError, WorktreePersistenceErrorCode};
+pub use graphql_scope::ShipRecordReadScope;
 pub use schema::{ADOPTED_TABLE, CURRENT_DJANGO_LEAF, LEDGER_TABLE, VERSION};
 
 /// Register the generated Worktree read graph in the product schema.

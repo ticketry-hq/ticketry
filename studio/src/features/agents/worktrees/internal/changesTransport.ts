@@ -1,8 +1,14 @@
 import { studioRuntime } from "../../../../runtime";
 import { ModuleCheckoutCommitDocument } from "../generated/moduleCheckoutCommit.documents";
+import type { ModuleCheckoutCommitMutation } from "../generated/moduleCheckoutCommit.documents";
+import { ModuleCheckoutCommitPushDocument } from "../generated/moduleCheckoutCommitPush.documents";
+import type { ModuleCheckoutCommitPushMutation } from "../generated/moduleCheckoutCommitPush.documents";
 import { ModuleCheckoutCreatePullRequestDocument } from "../generated/moduleCheckoutCreatePullRequest.documents";
 import { ModuleCheckoutPushDocument } from "../generated/moduleCheckoutPush.documents";
 import { WorktreeCommitDocument } from "../generated/worktreeCommit.documents";
+import type { WorktreeCommitMutation } from "../generated/worktreeCommit.documents";
+import { WorktreeCommitPushDocument } from "../generated/worktreeCommitPush.documents";
+import type { WorktreeCommitPushMutation } from "../generated/worktreeCommitPush.documents";
 import { WorktreeCleanupDocument } from "../generated/worktreeCleanup.documents";
 import type { WorktreeCleanupMutation } from "../generated/worktreeCleanup.documents";
 import { WorktreeCreatePullRequestDocument } from "../generated/worktreeCreatePullRequest.documents";
@@ -14,11 +20,11 @@ import { WorktreeReplacePullRequestDocument } from "../generated/worktreeReplace
 export function commitTaskChanges(
   taskId: string,
   operationId: string,
-  message: string,
-): Promise<void> {
+): Promise<WorktreeCommitMutation["worktree_commit"]> {
   return studioRuntime().writeWorkTracker({
     graphQl: async (execute) => {
-      await execute(WorktreeCommitDocument, { taskId, operationId, message });
+      const result = await execute(WorktreeCommitDocument, { taskId, operationId });
+      return result.worktree_commit;
     },
   });
 }
@@ -27,6 +33,18 @@ export function pushTaskChanges(taskId: string, operationId: string): Promise<vo
   return studioRuntime().writeWorkTracker({
     graphQl: async (execute) => {
       await execute(WorktreePushDocument, { taskId, operationId });
+    },
+  });
+}
+
+export function commitPushTaskChanges(
+  taskId: string,
+  operationId: string,
+): Promise<WorktreeCommitPushMutation["worktree_commit_push"]> {
+  return studioRuntime().writeWorkTracker({
+    graphQl: async (execute) => {
+      const result = await execute(WorktreeCommitPushDocument, { taskId, operationId });
+      return result.worktree_commit_push;
     },
   });
 }
@@ -50,11 +68,14 @@ export function cleanupTaskWorktree(
 export function commitModuleChanges(
   moduleId: string,
   operationId: string,
-  message: string,
-): Promise<void> {
+): Promise<ModuleCheckoutCommitPushMutation["module_checkout_commit_push"]> {
   return studioRuntime().writeWorkTracker({
     graphQl: async (execute) => {
-      await execute(ModuleCheckoutCommitDocument, { moduleId, operationId, message });
+      const result = await execute(ModuleCheckoutCommitDocument, {
+        moduleId,
+        operationId,
+      });
+      return result.module_checkout_commit;
     },
   });
 }
@@ -63,6 +84,18 @@ export function pushModuleChanges(moduleId: string, operationId: string): Promis
   return studioRuntime().writeWorkTracker({
     graphQl: async (execute) => {
       await execute(ModuleCheckoutPushDocument, { moduleId, operationId });
+    },
+  });
+}
+
+export function commitPushModuleChanges(
+  moduleId: string,
+  operationId: string,
+): Promise<ModuleCheckoutCommitMutation["module_checkout_commit"]> {
+  return studioRuntime().writeWorkTracker({
+    graphQl: async (execute) => {
+      const result = await execute(ModuleCheckoutCommitPushDocument, { moduleId, operationId });
+      return result.module_checkout_commit_push;
     },
   });
 }

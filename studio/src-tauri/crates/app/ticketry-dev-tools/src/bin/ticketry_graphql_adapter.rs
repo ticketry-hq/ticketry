@@ -15,7 +15,7 @@ use futures_util::StreamExt;
 use serde::Deserialize;
 use tauri_graphql::{TransportApi, TransportApiImpl};
 use ticketry_launch::LaunchPathsService;
-use ticketry_mcp::{McpRuntime, RunAuthority};
+use ticketry_mcp::RunAuthority;
 use ticketry_terminal::TerminalRuntimeAuthority;
 
 #[path = "ticketry_graphql_adapter/mcp.rs"]
@@ -34,10 +34,6 @@ mod viewer_session;
 struct AdapterState {
     api: TransportApiImpl,
     documents: ticketry_documents::DocumentsService,
-    /// In-process MCP is retained for the adapter's whole process lifetime;
-    /// dropping it would cancel the listener and its reconciler.
-    #[allow(dead_code)]
-    mcp: Arc<McpRuntime>,
     terminal: Arc<terminal_ws::TerminalBridge>,
 }
 
@@ -107,22 +103,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             paths: LaunchPathsService::new(database.clone()),
             hook_runner,
             hook_spool_directory,
-            mcp_url: String::new(),
+            mcp_data_directory: None,
             run_authority: RunAuthority::new(database.clone()),
             granted_operations: ticketry_mcp::allowed_provider_operations(),
         });
 
-    let mcp_runtime = Arc::new(mcp::start(&data_directory, &data_directory_guard).await?);
+    let mcp_runtime = mcp::start(&data_directory, &data_directory_guard).await?;
     eprintln!(
         "Ticketry WorkTracker MCP listening on {}",
         mcp_runtime.socket_path().display()
     );
-    // CODING-1559 replaces this URL-shaped field with the socket location and
-    // bearer value the stdio bridge needs.
-    adopted.runtime.terminal_runtime().replace_mcp_authority(
-        mcp_runtime.socket_path().to_string_lossy().into_owned(),
-        mcp_runtime.authority(),
-    )?;
+    adopted
+        .runtime
+        .terminal_runtime()
+        .replace_mcp_authority(data_directory.clone(), mcp_runtime.authority())?;
 
     let port = std::env::var("TICKETRY_GRAPHQL_ADAPTER_PORT")
         .unwrap_or_else(|_| "8790".to_owned())
@@ -132,7 +126,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let state = AdapterState {
         api,
         documents: adopted.runtime.documents().clone(),
-        mcp: mcp_runtime,
         terminal: Arc::new(terminal_ws::TerminalBridge::new(
             adopted.runtime.viewer_ownership().clone(),
         )),
@@ -143,7 +136,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/documents/{document_id}/{*asset_path}", get(document))
         .route("/ws/terminal", get(terminal_socket))
         .with_state(state);
-    axum::serve(listener, app).await?;
+    let mut interrupt = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())?;
+    let mut terminate = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
+    mcp::serve(listener, app, mcp_runtime, async move {
+        tokio::select! {
+            _ = interrupt.recv() => {},
+            _ = terminate.recv() => {},
+        }
+    })
+    .await?;
     Ok(())
 }
 

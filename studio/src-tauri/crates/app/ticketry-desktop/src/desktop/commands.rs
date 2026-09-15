@@ -2,6 +2,7 @@
 //! own authority: the main window only, no caller-supplied program, path,
 //! port, or environment value.
 
+pub(crate) mod directory_trust;
 pub(crate) mod terminal_viewer;
 
 use std::path::PathBuf;
@@ -62,9 +63,14 @@ pub async fn desktop_launch_default_coding_agent(
         .expect("terminal launch lock poisoned")
         .clone()
         .ok_or_else(|| "terminal launch is unavailable".to_owned())?;
-    let session =
-        ticketry_agent_execution::launch_delivery::execute(database, &terminal_launch, &decision)
-            .await?;
+    let cleanup = ticketry_terminal::TerminalCleanupService::with_tmux(database.clone());
+    let session = ticketry_agent_execution::launch_delivery::execute(
+        database,
+        &terminal_launch,
+        &cleanup,
+        &decision,
+    )
+    .await?;
     Ok(serde_json::json!({ "agent_run_id": session.agent_run_id }))
 }
 

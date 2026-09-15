@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 
-use crate::execution::graph::has_live_work;
 use ticketry_entities::{issue, issue_type, issue_type_transition, state, transition_occurrence};
 use ticketry_terminal::TerminalLaunchService;
 use ticketry_work_management::commands::{
@@ -130,19 +129,6 @@ impl RunNowService {
             {
                 return self.launch_committed(projected.id, decision).await;
             }
-        }
-
-        if has_live_work(&self.database, &target_id, request.caller.excluded_run_id())
-            .await
-            .map_err(|error| storage_refusal(&projected.id, error.to_string()))?
-        {
-            return Err(refusal(
-                projected.id,
-                "task_already_active",
-                "Another live run or terminal already owns this Work Item.",
-                Some("End the other live work before trying Run Now again."),
-                None,
-            ));
         }
 
         let kind = issue_type::Entity::find_by_id(&current.issue_type_id)

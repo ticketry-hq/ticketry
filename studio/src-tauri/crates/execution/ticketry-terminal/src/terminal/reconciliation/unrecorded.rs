@@ -1,9 +1,8 @@
 use chrono::{SecondsFormat, Utc};
-use sea_orm::{
-    ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, QueryFilter, TransactionTrait,
-};
+use sea_orm::{ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, QueryFilter};
 use serde_json::json;
 use sha2::{Digest, Sha256};
+use ticketry_work_management::begin_write;
 
 use crate::terminal::cleanup::{CleanupCause, CleanupEffectIdentity, RuntimeInventory};
 use crate::tmux_adapter::{
@@ -29,8 +28,9 @@ pub(super) struct InventoryReport {
 impl TerminalReconciliationService {
     pub(super) async fn reconcile_inventory(
         &self,
+        inventory: RuntimeInventory,
     ) -> Result<InventoryReport, TerminalReconciliationError> {
-        let RuntimeInventory::Available(entries) = self.runtime.inventory().await else {
+        let RuntimeInventory::Available(entries) = inventory else {
             return Ok(InventoryReport {
                 unavailable: true,
                 ..InventoryReport::default()
@@ -85,13 +85,17 @@ impl TerminalReconciliationService {
                 .one(&self.database)
                 .await?;
             if let Some(effect) = effect {
-                if effect.state == "applied" {
-                    self.adopt_applied_runtime(&material, runtime).await?;
-                    return Ok(Some(result(
-                        runtime,
-                        legacy_namespace,
-                        UnrecordedRuntimeDecision::Adopted,
-                    )));
+                if effect.state == "applied"
+                    || (runtime.running && matches!(effect.state.as_str(), "prepared" | "leased"))
+                {
+                    if self.adopt_runtime(&material, runtime).await? {
+                        return Ok(Some(result(
+                            runtime,
+                            legacy_namespace,
+                            UnrecordedRuntimeDecision::Adopted,
+                        )));
+                    }
+                    return Ok(None);
                 }
                 if matches!(effect.state.as_str(), "prepared" | "leased") {
                     return Ok(Some(result(
@@ -102,33 +106,47 @@ impl TerminalReconciliationService {
                 }
             }
         }
-        if self
-            .quarantine_owned_runtime(runtime, legacy_namespace)
+        if let Some(decision) = self
+            .restore_or_quarantine_owned_runtime(runtime, legacy_namespace)
             .await?
         {
-            Ok(Some(result(
-                runtime,
-                legacy_namespace,
-                UnrecordedRuntimeDecision::Quarantined,
-            )))
+            Ok(Some(result(runtime, legacy_namespace, decision)))
         } else {
             Ok(None)
         }
     }
 
-    async fn adopt_applied_runtime(
+    async fn adopt_runtime(
         &self,
         material: &launch_material::Model,
         runtime: &OwnedSession,
-    ) -> Result<(), TerminalReconciliationError> {
-        let transaction = self.database.begin().await?;
+    ) -> Result<bool, TerminalReconciliationError> {
+        let transaction = begin_write(&self.database).await?;
+        // The launch or a stop request may have settled since the inventory
+        // read. Do not restore a session now owned by cleanup.
+        let effect = launch_effect::Entity::find_by_id(&material.effect_id)
+            .one(&transaction)
+            .await?;
+        if !effect.is_some_and(|effect| {
+            effect.state == "applied"
+                || (runtime.running && matches!(effect.state.as_str(), "prepared" | "leased"))
+        }) || cleanup_effect::Entity::find()
+            .filter(cleanup_effect::Column::AgentRunId.eq(&runtime.agent_run_id))
+            .one(&transaction)
+            .await?
+            .is_some()
+        {
+            return Ok(false);
+        }
         if session::Entity::find_by_id(&runtime.agent_run_id)
             .one(&transaction)
             .await?
             .is_none()
         {
-            session_model(material, runtime, false)
+            let terminal = session_model(material, runtime, false)
                 .insert(&transaction)
+                .await?;
+            self.append_availability_fact(&transaction, &terminal, &terminal.created_at)
                 .await?;
             self.checkpoints.reached(
                 &runtime.agent_run_id,
@@ -136,34 +154,36 @@ impl TerminalReconciliationService {
             )?;
         }
         transaction.commit().await?;
-        Ok(())
+        self.runs.lifecycle().events().wake_committed();
+        Ok(true)
     }
 
-    async fn quarantine_owned_runtime(
+    async fn restore_or_quarantine_owned_runtime(
         &self,
         runtime: &OwnedSession,
         legacy_namespace: bool,
-    ) -> Result<bool, TerminalReconciliationError> {
+    ) -> Result<Option<UnrecordedRuntimeDecision>, TerminalReconciliationError> {
+        let transaction = begin_write(&self.database).await?;
         let Some(run) = agent_run::Entity::find_by_id(&runtime.agent_run_id)
-            .one(&self.database)
+            .one(&transaction)
             .await?
         else {
-            return Ok(false);
+            return Ok(None);
         };
         let Some(work_item) = issue::Entity::find_by_id(&run.issue_id)
-            .one(&self.database)
+            .one(&transaction)
             .await?
         else {
-            return Ok(false);
+            return Ok(None);
         };
         let Some(module_id) = work_item.module_id.clone() else {
-            return Ok(false);
+            return Ok(None);
         };
         if run.scope == "docchat" {
-            return Ok(false);
+            return Ok(None);
         }
         let Some(agent) = run.agent.clone() else {
-            return Ok(false);
+            return Ok(None);
         };
 
         let identity = CleanupEffectIdentity::predetermined(
@@ -172,13 +192,18 @@ impl TerminalReconciliationService {
             &runtime.runtime_namespace,
         )?;
         let now = Utc::now().to_rfc3339_opts(SecondsFormat::Micros, true);
-        let transaction = self.database.begin().await?;
+        let recover = runtime.running
+            && cleanup_effect::Entity::find()
+                .filter(cleanup_effect::Column::AgentRunId.eq(&runtime.agent_run_id))
+                .one(&transaction)
+                .await?
+                .is_none();
         if session::Entity::find_by_id(&runtime.agent_run_id)
             .one(&transaction)
             .await?
             .is_none()
         {
-            session::ActiveModel {
+            let terminal = session::ActiveModel {
                 agent_run_id: Set(runtime.agent_run_id.clone()),
                 tmux_session_name: Set(
                     PersistedSessionName::for_owned_session(runtime).into_string()
@@ -190,7 +215,7 @@ impl TerminalReconciliationService {
                 terminated_at: Set(None),
                 scope: Set(run.scope),
                 doc_rel_path: Set(None),
-                runtime_cleanup_pending: Set(true),
+                runtime_cleanup_pending: Set(!recover),
                 runtime_namespace: Set(Some(runtime.runtime_namespace.clone())),
                 output_identity: Set(None),
                 output_sequence: Set(0),
@@ -199,6 +224,15 @@ impl TerminalReconciliationService {
             }
             .insert(&transaction)
             .await?;
+            if recover {
+                self.append_availability_fact(&transaction, &terminal, &now)
+                    .await?;
+            }
+        }
+        if recover {
+            transaction.commit().await?;
+            self.runs.lifecycle().events().wake_committed();
+            return Ok(Some(UnrecordedRuntimeDecision::Adopted));
         }
         if cleanup_effect::Entity::find_by_id(&identity.effect_id)
             .one(&transaction)
@@ -234,7 +268,7 @@ impl TerminalReconciliationService {
             ReconciliationCheckpoint::CleanupScheduled,
         )?;
         transaction.commit().await?;
-        Ok(true)
+        Ok(Some(UnrecordedRuntimeDecision::Quarantined))
     }
 }
 

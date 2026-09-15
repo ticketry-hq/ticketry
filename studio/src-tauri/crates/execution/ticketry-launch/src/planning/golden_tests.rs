@@ -4,16 +4,12 @@ use std::collections::BTreeSet;
 use std::path::PathBuf;
 
 fn authority(provider: Provider) -> ExecutionAuthority {
-    authority_with_mcp_url(provider, "http://127.0.0.1:8123/mcp")
-}
-
-fn authority_with_mcp_url(provider: Provider, mcp_url: &str) -> ExecutionAuthority {
     ExecutionAuthority::new(
         PathBuf::from(format!("/approved/{}", provider_contract(provider).slug)),
         PathBuf::from("/authorized/workspace"),
         PathBuf::from("/Applications/Ticketry/ticketry-hook"),
         PathBuf::from("/private/spool"),
-        mcp_url.into(),
+        "/private/Ticketry Data".into(),
         "Bearer secret-mcp".into(),
         BTreeSet::from(["tdd".into()]),
     )
@@ -89,55 +85,6 @@ fn provider_contracts_keep_flags_hooks_mcp_and_timeout_units() {
 }
 
 #[test]
-fn distinctive_mcp_url_is_materialized_in_each_provider_launch_shape() {
-    const MCP_URL: &str =
-        "https://mcp.coding-1422.example:9443/agent?source=golden&workspace=ticketry";
-
-    for provider in [
-        Provider::Claude,
-        Provider::Codex,
-        Provider::Gemini,
-        Provider::Agy,
-    ] {
-        let plan = materialize(
-            &durable(provider, LaunchKind::Task),
-            &authority_with_mcp_url(provider, MCP_URL),
-        )
-        .unwrap();
-
-        match provider {
-            Provider::Claude => {
-                let config_index = plan
-                    .argv
-                    .iter()
-                    .position(|argument| argument == "--mcp-config")
-                    .unwrap();
-                let config: serde_json::Value =
-                    serde_json::from_str(&plan.argv[config_index + 1]).unwrap();
-                assert_eq!(config["mcpServers"]["worktracker-agent"]["url"], MCP_URL);
-            }
-            Provider::Codex => {
-                let expected = format!(
-                    "mcp_servers={{worktracker-agent={{http_headers={{Authorization=\"Bearer secret-mcp\"}},url=\"{MCP_URL}\"}}}}"
-                );
-                assert!(
-                    contains_sequence(&plan.argv, &["-c", &expected]),
-                    "argv: {:?}",
-                    plan.argv
-                );
-            }
-            Provider::Gemini | Provider::Agy => {
-                let settings = plan.settings.unwrap();
-                assert_eq!(
-                    settings.contents["mcpServers"]["worktracker-agent"]["httpUrl"],
-                    MCP_URL
-                );
-            }
-        }
-    }
-}
-
-#[test]
 fn provider_model_and_reasoning_options_keep_the_established_cli_shapes() {
     let cases = [
         (
@@ -163,6 +110,7 @@ fn provider_model_and_reasoning_options_keep_the_established_cli_shapes() {
     for (provider, model, reasoning, expected) in cases {
         let mut input = durable(provider, LaunchKind::Task);
         input.options = ProviderOptions {
+            profile: None,
             model: model.map(str::to_owned),
             reasoning: reasoning.map(str::to_owned),
         };
@@ -203,6 +151,40 @@ fn every_provider_builds_native_resume_argv() {
 }
 
 #[test]
+fn codex_profile_is_structured_for_new_and_resumed_launches() {
+    for kind in [
+        LaunchKind::Task,
+        LaunchKind::Planning,
+        LaunchKind::Instant,
+        LaunchKind::DocumentChat,
+        LaunchKind::Automation,
+        LaunchKind::Resume {
+            provider_session_id: "thread-1".into(),
+        },
+    ] {
+        let mut input = durable(Provider::Codex, kind.clone());
+        input.options.profile = Some("work".into());
+        let plan = materialize(&input, &authority(Provider::Codex)).unwrap();
+        assert!(contains_sequence(&plan.argv, &["--profile", "work"]));
+        assert!(!plan.argv.iter().any(|argument| argument == "--model"));
+        assert!(!plan
+            .argv
+            .iter()
+            .any(|argument| argument.contains("model_reasoning_effort")));
+    }
+
+    let mut legacy = serde_json::to_value(durable(Provider::Codex, LaunchKind::Task)).unwrap();
+    legacy["options"].as_object_mut().unwrap().remove("profile");
+    assert_eq!(
+        serde_json::from_value::<DurableLaunchMaterial>(legacy)
+            .unwrap()
+            .options
+            .profile,
+        None
+    );
+}
+
+#[test]
 fn prompt_is_one_argv_value_even_when_large_quote_heavy_and_unicode() {
     let prompt = format!("say 'hello' \"world\" 東京 🦀\n{}", "x".repeat(128_000));
     for provider in [
@@ -220,6 +202,23 @@ fn prompt_is_one_argv_value_even_when_large_quote_heavy_and_unicode() {
                 .filter(|argument| *argument == &prompt)
                 .count(),
             1
+        );
+    }
+}
+
+#[test]
+fn mcp_bridge_requires_an_agent_run_identity_before_execution() {
+    for provider in [
+        Provider::Claude,
+        Provider::Codex,
+        Provider::Gemini,
+        Provider::Agy,
+    ] {
+        let mut input = durable(provider, LaunchKind::Task);
+        input.agent_run_id.clear();
+        assert_eq!(
+            materialize(&input, &authority(provider)).unwrap_err().code,
+            LaunchPlanningErrorCode::InvalidExecutionAuthority,
         );
     }
 }
@@ -256,6 +255,7 @@ fn unavailable_skills_and_unsupported_options_fail_before_execution() {
         LaunchPlanningErrorCode::UnsupportedReasoning,
     );
     input.options = ProviderOptions {
+        profile: None,
         model: Some("model\"; shell".into()),
         reasoning: None,
     };

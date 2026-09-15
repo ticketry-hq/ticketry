@@ -34,3 +34,6 @@ pub use graph_run_service::{
     GraphRunRequest, GraphRunResult, GraphRunService, GraphRunServiceError,
     GraphRunServiceErrorCode, LaunchedChild, ResetGraphRunResult,
 };
+
+/// Validate and migrate persistence for desktop startup.
+pub use execution::persistence::ensure_adopted;

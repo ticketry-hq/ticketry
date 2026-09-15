@@ -24,6 +24,26 @@ const MAX_OUTPUT_BYTES: usize = 64 * 1024;
 const GIT_TIMEOUT: Duration = Duration::from_secs(30);
 const WAIT_POLL_INTERVAL: Duration = Duration::from_millis(10);
 
+/// Per-call limits for one Git invocation. Callers that parse unbounded-repo
+/// data (diff previews, PR generators) tighten or widen these without
+/// touching every other read.
+#[derive(Clone, Copy, Debug)]
+pub struct RunOptions {
+    /// Retained stdout and stderr beyond this are marked truncated.
+    pub max_output_bytes: usize,
+    /// Wall-clock budget; a Git process past it is killed.
+    pub timeout: Duration,
+}
+
+impl Default for RunOptions {
+    fn default() -> Self {
+        Self {
+            max_output_bytes: MAX_OUTPUT_BYTES,
+            timeout: GIT_TIMEOUT,
+        }
+    }
+}
+
 /// The executable name resolved through the inherited PATH, never a
 /// caller-supplied program.
 const GIT_PROGRAM: &str = "git";
@@ -78,12 +98,28 @@ impl GitPort {
         arguments: &[&str],
         working_directory: &Path,
     ) -> Result<GitOutcome, WorktreeStatusError> {
+        self.run_with(arguments, working_directory, RunOptions::default())
+            .await
+    }
+
+    /// Run the same contract with per-call output and wall-clock limits.
+    pub async fn run_with(
+        &self,
+        arguments: &[&str],
+        working_directory: &Path,
+        options: RunOptions,
+    ) -> Result<GitOutcome, WorktreeStatusError> {
         let mut command = Command::new(GIT_PROGRAM);
         command.arg("-C").arg(working_directory);
+        // Locale-stable parsing and unquoted paths are contract requirements
+        // for every read below, so the port applies them itself rather than
+        // trusting callers to remember.
+        command.env("LC_ALL", "C");
+        command.arg("-c").arg("core.quotepath=false");
         command.args(arguments);
         // Git is blocking and the runtime is shared, so it runs off the async
         // worker rather than stalling every other in-flight request.
-        tokio::task::spawn_blocking(move || run_command(command, GIT_TIMEOUT))
+        tokio::task::spawn_blocking(move || run_command_with(command, options))
             .await
             .map_err(|_| WorktreeStatusError::git_unavailable("Git inspection did not complete."))?
     }
@@ -92,9 +128,15 @@ impl GitPort {
 struct BoundedOutput {
     retained: Vec<u8>,
     truncated: bool,
+    /// The pipe died mid-read. Retained bytes survive; nothing more is
+    /// claimed, and no raw output is quoted in any error.
+    read_failed: bool,
 }
 
-fn run_command(mut command: Command, timeout: Duration) -> Result<GitOutcome, WorktreeStatusError> {
+fn run_command_with(
+    mut command: Command,
+    options: RunOptions,
+) -> Result<GitOutcome, WorktreeStatusError> {
     command
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -114,24 +156,26 @@ fn run_command(mut command: Command, timeout: Duration) -> Result<GitOutcome, Wo
     };
     let Some(stdout) = child.stdout.take() else {
         terminate(&mut child);
-        return Err(output_failure());
+        return Err(output_failure(0, 0));
     };
     let Some(stderr) = child.stderr.take() else {
         terminate(&mut child);
-        return Err(output_failure());
+        return Err(output_failure(0, 0));
     };
-    let stdout_reader = match spawn_reader("ticketry-git-stdout", stdout) {
+    let stdout_reader = match spawn_reader("ticketry-git-stdout", stdout, options.max_output_bytes)
+    {
         Ok(reader) => reader,
         Err(_) => {
             terminate(&mut child);
-            return Err(output_failure());
+            return Err(output_failure(0, 0));
         }
     };
-    let stderr_reader = match spawn_reader("ticketry-git-stderr", stderr) {
+    let stderr_reader = match spawn_reader("ticketry-git-stderr", stderr, options.max_output_bytes)
+    {
         Ok(reader) => reader,
         Err(_) => {
             terminate(&mut child);
-            return Err(output_failure());
+            return Err(output_failure(0, 0));
         }
     };
 
@@ -139,10 +183,13 @@ fn run_command(mut command: Command, timeout: Duration) -> Result<GitOutcome, Wo
         &mut child,
         &stdout_reader,
         &stderr_reader,
-        Instant::now() + timeout,
+        Instant::now() + options.timeout,
     )?;
     let stdout = join_reader(stdout_reader)?;
     let stderr = join_reader(stderr_reader)?;
+    if stdout.read_failed || stderr.read_failed {
+        return Err(output_failure(stdout.retained.len(), stderr.retained.len()));
+    }
     let stdout_valid_utf8 = retained_stdout_is_utf8(&stdout.retained, stdout.truncated);
 
     Ok(GitOutcome {
@@ -157,33 +204,50 @@ fn run_command(mut command: Command, timeout: Duration) -> Result<GitOutcome, Wo
 fn spawn_reader<R>(
     name: &str,
     reader: R,
+    max_output_bytes: usize,
 ) -> io::Result<thread::JoinHandle<io::Result<BoundedOutput>>>
 where
     R: Read + Send + 'static,
 {
     thread::Builder::new()
         .name(name.to_owned())
-        .spawn(move || drain_bounded(reader))
+        .spawn(move || drain_bounded(reader, max_output_bytes))
 }
 
-fn drain_bounded(mut reader: impl Read) -> io::Result<BoundedOutput> {
-    let mut retained = Vec::with_capacity(MAX_OUTPUT_BYTES);
+fn drain_bounded(mut reader: impl Read, max_output_bytes: usize) -> io::Result<BoundedOutput> {
+    let mut retained = Vec::with_capacity(max_output_bytes);
     let mut truncated = false;
+    let mut read_failed = false;
     let mut buffer = [0_u8; 8192];
     loop {
-        let read = reader.read(&mut buffer)?;
-        if read == 0 {
-            break;
+        match reader.read(&mut buffer) {
+            Ok(0) => break,
+            Ok(read) => {
+                let available = max_output_bytes.saturating_sub(retained.len());
+                let keep = available.min(read);
+                retained.extend_from_slice(&buffer[..keep]);
+                truncated |= keep < read;
+            }
+            Err(_) => {
+                read_failed = true;
+                break;
+            }
         }
-        let available = MAX_OUTPUT_BYTES.saturating_sub(retained.len());
-        let keep = available.min(read);
-        retained.extend_from_slice(&buffer[..keep]);
-        truncated |= keep < read;
     }
     Ok(BoundedOutput {
         retained,
         truncated,
+        read_failed,
     })
+}
+
+/// A failed read is reported by length, never by quoting the bytes Git
+/// produced; the lengths alone are safe evidence for diagnostics.
+fn read_failure_message(stdout_bytes: usize, stderr_bytes: usize) -> String {
+    format!(
+        "Git output could not be read completely (stdout bytes retained: {stdout_bytes}, \
+stderr bytes retained: {stderr_bytes})."
+    )
 }
 
 fn retained_stdout_is_utf8(retained: &[u8], truncated: bool) -> bool {
@@ -236,8 +300,8 @@ fn join_reader(
 ) -> Result<BoundedOutput, WorktreeStatusError> {
     reader
         .join()
-        .map_err(|_| output_failure())?
-        .map_err(|_| output_failure())
+        .map_err(|_| output_failure(0, 0))?
+        .map_err(|_| output_failure(0, 0))
 }
 
 fn terminate(child: &mut std::process::Child) {
@@ -245,8 +309,8 @@ fn terminate(child: &mut std::process::Child) {
     let _ = child.wait();
 }
 
-fn output_failure() -> WorktreeStatusError {
-    WorktreeStatusError::git_unavailable("Git output could not be read.")
+fn output_failure(stdout_bytes: usize, stderr_bytes: usize) -> WorktreeStatusError {
+    WorktreeStatusError::git_unavailable(read_failure_message(stdout_bytes, stderr_bytes))
 }
 
 #[cfg(test)]
@@ -271,9 +335,39 @@ mod tests {
     #[test]
     fn output_is_bounded_before_it_can_become_a_message() {
         let raw = vec![b'x'; MAX_OUTPUT_BYTES + 4096];
-        let output = drain_bounded(std::io::Cursor::new(raw)).expect("drain bounded bytes");
+        let output = drain_bounded(std::io::Cursor::new(raw), MAX_OUTPUT_BYTES)
+            .expect("drain bounded bytes");
         assert_eq!(output.retained.len(), MAX_OUTPUT_BYTES);
         assert!(output.truncated);
+    }
+
+    struct PartialThenError {
+        reads: u32,
+    }
+
+    impl Read for PartialThenError {
+        fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+            self.reads += 1;
+            if self.reads == 1 {
+                buffer[..12].copy_from_slice(b"partial-data");
+                Ok(12)
+            } else {
+                Err(io::Error::new(io::ErrorKind::Other, "pipe collapsed"))
+            }
+        }
+    }
+
+    #[test]
+    fn a_read_failure_reports_retained_lengths_not_output() {
+        let output = drain_bounded(PartialThenError { reads: 0 }, 1024)
+            .expect("the partial read is retained");
+
+        assert_eq!(output.retained, b"partial-data");
+        assert!(output.read_failed);
+        assert_eq!(
+            read_failure_message(12, 0),
+            "Git output could not be read completely (stdout bytes retained: 12, stderr bytes retained: 0)."
+        );
     }
 
     #[test]
@@ -295,7 +389,8 @@ mod tests {
             "head -c 131072 /dev/zero; head -c 131072 /dev/zero >&2",
         ]);
 
-        let outcome = run_command(command, Duration::from_secs(5)).expect("run bounded command");
+        let outcome =
+            run_command_with(command, RunOptions::default()).expect("run bounded command");
 
         assert!(outcome.succeeded);
         assert_eq!(outcome.stdout.len(), MAX_OUTPUT_BYTES);
@@ -310,13 +405,100 @@ mod tests {
         command.args(["-c", "while :; do :; done"]);
         let started = Instant::now();
 
-        let error =
-            run_command(command, Duration::from_millis(50)).expect_err("the command must time out");
+        let error = run_command_with(
+            command,
+            RunOptions {
+                timeout: Duration::from_millis(50),
+                ..RunOptions::default()
+            },
+        )
+        .expect_err("the command must time out");
 
         assert_eq!(
             error.code(),
             super::super::WorktreeStatusErrorCode::GitUnavailable
         );
         assert!(started.elapsed() < Duration::from_secs(1));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_call_can_select_a_smaller_output_cap() {
+        let mut command = Command::new("sh");
+        command.args(["-c", "head -c 20000 /dev/zero"]);
+
+        let outcome = run_command_with(
+            command,
+            RunOptions {
+                max_output_bytes: 1024,
+                ..RunOptions::default()
+            },
+        )
+        .expect("run capped command");
+
+        assert_eq!(outcome.stdout.len(), 1024);
+        assert!(outcome.stdout_truncated);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_call_can_select_a_shorter_timeout() {
+        let mut command = Command::new("sh");
+        command.args(["-c", "while :; do :; done"]);
+
+        let error = run_command_with(
+            command,
+            RunOptions {
+                timeout: Duration::from_millis(50),
+                ..RunOptions::default()
+            },
+        )
+        .expect_err("the command must time out");
+
+        assert_eq!(
+            error.code(),
+            super::super::WorktreeStatusErrorCode::GitUnavailable
+        );
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn git_output_is_locale_stable_and_paths_are_not_quoted() {
+        let directory = tempfile::tempdir().expect("create a fixture directory");
+        let checkout = directory.path().join("checkout");
+        std::fs::create_dir_all(&checkout).expect("create a checkout");
+        let run = |arguments: &[&str]| {
+            let output = std::process::Command::new("git")
+                .arg("-C")
+                .arg(&checkout)
+                .args(arguments)
+                .output()
+                .expect("run fixture git");
+            assert!(output.status.success());
+        };
+        run(&["init", "-b", "main"]);
+        run(&["config", "user.email", "test@ticketry.invalid"]);
+        run(&["config", "user.name", "Ticketry Test"]);
+        // With core.quotepath unset, Git prints this octal-escaped; the port's
+        // -c core.quotepath=false must force the raw bytes through.
+        std::fs::write(checkout.join("na\u{00ef}ve-\u{00e9}t\u{00e9}.txt"), "x\n")
+            .expect("write a non-ASCII fixture file");
+
+        let outcome = GitPort::new()
+            .run(
+                &["status", "--porcelain=v1", "-z", "--untracked-files=all"],
+                &checkout,
+            )
+            .await
+            .expect("Git itself is available");
+
+        assert!(outcome.succeeded);
+        assert!(
+            outcome
+                .stdout
+                .contains("na\u{00ef}ve-\u{00e9}t\u{00e9}.txt"),
+            "quotepath=false must print non-ASCII paths raw, got {:?}",
+            outcome.stdout
+        );
     }
 }

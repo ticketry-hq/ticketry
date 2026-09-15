@@ -26,8 +26,10 @@ fn source_roots() -> Vec<PathBuf> {
         .expect("readable crates directory")
         .flat_map(|entry| {
             let tier = entry.expect("readable tier entry").path();
-            fs::read_dir(&tier)
-                .expect("readable tier directory")
+            tier.is_dir()
+                .then(|| fs::read_dir(&tier).expect("readable tier directory"))
+                .into_iter()
+                .flatten()
                 .map(|entry| entry.expect("readable crate entry").path().join("src"))
         })
         .filter(|path| path.is_dir())
@@ -35,7 +37,7 @@ fn source_roots() -> Vec<PathBuf> {
     slices.sort();
     assert_eq!(
         slices.len(),
-        18,
+        20,
         "tmux naming guard must scan all workspace crates"
     );
     roots.extend(slices);

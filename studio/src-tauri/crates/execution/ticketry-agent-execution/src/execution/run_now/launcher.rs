@@ -28,9 +28,14 @@ impl TerminalRunNowLauncher {
 #[async_trait]
 impl RunNowLauncher for TerminalRunNowLauncher {
     async fn launch(&self, decision: &LaunchPolicyDecision) -> Result<RunNowRun, String> {
-        let session =
-            crate::execution::launch_delivery::execute(&self.database, &self.terminals, decision)
-                .await?;
+        let cleanup = ticketry_terminal::TerminalCleanupService::with_tmux(self.database.clone());
+        let session = crate::execution::launch_delivery::execute(
+            &self.database,
+            &self.terminals,
+            &cleanup,
+            decision,
+        )
+        .await?;
         Ok(RunNowRun {
             target_id: decision.task_id.clone(),
             agent: session.agent.unwrap_or_else(|| decision.provider.clone()),

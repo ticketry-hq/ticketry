@@ -226,16 +226,26 @@ async fn binding_profile_round_trips_and_rejects_model_combinations() {
     input.profile = workflow::PatchValue::Value("careful".to_owned());
     input.model_id = workflow::PatchValue::Null;
     input.reasoning_id = workflow::PatchValue::Null;
-    let id = workflow::patch_launch_binding(&database, input).await.unwrap();
+    let id = workflow::patch_launch_binding(&database, input)
+        .await
+        .unwrap();
     assert_eq!(
-        launch_binding::Entity::find_by_id(id).one(&database).await.unwrap().unwrap().profile.as_deref(),
+        launch_binding::Entity::find_by_id(id)
+            .one(&database)
+            .await
+            .unwrap()
+            .unwrap()
+            .profile
+            .as_deref(),
         Some("careful")
     );
 
     let mut invalid = patch(REVIEW);
     invalid.workflow_revision = 2;
     invalid.profile = workflow::PatchValue::Value("fast".to_owned());
-    let error = workflow::patch_launch_binding(&database, invalid).await.unwrap_err();
+    let error = workflow::patch_launch_binding(&database, invalid)
+        .await
+        .unwrap_err();
     assert_eq!(error.code(), "profile_conflicts_with_model");
 }
 

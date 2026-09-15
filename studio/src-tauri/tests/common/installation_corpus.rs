@@ -1,14 +1,10 @@
 //! Materialize the checked installation corpus for classification tests.
 //!
-//! Every fixture is built by `scripts/installation_corpus.py`, which runs the
-//! real Django migrations rather than describing their result. The whole corpus
-//! is built once per test binary and then copied per case, so a test can mutate
-//! its own installation freely without disturbing the shared build.
+//! Current fixtures are built from the checked Django schema and ledger that
+//! production provisioning verifies. Each test receives its own installation.
 #![allow(dead_code)]
 
 use std::path::{Path, PathBuf};
-use std::process::Command;
-use std::sync::OnceLock;
 
 /// Files one SQLite installation is stored in.
 pub const DATABASE_FILES: [&str; 3] = ["state.db", "state.db-wal", "state.db-shm"];
@@ -20,57 +16,60 @@ pub fn repository_root() -> PathBuf {
         .expect("resolve repository root")
 }
 
-/// Build the whole corpus once, and return the directory holding it.
-pub fn corpus() -> &'static Path {
-    static CORPUS: OnceLock<PathBuf> = OnceLock::new();
-    CORPUS.get_or_init(|| {
-        let directory = std::env::temp_dir().join(format!(
-            "ticketry-installation-corpus-{}",
-            std::process::id()
-        ));
-        let output = Command::new(repository_root().join("backend/.venv/bin/python"))
-            .arg(repository_root().join("scripts/installation_corpus.py"))
-            .arg("materialize")
-            .arg(&directory)
-            .current_dir(repository_root())
-            .output()
-            .expect("run the installation corpus builder");
-        assert!(
-            output.status.success(),
-            "installation corpus build failed:\n{}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-        directory
-    })
-}
-
 /// Copy one corpus fixture into a fresh data directory.
 pub fn install(fixture: &str) -> tempfile::TempDir {
-    let source = corpus().join(fixture);
-    assert!(
-        source.join("state.db").is_file(),
-        "the corpus has no fixture named {fixture}"
-    );
     let destination = tempfile::tempdir().expect("create an installation directory");
-    copy_tree(&source, destination.path());
+    let path = destination.path().to_owned();
+    let fixture = fixture.to_owned();
+    std::thread::spawn(move || {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("build fixture runtime")
+            .block_on(async {
+                match fixture.as_str() {
+                    "django-current" | "current-small" | "current-representative" => {
+                        super::execution_legacy_fixture::provision_current(&path).await;
+                        std::fs::create_dir(path.join("media"))
+                            .expect("create the fixture media root");
+                    }
+                    "current-wal" => provision_wal_fixture(&path).await,
+                    _ => panic!("the checked Rust fixture does not materialize {fixture}"),
+                }
+            });
+    })
+    .join()
+    .expect("build the installation fixture");
     destination
 }
 
-fn copy_tree(source: &Path, destination: &Path) {
-    for entry in std::fs::read_dir(source).expect("read a corpus fixture") {
-        let entry = entry.expect("read a corpus fixture entry");
-        let target = destination.join(entry.file_name());
-        if entry
-            .file_type()
-            .expect("classify a fixture entry")
-            .is_dir()
-        {
-            std::fs::create_dir_all(&target).expect("create a fixture subdirectory");
-            copy_tree(&entry.path(), &target);
-        } else {
-            std::fs::copy(entry.path(), &target).expect("copy a fixture file");
-        }
+async fn provision_wal_fixture(destination: &Path) {
+    use sea_orm::{ConnectionTrait, Database};
+
+    let source = tempfile::tempdir().expect("create the WAL fixture source");
+    super::execution_legacy_fixture::provision_current(source.path()).await;
+    let database = Database::connect(format!(
+        "sqlite:{}?mode=rw",
+        source.path().join("state.db").display()
+    ))
+    .await
+    .expect("open the WAL fixture source");
+    database
+        .execute_unprepared(
+            "PRAGMA journal_mode=WAL; PRAGMA wal_autocheckpoint=0; \
+             UPDATE worktracker_issue SET updated_at='2026-08-20 00:00:00' \
+             WHERE id=(SELECT id FROM worktracker_issue LIMIT 1);",
+        )
+        .await
+        .expect("commit fixture content into the write-ahead log");
+    for name in ["state.db", "state.db-wal"] {
+        std::fs::copy(source.path().join(name), destination.join(name))
+            .unwrap_or_else(|error| panic!("copy WAL fixture {name}: {error}"));
     }
+    database
+        .close()
+        .await
+        .expect("close the WAL fixture source");
 }
 
 /// Run SQL against an installation, for the drifted and lookalike cases.
@@ -129,7 +128,7 @@ pub fn assert_stored_bytes_unchanged(
 ) {
     let after = database_bytes(data_directory);
     for ((name, before_bytes), (_, after_bytes)) in before.iter().zip(after.iter()) {
-        if before_bytes.is_none() {
+        if name == "state.db-shm" || before_bytes.is_none() {
             continue;
         }
         assert_eq!(

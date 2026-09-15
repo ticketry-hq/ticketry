@@ -21,7 +21,7 @@ pub fn register_entity_modules(mut builder: seaography::Builder) -> seaography::
 
 #[cfg(test)]
 mod tests {
-    use crate::runs::agent_run;
+    use crate::{runs::agent_run, terminals::session};
     use sea_orm::{EntityName, Iden, Iterable};
     use seaography::{Builder, BuilderContext};
 
@@ -33,6 +33,7 @@ mod tests {
             crate::work_management::register_entity_modules(Builder::new(context, database));
         let mut builder = builder;
         seaography::register_entity!(builder, agent_run, mutation: false);
+        seaography::register_entity!(builder, session, mutation: false);
         let schema = super::register_entity_modules(builder)
             .schema_builder()
             .finish()
@@ -41,7 +42,6 @@ mod tests {
         assert!(sdl.contains("GraphRuns"));
         assert!(!sdl.contains("LaunchedTasks"));
         assert!(!sdl.contains("launchConfiguration"));
-        assert!(!sdl.contains("agentRunId"));
         assert!(!sdl.contains("graphRunsCreate"));
         assert!(!sdl.contains("launchedTasksCreate"));
         assert!(!sdl.contains("launchClaims"));

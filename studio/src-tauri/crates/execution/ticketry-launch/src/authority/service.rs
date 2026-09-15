@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use sea_orm::{DatabaseConnection, EntityTrait};
+use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 
 use crate::paths::LaunchPathsService;
 use crate::planning::{
@@ -7,7 +7,7 @@ use crate::planning::{
     DocumentChatPrompt, InstantPrompt, PlanningPrompt, Provider,
 };
 use crate::terminal_session::{CreateTerminalSession, TerminalLaunchKind};
-use ticketry_entities::agent_run;
+use ticketry_entities::{agent_run, launch_material};
 use ticketry_work_management::launch_policy::{
     CallerScope, LaunchPolicyRequest, LaunchPolicyResolver,
 };
@@ -60,23 +60,51 @@ impl InteractiveLaunchAuthority for LaunchAuthorityService {
                 "A shell launch carries no agent material to resolve.",
             ));
         }
-        if request.resume_from_agent_run_id.is_some() {
-            return self.resume(request).await;
+        let mut material = if request.resume_from_agent_run_id.is_some() {
+            self.resume(request).await?
+        } else {
+            match request.kind {
+                TerminalLaunchKind::Task | TerminalLaunchKind::Automation => {
+                    self.task(request).await
+                }
+                TerminalLaunchKind::Planning => self.planning(request).await,
+                TerminalLaunchKind::Instant => self.instant(request).await,
+                TerminalLaunchKind::DocumentChat => self.document_chat(request).await,
+                TerminalLaunchKind::Shell => unreachable!("rejected above"),
+            }?
+        };
+        if material.provider.as_deref() == Some("codex") {
+            // A workflow binding's profile outranks the global default; the
+            // default only fills a launch that resolved without one, and it
+            // never displaces an explicitly resolved model or reasoning
+            // level with its own profile.
+            if request.resume_from_agent_run_id.is_none()
+                && material.profile.is_none()
+                && material.model.is_none()
+                && material.reasoning.is_none()
+            {
+                if let Some(default) =
+                    ticketry_settings::read_global_launch_default(&self.database).await?
+                {
+                    if default.provider == "codex" {
+                        material.profile = default.profile;
+                    }
+                }
+            }
+            if material.profile.is_some() {
+                material.model = None;
+                material.reasoning = None;
+            }
         }
-        match request.kind {
-            TerminalLaunchKind::Task | TerminalLaunchKind::Automation => self.task(request).await,
-            TerminalLaunchKind::Planning => self.planning(request).await,
-            TerminalLaunchKind::Instant => self.instant(request).await,
-            TerminalLaunchKind::DocumentChat => self.document_chat(request).await,
-            TerminalLaunchKind::Shell => unreachable!("rejected above"),
-        }
+        Ok(material)
     }
 }
 
 impl LaunchAuthorityService {
-    /// A task launch is whatever the Work Item's launch binding says it is.
-    /// The caller's provider is offered as an override so the picker still
-    /// chooses an agent, and the catalog decides whether that is allowed.
+    /// A task launch takes its model, reasoning, and skills from the Work
+    /// Item's launch binding. Only automation receives the binding's workflow
+    /// prompt; a manual picker launch starts from the factual ticket context.
+    /// The caller's provider remains an override governed by the catalog.
     async fn task(
         &self,
         request: &CreateTerminalSession,
@@ -99,17 +127,23 @@ impl LaunchAuthorityService {
                 module_id: &decision.module_link.module_id,
                 local_module_folder: decision.module_link.path.as_deref().unwrap_or_default(),
                 state_name: decision.state_name.as_deref(),
-                workflow_prompt: &decision.prompt,
+                workflow_prompt: if request.kind == TerminalLaunchKind::Automation {
+                    decision.prompt.as_str()
+                } else {
+                    ""
+                },
                 // The one thing the caller contributes to a task prompt: the
                 // free text typed into the launch box, kept as user input
                 // rather than as authority.
                 additional_user_input: submitted(request.prompt.as_deref()),
                 design_directory: paths.design_directory_relative.as_deref(),
+                design_directory_root: paths.design_directory.as_deref(),
             },
         )
         .await?;
         Ok(ResolvedLaunchMaterial {
             provider: Some(decision.provider),
+            profile: decision.profile,
             model: decision.model,
             reasoning: decision.reasoning,
             policy_reference: Some(decision.policy_identity),
@@ -228,6 +262,11 @@ impl LaunchAuthorityService {
             .ok_or_else(|| {
                 LaunchAuthorityError::unresolvable("The resumed conversation is unavailable.")
             })?;
+        let profile = launch_material::Entity::find()
+            .filter(launch_material::Column::AgentRunId.eq(source_id))
+            .one(&self.database)
+            .await?
+            .and_then(|material| material.profile);
         let document_relative_path = match request.kind {
             TerminalLaunchKind::DocumentChat => {
                 launch_paths(&self.paths, request)
@@ -238,6 +277,7 @@ impl LaunchAuthorityService {
         };
         Ok(ResolvedLaunchMaterial {
             provider: source.agent,
+            profile,
             model: source.launch_model,
             reasoning: source.launch_reasoning,
             policy_reference: None,

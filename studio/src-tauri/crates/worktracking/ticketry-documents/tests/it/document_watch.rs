@@ -204,6 +204,7 @@ async fn fixture() -> Fixture {
             name TEXT NOT NULL DEFAULT '', sequence_id INTEGER NOT NULL DEFAULT 0,
             is_archived BOOLEAN NOT NULL DEFAULT 0, rank TEXT NOT NULL DEFAULT 'a',
             description TEXT NOT NULL DEFAULT '',
+            workspace_tab_order TEXT NOT NULL DEFAULT '[]',
             created_at DATETIME NOT NULL DEFAULT '2026-01-01 00:00:00',
             updated_at DATETIME NOT NULL DEFAULT '2026-01-01 00:00:00'
         );
@@ -212,7 +213,8 @@ async fn fixture() -> Fixture {
             model TEXT, reasoning TEXT, status TEXT NOT NULL, started_at TEXT NOT NULL,
             ended_at TEXT, exit_code INTEGER, error TEXT, cwd TEXT, provider_session_id TEXT,
             lifecycle_state TEXT, lifecycle_updated_at TEXT, design_dir TEXT, resumed_from TEXT,
-            scope TEXT NOT NULL, launch_state TEXT, launch_model TEXT
+            scope TEXT NOT NULL, launch_state TEXT, launch_model TEXT, initial_prompt TEXT,
+            launch_reasoning TEXT, launch_unattended BOOLEAN NOT NULL DEFAULT 0
         );
         CREATE TABLE runs_status_events (
             cursor integer PRIMARY KEY AUTOINCREMENT,

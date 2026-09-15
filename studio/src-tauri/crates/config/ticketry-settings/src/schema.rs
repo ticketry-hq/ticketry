@@ -44,11 +44,15 @@ impl SettingsMutations {
     async fn update_provider_catalog(
         ctx: &Context<'_>,
         activated_providers: StringList,
+        codex_profiles: StringList,
         default_provider: Option<String>,
+        default_profile: Option<String>,
         default_model: Option<String>,
         default_reasoning: Option<String>,
     ) -> Result<ProviderCatalog> {
-        if default_provider.is_none() && (default_model.is_some() || default_reasoning.is_some()) {
+        if default_provider.is_none()
+            && (default_profile.is_some() || default_model.is_some() || default_reasoning.is_some())
+        {
             return Err(catalog_error(ProviderCatalogError::Validation {
                 field: "default_provider",
                 message: "Choose a catalog provider before configuring model or reasoning."
@@ -57,12 +61,14 @@ impl SettingsMutations {
         }
         let global_default = default_provider.map(|provider| GlobalLaunchDefault {
             provider,
+            profile: default_profile,
             model: default_model,
             reasoning: default_reasoning,
         });
         provider_catalog(ctx)?
             .update(ProviderCatalogUpdate {
                 activated_providers: activated_providers.0,
+                codex_profiles: codex_profiles.0,
                 global_default,
             })
             .await

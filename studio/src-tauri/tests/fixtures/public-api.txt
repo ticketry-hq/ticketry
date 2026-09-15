@@ -6,9 +6,6 @@ tauri-graphql|TransportApi
 tauri-graphql|TransportApiImpl
 tauri-graphql|export_bindings
 tauri-graphql|valid_subscription_id
-ticketry|file_logging_requested
-ticketry|run
-ticketry|run_with_file_logging
 ticketry-agent-execution|DeletedGraphRunResult
 ticketry-agent-execution|GraphRunAdvanceResult
 ticketry-agent-execution|GraphRunCaller
@@ -20,6 +17,7 @@ ticketry-agent-execution|GraphRunServiceError
 ticketry-agent-execution|GraphRunServiceErrorCode
 ticketry-agent-execution|LaunchedChild
 ticketry-agent-execution|ResetGraphRunResult
+ticketry-agent-execution|ensure_adopted
 ticketry-agent-execution|graph
 ticketry-agent-execution|graph_run
 ticketry-agent-execution|launch_delivery
@@ -27,6 +25,9 @@ ticketry-agent-execution|merge_preparation_launcher
 ticketry-agent-execution|persistence
 ticketry-agent-execution|reconciliation
 ticketry-agent-execution|run_now
+ticketry-codex-app-server|CodexAppServerClient
+ticketry-codex-app-server|CodexAppServerError
+ticketry-codex-app-server|CodexThreadTitleReader
 ticketry-data-directory|DataDirectoryGuard
 ticketry-data-directory|OwnerIdentity
 ticketry-data-directory|OwnershipError
@@ -77,6 +78,7 @@ ticketry-diagnostics|VISIBILITY_STAGES
 ticketry-diagnostics|admitted
 ticketry-diagnostics|attempt_committed
 ticketry-diagnostics|attempt_keyed_stages
+ticketry-diagnostics|catch_unwind_without_crash_attribution
 ticketry-diagnostics|clean_session_marker
 ticketry-diagnostics|collect_dirty_shutdown
 ticketry-diagnostics|configure_process_file_log
@@ -84,7 +86,6 @@ ticketry-diagnostics|correlate_launch_traces
 ticketry-diagnostics|current
 ticketry-diagnostics|file_logging_requested
 ticketry-diagnostics|force_development_panic_abort
-ticketry-diagnostics|ghostty_sentry_database_directory
 ticketry-diagnostics|install_panic_attribution_hook
 ticketry-diagnostics|is_path_stage
 ticketry-diagnostics|is_pre_commit_stage
@@ -92,6 +93,7 @@ ticketry-diagnostics|launch_trace_for_agent_run
 ticketry-diagnostics|launch_trace_for_launch_attempt
 ticketry-diagnostics|launch_trace_records_from_log
 ticketry-diagnostics|path_stages
+ticketry-diagnostics|process_file_log
 ticketry-diagnostics|record_launch_discovery
 ticketry-diagnostics|record_story_move
 ticketry-diagnostics|refused
@@ -201,7 +203,9 @@ ticketry-entities|register_execution_entities
 ticketry-entities|register_foundation_entities
 ticketry-entities|register_work_management_entities
 ticketry-entities|register_worktree_entities
+ticketry-entities|register_workspace_runtime_entities
 ticketry-entities|session
+ticketry-entities|ship_record
 ticketry-entities|state
 ticketry-entities|status_event
 ticketry-entities|transition_occurrence
@@ -269,6 +273,8 @@ ticketry-installation|SnapshotManifest
 ticketry-installation|SnapshotRecord
 ticketry-installation|SqliteGeneration
 ticketry-installation|StagedImport
+ticketry-installation|VERIFY_STORE_ENV
+ticketry-installation|VERIFY_STORE_FLAG
 ticketry-installation|Verdict
 ticketry-installation|activate_import
 ticketry-installation|adopt
@@ -291,6 +297,8 @@ ticketry-installation|stage_import
 ticketry-installation|validate_recovery
 ticketry-installation|verify_snapshot
 ticketry-launch|CreateTerminalSession
+ticketry-launch|DirectoryTrustOutcome
+ticketry-launch|DirectoryTrustSetup
 ticketry-launch|DocumentChatPrompt
 ticketry-launch|DurableLaunchMaterial
 ticketry-launch|ExecutionAuthority
@@ -441,6 +449,7 @@ ticketry-runs|TerminalOutcome
 ticketry-runs|TransitionOccurrence
 ticketry-runs|VERSION
 ticketry-runs|adopt
+ticketry-runs|ensure_adopted
 ticketry-runs|ensure_hook_spool_directory
 ticketry-runs|failure_code
 ticketry-runs|format_timestamp
@@ -467,6 +476,12 @@ ticketry-settings|AppSetting
 ticketry-settings|AppSettingRepository
 ticketry-settings|CODEX_5_6_LEDGER
 ticketry-settings|CODEX_5_6_MIGRATION_ID
+ticketry-settings|CODEX_6_ASTRA_LEDGER
+ticketry-settings|CODEX_6_ASTRA_MIGRATION_ID
+ticketry-settings|CODEX_ASTRA_LEDGER
+ticketry-settings|CODEX_ASTRA_MIGRATION_ID
+ticketry-settings|CODEX_GLM_5_3_FLASH_LEDGER
+ticketry-settings|CODEX_GLM_5_3_FLASH_MIGRATION_ID
 ticketry-settings|CODEX_SPARK_LEDGER
 ticketry-settings|CODEX_SPARK_MIGRATION_ID
 ticketry-settings|DJANGO_COMPATIBILITY_PORTS
@@ -474,6 +489,7 @@ ticketry-settings|GlobalLaunchDefault
 ticketry-settings|InstantLaunchSettings
 ticketry-settings|JsonSourceClassification
 ticketry-settings|LAUNCH_BINDING_ENTRY_SKILL_LEDGER
+ticketry-settings|LAUNCH_BINDING_PROFILE_LEDGER
 ticketry-settings|MAX_INITIAL_PROMPT_CHARACTERS
 ticketry-settings|ModuleLink
 ticketry-settings|OWNED_ASSETS
@@ -494,6 +510,9 @@ ticketry-settings|Slice2Readiness
 ticketry-settings|SourceClassification
 ticketry-settings|adopt
 ticketry-settings|install_codex_5_6
+ticketry-settings|install_codex_6_astra
+ticketry-settings|install_codex_astra
+ticketry-settings|install_codex_glm_5_3_flash
 ticketry-settings|install_codex_spark
 ticketry-settings|load_instant_launch_settings
 ticketry-settings|parse_global_launch_default
@@ -546,6 +565,7 @@ ticketry-terminal|HandoffStatus
 ticketry-terminal|INSTANT_RUN_TICKET_LIMIT
 ticketry-terminal|InstantRunTicket
 ticketry-terminal|InstantRunTicketQuery
+ticketry-terminal|InstantRunTicketTitleService
 ticketry-terminal|InteractiveTerminalLaunchRuntime
 ticketry-terminal|InventoryConflictKind
 ticketry-terminal|InventoryEntry
@@ -558,7 +578,6 @@ ticketry-terminal|LEDGER_TABLE
 ticketry-terminal|LaunchActionCompatibilityStage
 ticketry-terminal|LiveOutputSweepRuntime
 ticketry-terminal|MAX_INPUT_BYTES
-ticketry-terminal|MAX_RECORDED_SESSION_BATCH
 ticketry-terminal|NEEDS_PROOF
 ticketry-terminal|NON_SEAORM_CRUD_PATHS
 ticketry-terminal|NoReconciliationCheckpoints
@@ -590,6 +609,7 @@ ticketry-terminal|RegisteredEntity
 ticketry-terminal|ResumableConversationService
 ticketry-terminal|RuntimeConflictDiagnostic
 ticketry-terminal|RuntimeInventory
+ticketry-terminal|RuntimeSnapshot
 ticketry-terminal|SESSION_COLUMNS
 ticketry-terminal|SESSION_PREFIX
 ticketry-terminal|ScrollDirection
@@ -670,6 +690,7 @@ ticketry-terminal|approved_login_shell
 ticketry-terminal|approved_tool_path
 ticketry-terminal|configured_sweep_interval
 ticketry-terminal|current_runtime_namespace
+ticketry-terminal|ensure_terminal_persistence_adopted
 ticketry-terminal|entry_skill_invocation
 ticketry-terminal|journal_profile_teardown
 ticketry-terminal|journal_terminal_cleanup
@@ -703,7 +724,6 @@ ticketry-tool-discovery|ToolHealth
 ticketry-tool-discovery|approve_executable_path
 ticketry-tool-discovery|consulted_discovery
 ticketry-tool-discovery|preflight_report
-ticketry-tool-discovery|resolved_tool_environment
 ticketry-work-management|FOLDER_INVALID
 ticketry-work-management|ImportOutcome
 ticketry-work-management|ImportReceipt
@@ -721,13 +741,16 @@ ticketry-work-management|RollbackOutcome
 ticketry-work-management|STORE_UNAVAILABLE
 ticketry-work-management|SkipReason
 ticketry-work-management|adoption
+ticketry-work-management|begin_write
 ticketry-work-management|commands
+ticketry-work-management|ensure_adopted
 ticketry-work-management|entities
 ticketry-work-management|folder_preflight
 ticketry-work-management|graphql
 ticketry-work-management|identity
 ticketry-work-management|import
 ticketry-work-management|launch_binding_entry_skill_migration
+ticketry-work-management|launch_binding_profile_migration
 ticketry-work-management|launch_policy
 ticketry-work-management|legacy_source
 ticketry-work-management|module_links_ownership_manifest
@@ -763,3 +786,6 @@ ticketry-workspace-runtime|status
 ticketry-workspace-runtime|workspace_graphql_worktree
 ticketry-workspace-runtime|workspace_operations
 ticketry-workspace-runtime|worktree_operations
+ticketry|file_logging_requested
+ticketry|run
+ticketry|run_with_file_logging

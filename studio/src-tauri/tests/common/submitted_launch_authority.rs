@@ -27,6 +27,7 @@ impl InteractiveLaunchAuthority for SubmittedLaunchAuthority {
     ) -> Result<ResolvedLaunchMaterial, LaunchAuthorityError> {
         Ok(ResolvedLaunchMaterial {
             provider: request.provider.clone(),
+            profile: request.profile.clone(),
             model: request.model.clone(),
             reasoning: request.reasoning.clone(),
             policy_reference: request.policy_reference.clone(),

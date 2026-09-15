@@ -65,7 +65,6 @@ pub async fn preflight(
 pub async fn adopt(data_directory: &Path) -> Result<AdoptionEvidence, DocumentsPersistenceError> {
     let path = checked_database_path(data_directory)?;
     let database = connect(&path, true).await?;
-    integrity(&database).await?;
     let source = classify(&database).await?;
     validate_manifest(&database, source).await?;
     validate_semantics(&database).await?;
@@ -85,7 +84,9 @@ pub async fn adopt(data_directory: &Path) -> Result<AdoptionEvidence, DocumentsP
         });
     }
 
+    // Startup reopen skips this: installation preflight already verified the file.
     let checkpoint = connect(&path, false).await?;
+    integrity(&checkpoint).await?;
     checkpoint
         .execute_unprepared("PRAGMA wal_checkpoint(TRUNCATE)")
         .await

@@ -5,17 +5,20 @@ void *muxed_ghostty_view_new(void *opaque, void *parent_view,
                              muxed_ghostty_process_exit_cb process_exit_callback,
                              void *process_exit_context) {
   if (opaque == NULL || parent_view == NULL || command == NULL) return NULL;
-  return [[MuxedGhosttyView alloc]
+  if (((MuxedGhosttyRuntime *)opaque)->app == NULL) return NULL;
+  return muxed_ghostty_register_view([[MuxedGhosttyView alloc]
       initWithRuntime:(MuxedGhosttyRuntime *)opaque
                parent:(NSView *)parent_view
               command:command
   processExitCallback:process_exit_callback
-   processExitContext:process_exit_context];
+   processExitContext:process_exit_context]);
 }
 
 void muxed_ghostty_view_free(void *opaque) {
-  MuxedGhosttyView *view = opaque;
+  MuxedGhosttyView *view = muxed_ghostty_take_view(opaque);
   if (view == nil) return;
+  view->_acceptsInput = NO;
+  view->_reportsGridResize = NO;
   muxed_focus_trace(view, "view freed", view->_acceptsInput);
   muxed_ghostty_surface_owner_invalidate(&view->_surfaceOwner);
   view->_scrollCallback = NULL;
@@ -26,13 +29,22 @@ void muxed_ghostty_view_free(void *opaque) {
   view->_processExitContext = NULL;
   view->_chordCallback = NULL;
   view->_chordContext = NULL;
+  // Free the surface here, not in dealloc. AppKit can keep the view alive past
+  // the release below (removeFromSuperview autoreleases it), and libghostty's
+  // ghostty_app_free destroys the app record before it walks any surface still
+  // registered with it, so a surface that outlives its runtime free crashes
+  // the process with EXC_BAD_ACCESS in Surface.deinit (CODING-1368 minidump).
+  ghostty_surface_t surface = view->_surface;
+  view->_surface = NULL;
+  if (surface != NULL) ghostty_surface_free(surface);
   [view removeFromSuperview];
+  view->_webview = nil;
   [view release];
 }
 
 void muxed_ghostty_view_set_resize_callback(
     void *opaque, muxed_ghostty_resize_cb callback, void *context) {
-  MuxedGhosttyView *view = opaque;
+  MuxedGhosttyView *view = muxed_ghostty_view_for_handle(opaque);
   if (view == nil) return;
   view->_resizeCallback = callback;
   view->_resizeContext = context;
@@ -43,7 +55,7 @@ void muxed_ghostty_view_set_resize_callback(
 }
 
 void muxed_ghostty_view_disable_resize_callback(void *opaque) {
-  MuxedGhosttyView *view = opaque;
+  MuxedGhosttyView *view = muxed_ghostty_view_for_handle(opaque);
   if (view == nil) return;
   view->_resizeCallback = NULL;
   view->_resizeContext = NULL;
@@ -53,7 +65,7 @@ muxed_ghostty_grid_size_s
 muxed_ghostty_view_set_frame(void *opaque, double x, double y, double width,
                              double height, double viewport_width,
                              double viewport_height) {
-  MuxedGhosttyView *view = opaque;
+  MuxedGhosttyView *view = muxed_ghostty_view_for_handle(opaque);
   if (view == nil || view.superview == nil || viewport_width <= 0 ||
       viewport_height <= 0)
     return (muxed_ghostty_grid_size_s){0, 0};
@@ -84,7 +96,7 @@ muxed_ghostty_view_set_frame(void *opaque, double x, double y, double width,
 }
 
 uint64_t muxed_ghostty_view_arm_redraw(void *opaque) {
-  MuxedGhosttyView *view = opaque;
+  MuxedGhosttyView *view = muxed_ghostty_view_for_handle(opaque);
   if (view == nil || view->_surface == NULL) return UINT64_MAX;
   uint64_t generation = atomic_load_explicit(&view->_redrawGeneration,
                                               memory_order_acquire);
@@ -99,28 +111,34 @@ uint64_t muxed_ghostty_view_arm_redraw(void *opaque) {
 
 bool muxed_ghostty_view_wait_for_redraw(void *opaque, uint64_t generation,
                                         uint32_t timeout_milliseconds) {
-  MuxedGhosttyView *view = opaque;
-  if (view == nil || generation == UINT64_MAX) return false;
+  if (generation == UINT64_MAX) return false;
+  MuxedGhosttyView *view = muxed_ghostty_retain_view(opaque);
+  if (view == nil) return false;
 
   struct timespec started;
   clock_gettime(CLOCK_MONOTONIC, &started);
   for (;;) {
     if (atomic_load_explicit(&view->_redrawGeneration, memory_order_acquire) >
-        generation)
+        generation) {
+      muxed_ghostty_release_view_on_main_thread(view);
       return true;
+    }
     struct timespec now;
     clock_gettime(CLOCK_MONOTONIC, &now);
     int64_t elapsed_nanoseconds =
         (int64_t)(now.tv_sec - started.tv_sec) * 1000000000LL +
         (int64_t)(now.tv_nsec - started.tv_nsec);
     uint64_t elapsed = (uint64_t)(elapsed_nanoseconds / 1000000LL);
-    if (elapsed >= timeout_milliseconds) return false;
+    if (elapsed >= timeout_milliseconds) {
+      muxed_ghostty_release_view_on_main_thread(view);
+      return false;
+    }
     usleep(1000);
   }
 }
 
 bool muxed_ghostty_view_present(void *opaque) {
-  MuxedGhosttyView *view = opaque;
+  MuxedGhosttyView *view = muxed_ghostty_view_for_handle(opaque);
   if (view == nil || view->_webview == nil) return false;
   if (!muxed_ghostty_place_sibling(view, view->_webview, false)) return false;
   view->_reportsGridResize = YES;
@@ -132,7 +150,7 @@ bool muxed_ghostty_view_present(void *opaque) {
 }
 
 void muxed_ghostty_view_hide(void *opaque) {
-  MuxedGhosttyView *view = opaque;
+  MuxedGhosttyView *view = muxed_ghostty_view_for_handle(opaque);
   if (view == nil) return;
   muxed_focus_trace(view, "hide requested", view->_acceptsInput);
   view->_reportsGridResize = NO;
@@ -158,22 +176,22 @@ muxed_ghostty_view_show(void *opaque, double x, double y, double width,
 }
 
 bool muxed_ghostty_view_is_focused(void *opaque) {
-  MuxedGhosttyView *view = opaque;
+  MuxedGhosttyView *view = muxed_ghostty_view_for_handle(opaque);
   return view != nil && view.window.firstResponder == view;
 }
 
 bool muxed_ghostty_view_is_hidden(void *opaque) {
-  MuxedGhosttyView *view = opaque;
+  MuxedGhosttyView *view = muxed_ghostty_view_for_handle(opaque);
   return view == nil || view.hidden;
 }
 
 bool muxed_ghostty_view_accepts_input(void *opaque) {
-  MuxedGhosttyView *view = opaque;
+  MuxedGhosttyView *view = muxed_ghostty_view_for_handle(opaque);
   return view != nil && !view.hidden && view->_acceptsInput;
 }
 
 void muxed_ghostty_view_focus(void *opaque) {
-  MuxedGhosttyView *view = opaque;
+  MuxedGhosttyView *view = muxed_ghostty_view_for_handle(opaque);
   if (view == nil) return;
   muxed_focus_trace(view, "focus requested", view->_acceptsInput);
   if (view->_acceptsInput) [view.window makeFirstResponder:view];
@@ -182,7 +200,7 @@ void muxed_ghostty_view_focus(void *opaque) {
 
 bool muxed_ghostty_view_set_webview_interaction(void *opaque,
                                                 bool webview_owns_input) {
-  MuxedGhosttyView *view = opaque;
+  MuxedGhosttyView *view = muxed_ghostty_view_for_handle(opaque);
   if (view == nil || view->_webview == nil) return false;
   if (view.hidden && !webview_owns_input) return false;
 
@@ -238,14 +256,14 @@ muxed_ghostty_normalize_scroll(double vertical_delta, bool precise) {
 void muxed_ghostty_view_set_scroll_callback(void *opaque,
                                            muxed_ghostty_scroll_cb callback,
                                            void *context) {
-  MuxedGhosttyView *view = opaque;
+  MuxedGhosttyView *view = muxed_ghostty_view_for_handle(opaque);
   if (view == nil) return;
   view->_scrollCallback = callback;
   view->_scrollContext = context;
 }
 
 void muxed_ghostty_view_disable_scroll_callback(void *opaque) {
-  MuxedGhosttyView *view = opaque;
+  MuxedGhosttyView *view = muxed_ghostty_view_for_handle(opaque);
   if (view == nil) return;
   view->_scrollCallback = NULL;
   view->_scrollContext = NULL;
@@ -254,21 +272,21 @@ void muxed_ghostty_view_disable_scroll_callback(void *opaque) {
 void muxed_ghostty_view_set_chord_callback(void *opaque,
                                           muxed_ghostty_chord_cb callback,
                                           void *context) {
-  MuxedGhosttyView *view = opaque;
+  MuxedGhosttyView *view = muxed_ghostty_view_for_handle(opaque);
   if (view == nil) return;
   view->_chordCallback = callback;
   view->_chordContext = context;
 }
 
 void muxed_ghostty_view_disable_chord_callback(void *opaque) {
-  MuxedGhosttyView *view = opaque;
+  MuxedGhosttyView *view = muxed_ghostty_view_for_handle(opaque);
   if (view == nil) return;
   view->_chordCallback = NULL;
   view->_chordContext = NULL;
 }
 
 void muxed_ghostty_view_disable_process_exit_callback(void *opaque) {
-  MuxedGhosttyView *view = opaque;
+  MuxedGhosttyView *view = muxed_ghostty_view_for_handle(opaque);
   if (view == nil) return;
   view->_processExitCallback = NULL;
   view->_processExitContext = NULL;

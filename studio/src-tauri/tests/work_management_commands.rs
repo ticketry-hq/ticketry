@@ -6,8 +6,8 @@ use sea_orm::{
 };
 use tauri_graphql::{TransportApi, TransportApiImpl};
 use ticketry_entities::{
-    attachment, issue, issue_type, issue_type_transition, launch_binding, module_presentation,
-    project, state,
+    attachment, design_document, issue, issue_type, issue_type_transition, launch_binding,
+    module_presentation, project, state,
 };
 use ticketry_graphql_schema::initialize_with_worktracker_commands_and_install;
 use ticketry_work_management::commands::{
@@ -79,6 +79,12 @@ async fn fixture() -> (tempfile::TempDir, sea_orm::DatabaseConnection) {
             r#"
             PRAGMA journal_mode=WAL;
             PRAGMA foreign_keys=ON;
+            CREATE TABLE design_documents (
+                id TEXT PRIMARY KEY, module_id TEXT NOT NULL, task_id TEXT NOT NULL,
+                scope TEXT NOT NULL, root_dir TEXT NOT NULL, rel_path TEXT NOT NULL,
+                discovered_by_run_id TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+                content_digest TEXT
+            );
             CREATE TABLE app_settings (
                 scope varchar NOT NULL, "key" varchar NOT NULL,
                 value varchar NOT NULL, updated_at varchar NOT NULL,
@@ -142,7 +148,7 @@ async fn fixture() -> (tempfile::TempDir, sea_orm::DatabaseConnection) {
             CREATE TABLE worktracker_launchbinding (
                 id integer PRIMARY KEY AUTOINCREMENT, issue_type_id char(32) NOT NULL,
                 state_id char(32) NOT NULL, prompt text NOT NULL,
-                required_skills text NOT NULL, entry_skill varchar(128),
+                required_skills text NOT NULL, entry_skill varchar(128), profile varchar(255),
                 model_id char(32), reasoning_id char(32),
                 auto_start bool NOT NULL, subtree_run_enabled bool NOT NULL,
                 created_at datetime NOT NULL, updated_at datetime NOT NULL,
@@ -219,12 +225,6 @@ async fn seed_workspace_identities(
     database
         .execute_unprepared(&format!(
             r#"
-            CREATE TABLE design_documents (
-                id TEXT PRIMARY KEY, module_id TEXT NOT NULL, task_id TEXT NOT NULL,
-                scope TEXT NOT NULL, root_dir TEXT NOT NULL, rel_path TEXT NOT NULL,
-                discovered_by_run_id TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
-                content_digest TEXT
-            );
             CREATE TABLE agent_runs (
                 id TEXT PRIMARY KEY, issue_id TEXT NOT NULL, ticket_seq INTEGER,
                 agent TEXT, model TEXT, reasoning TEXT, status TEXT NOT NULL,
@@ -1287,13 +1287,43 @@ async fn archive_cascades_delete_rejects_children_and_attachment_materializes_fi
     );
     assert_eq!(attachments::list(&database, &child).await.unwrap().len(), 1);
 
+    let hyphenated = uuid::Uuid::parse_str(&child)
+        .unwrap()
+        .hyphenated()
+        .to_string();
+    database
+        .execute_unprepared(&format!(
+            "INSERT INTO design_documents (id, module_id, task_id, scope, root_dir, rel_path, created_at, updated_at)
+             VALUES ('doc-child', '{parent}', '{hyphenated}', 'task', '/root', 'spec.md', '2026-01-01', '2026-01-01'),
+                    ('doc-other', '{parent}', 'other-task', 'task', '/root', 'other.md', '2026-01-01', '2026-01-01')"
+        ))
+        .await
+        .unwrap();
+
     work_items::delete(&database, &child, None).await.unwrap();
     assert!(attachment::Entity::find_by_id(created.id)
         .one(&database)
         .await
         .unwrap()
         .is_none());
+    let remaining = design_document::Entity::find()
+        .all(&database)
+        .await
+        .unwrap();
+    assert_eq!(
+        remaining
+            .iter()
+            .map(|row| row.id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["doc-other"],
+        "deleting a task removes its own document metadata only"
+    );
     work_items::delete(&database, &parent, None).await.unwrap();
+    assert!(design_document::Entity::find()
+        .all(&database)
+        .await
+        .unwrap()
+        .is_empty());
 }
 
 #[tokio::test]
@@ -1564,7 +1594,7 @@ async fn graphql_exposes_only_authored_mutations_and_structured_errors() {
     );
     let binding_write: serde_json::Value = serde_json::from_str(
         &api.clone().graphql_execute(serde_json::json!({
-            "query": format!("mutation {{ upsert_issue_type_launch_binding(issue_type_id: \"{TASK_TYPE}\", state_id: \"{BACKLOG}\", workflow_revision: 2, prompt: \"Implement it.\", required_skills: [\"tdd\"], entry_skill: \"tdd\") {{ id prompt required_skills: requiredSkills entry_skill: entrySkill }} }}")
+            "query": format!("mutation {{ upsert_issue_type_launch_binding(issue_type_id: \"{TASK_TYPE}\", state_id: \"{BACKLOG}\", workflow_revision: 2, prompt: \"Implement it.\", required_skills: [\"tdd\"], entry_skill: \"tdd\", profile: \"careful\") {{ id prompt required_skills: requiredSkills entry_skill: entrySkill profile }} }}")
         }).to_string()).await,
     ).unwrap();
     assert!(binding_write.get("errors").is_none(), "{binding_write:#}");
@@ -1575,6 +1605,10 @@ async fn graphql_exposes_only_authored_mutations_and_structured_errors() {
     assert_eq!(
         binding_write["data"]["upsert_issue_type_launch_binding"]["entry_skill"],
         "tdd"
+    );
+    assert_eq!(
+        binding_write["data"]["upsert_issue_type_launch_binding"]["profile"],
+        "careful"
     );
     let stale_binding_write: serde_json::Value = serde_json::from_str(
         &api.clone().graphql_execute(serde_json::json!({
@@ -1609,7 +1643,7 @@ async fn graphql_exposes_only_authored_mutations_and_structured_errors() {
     assert!(module_reorder.get("errors").is_none(), "{module_reorder}");
     assert_eq!(
         module_reorder["data"]["reorder_module_presentation"]["moduleId"],
-        "20000000000000000000000000000001"
+        "20000000-0000-0000-0000-000000000001"
     );
     let manual_order: serde_json::Value = serde_json::from_str(
         &api.clone()
@@ -1642,8 +1676,8 @@ async fn graphql_exposes_only_authored_mutations_and_structured_errors() {
         &api.clone()
             .graphql_execute(
                 serde_json::json!({
-                    "query": include_str!("../../src/features/work-items/operations/workItems.graphql"),
-                    "operationName": "UpdateWorkTrackerWorkItem",
+                    "query": include_str!("../../src/features/work-items/operations/workItems.graphql").replace(" @nonreactive", ""),
+                    "operationName": "UpdateWorkTrackerWorkItemDetails",
                     "variables": {"id": task_a, "name": "GraphQL A updated"}
                 })
                 .to_string(),
@@ -2044,6 +2078,7 @@ async fn workflow_configuration_compare_and_set_is_atomic_and_prunes_unreachable
             prompt: workflow::PatchValue::Value("Implement the work item.".to_owned()),
             required_skills: workflow::PatchValue::Unset,
             entry_skill: workflow::PatchValue::Unset,
+            profile: workflow::PatchValue::Unset,
             model_id: workflow::PatchValue::Unset,
             reasoning_id: workflow::PatchValue::Unset,
             auto_start: workflow::PatchValue::Value(true),
@@ -2334,6 +2369,7 @@ async fn review_finding_creation_owns_parent_policy_and_evidence_format() {
             line_end: 12,
             note: Some("Policy belongs in the transaction.".to_owned()),
         },
+        None,
     )
     .await
     .unwrap();
@@ -2361,6 +2397,7 @@ async fn review_finding_creation_owns_parent_policy_and_evidence_format() {
             line_end: 0,
             note: None,
         },
+        None,
     )
     .await
     .unwrap_err();
@@ -2379,6 +2416,7 @@ async fn launch_binding_patch_preserves_omitted_fields_and_skips_noop_revision()
             prompt: workflow::PatchValue::Value("Initial prompt".to_owned()),
             required_skills: workflow::PatchValue::Value(vec!["tdd".to_owned()]),
             entry_skill: workflow::PatchValue::Unset,
+            profile: workflow::PatchValue::Unset,
             model_id: workflow::PatchValue::Unset,
             reasoning_id: workflow::PatchValue::Unset,
             auto_start: workflow::PatchValue::Unset,
@@ -2404,6 +2442,7 @@ async fn launch_binding_patch_preserves_omitted_fields_and_skips_noop_revision()
             prompt: workflow::PatchValue::Unset,
             required_skills: workflow::PatchValue::Unset,
             entry_skill: workflow::PatchValue::Unset,
+            profile: workflow::PatchValue::Unset,
             model_id: workflow::PatchValue::Unset,
             reasoning_id: workflow::PatchValue::Unset,
             auto_start: workflow::PatchValue::Value(false),
@@ -2444,6 +2483,7 @@ async fn automation_flags_ride_the_launch_binding_patch_and_need_a_configured_bi
             prompt: workflow::PatchValue::Unset,
             required_skills: workflow::PatchValue::Unset,
             entry_skill: workflow::PatchValue::Unset,
+            profile: workflow::PatchValue::Unset,
             model_id: workflow::PatchValue::Unset,
             reasoning_id: workflow::PatchValue::Unset,
             auto_start: workflow::PatchValue::Value(true),
@@ -2479,6 +2519,7 @@ async fn automation_flags_ride_the_launch_binding_patch_and_need_a_configured_bi
             prompt: workflow::PatchValue::Value("Implement it.".to_owned()),
             required_skills: workflow::PatchValue::Unset,
             entry_skill: workflow::PatchValue::Unset,
+            profile: workflow::PatchValue::Unset,
             model_id: workflow::PatchValue::Unset,
             reasoning_id: workflow::PatchValue::Unset,
             auto_start: workflow::PatchValue::Unset,
@@ -2509,6 +2550,7 @@ async fn automation_flags_ride_the_launch_binding_patch_and_need_a_configured_bi
                     prompt: workflow::PatchValue::Unset,
                     required_skills: workflow::PatchValue::Unset,
                     entry_skill: workflow::PatchValue::Unset,
+                    profile: workflow::PatchValue::Unset,
                     model_id: workflow::PatchValue::Unset,
                     reasoning_id: workflow::PatchValue::Unset,
                     auto_start,

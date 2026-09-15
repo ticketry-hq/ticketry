@@ -13,7 +13,7 @@ use seaography::{Builder, BuilderContext};
 use ticketry_agent_execution::graph::{ExecutionMode, GraphAccess};
 use ticketry_agent_execution::reconciliation::ExecutionReconciliationService;
 use ticketry_agent_execution::{GraphRunCaller, GraphRunRequest, GraphRunService};
-use ticketry_entities::{agent_run, launch_material};
+use ticketry_entities::{agent_run, launch_material, session};
 use ticketry_launch::TerminalLaunchError;
 use ticketry_terminal::{
     TerminalLaunchBoundary, TerminalLaunchCheckpoint, TerminalLaunchRuntime, TerminalLaunchService,
@@ -184,6 +184,7 @@ async fn graph_run_graphql_contract_returns_authoritative_models_and_child_ids()
     ));
     let mut builder = ticketry_entities::register_execution_entities(builder);
     seaography::register_entity!(builder, agent_run, mutation: false);
+    seaography::register_entity!(builder, session, mutation: false);
     let schema = ticketry_agent_execution::graph_run::register_graphql(builder)
         .schema_builder()
         .data(database.clone())

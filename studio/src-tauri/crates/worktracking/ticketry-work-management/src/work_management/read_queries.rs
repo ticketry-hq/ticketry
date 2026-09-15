@@ -127,6 +127,7 @@ pub async fn modules(
         )
         .filter(issue::Column::ProjectId.eq(&project_id))
         .filter(issue::Column::Type.eq("module"))
+        .filter(issue::Column::IsArchived.eq(false))
         .filter(module_presentation::Column::Rank.ne(""))
         .one(database)
         .await?
@@ -138,7 +139,7 @@ pub async fn modules(
             .order_by_asc(issue::Column::Id)
     } else {
         query
-            .order_by_desc(issue::Column::SequenceId)
+            .order_by_asc(issue::Column::SequenceId)
             .order_by_asc(issue::Column::Id)
     };
     Ok(query

@@ -294,19 +294,24 @@ async fn dispatch_checked(
                     })))
                 }
             };
-            let result =
-                super::service::execute_launch_decision(database, terminal_launch, &decision).await;
-            if let Ok(session) = result {
-                return Ok(DispatchOutput::direct(json!({
+            let result = super::service::execute_launch_decision(
+                database,
+                terminal_launch,
+                terminal_cleanup,
+                &decision,
+            )
+            .await;
+            match result {
+                Ok(session) => Ok(DispatchOutput::direct(json!({
                     "target_id": task.id,
                     "agent": session.agent,
                     "agent_run_id": session.agent_run_id,
-                })));
+                }))),
+                Err(error) => Ok(DispatchOutput::direct(json!({
+                    "target_id": task.id,
+                    "error": error,
+                }))),
             }
-            Ok(DispatchOutput::direct(json!({
-                "target_id": task.id,
-                "error": "terminal_launch_unavailable",
-            })))
         }
         _ => Err(CommandError::validation("Unknown WorkTracker MCP tool.")),
     }

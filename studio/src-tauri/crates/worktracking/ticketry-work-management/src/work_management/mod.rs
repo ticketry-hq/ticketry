@@ -8,6 +8,7 @@ pub(crate) mod issue_type;
 pub(crate) mod issue_type_transition;
 pub(crate) mod launch_binding;
 pub mod launch_binding_entry_skill_migration;
+pub mod launch_binding_profile_migration;
 pub mod launch_policy;
 pub(crate) mod module_presentation;
 pub mod module_presentation_migration;
@@ -25,5 +26,5 @@ pub(crate) mod workspace_tab_order;
 pub mod workspace_tab_order_migration;
 
 pub use database::{
-    open, open_established, open_for_commands, state_database_path, ReadDatabaseError,
+    begin_write, open, open_established, open_for_commands, state_database_path, ReadDatabaseError,
 };

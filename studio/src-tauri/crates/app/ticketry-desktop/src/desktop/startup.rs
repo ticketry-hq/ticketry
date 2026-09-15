@@ -2,11 +2,12 @@
 //! owns the data directory, adopt or bootstrap the GraphQL foundation, and
 //! either launch the supervised pair or connect to a development stack.
 //!
-//! The Tauri setup hook returns at once so the window and its WebView appear
-//! without waiting. The frontend reads a `starting` health, shows its
-//! preparing screen, and switches to the shell on the `ready` health event.
-//! Automated launches keep the synchronous order because their exit code
-//! reports startup failures.
+//! Plugin setup starts services on a worker before Tauri creates its windows.
+//! Database adoption and WebView creation can therefore overlap. Services use
+//! managed state and paths, never a window handle. The frontend reads the live
+//! health even if services finished before its event listener was registered.
+//! Automated launches still start synchronously in the app setup hook so their
+//! exit code reports startup failures.
 
 use tauri::Manager;
 
@@ -33,6 +34,28 @@ pub fn initialize_services(
     if automated_startup_exit_requested() {
         return start_services(&handle, graphql_api);
     }
+    Ok(())
+}
+
+/// Tauri initializes plugins before creating the configured windows.
+pub(crate) fn startup_plugin(
+    graphql_api: tauri_graphql::TransportApiImpl,
+) -> tauri::plugin::TauriPlugin<tauri::Wry> {
+    tauri::plugin::Builder::new("ticketry-startup")
+        .setup(move |application, _| {
+            if !automated_startup_exit_requested() {
+                start_services_in_background(application, &graphql_api)?;
+            }
+            Ok(())
+        })
+        .build()
+}
+
+fn start_services_in_background(
+    application: &tauri::AppHandle,
+    graphql_api: &tauri_graphql::TransportApiImpl,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let handle = application.clone();
     // `desktop_runtime_configuration` answers immediately; the configuration
     // call overlays the live health, which is still `starting`.
     *handle
@@ -41,6 +64,9 @@ pub fn initialize_services(
         .lock()
         .expect("runtime configuration lock poisoned") = Some(rust_runtime_configuration());
     let graphql_api = graphql_api.clone();
+    handle
+        .state::<DesktopStartupTrace>()
+        .record("services-start-dispatched");
     // A plain thread: the body blocks on the async runtime, so it must not
     // run on that runtime's worker threads.
     std::thread::Builder::new()

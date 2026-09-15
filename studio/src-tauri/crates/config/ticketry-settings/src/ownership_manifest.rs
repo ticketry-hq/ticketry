@@ -15,6 +15,7 @@ pub const VERSION: i32 = 1;
 /// `work_management::launch_binding_entry_skill_migration` owns the name; a
 /// test there fails if the two ever drift.
 pub const LAUNCH_BINDING_ENTRY_SKILL_LEDGER: &str = "ticketry_launch_binding_entry_skill_migration";
+pub const LAUNCH_BINDING_PROFILE_LEDGER: &str = "ticketry_launch_binding_profile_migration";
 
 pub const OWNED_TABLES: &[(&str, &[&str])] = &[
     ("app_settings", &["scope", "key", "value", "updated_at"]),

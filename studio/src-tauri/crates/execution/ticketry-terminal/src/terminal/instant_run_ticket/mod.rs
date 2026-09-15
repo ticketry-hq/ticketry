@@ -7,12 +7,14 @@
 mod graphql;
 mod operation_registry;
 mod query;
+mod thread_title;
 mod title;
 
 use seaography::CustomOutputType;
 use serde::Serialize;
 
 pub use query::{InstantRunTicketQuery, INSTANT_RUN_TICKET_LIMIT};
+pub use thread_title::InstantRunTicketTitleService;
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, CustomOutputType)]
 pub struct InstantRunTicket {

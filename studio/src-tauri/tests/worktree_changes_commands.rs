@@ -24,8 +24,14 @@ const MODULE_CHANGES: &str = r#"query($moduleId: String!) {
     checkout { clean dirty unpushed_count files { path status } }
   }
 }"#;
-const TASK_COMMIT: &str = r#"mutation($taskId: String!, $operationId: String!, $message: String!) {
-  worktree_commit(task_id: $taskId, operation_id: $operationId, message: $message) {
+
+const MODULE_FILE_DIFF: &str = r#"query($moduleId: String!, $path: String!) {
+  module_file_diff(module_id: $moduleId, path: $path) {
+    path status binary patch truncated
+  }
+}"#;
+const TASK_COMMIT: &str = r#"mutation($taskId: String!, $operationId: String!) {
+  worktree_commit(task_id: $taskId, operation_id: $operationId) {
     operation_id head_commit dirty unpushed_count uncommitted_work_excluded
   }
 }"#;
@@ -34,8 +40,8 @@ const TASK_PUSH: &str = r#"mutation($taskId: String!, $operationId: String!) {
     operation_id head_commit dirty unpushed_count uncommitted_work_excluded
   }
 }"#;
-const MODULE_COMMIT: &str = r#"mutation($moduleId: String!, $operationId: String!, $message: String!) {
-  module_checkout_commit(module_id: $moduleId, operation_id: $operationId, message: $message) {
+const MODULE_COMMIT: &str = r#"mutation($moduleId: String!, $operationId: String!) {
+  module_checkout_commit(module_id: $moduleId, operation_id: $operationId) {
     operation_id head_commit dirty unpushed_count uncommitted_work_excluded
   }
 }"#;
@@ -113,7 +119,6 @@ async fn task_commit_keeps_the_cumulative_diff_and_clean_agent_commits_can_push(
             serde_json::json!({
                 "taskId": TASK,
                 "operationId": operation_id(),
-                "message": "Record task work",
             }),
         )
         .await;
@@ -215,7 +220,6 @@ async fn module_checkout_commit_and_push_use_the_same_independent_rules() {
             serde_json::json!({
                 "moduleId": MODULE,
                 "operationId": operation_id(),
-                "message": "Record module work",
             }),
         )
         .await;

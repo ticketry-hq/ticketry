@@ -1,7 +1,10 @@
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use sea_orm::{ConnectOptions, Database, DatabaseConnection, DbErr};
+use sea_orm::{
+    ConnectOptions, Database, DatabaseConnection, DatabaseTransaction, DbErr,
+    SqliteTransactionMode, TransactionOptions, TransactionTrait,
+};
 
 use ticketry_data_directory::{established_data_directory, OwnershipError};
 
@@ -85,6 +88,26 @@ pub async fn open_for_commands(path: &Path) -> Result<DatabaseConnection, ReadDa
     Ok(database)
 }
 
+/// Begin a write transaction on the WAL command pool.
+///
+/// A plain `BEGIN` is deferred: SQLite promotes it to a writer at its first
+/// write statement. On a WAL database that promotion fails at once — with
+/// `SQLITE_BUSY_SNAPSHOT` (517) when another connection committed after the
+/// transaction's first read, and with `SQLITE_BUSY` (5) while another writer
+/// is active, because SQLite skips the busy handler on an upgrade to avoid a
+/// deadlock. Both surfaced as "database is locked" on the native viewer lease
+/// path (CODING-1555). `BEGIN IMMEDIATE` takes the write lock first, so the
+/// pool's busy timeout applies and a read-then-write sequence keeps its
+/// snapshot.
+pub async fn begin_write(database: &DatabaseConnection) -> Result<DatabaseTransaction, DbErr> {
+    database
+        .begin_with_options(TransactionOptions {
+            sqlite_transaction_mode: Some(SqliteTransactionMode::Immediate),
+            ..TransactionOptions::default()
+        })
+        .await
+}
+
 /// Open Django's existing SQLite database without creating or migrating it.
 ///
 /// SQLite's read-only open flag is the primary guard. `query_only` is applied
@@ -121,7 +144,7 @@ mod tests {
         TransactionTrait,
     };
 
-    use super::{open, open_for_commands};
+    use super::{begin_write, open, open_for_commands};
     use ticketry_entities::project;
 
     #[tokio::test]
@@ -236,5 +259,70 @@ mod tests {
             .try_get::<String>("", "journal_mode")
             .expect("decode journal mode");
         assert_eq!(journal_mode, "wal");
+    }
+
+    /// CODING-1555: the native viewer lease create read the run and the current
+    /// lease inside a deferred transaction, then lost the write upgrade to a
+    /// concurrent terminal-activity commit with "database is locked" (517/5).
+    /// A write transaction on this pool must hold the write lock from `BEGIN`.
+    #[tokio::test]
+    async fn write_transaction_that_reads_first_commits_after_a_concurrent_write() {
+        let directory = tempfile::tempdir().expect("create fixture directory");
+        let path = directory.path().join("state.db");
+        let setup = Database::connect(format!("sqlite:{}?mode=rwc", path.display()))
+            .await
+            .expect("open fixture writer");
+        setup
+            .execute_unprepared("CREATE TABLE lock_probe (id integer PRIMARY KEY)")
+            .await
+            .expect("create lock probe");
+        setup.close().await.expect("close fixture writer");
+
+        let commands = open_for_commands(&path).await.expect("open command pool");
+        let other_writer = open_for_commands(&path).await.expect("open second pool");
+
+        let transaction = begin_write(&commands)
+            .await
+            .expect("begin write transaction");
+        transaction
+            .query_one_raw(Statement::from_string(
+                DbBackend::Sqlite,
+                "SELECT count(*) AS count FROM lock_probe".to_owned(),
+            ))
+            .await
+            .expect("read before writing");
+        // The concurrent writer must queue behind this transaction instead of
+        // committing underneath its snapshot.
+        let concurrent = tokio::spawn(async move {
+            other_writer
+                .execute_unprepared("INSERT INTO lock_probe DEFAULT VALUES")
+                .await
+        });
+        tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+
+        transaction
+            .execute_unprepared("INSERT INTO lock_probe DEFAULT VALUES")
+            .await
+            .expect("write after reading in the same transaction");
+        transaction
+            .commit()
+            .await
+            .expect("commit write transaction");
+        concurrent
+            .await
+            .expect("join concurrent writer")
+            .expect("concurrent write lands after the transaction commits");
+
+        let count = commands
+            .query_one_raw(Statement::from_string(
+                DbBackend::Sqlite,
+                "SELECT count(*) AS count FROM lock_probe".to_owned(),
+            ))
+            .await
+            .expect("count rows")
+            .expect("count row")
+            .try_get::<i64>("", "count")
+            .expect("decode count");
+        assert_eq!(count, 2);
     }
 }

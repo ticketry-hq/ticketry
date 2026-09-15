@@ -31,7 +31,10 @@ pub async fn latest_attempts(
     let mut resolved = HashSet::<String>::new();
     rows.into_iter()
         .filter(|attempt| resolved.insert(lineage(attempt)))
-        .filter(|attempt| attempt.status != "succeeded" && attempt.dismissed_at.is_none())
+        .filter(|attempt| {
+            !matches!(attempt.status.as_str(), "succeeded" | "skipped")
+                && attempt.dismissed_at.is_none()
+        })
         .map(automation_attempt)
         .map(project)
         .collect()

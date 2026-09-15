@@ -18,6 +18,7 @@ use ticketry_terminal::{
     CreateViewerLease, DeleteViewerLease, PreparedViewerMechanics, UpdateViewerLease,
     ViewerDetachReason, ViewerOwnershipError, ViewerOwnershipErrorCode, ViewerOwnershipService,
 };
+use ticketry_work_management::{begin_write, open_for_commands};
 
 const RUN_ID: &str = "run-viewer-ownership";
 const OTHER_RUN_ID: &str = "run-viewer-ownership-2";
@@ -316,21 +317,7 @@ async fn graphql_restricted_views_preserve_ownership_and_nullable_release() {
     service
         .stage_prepared(&create("graphql-native", "native"), mechanics.clone())
         .unwrap();
-    let mut context = BuilderContext::default();
-    ticketry_terminal::apply_terminal_column_policy(&mut context);
-    let context = Box::leak(Box::new(context));
-    let mut builder = Builder::new(context, database.clone());
-    builder.mutation = Object::new("Mutation");
-    builder.schema = Schema::build("Query", Some("Mutation"), None);
-    let builder = ticketry_entities::register_work_management_entities(builder);
-    let builder = ticketry_terminal::register_persistence_graphql(builder);
-    let builder = ticketry_terminal::register_viewer_lease_graphql(builder);
-    let schema = builder
-        .schema_builder()
-        .data(database.clone())
-        .data(service.clone())
-        .finish()
-        .unwrap();
+    let schema = viewer_schema(&database, &service);
     let response = schema
         .execute(viewer_request(
             "CreateViewerLease",
@@ -466,6 +453,87 @@ async fn graphql_restricted_views_preserve_ownership_and_nullable_release() {
     );
 }
 
+#[tokio::test]
+async fn graphql_create_viewer_lease_waits_for_a_concurrent_writer_instead_of_failing() {
+    // The desktop native lifecycle acquires its lease through this GraphQL
+    // path, whose transaction seaolim opens with a deferred `BEGIN`. A writer
+    // committing on another pooled connection between the prepare reads and
+    // the insert produced SQLITE_BUSY (5/517) "database is locked" in the
+    // product (CODING-1555). The path must take the write lock up front and
+    // queue behind the other writer instead.
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("state.db");
+    let setup = Database::connect(format!("sqlite:{}?mode=rwc", path.display()))
+        .await
+        .unwrap();
+    seed_fixture(&setup).await;
+    setup.close().await.unwrap();
+    let database = open_for_commands(&path).await.unwrap();
+    let other_writer = open_for_commands(&path).await.unwrap();
+
+    let service = ViewerOwnershipService::new(database.clone());
+    let mechanics = Arc::new(Mechanics::default());
+    service
+        .stage_prepared(&create("graphql-concurrent", "native"), mechanics.clone())
+        .unwrap();
+    let schema = viewer_schema(&database, &service);
+
+    let blocker = begin_write(&other_writer).await.unwrap();
+    blocker
+        .execute_unprepared(&format!(
+            "UPDATE agent_runs SET status = 'running' WHERE id = '{RUN_ID}'"
+        ))
+        .await
+        .unwrap();
+    let release = tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        blocker.commit().await
+    });
+
+    let response = schema
+        .execute(viewer_request(
+            "CreateViewerLease",
+            serde_json::json!({
+                "agentRunId": RUN_ID,
+                "viewerId": "graphql-concurrent",
+                "transport": "native"
+            }),
+        ))
+        .await;
+    release.await.unwrap().unwrap();
+
+    assert!(
+        response.errors.is_empty(),
+        "create_viewer_lease must queue behind the concurrent writer: {:?}",
+        response.errors
+    );
+    let body = serde_json::to_value(response).unwrap();
+    assert_eq!(
+        body["data"]["viewer_lease"]["viewer_id"],
+        "graphql-concurrent"
+    );
+    assert_eq!(lease(&database).await.viewer_id, "graphql-concurrent");
+    assert!(mechanics.reasons().is_empty());
+}
+
+fn viewer_schema(database: &DatabaseConnection, service: &ViewerOwnershipService) -> Schema {
+    let mut context = BuilderContext::default();
+    ticketry_terminal::apply_terminal_column_policy(&mut context);
+    let context = Box::leak(Box::new(context));
+    let mut builder = Builder::new(context, database.clone());
+    builder.mutation = Object::new("Mutation");
+    builder.schema = Schema::build("Query", Some("Mutation"), None);
+    let builder = ticketry_entities::register_work_management_entities(builder);
+    let builder = ticketry_terminal::register_persistence_graphql(builder);
+    let builder = ticketry_terminal::register_viewer_lease_graphql(builder);
+    builder
+        .schema_builder()
+        .data(database.clone())
+        .data(service.clone())
+        .finish()
+        .unwrap()
+}
+
 fn viewer_request(operation: &str, variables: serde_json::Value) -> Request {
     Request::new(include_str!(
         "../../src/features/agents/terminal/operations/viewerLeases.graphql"
@@ -536,6 +604,11 @@ async fn insert_second_run(database: &DatabaseConnection) {
 
 async fn fixture() -> DatabaseConnection {
     let database = Database::connect("sqlite::memory:").await.unwrap();
+    seed_fixture(&database).await;
+    database
+}
+
+async fn seed_fixture(database: &DatabaseConnection) {
     let namespace = ticketry_terminal::current_runtime_namespace().unwrap();
     database
         .execute_unprepared(&format!(
@@ -561,7 +634,10 @@ async fn fixture() -> DatabaseConnection {
                 resumed_from varchar,
                 scope varchar NOT NULL,
                 launch_state varchar,
-                launch_model varchar
+                launch_model varchar,
+                initial_prompt text,
+                launch_reasoning varchar,
+                launch_unattended bool NOT NULL DEFAULT 0
             );
             CREATE TABLE worktracker_project (id varchar PRIMARY KEY);
             CREATE TABLE agent_terminal_sessions (
@@ -605,5 +681,4 @@ async fn fixture() -> DatabaseConnection {
         ))
         .await
         .unwrap();
-    database
 }

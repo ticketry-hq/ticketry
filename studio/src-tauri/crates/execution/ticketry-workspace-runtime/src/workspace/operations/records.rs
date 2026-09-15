@@ -3,7 +3,7 @@
 use serde_json::Value;
 
 use super::entities::operation as operation_entity;
-use super::{WorkspaceOperationKind, WorkspaceResourceKind};
+use super::WorkspaceOperationKind;
 
 /// One row, as every caller in this capability sees it.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -49,10 +49,6 @@ impl WorkspaceOperationRecord {
     /// the journal. Reconciliation defers such a row instead of guessing.
     pub fn typed_kind(&self) -> Option<WorkspaceOperationKind> {
         WorkspaceOperationKind::from_code(&self.kind).ok()
-    }
-
-    pub fn typed_resource_kind(&self) -> Option<WorkspaceResourceKind> {
-        self.typed_kind().map(WorkspaceOperationKind::resource_kind)
     }
 
     /// The intent payload a typed decoder reads. An unparseable or

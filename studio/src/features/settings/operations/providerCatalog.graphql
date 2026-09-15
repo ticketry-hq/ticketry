@@ -11,19 +11,24 @@ query LoadProviderCatalog {
       }
     }
     reasoning_levels { id name }
-    global_default { provider model reasoning }
+    codex_profiles
+    global_default { provider profile model reasoning }
   }
 }
 
 mutation UpdateProviderCatalog(
   $activatedProviders: [String!]!
+  $codexProfiles: [String!]!
   $defaultProvider: String
+  $defaultProfile: String
   $defaultModel: String
   $defaultReasoning: String
 ) {
   update_provider_catalog(
     activated_providers: $activatedProviders
+    codex_profiles: $codexProfiles
     default_provider: $defaultProvider
+    default_profile: $defaultProfile
     default_model: $defaultModel
     default_reasoning: $defaultReasoning
   ) {
@@ -38,6 +43,7 @@ mutation UpdateProviderCatalog(
       }
     }
     reasoning_levels { id name }
-    global_default { provider model reasoning }
+    codex_profiles
+    global_default { provider profile model reasoning }
   }
 }

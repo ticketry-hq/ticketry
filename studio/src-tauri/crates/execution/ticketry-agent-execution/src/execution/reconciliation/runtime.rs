@@ -75,7 +75,9 @@ impl ExecutionReconciliationRuntime {
         let startup = async {
             let automation = service.reconcile_automation(config.batch_size).await;
             log_failures(&automation);
-            terminal.request_sweep().await;
+            if automation.needs_terminal_reconciliation() {
+                terminal.request_sweep().await;
+            }
             let mut cursor = None;
             loop {
                 let report = service
@@ -125,7 +127,7 @@ impl ExecutionReconciliationRuntime {
                                 let roots = service.reconcile_armed_batch(cursor.as_deref(), config.batch_size).await;
                                 log_failures(&roots);
                                 cursor = roots.next_root_id.clone();
-                                if events.needs_terminal_reconciliation() || roots.needs_terminal_reconciliation() {
+                                if automation.needs_terminal_reconciliation() || events.needs_terminal_reconciliation() || roots.needs_terminal_reconciliation() {
                                     terminal.request_sweep().await;
                                 }
                             };

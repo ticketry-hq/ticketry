@@ -7,7 +7,7 @@ use crate::graph_run_service::GraphRunService;
 use ticketry_entities::{
     status_event, transition_occurrence, {graph_run, launch_claim},
 };
-use ticketry_terminal::TerminalLaunchService;
+use ticketry_terminal::{TerminalCleanupService, TerminalLaunchService};
 use ticketry_work_management::launch_policy::{self, LaunchPolicyResolver};
 
 use super::{ExecutionReconciliationReport, RootReconciliation};
@@ -19,6 +19,7 @@ pub struct ExecutionReconciliationService {
     database: DatabaseConnection,
     policy: LaunchPolicyResolver,
     terminal_launch: TerminalLaunchService,
+    terminal_cleanup: TerminalCleanupService,
     graph_runs: GraphRunService,
 }
 
@@ -27,6 +28,16 @@ impl ExecutionReconciliationService {
         database: DatabaseConnection,
         policy: LaunchPolicyResolver,
         terminal_launch: TerminalLaunchService,
+    ) -> Self {
+        let terminal_cleanup = TerminalCleanupService::with_tmux(database.clone());
+        Self::with_cleanup(database, policy, terminal_launch, terminal_cleanup)
+    }
+
+    pub fn with_cleanup(
+        database: DatabaseConnection,
+        policy: LaunchPolicyResolver,
+        terminal_launch: TerminalLaunchService,
+        terminal_cleanup: TerminalCleanupService,
     ) -> Self {
         Self {
             graph_runs: GraphRunService::new(
@@ -37,6 +48,7 @@ impl ExecutionReconciliationService {
             database,
             policy,
             terminal_launch,
+            terminal_cleanup,
         }
     }
 
@@ -60,6 +72,7 @@ impl ExecutionReconciliationService {
                     if let Err(error) = crate::execution::launch_delivery::execute(
                         &self.database,
                         &self.terminal_launch,
+                        &self.terminal_cleanup,
                         &decision,
                     )
                     .await

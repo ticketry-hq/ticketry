@@ -37,7 +37,11 @@ pub(super) async fn live_agent_session(
     database: &DatabaseConnection,
     task_id: &str,
 ) -> Result<Option<LiveAgentSession>, sea_orm::DbErr> {
-    let candidates = open_sessions(database, task_id).await?;
+    let candidates = open_sessions(database, task_id)
+        .await?
+        .into_iter()
+        .filter_map(input_capable)
+        .collect::<Vec<_>>();
     if candidates.is_empty() {
         return Ok(None);
     }
@@ -112,22 +116,31 @@ fn submit_destination<T: PromptDeliveryTmux>(
     delivery.submit_follow_on(provider, run_id, &entry_skill_invocation(provider, skill))
 }
 
-/// Open task sessions for the work item, newest first, restricted to providers
-/// whose composer can be observed.
-async fn open_sessions(
+/// Open handoff candidates for the work item, newest first.
+pub(super) async fn open_sessions(
     database: &DatabaseConnection,
     task_id: &str,
-) -> Result<Vec<LiveAgentSession>, sea_orm::DbErr> {
-    let rows = session::Entity::find()
+) -> Result<Vec<session::Model>, sea_orm::DbErr> {
+    task_sessions(database, task_id, false).await
+}
+
+pub(super) async fn task_sessions(
+    database: &DatabaseConnection,
+    task_id: &str,
+    include_cleanup_pending: bool,
+) -> Result<Vec<session::Model>, sea_orm::DbErr> {
+    let mut query = session::Entity::find()
         .filter(session::Column::TaskId.eq(compact(task_id)))
         .filter(session::Column::Scope.eq("task"))
-        .filter(session::Column::TerminatedAt.is_null())
-        .filter(session::Column::RuntimeCleanupPending.eq(false))
+        .filter(session::Column::TerminatedAt.is_null());
+    if !include_cleanup_pending {
+        query = query.filter(session::Column::RuntimeCleanupPending.eq(false));
+    }
+    query
         .order_by_desc(session::Column::CreatedAt)
         .order_by_desc(session::Column::AgentRunId)
         .all(database)
-        .await?;
-    Ok(rows.into_iter().filter_map(input_capable).collect())
+        .await
 }
 
 /// A session is input-capable when its provider publishes a ready-composer
@@ -394,8 +407,11 @@ mod tests {
     }
 
     fn row(agent_run_id: &str, terminated: bool, cleanup: bool, agent: &str) -> String {
+        let session_name = ticketry_terminal::PersistedSessionName::for_agent_run(agent_run_id)
+            .unwrap()
+            .into_string();
         format!(
-            "INSERT INTO agent_terminal_sessions VALUES ('{agent_run_id}', 'pt-{agent_run_id}', \
+            "INSERT INTO agent_terminal_sessions VALUES ('{agent_run_id}', '{session_name}', \
              '1fa3c1b1143b4ca2b31a9b5db0b839c6', 'module', 'project', '2026-09-01T00:00:00Z', {}, \
              'task', NULL, {}, NULL, NULL, 0, NULL, '{agent}');",
             if terminated {

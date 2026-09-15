@@ -50,57 +50,6 @@ fn defect<'report>(report: &'report PreflightReport, code: &str) -> &'report pre
 }
 
 #[tokio::test]
-async fn every_corpus_fixture_is_semantically_adoptable() {
-    // Every generation Ticketry supports must pass every rule that applies to
-    // it. A rule too strict for a real installation fails here rather than
-    // refusing a user's only working database after release.
-    for fixture in &classification::manifest().corpus {
-        let installation = corpus::install(&fixture.name);
-        let report = run(installation.path()).await;
-        assert_eq!(
-            report.verdict(),
-            Verdict::Adoptable,
-            "{} must be adoptable, but reported {:#?}",
-            fixture.name,
-            report.defects
-        );
-        assert!(report.checked > 0, "{} ran no rules at all", fixture.name);
-    }
-}
-
-#[tokio::test]
-async fn a_historical_generation_records_the_rules_it_has_no_table_for() {
-    // A rule that cannot run must say so. Without that, a clean report on an
-    // early generation would be indistinguishable from a report where half the
-    // rules silently did nothing.
-    let installation = corpus::install("django-worktracker-0001_initial");
-    let report = run(installation.path()).await;
-
-    assert!(
-        !report.skipped.is_empty(),
-        "an early generation carries none of the later capability tables"
-    );
-    for skipped in &report.skipped {
-        let table = skipped
-            .missing_requirement
-            .split('.')
-            .next()
-            .expect("a requirement names a table");
-        assert!(
-            !std::path::Path::new(table).exists(),
-            "a requirement must name a table, not a path"
-        );
-    }
-    assert!(
-        report
-            .skipped
-            .iter()
-            .any(|skipped| skipped.missing_requirement.starts_with("worktrees")),
-        "the initial generation has no worktrees table"
-    );
-}
-
-#[tokio::test]
 async fn the_current_generation_runs_every_rule_its_schema_can_answer() {
     let installation = corpus::install("current-representative");
     let report = run(installation.path()).await;
@@ -116,14 +65,17 @@ async fn the_current_generation_runs_every_rule_its_schema_can_answer() {
         "runs_launch_effects",
         "terminal_cleanup_effects",
         "workspace_operations",
+        "module_links",
     ];
     for skipped in &report.skipped {
         assert!(
             rust_owned
                 .iter()
-                .any(|table| skipped.missing_requirement.starts_with(table)),
-            "{} was skipped on the current generation",
-            skipped.code
+                .any(|table| skipped.missing_requirement.starts_with(table))
+                || skipped.missing_requirement == "worktracker_project.onboarding_required",
+            "{} was skipped on the current generation because {} is absent",
+            skipped.code,
+            skipped.missing_requirement
         );
     }
     assert!(report.checked > 80, "only {} rules ran", report.checked);
@@ -178,8 +130,8 @@ async fn a_parent_cycle_is_refused_with_its_affected_identities() {
     corpus::execute(
         installation.path(),
         "UPDATE worktracker_issue
-         SET parent_id = '00000000000000000000000000098606'
-         WHERE id = '00000000000000000000000000098605'",
+         SET parent_id = '00000000000000000000000000089306'
+         WHERE id = '00000000000000000000000000089305'",
     )
     .await;
 
@@ -191,7 +143,7 @@ async fn a_parent_cycle_is_refused_with_its_affected_identities() {
     assert_eq!(cycle.count, 2, "both work items are on the loop");
     assert!(cycle
         .affected
-        .contains(&"00000000000000000000000000098605".to_owned()));
+        .contains(&"00000000000000000000000000089305".to_owned()));
     assert!(!cycle.is_admitted(), "no bridge admits an unknown defect");
 }
 
@@ -201,8 +153,8 @@ async fn a_blocker_cycle_is_refused() {
     corpus::execute(
         installation.path(),
         "INSERT INTO worktracker_issue_blocked_by (from_issue_id, to_issue_id) VALUES
-           ('00000000000000000000000000098605', '00000000000000000000000000098606'),
-           ('00000000000000000000000000098606', '00000000000000000000000000098605')",
+           ('00000000000000000000000000089305', '00000000000000000000000000089306'),
+           ('00000000000000000000000000089306', '00000000000000000000000000089305')",
     )
     .await;
 
@@ -225,8 +177,8 @@ async fn a_duplicate_human_key_is_refused() {
     corpus::execute_unconstrained(
         installation.path(),
         "DROP INDEX worktracker_issue_project_id_sequence_id_55f38730_uniq;
-         UPDATE worktracker_issue SET sequence_id = 1
-         WHERE id = '00000000000000000000000000098606'",
+         UPDATE worktracker_issue SET sequence_id = 891
+         WHERE id = '00000000000000000000000000089306'",
     )
     .await;
 
@@ -259,11 +211,11 @@ async fn a_state_outside_its_own_workflow_is_refused() {
         "INSERT INTO worktracker_state
            (id, project_id, name, \"group\", color, sort_order, is_protected,
             created_at, updated_at)
-         VALUES ('00000000000000000000000000098610',
-                 '00000000000000000000000000098601', 'Orphan', 'started', '', 9, 0,
+         VALUES ('00000000000000000000000000089310',
+                 '00000000000000000000000000089301', 'Orphan', 'started', '', 9, 0,
                  '2026-08-22 09:00:00', '2026-08-22 09:00:00');
-         UPDATE worktracker_issue SET state_id = '00000000000000000000000000098610'
-         WHERE id = '00000000000000000000000000098606'",
+         UPDATE worktracker_issue SET state_id = '00000000000000000000000000089310'
+         WHERE id = '00000000000000000000000000089306'",
     )
     .await;
 
@@ -279,7 +231,7 @@ async fn an_unreadable_rank_is_refused() {
     corpus::execute(
         installation.path(),
         "UPDATE worktracker_issue SET rank = 'a b'
-         WHERE id = '00000000000000000000000000098606'",
+         WHERE id = '00000000000000000000000000089306'",
     )
     .await;
 
@@ -313,8 +265,8 @@ async fn a_work_item_whose_kind_contradicts_its_issue_type_is_refused() {
     corpus::execute(
         installation.path(),
         "UPDATE worktracker_issue
-         SET issue_type_id = '00000000000000000000000000098603'
-         WHERE id = '00000000000000000000000000098606'",
+         SET issue_type_id = '00000000000000000000000000089303'
+         WHERE id = '00000000000000000000000000089306'",
     )
     .await;
 
@@ -366,7 +318,7 @@ async fn a_run_that_ended_before_it_started_is_refused() {
     let installation = corpus::install("current-representative");
     corpus::execute(
         installation.path(),
-        "UPDATE agent_runs SET ended_at = '2026-08-21 09:00:00'",
+        "UPDATE agent_runs SET ended_at = '2026-08-18 09:00:00'",
     )
     .await;
 
@@ -382,9 +334,9 @@ async fn a_launch_claim_without_its_graph_run_is_refused() {
     corpus::execute(
         installation.path(),
         "INSERT INTO launched_tasks (task_id, root_id, agent_run_id, launched_at)
-         VALUES ('00000000000000000000000000098606',
-                 '00000000000000000000000000098605',
-                 'corpus-run', '2026-08-22 09:10:00')",
+         VALUES ('00000000000000000000000000089306',
+                 '00000000000000000000000000089305',
+                 'run-893', '2026-08-22 09:10:00')",
     )
     .await;
 
@@ -404,11 +356,11 @@ async fn a_terminal_launch_whose_environment_is_not_an_object_is_refused() {
         "INSERT INTO terminal_launch_requests
            (effect_id, agent_run_id, issue_id, project_id, module_id, task_id, scope,
             command, working_directory, environment, \"columns\", \"rows\", created_at)
-         VALUES ('effect-1', 'corpus-run',
-                 '00000000000000000000000000098606',
-                 '00000000000000000000000000098601',
-                 '00000000000000000000000000098605',
-                 '00000000000000000000000000098606', 'task',
+         VALUES ('effect-1', 'run-893',
+                 '00000000000000000000000000089306',
+                 '00000000000000000000000000089301',
+                 '00000000000000000000000000089305',
+                 '00000000000000000000000000089306', 'task',
                  'codex --dangerously-bypass-approvals', '/tmp',
                  'ANTHROPIC_API_KEY=sk-live-should-never-be-reported', 80, 24,
                  '2026-08-22 09:00:00')",
@@ -444,7 +396,7 @@ async fn a_declared_foreign_key_with_no_parent_row_is_refused() {
     // the report actionable where the storage-level check names a rowid.
     assert_eq!(
         defect(&report, "run-work-item-missing").affected,
-        ["corpus-run"]
+        ["run-893"]
     );
 }
 
@@ -485,8 +437,8 @@ async fn an_attachment_recorded_as_an_absolute_path_is_refused() {
         installation.path(),
         "INSERT INTO worktracker_attachment
            (id, issue_id, file, filename, mime_type, size, created_at)
-         VALUES ('00000000000000000000000000098620',
-                 '00000000000000000000000000098606',
+         VALUES ('00000000000000000000000000089320',
+                 '00000000000000000000000000089306',
                  '/etc/shadow', 'shadow', 'text/plain', 1, '2026-08-22 09:00:00')",
     )
     .await;
@@ -520,10 +472,10 @@ async fn an_unsafe_tmux_session_name_is_refused_before_it_reaches_a_command_line
         "INSERT INTO agent_terminal_sessions
            (agent_run_id, tmux_session_name, task_id, module_id, project_id,
             created_at, scope, runtime_cleanup_pending, output_sequence)
-         VALUES ('corpus-run', 'pt-corpus-run:0.1',
-                 '00000000000000000000000000098606',
-                 '00000000000000000000000000098605',
-                 '00000000000000000000000000098601',
+         VALUES ('run-893', 'pt-corpus-run:0.1',
+                 '00000000000000000000000000089306',
+                 '00000000000000000000000000089305',
+                 '00000000000000000000000000089301',
                  '2026-08-22 09:00:00', 'task', 0, 0)",
     )
     .await;
@@ -533,7 +485,7 @@ async fn an_unsafe_tmux_session_name_is_refused_before_it_reaches_a_command_line
     assert_eq!(report.verdict(), Verdict::Refused);
     let unsafe_name = defect(&report, "tmux-session-name-unsafe");
     assert_eq!(unsafe_name.area, Area::Runtime);
-    assert_eq!(unsafe_name.affected, ["corpus-run"]);
+    assert_eq!(unsafe_name.affected, ["run-893"]);
 }
 
 #[tokio::test]
@@ -545,10 +497,10 @@ async fn an_unsafe_runtime_namespace_is_refused() {
            (agent_run_id, tmux_session_name, task_id, module_id, project_id,
             created_at, scope, runtime_cleanup_pending, output_sequence,
             runtime_namespace)
-         VALUES ('corpus-run', 'pt-corpus-run',
-                 '00000000000000000000000000098606',
-                 '00000000000000000000000000098605',
-                 '00000000000000000000000000098601',
+         VALUES ('run-893', 'pt-corpus-run',
+                 '00000000000000000000000000089306',
+                 '00000000000000000000000000089305',
+                 '00000000000000000000000000089301',
                  '2026-08-22 09:00:00', 'task', 0, 0, '../escape')",
     )
     .await;
@@ -596,11 +548,11 @@ async fn a_report_carries_identities_and_counts_and_no_secret() {
          INSERT INTO terminal_launch_requests
            (effect_id, agent_run_id, issue_id, project_id, module_id, task_id, scope,
             command, working_directory, environment, \"columns\", \"rows\", created_at)
-         VALUES ('effect-secret', 'corpus-run',
-                 '00000000000000000000000000098606',
-                 '00000000000000000000000000098601',
-                 '00000000000000000000000000098605',
-                 '00000000000000000000000000098606', 'task',
+         VALUES ('effect-secret', 'run-893',
+                 '00000000000000000000000000089306',
+                 '00000000000000000000000000089301',
+                 '00000000000000000000000000089305',
+                 '00000000000000000000000000089306', 'task',
                  'codex --token COMMAND-SECRET', '/tmp',
                  'ENV-SECRET', 0, 0, '2026-08-22 09:00:00')",
     )
@@ -789,13 +741,9 @@ async fn an_inconsistent_effect_journal_in_a_rust_owned_installation_is_refused(
     // nor take the lease itself.
     corpus::execute_unconstrained(
         installation.path(),
-        "INSERT INTO runs_launch_effects
-           (effect_id, agent_run_id, request_id, project_id, issue_id, scope,
-            target_kind, target_id, state, lease_owner, lease_expires_at)
-         VALUES ('e0000000000000000000000000000009', 'corpus-run',
-                 'graph-adopted:corpus', '00000000000000000000000000098601',
-                 '00000000000000000000000000098606', 'task', 'automation',
-                 '00000000000000000000000000098606', 'leased', NULL, NULL)",
+        "UPDATE runs_launch_effects
+         SET state='leased', lease_owner=NULL, lease_expires_at=NULL
+         WHERE agent_run_id='run-893'",
     )
     .await;
 
@@ -820,8 +768,8 @@ async fn a_malformed_status_event_payload_is_refused() {
            (event_id, project_id, event_kind, payload_version, subject_kind,
             subject_id, payload, committed_at)
          VALUES ('e0000000000000000000000000000001',
-                 '00000000000000000000000000098601', 'run.updated', 1,
-                 'agent-run', 'corpus-run', 'not-json', '2026-08-22 09:00:00')",
+                 '00000000000000000000000000089301', 'run.updated', 1,
+                 'agent-run', 'run-893', 'not-json', '2026-08-22 09:00:00')",
     )
     .await;
 

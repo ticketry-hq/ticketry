@@ -90,6 +90,16 @@ pub const OWNED_TABLES: &[(&str, ProductionWriter, &[&str])] = &[
         WORKTREE_PULL_REQUEST_MIGRATION_COLUMNS,
     ),
     (
+        crate::worktree::persistence::ship_record_migration::LEDGER_TABLE,
+        ProductionWriter::Worktrees,
+        SHIP_RECORD_MIGRATION_COLUMNS,
+    ),
+    (
+        crate::worktree::persistence::ship_record_migration::SHIP_RECORD_TABLE,
+        ProductionWriter::Worktrees,
+        SHIP_RECORD_COLUMNS,
+    ),
+    (
         "workspace_operations",
         ProductionWriter::WorkspaceOperations,
         OPERATION_COLUMNS,
@@ -107,6 +117,10 @@ const WORKTREE_COLUMNS: &[&str] =
 
 const WORKTREE_PULL_REQUEST_MIGRATION_COLUMNS: &[&str] =
     crate::worktree::persistence::ownership_manifest::AUTHORED_TABLES[1].1;
+const SHIP_RECORD_MIGRATION_COLUMNS: &[&str] =
+    crate::worktree::persistence::ownership_manifest::AUTHORED_TABLES[2].1;
+const SHIP_RECORD_COLUMNS: &[&str] =
+    crate::worktree::persistence::ownership_manifest::AUTHORED_TABLES[3].1;
 
 /// The authored journal, at the shape the capability manifest declares.
 const OPERATION_COLUMNS: &[&str] =

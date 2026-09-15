@@ -1,15 +1,15 @@
 #![allow(dead_code)]
 
 use std::collections::{HashMap, VecDeque};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 use ticketry_entities::{launch_material, session};
 use ticketry_launch::TerminalLaunchError;
-use ticketry_terminal::InventoryEntry;
 use ticketry_terminal::{
     CleanupCheckpoint, CleanupCheckpoints, CleanupKillResult, CleanupRuntimeObservation,
-    RuntimeInventory, TerminalCleanupError, TerminalCleanupRuntime,
+    InventoryEntry, RuntimeInventory, TerminalCleanupError, TerminalCleanupRuntime,
 };
 use ticketry_terminal::{
     ReconciliationCheckpoint, ReconciliationCheckpoints, TerminalReconciliationError,
@@ -24,6 +24,8 @@ use ticketry_terminal::{
 pub struct ScriptedRuntime {
     observations: Mutex<HashMap<String, VecDeque<CleanupRuntimeObservation>>>,
     inventory: Mutex<Vec<InventoryEntry>>,
+    events: Mutex<Vec<String>>,
+    kill_failures: AtomicUsize,
 }
 
 impl ScriptedRuntime {
@@ -36,6 +38,14 @@ impl ScriptedRuntime {
 
     pub fn set_inventory(&self, values: impl IntoIterator<Item = InventoryEntry>) {
         *self.inventory.lock().unwrap() = values.into_iter().collect();
+    }
+
+    pub fn fail_kills(&self, count: usize) {
+        self.kill_failures.store(count, Ordering::SeqCst);
+    }
+
+    pub fn events(&self) -> Vec<String> {
+        self.events.lock().unwrap().clone()
     }
 
     fn next(&self, run_id: &str) -> CleanupRuntimeObservation {
@@ -59,6 +69,19 @@ impl TerminalCleanupRuntime for ScriptedRuntime {
     }
 
     async fn kill_verified(&self, terminal: &session::Model) -> CleanupKillResult {
+        self.events
+            .lock()
+            .unwrap()
+            .push(format!("kill:{}", terminal.agent_run_id));
+        if self
+            .kill_failures
+            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |count| {
+                count.checked_sub(1)
+            })
+            .is_ok()
+        {
+            return CleanupKillResult::Unconfirmed;
+        }
         self.set(&terminal.agent_run_id, [CleanupRuntimeObservation::Missing]);
         CleanupKillResult::Killed
     }
@@ -93,6 +116,10 @@ impl TerminalLaunchRuntime for ScriptedRuntime {
         material: &launch_material::Model,
         checkpoint: &dyn TerminalLaunchCheckpoint,
     ) -> Result<(), TerminalLaunchError> {
+        self.events
+            .lock()
+            .unwrap()
+            .push(format!("launch:{}", material.agent_run_id));
         self.set(&material.agent_run_id, [CleanupRuntimeObservation::Running]);
         checkpoint
             .checkpoint(TerminalLaunchBoundary::TmuxCreated)

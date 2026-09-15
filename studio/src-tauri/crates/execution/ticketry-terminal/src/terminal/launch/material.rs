@@ -112,6 +112,7 @@ impl PreparedMaterial {
             module_id: Set(compact(&self.request.module_id)),
             task_id: Set(compact(&self.request.terminal_task_id())),
             provider: Set(self.request.provider.clone()),
+            profile: Set(self.request.profile.clone()),
             model: Set(self.request.model.clone()),
             reasoning: Set(self.request.reasoning.clone()),
             scope: Set(self.request.kind.scope().to_owned()),
@@ -135,6 +136,7 @@ impl PreparedMaterial {
             && row.module_id == compact(&self.request.module_id)
             && row.task_id == compact(&self.request.terminal_task_id())
             && row.provider == self.request.provider
+            && row.profile == self.request.profile
             && row.model == self.request.model
             && row.reasoning == self.request.reasoning
             && row.scope == self.request.kind.scope()

@@ -13,7 +13,7 @@ use crate::terminal::launch::{TerminalLaunchRuntime, TerminalLaunchService};
 use ticketry_entities::{agent_run, session};
 use ticketry_runs::{EndOfLifeOrigin, NewStatusEvent, RunsServices, TerminalFact, TerminalOutcome};
 
-use super::batch::{recorded_session_batch, RecordedSessionCursors};
+use super::batch::recorded_session_batch;
 use super::{
     NoReconciliationCheckpoints, ReconciledSession, ReconciliationCheckpoint,
     ReconciliationCheckpoints, RecordedSessionDecision, TerminalReconciliationError,
@@ -23,12 +23,11 @@ use super::{
 #[derive(Clone)]
 pub struct TerminalReconciliationService {
     pub(super) database: DatabaseConnection,
-    runs: RunsServices,
+    pub(super) runs: RunsServices,
     launch: TerminalLaunchService,
     cleanup: TerminalCleanupService,
     pub(super) runtime: Arc<dyn TerminalCleanupRuntime>,
     pub(super) checkpoints: Arc<dyn ReconciliationCheckpoints>,
-    cursors: Arc<RecordedSessionCursors>,
 }
 
 impl TerminalReconciliationService {
@@ -44,7 +43,6 @@ impl TerminalReconciliationService {
             database,
             runtime: cleanup_runtime,
             checkpoints: Arc::new(NoReconciliationCheckpoints),
-            cursors: Arc::new(RecordedSessionCursors::default()),
         }
     }
 
@@ -55,20 +53,25 @@ impl TerminalReconciliationService {
 
     /// Reconcile effects before rows. A launch adopted in this pass is then
     /// checked as a recorded session, while a cleanup settled in this pass is
-    /// already a stable tombstone when the row scan reaches it. The row scan is
-    /// a bounded batch that prefers rows whose durable state can still change
-    /// and advances a cursor, so a saturated pass reports saturation and the
-    /// next pass continues past the rows it already inspected.
+    /// already a stable tombstone when the row scan reaches it. The runtime
+    /// listing is taken after those effects replay and answers every recorded
+    /// row and the inventory, so one pass costs one `list-sessions` however
+    /// long the recorded history is.
     pub async fn reconcile(
         &self,
     ) -> Result<TerminalReconciliationReport, TerminalReconciliationError> {
         let launches = self.launch.reconcile().await?;
         let cleanups = self.cleanup.reconcile().await?;
-        let recorded = recorded_session_batch(&self.database, &self.cursors).await?;
-        let sessions_saturated = recorded.saturated;
-        let mut sessions = Vec::with_capacity(recorded.rows.len());
-        for terminal in recorded.rows {
-            let observation = self.runtime.inspect(&terminal).await;
+        let recorded = recorded_session_batch(&self.database).await?;
+        // A launch committed after the listing must wait for the next pass,
+        // not be judged missing from a snapshot older than its session row.
+        let snapshot = self.runtime.snapshot().await;
+        let mut sessions = Vec::with_capacity(recorded.len());
+        for terminal in recorded {
+            let observation = match &snapshot {
+                Some(snapshot) => snapshot.observe(&terminal),
+                None => self.runtime.inspect(&terminal).await,
+            };
             self.checkpoints.reached(
                 &terminal.agent_run_id,
                 ReconciliationCheckpoint::RuntimeObserved,
@@ -79,13 +82,16 @@ impl TerminalReconciliationService {
                 decision,
             });
         }
-        let inventory = self.reconcile_inventory().await?;
+        let runtime_inventory = match &snapshot {
+            Some(snapshot) => snapshot.inventory(),
+            None => self.runtime.inventory().await,
+        };
+        let inventory = self.reconcile_inventory(runtime_inventory).await?;
         record_sweep(&sessions);
         Ok(TerminalReconciliationReport {
             launches,
             cleanups,
             sessions,
-            sessions_saturated,
             unrecorded: inventory.unrecorded,
             conflicts: inventory.conflicts,
             inventory_unavailable: inventory.unavailable,
@@ -259,7 +265,7 @@ impl TerminalReconciliationService {
         Ok(())
     }
 
-    async fn append_availability_fact(
+    pub(super) async fn append_availability_fact(
         &self,
         transaction: &sea_orm::DatabaseTransaction,
         terminal: &session::Model,

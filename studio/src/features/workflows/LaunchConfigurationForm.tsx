@@ -15,6 +15,7 @@ import {
   entrySkillWarning,
   validateLaunchBindingOptions,
 } from "./launchBindingValidation";
+import { getCodexProfilesSnapshot } from "./providerQueries";
 import {
   SETTINGS_FIELD_CLASS,
   SettingsStatusLine,
@@ -45,7 +46,7 @@ export function LaunchConfigurationForm({
     `${issueType.id}:${state.id}`,
     binding,
   );
-  const { prompt, entrySkill, agent, model, reasoning } = fields;
+  const { prompt, entrySkill, agent, profile, model, reasoning } = fields;
   const setPrompt = (next: string) => setFields({ ...fields, prompt: next });
   const [applying, setApplying] = useState(false);
 
@@ -53,9 +54,10 @@ export function LaunchConfigurationForm({
     prompt,
     entry_skill: optional(entrySkill),
     agent: optional(agent),
+    profile: optional(profile),
     model: optional(model),
     reasoning: optional(reasoning),
-  }), [agent, entrySkill, model, prompt, reasoning]);
+  }), [agent, entrySkill, model, profile, prompt, reasoning]);
   const validationError = validateLaunchBindingOptions(input, providerCapabilities);
   const skillWarning = entrySkillWarning(
     binding?.required_skills ?? [],
@@ -63,9 +65,10 @@ export function LaunchConfigurationForm({
   );
   const pickerValue = useMemo<LaunchDefaultPickerValue>(() => ({
     provider: agent,
+    profile,
     model,
     reasoning,
-  }), [agent, model, reasoning]);
+  }), [agent, model, profile, reasoning]);
 
   const apply = async (next: LaunchBindingInput) => {
     setApplying(true);
@@ -75,6 +78,7 @@ export function LaunchConfigurationForm({
         prompt: next.prompt ?? "",
         entrySkill: next.entry_skill ?? "",
         agent: next.agent ?? "",
+        profile: next.profile ?? "",
         model: next.model ?? "",
         reasoning: next.reasoning ?? "",
       });
@@ -87,6 +91,7 @@ export function LaunchConfigurationForm({
     setFields({
       ...fields,
       agent: next.provider,
+      profile: next.profile,
       model: next.model,
       reasoning: next.reasoning,
     });
@@ -100,6 +105,7 @@ export function LaunchConfigurationForm({
       prompt,
       entry_skill: optional(entrySkill),
       agent: optional(next.provider),
+      profile: optional(next.profile),
       model: optional(next.model),
       reasoning: optional(next.reasoning),
     });
@@ -148,6 +154,7 @@ export function LaunchConfigurationForm({
 
       <LaunchDefaultPicker
         providerCapabilities={providerCapabilities}
+        codexProfiles={getCodexProfilesSnapshot()}
         value={pickerValue}
         onChange={updatePicker}
         onCommit={commitPicker}

@@ -20,6 +20,7 @@ import {
 
 const EMPTY_DEFAULT: LaunchDefaultPickerValue = {
   provider: "",
+  profile: "",
   model: "",
   reasoning: "",
 };
@@ -29,6 +30,7 @@ function pickerValueFrom(catalog: ProviderCatalog): LaunchDefaultPickerValue {
   return launchDefault
     ? {
         provider: launchDefault.provider,
+        profile: launchDefault.profile ?? "",
         model: launchDefault.model ?? "",
         reasoning: launchDefault.reasoning ?? "",
       }
@@ -94,9 +96,11 @@ export function OnboardingProviders({ continueLabel, onContinue }: Props) {
     activated_providers: CONFIGURABLE_PROVIDERS.filter((provider) =>
       activated.includes(provider),
     ),
+    codex_profiles: catalogQuery.data?.codex_profiles ?? [],
     global_default: launchDefault.provider
       ? {
           provider: launchDefault.provider as ConfigurableProvider,
+          profile: null,
           model: launchDefault.model.trim() || null,
           reasoning: launchDefault.reasoning.trim() || null,
         }

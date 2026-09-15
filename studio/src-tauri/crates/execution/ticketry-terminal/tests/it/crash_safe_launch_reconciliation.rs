@@ -7,8 +7,6 @@
 //! deleted while an external runtime might still exist.
 
 use std::collections::BTreeSet;
-use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
@@ -22,46 +20,20 @@ use ticketry_runs::{
 
 const PROVIDER: &str = "codex";
 
-fn root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../../../..")
-        .canonicalize()
-        .unwrap()
-}
-
-fn fixture(path: &Path) {
-    let script = r#"
-import os, sys, uuid
-from pathlib import Path
-p=Path(sys.argv[1]).resolve(); os.environ['DJANGO_SETTINGS_MODULE']='studio_server.settings'; os.environ['MUXED_STATE_DB']=str(p); os.environ['MUXED_DATA_DIR']=str(p.parent); os.environ['MUXED_FORCE_SQLITE']='true'
-import django; django.setup()
-from django.core.management import call_command
-from worktracker.models import Workspace, Project, State, IssueType, Issue
-call_command('migrate', interactive=False, verbosity=0)
-w=Workspace.objects.create(id=uuid.UUID(int=700),slug='reconcile-fixture',name='Reconcile Fixture')
-project=Project.objects.create(id=uuid.UUID(int=701),workspace=w,name='Project 700',slug='P700')
-state=State.objects.create(id=uuid.UUID(int=702),project=project,name='Todo',group='unstarted',sort_order=1)
-kind=IssueType.objects.create(id=uuid.UUID(int=703),project=project,name='Story',level='task',sort_order=1,start_state=state)
-Issue.objects.create(id=uuid.UUID(int=704),project=project,type='task',issue_type=kind,state=state,name='Reconcile fixture',sequence_id=700,rank='z')
-"#;
-    let output = Command::new(root().join("backend/.venv/bin/python"))
-        .arg("-c")
-        .arg(script)
-        .arg(path)
-        .current_dir(root())
-        .output()
-        .unwrap();
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-}
-
 async fn adopted() -> (tempfile::TempDir, sea_orm::DatabaseConnection, RunsServices) {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("state.db");
-    fixture(&path);
+    super::execution_legacy_fixture::provision_current(directory.path()).await;
+    let fixture_database = Database::connect(format!("sqlite:{}?mode=rw", path.display()))
+        .await
+        .unwrap();
+    fixture_database
+        .execute_unprepared(
+            "DELETE FROM launched_tasks; DELETE FROM graph_runs; DELETE FROM launch_policy_effects; DELETE FROM agent_runs",
+        )
+        .await
+        .unwrap();
+    fixture_database.close().await.unwrap();
     adopt(directory.path()).await.unwrap();
     ticketry_terminal::adopt_terminal_persistence(directory.path())
         .await
@@ -82,18 +54,22 @@ fn db_id(value: u128) -> String {
     uuid::Uuid::from_u128(value).simple().to_string()
 }
 
+fn fixture_id(value: &str) -> String {
+    uuid::Uuid::parse_str(value).unwrap().hyphenated().to_string()
+}
+
 fn intent(seed: u128, attempt: Option<String>) -> LaunchIntent {
     LaunchIntent {
         effect_id: id(seed),
         agent_run_id: format!("run-{seed}"),
         automation_attempt_id: attempt,
         request_id: format!("request-{seed}"),
-        project_id: id(701),
-        issue_id: id(704),
+        project_id: fixture_id(super::execution_legacy_fixture::PROJECT),
+        issue_id: fixture_id(super::execution_legacy_fixture::CLAIMED_CHILD),
         scope: "task".to_owned(),
         provider: Some(PROVIDER.to_owned()),
         target_kind: "task".to_owned(),
-        target_id: id(704),
+        target_id: fixture_id(super::execution_legacy_fixture::CLAIMED_CHILD),
         policy_reference: None,
     }
 }
@@ -452,8 +428,8 @@ async fn a_conflicting_runtime_becomes_a_durable_non_retryable_failure() {
         .attempts()
         .materialize_root(&TransitionOccurrence {
             occurrence_id: id(1150),
-            issue_id: id(704),
-            project_id: id(701),
+            issue_id: fixture_id(super::execution_legacy_fixture::CLAIMED_CHILD),
+            project_id: fixture_id(super::execution_legacy_fixture::PROJECT),
             from_state_id: id(702),
             to_state_id: id(702),
             workflow_revision: 7,
@@ -600,8 +576,8 @@ async fn a_rolled_back_acknowledgement_converges_on_one_runtime_and_one_outcome(
         .attempts()
         .materialize_root(&TransitionOccurrence {
             occurrence_id: id(1160),
-            issue_id: id(704),
-            project_id: id(701),
+            issue_id: fixture_id(super::execution_legacy_fixture::CLAIMED_CHILD),
+            project_id: fixture_id(super::execution_legacy_fixture::PROJECT),
             from_state_id: id(702),
             to_state_id: id(702),
             workflow_revision: 7,

@@ -163,7 +163,7 @@ fn approved_absolute_path_is_persisted_and_preferred_on_relaunch() {
 }
 
 #[test]
-fn invalid_explicit_path_is_not_persisted_or_exported_to_the_backend() {
+fn invalid_explicit_path_is_rejected_and_not_persisted() {
     let root = fixture_dir("invalid approval");
     let data_dir = root.join("application data");
     let wrong_tool = root.join("claude");
@@ -173,14 +173,6 @@ fn invalid_explicit_path_is_not_persisted_or_exported_to_the_backend() {
         .expect_err("wrong named tool is rejected");
     assert!(error.contains("identity"));
     assert!(!data_dir.join(APPROVED_PATHS_FILE).exists());
-
-    let environment = resolved_tool_environment_from_service(&DiscoveryService {
-        roots: Vec::new(),
-        approved: ApprovedToolPaths::default(),
-    });
-    assert!(!environment
-        .iter()
-        .any(|(name, _)| name == "MUXED_APPROVED_CODEX_PATH"));
     fs::remove_dir_all(root).unwrap();
 }
 

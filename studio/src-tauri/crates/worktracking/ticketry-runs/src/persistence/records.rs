@@ -110,6 +110,10 @@ pub struct TransitionOccurrence {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum AttemptOutcome {
+    Skipped {
+        reason: String,
+        details: serde_json::Value,
+    },
     Succeeded {
         agent: String,
         agent_run_id: String,

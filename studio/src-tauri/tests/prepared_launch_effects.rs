@@ -5,8 +5,7 @@
 //! zero terminal launch for a rolled-back preparation, and exactly one
 //! deterministic runtime for one prepared effect.
 
-use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
@@ -19,47 +18,16 @@ use ticketry_runs::{
 
 const PROVIDER: &str = "codex";
 
-fn root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+mod common;
 
-fn fixture(path: &Path) {
-    let script = r#"
-import os, sys, uuid
-from pathlib import Path
-p=Path(sys.argv[1]).resolve(); os.environ['DJANGO_SETTINGS_MODULE']='studio_server.settings'; os.environ['MUXED_STATE_DB']=str(p); os.environ['MUXED_DATA_DIR']=str(p.parent); os.environ['MUXED_FORCE_SQLITE']='true'
-import django; django.setup()
-from django.core.management import call_command
-from worktracker.models import Workspace, Project, State, IssueType, Issue
-call_command('migrate', interactive=False, verbosity=0)
-w=Workspace.objects.create(id=uuid.UUID(int=800),slug='launch-fixture',name='Launch Fixture')
-for base in (800, 810):
-    project=Project.objects.create(id=uuid.UUID(int=base+1),workspace=w,name=f'Project {base}',slug=f'P{base}')
-    state=State.objects.create(id=uuid.UUID(int=base+2),project=project,name='Todo',group='unstarted',sort_order=1)
-    kind=IssueType.objects.create(id=uuid.UUID(int=base+3),project=project,name='Story',level='task',sort_order=1,start_state=state)
-    Issue.objects.create(id=uuid.UUID(int=base+4),project=project,type='task',issue_type=kind,state=state,name='Launch fixture',sequence_id=base,rank='z')
-"#;
-    let output = Command::new(root().join("backend/.venv/bin/python"))
-        .arg("-c")
-        .arg(script)
-        .arg(path)
-        .current_dir(root())
-        .output()
-        .unwrap();
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
+async fn fixture(path: &Path) {
+    common::execution_legacy_fixture::provision_runs_fixture(path.parent().unwrap()).await;
 }
 
 async fn adopted() -> (tempfile::TempDir, sea_orm::DatabaseConnection, RunsServices) {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("state.db");
-    fixture(&path);
+    fixture(&path).await;
     adopt(directory.path()).await.unwrap();
     let database = Database::connect(format!("sqlite:{}?mode=rw", path.display()))
         .await

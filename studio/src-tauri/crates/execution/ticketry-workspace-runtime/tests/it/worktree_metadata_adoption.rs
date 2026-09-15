@@ -4,8 +4,7 @@
 //! Git metadata, the same lifecycle state, proved by a stable digest across a
 //! verified snapshot and a restart.
 
-use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::path::Path;
 
 use sea_orm::{ConnectionTrait, Database, DbBackend, Statement};
 use ticketry_workspace_runtime::persistence::{
@@ -13,40 +12,11 @@ use ticketry_workspace_runtime::persistence::{
     LEDGER_TABLE,
 };
 
-fn root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../../../..")
-        .canonicalize()
-        .unwrap()
-}
-
-fn fixture(path: &Path) {
-    let script = r#"
-import os, sys, uuid
-from pathlib import Path
-p=Path(sys.argv[1]).resolve(); os.environ['DJANGO_SETTINGS_MODULE']='studio_server.settings'; os.environ['MUXED_STATE_DB']=str(p); os.environ['MUXED_DATA_DIR']=str(p.parent); os.environ['MUXED_FORCE_SQLITE']='true'
-import django; django.setup()
-from django.core.management import call_command
-from worktracker.models import Workspace, Project, State, IssueType, Issue
-from apps.worktrees.models import Worktree
-call_command('migrate', interactive=False, verbosity=0)
-w=Workspace.objects.create(id=uuid.UUID(int=700),slug='worktree-fixture',name='Worktree Fixture'); pjt=Project.objects.create(id=uuid.UUID(int=701),workspace=w,name='Worktrees',slug='WTR'); s=State.objects.create(id=uuid.UUID(int=702),project=pjt,name='Todo',group='unstarted',sort_order=1); t=IssueType.objects.create(id=uuid.UUID(int=703),project=pjt,name='Story',level='task',sort_order=1,start_state=s)
-m=Issue.objects.create(id=uuid.UUID(int=704),project=pjt,type='module',issue_type=t,state=s,name='Module',sequence_id=880,rank='y')
-i=Issue.objects.create(id=uuid.UUID(int=705),project=pjt,type='task',issue_type=t,state=s,module=m,name='Worktree fixture',sequence_id=881,rank='z')
-Worktree.objects.create(id=uuid.UUID(int=706).hex,task_id=uuid.UUID(int=705).hex,workspace_slug='worktree-fixture',project_id=uuid.UUID(int=701).hex,module_id=uuid.UUID(int=704).hex,ticket_seq=881,repo_root='/repos/ticketry',path='/worktrees/ticketry/CODIN-881-worktree-fixture',branch='wt/CODIN-881-worktree-fixture',base_branch='main',base_commit='0123456789abcdef0123456789abcdef01234567',status='active',ephemeral=False,created_at='2026-01-01T00:00:00+00:00',updated_at='2026-01-01T00:00:00+00:00')
-"#;
-    let output = Command::new(root().join("backend/.venv/bin/python"))
-        .arg("-c")
-        .arg(script)
-        .arg(path)
-        .current_dir(root())
-        .output()
-        .unwrap();
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
+async fn fixture(path: &Path) {
+    super::execution_legacy_fixture::provision_current(path.parent().unwrap()).await;
+    let database = open(path).await;
+    database.execute_unprepared("DELETE FROM worktrees; INSERT INTO worktrees (id,task_id,workspace_slug,project_id,module_id,ticket_seq,repo_root,path,branch,base_branch,base_commit,status,ephemeral,created_at,updated_at) VALUES ('000000000000000000000000000002c2','00000000000000000000000000089307','worktree-fixture','00000000000000000000000000089301','00000000000000000000000000089305',881,'/repos/ticketry','/worktrees/ticketry/CODIN-881-worktree-fixture','wt/CODIN-881-worktree-fixture','main','0123456789abcdef0123456789abcdef01234567','active',0,'2026-01-01T00:00:00+00:00','2026-01-01T00:00:00+00:00')").await.unwrap();
+    database.close().await.unwrap();
 }
 
 async fn open(path: &Path) -> sea_orm::DatabaseConnection {
@@ -69,7 +39,7 @@ async fn scalar(database: &sea_orm::DatabaseConnection, query: &str) -> String {
 async fn preflight_classifies_django_metadata_without_writing() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("state.db");
-    fixture(&path);
+    fixture(&path).await;
 
     let source = preflight(directory.path()).await.unwrap();
 
@@ -82,7 +52,7 @@ async fn preflight_classifies_django_metadata_without_writing() {
 async fn adopts_existing_rows_in_place_and_reopens_deterministically() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("state.db");
-    fixture(&path);
+    fixture(&path).await;
 
     let first = adopt(directory.path()).await.unwrap();
     let second = adopt(directory.path()).await.unwrap();
@@ -139,7 +109,7 @@ async fn adopts_existing_rows_in_place_and_reopens_deterministically() {
 async fn refuses_an_unknown_worktree_schema() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("state.db");
-    fixture(&path);
+    fixture(&path).await;
     let database = open(&path).await;
     database
         .execute_unprepared("ALTER TABLE worktrees ADD COLUMN unexpected varchar NULL")
@@ -161,7 +131,7 @@ async fn refuses_an_unknown_worktree_schema() {
 async fn refuses_semantically_invalid_metadata() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("state.db");
-    fixture(&path);
+    fixture(&path).await;
     let database = open(&path).await;
     database
         .execute_unprepared("UPDATE worktrees SET status='integrated'")
@@ -180,7 +150,7 @@ async fn refuses_semantically_invalid_metadata() {
 async fn refuses_a_worktree_row_without_its_work_item() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("state.db");
-    fixture(&path);
+    fixture(&path).await;
     let database = open(&path).await;
     database
         .execute_unprepared("UPDATE worktrees SET task_id='00000000000000000000000000000000'")
@@ -197,7 +167,7 @@ async fn refuses_a_worktree_row_without_its_work_item() {
 async fn refuses_a_store_without_django_worktree_history() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("state.db");
-    fixture(&path);
+    fixture(&path).await;
     let database = open(&path).await;
     database
         .execute_unprepared("DELETE FROM django_migrations WHERE app='worktrees'")

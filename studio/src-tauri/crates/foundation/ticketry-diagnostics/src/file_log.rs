@@ -6,7 +6,6 @@ use std::sync::{Arc, OnceLock};
 
 use chrono::{SecondsFormat, Utc};
 
-pub const FILE_LOGGING_FLAG: &str = "--log-to-file";
 const LOG_FILE_NAME: &str = "ticketry.log";
 
 static PROCESS_FILE_LOG: OnceLock<FileLog> = OnceLock::new();
@@ -81,10 +80,10 @@ impl FileLog {
     }
 }
 
-pub fn file_logging_requested(arguments: &[OsString]) -> bool {
-    arguments
-        .iter()
-        .any(|argument| argument == FILE_LOGGING_FLAG)
+/// Desktop diagnostics are always captured, including ordinary Finder launches.
+/// Keep accepting the legacy flag for existing launch scripts.
+pub fn file_logging_requested(_arguments: &[OsString]) -> bool {
+    true
 }
 
 pub fn configure_process_file_log(
@@ -138,10 +137,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn production_file_logging_is_enabled_only_by_the_flag() {
-        assert!(!file_logging_requested(&[]));
-        assert!(file_logging_requested(&[OsString::from(FILE_LOGGING_FLAG)]));
-        assert!(!file_logging_requested(&[OsString::from("--temp-sqlite")]));
+    fn production_file_logging_is_enabled_without_arguments() {
+        assert!(file_logging_requested(&[]));
+        assert!(file_logging_requested(&[OsString::from("--log-to-file")]));
+        assert!(file_logging_requested(&[OsString::from("--temp-sqlite")]));
     }
 
     #[test]

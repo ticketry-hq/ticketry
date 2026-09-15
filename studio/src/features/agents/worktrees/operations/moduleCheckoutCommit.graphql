@@ -1,6 +1,8 @@
-mutation ModuleCheckoutCommit($moduleId: String!, $operationId: String!, $message: String!) {
-  module_checkout_commit(module_id: $moduleId, operation_id: $operationId, message: $message) {
+mutation ModuleCheckoutCommit($moduleId: String!, $operationId: String!) {
+  module_checkout_commit(module_id: $moduleId, operation_id: $operationId) {
     operation_id
+    subject
+    message_source
     head_commit
     dirty
     unpushed_count

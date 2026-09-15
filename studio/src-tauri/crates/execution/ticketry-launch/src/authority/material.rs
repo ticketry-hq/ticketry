@@ -9,6 +9,7 @@ use crate::terminal_session::CreateTerminalSession;
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ResolvedLaunchMaterial {
     pub provider: Option<String>,
+    pub profile: Option<String>,
     pub model: Option<String>,
     pub reasoning: Option<String>,
     pub policy_reference: Option<String>,
@@ -24,6 +25,7 @@ impl ResolvedLaunchMaterial {
     /// are the only things the caller is allowed to choose.
     pub fn apply(self, request: &mut CreateTerminalSession) {
         request.provider = self.provider;
+        request.profile = self.profile;
         request.model = self.model;
         request.reasoning = self.reasoning;
         request.policy_reference = self.policy_reference;

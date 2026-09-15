@@ -5,7 +5,7 @@ use seaolim::{PreparedModelWrite, RestrictedModelMutation};
 use crate::viewer_ownership::DeleteViewerLease;
 use ticketry_entities::viewer_lease;
 
-use super::super::support;
+use super::super::{support, write_lock};
 
 pub(super) struct DeleteViewerLeaseView;
 
@@ -18,6 +18,7 @@ impl RestrictedModelMutation<viewer_lease::Entity, viewer_lease::ActiveModel>
         ctx: &ResolverContext<'_>,
         transaction: &DatabaseTransaction,
     ) -> Result<PreparedModelWrite<viewer_lease::ActiveModel, viewer_lease::Model>> {
+        write_lock::reserve(transaction).await?;
         let input = DeleteViewerLease {
             agent_run_id: ctx.args.try_get("agent_run_id")?.string()?.to_owned(),
             viewer_id: ctx.args.try_get("viewer_id")?.string()?.to_owned(),

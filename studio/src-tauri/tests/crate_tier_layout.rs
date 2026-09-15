@@ -11,9 +11,10 @@ const TIERS: [(&str, u8); 6] = [
     ("app", 5),
 ];
 
-const EXPECTED_CRATES: [&str; 18] = [
+const EXPECTED_CRATES: [&str; 20] = [
     "tauri-graphql",
     "ticketry-agent-execution",
+    "ticketry-codex-app-server",
     "ticketry-data-directory",
     "ticketry-desktop",
     "ticketry-dev-tools",
@@ -21,6 +22,7 @@ const EXPECTED_CRATES: [&str; 18] = [
     "ticketry-documents",
     "ticketry-entities",
     "ticketry-graphql-schema",
+    "ticketry-hook",
     "ticketry-installation",
     "ticketry-launch",
     "ticketry-mcp",
@@ -88,7 +90,7 @@ fn workspace_crates() -> BTreeMap<String, WorkspaceCrate> {
         .unwrap_or_else(|error| panic!("read {}: {error}", crates_directory.display()))
     {
         let tier_path = tier_entry.expect("read tier entry").path();
-        if !tier_path.is_dir() {
+        if !tier_path.is_dir() || !contains_crate_manifest(&tier_path) {
             continue;
         }
         let tier = tier_path
@@ -128,6 +130,14 @@ fn workspace_crates() -> BTreeMap<String, WorkspaceCrate> {
         }
     }
     crates
+}
+
+fn contains_crate_manifest(tier_path: &Path) -> bool {
+    fs::read_dir(tier_path)
+        .unwrap_or_else(|error| panic!("read {}: {error}", tier_path.display()))
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .any(|path| path.is_dir() && path.join("Cargo.toml").is_file())
 }
 
 #[test]

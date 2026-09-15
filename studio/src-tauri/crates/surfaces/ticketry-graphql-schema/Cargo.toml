@@ -5,6 +5,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
+ticketry-diagnostics.workspace = true
 async-graphql.workspace = true
 async-trait.workspace = true
 sea-orm.workspace = true
@@ -31,3 +32,4 @@ uuid.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
+ticketry-tool-discovery.workspace = true

@@ -127,7 +127,9 @@ fn unmet(readiness: &Slice4Readiness) -> String {
 /// cutover would leave Studio with no writer rather than a slower one.
 const REQUIRED_QUERIES: &[&str] = &[
     "directory_completions",
+    "module_file_diff",
     "worktree_changes",
+    "worktree_file_diff",
     "worktree_status",
 ];
 const REQUIRED_MUTATIONS: &[&str] = &[

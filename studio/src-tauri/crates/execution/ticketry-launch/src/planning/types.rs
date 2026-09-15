@@ -22,6 +22,8 @@ pub enum LaunchKind {
 #[serde(deny_unknown_fields)]
 pub struct ProviderOptions {
     #[serde(default)]
+    pub profile: Option<String>,
+    #[serde(default)]
     pub model: Option<String>,
     #[serde(default)]
     pub reasoning: Option<String>,
@@ -99,10 +101,19 @@ pub struct RuntimeSettings {
     pub contents: Value,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct MaterializedLaunch {
     pub argv: Vec<String>,
     pub working_directory: PathBuf,
     pub environment: BTreeMap<String, String>,
     pub settings: Option<RuntimeSettings>,
+}
+
+impl std::fmt::Debug for MaterializedLaunch {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MaterializedLaunch")
+            .field("argument_count", &self.argv.len())
+            .field("has_settings", &self.settings.is_some())
+            .finish_non_exhaustive()
+    }
 }

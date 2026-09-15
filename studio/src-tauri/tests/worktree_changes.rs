@@ -16,24 +16,35 @@ const TASK: &str = "60000000000000000000000000000001";
 const CHILD_TASK: &str = "60000000000000000000000000000002";
 
 const CHANGES_QUERY: &str = r#"query($taskId: String!) {
-  worktree_changes(task_id: $taskId) {
+    worktree_changes(task_id: $taskId) {
     task_id
     top_level_task_id
     is_shared
     base_commit
-    truncated
-    files {
-      path
-      previous_path
-      status
+      truncated
+      files {
+        path
+        previous_path
+        status
+        binary
+        insertions
+        deletions
+      }
+      insertions
+      deletions
     }
-  }
 }"#;
 
 const STATUS_AND_CHANGES_QUERY: &str = r#"query($taskId: String!) {
   worktree_status(task_id: $taskId) { dirty }
   worktree_changes(task_id: $taskId) {
     files { path previous_path status }
+  }
+}"#;
+
+const FILE_DIFF_QUERY: &str = r#"query($taskId: String!, $path: String!) {
+  worktree_file_diff(task_id: $taskId, path: $path) {
+    path status binary patch truncated
   }
 }"#;
 

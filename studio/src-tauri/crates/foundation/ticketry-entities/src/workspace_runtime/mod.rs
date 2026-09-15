@@ -8,3 +8,7 @@
 //! the `workspace::operations` module, which is the only writer.
 
 pub mod operation;
+pub mod ship_record;
+mod graphql;
+
+pub use graphql::register_entity_modules;

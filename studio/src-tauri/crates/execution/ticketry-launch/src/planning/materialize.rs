@@ -14,15 +14,21 @@ use crate::trace_reasons;
 
 /// Values supplied only by trusted desktop services immediately before tmux
 /// creation. This value is intentionally not serializable or deserializable.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct ExecutionAuthority {
     executable: PathBuf,
     working_directory: PathBuf,
     hook_runner: PathBuf,
     hook_spool_directory: PathBuf,
-    mcp_url: String,
+    mcp_data_directory: PathBuf,
     mcp_authorization: String,
     available_skills: BTreeSet<String>,
+}
+
+impl std::fmt::Debug for ExecutionAuthority {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ExecutionAuthority").finish_non_exhaustive()
+    }
 }
 
 impl ExecutionAuthority {
@@ -32,7 +38,7 @@ impl ExecutionAuthority {
         working_directory: PathBuf,
         hook_runner: PathBuf,
         hook_spool_directory: PathBuf,
-        mcp_url: String,
+        mcp_data_directory: PathBuf,
         mcp_authorization: String,
         available_skills: BTreeSet<String>,
     ) -> Self {
@@ -41,7 +47,7 @@ impl ExecutionAuthority {
             working_directory,
             hook_runner,
             hook_spool_directory,
-            mcp_url,
+            mcp_data_directory,
             mcp_authorization,
             available_skills,
         }
@@ -97,7 +103,7 @@ fn materialize_inner(
     trace::admitted(trace::PROVIDER_VALIDATED)
         .with("providerSlug", provider_contract(durable.provider).slug)
         .record();
-    validate_authority(durable.provider, authority)?;
+    validate_authority(durable, authority)?;
     for skill in &durable.required_skills {
         if !authority.available_skills.contains(skill) {
             return Err(LaunchPlanningError::new(
@@ -112,7 +118,9 @@ fn materialize_inner(
     let settings = provider_settings(durable.provider, &durable.agent_run_id, &hook, authority);
     let runtime_settings = match durable.provider {
         Provider::Claude => {
-            let mcp = claude_mcp(authority);
+            let mcp = json!({"mcpServers": {"ticketry": mcp_server(
+                durable.provider, &durable.agent_run_id, authority
+            )}});
             argv.splice(
                 1..1,
                 [
@@ -126,7 +134,9 @@ fn materialize_inner(
         }
         Provider::Codex => {
             let hooks = toml_inline(&settings["hooks"]);
-            let mcp = toml_inline(&codex_mcp(authority));
+            let mcp = toml_inline(&json!({"ticketry": mcp_server(
+                durable.provider, &durable.agent_run_id, authority
+            )}));
             let injected = [
                 "-c".to_owned(),
                 format!("hooks={hooks}"),
@@ -149,6 +159,10 @@ fn materialize_inner(
     let environment = BTreeMap::from([
         ("COLORTERM".to_owned(), "truecolor".to_owned()),
         ("FORCE_COLOR".to_owned(), "1".to_owned()),
+        (
+            "TICKETRY_MCP_AUTHORIZATION".to_owned(),
+            authority.mcp_authorization.clone(),
+        ),
     ]);
     Ok(MaterializedLaunch {
         argv,
@@ -159,10 +173,10 @@ fn materialize_inner(
 }
 
 fn validate_authority(
-    provider: Provider,
+    durable: &DurableLaunchMaterial,
     authority: &ExecutionAuthority,
 ) -> Result<(), LaunchPlanningError> {
-    let expected = provider_contract(provider).slug;
+    let expected = provider_contract(durable.provider).slug;
     if !authority.executable.is_absolute()
         || authority
             .executable
@@ -178,8 +192,9 @@ fn validate_authority(
     if !authority.working_directory.is_absolute()
         || !authority.hook_runner.is_absolute()
         || !authority.hook_spool_directory.is_absolute()
-        || authority.mcp_url.is_empty()
+        || !authority.mcp_data_directory.is_absolute()
         || authority.mcp_authorization.is_empty()
+        || durable.agent_run_id.is_empty()
     {
         return Err(LaunchPlanningError::new(
             LaunchPlanningErrorCode::InvalidExecutionAuthority,
@@ -212,7 +227,17 @@ fn provider_argv(
                 "--resume".into(),
                 provider_session_id.clone(),
             ],
-            Provider::Codex => vec![binary, "resume".into(), provider_session_id.clone()],
+            Provider::Codex => [
+                vec![binary, "resume".into()],
+                durable
+                    .options
+                    .profile
+                    .as_ref()
+                    .map(|profile| vec!["--profile".to_owned(), profile.clone()])
+                    .unwrap_or_default(),
+                vec![provider_session_id.clone()],
+            ]
+            .concat(),
             Provider::Gemini => vec![
                 binary,
                 "--skip-trust".into(),
@@ -231,6 +256,9 @@ fn provider_argv(
     }
     let prompt = durable.prompt.clone().unwrap_or_default();
     let mut options = Vec::new();
+    if let Some(profile) = &durable.options.profile {
+        options.extend(["--profile".to_owned(), profile.clone()]);
+    }
     if let Some(model) = &durable.options.model {
         options.extend(["--model".to_owned(), model.clone()]);
     }
@@ -314,30 +342,25 @@ fn provider_settings(
         Provider::Codex => json!({"hooks": hooks}),
         Provider::Gemini | Provider::Agy => json!({
             "hooks": hooks,
-            "mcpServers": gemini_mcp(authority),
+            "mcpServers": {"ticketry": mcp_server(provider, run_id, authority)},
         }),
     }
 }
 
-fn claude_mcp(authority: &ExecutionAuthority) -> Value {
-    json!({"mcpServers": {"worktracker-agent": {
-        "type": "http", "url": authority.mcp_url,
-        "headers": {"Authorization": authority.mcp_authorization}
-    }}})
-}
-
-fn codex_mcp(authority: &ExecutionAuthority) -> Value {
-    json!({"worktracker-agent": {
-        "url": authority.mcp_url,
-        "http_headers": {"Authorization": authority.mcp_authorization}
-    }})
-}
-
-fn gemini_mcp(authority: &ExecutionAuthority) -> Value {
-    json!({"worktracker-agent": {
-        "httpUrl": authority.mcp_url, "trust": true,
-        "headers": {"Authorization": authority.mcp_authorization}
-    }})
+fn mcp_server(provider: Provider, run_id: &str, authority: &ExecutionAuthority) -> Value {
+    let mut server = json!({
+        "command": authority.hook_runner,
+        "args": ["mcp", "--data-dir", authority.mcp_data_directory, "--agent-run-id", run_id],
+    });
+    if provider == Provider::Codex {
+        server["env_vars"] = json!(["TICKETRY_MCP_AUTHORIZATION"]);
+    } else {
+        server["env"] = json!({"TICKETRY_MCP_AUTHORIZATION": "${TICKETRY_MCP_AUTHORIZATION}"});
+    }
+    if matches!(provider, Provider::Gemini | Provider::Agy) {
+        server["trust"] = json!(true);
+    }
+    server
 }
 
 fn compact_json(value: &Value) -> String {
@@ -350,6 +373,8 @@ fn toml_inline(value: &Value) -> String {
             "{{{}}}",
             values
                 .iter()
+                .collect::<BTreeMap<_, _>>()
+                .into_iter()
                 .map(|(key, value)| format!("{key}={}", toml_inline(value)))
                 .collect::<Vec<_>>()
                 .join(",")
@@ -360,7 +385,7 @@ fn toml_inline(value: &Value) -> String {
         ),
         Value::Bool(value) => value.to_string(),
         Value::Number(value) => value.to_string(),
-        Value::String(value) => format!("\"{}\"", value.replace('\\', "\\\\").replace('"', "\\\"")),
+        Value::String(_) => compact_json(value).replace('\u{7f}', "\\u007f"),
         Value::Null => "\"\"".to_owned(),
     }
 }

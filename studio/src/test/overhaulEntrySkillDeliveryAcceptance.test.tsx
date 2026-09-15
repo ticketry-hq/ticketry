@@ -26,6 +26,20 @@ it("[overhaul-245] fresh bound launches type only the provider-formatted entry s
       "ticketry-terminal",
       "src",
       "terminal",
+      "lifecycle",
+      "entry_skill_delivery.rs",
+    ),
+    "utf8",
+  );
+  const promptDelivery = readFileSync(
+    join(
+      process.cwd(),
+      "src-tauri",
+      "crates",
+      "execution",
+      "ticketry-terminal",
+      "src",
+      "terminal",
       "prompt_delivery",
       "mod.rs",
     ),
@@ -33,8 +47,8 @@ it("[overhaul-245] fresh bound launches type only the provider-formatted entry s
   );
 
   expect(runtime).toContain("entry_skill_for_effect");
-  expect(runtime).toContain("entry_skill_invocation(provider, &skill)");
+  expect(delivery).toContain("entry_skill_invocation(provider, skill)");
   expect(runtime).toContain("prompt_delivery::submit_text");
-  expect(runtime).toContain("adapter.kill_verified(&identity)");
-  expect(delivery).toContain("provider_contract(provider).invocation_prefix");
+  expect(runtime).toContain("self.kill_verified(identity)");
+  expect(promptDelivery).toContain("provider_contract(provider)");
 });

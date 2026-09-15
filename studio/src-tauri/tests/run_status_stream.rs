@@ -158,7 +158,9 @@ async fn snapshot_projects_the_inclusive_stall_boundary_with_outcome_precedence(
         holding(&boundary, "run-waiting").effective_state,
         "needs_input"
     );
-    assert_eq!(holding(&boundary, "run-ended").effective_state, "exited");
+    // The ended run leaves the live snapshot entirely; its outcome is read
+    // through the WorkItem ended-runs relationship.
+    assert!(!boundary.iter().any(|run| run.agent_run_id == "run-ended"));
 }
 
 #[tokio::test]
@@ -584,13 +586,67 @@ async fn a_terminal_outcome_reaches_subscribers_and_survives_a_reconnect() {
     assert_eq!(event.event_kind, "agent_run.terminal");
     drop(stream);
 
-    // A reconnect converges on the same authoritative holding.
+    // A reconnect converges on the live holding, which the ended run has left.
+    // Its outcome was published as the event above; the snapshot never carries
+    // it, and a client that missed the event reads it through its WorkItem.
     let mut reconnected = Box::pin(open_status_stream(services.stream(), request(None)));
     let opening = take(&mut reconnected, 2).await;
     let RunStatusFrame::RunStatusSnapshot(snapshot) = &opening[0] else {
         panic!("the reconnect starts with a snapshot");
     };
-    assert_eq!(snapshot.runs[0].state, "exited");
+    assert!(
+        snapshot.runs.is_empty(),
+        "the snapshot carries live runs only, received {:?}",
+        snapshot.runs
+    );
+}
+
+/// The production shape this stream was sized for: a few live runs inside a
+/// long history of ended ones. The handshake frame must carry the live runs
+/// alone, so the frame the WebView receives stays small however deep the
+/// history behind it grows.
+#[tokio::test]
+async fn a_production_sized_history_publishes_only_its_live_runs() {
+    let (_directory, database, services) = fixture().await;
+    let mut ended = Vec::new();
+    for index in 0..2_000 {
+        ended.push(format!(
+            "('ended-{index}','{TASK}','codex','completed','2026-07-01T00:00:00+00:00','2026-07-01T01:00:00+00:00','task')"
+        ));
+    }
+    database
+        .execute_unprepared(&format!(
+            "INSERT INTO agent_runs (id, issue_id, agent, status, started_at, ended_at, scope) VALUES {};",
+            ended.join(",")
+        ))
+        .await
+        .unwrap();
+    for index in 0..9 {
+        insert_run(
+            &database,
+            &format!("live-{index}"),
+            TASK,
+            "2026-08-16T10:00:00Z",
+        )
+        .await;
+    }
+
+    let mut stream = Box::pin(open_status_stream(services.stream(), request(None)));
+    let opening = take(&mut stream, 1).await;
+    let RunStatusFrame::RunStatusSnapshot(snapshot) = &opening[0] else {
+        panic!(
+            "the handshake starts with a snapshot, received {:?}",
+            opening[0]
+        );
+    };
+    assert_eq!(snapshot.runs.len(), 9);
+    assert!(
+        snapshot
+            .runs
+            .iter()
+            .all(|run| run.agent_run_id.starts_with("live-")),
+        "the snapshot carries live runs only"
+    );
 }
 
 #[tokio::test]

@@ -81,26 +81,27 @@ impl WorktrackerMcpService {
 pub(super) async fn execute_launch_decision(
     database: &DatabaseConnection,
     service: Option<&ticketry_terminal::TerminalLaunchService>,
+    cleanup: &TerminalCleanupService,
     decision: &ticketry_work_management::launch_policy::LaunchPolicyDecision,
-) -> Result<ticketry_entities::session::Model, ()> {
+) -> Result<ticketry_entities::session::Model, String> {
     let Some(service) = service else {
-        return Err(());
+        return Err("terminal_launch_unavailable".to_owned());
     };
-    ticketry_agent_execution::launch_delivery::execute(database, service, decision)
+    ticketry_agent_execution::launch_delivery::execute(database, service, cleanup, decision)
         .await
         .map_err(|error| {
             eprintln!(
                 "Ticketry could not execute Rust launch policy decision {}: {error}",
                 decision.decision_id,
             );
+            error
         })
 }
 
 impl ServerHandler for WorktrackerMcpService {
     fn get_info(&self) -> ServerInfo {
-        ServerInfo::new(ServerCapabilities::builder().enable_tools().build()).with_server_info(
-            rmcp::model::Implementation::new("worktracker-agent", "0.1.0"),
-        )
+        ServerInfo::new(ServerCapabilities::builder().enable_tools().build())
+            .with_server_info(rmcp::model::Implementation::new("ticketry", "0.1.0"))
     }
 
     async fn list_tools(
@@ -146,7 +147,7 @@ impl ServerHandler for WorktrackerMcpService {
         let arguments: Map<String, Value> = request.arguments.unwrap_or_default();
         if request.name == "mcp_ping" {
             return Ok(Self::result(dispatch::DispatchOutput {
-                value: json!({"status": "ok", "server": "worktracker-agent"}),
+                value: json!({"status": "ok", "server": "ticketry"}),
                 wrap_result: false,
             }));
         }

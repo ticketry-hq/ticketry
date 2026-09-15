@@ -84,7 +84,12 @@ const cumulativeChanges = {
     path,
     status,
     previous_path: previousPath,
+    binary: false,
+    insertions: 1,
+    deletions: 1,
   })),
+  insertions: 7,
+  deletions: 7,
 };
 
 describe("overhaul acceptance - task worktree Changes", () => {
@@ -448,6 +453,8 @@ describe("overhaul acceptance - task worktree Changes", () => {
           return {
             worktree_commit: {
               operation_id: (variables as { operationId: string }).operationId,
+              subject: "Record current work",
+              message_source: "claude",
               head_commit: "commit-head",
               dirty: false,
               unpushed_count: 1,
@@ -463,9 +470,6 @@ describe("overhaul acceptance - task worktree Changes", () => {
     fireEvent.click(await within(tabs).findByRole("tab", { name: "Changes" }));
     const commit = await screen.findByRole("button", { name: "Commit" });
     const push = screen.getByRole("button", { name: "Push" });
-    fireEvent.change(screen.getByRole("textbox", { name: "Commit message" }), {
-      target: { value: "Record current work" },
-    });
     expect(commit).toBeEnabled();
     expect(push).toBeEnabled();
     expect(screen.getByRole("status")).toHaveTextContent(
@@ -487,7 +491,7 @@ describe("overhaul acceptance - task worktree Changes", () => {
     expect(commands[0].variables).toMatchObject({ taskId: TASK_ID });
     expect(commands[1].variables).toMatchObject({
       taskId: TASK_ID,
-      message: "Record current work",
+      operationId: expect.any(String),
     });
   });
 
@@ -538,6 +542,9 @@ describe("overhaul acceptance - task worktree Changes", () => {
             worktree_pull_request_create: {
               operation_id: (variables as { operationId: string }).operationId,
               url: changes.pull_request_url,
+              title: "Merge 2 commits from wt/CODING-1324-create-pr",
+              body: "Merging `wt/CODING-1324-create-pr` into `main`.",
+              message_source: "claude",
               branch: "wt/CODING-1324-create-pr",
               base_branch: "main",
               pushed: true,
@@ -823,6 +830,9 @@ describe("overhaul acceptance - task worktree Changes", () => {
             worktree_pull_request_replace: {
               operation_id: (variables as { operationId: string }).operationId,
               url,
+              title: "Merge 1 commit from wt/CODING-1325-replace-pr",
+              body: "Merging `wt/CODING-1325-replace-pr` into `main`.",
+              message_source: "claude",
               branch: activeCleanWorktree.branch,
               base_branch: "main",
               pushed: false,
@@ -848,6 +858,9 @@ describe("overhaul acceptance - task worktree Changes", () => {
             worktree_pull_request_follow_up: {
               operation_id: (variables as { operationId: string }).operationId,
               url,
+              title: "Merge 1 commit from wt/CODING-1326-follow-up",
+              body: "Merging `wt/CODING-1326-follow-up` into `main`.",
+              message_source: "claude",
               branch: activeCleanWorktree.branch,
               base_branch: "main",
               pushed: true,

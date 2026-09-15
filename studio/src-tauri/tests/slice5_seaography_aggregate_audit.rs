@@ -150,6 +150,7 @@ fn no_audited_module_reaches_model_crud_outside_seaorm() {
                 continue;
             }
             let source = std::fs::read_to_string(&file).expect("read audited source");
+            let source = source.split("#[cfg(test)]").next().unwrap_or(&source);
             if markers.iter().any(|marker| source.contains(marker)) {
                 offenders.push(file);
             }

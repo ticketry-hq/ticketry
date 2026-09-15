@@ -45,6 +45,8 @@ function mergedChanges(overrides: Record<string, unknown> = {}) {
     unpushed_count: 0,
     truncated: false,
     files: [],
+    insertions: 0,
+    deletions: 0,
     ...overrides,
   };
 }

@@ -261,7 +261,6 @@ impl ExecutionHarness {
         .expect("start the in-process MCP listener");
         let run_authority = mcp.authority();
         self.authorization.start(&commands, &run_authority).await;
-        let mcp_socket = mcp.socket_path().to_string_lossy().into_owned();
         self.ownership = Some(ownership);
 
         // Startup is what points the interactive runtime at the launch paths,
@@ -273,7 +272,7 @@ impl ExecutionHarness {
                 paths: ticketry_launch::LaunchPathsService::new(commands.clone()),
                 hook_runner: provider_directory(&data_directory).join("ticketry-hook-runner"),
                 hook_spool_directory: spool_directory.clone(),
-                mcp_url: mcp_socket,
+                mcp_data_directory: Some(data_directory.clone()),
                 run_authority: mcp.authority(),
                 granted_operations: ticketry_mcp::allowed_provider_operations(),
             });

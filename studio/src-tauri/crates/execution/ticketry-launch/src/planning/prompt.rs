@@ -1,3 +1,5 @@
+use std::path::Path;
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TaskPromptFacts {
     pub name: String,
@@ -17,6 +19,13 @@ pub struct TaskPromptInput {
     pub workflow_prompt: String,
     pub additional_user_input: Option<String>,
     pub design_directory: Option<String>,
+    /// The same design directory resolved absolutely, when the caller has it.
+    /// Existence checks for prompt-named files run against this root; the
+    /// prompt itself keeps naming the root-relative path the agent runs in.
+    pub design_directory_root: Option<String>,
+    /// The workflow state the work item just left, when this launch follows a
+    /// committed transition. The handoff note is keyed to it.
+    pub previous_state_name: Option<String>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -102,9 +111,26 @@ pub fn build_task_prompt(input: &TaskPromptInput) -> String {
     if !facts.state.eq_ignore_ascii_case("ideas") {
         if let Some(directory) = input.design_directory.as_deref() {
             prompt.push_str(&format!("Design directory: {directory}\n"));
+            if let (Some(root), Some(previous)) = (
+                input.design_directory_root.as_deref(),
+                input.previous_state_name.as_deref(),
+            ) {
+                let slug = ticketry_documents::slugify(previous, usize::MAX);
+                if Path::new(root).join(format!("{slug}-handoff.md")).is_file() {
+                    prompt.push_str(&format!(
+                        "Handoff note: {directory}/{slug}-handoff.md — read it before starting.\n"
+                    ));
+                }
+            }
         }
     }
     prompt.push_str("Available tools: WorkTracker MCP server; coding agent status tool.");
+    if !facts.state.is_empty() {
+        prompt.push_str(&format!(
+            "\n\nEnding this run: terminate_current_run only succeeds once this task has left '{}' for one of that state's configured destinations. Move it there with update_task_status first; a refusal lists the acceptable states.",
+            facts.state
+        ));
+    }
     prompt
 }
 
@@ -175,39 +201,15 @@ pub fn build_instant_prompt(input: &InstantPrompt) -> String {
             ]
         });
     }
-    steps.extend([
-        vec![
-            "Make the change the user described directly. This is intentionally",
-            "lightweight — no WorkTracker task is being tracked for it.",
-        ],
-        vec![
-            "If a local codebase folder is set, explore only what you need to",
-            "make the change safely.",
-        ],
-        vec![
-            "Keep the scope tight to exactly what was asked. Do not refactor,",
-            "expand scope, or create WorkTracker tasks.",
-        ],
-        vec![
-            "If the change turns out to be larger than expected or ambiguous,",
-            "stop and tell the user it should be planned properly via the",
-            "'n' (Plan Feature) flow instead of done instantly.",
-        ],
-    ]);
     if input.allow_self_termination && input.auto_close {
         steps.extend([
             vec!["After the work completes successfully and is validated, briefly report what changed,", "then invoke terminate_current_run with no arguments."],
-            vec!["Never invoke self-termination when the work is blocked, failed, ambiguous, or", "larger than expected. Do not update any WorkTracker task state."],
+            vec!["Never invoke self-termination when the work is blocked, failed, ambiguous, or", "larger than expected."],
         ]);
     } else if input.allow_self_termination {
         steps.extend([
             vec!["After the work completes successfully and is validated, briefly report what changed.", "Only after that report, and only if the user explicitly authorized it, invoke", "terminate_current_run with no arguments."],
-            vec!["Never invoke self-termination when the work is blocked, failed, ambiguous, or", "larger than expected. Without explicit authorization, leave the run open.", "Do not update any WorkTracker task state."],
-        ]);
-    } else {
-        steps.push(vec![
-            "When done, briefly confirm what you changed. Do not update any",
-            "WorkTracker task state.",
+            vec!["Never invoke self-termination when the work is blocked, failed, ambiguous, or", "larger than expected. Without explicit authorization, leave the run open."],
         ]);
     }
     let jobs = steps
@@ -241,7 +243,7 @@ pub fn build_instant_prompt(input: &InstantPrompt) -> String {
         .map(|value| format!("User's request:\n  {value}\n\n"))
         .unwrap_or_default();
     format!(
-        "You are an agent making a small, instant change in the '{}' module.\n\nContext:\n  Project: {}\n  Project ID:  {}\n  Module ID:   {}\n  Local Codebase: {}\n\n{}{}Your job:\n{}\n{}Do not create or update WorkTracker tasks for this work.",
+        "Context:\n  Module: {}\n  Project: {}\n  Project ID:  {}\n  Module ID:   {}\n  Local Codebase: {}\n\n{}{}Run lifecycle:\n{}\n{}",
         module.name, module.project_slug, module.project_id, module.module_id,
         module.local_codebase.as_deref().unwrap_or("(not set)"), configured, request, jobs, design,
     )
@@ -334,6 +336,8 @@ mod tests {
             workflow_prompt: "This text is opaque; keep \"all\" of it.".into(),
             additional_user_input: Some("Also preserve 🦀.".into()),
             design_directory: Some("spec/module/T867--launch".into()),
+            design_directory_root: None,
+            previous_state_name: None,
         });
 
         assert!(prompt.starts_with("Selected workflow prompt:\nThis text is opaque; keep \"all\" of it.\n\nWork item context (factual):"));
@@ -345,6 +349,76 @@ mod tests {
             "Design directory: spec/module/T867--launch",
         ] {
             assert!(prompt.contains(expected), "missing {expected:?}");
+        }
+    }
+
+    #[test]
+    fn task_prompt_names_the_previous_state_handoff_note_when_it_exists() {
+        let directory = tempfile::tempdir().unwrap();
+        let design = directory
+            .path()
+            .join("spec")
+            .join("module--abc")
+            .join("T867--launch");
+        std::fs::create_dir_all(&design).unwrap();
+        std::fs::write(design.join("todo-handoff.md"), "What I learned.").unwrap();
+
+        let prompt = build_task_prompt(&TaskPromptInput {
+            facts: facts(),
+            workflow_prompt: String::new(),
+            additional_user_input: None,
+            design_directory: Some(design.to_string_lossy().into_owned()),
+            design_directory_root: Some(design.to_string_lossy().into_owned()),
+            previous_state_name: Some("Todo".into()),
+        });
+
+        let expected = format!(
+            "Handoff note: {}/todo-handoff.md — read it before starting.",
+            design.to_string_lossy()
+        );
+        assert!(
+            prompt.lines().filter(|line| *line == expected).count() == 1,
+            "expected exactly one handoff line naming the note, got: {prompt}"
+        );
+    }
+
+    #[test]
+    fn task_prompt_is_silent_when_the_handoff_note_is_missing() {
+        let directory = tempfile::tempdir().unwrap();
+        let design = directory
+            .path()
+            .join("spec")
+            .join("module--abc")
+            .join("T867--launch");
+        std::fs::create_dir_all(&design).unwrap();
+
+        for previous_state_name in [None, Some("Todo".into())] {
+            let prompt = build_task_prompt(&TaskPromptInput {
+                facts: facts(),
+                workflow_prompt: String::new(),
+                additional_user_input: None,
+                design_directory: Some(design.to_string_lossy().into_owned()),
+                design_directory_root: Some(design.to_string_lossy().into_owned()),
+                previous_state_name: previous_state_name.clone(),
+            });
+            assert!(
+                !prompt.contains("handoff"),
+                "no handoff line expected without a note (previous state {previous_state_name:?}): {prompt}"
+            );
+        }
+    }
+
+    fn facts() -> TaskPromptFacts {
+        TaskPromptFacts {
+            name: "Handoff test".into(),
+            work_item_id: "task-1".into(),
+            sequence_id: Some(867),
+            project_id: "project-1".into(),
+            module_id: "module-1".into(),
+            local_module_folder: "/authorized/repo".into(),
+            state: "Implement".into(),
+            issue_type: "Implementation".into(),
+            description_html: String::new(),
         }
     }
 

@@ -431,11 +431,11 @@ async fn concurrent_same_and_distinct_identities_commit_one_claim_and_one_launch
 }
 
 #[tokio::test]
-async fn another_live_run_returns_the_stable_active_work_refusal_without_effects() {
+async fn run_now_with_another_live_run_replaces_it_and_launches_once() {
     let live_run_fixture = fixture(None).await;
     insert_live_run(&live_run_fixture.database, CALLER_RUN).await;
     insert_live_run(&live_run_fixture.database, OTHER_RUN).await;
-    let refusal = live_run_fixture
+    let success = live_run_fixture
         .service
         .execute(RunNowRequest {
             id_or_key: TASK.to_owned(),
@@ -445,17 +445,14 @@ async fn another_live_run_returns_the_stable_active_work_refusal_without_effects
             },
         })
         .await
-        .unwrap_err();
-    assert_eq!(refusal.code, "task_already_active");
-    assert!(refusal.committed_state.is_none());
-    assert!(refusal.run.is_none());
-    assert_eq!(live_run_fixture.launches.load(Ordering::SeqCst), 0);
-    assert_eq!(
-        state_id(&live_run_fixture.database).await.as_deref(),
-        Some(IDEAS)
-    );
+        .unwrap();
+    assert_eq!(success.code, "run_now_started");
+    assert_eq!(success.committed_state.name, "Implement");
+    assert_eq!(live_run_fixture.launches.load(Ordering::SeqCst), 1);
+    assert_eq!(state_id(&live_run_fixture.database).await.as_deref(), Some(IMPLEMENT));
 
     let live_terminal_fixture = fixture(None).await;
+    insert_live_run(&live_terminal_fixture.database, OTHER_RUN).await;
     live_terminal_fixture
         .database
         .execute_unprepared(&format!(
@@ -465,17 +462,18 @@ async fn another_live_run_returns_the_stable_active_work_refusal_without_effects
         ))
         .await
         .unwrap();
-    let refusal = live_terminal_fixture
+    let success = live_terminal_fixture
         .service
         .execute(human(TASK))
         .await
-        .unwrap_err();
-    assert_eq!(refusal.code, "task_already_active");
+        .unwrap();
+    assert_eq!(success.code, "run_now_started");
+    assert_eq!(success.committed_state.name, "Implement");
+    assert_eq!(live_terminal_fixture.launches.load(Ordering::SeqCst), 1);
     assert_eq!(
         state_id(&live_terminal_fixture.database).await.as_deref(),
-        Some(IDEAS)
+        Some(IMPLEMENT)
     );
-    assert_eq!(live_terminal_fixture.launches.load(Ordering::SeqCst), 0);
 }
 
 #[tokio::test]

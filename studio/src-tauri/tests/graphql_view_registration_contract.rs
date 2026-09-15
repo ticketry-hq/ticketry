@@ -200,18 +200,22 @@ fn audited_source_roots() -> Vec<PathBuf> {
     let crates = manifest.join("crates");
     let mut slices: Vec<PathBuf> = fs::read_dir(&crates)
         .unwrap_or_else(|error| panic!("read {}: {error}", crates.display()))
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|tier| tier.is_dir())
         .flat_map(|entry| {
-            let tier = entry.expect("read tier entry").path();
-            fs::read_dir(&tier)
-                .unwrap_or_else(|error| panic!("read {}: {error}", tier.display()))
-                .map(|entry| entry.expect("read crate entry").path().join("src"))
+            fs::read_dir(&entry)
+                .unwrap_or_else(|error| panic!("read {}: {error}", entry.display()))
+                .filter_map(Result::ok)
+                .map(|entry| entry.path().join("src"))
+                .collect::<Vec<_>>()
         })
         .filter(|path| path.is_dir())
         .collect();
     slices.sort();
     assert_eq!(
         slices.len(),
-        18,
+        20,
         "GraphQL audit must scan all workspace crates"
     );
     roots.extend(slices);

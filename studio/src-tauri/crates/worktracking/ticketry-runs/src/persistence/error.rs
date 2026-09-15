@@ -40,6 +40,13 @@ impl RunsPersistenceError {
     }
 
     pub fn storage(context: &'static str, source: DbErr) -> Self {
+        // Public errors stay concise; retain the database cause for diagnosis.
+        let _ = ticketry_diagnostics::process_file_log().record(
+            "runs",
+            "error",
+            "storage-failed",
+            serde_json::json!({ "context": context, "cause": source.to_string() }),
+        );
         Self {
             code: RunsPersistenceErrorCode::Storage,
             message: context.to_owned(),

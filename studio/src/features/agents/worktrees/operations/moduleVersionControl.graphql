@@ -19,7 +19,12 @@ query ModuleVersionControl($moduleId: String!) {
         path
         previous_path
         status
+        binary
+        insertions
+        deletions
       }
+      insertions
+      deletions
     }
     worktrees {
       kind

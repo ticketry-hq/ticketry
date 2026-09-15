@@ -49,7 +49,7 @@ pub fn launch_rust_runtime(
         paths: ticketry_launch::LaunchPathsService::new(database.clone()),
         hook_runner,
         hook_spool_directory: spool_directory.clone(),
-        mcp_url: String::new(),
+        mcp_data_directory: None,
         run_authority: ticketry_runs::RunAuthority::new(database.clone()),
         granted_operations: ticketry_mcp::allowed_provider_operations(),
     })?;
@@ -83,15 +83,13 @@ pub fn launch_rust_runtime(
     };
     startup_trace.record("mcp-listener-started");
     if let Some(runtime) = mcp_runtime.as_ref() {
-        // CODING-1559 replaces this URL-shaped field with the socket location
-        // and bearer value the stdio bridge needs; until then the socket path
-        // marks provider control as available.
-        launch_runtime.replace_terminal_mcp_authority(
-            runtime.socket_path().to_string_lossy().into_owned(),
-            runtime.authority(),
-        )?;
+        startup_trace.record("terminal-mcp-authority-replacement-started");
+        launch_runtime
+            .replace_terminal_mcp_authority(data_directory.clone(), runtime.authority())?;
+        startup_trace.record("terminal-mcp-authority-replaced");
     }
 
+    startup_trace.record("runs-handoff-opening");
     tauri::async_runtime::block_on(runs_handoff::open_gate(
         &data_directory,
         &database,
@@ -258,12 +256,14 @@ fn terminal_sweep_interval() -> Duration {
         return Duration::from_millis(milliseconds.max(25));
     }
 
-    const DEFAULT_MINUTES: u64 = 30;
-    let minutes = std::env::var("MUXED_IDLE_SWEEP_MINUTES")
-        .ok()
-        .and_then(|value| value.parse::<u64>().ok())
-        .unwrap_or(DEFAULT_MINUTES);
-    Duration::from_secs(minutes.saturating_mul(60))
+    // Launch lease recovery must not inherit the old idle-cleanup interval.
+    TerminalLifecycleConfig::default().sweep_interval
+}
+
+#[cfg(all(test, not(feature = "desktop-acceptance")))]
+#[test]
+fn launch_recovery_runs_every_fifteen_seconds() {
+    assert_eq!(terminal_sweep_interval(), Duration::from_secs(15));
 }
 
 fn provider_hook_sweep_interval() -> Duration {

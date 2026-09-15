@@ -17,6 +17,16 @@ pub(super) async fn cumulative(
     checkout: &Path,
     base_commit: &str,
 ) -> Result<CumulativeChanges, WorktreeChangesError> {
+    let status = super::command_git::status(git, checkout).await?;
+    cumulative_from_status(git, checkout, base_commit, &status).await
+}
+
+pub(super) async fn cumulative_from_status(
+    git: &GitPort,
+    checkout: &Path,
+    base_commit: &str,
+    status: &GitOutcome,
+) -> Result<CumulativeChanges, WorktreeChangesError> {
     let diff = git
         .run(
             &[
@@ -51,13 +61,7 @@ pub(super) async fn cumulative(
             "Git could not read this checkout's unmerged paths.",
         ));
     }
-    let status = git
-        .run(
-            &["status", "--porcelain=v1", "-z", "--untracked-files=all"],
-            checkout,
-        )
-        .await?;
-    require_path_bytes(&status)?;
+    require_path_bytes(status)?;
     if !status.succeeded {
         return Err(WorktreeChangesError::git_state_unavailable(
             "Git could not read this checkout's current state.",
@@ -67,8 +71,32 @@ pub(super) async fn cumulative(
     let mut files = BTreeMap::new();
     parse_name_status(&diff, &mut files)?;
     merge_unmerged(&unmerged, &mut files)?;
-    merge_status(&status, &mut files)?;
+    merge_status(status, &mut files)?;
     let list_truncated = files.len() > MAX_CHANGED_FILES;
+    let numstat = git
+        .run(
+            &[
+                "diff",
+                "--numstat",
+                "-z",
+                "--find-renames",
+                "--find-copies-harder",
+                "--no-ext-diff",
+                "--no-textconv",
+                base_commit,
+                "--",
+            ],
+            checkout,
+        )
+        .await?;
+    require_path_bytes(&numstat)?;
+    if !numstat.succeeded {
+        return Err(WorktreeChangesError::git_state_unavailable(
+            "Git could not read changed-file counts.",
+        ));
+    }
+    parse_numstat(&numstat, &mut files)?;
+    count_untracked(&mut files, checkout);
     Ok(CumulativeChanges {
         files: files.into_values().take(MAX_CHANGED_FILES).collect(),
         truncated: diff.stdout_truncated
@@ -76,6 +104,100 @@ pub(super) async fn cumulative(
             || status.stdout_truncated
             || list_truncated,
     })
+}
+
+/// Untracked files never appear in numstat, so their counts come from a small
+// read of the working file. A single NUL marks binary content.
+fn count_untracked(files: &mut BTreeMap<String, ChangedFile>, checkout: &Path) {
+    for (_, file) in files
+        .iter_mut()
+        .filter(|(_, file)| file.status == "untracked" && file.insertions.is_none())
+    {
+        let path = checkout.join(&file.path);
+        let Ok(metadata) = std::fs::symlink_metadata(&path) else {
+            continue;
+        };
+        if !metadata.file_type().is_file() {
+            continue;
+        }
+        let Ok(bytes) = std::fs::read(&path) else {
+            continue;
+        };
+        let binary = bytes[..bytes.len().min(8000)].contains(&0);
+        let lines = if binary {
+            0
+        } else {
+            bytes.iter().filter(|byte| **byte == b'\n').count()
+                + usize::from(!bytes.is_empty() && bytes.last() != Some(&b'\n'))
+        };
+        file.binary = binary;
+        file.insertions = Some(lines.min(i32::MAX as usize) as i32);
+        file.deletions = Some(0);
+    }
+}
+
+fn parse_numstat(
+    outcome: &GitOutcome,
+    files: &mut BTreeMap<String, ChangedFile>,
+) -> Result<(), WorktreeChangesError> {
+    if outcome.stdout_truncated || (!outcome.stdout.is_empty() && !outcome.stdout.ends_with('\0')) {
+        return Err(WorktreeChangesError::git_state_unavailable(
+            "Git returned an incomplete changed-file count stream.",
+        ));
+    }
+    let records = outcome.stdout.split_terminator('\0').collect::<Vec<_>>();
+    let mut index = 0;
+    while index < records.len() {
+        let record = records[index];
+        index += 1;
+        let mut parts = record.split('\t');
+        let added = parts.next().unwrap_or_default();
+        let removed = parts.next().unwrap_or_default();
+        let path_field = parts.next().unwrap_or_default();
+        if added.is_empty() || removed.is_empty() {
+            return Err(WorktreeChangesError::git_state_unavailable(
+                "Git returned an incomplete changed-file count record.",
+            ));
+        }
+        let binary = added == "-" || removed == "-";
+        let (insertions, deletions) = if binary {
+            (None, None)
+        } else {
+            let insertions = added.parse::<i32>().map_err(|_| {
+                WorktreeChangesError::git_state_unavailable(
+                    "Git returned an unreadable changed-file count record.",
+                )
+            })?;
+            let deletions = removed.parse::<i32>().map_err(|_| {
+                WorktreeChangesError::git_state_unavailable(
+                    "Git returned an unreadable changed-file count record.",
+                )
+            })?;
+            (Some(insertions), Some(deletions))
+        };
+        let path = if path_field.is_empty() {
+            let _original = records.get(index).ok_or_else(|| {
+                WorktreeChangesError::git_state_unavailable(
+                    "Git returned an incomplete renamed-file count record.",
+                )
+            })?;
+            let current = records.get(index + 1).ok_or_else(|| {
+                WorktreeChangesError::git_state_unavailable(
+                    "Git returned an incomplete renamed-file count record.",
+                )
+            })?;
+            index += 2;
+            (*current).to_owned()
+        } else {
+            path_field.to_owned()
+        };
+        if let Some(file) = files.get_mut(&path) {
+            file.binary = binary;
+            file.insertions = insertions;
+            file.deletions = deletions;
+        }
+    }
+    Ok(())
 }
 
 fn merge_unmerged(
@@ -91,6 +213,9 @@ fn merge_unmerged(
                 path: path.to_owned(),
                 previous_path: None,
                 status: "conflicted".to_owned(),
+                binary: false,
+                insertions: None,
+                deletions: None,
             });
     }
     Ok(())
@@ -122,6 +247,9 @@ fn parse_name_status(
                 path,
                 previous_path,
                 status: status.to_owned(),
+                binary: false,
+                insertions: None,
+                deletions: None,
             },
         );
     }
@@ -160,12 +288,18 @@ fn merge_status(
                     path: path.to_owned(),
                     previous_path: None,
                     status: "conflicted".to_owned(),
+                    binary: false,
+                    insertions: None,
+                    deletions: None,
                 });
         } else if code == "??" {
             files.entry(path.to_owned()).or_insert_with(|| ChangedFile {
                 path: path.to_owned(),
                 previous_path: None,
                 status: "untracked".to_owned(),
+                binary: false,
+                insertions: None,
+                deletions: None,
             });
         }
     }
@@ -290,6 +424,51 @@ mod tests {
         parse_name_status(&output, &mut files).expect("parse exact-base conflict");
 
         assert_eq!(files["late-conflict.txt"].status, "conflicted");
+    }
+
+    #[test]
+    fn numstat_sets_counts_and_binary_state() {
+        let mut files = BTreeMap::from([
+            (
+                "changed.txt".to_owned(),
+                ChangedFile {
+                    path: "changed.txt".to_owned(),
+                    previous_path: None,
+                    status: "modified".to_owned(),
+                    binary: false,
+                    insertions: None,
+                    deletions: None,
+                },
+            ),
+            (
+                "image.png".to_owned(),
+                ChangedFile {
+                    path: "image.png".to_owned(),
+                    previous_path: None,
+                    status: "modified".to_owned(),
+                    binary: false,
+                    insertions: None,
+                    deletions: None,
+                },
+            ),
+        ]);
+        let outcome = outcome("3\t1\tchanged.txt\0-\t-\timage.png\0", false, true);
+
+        parse_numstat(&outcome, &mut files).expect("valid numstat");
+
+        assert_eq!(files["changed.txt"].insertions, Some(3));
+        assert_eq!(files["changed.txt"].deletions, Some(1));
+        assert!(files["image.png"].binary);
+        assert_eq!(files["image.png"].insertions, None);
+    }
+
+    #[test]
+    fn truncated_numstat_is_rejected() {
+        let mut files = BTreeMap::new();
+        let error = parse_numstat(&outcome("3\t1\tpartial", true, true), &mut files)
+            .expect_err("truncated numstat must fail");
+
+        assert_eq!(error.code_str(), "worktree_changes_git_unavailable");
     }
 
     #[test]

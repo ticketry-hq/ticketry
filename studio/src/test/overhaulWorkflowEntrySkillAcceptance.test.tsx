@@ -18,6 +18,7 @@ function binding(entrySkill: string | null): ScopedWorkflowLaunchBinding {
     required_skills: ["to-spec", "tdd"],
     entry_skill: entrySkill,
     agent: null,
+    profile: null,
     model: null,
     reasoning: null,
     auto_start: false,

@@ -50,7 +50,8 @@ pub(crate) mod timestamp;
 mod work_item_scope;
 
 pub use adoption::{
-    adopt, outbox_adopted, preflight, AdoptionEvidence, DjangoGeneration, SourceClassification,
+    adopt, ensure_adopted, outbox_adopted, preflight, AdoptionEvidence, DjangoGeneration,
+    SourceClassification,
 };
 pub use delivery_mode::DeliveryMode;
 pub use end_of_life::{record_run_ended, record_sweep_ended, terminating_signal, EndOfLifeOrigin};

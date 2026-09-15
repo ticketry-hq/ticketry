@@ -11,7 +11,6 @@ use super::{
     RunsPersistenceErrorCode,
 };
 
-const STATUS_WINDOW_DAYS: i64 = 30;
 const STALL_AFTER_SECONDS: i64 = 60;
 
 struct HoldingRow {
@@ -44,6 +43,15 @@ impl QueryProjectionService {
             .await
     }
 
+    /// The live holding: runs that have not ended. An already-ended run is
+    /// read through its WorkItem instead, so there is one server-side source
+    /// for ended runs and no calendar cutoff anywhere.
+    ///
+    /// The partition is `ended_at`, the same fact the WorkItem ended-runs read
+    /// selects on (`endedAt: { is_null: false }`), so every run is carried by
+    /// exactly one of the two sources. A run whose agent reported `error` or
+    /// `session_end` while its process is still alive has no `ended_at`, stays
+    /// live here, and is not silently lost between the two reads.
     pub async fn run_holdings_at(
         &self,
         project_id: &str,
@@ -61,7 +69,6 @@ async fn run_holdings_on(
     now: &str,
 ) -> Result<Vec<AgentRunHolding>, RunsPersistenceError> {
     let now = timestamp::parse(now)?;
-    let cutoff = now - Duration::days(STATUS_WINDOW_DAYS);
     let project_id = database_uuid(project_id);
     let task_id = task_id.map(database_uuid);
     let issue_ids =
@@ -99,13 +106,7 @@ async fn run_holdings_on(
         .map(|row| project(row, now))
         .collect::<Result<Vec<_>, _>>()?
         .into_iter()
-        .filter(|holding| {
-            holding.ended_at.is_none()
-                || holding
-                    .updated
-                    .as_ref()
-                    .is_some_and(|updated| *updated >= cutoff)
-        })
+        .filter(|holding| holding.ended_at.is_none())
         .map(|holding| holding.value)
         .collect::<Vec<_>>();
     holdings.sort_by(|left, right| {
@@ -154,7 +155,6 @@ pub async fn run_holding_in(
 struct ProjectedHolding {
     value: AgentRunHolding,
     ended_at: Option<String>,
-    updated: Option<chrono::DateTime<Utc>>,
 }
 
 fn project(
@@ -217,7 +217,6 @@ fn project(
             last_output_at: row.last_output_at,
         },
         ended_at: row.ended_at,
-        updated: Some(updated),
     })
 }
 

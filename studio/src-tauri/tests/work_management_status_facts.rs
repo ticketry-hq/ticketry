@@ -59,6 +59,12 @@ async fn fixture() -> (tempfile::TempDir, DatabaseConnection, WorkFactRecorder) 
         .execute_unprepared(&format!(
             r#"
             PRAGMA foreign_keys=ON;
+            CREATE TABLE design_documents (
+                id TEXT PRIMARY KEY, module_id TEXT NOT NULL, task_id TEXT NOT NULL,
+                scope TEXT NOT NULL, root_dir TEXT NOT NULL, rel_path TEXT NOT NULL,
+                discovered_by_run_id TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+                content_digest TEXT
+            );
             CREATE TABLE worktracker_project (
                 id char(32) PRIMARY KEY,
                 name varchar(255) NOT NULL, slug varchar(64) NOT NULL,
@@ -103,7 +109,7 @@ async fn fixture() -> (tempfile::TempDir, DatabaseConnection, WorkFactRecorder) 
                 id integer PRIMARY KEY AUTOINCREMENT, issue_type_id char(32) NOT NULL,
                 state_id char(32) NOT NULL, prompt text NOT NULL,
                 required_skills text NOT NULL, entry_skill varchar(128),
-                model_id char(32), reasoning_id char(32),
+                model_id char(32), reasoning_id char(32), profile varchar,
                 auto_start bool NOT NULL, subtree_run_enabled bool NOT NULL,
                 created_at datetime NOT NULL, updated_at datetime NOT NULL,
                 UNIQUE(issue_type_id, state_id)
@@ -281,7 +287,6 @@ async fn moving_and_removing_items_publish_explicit_collection_changes() {
             ("work_item.changed", "created"),
             ("work_item.changed", "created"),
             ("work_item.changed", "reparented"),
-            ("work_item.changed", "reordered"),
             // Archiving cascades, so the child leaves its collections too.
             ("work_item.changed", "archived"),
             ("work_item.changed", "archived"),
@@ -290,7 +295,7 @@ async fn moving_and_removing_items_publish_explicit_collection_changes() {
     assert!(published
         .iter()
         .all(|fact| fact.payload["membershipChanged"] == true));
-    let archived: Vec<&str> = published[4..]
+    let archived: Vec<&str> = published[3..]
         .iter()
         .map(|fact| fact.subject_id.as_str())
         .collect();

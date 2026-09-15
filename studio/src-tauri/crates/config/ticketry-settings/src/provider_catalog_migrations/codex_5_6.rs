@@ -24,39 +24,59 @@ pub(super) async fn apply(transaction: &DatabaseTransaction) -> Result<(), DbErr
         .ok_or_else(|| DbErr::Custom("the provider catalog has no codex provider".to_owned()))?;
 
     for (name, reasoning_names) in MODELS {
-        let model_id = model_id(transaction, &codex.id, name).await?;
-        let mut reasoning_ids = Vec::with_capacity(reasoning_names.len());
-        for name in *reasoning_names {
-            reasoning_ids.push(reasoning_id(transaction, name).await?);
-        }
-        agent_model_reasoning_level::Entity::delete_many()
+        apply_model(transaction, &codex.id, name, reasoning_names).await?;
+    }
+    Ok(())
+}
+
+pub(super) async fn apply_astra(transaction: &DatabaseTransaction) -> Result<(), DbErr> {
+    let codex = provider::Entity::find()
+        .filter(provider::Column::Slug.eq("codex"))
+        .one(transaction)
+        .await?
+        .ok_or_else(|| DbErr::Custom("the provider catalog has no codex provider".to_owned()))?;
+    apply_model(
+        transaction,
+        &codex.id,
+        "gpt-5.6-astra",
+        &["low", "medium", "high", "xhigh", "max", "ultra"],
+    )
+    .await
+}
+
+pub(super) async fn apply_model(
+    transaction: &DatabaseTransaction,
+    provider_id: &str,
+    name: &str,
+    reasoning_names: &[&str],
+) -> Result<(), DbErr> {
+    let model_id = model_id(transaction, provider_id, name).await?;
+    let mut reasoning_ids = Vec::with_capacity(reasoning_names.len());
+    for name in reasoning_names {
+        reasoning_ids.push(reasoning_id(transaction, name).await?);
+    }
+    agent_model_reasoning_level::Entity::delete_many()
+        .filter(agent_model_reasoning_level::Column::AgentModelId.eq(&model_id))
+        .filter(
+            agent_model_reasoning_level::Column::ReasoningLevelId.is_not_in(reasoning_ids.clone()),
+        )
+        .exec(transaction)
+        .await?;
+    for reasoning_level_id in reasoning_ids {
+        let exists = agent_model_reasoning_level::Entity::find()
             .filter(agent_model_reasoning_level::Column::AgentModelId.eq(&model_id))
-            .filter(
-                agent_model_reasoning_level::Column::ReasoningLevelId
-                    .is_not_in(reasoning_ids.clone()),
-            )
+            .filter(agent_model_reasoning_level::Column::ReasoningLevelId.eq(&reasoning_level_id))
+            .one(transaction)
+            .await?
+            .is_some();
+        if !exists {
+            agent_model_reasoning_level::Entity::insert(agent_model_reasoning_level::ActiveModel {
+                id: NotSet,
+                agent_model_id: Set(model_id.clone()),
+                reasoning_level_id: Set(reasoning_level_id),
+            })
             .exec(transaction)
             .await?;
-        for reasoning_level_id in reasoning_ids {
-            let exists = agent_model_reasoning_level::Entity::find()
-                .filter(agent_model_reasoning_level::Column::AgentModelId.eq(&model_id))
-                .filter(
-                    agent_model_reasoning_level::Column::ReasoningLevelId.eq(&reasoning_level_id),
-                )
-                .one(transaction)
-                .await?
-                .is_some();
-            if !exists {
-                agent_model_reasoning_level::Entity::insert(
-                    agent_model_reasoning_level::ActiveModel {
-                        id: NotSet,
-                        agent_model_id: Set(model_id.clone()),
-                        reasoning_level_id: Set(reasoning_level_id),
-                    },
-                )
-                .exec(transaction)
-                .await?;
-            }
         }
     }
     Ok(())

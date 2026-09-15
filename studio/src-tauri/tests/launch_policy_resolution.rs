@@ -88,6 +88,7 @@ async fn fixture() -> (tempfile::TempDir, DatabaseConnection, LaunchPolicyResolv
                 issue_type_id char(32) NOT NULL, state_id char(32) NOT NULL,
                 prompt text NOT NULL, required_skills text NOT NULL,
                 entry_skill varchar(128),
+                profile varchar(255),
                 model_id char(32), reasoning_id char(32),
                 auto_start bool NOT NULL, subtree_run_enabled bool NOT NULL,
                 created_at datetime NOT NULL, updated_at datetime NOT NULL
@@ -104,6 +105,14 @@ async fn fixture() -> (tempfile::TempDir, DatabaseConnection, LaunchPolicyResolv
             );
             CREATE UNIQUE INDEX uniq_auto_attempt_transition_root
                 ON automation_attempts(transition_id) WHERE retry_of_id IS NULL;
+            CREATE TABLE agent_terminal_sessions (
+                agent_run_id text PRIMARY KEY, tmux_session_name text NOT NULL,
+                task_id text NOT NULL, module_id text NOT NULL, project_id text NOT NULL,
+                created_at text NOT NULL, terminated_at text, scope text NOT NULL,
+                doc_rel_path text, runtime_cleanup_pending bool NOT NULL DEFAULT 0,
+                runtime_namespace text, output_identity text,
+                output_sequence bigint NOT NULL DEFAULT 0, last_output_at text, agent text
+            );
             CREATE TABLE runs_status_events (
                 cursor integer PRIMARY KEY AUTOINCREMENT,
                 event_id text NOT NULL UNIQUE, project_id text NOT NULL,
@@ -261,10 +270,46 @@ async fn explicit_provider_never_inherits_another_providers_defaults() {
 }
 
 #[tokio::test]
+async fn workflow_profile_overrides_and_empty_selection_inherits_the_global_profile() {
+    let (_directory, database, resolver) = fixture().await;
+    database.execute_unprepared(
+        r#"UPDATE app_settings SET value = '{"global_default":{"provider":"codex","profile":"global"}}';
+           UPDATE worktracker_launchbinding SET profile = 'workflow', model_id = NULL, reasoning_id = NULL"#,
+    ).await.unwrap();
+    let workflow = resolver
+        .resolve(request(CallerScope::Interactive, "workflow-profile"))
+        .await
+        .unwrap();
+    assert_eq!(workflow.profile.as_deref(), Some("workflow"));
+
+    database
+        .execute_unprepared("UPDATE worktracker_launchbinding SET profile = NULL")
+        .await
+        .unwrap();
+    let inherited = resolver
+        .resolve(request(CallerScope::Interactive, "global-profile"))
+        .await
+        .unwrap();
+    assert_eq!(inherited.profile.as_deref(), Some("global"));
+
+    database
+        .execute_unprepared(&format!(
+            "UPDATE worktracker_launchbinding SET model_id = '{GPT}', profile = NULL"
+        ))
+        .await
+        .unwrap();
+    let explicit_model = resolver
+        .resolve(request(CallerScope::Interactive, "explicit-model"))
+        .await
+        .unwrap();
+    assert_eq!(explicit_model.profile, None);
+}
+
+#[tokio::test]
 async fn resolution_rejects_every_established_policy_failure_code() {
     let mutations = [
         ("UPDATE worktracker_issue SET state_id = NULL", "launch_context_incomplete"),
-        ("UPDATE worktracker_launchbinding SET prompt = '', required_skills = '[]', model_id = NULL, reasoning_id = NULL", "binding_not_configured"),
+        ("UPDATE worktracker_launchbinding SET prompt = '', required_skills = '[]', entry_skill = NULL, model_id = NULL, reasoning_id = NULL", "binding_not_configured"),
         (&format!("UPDATE worktracker_launchbinding SET prompt = '', model_id = '{GPT}'"), "prompt_not_configured"),
         ("UPDATE worktracker_launchbinding SET required_skills = '[\"future\"]'", "invalid_required_skills"),
         (&format!("UPDATE worktracker_launchbinding SET model_id = '{DISABLED_MODEL}'"), "provider_not_activated"),
@@ -624,6 +669,84 @@ async fn auto_start_occurrences_become_decisions_or_recoverable_rejections() {
         .await
         .unwrap()
         .is_empty());
+}
+
+#[tokio::test]
+async fn manual_auto_start_leaves_a_live_agent_alone_except_for_handoffs() {
+    let (_directory, database, resolver) = fixture().await;
+    database
+        .execute_unprepared(&format!(
+            r#"
+            INSERT INTO agent_terminal_sessions
+                (agent_run_id, tmux_session_name, task_id, module_id, project_id,
+                 created_at, scope, runtime_cleanup_pending, agent)
+                VALUES ('live-run', 'live-run', '{TASK}', '{MODULE}', '{PROJECT}',
+                        CURRENT_TIMESTAMP, 'task', 0, 'codex');
+            INSERT INTO worktracker_transitionoccurrence (
+                occurrence_id, version, issue_id, project_id, issue_type_id,
+                from_state_id, to_state_id, from_group, to_group,
+                work_item_revision, workflow_revision, destination_auto_start, handoff, origin
+            ) VALUES
+                ('10101010101010101010101010101010', 1, '{TASK}', '{PROJECT}', '{TYPE}',
+                 '{STATE}', '{STATE}', 'started', 'started', 1, 17, 1, 0, 'human'),
+                ('20202020202020202020202020202020', 1, '{TASK}', '{PROJECT}', '{TYPE}',
+                 '{STATE}', '{STATE}', 'started', 'started', 2, 17, 1, 1, 'human'),
+                ('30303030303030303030303030303030', 1, '{TASK}', '{PROJECT}', '{TYPE}',
+                 '{STATE}', '{STATE}', 'started', 'started', 3, 17, 1, 0, 'agent');
+            "#
+        ))
+        .await
+        .unwrap();
+
+    let decisions = launch_policy::prepare_pending_auto_starts(&database, &resolver, 10)
+        .await
+        .unwrap();
+    assert_eq!(
+        decisions
+            .iter()
+            .map(|decision| decision.idempotency_key.as_str())
+            .collect::<Vec<_>>(),
+        [
+            "20202020202020202020202020202020",
+            "30303030303030303030303030303030"
+        ]
+    );
+    let skipped = database
+        .query_one_raw(sea_orm::Statement::from_string(
+            sea_orm::DbBackend::Sqlite,
+            "SELECT status, error_details FROM automation_attempts WHERE transition_id = '10101010101010101010101010101010'".to_owned(),
+        ))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(skipped.try_get::<String>("", "status").unwrap(), "skipped");
+    assert!(skipped
+        .try_get::<String>("", "error_details")
+        .unwrap()
+        .contains("live_agent_present"));
+
+    database
+        .execute_unprepared(&format!(
+            r#"
+            UPDATE agent_terminal_sessions SET terminated_at = CURRENT_TIMESTAMP;
+            INSERT INTO worktracker_transitionoccurrence (
+                occurrence_id, version, issue_id, project_id, issue_type_id,
+                from_state_id, to_state_id, from_group, to_group,
+                work_item_revision, workflow_revision, destination_auto_start, handoff, origin
+            ) VALUES ('40404040404040404040404040404040', 1, '{TASK}', '{PROJECT}', '{TYPE}',
+                      '{STATE}', '{STATE}', 'started', 'started', 4, 17, 1, 0, 'human');
+            "#
+        ))
+        .await
+        .unwrap();
+    let decisions = launch_policy::prepare_pending_auto_starts(&database, &resolver, 10)
+        .await
+        .unwrap();
+    assert_eq!(decisions.len(), 1);
+    assert_eq!(
+        decisions[0].idempotency_key,
+        "40404040404040404040404040404040"
+    );
 }
 
 #[tokio::test]

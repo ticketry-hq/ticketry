@@ -114,6 +114,7 @@ pub async fn record_outcome_in(
     let attempt_id = database_uuid(attempt_id)?;
     let (current, project_id) = attempt_with_project(transaction, &attempt_id).await?;
     let desired_status = match &outcome {
+        AttemptOutcome::Skipped { .. } => "skipped",
         AttemptOutcome::Succeeded { .. } => "succeeded",
         AttemptOutcome::Failed { .. } => "failed",
     };
@@ -125,6 +126,34 @@ pub async fn record_outcome_in(
     }
 
     let result = match outcome {
+        AttemptOutcome::Skipped { reason, details } => {
+            let timestamp = now();
+            automation_attempt_entity::Entity::update_many()
+                .col_expr(
+                    automation_attempt_entity::Column::Status,
+                    Expr::value("skipped"),
+                )
+                .col_expr(
+                    automation_attempt_entity::Column::Error,
+                    Expr::value(reason),
+                )
+                .col_expr(
+                    automation_attempt_entity::Column::ErrorDetails,
+                    Expr::value(details.to_string()),
+                )
+                .col_expr(
+                    automation_attempt_entity::Column::Retryable,
+                    Expr::value(false),
+                )
+                .col_expr(
+                    automation_attempt_entity::Column::UpdatedAt,
+                    Expr::value(timestamp),
+                )
+                .filter(automation_attempt_entity::Column::Id.eq(&attempt_id))
+                .filter(automation_attempt_entity::Column::Status.eq("pending"))
+                .exec(transaction)
+                .await?
+        }
         AttemptOutcome::Succeeded {
             agent,
             agent_run_id,
@@ -382,6 +411,15 @@ fn validate_occurrence(
 
 fn validate_outcome(outcome: &AttemptOutcome) -> Result<(), RunsPersistenceError> {
     match outcome {
+        AttemptOutcome::Skipped { reason, details }
+            if reason.trim().is_empty()
+                || !details.is_object()
+                || details.get("code").and_then(Value::as_str).is_none() =>
+        {
+            Err(invalid(
+                "Skipped Automation Attempts require a reason and typed details object",
+            ))
+        }
         AttemptOutcome::Succeeded {
             agent,
             agent_run_id,

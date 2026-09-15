@@ -59,6 +59,7 @@ impl<'a> PolicyReader<'a> {
                 prompt: row.prompt,
                 required_skills: row.required_skills.to_string(),
                 entry_skill: row.entry_skill,
+                profile: row.profile,
                 model_id: row.model_id,
                 reasoning_id: row.reasoning_id,
                 auto_start: row.auto_start,
@@ -110,6 +111,7 @@ pub(super) struct BindingRow {
     pub(super) prompt: String,
     pub(super) required_skills: String,
     pub(super) entry_skill: Option<String>,
+    pub(super) profile: Option<String>,
     pub(super) model_id: Option<String>,
     pub(super) reasoning_id: Option<String>,
     pub(super) auto_start: bool,
@@ -120,6 +122,7 @@ impl BindingRow {
     pub(super) fn has_policy(&self) -> bool {
         !self.prompt.is_empty()
             || self.model_id.is_some()
+            || self.profile.is_some()
             || self.reasoning_id.is_some()
             || self.required_skills != "[]"
             || self.entry_skill.is_some()

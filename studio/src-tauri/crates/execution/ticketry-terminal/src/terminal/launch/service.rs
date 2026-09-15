@@ -98,6 +98,7 @@ impl TerminalLaunchService {
             target_id: module.id.clone(),
             kind: ticketry_launch::TerminalLaunchKind::Shell,
             provider: None,
+            profile: None,
             model: None,
             reasoning: None,
             policy_reference: None,

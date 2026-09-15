@@ -1,7 +1,7 @@
 //! Named viewer threads with durable start, exit, and panic records.
 
 use serde_json::json;
-use std::panic::{catch_unwind, resume_unwind, AssertUnwindSafe};
+use std::panic::{resume_unwind, AssertUnwindSafe};
 use std::thread;
 
 pub(super) fn spawn(
@@ -22,7 +22,9 @@ pub(super) fn spawn(
                 Some(&thread_run),
                 json!({"viewerHandle": thread_handle, "role": role}),
             );
-            match catch_unwind(AssertUnwindSafe(work)) {
+            match ticketry_diagnostics::catch_unwind_without_crash_attribution(AssertUnwindSafe(
+                work,
+            )) {
                 Ok(()) => super::super::diagnostics::record(
                     "terminal-viewer-thread-ended",
                     Some(&thread_run),

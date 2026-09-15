@@ -87,13 +87,38 @@ pub async fn preflight(
 
 /// Adopt only an explicitly supplied SQLite store. Desktop startup does not
 /// call this function until the final one-writer handoff ticket.
+/// Validate and adopt for startup without hashing unchanged history on reopen.
+pub async fn ensure_adopted(data_directory: &Path) -> Result<(), RunsPersistenceError> {
+    adopt_inner(data_directory, false).await.map(drop)
+}
+
 pub async fn adopt(data_directory: &Path) -> Result<AdoptionEvidence, RunsPersistenceError> {
+    Ok(adopt_inner(data_directory, true)
+        .await?
+        .expect("adoption evidence requested"))
+}
+
+async fn adopt_inner(
+    data_directory: &Path,
+    capture_evidence: bool,
+) -> Result<Option<AdoptionEvidence>, RunsPersistenceError> {
     let path = checked_database_path(data_directory)?;
     let database = connect(&path, true).await?;
-    integrity(&database).await?;
+    // Installation preflight already ran integrity_check on this file this startup.
+    if capture_evidence {
+        integrity(&database).await?;
+    }
     let source = classify(&database).await?;
     validate_manifest(&database, source).await?;
     validate_semantics(&database).await?;
+    // Reopening retains validation and schema repair, but needs no migration digest.
+    if !capture_evidence && source == SourceClassification::RustOwned {
+        database.close().await.map_err(storage)?;
+        let writable = connect(&path, false).await?;
+        schema::reconcile_attempt_columns(&writable).await?;
+        writable.close().await.map_err(storage)?;
+        return Ok(None);
+    }
     let digest_generation = digest_generation(&database, source).await?;
     let before = stable_digest(&database, digest_generation).await?;
     database.close().await.map_err(storage)?;
@@ -105,14 +130,14 @@ pub async fn adopt(data_directory: &Path) -> Result<AdoptionEvidence, RunsPersis
         let writable = connect(&path, false).await?;
         schema::reconcile_attempt_columns(&writable).await?;
         writable.close().await.map_err(storage)?;
-        return Ok(AdoptionEvidence {
+        return Ok(Some(AdoptionEvidence {
             version: schema::VERSION,
             source,
             stable_digest: before,
             snapshot_path: None,
             snapshot_sha256: None,
             restoration_verified: true,
-        });
+        }));
     }
 
     let checkpoint = connect(&path, false).await?;
@@ -165,7 +190,7 @@ pub async fn adopt(data_directory: &Path) -> Result<AdoptionEvidence, RunsPersis
         restoration_verified: true,
     };
     write_evidence(data_directory, &evidence)?;
-    Ok(evidence)
+    Ok(Some(evidence))
 }
 
 async fn classify(
@@ -418,7 +443,7 @@ async fn validate_semantics(database: &impl ConnectionTrait) -> Result<(), RunsP
     let checks = [
         ("Agent Run required values", "SELECT COUNT(*) AS count FROM agent_runs WHERE id='' OR issue_id='' OR agent='' OR status='' OR started_at='' OR scope=''"),
         ("Agent Run issue scope", "SELECT COUNT(*) AS count FROM agent_runs r LEFT JOIN worktracker_issue i ON i.id=r.issue_id WHERE i.id IS NULL"),
-        ("Automation Attempt status", "SELECT COUNT(*) AS count FROM automation_attempts WHERE status NOT IN ('pending','succeeded','failed')"),
+        ("Automation Attempt status", "SELECT COUNT(*) AS count FROM automation_attempts WHERE status NOT IN ('pending','succeeded','failed','skipped')"),
         ("Automation Attempt issue scope", "SELECT COUNT(*) AS count FROM automation_attempts a LEFT JOIN worktracker_issue i ON i.id=a.issue_id WHERE i.id IS NULL"),
         ("Automation Attempt retry lineage", "SELECT COUNT(*) AS count FROM automation_attempts WHERE (retry_of_id IS NULL) <> (root_attempt_id IS NULL) OR retry_of_id=id OR root_attempt_id=id"),
     ];

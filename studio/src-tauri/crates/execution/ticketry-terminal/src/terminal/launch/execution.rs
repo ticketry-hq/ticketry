@@ -19,6 +19,32 @@ impl TerminalLaunchService {
         &self,
         material: launch_material::Model,
     ) -> Result<session::Model, TerminalLaunchError> {
+        let started = std::time::Instant::now();
+        let log = ticketry_diagnostics::process_file_log();
+        let mut details = json!({
+            "agentRunId": material.agent_run_id,
+            "effectId": material.effect_id,
+        });
+        let _ = log.record("terminal", "info", "launch-execution-started", details.clone());
+        let result = self.execute_inner(material).await;
+        details["elapsedMs"] = json!(started.elapsed().as_millis());
+        let level = match &result {
+            Ok(_) => "info",
+            Err(error) => {
+                details["errorCode"] = json!(error.code_str());
+                details["error"] = json!(error.to_string());
+                "error"
+            }
+        };
+        details["succeeded"] = json!(result.is_ok());
+        let _ = log.record("terminal", level, "launch-execution-finished", details);
+        result
+    }
+
+    async fn execute_inner(
+        &self,
+        material: launch_material::Model,
+    ) -> Result<session::Model, TerminalLaunchError> {
         let claim = self
             .runs
             .effects()

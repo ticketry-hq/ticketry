@@ -7,7 +7,7 @@ publish = false
 [features]
 # Socket client fixture the root package's `mcp_acceptance` integration
 # binary needs; never enabled in a shipped build.
-test-support = ["ticketry-runs/test-support"]
+test-support = ["ticketry-runs/test-support", "ticketry-work-management/test-support"]
 
 [dependencies]
 chrono.workspace = true

@@ -81,6 +81,30 @@ pub(crate) async fn check(
         )));
     }
 
+    let reads_proven = prove_reads(database).await?;
+
+    Ok(Postflight {
+        adopted,
+        invariants_checked: report.checked,
+        reads_proven,
+    })
+}
+
+/// Postflight for a reopen that applied no bridge: the commit wrote only the
+/// ledger row, so the inventory preflight just hashed is still the adopted one
+/// and the semantic rules it ran still hold. Only the reads are proven again.
+pub(crate) async fn check_reopened(
+    database: &DatabaseConnection,
+    source: &Inventory,
+) -> Result<Postflight, AdoptionFailure> {
+    Ok(Postflight {
+        adopted: source.clone(),
+        invariants_checked: 0,
+        reads_proven: prove_reads(database).await?,
+    })
+}
+
+async fn prove_reads(database: &DatabaseConnection) -> Result<usize, AdoptionFailure> {
     let present = inventory::product_tables(database)
         .await
         .map_err(|error| refused(format!("the adopted schema could not be listed: {error}")))?;
@@ -93,12 +117,7 @@ pub(crate) async fn check(
             unanswered.join("; ")
         )));
     }
-
-    Ok(Postflight {
-        adopted,
-        invariants_checked: report.checked,
-        reads_proven: representative_reads::reads().len() - unanswered.len(),
-    })
+    Ok(representative_reads::reads().len() - unanswered.len())
 }
 
 fn refused(detail: String) -> AdoptionFailure {

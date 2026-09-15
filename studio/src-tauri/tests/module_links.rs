@@ -715,7 +715,7 @@ async fn contract_sdl() -> String {
         async_graphql::dynamic::{Object, Schema},
         Builder, BuilderContext,
     };
-    use ticketry_entities::agent_run;
+    use ticketry_entities::{agent_run, session};
 
     let database = Database::connect("sqlite::memory:")
         .await
@@ -728,6 +728,7 @@ async fn contract_sdl() -> String {
     // The Work Item graph names Agent Runs, so the read graph only closes once
     // that entity is registered alongside it.
     seaography::register_entity!(builder, agent_run, mutation: false);
+    seaography::register_entity!(builder, session, mutation: false);
     ticketry_work_management::register_graphql(builder)
         .schema_builder()
         .finish()
@@ -743,7 +744,7 @@ async fn executable_contract(
         async_graphql::dynamic::{Object, Schema},
         Builder, BuilderContext,
     };
-    use ticketry_entities::agent_run;
+    use ticketry_entities::{agent_run, session};
 
     let context = Box::leak(Box::new(BuilderContext::default()));
     let mut builder = Builder::new(context, database.clone());
@@ -751,6 +752,7 @@ async fn executable_contract(
     builder.schema = Schema::build("Query", Some("Mutation"), None);
     let mut builder = ticketry_entities::register_work_management_entities(builder);
     seaography::register_entity!(builder, agent_run, mutation: false);
+    seaography::register_entity!(builder, session, mutation: false);
     let builder = ticketry_work_management::register_graphql(builder);
     let mut schema = builder.schema_builder().data(database.clone());
     if writable {

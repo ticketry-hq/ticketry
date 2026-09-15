@@ -4,13 +4,13 @@ use sea_orm::{
     TransactionTrait,
 };
 
-use super::identifiers::{database_uuid, new_database_uuid};
+use super::identifiers::{database_uuid, new_database_uuid, uuid_spellings};
 use super::status_facts::{
     record_work_item, stamp, WorkFactRecorder, WorkItemChange, WorkItemFact, WorkItemIdentity,
 };
 use super::CommandError;
 use super::{arrival_rank, fractional_rank};
-use ticketry_entities::{issue, issue_type, module_presentation, project, state};
+use ticketry_entities::{design_document, issue, issue_type, module_presentation, project, state};
 
 pub use super::descriptions::{append_description, AppendDescription};
 pub use super::review_findings::{create_review_finding, CreateReviewFinding};
@@ -93,7 +93,7 @@ pub async fn create(
     let state_revision = counters.state_revision;
     let presentation_rank =
         if item_type == "module" && uses_manual_module_order(&transaction, &project_id).await? {
-            let first = module_presentation::Entity::find()
+            let last = module_presentation::Entity::find()
                 .join(
                     JoinType::InnerJoin,
                     module_presentation::Relation::Module.def(),
@@ -102,12 +102,12 @@ pub async fn create(
                 .filter(issue::Column::Type.eq("module"))
                 .filter(issue::Column::IsArchived.eq(false))
                 .filter(module_presentation::Column::Rank.ne(""))
-                .order_by_asc(module_presentation::Column::Rank)
-                .order_by_asc(module_presentation::Column::ModuleId)
+                .order_by_desc(module_presentation::Column::Rank)
+                .order_by_desc(module_presentation::Column::ModuleId)
                 .one(&transaction)
                 .await?;
             Some(
-                fractional_rank::between(None, first.as_ref().map(|row| row.rank.as_str()))
+                fractional_rank::between(last.as_ref().map(|row| row.rank.as_str()), None)
                     .map_err(|_| CommandError::validation("An existing module rank is invalid."))?,
             )
         } else {
@@ -184,6 +184,7 @@ async fn uses_manual_module_order<C: ConnectionTrait>(
         )
         .filter(issue::Column::ProjectId.eq(project_id))
         .filter(issue::Column::Type.eq("module"))
+        .filter(issue::Column::IsArchived.eq(false))
         .filter(module_presentation::Column::Rank.ne(""))
         .one(database)
         .await?
@@ -361,7 +362,19 @@ pub async fn delete(
     let identity = WorkItemIdentity::of(&existing);
     let now = super::timestamp::now();
     let occurred_at = stamp(now);
-    issue::Entity::delete_by_id(id).exec(&transaction).await?;
+    issue::Entity::delete_by_id(&id).exec(&transaction).await?;
+    // The document registry has no foreign key to work items. Rows left behind
+    // are the "document-work-item-missing" defect every later launch repairs
+    // behind a full recovery snapshot, so remove them with their owner.
+    let spellings = uuid_spellings(&id);
+    design_document::Entity::delete_many()
+        .filter(
+            design_document::Column::TaskId
+                .is_in(spellings.clone())
+                .or(design_document::Column::ModuleId.is_in(spellings)),
+        )
+        .exec(&transaction)
+        .await?;
     record_work_item(
         facts,
         &transaction,

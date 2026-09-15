@@ -42,13 +42,35 @@ pub async fn preflight(
     Ok(source)
 }
 
+/// Validate and adopt for startup without hashing unchanged history on reopen.
+pub async fn ensure_adopted(data_directory: &Path) -> Result<(), ExecutionPersistenceError> {
+    adopt_inner(data_directory, false).await.map(drop)
+}
+
 pub async fn adopt(data_directory: &Path) -> Result<AdoptionEvidence, ExecutionPersistenceError> {
+    Ok(adopt_inner(data_directory, true)
+        .await?
+        .expect("adoption evidence requested"))
+}
+
+async fn adopt_inner(
+    data_directory: &Path,
+    capture_evidence: bool,
+) -> Result<Option<AdoptionEvidence>, ExecutionPersistenceError> {
     let path = checked_database_path(data_directory)?;
     let read = connect(&path, true).await?;
-    inspection::integrity(&read).await?;
+    // Installation preflight already ran integrity_check on this file this startup.
+    if capture_evidence {
+        inspection::integrity(&read).await?;
+    }
     let source = inspection::classify(&read).await?;
     inspection::validate_manifest(&read, source).await?;
     inspection::validate_semantics(&read).await?;
+    // Reopening retains validation and schema repair, but needs no migration digest.
+    if !capture_evidence && source == SourceClassification::RustOwned {
+        read.close().await.map_err(storage)?;
+        return Ok(None);
+    }
     let historical_columns = evidence::evidence_columns(&read).await?;
     let before = evidence::table_evidence(&read, Some(&historical_columns)).await?;
     let digest = evidence::combined_digest(&before);
@@ -80,11 +102,11 @@ pub async fn adopt(data_directory: &Path) -> Result<AdoptionEvidence, ExecutionP
     let verified = connect(&path, true).await?;
     let tables = evidence::table_evidence(&verified, None).await?;
     verified.close().await.map_err(storage)?;
-    Ok(AdoptionEvidence {
+    Ok(Some(AdoptionEvidence {
         version: schema::VERSION,
         source,
         tables,
-    })
+    }))
 }
 
 fn checked_database_path(data_directory: &Path) -> Result<PathBuf, ExecutionPersistenceError> {

@@ -89,6 +89,15 @@ impl Fixture {
         );
     }
 
+    pub async fn map_pull_request(&self) {
+        let database = Database::connect(format!("sqlite:{}?mode=rw", self.state().display()))
+            .await
+            .expect("open fixture database");
+        database.execute_unprepared(
+            "UPDATE worktrees SET pull_request_url = 'https://github.com/ticketry-hq/ticketry/pull/1'"
+        ).await.expect("map fixture PR");
+    }
+
     pub async fn set_transition_agent_allowed(&self, allowed: bool) {
         let database = Database::connect(format!("sqlite:{}?mode=rw", self.state().display()))
             .await

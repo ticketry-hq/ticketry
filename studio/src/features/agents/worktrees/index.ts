@@ -14,3 +14,5 @@ export type {
   DiscardResult,
 } from "./internal/types";
 export { WorktreeChangesDocument } from "./generated/worktreeChanges.documents";
+export { WorktreeFileDiffDocument } from "./generated/worktreeFileDiff.documents";
+export { ModuleFileDiffDocument } from "./generated/moduleFileDiff.documents";

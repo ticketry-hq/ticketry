@@ -19,6 +19,7 @@ fn main() {
             "desktop_append_frontend_log",
             "desktop_retry_services",
             "desktop_pick_folder",
+            "desktop_prepare_directory_trust",
             "desktop_validate_module_folder",
             "desktop_preflight_report",
             "desktop_approve_executable_path",
@@ -127,57 +128,6 @@ fn build_native_libghostty() {
         "prepared libghostty revision does not match the pinned revision"
     );
 
-    cc::Build::new()
-        .file(manifest.join("native/libghostty_host.m"))
-        .include(manifest.join("native"))
-        .include(vendor.join("include"))
-        .flag("-fno-objc-arc")
-        .compile("muxed_ghostty_host");
-
-    println!(
-        "cargo:rustc-link-search=native={}",
-        vendor.join("lib").display()
-    );
-    println!("cargo:rustc-link-lib=static=ghostty");
-    for library in ["c++", "bz2", "iconv", "resolv", "z"] {
-        println!("cargo:rustc-link-lib={library}");
-    }
-    for framework in [
-        "AppKit",
-        "Carbon",
-        "CoreFoundation",
-        "CoreGraphics",
-        "CoreText",
-        "Foundation",
-        "IOSurface",
-        "Metal",
-        "QuartzCore",
-        "Security",
-        "UniformTypeIdentifiers",
-    ] {
-        println!("cargo:rustc-link-lib=framework={framework}");
-    }
-
-    println!(
-        "cargo:rerun-if-changed={}",
-        manifest.join("native/libghostty_host.h").display()
-    );
-    println!(
-        "cargo:rerun-if-changed={}",
-        manifest.join("native/libghostty_host.m").display()
-    );
-    for source in [
-        "native/libghostty_surface_owner.m",
-        "native/libghostty_runtime.m",
-        "native/libghostty_key_event.m",
-        "native/libghostty_studio_chord.m",
-        "native/libghostty_webview_composition.m",
-        "native/libghostty_view.m",
-        "native/libghostty_command_routing.m",
-        "native/libghostty_view_bridge.m",
-    ] {
-        println!("cargo:rerun-if-changed={}", manifest.join(source).display());
-    }
     println!(
         "cargo:rerun-if-changed={}",
         vendor.join("REVISION").display()

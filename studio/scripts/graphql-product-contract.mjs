@@ -99,6 +99,8 @@ const GENERATED_PRODUCT_QUERIES = [
   "worktrackerProvider",
   "worktrackerReasoninglevel",
   "worktrackerState",
+  "ticketryShiprecords",
+  "worktrackerTransitionoccurrence",
   "worktrees",
 ];
 
@@ -107,16 +109,19 @@ const AUTHORED_QUERIES = [
   "automation_attempts",
   "directory_completions",
   "instant_run_tickets",
+  "instant_run_ticket_title",
   "instant_launch_setting",
   "keybinding_setting",
+  "module_file_diff",
   "module_version_control",
   "provider_catalog",
   "resumable_terminal_sessions",
+  "worktree_file_diff",
   "worktree_changes",
   "worktree_status",
 ];
 
-const SUBSCRIPTIONS = ["run_status_stream"];
+const SUBSCRIPTIONS = ["instant_run_ticket_title_restarted", "run_status_stream"];
 
 function fields(root) {
   return root ? Object.keys(root.getFields()).sort() : [];

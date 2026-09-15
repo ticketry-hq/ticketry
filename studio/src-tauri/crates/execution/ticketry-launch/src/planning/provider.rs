@@ -230,6 +230,26 @@ pub fn validate_options(
     options: &ProviderOptions,
 ) -> Result<(), LaunchPlanningError> {
     let contract = provider_contract(provider);
+    if options.profile.is_some() && provider != Provider::Codex {
+        return Err(LaunchPlanningError::new(
+            LaunchPlanningErrorCode::UnsupportedModel,
+            format!(
+                "Provider '{}' does not support Codex profiles.",
+                contract.slug
+            ),
+        ));
+    }
+    if options
+        .profile
+        .as_deref()
+        .is_some_and(|value| !valid_option(value))
+        || options.profile.is_some() && (options.model.is_some() || options.reasoning.is_some())
+    {
+        return Err(LaunchPlanningError::new(
+            LaunchPlanningErrorCode::UnsupportedModel,
+            "A Codex profile must be non-empty and cannot be combined with model or reasoning.",
+        ));
+    }
     if options
         .model
         .as_deref()

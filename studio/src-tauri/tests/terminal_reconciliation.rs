@@ -1,6 +1,11 @@
 mod common;
+#[path = "terminal_reconciliation/recovery.rs"]
+mod recovery;
+#[path = "terminal_reconciliation/snapshot_race.rs"]
+mod snapshot_race;
 
 use std::collections::BTreeSet;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
 use common::submitted_launch_authority::launch_service;
@@ -23,7 +28,6 @@ use ticketry_terminal::{CleanupCause, CleanupRuntimeObservation, TerminalCleanup
 use ticketry_terminal::{InventoryConflictKind, InventoryEntry, OwnedSession};
 use ticketry_terminal::{
     ReconciliationCheckpoint, RecordedSessionDecision, UnrecordedRuntimeDecision,
-    MAX_RECORDED_SESSION_BATCH,
 };
 
 #[tokio::test]
@@ -256,120 +260,6 @@ async fn one_host_pass_adopts_launches_and_drains_prepared_cleanup() {
 }
 
 #[tokio::test]
-async fn recorded_session_scan_is_bounded_and_reports_saturation() {
-    let harness = TerminalLifecycleHarness::start().await;
-    let database = harness.database().await;
-    for index in 0..199 {
-        insert_session(
-            &database,
-            &format!("reconcile-bounded-{index:03}"),
-            "exited",
-            true,
-        )
-        .await;
-    }
-    let report = service(database, Arc::new(ScriptedRuntime::default()))
-        .reconcile()
-        .await
-        .unwrap();
-    assert_eq!(report.sessions.len(), 200);
-    assert!(report.sessions_saturated);
-}
-
-#[tokio::test]
-async fn an_active_session_is_reconciled_ahead_of_a_saturating_settled_history() {
-    let harness = TerminalLifecycleHarness::start().await;
-    let database = harness.database().await;
-    let runtime = Arc::new(ScriptedRuntime::default());
-    for index in 0..MAX_RECORDED_SESSION_BATCH {
-        insert_session(
-            &database,
-            &format!("aged-history-{index:03}"),
-            "exited",
-            true,
-        )
-        .await;
-    }
-    // Sorts last in the scan order, so an unbounded oldest-first scan would
-    // never reach it while the settled history keeps saturating the batch.
-    insert_session(&database, "zz-active-session", "working", false).await;
-    for run_id in [TASK_RUN_ID, DOCUMENT_RUN_ID, "zz-active-session"] {
-        runtime.set(run_id, [CleanupRuntimeObservation::Running]);
-    }
-
-    let report = service(database, runtime).reconcile().await.unwrap();
-
-    assert_eq!(
-        decision(&report.sessions, "zz-active-session"),
-        RecordedSessionDecision::Running
-    );
-    assert_eq!(
-        report.sessions.len(),
-        MAX_RECORDED_SESSION_BATCH as usize,
-        "the pass stays bounded"
-    );
-    assert!(report.sessions_saturated);
-}
-
-#[tokio::test]
-async fn settled_history_advances_each_pass_until_every_row_is_inspected() {
-    let harness = TerminalLifecycleHarness::start().await;
-    let database = harness.database().await;
-    let runtime = Arc::new(ScriptedRuntime::default());
-    let history = MAX_RECORDED_SESSION_BATCH + 5;
-    for index in 0..history {
-        insert_session(
-            &database,
-            &format!("settled-cycle-{index:03}"),
-            "exited",
-            true,
-        )
-        .await;
-    }
-    for run_id in [TASK_RUN_ID, DOCUMENT_RUN_ID] {
-        runtime.set(run_id, [CleanupRuntimeObservation::Running]);
-    }
-    let reconciliation = service(database, runtime);
-
-    let first = inspected(&reconciliation.reconcile().await.unwrap());
-    let second = inspected(&reconciliation.reconcile().await.unwrap());
-
-    let tail = format!("settled-cycle-{:03}", history - 1);
-    assert!(!first.contains(&tail), "the first pass is bounded");
-    assert!(second.contains(&tail), "the next pass advances past it");
-    for index in 0..history {
-        let run_id = format!("settled-cycle-{index:03}");
-        assert!(
-            first.contains(&run_id) || second.contains(&run_id),
-            "{run_id} was never inspected"
-        );
-    }
-
-    let third = inspected(&reconciliation.reconcile().await.unwrap());
-    assert!(
-        third.contains("settled-cycle-000"),
-        "an exhausted scan restarts at the oldest row"
-    );
-}
-
-#[tokio::test]
-async fn a_saturated_pass_reports_saturation_only_while_rows_remain() {
-    let harness = TerminalLifecycleHarness::start().await;
-    let database = harness.database().await;
-    let runtime = Arc::new(ScriptedRuntime::default());
-    for index in 0..(MAX_RECORDED_SESSION_BATCH + 5) {
-        insert_session(&database, &format!("saturation-{index:03}"), "exited", true).await;
-    }
-    for run_id in [TASK_RUN_ID, DOCUMENT_RUN_ID] {
-        runtime.set(run_id, [CleanupRuntimeObservation::Running]);
-    }
-    let reconciliation = service(database, runtime);
-
-    assert!(reconciliation.reconcile().await.unwrap().sessions_saturated);
-    assert!(!reconciliation.reconcile().await.unwrap().sessions_saturated);
-}
-
-#[tokio::test]
 async fn applied_launch_without_a_session_is_adopted_once_including_legacy_namespace() {
     let harness = TerminalLifecycleHarness::start().await;
     let database = harness.database().await;
@@ -416,10 +306,10 @@ async fn owned_orphan_is_quarantined_then_cleaned_by_one_durable_effect() {
     let harness = TerminalLifecycleHarness::start().await;
     let database = harness.database().await;
     let run_id = "owned-orphan-run";
-    insert_run(&database, run_id, "working", false).await;
+    insert_run(&database, run_id, "exited", true).await;
     let runtime = Arc::new(ScriptedRuntime::default());
     runtime.set(run_id, [CleanupRuntimeObservation::Running]);
-    runtime.set_inventory([owned_inventory(run_id, "legacy-owned-runtime", true)]);
+    runtime.set_inventory([exited_inventory(run_id)]);
 
     let first = service(database.clone(), runtime.clone())
         .reconcile()
@@ -486,10 +376,10 @@ async fn crash_during_orphan_quarantine_replays_without_duplicate_effects() {
     let harness = TerminalLifecycleHarness::start().await;
     let database = harness.database().await;
     let run_id = "owned-orphan-crash";
-    insert_run(&database, run_id, "working", false).await;
+    insert_run(&database, run_id, "exited", true).await;
     let runtime = Arc::new(ScriptedRuntime::default());
     runtime.set(run_id, [CleanupRuntimeObservation::Running]);
-    runtime.set_inventory([owned_inventory(run_id, "legacy-owned-runtime", true)]);
+    runtime.set_inventory([exited_inventory(run_id)]);
 
     let stopped = service(database.clone(), runtime.clone())
         .with_checkpoints(Arc::new(StopOnce::new(
@@ -570,6 +460,92 @@ async fn foreign_and_ambiguous_inventory_produces_stable_sanitized_conflicts() {
     }
 }
 
+#[tokio::test]
+async fn one_pass_judges_every_recorded_row_against_one_runtime_listing() {
+    let harness = TerminalLifecycleHarness::start().await;
+    let database = harness.database().await;
+    for index in 0..250 {
+        insert_session(&database, &format!("settled-{index:03}"), "exited", true).await;
+    }
+    insert_session(&database, "zz-active-session", "working", false).await;
+    let runtime = Arc::new(CountingRuntime::default());
+
+    let report = service_with(database, runtime.clone())
+        .reconcile()
+        .await
+        .unwrap();
+
+    assert_eq!(
+        runtime.counts(),
+        (1, 0, 0),
+        "one pass reads the runtime listing once and asks it nothing else"
+    );
+    let inspected = inspected(&report);
+    assert!(
+        inspected.contains("zz-active-session"),
+        "the active row is judged"
+    );
+    for index in 0..250 {
+        let run_id = format!("settled-{index:03}");
+        assert!(inspected.contains(&run_id), "{run_id} was never judged");
+    }
+}
+
+/// A runtime that answers a whole pass from one listing and counts every way
+/// the pass could have asked it something else.
+#[derive(Default)]
+struct CountingRuntime {
+    snapshots: AtomicUsize,
+    inspections: AtomicUsize,
+    inventories: AtomicUsize,
+}
+
+impl CountingRuntime {
+    fn counts(&self) -> (usize, usize, usize) {
+        (
+            self.snapshots.load(Ordering::Relaxed),
+            self.inspections.load(Ordering::Relaxed),
+            self.inventories.load(Ordering::Relaxed),
+        )
+    }
+}
+
+#[async_trait::async_trait]
+impl ticketry_terminal::TerminalCleanupRuntime for CountingRuntime {
+    async fn inspect(&self, _terminal: &session::Model) -> CleanupRuntimeObservation {
+        self.inspections.fetch_add(1, Ordering::Relaxed);
+        CleanupRuntimeObservation::Unavailable
+    }
+
+    async fn kill_verified(
+        &self,
+        _terminal: &session::Model,
+    ) -> ticketry_terminal::CleanupKillResult {
+        ticketry_terminal::CleanupKillResult::Unconfirmed
+    }
+
+    async fn inventory(&self) -> ticketry_terminal::RuntimeInventory {
+        self.inventories.fetch_add(1, Ordering::Relaxed);
+        ticketry_terminal::RuntimeInventory::Unavailable
+    }
+
+    async fn snapshot(&self) -> Option<ticketry_terminal::RuntimeSnapshot> {
+        self.snapshots.fetch_add(1, Ordering::Relaxed);
+        Some(ticketry_terminal::RuntimeSnapshot::unavailable())
+    }
+}
+
+fn service_with(
+    database: sea_orm::DatabaseConnection,
+    runtime: Arc<CountingRuntime>,
+) -> ticketry_terminal::TerminalReconciliationService {
+    ticketry_terminal::TerminalReconciliationService::new(
+        database,
+        Arc::new(ScriptedRuntime::default()),
+        runtime,
+    )
+}
+
 async fn insert_session(
     database: &sea_orm::DatabaseConnection,
     run_id: &str,
@@ -609,6 +585,15 @@ async fn insert_run(
     run.exit_code = Set(None);
     run.lifecycle_state = Set(Some(if ended { "exited" } else { "working" }.to_owned()));
     run.insert(database).await.unwrap();
+}
+
+fn exited_inventory(run_id: &str) -> InventoryEntry {
+    let mut entry = owned_inventory(run_id, "legacy-owned-runtime", true);
+    if let InventoryEntry::Owned { session, .. } = &mut entry {
+        session.running = false;
+        session.exit_code = Some(0);
+    }
+    entry
 }
 
 fn owned_inventory(run_id: &str, namespace: &str, legacy_namespace: bool) -> InventoryEntry {
@@ -660,6 +645,7 @@ fn launch_request(id: &str) -> CreateTerminalSession {
         target_id: TASK_ID.to_owned(),
         kind: TerminalLaunchKind::Task,
         provider: Some("codex".to_owned()),
+        profile: None,
         model: None,
         reasoning: None,
         policy_reference: None,

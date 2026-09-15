@@ -34,5 +34,6 @@ pub fn register_entity_modules(mut builder: seaography::Builder) -> seaography::
     seaography::register_entity!(builder, agent_model, mutation: false);
     seaography::register_entity!(builder, agent_model_reasoning_level, mutation: false);
     seaography::register_entity!(builder, reasoning_level, mutation: false);
+    seaography::register_entity!(builder, transition_occurrence, mutation: false);
     builder
 }

@@ -33,7 +33,7 @@ fn nullable_strings() -> Value {
 pub fn tools() -> Vec<Tool> {
     vec![
         tool("mcp_ping", "Verify MCP transport and tool execution without touching a backend.", json!({}), &[]),
-        tool("terminate_current_run", "Terminate only the Studio run bound to this MCP request. Ticket runs must first reach a configured destination state from their launch state.", json!({}), &[]),
+        tool("terminate_current_run", "Terminate only the Studio run bound to this MCP request. A ticket run must first move its task out of the state it launched from, into one of that state's configured destinations. A refusal returns error \"ticket_transition_required\" and lists every acceptable state in \"allowed_states\": move the task there with update_task_status, then call this once more.", json!({}), &[]),
         tool("add_issue_type_workflow_transition", "Add one transition to a type's workflow at the supplied revision.", json!({
             "type_id": {"type": "string"}, "from_state_id": {"type": "string"}, "to_state_id": {"type": "string"},
             "workflow_revision": {"type": "integer"}, "agent_allowed": {"type": "boolean", "default": true},
@@ -125,7 +125,7 @@ pub fn tools() -> Vec<Tool> {
         }), &["project_id", "task_id", "status_name"]),
         tool("upsert_issue_type_workflow_launch_binding", "Create or replace one state's launch binding at the supplied revision.", json!({
             "type_id": {"type": "string"}, "state_id": {"type": "string"}, "workflow_revision": {"type": "integer"},
-            "prompt": nullable_string(), "agent": nullable_string(), "model": nullable_string(), "reasoning": nullable_string(), "required_skills": nullable_strings(), "entry_skill": nullable_string()
+            "prompt": nullable_string(), "agent": nullable_string(), "profile": nullable_string(), "model": nullable_string(), "reasoning": nullable_string(), "required_skills": nullable_strings(), "entry_skill": nullable_string()
         }), &["type_id", "state_id", "workflow_revision"]),
     ]
 }

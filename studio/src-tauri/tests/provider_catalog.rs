@@ -100,8 +100,10 @@ fn update(
 ) -> ProviderCatalogUpdate {
     ProviderCatalogUpdate {
         activated_providers: activated.iter().map(|value| (*value).to_owned()).collect(),
+        codex_profiles: Vec::new(),
         global_default: provider.map(|provider| GlobalLaunchDefault {
             provider: provider.to_owned(),
+            profile: None,
             model: model.map(str::to_owned),
             reasoning: reasoning.map(str::to_owned),
         }),
@@ -124,6 +126,31 @@ async fn activation(database: &DatabaseConnection) -> Vec<(String, bool)> {
             )
         })
         .collect()
+}
+
+#[tokio::test]
+async fn codex_profiles_are_trimmed_deduplicated_and_validate_the_default() {
+    let (_directory, database) = fixture(None).await;
+    let service = ProviderCatalogService::open(database).await.unwrap();
+    let catalog = service
+        .update(ProviderCatalogUpdate {
+            activated_providers: vec!["codex".into()],
+            codex_profiles: vec![" work ".into(), "".into(), "work".into()],
+            global_default: Some(GlobalLaunchDefault {
+                provider: "codex".into(),
+                profile: Some(" work ".into()),
+                model: None,
+                reasoning: None,
+            }),
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(catalog.codex_profiles.0, vec!["work"]);
+    assert_eq!(
+        catalog.global_default.unwrap().profile.as_deref(),
+        Some("work")
+    );
 }
 
 #[tokio::test]
@@ -317,12 +344,14 @@ async fn generated_graphql_query_and_restricted_mutation_use_the_catalog_service
                 "query": r#"
                     mutation UpdateProviderCatalog(
                       $activatedProviders: [String!]!,
+                      $codexProfiles: [String!]!,
                       $defaultProvider: String,
                       $defaultModel: String,
                       $defaultReasoning: String
                     ) {
                       update_provider_catalog(
                         activated_providers: $activatedProviders,
+                        codex_profiles: $codexProfiles,
                         default_provider: $defaultProvider,
                         default_model: $defaultModel,
                         default_reasoning: $defaultReasoning
@@ -340,6 +369,7 @@ async fn generated_graphql_query_and_restricted_mutation_use_the_catalog_service
                 "#,
                 "variables": {
                     "activatedProviders": ["codex"],
+                    "codexProfiles": [],
                     "defaultProvider": "codex",
                     "defaultModel": "gpt-5.4",
                     "defaultReasoning": "high"

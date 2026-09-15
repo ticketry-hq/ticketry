@@ -23,10 +23,9 @@ impl CommitWorktreeView {
         ctx: &Context<'_>,
         task_id: String,
         operation_id: String,
-        message: String,
     ) -> Result<RepositoryCommandResult> {
         service(ctx)?
-            .commit_task(&task_id, &operation_id, &message)
+            .commit_task(&task_id, &operation_id)
             .await
             .map_err(command_error)
     }
@@ -35,10 +34,31 @@ impl CommitWorktreeView {
         ctx: &Context<'_>,
         module_id: String,
         operation_id: String,
-        message: String,
     ) -> Result<RepositoryCommandResult> {
         service(ctx)?
-            .commit_module(&module_id, &operation_id, &message)
+            .commit_module(&module_id, &operation_id)
+            .await
+            .map_err(command_error)
+    }
+
+    async fn worktree_commit_push(
+        ctx: &Context<'_>,
+        task_id: String,
+        operation_id: String,
+    ) -> Result<RepositoryCommandResult> {
+        service(ctx)?
+            .commit_push_task(&task_id, &operation_id)
+            .await
+            .map_err(command_error)
+    }
+
+    async fn module_checkout_commit_push(
+        ctx: &Context<'_>,
+        module_id: String,
+        operation_id: String,
+    ) -> Result<RepositoryCommandResult> {
+        service(ctx)?
+            .commit_push_module(&module_id, &operation_id)
             .await
             .map_err(command_error)
     }

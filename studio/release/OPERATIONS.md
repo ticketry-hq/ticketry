@@ -28,6 +28,14 @@ can be restored before relying on it for a production release.
 
 ## Produce a release
 
+Before building a release DMG:
+
+- [ ] Remove the temporary default-on file logging enabled on 2026-09-11 for
+  agent launch and terminal attachment investigation. Restore opt-in logging
+  through `--log-to-file`, update the logging tests and README, and verify that
+  the packaged app writes no diagnostic file on a normal launch without the
+  flag. Keep the launch/recovery fixes and diagnostics available when opted in.
+
 Run these commands from `studio/` on a macOS arm64 host with the
 `aarch64-apple-darwin` Rust target installed.
 

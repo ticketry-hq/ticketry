@@ -79,14 +79,14 @@ describe("overhaul acceptance - Launchkey agent controls", () => {
     vi.useRealTimers();
   });
 
-  it("[overhaul-255] assigns and lights project runs, focuses pads, drains overflow, and excludes shells", async () => {
+  it("[overhaul-255] excludes historical failures, lights live runs, and acknowledges newly failed pads", async () => {
     const shell = agentRun({
       agent_run_id: "shell-run",
       agent: null,
       scope: "shell",
       started_at: "2026-09-04T07:59:59.000Z",
     });
-    const failed = agentRun({ agent_run_id: "failed-run", state: "error" });
+    const failed = agentRun({ agent_run_id: "failed-run", state: "working" });
     const working = Array.from({ length: 15 }, (_, index) => agentRun({
       agent_run_id: `working-${index + 1}`,
       started_at: `2026-09-04T08:00:${String(index + 1).padStart(2, "0")}.000Z`,
@@ -96,7 +96,15 @@ describe("overhaul acceptance - Launchkey agent controls", () => {
       state: "needs_input",
       started_at: "2026-09-04T08:00:16.000Z",
     });
-    const runs = [shell, failed, ...working, overflow];
+    const history = Array.from({ length: 20 }, (_, index) => agentRun({
+      agent_run_id: `historical-${index}`, state: index % 2 ? "lost" : "error",
+      started_at: "2026-08-01T00:00:00.000Z",
+    }));
+    const instant = agentRun({
+      agent_run_id: "instant-chat", scope: "instant", state: "permission_required",
+      started_at: "2026-08-01T00:00:00.000Z",
+    });
+    const runs = [...history, shell, instant, failed, ...working, overflow];
     useAgentStatusStore.setState({
       projectId: "project-1",
       runs: Object.fromEntries(runs.map((run) => [run.agent_run_id, run])),
@@ -120,27 +128,43 @@ describe("overhaul acceptance - Launchkey agent controls", () => {
 
     await controller.start();
     const transport = midi.connectedTransports[0];
+    useAgentStatusStore.setState({ runs: Object.fromEntries(
+      runs.map((run) => [run.agent_run_id, run.agent_run_id === "failed-run" ? { ...run, state: "error" } : run]),
+    ) });
     expect(transport?.sent).toContainEqual({
       port: "daw",
       data: [0x90, 96, 5],
     });
     expect(transport?.sent).toContainEqual({
       port: "daw",
-      data: [0x90, 97, 21],
+      data: [0x90, 97, 3],
     });
     expect(transport?.sent).not.toContainEqual({
       port: "daw",
-      data: expect.arrayContaining([13]),
+      data: [0x92, 96, 5],
     });
 
+    transport?.sent.splice(0);
     transport?.receive("daw", [0x90, 96, 127]);
     await settleInput();
 
     await vi.waitFor(() => expect(document.activeElement).toBe(terminal));
-    expect(transport?.sent).toContainEqual({
-      port: "daw",
-      data: [0x92, 96, 13],
-    });
+    // Acknowledgement frees the failed pad; live runs and overflow move up.
+    expect(transport?.sent).toContainEqual({ port: "daw", data: [0x90, 96, 3] });
+    expect(transport?.sent).toContainEqual({ port: "daw", data: [0x92, 119, 13] });
+    expect(transport?.sent).not.toContainEqual({ port: "daw", data: [0x92, 96, 5] });
+
+    useAgentStatusStore.setState({ runs: Object.fromEntries(runs.map((run) => [
+      run.agent_run_id,
+      run.agent_run_id === "working-1" ? { ...run, state: "turn_complete" }
+        : run.agent_run_id === "working-2" ? { ...run, effective_state: "stalled" }
+        : run.agent_run_id === "working-3" ? { ...run, state: "permission_required" }
+        : run.agent_run_id === "failed-run" ? { ...run, state: "error" }
+        : run,
+    ])) });
+    expect(transport?.sent).toContainEqual({ port: "daw", data: [0x90, 96, 21] });
+    expect(transport?.sent).toContainEqual({ port: "daw", data: [0x90, 97, 13] });
+    expect(transport?.sent).toContainEqual({ port: "daw", data: [0x91, 98, 3] });
 
     useAgentStatusStore.setState({
       projectId: "project-2",
@@ -157,7 +181,7 @@ describe("overhaul acceptance - Launchkey agent controls", () => {
 
     expect(transport?.sent).toContainEqual({
       port: "daw",
-      data: [0x91, 96, 9],
+      data: [0x91, 96, 3],
     });
     expect(transport?.sent.at(-1)).toEqual({
       port: "daw",

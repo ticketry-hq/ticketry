@@ -100,8 +100,8 @@ const mcpRuntime = readFileSync(
   ),
   "utf8",
 );
-if (!mcpRuntime.includes("if cfg!(debug_assertions)") || !mcpRuntime.includes("Ok(0)")) {
-  findings.push("studio/src-tauri/crates/app/ticketry-desktop/src/desktop/mcp_runtime.rs: production MCP must request an OS-assigned port");
+if (/TcpListener|SocketAddr|MCP_PORT|requested_port/.test(mcpRuntime.split("#[cfg(test)]")[0])) {
+  findings.push("studio/src-tauri/crates/app/ticketry-desktop/src/desktop/mcp_runtime.rs: MCP must use the owned data-directory socket");
 }
 const shippingFiles = [
   "package.json",

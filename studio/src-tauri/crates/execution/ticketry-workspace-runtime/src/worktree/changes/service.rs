@@ -1,5 +1,7 @@
 use chrono::{SecondsFormat, Utc};
-use sea_orm::{ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, QueryFilter, QueryOrder};
+use sea_orm::{
+    ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, QueryFilter, QueryOrder,
+};
 use std::path::Path;
 
 use crate::worktree::status::{self, WorktreeStatusService};
@@ -185,19 +187,32 @@ async fn cache_terminal_verdict(
     url: &str,
     view: &PullRequestStatusView,
 ) -> Result<(), sea_orm::DbErr> {
-    let Some(task_id) = task_id else { return Ok(()); };
+    let Some(task_id) = task_id else {
+        return Ok(());
+    };
     let Some(record) = ship_record::Entity::find()
         .filter(ship_record::Column::TaskId.eq(task_id))
         .filter(ship_record::Column::PrUrl.eq(url))
         .order_by_desc(ship_record::Column::ActedAt)
         .one(database)
         .await?
-    else { return Ok(()); };
+    else {
+        return Ok(());
+    };
     let mut update: ship_record::ActiveModel = record.into();
-    update.pr_state = Set(Some(if view.state == "merged" { "merged" } else { "closed" }.to_owned()));
+    update.pr_state = Set(Some(
+        if view.state == "merged" {
+            "merged"
+        } else {
+            "closed"
+        }
+        .to_owned(),
+    ));
     update.pr_target_branch = Set(view.target_branch.clone());
     update.pr_head_commit = Set(view.head_commit.clone());
-    update.pr_refreshed_at = Set(Some(Utc::now().to_rfc3339_opts(SecondsFormat::Micros, false)));
+    update.pr_refreshed_at = Set(Some(
+        Utc::now().to_rfc3339_opts(SecondsFormat::Micros, false),
+    ));
     update.update(database).await.map(|_| ())
 }
 

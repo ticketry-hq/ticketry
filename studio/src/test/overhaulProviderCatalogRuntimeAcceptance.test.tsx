@@ -58,6 +58,20 @@ function payload(activated: readonly string[]) {
       },
       {
         __typename: "WorktrackerAgentmodel",
+        id: "m-astra",
+        provider: "p-codex",
+        name: "gpt-6-astra",
+        reasoning_levels: { __typename: "WorktrackerAgentmodelreasoninglevelConnection", nodes: [{ __typename: "WorktrackerAgentmodelreasoninglevel", id: 4, reasoning_level_id: "r-high" }] },
+      },
+      {
+        __typename: "WorktrackerAgentmodel",
+        id: "m-glm-flash",
+        provider: "p-codex",
+        name: "glm-5.3-flash",
+        reasoning_levels: { __typename: "WorktrackerAgentmodelreasoninglevelConnection", nodes: [] },
+      },
+      {
+        __typename: "WorktrackerAgentmodel",
         id: "m-gemini",
         provider: "p-gemini",
         name: "gemini-pro",
@@ -65,9 +79,11 @@ function payload(activated: readonly string[]) {
       },
     ],
     reasoning_levels: [{ __typename: "WorktrackerReasoninglevel", id: "r-high", name: "high" }],
+    codex_profiles: [],
     global_default: {
       __typename: "GlobalLaunchDefault",
       provider: activated.includes("gemini") ? "gemini" : "codex",
+      profile: null,
       model: activated.includes("gemini") ? "gemini-pro" : "gpt-5.6-luna",
       reasoning: "high",
     },
@@ -98,7 +114,9 @@ describe("provider catalogue desktop runtime acceptance", () => {
         operationName: string;
         variables: {
           activatedProviders?: string[];
+          codexProfiles?: string[];
           defaultProvider?: string | null;
+          defaultProfile?: string | null;
           defaultModel?: string | null;
           defaultReasoning?: string | null;
         };
@@ -110,7 +128,9 @@ describe("provider catalogue desktop runtime acceptance", () => {
       expect(request.operationName).toBe("UpdateProviderCatalog");
       expect(request.variables).toEqual({
         activatedProviders: ["claude", "codex", "gemini"],
+        codexProfiles: [],
         defaultProvider: "gemini",
+        defaultProfile: null,
         defaultModel: "gemini-pro",
         defaultReasoning: "high",
       });
@@ -139,6 +159,8 @@ describe("provider catalogue desktop runtime acceptance", () => {
     );
 
     const region = await screen.findByRole("region", { name: "Model configuration" });
+    expect(region.querySelector('option[value="gpt-6-astra"]')).toBeInTheDocument();
+    expect(region.querySelector('option[value="glm-5.3-flash"]')).toBeInTheDocument();
     await waitFor(() => {
       expect(screen.getByRole("status", { name: "Launch picker providers" }))
         .toHaveTextContent("claude,codex");

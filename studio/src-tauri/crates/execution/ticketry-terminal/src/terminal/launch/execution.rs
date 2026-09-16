@@ -25,7 +25,12 @@ impl TerminalLaunchService {
             "agentRunId": material.agent_run_id,
             "effectId": material.effect_id,
         });
-        let _ = log.record("terminal", "info", "launch-execution-started", details.clone());
+        let _ = log.record(
+            "terminal",
+            "info",
+            "launch-execution-started",
+            details.clone(),
+        );
         let result = self.execute_inner(material).await;
         details["elapsedMs"] = json!(started.elapsed().as_millis());
         let level = match &result {

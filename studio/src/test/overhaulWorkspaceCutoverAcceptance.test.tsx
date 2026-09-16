@@ -10,7 +10,12 @@ import {
 } from "../features/documents";
 import { requestWorktreeCreate, newOperationId } from "../features/agents/worktrees/internal/createTransport";
 import { requestWorktreeDiscard } from "../features/agents/worktrees/internal/discardTransport";
-import { readWorktreeStatus } from "../features/agents/worktrees/internal/statusTransport";
+import {
+  adaptWorktreeStatus,
+  type WorktreeStatusPayload,
+} from "../features/agents/worktrees/internal/statusTransport";
+import { WorktreeStatusDocument } from "../features/agents/worktrees/generated/worktreeStatus.documents";
+import { studioApolloClient } from "../shared/apollo/client";
 import { createDesktopRuntime } from "../runtime/desktopRuntime";
 import { initializeStudioRuntime } from "../runtime";
 
@@ -184,14 +189,27 @@ describe("workspace cutover desktop runtime acceptance", () => {
         operationId: newSaveOperationId(),
       }),
     ).resolves.toMatchObject({ saved: true, stale: false });
-    await expect(readWorktreeStatus(TASK, { moduleId: MODULE })).resolves.toMatchObject({
-      kind: "worktree",
-    });
+    // The block's own read path: the same client and document `WorktreeBlock`
+    // issues through Apollo, driven imperatively so this gate can observe it.
     await expect(
-      requestWorktreeCreate(TASK, newOperationId(), { moduleId: MODULE, ticketSeq: 766 }),
+      studioApolloClient()
+        .query({
+          query: WorktreeStatusDocument,
+          variables: { taskId: TASK },
+          fetchPolicy: "network-only",
+        })
+        .then(({ data }) => {
+          if (!data) throw new Error("Worktree status returned no data.");
+          return adaptWorktreeStatus(
+            data.worktree_status as WorktreeStatusPayload,
+          );
+        }),
+    ).resolves.toMatchObject({ kind: "worktree" });
+    await expect(
+      requestWorktreeCreate(TASK, newOperationId()),
     ).resolves.toMatchObject({ kind: "worktree", branch: liveWorktree.branch });
     await expect(
-      requestWorktreeDiscard(TASK, newOperationId(), { moduleId: MODULE }),
+      requestWorktreeDiscard(TASK, newOperationId()),
     ).resolves.toMatchObject({ removed: true });
     // Every capability answered, and each one answered through GraphQL.
     expect(operations).toEqual([

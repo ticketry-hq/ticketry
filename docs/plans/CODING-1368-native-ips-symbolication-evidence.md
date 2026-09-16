@@ -1,15 +1,15 @@
 # CODING-1368 native `.ips` verification evidence
 
-Date: 2026-08-31
+Initial investigation: 2026-08-31
 
 Host: macOS 26.2 (25C56), arm64
-Source HEAD: `f58a3cbece07487c9253c2c84e5c90142d6aa417`
+Initial source HEAD: `f58a3cbece07487c9253c2c84e5c90142d6aa417`
 
 ## Result
 
-The automated collector seam passes. The required release-build `kill -SEGV`
-check does not pass yet, so this record must not be used to mark the manual
-acceptance item complete.
+The clean reproducible verification on 2026-09-05 passes the native `.ips`
+collection and function-name symbolication criteria. Earlier failed and
+uncommitted-snapshot attempts remain below as historical investigation.
 
 ## Automated collector seam
 
@@ -95,7 +95,7 @@ Then rerun the release check and add the source `.ips`, copied `.ips`, sidecar,
 binary UUID and hash, and named-frame excerpt to this record. Do not commit the
 full `.ips` because it can contain host details and local paths.
 
-## Resolution: why no `.ips` exists, and the crash it was hiding
+## Historical investigation: why no `.ips` existed, and the crash it hid
 
 Date: 2026-08-31 (later the same day)
 
@@ -170,12 +170,301 @@ Two defects were fixed:
   because the process leaves through that event. This also restores the
   `disable_resize_callback` step the old teardown omitted.
 
-`diagnostics/native_minidump_report.rs` (new) now copies a matching Breakpad
-envelope into the Crash Report and records `"libghostty native crash"` as the
-dirty exit reason, so this class of death is attributable without hand-decoding
-a minidump.
+A temporary `diagnostics/native_minidump_report.rs` fallback copied a matching
+Breakpad envelope into the Crash Report and recorded `"libghostty native crash"`
+as the dirty exit reason. It was removed on 2026-09-05 because the envelope
+contains a minidump with raw process memory, which the OS-native crash-report
+ADR rejects for privacy reasons.
 
-The manual `kill -SEGV` acceptance item remains open, and Breakpad's ownership
-of the exception ports is why: an external fatal signal on a release build
-cannot produce a macOS `.ips`. That item needs restating against Breakpad's
-envelope rather than against `~/Library/Logs/DiagnosticReports`.
+At that point, the manual `kill -SEGV` acceptance item remained open because
+Breakpad's exception-port ownership prevented an external fatal signal from
+producing a macOS `.ips` in the release build.
+
+## Current-HEAD verification, 2026-09-05
+
+Source HEAD: `445adcf84faf3a7a814bb7b29f6b60ed937094a6`
+
+The post-crate-split collector command is:
+
+```bash
+cargo test --locked --manifest-path studio/src-tauri/Cargo.toml \
+  -p ticketry-diagnostics crash_report::tests
+```
+
+Result on the integrated working tree after CODING-1365 returned to Review:
+15 passed, 0 failed. The collector copied a matching report, rejected foreign
+and out-of-window reports, and produced the marker-only sidecar when no report
+matched.
+
+A disposable clean-HEAD checkout built the unsigned arm64 application bundle.
+DMG creation still failed after the app and optimized binary were complete.
+The binary had UUID `C58BA758-99AE-3FA0-8529-138C66FF3DBD` and SHA-256
+`fb68f6aeb24b13d86202a7dc1df9bfed0d9639cb96663ba57ebd1dabdbec5b79`.
+
+The isolated release process, PID `43686`, wrote its Session Marker and reached
+runnable state. `kill -SEGV 43686` did not terminate it after more than two
+minutes. After rechecking the exact PID and binary path, the process was ended
+with `kill -KILL` so the marker-only relaunch path could be checked. Relaunch
+produced:
+
+```text
+/private/tmp/ticketry-coding-1368.UXw1V4/runtime.92HOBn/data/crash-reports/
+  crash-report-20260904T194530.302Z-22eb0e63ae764dc7aea02e809c237b90/
+```
+
+Its sidecar recorded `"native_report": "no native report found"`; it contained
+no copied `.ips` and no Breakpad envelope. Three `.ips` files created during the
+window belonged to `ticketry_diagnostics` test binaries with a different PID
+and image UUID, and the collector correctly ignored them. `nm`/`atos` confirmed
+the release binary retains function names, but there is still no collected
+release `.ips` in which to verify Ticketry frames.
+
+At this checkpoint, the manual `.ips` item remained open and the Breakpad
+fallback still conflicted with the ADR. The clean verification at the end of
+this record resolves both findings.
+
+## Historical uncommitted-snapshot verification, 2026-09-05
+
+This run proved the runtime behavior, but not clean source provenance. Its
+checkout was at `445adcf84faf3a7a814bb7b29f6b60ed937094a6` while the reviewed
+release-manifest and no-libghostty changes were uncommitted. The sidecar
+therefore stamped a commit that did not contain the built source changes. The
+details below remain as a historical observation and are not the acceptance
+proof.
+
+The shipping release no longer enables `native-libghostty`. The optimized
+arm64 application build completed with binary UUID
+`94E4F955-774B-3F41-A7A2-8BD86029BF07` and SHA-256
+`9b3635915a52542c83b273d913a2541c97cebc4475c3d6983b4b2d75c63d8a6b`.
+The binary contains no libghostty, Sentry, or Breakpad symbols, leaving native
+crash reporting to macOS as required by the ADR.
+
+A fresh isolated run used PID `18522` and data directory
+`/private/tmp/ticketry-coding-1368-fresh.UOXI9v/data`. Rust 1.95 installs a
+one-shot SIGSEGV/SIGBUS handler for stack-overflow diagnosis. A synthetic
+`kill -SEGV` has no fault address, so the first signal makes that handler
+restore the default disposition and return. The second `kill -SEGV` then
+terminated the process without a debugger. A real invalid-memory fault retries
+the faulting instruction after the handler returns and therefore reaches the
+default disposition without needing a second fault.
+
+macOS wrote:
+
+```text
+/Users/karthik/Library/Logs/DiagnosticReports/
+  ticketry-2026-09-05-015509.ips
+```
+
+Relaunch copied it into:
+
+```text
+/private/tmp/ticketry-coding-1368-fresh.UOXI9v/data/crash-reports/
+  crash-report-20260904T202543.729Z-8ffb56ddc9fb49dda8a303790cd320ce/
+```
+
+The source and copied `.ips` both have SHA-256
+`b186deb05ee4b192aea480227118ad2a44aab9bd9bd5e5bd96fa5c4474dabea4`.
+The sidecar references the copied filename and records app version `0.2.0`,
+commit `445adcf84faf3a7a814bb7b29f6b60ed937094a6`, and the matching image UUID.
+The collected report contains function-named Ticketry frames, including:
+
+```text
+tao::platform_impl::platform::event_loop::EventLoop<T>::run
+ticketry_desktop::desktop::run::run
+muxed_studio_lib::run_with_file_logging
+ticketry::main
+```
+
+This run does not complete the manual acceptance item because its source stamp
+was not truthful. The two-signal sequence is specific to synthetic SIGSEGV
+under Rust's stack-overflow handler; it is not additional product crash
+machinery.
+
+## Review finding resolution, 2026-09-05
+
+An immediate relaunch now leaves a marker-only Crash Report eligible for a
+detached retry after macOS publishes its delayed `.ips`. The retry updates the
+sidecar atomically and removes a copied report if that update fails.
+
+Canonical development, release, smoke, desktop-agent, and packaged-update
+builds no longer prepare, enable, or bundle native libghostty. The retained
+feature and preparation command are explicit non-shipping migration tools.
+
+Release builds now reject dirty source trees, malformed explicit commit IDs,
+and explicit commit IDs that differ from `HEAD`. Provenance logic and its tests
+live in the focused `release-provenance.mjs` module.
+
+Integrated checks passed: `ticketry-diagnostics` 67/67, release and packaged
+update scripts 45/45, desktop development scripts 21/21, desktop shell contract
+20/20, and the Rust public API boundary contract 1/1.
+
+## Delayed-report retry follow-up, 2026-09-05
+
+Desktop startup now only schedules native-report retry work. The worker owns
+the initial pending-report scan, the delayed second scan, and atomic sidecar
+repair. Those concerns live in the private `native_report_retry.rs` module;
+the crate root still exports only the existing collector entry point.
+
+A FIFO-backed seam test proves that `collect_dirty_shutdown` returns while a
+pending sidecar read is blocked. Delayed and native-report collection cases now
+live outside the general collector test file. The integrated
+`ticketry-diagnostics` suite passed 70/70; crash-report metadata and the Rust
+public API boundary contracts each passed 1/1.
+
+## Clean compiler-provenance and `.ips` verification, 2026-09-05
+
+The final proof was repeated from local branch `coding-1368-clean-proof` at
+commit `c13698f3dae8252e1cc87920c302c98e5281acb4`. The branch contains the
+reviewed CODING-1368 changes on `d3f16cf4110343cfbcacdf1804086eb17fc3aa18`
+and one test-only TypeScript inference fix required to build that clean base;
+it does not contain the unrelated dirty-worktree changes. `git status
+--porcelain --untracked-files=normal` was empty before the build.
+
+Toolchain: Rust 1.95.0 (`59807616e`, 2026-04-14), Node 26.7.0. Command:
+
+```bash
+npm run release:build --workspace @worktracker/studio -- \
+  --target macos-aarch64 --allow-unsigned
+```
+
+The optimized app and DMG completed. The staged binary was
+`studio/release-output/0.2.0/macos-aarch64/Ticketry.app/Contents/MacOS/ticketry`:
+
+```text
+UUID: 0B335134-A926-30A0-981A-B8F2D272BC3A (arm64)
+SHA-256: ca7f753525884bf01a0bb102c092f418480221d51b2ef67eb30539a7853de8d2
+```
+
+`nm` found no Breakpad, Sentry backend, or `ghostty_init` symbol. The clean
+snapshot passed the release scripts 136/136, `ticketry-diagnostics` 60/60, the
+crash-report metadata contract 1/1, and the public API boundary contract 1/1.
+
+An isolated launch used PID `90754`, data directory
+`/private/tmp/ticketry-coding-1368-clean.0wEgGe/runtime/data`, and Session
+Marker commit `c13698f3dae8252e1cc87920c302c98e5281acb4`. Rust's one-shot
+stack-overflow handler consumed the first synthetic SIGSEGV; the second
+terminated the process. macOS recorded `EXC_CRASH` / `SIGSEGV`, termination
+signal 11, for PID `90754` and bundle `com.ticketry.desktop` in:
+
+```text
+~/Library/Logs/DiagnosticReports/ticketry-2026-09-05-034241.ips
+```
+
+Immediate relaunch copied that report into:
+
+```text
+/private/tmp/ticketry-coding-1368-clean.0wEgGe/runtime/data/crash-reports/
+  crash-report-20260904T221249.858Z-743dc514e67b488eafb8a7b77424529e/
+```
+
+The sidecar references `ticketry-2026-09-05-034241.ips` and records commit
+`c13698f3dae8252e1cc87920c302c98e5281acb4`. Source and copy compared equal;
+both have SHA-256
+`02e00de0ce19a159675ba3dc4f2140ee440b5c173226c44ff1926624c997a3e2`.
+The report's Ticketry image UUID is
+`0b335134-a926-30a0-981a-b8f2d272bc3a`, matching the release binary, and its
+Ticketry-image frames include:
+
+```text
+tao::platform_impl::platform::event_loop::EventLoop<T>::run
+ticketry_desktop::desktop::run::run
+muxed_studio_lib::run_with_file_logging
+ticketry::main
+```
+
+The relaunch then exited normally and removed its Session Marker. This replaces
+the earlier dirty-build proof and completes the literal collected-`.ips` and
+function-name symbolication acceptance criterion.
+
+## Supplemental clean direct-binary retry verification, 2026-09-05
+
+Before the final bundled-app proof above, a disposable clone of base HEAD
+`d3f16cf4110343cfbcacdf1804086eb17fc3aa18` received only the reviewed
+CODING-1368 collector, delayed-retry, OS-native-only release, and provenance
+changes. Those changes were committed as:
+
+```text
+292a35f8041c0b2961ffbcdb16cefca0535721f3
+```
+
+`git status --porcelain --untracked-files=normal` was empty before the build.
+The source clone remains at
+`/private/tmp/ticketry-coding-1368-clean.EbhgAd/source`. A Git bundle that
+preserves the exact source commit is at:
+
+```text
+/private/tmp/ticketry-coding-1368-clean-proof.qFmECT/
+  source-292a35f8041c0b2961ffbcdb16cefca0535721f3.bundle
+```
+
+The ordinary release wrapper prepared the pinned ghostty-vt WASM, then stopped
+before Cargo on an unrelated pre-existing TypeScript fixture error. CODING-1487
+has since removed that prepare step, so a rerun today does not build ghostty-vt.
+No fixture change was added to the clean source. The native verification instead used the
+direct Rust/Tauri release boundary. The first command supplies Tauri's declared
+external hook binary; the second builds the optimized shipping binary and runs
+the release-only provenance check in `build.rs`:
+
+```bash
+rustc studio/src-tauri/native/ticketry_hook.rs \
+  --edition 2021 --target aarch64-apple-darwin -O \
+  -o studio/src-tauri/binaries/ticketry-hook-aarch64-apple-darwin
+cargo build --locked --manifest-path studio/src-tauri/Cargo.toml \
+  --release --bin ticketry
+```
+
+The build completed successfully. Its `build.rs` output set
+`TICKETRY_COMMIT=292a35f8041c0b2961ffbcdb16cefca0535721f3`. The arm64 Mach-O has
+UUID `7F8EBE45-47BE-30E4-A0E3-9E999A9E3C82` and SHA-256
+`71c86ab901cf373169307b849095dec38810843017ee5734414faa16fb0e6010`.
+`nm` found no Breakpad, Sentry, libghostty, `ghostty_init`, or native Ghostty
+surface symbols. The preserved binary is:
+
+```text
+/private/tmp/ticketry-coding-1368-clean-proof.qFmECT/
+  ticketry-292a35f8041c0b2961ffbcdb16cefca0535721f3
+```
+
+The first isolated run used PID `76400` and data directory
+`/private/tmp/ticketry-coding-1368-clean-proof.qFmECT/data`. Its Session Marker
+recorded app version `0.2.0`, the clean commit above, and session start
+`2026-09-04T22:06:16.212313Z`. The first synthetic `kill -SEGV 76400` was
+consumed by Rust's one-shot stack-overflow handler. The second exited with
+status 139.
+
+An immediate relaunch used PID `76828`. It first created this marker-only Crash
+Report with `"native_report": "no native report found"`:
+
+```text
+/private/tmp/ticketry-coding-1368-clean-proof.qFmECT/data/crash-reports/
+  crash-report-20260904T220708.776Z-fc8364b04ac64154b1f9dd86c1beda61/
+```
+
+macOS published the delayed source report at:
+
+```text
+/Users/karthik/Library/Logs/DiagnosticReports/
+  ticketry-2026-09-05-033721.ips
+```
+
+The detached retry copied it into the Crash Report above and atomically changed
+the sidecar reference to `ticketry-2026-09-05-033721.ips`. The source and copy
+are byte-identical and both have SHA-256
+`0c526efb4d83b59277522c2d70e7d291746b262a7c3b3fd87df06e614157f3c4`.
+The `.ips` records PID `76400`, process `ticketry`, capture time
+`2026-09-05 03:36:54.3676 +0530`, and image UUID
+`7F8EBE45-47BE-30E4-A0E3-9E999A9E3C82`, matching the built binary. The direct
+binary run has no bundle identifier, so the collector correctly matched its
+process identity. Its Ticketry image contains function-named frames including:
+
+```text
+tao::platform_impl::platform::event_loop::EventLoop<T>::run
+ticketry_desktop::desktop::run::run
+muxed_studio_lib::run_with_file_logging
+ticketry::main
+```
+
+The clean snapshot also passed `ticketry-diagnostics` 63/63 and the focused
+release/provenance script tests 29/29. This direct-binary run independently
+confirms delayed retry; the later bundled-app proof above is the authoritative
+release provenance and bundle-identity verification.

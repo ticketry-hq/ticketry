@@ -72,17 +72,15 @@ export function ChangesFileReview({
           <span>{files.length} files</span>
           <span>+{insertions} -{deletions}</span>
         </div>
-        <div className="max-h-64 overflow-auto">
-          <ChangedFilesList
-            files={files}
-            label={label}
-            descriptionPrefix={checkoutKey}
-            selectedPath={selectedPath}
-            onSelect={(path) => reviewSelection.setState((state) => ({
-              selectedByCheckout: { ...state.selectedByCheckout, [checkoutKey]: path },
-            }))}
-          />
-        </div>
+        <ChangedFilesList
+          files={files}
+          label={label}
+          descriptionPrefix={checkoutKey}
+          selectedPath={selectedPath}
+          onSelect={(path) => reviewSelection.setState((state) => ({
+            selectedByCheckout: { ...state.selectedByCheckout, [checkoutKey]: path },
+          }))}
+        />
         {truncated ? <p className="mt-2 text-xs text-lifecycle-attention" role="status">The changed-file limit was reached.</p> : null}
       </div>
       <section aria-label="Selected file diff" className="flex min-h-32 min-w-0 flex-col overflow-hidden border border-pane-border p-3 lg:min-h-0">

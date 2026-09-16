@@ -116,7 +116,6 @@ describe("toast viewport outside selected native Ghostty acceptance", () => {
         <NativeGhosttyTerminal
           sessionId="session-toast"
           owner="studio"
-          webviewSiblingSpike
         />
         <div data-studio-status-bar />
         <ToastHost />

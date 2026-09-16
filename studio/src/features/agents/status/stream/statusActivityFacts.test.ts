@@ -56,6 +56,7 @@ describe("durable terminal activity facts", () => {
         state: "working",
         effective_state: "working",
         updated_at: "2026-08-15T12:00:00.000Z",
+        provider_session_id: null,
         output_sequence: 2,
         last_output_at: "2026-08-15T12:01:00.000Z",
       },

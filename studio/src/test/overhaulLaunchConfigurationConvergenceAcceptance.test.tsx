@@ -25,13 +25,14 @@ function catalog(): WorkTrackerProjectOpenQuery {
   const reviewId = "88888888888888888888888888888888";
   fixture.states.nodes.push({ ...fixture.states.nodes[0], id: reviewId, name: "Review", sort_order: 1 });
   const implementation = fixture.issue_types.nodes[0];
-  implementation.transitions.nodes = [{
-    id: 12,
+  const transition = {
+    __typename: "WorktrackerIssuetypetransition", id: 12,
     issue_type: ISSUE_TYPE_ID, from_state: STATE_ID, to_state: reviewId,
     agent_allowed: true, handoff: false,
-    fromState: { id: STATE_ID, sort_order: 0 },
-    toState: { id: reviewId, sort_order: 1 },
-  }];
+    fromState: { __typename: "WorktrackerState", id: STATE_ID, sort_order: 0 },
+    toState: { __typename: "WorktrackerState", id: reviewId, sort_order: 1 },
+  };
+  implementation.transitions.nodes = [transition];
   const story = structuredClone(implementation);
   story.id = storyId;
   story.name = "Story";
@@ -68,7 +69,7 @@ async function prepare(fixture: WorkTrackerProjectOpenQuery) {
 
 afterEach(() => initializeStudioRuntime(createBrowserRuntime({ environment: {} })));
 
-it("[overhaul-246] keeps launch policy canonical through optimistic writes, reopening, and refresh", async () => {
+it("[overhaul-246] [overhaul-262] [overhaul-263] keeps launch policy canonical through optimistic writes, reopening, and refresh", async () => {
   const fixture = catalog();
   await prepare(fixture);
   const cache = studioApolloClient().cache;

@@ -7,7 +7,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut arguments = std::env::args().skip(1);
     let agent_run_id = arguments.next().ok_or("agent_run_id required")?;
     let token = arguments.next().unwrap_or_else(|| "dev-grant".to_owned());
-    let database = sea_orm::Database::connect("sqlite:/Users/karthik/.config/ticketry/state.db").await?;
+    let database =
+        sea_orm::Database::connect("sqlite:/Users/karthik/.config/ticketry/state.db").await?;
     let authority = RunAuthority::persistent(
         database,
         std::path::Path::new("/Users/karthik/.config/ticketry"),

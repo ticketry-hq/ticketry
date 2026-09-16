@@ -5,7 +5,6 @@ import { fileURLToPath } from "node:url";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const supportedEnvironment = new Set([
   "MUXED_DATA_DIR",
-  "MUXED_DESKTOP_MCP_PORT",
   "MUXED_FRONTEND_PORT",
   "MUXED_TMUX_SOCKET",
   "TICKETRY_GRAPHQL_ADAPTER_PORT",

@@ -14,7 +14,7 @@ export const CONFIGURABLE_PROVIDERS: readonly ConfigurableProvider[] = [
 ];
 
 export interface LaunchBindingValidationError {
-  field: "agent" | "model" | "reasoning";
+  field: "agent" | "profile" | "model" | "reasoning";
   message: string;
 }
 
@@ -71,8 +71,9 @@ export function validateLaunchBindingOptions(
   const agent = text(binding.agent);
   const model = text(binding.model);
   const reasoning = text(binding.reasoning);
+  const profile = text(binding.profile);
   if (!agent) {
-    return model || reasoning ? {
+    return profile || model || reasoning ? {
       field: "agent",
       message: "Choose an agent/provider before configuring model or reasoning.",
     } : null;
@@ -81,6 +82,12 @@ export function validateLaunchBindingOptions(
   const capability = capabilities.find((candidate) => candidate.agent === agent);
   if (!capability) {
     return { field: "agent", message: unavailableProviderMessage(agent) };
+  }
+  if (profile && agent !== "codex") {
+    return { field: "profile", message: "Only Codex supports launch profiles." };
+  }
+  if (profile && (model || reasoning)) {
+    return { field: "profile", message: "A Codex profile cannot be combined with model or reasoning overrides." };
   }
   if (
     model &&

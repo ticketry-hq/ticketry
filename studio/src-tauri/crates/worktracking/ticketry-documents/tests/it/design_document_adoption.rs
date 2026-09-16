@@ -17,8 +17,18 @@ async fn fixture(path: &Path) {
     let database = Database::connect(format!("sqlite:{}?mode=rwc", path.display()))
         .await
         .unwrap();
-    database.execute_unprepared(include_str!("../../../../execution/ticketry-installation/src/adoption/provisioning.v1.sql")).await.unwrap();
-    database.execute_unprepared(include_str!("../../../../execution/ticketry-installation/src/adoption/provisioning-ledger.v1.sql")).await.unwrap();
+    database
+        .execute_unprepared(include_str!(
+            "../../../../execution/ticketry-installation/src/adoption/provisioning.v1.sql"
+        ))
+        .await
+        .unwrap();
+    database
+        .execute_unprepared(include_str!(
+            "../../../../execution/ticketry-installation/src/adoption/provisioning-ledger.v1.sql"
+        ))
+        .await
+        .unwrap();
     database.execute_unprepared("INSERT INTO design_documents (id,module_id,task_id,scope,root_dir,rel_path,discovered_by_run_id,created_at,updated_at) VALUES ('00000000000000000000000000000258','00000000000000000000000000000259','0000000000000000000000000000025a','task','/modules/ticketry/spec/rusting--cf2de16d/T755--adopt-design-document-metadata-with-safe','SPEC.md','run-documents-fixture','2026-01-01T00:00:00+00:00','2026-01-02T00:00:00+00:00'),('0000000000000000000000000000025b','00000000000000000000000000000259','00000000-0000-0000-0000-000000000000','plan','/modules/ticketry/spec/planning--3f2a','nested/Design.HTML',NULL,'2026-01-03T00:00:00+00:00','2026-01-03T00:00:00+00:00')").await.unwrap();
     database.close().await.unwrap();
 }

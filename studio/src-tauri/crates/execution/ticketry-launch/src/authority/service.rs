@@ -1,5 +1,7 @@
 use async_trait::async_trait;
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
+use std::path::Path;
+use ticketry_provider::{DirectoryTrustContext, DirectoryTrustInspection};
 
 use crate::paths::LaunchPathsService;
 use crate::planning::{
@@ -12,7 +14,7 @@ use ticketry_work_management::launch_policy::{
     CallerScope, LaunchPolicyRequest, LaunchPolicyResolver,
 };
 
-use super::error::LaunchAuthorityError;
+use super::error::{LaunchAuthorityError, LaunchAuthorityErrorCode};
 use super::facts;
 use super::material::ResolvedLaunchMaterial;
 use super::sources::{
@@ -96,11 +98,77 @@ impl InteractiveLaunchAuthority for LaunchAuthorityService {
                 material.reasoning = None;
             }
         }
+        self.require_worktree_trust(request, material.provider.as_deref())
+            .await?;
         Ok(material)
     }
 }
 
 impl LaunchAuthorityService {
+    async fn require_worktree_trust(
+        &self,
+        request: &CreateTerminalSession,
+        provider: Option<&str>,
+    ) -> Result<(), LaunchAuthorityError> {
+        if !matches!(
+            request.kind,
+            TerminalLaunchKind::Task | TerminalLaunchKind::Automation
+        ) {
+            return Ok(());
+        }
+        let paths = launch_paths(&self.paths, request).await?;
+        if !paths.worktree.used {
+            return Ok(());
+        }
+        let directory = paths.working_directory.as_deref().ok_or_else(|| {
+            LaunchAuthorityError::unresolvable(
+                "The selected Worktree has no working directory to inspect for provider trust.",
+            )
+        })?;
+        let provider = Provider::try_from(provider.unwrap_or_default())
+            .map_err(|error| LaunchAuthorityError::unresolvable(error.to_string()))?;
+        if provider == Provider::Agy {
+            return Ok(());
+        }
+        let (code, message) = match ticketry_provider::provider_contract(provider)
+            .inspect_directory_trust(DirectoryTrustContext {
+                directory: Path::new(directory),
+                trust_file: None,
+            }) {
+            DirectoryTrustInspection::Trusted => return Ok(()),
+            DirectoryTrustInspection::ApprovalRequired(_) => (
+                "approval_required",
+                format!(
+                    "Approve {} trust for {directory} in Worktree details, then retry.",
+                    provider.slug(),
+                ),
+            ),
+            DirectoryTrustInspection::Denied => (
+                "denied",
+                format!(
+                    "{} denies trust for {directory}. Change it in the provider, then retry.",
+                    provider.slug(),
+                ),
+            ),
+            DirectoryTrustInspection::Unsupported => (
+                "unsupported",
+                format!("{} cannot persist trust for {directory}.", provider.slug()),
+            ),
+            DirectoryTrustInspection::Failed(failure) => (
+                "failed",
+                format!(
+                    "Could not inspect {} trust for {directory}: {}",
+                    provider.slug(),
+                    failure.message,
+                ),
+            ),
+        };
+        Err(LaunchAuthorityError::new(
+            LaunchAuthorityErrorCode::PolicyRejected,
+            format!("worktree_trust_{code}: {message}"),
+        ))
+    }
+
     /// A task launch takes its model, reasoning, and skills from the Work
     /// Item's launch binding. Only automation receives the binding's workflow
     /// prompt; a manual picker launch starts from the factual ticket context.

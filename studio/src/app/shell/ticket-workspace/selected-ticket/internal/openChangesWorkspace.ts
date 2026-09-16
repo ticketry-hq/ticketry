@@ -1,7 +1,7 @@
 import { TEMP_TASK_ID } from "../../../../../features/agents/types";
 import { scratchBucketId } from "../../../../../features/agents/terminal";
 import { useClientStore } from "../../../../../state/clientStore";
-import { rememberStudioWorkspaceTarget } from "./studioWorkspaceTarget";
+import { rememberStudioWorkspaceTarget } from "../../../../../features/workspace-state/studioWorkspaceTarget";
 
 export function openModuleChangesWorkspace(moduleId: string): void {
   const bucket = scratchBucketId(moduleId);

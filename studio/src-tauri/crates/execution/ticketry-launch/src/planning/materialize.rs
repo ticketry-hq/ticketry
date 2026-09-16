@@ -1,8 +1,12 @@
-use serde_json::{json, Map, Value};
+use serde_json::{json, Value};
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
+use ticketry_provider::{
+    LaunchConstructionRequest, ProviderError, ProviderErrorCode, ProviderLaunchKind,
+    ProviderOptions as SharedProviderOptions,
+};
 
-use super::provider::{provider_contract, validate_options};
+use super::provider::provider_contract;
 use ticketry_diagnostics as trace;
 
 use super::types::LAUNCH_MATERIAL_VERSION;
@@ -23,6 +27,7 @@ pub struct ExecutionAuthority {
     mcp_data_directory: PathBuf,
     mcp_authorization: String,
     available_skills: BTreeSet<String>,
+    registered_profiles: Vec<String>,
 }
 
 impl std::fmt::Debug for ExecutionAuthority {
@@ -41,6 +46,7 @@ impl ExecutionAuthority {
         mcp_data_directory: PathBuf,
         mcp_authorization: String,
         available_skills: BTreeSet<String>,
+        registered_profiles: Vec<String>,
     ) -> Self {
         Self {
             executable,
@@ -50,6 +56,7 @@ impl ExecutionAuthority {
             mcp_data_directory,
             mcp_authorization,
             available_skills,
+            registered_profiles,
         }
     }
 }
@@ -99,7 +106,32 @@ fn materialize_inner(
             ),
         ));
     }
-    validate_options(durable.provider, &durable.options)?;
+    let hook = hook_command(durable.provider, &durable.agent_run_id, authority);
+    let launch_kind = match &durable.kind {
+        LaunchKind::Resume {
+            provider_session_id,
+        } => ProviderLaunchKind::Resume {
+            provider_session_id,
+        },
+        _ => ProviderLaunchKind::Fresh,
+    };
+    let launch = ticketry_provider::provider_contract(durable.provider)
+        .construct_launch(&LaunchConstructionRequest {
+            executable: &authority.executable,
+            working_directory: &authority.working_directory,
+            kind: launch_kind,
+            agent_run_id: &durable.agent_run_id,
+            prompt: durable.prompt.as_deref(),
+            options: SharedProviderOptions {
+                profile: durable.options.profile.as_deref(),
+                model: durable.options.model.as_deref(),
+                effort: durable.options.reasoning.as_deref(),
+            },
+            registered_profiles: &authority.registered_profiles,
+            hook_command: &hook,
+            mcp_server: mcp_server(durable.provider, &durable.agent_run_id, authority),
+        })
+        .map_err(map_provider_error)?;
     trace::admitted(trace::PROVIDER_VALIDATED)
         .with("providerSlug", provider_contract(durable.provider).slug)
         .record();
@@ -113,49 +145,6 @@ fn materialize_inner(
         }
     }
 
-    let mut argv = provider_argv(durable, &authority.executable)?;
-    let hook = hook_command(durable.provider, &durable.agent_run_id, authority);
-    let settings = provider_settings(durable.provider, &durable.agent_run_id, &hook, authority);
-    let runtime_settings = match durable.provider {
-        Provider::Claude => {
-            let mcp = json!({"mcpServers": {"ticketry": mcp_server(
-                durable.provider, &durable.agent_run_id, authority
-            )}});
-            argv.splice(
-                1..1,
-                [
-                    "--settings".to_owned(),
-                    compact_json(&settings),
-                    "--mcp-config".to_owned(),
-                    compact_json(&mcp),
-                ],
-            );
-            None
-        }
-        Provider::Codex => {
-            let hooks = toml_inline(&settings["hooks"]);
-            let mcp = toml_inline(&json!({"ticketry": mcp_server(
-                durable.provider, &durable.agent_run_id, authority
-            )}));
-            let injected = [
-                "-c".to_owned(),
-                format!("hooks={hooks}"),
-                "-c".to_owned(),
-                format!("mcp_servers={mcp}"),
-                "-c".to_owned(),
-                "approvals_reviewer=\"auto_review\"".to_owned(),
-                "--dangerously-bypass-hook-trust".to_owned(),
-            ];
-            let offset = usize::from(matches!(durable.kind, LaunchKind::Resume { .. }));
-            argv.splice(1 + offset..1 + offset, injected);
-            None
-        }
-        Provider::Gemini | Provider::Agy => Some(RuntimeSettings {
-            environment_name: "GEMINI_CLI_SYSTEM_SETTINGS_PATH",
-            contents: settings,
-        }),
-    };
-
     let environment = BTreeMap::from([
         ("COLORTERM".to_owned(), "truecolor".to_owned()),
         ("FORCE_COLOR".to_owned(), "1".to_owned()),
@@ -165,11 +154,29 @@ fn materialize_inner(
         ),
     ]);
     Ok(MaterializedLaunch {
-        argv,
-        working_directory: authority.working_directory.clone(),
+        argv: launch.argv,
+        working_directory: launch.working_directory,
         environment,
-        settings: runtime_settings,
+        settings: launch.settings.map(|settings| RuntimeSettings {
+            environment_name: settings.environment_name,
+            contents: settings.contents,
+        }),
     })
+}
+
+fn map_provider_error(error: ProviderError) -> LaunchPlanningError {
+    let code = match error.code {
+        ProviderErrorCode::UnknownProvider => LaunchPlanningErrorCode::UnknownProvider,
+        ProviderErrorCode::UnsupportedEffort => LaunchPlanningErrorCode::UnsupportedReasoning,
+        ProviderErrorCode::InvalidResumeIdentity => LaunchPlanningErrorCode::InvalidResumeIdentity,
+        ProviderErrorCode::InvalidLaunchInput => LaunchPlanningErrorCode::InvalidExecutionAuthority,
+        ProviderErrorCode::UnsupportedProfile
+        | ProviderErrorCode::InvalidProfile
+        | ProviderErrorCode::UnregisteredProfile
+        | ProviderErrorCode::ProfileConflict
+        | ProviderErrorCode::UnsupportedModel => LaunchPlanningErrorCode::UnsupportedModel,
+    };
+    LaunchPlanningError::new(code, error.message)
 }
 
 fn validate_authority(
@@ -204,102 +211,6 @@ fn validate_authority(
     Ok(())
 }
 
-fn provider_argv(
-    durable: &DurableLaunchMaterial,
-    executable: &Path,
-) -> Result<Vec<String>, LaunchPlanningError> {
-    let binary = executable.to_string_lossy().into_owned();
-    if let LaunchKind::Resume {
-        provider_session_id,
-    } = &durable.kind
-    {
-        if provider_session_id.is_empty() {
-            return Err(LaunchPlanningError::new(
-                LaunchPlanningErrorCode::InvalidResumeIdentity,
-                "Provider session identity must be non-empty.",
-            ));
-        }
-        return Ok(match durable.provider {
-            Provider::Claude => vec![
-                binary,
-                "--permission-mode".into(),
-                "auto".into(),
-                "--resume".into(),
-                provider_session_id.clone(),
-            ],
-            Provider::Codex => [
-                vec![binary, "resume".into()],
-                durable
-                    .options
-                    .profile
-                    .as_ref()
-                    .map(|profile| vec!["--profile".to_owned(), profile.clone()])
-                    .unwrap_or_default(),
-                vec![provider_session_id.clone()],
-            ]
-            .concat(),
-            Provider::Gemini => vec![
-                binary,
-                "--skip-trust".into(),
-                "--approval-mode".into(),
-                "yolo".into(),
-                "--resume".into(),
-                provider_session_id.clone(),
-            ],
-            Provider::Agy => vec![
-                binary,
-                "--dangerously-skip-permissions".into(),
-                "--conversation".into(),
-                provider_session_id.clone(),
-            ],
-        });
-    }
-    let prompt = durable.prompt.clone().unwrap_or_default();
-    let mut options = Vec::new();
-    if let Some(profile) = &durable.options.profile {
-        options.extend(["--profile".to_owned(), profile.clone()]);
-    }
-    if let Some(model) = &durable.options.model {
-        options.extend(["--model".to_owned(), model.clone()]);
-    }
-    if let Some(reasoning) = &durable.options.reasoning {
-        match durable.provider {
-            Provider::Claude => options.extend(["--effort".to_owned(), reasoning.clone()]),
-            Provider::Codex => options.extend([
-                "-c".to_owned(),
-                format!("model_reasoning_effort=\"{reasoning}\""),
-            ]),
-            Provider::Gemini | Provider::Agy => unreachable!("validated above"),
-        }
-    }
-    Ok(match durable.provider {
-        Provider::Claude => [
-            vec![binary, "--permission-mode".into(), "auto".into()],
-            options,
-            vec![prompt],
-        ]
-        .concat(),
-        Provider::Codex => [vec![binary], options, vec![prompt]].concat(),
-        Provider::Gemini => [
-            vec![
-                binary,
-                "--skip-trust".into(),
-                "--approval-mode".into(),
-                "yolo".into(),
-            ],
-            options,
-            vec![prompt],
-        ]
-        .concat(),
-        Provider::Agy => [
-            vec![binary, "--dangerously-skip-permissions".into()],
-            options,
-            vec!["-i".into(), prompt],
-        ]
-        .concat(),
-    })
-}
-
 fn hook_command(provider: Provider, run_id: &str, authority: &ExecutionAuthority) -> String {
     let mut args = vec![
         authority.hook_runner.to_string_lossy().into_owned(),
@@ -317,36 +228,6 @@ fn hook_command(provider: Provider, run_id: &str, authority: &ExecutionAuthority
     shell_join(&args)
 }
 
-fn provider_settings(
-    provider: Provider,
-    run_id: &str,
-    hook: &str,
-    authority: &ExecutionAuthority,
-) -> Value {
-    let contract = provider_contract(provider);
-    let hook_entry = json!({
-        "hooks": [{"type": "command", "command": hook, "timeout": contract.hook_timeout}]
-    });
-    let hooks = contract
-        .hook_events
-        .iter()
-        .map(|event| ((*event).to_owned(), json!([hook_entry.clone()])))
-        .collect::<Map<_, _>>();
-    match provider {
-        Provider::Claude => json!({
-            "env": {
-                "MUXED_AGENT_RUN_ID": run_id,
-            },
-            "hooks": hooks,
-        }),
-        Provider::Codex => json!({"hooks": hooks}),
-        Provider::Gemini | Provider::Agy => json!({
-            "hooks": hooks,
-            "mcpServers": {"ticketry": mcp_server(provider, run_id, authority)},
-        }),
-    }
-}
-
 fn mcp_server(provider: Provider, run_id: &str, authority: &ExecutionAuthority) -> Value {
     let mut server = json!({
         "command": authority.hook_runner,
@@ -354,6 +235,7 @@ fn mcp_server(provider: Provider, run_id: &str, authority: &ExecutionAuthority) 
     });
     if provider == Provider::Codex {
         server["env_vars"] = json!(["TICKETRY_MCP_AUTHORIZATION"]);
+        server["required"] = json!(true);
     } else {
         server["env"] = json!({"TICKETRY_MCP_AUTHORIZATION": "${TICKETRY_MCP_AUTHORIZATION}"});
     }
@@ -361,33 +243,6 @@ fn mcp_server(provider: Provider, run_id: &str, authority: &ExecutionAuthority) 
         server["trust"] = json!(true);
     }
     server
-}
-
-fn compact_json(value: &Value) -> String {
-    serde_json::to_string(value).expect("provider settings are JSON")
-}
-
-fn toml_inline(value: &Value) -> String {
-    match value {
-        Value::Object(values) => format!(
-            "{{{}}}",
-            values
-                .iter()
-                .collect::<BTreeMap<_, _>>()
-                .into_iter()
-                .map(|(key, value)| format!("{key}={}", toml_inline(value)))
-                .collect::<Vec<_>>()
-                .join(",")
-        ),
-        Value::Array(values) => format!(
-            "[{}]",
-            values.iter().map(toml_inline).collect::<Vec<_>>().join(",")
-        ),
-        Value::Bool(value) => value.to_string(),
-        Value::Number(value) => value.to_string(),
-        Value::String(_) => compact_json(value).replace('\u{7f}', "\\u007f"),
-        Value::Null => "\"\"".to_owned(),
-    }
 }
 
 fn shell_join(arguments: &[String]) -> String {

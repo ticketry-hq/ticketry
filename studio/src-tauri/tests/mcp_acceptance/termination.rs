@@ -127,6 +127,46 @@ async fn ticket_run_cannot_terminate_before_reaching_a_configured_destination_st
 }
 
 #[tokio::test]
+async fn a_handoff_keeps_the_run_alive_for_its_queued_destination_prompt() {
+    let directory = tempfile::tempdir().unwrap();
+    prepare_command_database(&directory).await;
+    amend_fixture(
+        &directory,
+        "UPDATE agent_runs SET started_at = '2026-01-01T00:00:00Z' WHERE id = 'run-valid'; \
+         UPDATE worktracker_issuetypetransition SET handoff = 1 \
+         WHERE from_state_id = '40000000000000000000000000000003';",
+    )
+    .await;
+    let ownership = DataDirectoryGuard::acquire(directory.path()).unwrap();
+    let runtime = McpRuntime::start_for_test(
+        configuration(&directory),
+        &ownership,
+        Arc::new(MissingTerminalRuntime),
+    )
+    .await
+    .unwrap();
+    let authorization = runtime
+        .authority()
+        .issue("run-valid", allowed_provider_operations())
+        .await
+        .unwrap();
+    let mut client =
+        SocketClient::connect_run(runtime.socket_path(), "run-valid", &authorization).await;
+
+    move_run_ticket_to_validation(&mut client).await;
+    let continued = client
+        .structured(2, "terminate_current_run", json!({}))
+        .await;
+
+    assert_eq!(continued["ok"], true, "{continued}");
+    assert_eq!(continued["continued_by_handoff"], true, "{continued}");
+    assert_eq!(continued["termination_requested"], false, "{continued}");
+    assert_eq!(terminal_record(&directory).await, (None, 0));
+
+    runtime.shutdown().await;
+}
+
+#[tokio::test]
 async fn terminate_current_run_survives_an_mcp_listener_restart() {
     let directory = tempfile::tempdir().unwrap();
     prepare_command_database(&directory).await;

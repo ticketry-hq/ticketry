@@ -35,7 +35,7 @@ function requireDarwinArm64(manifest) {
 function buildPlan(version, publicKey, endpoint) {
   return {
     version,
-    features: ["native-libghostty", "desktop-acceptance"],
+    features: ["desktop-acceptance"],
     tauriConfig: {
       version,
       bundle: {

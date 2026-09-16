@@ -26,7 +26,13 @@ pub struct Model {
     #[seaography(ignore)]
     pub last_output_at: Option<String>,
     pub agent: Option<String>,
-    #[sea_orm(belongs_to, from = "agent_run_id", to = "id")]
+    #[sea_orm(
+        belongs_to,
+        relation_enum = "AgentRun",
+        relation_reverse = "TerminalSession",
+        from = "agent_run_id",
+        to = "id"
+    )]
     pub agent_run: BelongsTo<crate::runs::agent_run::Entity>,
 }
 

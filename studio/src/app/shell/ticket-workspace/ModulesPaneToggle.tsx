@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
 
 import { IconPanelLeft } from "../../../shared/ui/icons";
+import { KeyBadge } from "../../../shared/ui/KeyChordHint";
 import { useClientStore } from "../../../state/clientStore";
 import { formatChordSymbols } from "../../navigation/chordLabel";
 import { studioKeymapRegistry } from "../../navigation/keymapRegistry";
@@ -34,9 +35,7 @@ export function ModulesPaneToggle() {
       <IconPanelLeft size={14} />
       <span>Modules</span>
       {binding ? (
-        <span className="font-bold text-focus-accent">
-          {formatChordSymbols(binding.chord)}
-        </span>
+        <KeyBadge>{formatChordSymbols(binding.chord)}</KeyBadge>
       ) : null}
     </button>
   );

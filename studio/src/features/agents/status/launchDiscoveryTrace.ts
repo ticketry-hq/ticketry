@@ -100,7 +100,3 @@ export function recordLaunchDiscoveryForAgentRun(
 ): void {
   recorder.recordForAgentRun(event, projectId, agentRunId, details);
 }
-
-export function launchDiscoveryRendererInstance(): string {
-  return rendererInstance;
-}

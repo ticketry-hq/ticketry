@@ -116,7 +116,7 @@ function module(id: string, name: string, sequence_id: number): Module {
 }
 
 /** The two modules the project already had, in the server's answer order. */
-const EXISTING = [module("module-b", "Bravo", 2), module("module-a", "Alpha", 1)];
+const EXISTING = [module("module-a", "Alpha", 1), module("module-b", "Bravo", 2)];
 const CREATED = module(NEW_MODULE_ID, "Newest", 3);
 
 function project(manual_module_order: boolean): Project {
@@ -131,7 +131,7 @@ function project(manual_module_order: boolean): Project {
 
 /**
  * The Add Module modal mounted together with every Module surface it feeds.
- * Front placement is only real if the shared cached collection carries it, so
+ * Right placement is only real if the shared cached collection carries it, so
  * the sidebar and the Module tab strip are asserted from one render.
  */
 function ModuleCreationSurfaces() {
@@ -162,16 +162,15 @@ function tabStripOrder(): string[] {
 
 /**
  * Create "Newest" through the ordinary Add Module flow. The server answers the
- * follow-up collection read with the module in front, which is exactly what a
+ * follow-up collection read with the module at the end, which is exactly what a
  * project in either ordering mode returns after this create. `initialOrder` is
- * what the project shows before the create, so a case can seed activity that
- * already rearranged the existing modules.
+ * what the project shows before the create.
  */
 async function createNewestModule(initialOrder: string[]): Promise<void> {
   render(<ModuleCreationSurfaces />);
   await waitFor(() => expect(sidebarOrder()).toEqual(initialOrder));
 
-  api.listModules.mockResolvedValue([CREATED, ...EXISTING]);
+  api.listModules.mockResolvedValue([...EXISTING, CREATED]);
   fireEvent.change(await screen.findByPlaceholderText("Module name"), {
     target: { value: "Newest" },
   });
@@ -183,7 +182,7 @@ async function createNewestModule(initialOrder: string[]): Promise<void> {
   await waitFor(() => expect(useModalStore.getState().modalStack).toEqual([]));
 }
 
-/** The creation behaviors front placement must not disturb. */
+/** The creation behaviors right placement must not disturb. */
 function expectCreationFlowIntact(): void {
   expect(api.createModule).toHaveBeenCalledOnce();
   expect(api.createModule).toHaveBeenCalledWith(
@@ -207,7 +206,7 @@ function expectOrderingModeUnchanged(manual: boolean): void {
   expect(getProjectsSnapshot().find((entry) => entry.id === PROJECT_ID)).toBeDefined();
 }
 
-describe("module creation front-placement acceptance", () => {
+describe("module creation right-placement acceptance", () => {
   // The Module tab strip scrolls its selected tab into view, which jsdom does
   // not implement; selecting the created module is part of what these cases
   // exercise, so the no-op keeps that behavior observable.
@@ -248,19 +247,19 @@ describe("module creation front-placement acceptance", () => {
     useModalStore.setState({ modalStack: [{ type: "add-module" }] });
   });
 
-  it("[overhaul-46] leads an automatic project's module surfaces with the module just created", async () => {
+  it("[overhaul-46] appends a new module to an automatic project's module surfaces", async () => {
     api.listProjects.mockReset().mockResolvedValue([project(false)]);
     seedProjects([project(false)]);
-    await createNewestModule(["Bravo", "Alpha"]);
+    await createNewestModule(["Alpha", "Bravo"]);
 
     await waitFor(() =>
-      expect(sidebarOrder()).toEqual(["Newest", "Bravo", "Alpha"]),
+      expect(sidebarOrder()).toEqual(["Alpha", "Bravo", "Newest"]),
     );
-    expect(tabStripOrder()).toEqual(["Newest", "Bravo", "Alpha"]);
+    expect(tabStripOrder()).toEqual(["Alpha", "Bravo", "Newest"]);
     expect(getModulesSnapshot(PROJECT_ID).map((entry) => entry.name)).toEqual([
-      "Newest",
-      "Bravo",
       "Alpha",
+      "Bravo",
+      "Newest",
     ]);
     expectOrderingModeUnchanged(false);
     expectCreationFlowIntact();
@@ -269,33 +268,33 @@ describe("module creation front-placement acceptance", () => {
   it("[overhaul-55] keeps the server's canonical order across reloads", async () => {
     api.listProjects.mockReset().mockResolvedValue([project(false)]);
     seedProjects([project(false)]);
-    await createNewestModule(["Bravo", "Alpha"]);
+    await createNewestModule(["Alpha", "Bravo"]);
     await waitFor(() =>
-      expect(sidebarOrder()).toEqual(["Newest", "Bravo", "Alpha"]),
+      expect(sidebarOrder()).toEqual(["Alpha", "Bravo", "Newest"]),
     );
 
     await useStudioStore.getState().reloadModules();
 
     await waitFor(() =>
-      expect(sidebarOrder()).toEqual(["Newest", "Bravo", "Alpha"]),
+      expect(sidebarOrder()).toEqual(["Alpha", "Bravo", "Newest"]),
     );
-    expect(tabStripOrder()).toEqual(["Newest", "Bravo", "Alpha"]);
+    expect(tabStripOrder()).toEqual(["Alpha", "Bravo", "Newest"]);
     expectOrderingModeUnchanged(false);
   });
 
-  it("[overhaul-47] leads a manual project's module surfaces without leaving Manual module order", async () => {
+  it("[overhaul-47] appends to a manual project's module surfaces without leaving Manual module order", async () => {
     api.listProjects.mockReset().mockResolvedValue([project(true)]);
     seedProjects([project(true)]);
-    await createNewestModule(["Bravo", "Alpha"]);
+    await createNewestModule(["Alpha", "Bravo"]);
 
     await waitFor(() =>
-      expect(sidebarOrder()).toEqual(["Newest", "Bravo", "Alpha"]),
+      expect(sidebarOrder()).toEqual(["Alpha", "Bravo", "Newest"]),
     );
-    expect(tabStripOrder()).toEqual(["Newest", "Bravo", "Alpha"]);
+    expect(tabStripOrder()).toEqual(["Alpha", "Bravo", "Newest"]);
     expect(getModulesSnapshot(PROJECT_ID).map((entry) => entry.name)).toEqual([
-      "Newest",
-      "Bravo",
       "Alpha",
+      "Bravo",
+      "Newest",
     ]);
     expectOrderingModeUnchanged(true);
     expectCreationFlowIntact();
@@ -305,8 +304,8 @@ describe("module creation front-placement acceptance", () => {
     await useStudioStore.getState().reloadModules();
 
     await waitFor(() =>
-      expect(sidebarOrder()).toEqual(["Newest", "Bravo", "Alpha"]),
+      expect(sidebarOrder()).toEqual(["Alpha", "Bravo", "Newest"]),
     );
-    expect(tabStripOrder()).toEqual(["Newest", "Bravo", "Alpha"]);
+    expect(tabStripOrder()).toEqual(["Alpha", "Bravo", "Newest"]);
   });
 });

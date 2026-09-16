@@ -50,9 +50,6 @@ pub const OWNED_TABLES: &[(&str, &[&str])] = &[
 /// Non-SQL assets transferred with the same ownership decision.
 pub const OWNED_ASSETS: &[&str] = &["profiles.json", "features.json"];
 
-/// Code-owned launch adapters which must have exactly one persisted row.
-pub const PROVIDER_ADAPTER_SLUGS: &[&str] = &["agy", "claude", "codex", "gemini"];
-
 /// The only Python modules allowed to consume transferred policy in shipping.
 /// Both are read/effect compatibility ports and contain no settings writer.
 pub const DJANGO_COMPATIBILITY_PORTS: &[&str] = &[

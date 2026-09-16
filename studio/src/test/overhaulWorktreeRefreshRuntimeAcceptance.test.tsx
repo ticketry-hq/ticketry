@@ -197,9 +197,9 @@ async function installRuntime(host: ReturnType<typeof runtime>) {
 function renderViews() {
   return render(
     <>
-      <WorktreeBlock taskId={OWNER} parentId={null} moduleId="m1" ticketSeq={881} />
-      <WorktreeBlock taskId={CHILD} parentId={OWNER} moduleId="m1" ticketSeq={882} />
-      <WorktreeBlock taskId={UNRELATED} parentId={null} moduleId="m1" ticketSeq={889} />
+      <WorktreeBlock taskId={OWNER} parentId={null} moduleId="m1" />
+      <WorktreeBlock taskId={CHILD} parentId={OWNER} moduleId="m1" />
+      <WorktreeBlock taskId={UNRELATED} parentId={null} moduleId="m1" />
     </>,
   );
 }

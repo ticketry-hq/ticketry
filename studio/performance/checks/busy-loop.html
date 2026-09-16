@@ -1,0 +1,24 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>Profiling collector check: busy loop</title>
+<h1>Busy loop</h1>
+<p>
+  A deliberately expensive named function. The CPU collector is only trusted to
+  say something about Ticketry once it can name this function from a recording
+  of this page.
+</p>
+<script>
+  function ticketryProfilingBusyLoop() {
+    let total = 0;
+    const until = performance.now() + 40;
+    while (performance.now() < until) {
+      total += Math.sqrt(total + 1) % 7;
+    }
+    return total;
+  }
+  window.__checkTotal = 0;
+  window.__checkTimer = setInterval(() => {
+    window.__checkTotal += ticketryProfilingBusyLoop();
+  }, 50);
+  window.__checkReady = true;
+</script>

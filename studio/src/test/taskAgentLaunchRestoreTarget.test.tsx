@@ -8,7 +8,7 @@ import {
 import {
   readStudioWorkspaceTarget,
   rememberStudioWorkspaceTarget,
-} from "../app/shell/ticket-workspace/selected-ticket/internal/studioWorkspaceTarget";
+} from "../features/workspace-state/studioWorkspaceTarget";
 
 const TASK_CONTEXT = {
   kind: "task" as const,

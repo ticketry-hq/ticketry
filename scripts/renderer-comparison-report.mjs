@@ -2,6 +2,9 @@
 /**
  * CODING-1304 — turn captured renderer measurements into the comparison matrix.
  *
+ * CODING-1487 retired the WASM renderer, so the matrix now compares embedded
+ * native libghostty against the xterm compatibility renderer.
+ *
  * Input files are the JSON a Studio window produces from
  * `window.__ticketryRendererMeasurements()`, wrapped with the context the
  * ticket requires for every result: command, terminal dimensions, sample
@@ -22,7 +25,7 @@ export const REQUIRED_CONTEXT = [
   "method",
 ];
 
-const RENDERERS = ["native", "xterm", "ghostty-wasm"];
+const RENDERERS = ["native", "xterm"];
 
 /** Average a numeric field across samples, ignoring nulls. */
 function mean(samples, field) {
@@ -80,7 +83,6 @@ export function buildRendererComparison(captures) {
       paintMsP50: mean(samples, "paintMsP50"),
       paintMsP95: mean(samples, "paintMsP95"),
       paintMsMax: maximum(samples, "paintMsMax"),
-      wasmMemoryBytes: maximum(samples, "wasmMemoryBytes"),
     };
   });
 
@@ -93,16 +95,11 @@ function cell(value, digits = 1) {
   return Number.isInteger(value) ? String(value) : value.toFixed(digits);
 }
 
-function bytesCell(value) {
-  if (value === null || value === undefined) return "—";
-  return `${(value / 1024 / 1024).toFixed(2)} MiB`;
-}
-
 /** Render the comparison as the markdown table the evidence document holds. */
 export function renderRendererComparison(comparison) {
   const header = [
-    "| Renderer | Samples | Cold attach (ms) | Warm attach (ms) | Frames | Bytes | Paint p50 (ms) | Paint p95 (ms) | Paint max (ms) | Wasm memory |",
-    "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+    "| Renderer | Samples | Cold attach (ms) | Warm attach (ms) | Frames | Bytes | Paint p50 (ms) | Paint p95 (ms) | Paint max (ms) |",
+    "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
   ];
   const body = comparison.rows.map((row) =>
     [
@@ -114,8 +111,7 @@ export function renderRendererComparison(comparison) {
       cell(row.bytes),
       cell(row.paintMsP50, 2),
       cell(row.paintMsP95, 2),
-      cell(row.paintMsMax, 2),
-      `${bytesCell(row.wasmMemoryBytes)} |`,
+      `${cell(row.paintMsMax, 2)} |`,
     ].join(" | "),
   );
 

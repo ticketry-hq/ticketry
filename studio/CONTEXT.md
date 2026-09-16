@@ -5,6 +5,13 @@ and running agents before and during execution.
 
 ## Language
 
+**Changes workspace**:
+The full-window review workspace with checkout and worktree selection on the
+left, changed files in the middle, and the selected file's diff on the right.
+Each column can be resized. Global navigation remains available, and leaving
+Changes restores the prior planning workspace.
+_Avoid_: Git suite, operating-system fullscreen
+
 **Task-launch flow**:
 The Studio interaction that begins when a work item is activated for an agent
 run and ends when its required setup and agent choices are completed or dismissed.
@@ -19,9 +26,10 @@ _Avoid_: Temporary task, fake issue, unscoped terminal
 **Conversations section**:
 The Stories-pane section that replaces the old Scratch section. It contains a
 New conversation launcher and one ticket row for each active taskless Instant
-conversation in the selected module. The header combines their lifecycle
-chicklets. New conversation immediately launches the configured global default
-model, and the user types their request in that conversation's terminal.
+conversation in the selected module. The header shows the chat count and no
+lifecycle aggregate. New conversation immediately launches the configured
+global default model, and the user types their request in that conversation's
+terminal.
 _Avoid_: Scratch section, Instant section, temporary tasks
 
 **Conversation launch flow**:
@@ -38,11 +46,10 @@ one real module in the active project. Choosing another module opens that
 module's separate workspace; it does not retarget runs already opened here.
 _Avoid_: No-module workspace, shared scratch workspace
 
-**Conversation chicklets**:
-A combined lifecycle-state summary in the Conversations header. Each visible
-Instant state has one glyph and count. Conversation rows do not repeat these
-chicklets.
-_Avoid_: Scratch child row, per-run chicklet, run tab
+**Conversation lifecycle badge**:
+The lifecycle badge on an Instant ticket. Each row presents only its own Agent
+Run lifecycle and updates with that run.
+_Avoid_: Header aggregate, cross-run summary, run tab
 
 **Instant ticket**:
 A Stories-pane row backed by one active, taskless Instant Agent Run. Its title
@@ -50,8 +57,8 @@ is the Codex thread name once Codex has given the thread a real name; until
 then it uses the safe launch title available to Ticketry. Selecting it
 foregrounds the exact terminal conversation. It is presentation over an Agent Run, not a
 persisted WorkItem. The module-scoped workspace remains its internal owner. A
-selected row presents only that run's terminal and never a lifecycle chicklet
-or add-agent control.
+row presents only that run's lifecycle badge, and selecting it presents only
+that run's terminal. It never presents an add-agent control.
 _Avoid_: Temporary task, fake issue, Instant WorkItem
 
 **Terminal panel**:
@@ -165,18 +172,16 @@ _Avoid_: Repo path, module directory, worktree, project folder
 **Module tab strip**:
 The single module switcher row spanning the Stories and Workspace panes, listing
 every module of the active project in the canonical module order, with module
-creation at its leftmost point. Selecting a tab is the same act as selecting
+creation at its rightmost point. Selecting a tab is the same act as selecting
 that module anywhere else.
 _Avoid_: Pane header tabs, open-tab set, browser-style tabs
 
 **Canonical module order**:
 The one project-wide module order every module surface — sidebar, tab strip,
 backlog grouping, module pickers, keyboard position shortcuts — renders
-identically. It is the recency order until the project is first manually
+identically. It is the creation order until the project is first manually
 reordered, and the manually set order from then on; a newly created module
-always enters at the front. In recency mode that front placement is held
-explicitly until the new module has agent activity of its own, since it would
-otherwise sort behind every module that has ever been worked in.
+always enters at the end.
 _Avoid_: Recency order, per-surface order, tab order
 
 **Manual module order**:
@@ -209,6 +214,42 @@ _Avoid_: Graph editor, drag-to-connect canvas, workflow diagram export
 **State attribute panel**:
 The editing surface opened by selecting a workflow graph view node. It edits the state's shared attributes (name, group/color) and the current tab's type-scoped attributes (start/stop role, outgoing transitions, launch configuration), applying each change through scoped apply.
 _Avoid_: Node modal, state drawer, launch form
+
+**Handoff edge**:
+A workflow transition edge marked so that the work item's live agent survives
+the move: the destination's prompt and entry skill are typed into that agent's
+own session and no new run begins. An unmarked edge is a replacing edge — the
+move ends the live agent, and the destination starts fresh if it launches at
+all. Either edge starts fresh when no agent is live. It is the only setting
+that decides survive versus replace.
+_Avoid_: Continue flag, keep-agent flag, session reuse toggle
+
+**Handoff note**:
+The document an agent leaves in its work item's design directory before it
+crosses a replacing edge, named for the state it is leaving, so the agent that
+replaces it can pick up where it stopped. Writing it is the agent's duty under
+its launch prompt; Ticketry never writes, waits for, or requires it, and only
+points the replacement at it when it exists.
+_Avoid_: Handoff (unqualified), session summary, context dump
+
+**Agent move**:
+A workflow state change made by an agent or by Run Now. It enforces one live
+agent per work item: a replacing edge ends the current agent before anything
+new starts, a handoff edge continues it.
+_Avoid_: Automated move, MCP transition, system move
+
+**Manual move**:
+A workflow state change a person makes in Studio. While the work item has a
+live agent it leaves that agent alone and starts nothing; when no agent is
+live it behaves as an agent move would.
+_Avoid_: Human transition, drag, direct move
+
+**One live agent**:
+The rule that a work item has at most one live task run at any moment. Any
+deliberate launch on the work item — agent move, Run Now, retry — ends the
+current run before it starts another; if the current run cannot be ended,
+nothing starts and the failure is shown for retry.
+_Avoid_: Agent stacking, parallel agents, run slot
 
 **Run self-termination**:
 An agent-initiated action that ends only the agent's own active Studio run. A
@@ -305,7 +346,7 @@ _Avoid_: HTML doc, broken markdown, mislabeled file
 
 **Desktop development instance**:
 One Tauri development launch of Studio with a coordinated runtime identity —
-its worktree, frontend origin, backend endpoint, MCP endpoint, and data
+its worktree, frontend origin, backend endpoint, MCP Unix socket, and data
 directory — isolated so concurrent launches from different worktrees never
 share ports, origins, or state.
 _Avoid_: Dev window, second app copy, port profile

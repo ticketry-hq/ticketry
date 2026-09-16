@@ -66,23 +66,19 @@ function changedCells() {
   return count;
 }
 
-function emptyCells() {
+// Empty prompt cells as display labels. `activeOnly` keeps just the cells that
+// belong to their issue type's workflow, decided while the identities are still
+// in hand rather than by parsing the label back apart.
+function emptyCells(activeOnly = false) {
   const cells = [];
   for (const typeName of model.issueTypes) {
     for (const state of model.states) {
-      if (!model.prompts[typeName][state.name].trim()) {
-        cells.push(`${typeName} · ${state.name}`);
-      }
+      if (model.prompts[typeName][state.name].trim()) continue;
+      if (activeOnly && !isActive(typeName, state.name)) continue;
+      cells.push(`${typeName} · ${state.name}`);
     }
   }
   return cells;
-}
-
-function activeEmptyCells() {
-  return emptyCells().filter((cell) => {
-    const [type, state] = cell.split(" · ");
-    return issueType(type).states.includes(state);
-  });
 }
 
 function words(value) {
@@ -517,7 +513,7 @@ function renderFlow() {
 
 function renderReview() {
   const empties = emptyCells();
-  const activeEmpties = activeEmptyCells();
+  const activeEmpties = emptyCells(true);
   const changes = changedCells();
   const agentsChanged = model.guidance !== baseline.guidance;
   const totalCells = model.issueTypes.length * model.states.length;
@@ -640,7 +636,7 @@ function payload(finalizedAt = model.finalizedAt) {
 }
 
 async function finalizeReview() {
-  const activeEmpties = activeEmptyCells();
+  const activeEmpties = emptyCells(true);
   if (!model.guidance.trim() || activeEmpties.length) {
     view = "review";
     renderShell();

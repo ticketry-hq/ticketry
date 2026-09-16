@@ -14,9 +14,9 @@ function renderPanePair() {
   return {
     stories: container.querySelector('[data-pane="tasks"]'),
     workspace: container.querySelector('[data-pane="details-or-terminal"]')!,
-    storiesBody: container.querySelector('[data-pane="tasks"] .overflow-auto')!,
+    storiesBody: container.querySelector('[data-testid="tasks-pane-body"]')!,
     workspaceBody: container.querySelector(
-      '[data-pane="details-or-terminal"] .overflow-auto',
+      '[data-testid="details-or-terminal-pane-body"]',
     )!,
   };
 }
@@ -53,6 +53,14 @@ describe("PaneShell", () => {
     expect(workspaceBody).not.toHaveClass("p-2");
     expect(workspaceBody).toHaveClass("px-2", "pt-2");
     expect(storiesBody).toHaveClass("p-2");
+  });
+
+  it("leaves selected workspace scrolling to the active surface", () => {
+    const { storiesBody, workspaceBody } = renderPanePair();
+
+    expect(storiesBody).toHaveClass("overflow-auto");
+    expect(workspaceBody).toHaveClass("overflow-hidden");
+    expect(workspaceBody).not.toHaveClass("overflow-auto");
   });
 
   it("swaps emphasis when the focused pane store value changes", () => {

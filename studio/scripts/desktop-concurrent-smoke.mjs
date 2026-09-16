@@ -3,6 +3,8 @@ import { mkdir, writeFile } from "node:fs/promises";
 import readline from "node:readline";
 import path from "node:path";
 
+import { callSocketMcpTool } from "./mcp-socket-client.mjs";
+
 const identityPrefix = "MUXED_DEVELOPMENT_IDENTITY ";
 
 function waitForIdentity(child, name, timeoutMs) {
@@ -62,10 +64,8 @@ async function observe(instance) {
     { headers: { Origin: instance.identity.frontend } },
     `${instance.name} backend`,
   );
-  const mcpOwner = await fetchText(
-    `${instance.identity.mcp}/mcp`,
-    { method: "POST", body: "{}" },
-    `${instance.name} MCP`,
+  const { structuredContent: { owner: mcpOwner } } = await callSocketMcpTool(
+    instance.identity.dataDirectory, "mcp_ping",
   );
   return { ...instance.identity, frontendMarker, backendOwner, mcpOwner };
 }

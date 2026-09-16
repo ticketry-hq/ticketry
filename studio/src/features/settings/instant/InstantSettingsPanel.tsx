@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   SETTINGS_CHECKBOX_CLASS,
   SETTINGS_FIELD_CLASS,
@@ -23,7 +23,13 @@ function sameSettings(
     left.autoClose === right.autoClose;
 }
 
-export function InstantSettingsPanel() {
+export function InstantSettingsPanel({
+  focusPrompt = false,
+  showHeading = true,
+}: {
+  focusPrompt?: boolean;
+  showHeading?: boolean;
+}) {
   const [saved, setSaved] = useState(DEFAULT_INSTANT_LAUNCH_SETTINGS);
   const [draft, setDraft] = useState(DEFAULT_INSTANT_LAUNCH_SETTINGS);
   const [loading, setLoading] = useState(true);
@@ -32,6 +38,7 @@ export function InstantSettingsPanel() {
     tone: "success" | "danger";
     text: string;
   } | null>(null);
+  const promptRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     let current = true;
@@ -57,6 +64,12 @@ export function InstantSettingsPanel() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!focusPrompt || loading) return;
+    const frame = requestAnimationFrame(() => promptRef.current?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [focusPrompt, loading]);
+
   const dirty = !sameSettings(saved, draft);
 
   async function save(): Promise<void> {
@@ -79,12 +92,14 @@ export function InstantSettingsPanel() {
 
   return (
     <div className="space-y-5">
-      <header>
-        <h2 className={SETTINGS_SECTION_HEADING_CLASS}>Conversations</h2>
-        <p className="mt-0.5 text-sm text-text-muted">
-          Defaults applied to every new conversation.
-        </p>
-      </header>
+      {showHeading ? (
+        <header>
+          <h2 className={SETTINGS_SECTION_HEADING_CLASS}>Conversations</h2>
+          <p className="mt-0.5 text-sm text-text-muted">
+            Defaults applied to every new conversation.
+          </p>
+        </header>
+      ) : null}
 
       {message ? (
         <SettingsStatusLine tone={message.tone}>{message.text}</SettingsStatusLine>
@@ -103,6 +118,7 @@ export function InstantSettingsPanel() {
           </p>
         </div>
         <textarea
+          ref={promptRef}
           aria-label="Conversation starter prompt"
           value={draft.initialPrompt}
           maxLength={MAX_INITIAL_PROMPT_CHARACTERS}

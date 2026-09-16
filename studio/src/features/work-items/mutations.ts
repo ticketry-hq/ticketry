@@ -174,12 +174,22 @@ export function useSetWorkItemState() {
   );
 }
 
-export interface SetWorkItemParentArgs { id: string; parentId: string | null }
+export interface SetWorkItemParentArgs {
+  id: string;
+  parentId: string | null;
+  moduleId?: string;
+}
 
-export function useSetWorkItemParent(_memberships: readonly ModuleMembership[]) {
+export function useSetWorkItemParent(memberships: readonly ModuleMembership[]) {
   return useApolloWorkItemMutation(
-    ({ id, parentId }: SetWorkItemParentArgs, optimistic) =>
-      reparentWorkItem(id, parentId, { optimistic }),
+    ({ id, parentId, moduleId }: SetWorkItemParentArgs, optimistic) =>
+      reparentWorkItem(id, parentId, {
+        optimistic,
+        moduleIds: [
+          ...memberships.map((membership) => membership.moduleId),
+          ...(moduleId ? [moduleId] : []),
+        ],
+      }),
     ({ id }: SetWorkItemParentArgs) => id,
     (current, { parentId }) => ({
       ...current,
@@ -195,7 +205,10 @@ let optimisticBlockerEdgeSequence = 0;
 export function useSetWorkItemBlockers() {
   return useApolloWorkItemMutation(
     ({ id, blockedByIds }: SetWorkItemBlockersArgs, optimistic) =>
-      setWorkItemBlockers(id, blockedByIds, { optimistic }),
+      setWorkItemBlockers(id, blockedByIds, {
+        optimistic,
+        moduleId: optimistic?.module_id ?? undefined,
+      }),
     ({ id }: SetWorkItemBlockersArgs) => id,
     (current, { blockedByIds }) => ({
       ...current,

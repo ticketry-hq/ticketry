@@ -79,7 +79,7 @@ export function createPackagedUpdateBuildCommand({
       "--target",
       "aarch64-apple-darwin",
       "--features",
-      "native-libghostty,desktop-acceptance",
+      "desktop-acceptance",
       "--config",
       JSON.stringify(config),
       "--",

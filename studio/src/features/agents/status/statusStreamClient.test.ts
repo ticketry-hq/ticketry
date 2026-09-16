@@ -77,6 +77,7 @@ function harness(initialCursors: Record<string, number> = {}) {
   });
   return {
     applied,
+    proxy,
     cursors,
     client,
     unsubscribe,
@@ -88,6 +89,14 @@ function harness(initialCursors: Record<string, number> = {}) {
 }
 
 describe("the controlled status stream client", () => {
+  it("rejects a refused subscription so the feed can retry", async () => {
+    const stream = harness();
+    stream.proxy.graphql_subscribe.mockResolvedValueOnce(JSON.stringify({
+      data: null,
+      errors: [{ message: "The subscription id is already active." }],
+    }));
+    await expect(stream.client.start()).rejects.toThrow("not accepted");
+  });
   it("subscribes fresh with no cursor and converges on the authoritative holding", async () => {
     const stream = harness();
     await stream.client.start();

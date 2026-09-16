@@ -266,8 +266,10 @@ describe("overhaul acceptance — settings", () => {
     await waitFor(() => {
       expect(settingsApi.putProviderCatalog).toHaveBeenCalledWith({
         activated_providers: ["claude", "codex"],
+        codex_profiles: [],
         global_default: {
           provider: "claude",
+          profile: null,
           model: "opus",
           reasoning: "medium",
         },

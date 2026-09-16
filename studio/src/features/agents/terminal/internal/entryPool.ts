@@ -54,7 +54,7 @@ export const SUSPEND_GRACE_MS = 30_000;
 
 const XTERM_OPTIONS = {
   fontFamily: "JetBrains Mono, Fira Code, ui-monospace, monospace",
-  fontSize: 13,
+  fontSize: 14,
   cursorBlink: true,
   convertEol: false,
   theme: {
@@ -252,7 +252,9 @@ export function ensureConnected(sessionId: string, meta: SessionMeta): void {
       if (event.type === "ready") {
         if (firstReady) {
           firstReady = false;
-          const serverId = event.sessionId;
+          // A replacement viewer has a new handle, not a new terminal tab.
+          // Only the first attachment of a connecting launch rekeys its id.
+          const serverId = canAttachReadySession ? tempId : event.sessionId;
           const runId = event.agentRunId;
         // Rekey the entry under the server id so subsequent lookups work. The
         // matching registry rekey (tmp -> agentRunId) happens centrally in

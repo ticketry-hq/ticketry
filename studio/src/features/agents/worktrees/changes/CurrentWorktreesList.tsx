@@ -67,7 +67,7 @@ export function CurrentWorktreesList({
 }) {
   const taskCount = rows.filter((row) => row.kind === "task").length;
   return (
-    <section aria-label="Current worktrees" className="min-h-0 overflow-auto p-3">
+    <section aria-label="Current worktrees" className="h-full min-h-0 overflow-auto p-3">
       <header className="mb-2">
         <h2 className="font-medium text-text-primary">Current worktrees</h2>
         <p className="text-xs text-text-muted">Module checkout first, then active task worktrees.</p>

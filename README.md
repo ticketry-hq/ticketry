@@ -24,8 +24,14 @@ npm run desktop:dev
 The launcher rebuilds the Rust application as `Ticketry Dev`, with its own app
 identifier and a per-worktree development profile. It can run beside an
 installed `Ticketry` app without sharing data, tmux sessions, frontend ports,
-or MCP listeners. Frontend, Rust runtime, and MCP output is written to
+or MCP listeners. MCP binds `mcp.sock` inside the owned data directory;
+providers connect through the packaged `ticketry-hook mcp` stdio bridge.
+Frontend, Rust runtime, and MCP output is written to
 `.ticketry-dev/logs/ticketry.log`.
+Every launch is also a startup measurement: once the desktop and the frontend
+finish booting, the launcher prints their startup times against the median of
+the last ten launches and shouts `STARTUP TIME REGRESSION` when one is more
+than 1.25x slower. `npm run logs:startup` prints the same comparison.
 
 To run that development build as the main app against the writable production
 data and product tmux sessions, close the installed app first, then run:
@@ -77,11 +83,20 @@ intentional tmux sessions.
 
 ## Production diagnostics
 
-Launch the installed executable with `--log-to-file` to record frontend and
-Rust diagnostics. Omitting the flag leaves production file logging off.
+The installed app records frontend and Rust diagnostics by default, including
+when opened from Finder. The legacy `--log-to-file` flag is still accepted.
 
 ```bash
 /Applications/Ticketry.app/Contents/MacOS/ticketry --log-to-file
+```
+
+A launch of a store Rust already owns skips the whole-file SQLite integrity
+check and semantic preflight. Add `--verify-store` (or set
+`TICKETRY_VERIFY_STORE=1`) to run the full preflight, for example after an
+update or when support asks:
+
+```bash
+/Applications/Ticketry.app/Contents/MacOS/ticketry --verify-store --log-to-file
 ```
 
 The process writes `ticketry.log` in Ticketry's selected data directory, the

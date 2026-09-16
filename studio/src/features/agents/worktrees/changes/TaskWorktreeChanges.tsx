@@ -97,7 +97,7 @@ export function TaskWorktreeChanges({
   return (
     <section
       aria-label="Task worktree changes"
-      className="flex h-full min-h-0 flex-col overflow-hidden p-4 text-sm"
+      className="flex h-full min-h-0 flex-col overflow-x-hidden overflow-y-auto p-4 text-sm"
       data-testid="task-worktree-changes"
     >
       <header className="mb-3 shrink-0 border-b border-pane-border pb-3">

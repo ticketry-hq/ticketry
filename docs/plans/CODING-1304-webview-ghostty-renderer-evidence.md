@@ -1,5 +1,14 @@
 # CODING-1304 WebView-hosted Ghostty renderer — evidence
 
+Status: **historical.** CODING-1487 removed the `ghostty-wasm` renderer, the
+prepare script, and the measurement seam this document describes. Desktop
+development and packaged builds render with embedded native libghostty, browser
+development renders with xterm over the `browserTerminalClient` WebSocket
+adapter, and xterm is the compatibility fallback everywhere. The archived code
+and its recovery steps are in
+[`../archive/ghostty-wasm-restore.md`](../archive/ghostty-wasm-restore.md). None
+of the capture instructions below can be run from the active branch.
+
 Post-release experiment. Not a release blocker, and not a migration. The final
 native-underlay comparison and renderer decision are recorded in
 [`CODING-1394-renderer-decision.md`](CODING-1394-renderer-decision.md).
@@ -12,9 +21,10 @@ frames onto a Canvas 2D surface inside Ticketry's WKWebView, fed by the
 existing Rust tmux attachment over the existing Tauri byte channel.
 
 - tmux remains the durable session owner.
-- Native libghostty is now the desktop default. `ghostty-wasm` remains the
-  browser default and a desktop diagnostic renderer; xterm remains the
-  fallback.
+- Native libghostty later became the desktop default, with `ghostty-wasm` the
+  browser default and a desktop diagnostic renderer, and xterm the fallback.
+  CODING-1487 then removed `ghostty-wasm` and moved browser development to
+  xterm.
 - Development renderer selection reads `?terminalRenderer=` then
   `localStorage["ticketry:terminal-renderer"]`.
 - Switching renderers changes no run, no tmux session identity, and no
@@ -124,10 +134,11 @@ browser.
 
 ## Comparison matrix
 
-Run every case against native Ghostty, xterm and `ghostty-wasm` in the same
-Ticketry build on the same machine. This original matrix remains as the capture
-protocol. CODING-1394 records missing cases explicitly rather than filling the
-cells with unmatched runs.
+The protocol was to run every case against native Ghostty, xterm and
+`ghostty-wasm` in the same Ticketry build on the same machine. CODING-1394
+records missing cases explicitly rather than filling the cells with unmatched
+runs. The WASM column is no longer reachable from the active branch; it would
+have to be rebuilt from `archive/CODING-1487-ghostty-wasm`.
 
 ### Startup and resource use
 

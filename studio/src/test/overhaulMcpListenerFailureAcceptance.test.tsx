@@ -9,12 +9,12 @@ import {
   type StudioRuntime,
 } from "../runtime";
 
-describe("overhaul acceptance - fail-closed MCP listener failure", () => {
+describe("overhaul acceptance - fail-closed MCP socket listener failure", () => {
   afterEach(() => {
     useModalStore.setState({ modalStack: [] });
   });
 
-  it("[overhaul-174] keeps shells available while agent launch waits for this instance's listener", async () => {
+  it("[overhaul-174] keeps shells available after this data directory's MCP socket startup fails", async () => {
     const base = createBrowserRuntime({ environment: {} });
     const startup = base.startup();
     initializeStudioRuntime({

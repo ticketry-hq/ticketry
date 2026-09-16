@@ -5,18 +5,23 @@ import { isDialogFocusTarget } from "../../shared/utilities/keyboard";
 
 interface PaneShellProps {
   title?: string;
+  titleCasing?: "uppercase" | "preserve";
   pane: FocusedPane;
   children?: React.ReactNode;
 }
 
 /**
- * Pane wrapper: title header, scrollable body, and a focusable root that
- * carries `tabIndex={-1}` so the global keymap's focusLeft/focusRight can
- * move DOM focus into it. The pane root also reports clicks/focus back
- * into `clientStore.setFocusedPane` so a click can shift focus too.
+ * Pane wrapper: title header, bounded body, and a focusable root that carries
+ * `tabIndex={-1}` so the global keymap's focusLeft/focusRight can move DOM
+ * focus into it. Stories scroll here; the selected workspace's active surface
+ * owns its scrolling. The pane root also reports clicks/focus back into
+ * `clientStore.setFocusedPane` so a click can shift focus too.
  */
 export const PaneShell = forwardRef<HTMLDivElement, PaneShellProps>(
-  function PaneShell({ title, pane, children }, externalRef) {
+  function PaneShell(
+    { title, titleCasing = "uppercase", pane, children },
+    externalRef,
+  ) {
     const focusedPane = useClientStore((s) => s.focusedPane);
     const editViewZone = useClientStore((s) => s.editViewZone);
     const navigationModality = useClientStore((s) => s.navigationModality);
@@ -89,15 +94,24 @@ export const PaneShell = forwardRef<HTMLDivElement, PaneShellProps>(
         className={`hide-scrollbars flex h-full flex-col border-r border-pane-border bg-pane-panel outline-none transition-opacity duration-150 motion-reduce:transition-none ${emphasisClass}`}
       >
         {title && (
-          <div className="h-7 shrink-0 bg-pane-title px-2 text-center text-xs font-bold uppercase leading-7 tracking-wider text-text-primary">
+          <div
+            data-testid={`${pane}-pane-title`}
+            data-title-casing={titleCasing}
+            className={`h-7 shrink-0 bg-pane-title px-2 text-center text-xs font-bold leading-7 tracking-wider text-text-primary ${
+              titleCasing === "uppercase" ? "uppercase" : ""
+            }`}
+          >
             {title}
           </div>
         )}
         {/* The workspace pane hosts the terminal, which must sit flush against
             the pane's bottom edge — no padding below it. */}
         <div
-          className={`flex-1 overflow-auto text-sm ${
-            pane === "details-or-terminal" ? "px-2 pt-2 pb-0" : "p-2"
+          data-testid={`${pane}-pane-body`}
+          className={`min-h-0 flex-1 text-sm ${
+            pane === "details-or-terminal"
+              ? "overflow-hidden px-2 pt-2 pb-0"
+              : "overflow-auto p-2"
           }`}
         >
           {children}

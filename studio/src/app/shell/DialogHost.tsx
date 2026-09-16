@@ -1,9 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ModalShell } from "../modal/ModalShell";
-import {
-  useClientStore,
-  type DialogDescriptor,
-} from "../../state/clientStore";
+import { useDialogStore, type DialogDescriptor } from "./dialogStore";
 
 const buttonClass =
   "border border-pane-border px-3 py-1.5 text-sm font-medium transition-colors hover:bg-pane-title disabled:cursor-not-allowed disabled:opacity-50";
@@ -119,7 +116,7 @@ function ReassignDialog({
 
 /** Renders the top descriptor from the promise-based confirmation bus. */
 export function DialogHost() {
-  const top = useClientStore((state) => state.dialogs.at(-1));
+  const top = useDialogStore((state) => state.dialogs.at(-1));
   if (!top) return null;
 
   switch (top.kind) {

@@ -84,6 +84,7 @@ type AgentRuns {
 	launchReasoning: String
 	launchUnattended: Boolean!
 	issue: WorktrackerIssue
+	terminalSession(filters: AgentTerminalSessionsFilterInput, orderBy: AgentTerminalSessionsOrderInput, pagination: PaginationInput): AgentTerminalSessionsConnection!
 }
 
 type AgentRunsConnection {
@@ -125,6 +126,7 @@ input AgentRunsFilterInput {
 
 input AgentRunsHavingInput {
 	issue: WorktrackerIssueFilterInput
+	terminalSession: AgentTerminalSessionsFilterInput
 }
 
 input AgentRunsOrderInput {

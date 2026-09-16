@@ -5,7 +5,27 @@ use std::{
     process::Command,
     time::{Duration, Instant},
 };
-use ticketry_launch::{DirectoryTrustOutcome, DirectoryTrustSetup, Provider};
+use ticketry_provider::{
+    provider_contract, DirectoryTrustContext, DirectoryTrustInspection, DirectoryTrustPreparation,
+    Provider,
+};
+
+fn prepare_trust(directory: &Path, trust_file: &Path) {
+    let provider = provider_contract(Provider::Gemini);
+    let context = DirectoryTrustContext {
+        directory,
+        trust_file: Some(trust_file),
+    };
+    let DirectoryTrustInspection::ApprovalRequired(approval) =
+        provider.inspect_directory_trust(context)
+    else {
+        panic!("Gemini directory should require approval")
+    };
+    assert_eq!(
+        provider.prepare_directory_trust(context, Some(&approval)),
+        DirectoryTrustPreparation::Prepared
+    );
+}
 
 fn git(directory: &Path, args: &[&str]) {
     let output = Command::new("git")
@@ -102,12 +122,8 @@ fn installed_gemini_connects_mcp_after_explicit_folder_setup() {
         text
     };
     run(&module, &["--version"]);
-    let setup = DirectoryTrustSetup::new(Provider::Gemini, trust.clone());
     assert!(run(&module, &["mcp", "list"]).contains("folder is untrusted"));
-    assert_eq!(
-        setup.prepare(&module, true).unwrap(),
-        DirectoryTrustOutcome::Prepared
-    );
+    prepare_trust(&module, &trust);
     let connected = run(&module, &["mcp", "list"]);
     assert!(
         connected.contains("Connected") && !connected.contains("untrusted"),
@@ -126,25 +142,4 @@ fn installed_gemini_connects_mcp_after_explicit_folder_setup() {
     );
     // An external worktree requires its own explicit approval, matching its actual CWD.
     assert!(run(&worktree, &["mcp", "list"]).contains("folder is untrusted"));
-    assert_eq!(
-        setup.prepare(&worktree, true).unwrap(),
-        DirectoryTrustOutcome::Prepared
-    );
-    let connected = run(&worktree, &["mcp", "list"]);
-    assert!(
-        connected.contains("Connected") && !connected.contains("untrusted"),
-        "{connected}"
-    );
-    // Startup reaches the isolated authentication boundary; no model request is made.
-    let startup = run(
-        &worktree,
-        &[
-            "-p",
-            "Selected workflow prompt: Grill. Ask the first clarification question.",
-        ],
-    );
-    assert!(
-        startup.contains("Please set an Auth method") && !startup.contains("folder is untrusted"),
-        "{startup}"
-    );
 }

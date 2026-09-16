@@ -1,6 +1,7 @@
 import type { TreeRow } from "../../shell/ticket-workspace/tasks/TasksPane";
 import { isEngageableZone, useClientStore } from "../../../state/clientStore";
 import { useTerminalPanelStore } from "../../../features/terminal-panel/panelStore";
+import { startInstantChangeFlow } from "../../../features/studio/modals/PlanFeature";
 import { routeTaskWorkspaceEditViewAction } from "../../shell/ticket-workspace/selected-ticket/appNavigation";
 import { isTypingTarget } from "../../../shared/utilities/keyboard";
 import {
@@ -168,6 +169,11 @@ function routeStoriesZone(
     case "edit-view.right":
       return expandTaskOrDiveActiveBody(ctx);
     case "edit-view.commit":
+      if (currentPlanningRow(ctx)?.kind === "scratch") {
+        consume(ctx.event);
+        startInstantChangeFlow();
+        return true;
+      }
       return workspaceActionHandled(
         routeTaskWorkspaceEditViewAction(ctx.event, "dive-active"),
       );

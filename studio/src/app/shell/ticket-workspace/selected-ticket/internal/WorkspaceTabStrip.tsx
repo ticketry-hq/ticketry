@@ -43,9 +43,11 @@ export function WorkspaceTabStrip({
   reorderDrag,
   bucket,
   launchContext,
+  conversationTitle,
   onClaimPointerZone,
   onSetEditViewZone,
   onSelectTab,
+  onActivateTerminal,
   onCloseDocument,
   onCloseTerminal,
   onTaskAgentLaunched,
@@ -68,9 +70,11 @@ export function WorkspaceTabStrip({
   reorderDrag: WorkspaceTabReorderDrag;
   bucket: string;
   launchContext: WorkspaceLauncherContext | null;
+  conversationTitle: string | null;
   onClaimPointerZone: (zone: "tab-strip") => void;
   onSetEditViewZone: (zone: "tab-strip") => void;
   onSelectTab: (tab: TaskWorkspaceTabIdentity) => void;
+  onActivateTerminal: (sessionId: string) => void;
   onCloseDocument: (docId: string) => void;
   onCloseTerminal: (sessionId: string) => void;
   onTaskAgentLaunched: () => void;
@@ -214,11 +218,18 @@ export function WorkspaceTabStrip({
         if (!terminal) return null;
         const { tab, presentation } = terminal;
         const active = activeKind === "terminal" && activeTerminalId === tab.id;
+        const acceptedConversationTitle = tab.meta.isInstant
+          ? conversationTitle
+          : null;
+        const label = acceptedConversationTitle ?? presentation.label;
+        const accessibleName = acceptedConversationTitle
+          ? `${acceptedConversationTitle} ${tab.meta.agent ?? "agent"} terminal`
+          : presentation.accessibleName;
         return (
           <WorkspaceTab
             key={tab.id}
-            label={presentation.label}
-            accessibleName={presentation.accessibleName}
+            label={label}
+            accessibleName={accessibleName}
             title={presentation.hoverTitle || undefined}
             active={active}
             highlighted={
@@ -236,7 +247,7 @@ export function WorkspaceTabStrip({
             badge={<LifecycleBadge state={tab.lifecycle} />}
             onClick={() => {
               if (!reorderDrag.consumePostDropClick()) {
-                onSelectTab({ kind: "terminal", id: tab.id });
+                onActivateTerminal(tab.id);
               }
             }}
             onClose={() => {
@@ -244,7 +255,11 @@ export function WorkspaceTabStrip({
                 onCloseTerminal(tab.id);
               }
             }}
-            closeLabel={presentation.closeName}
+            closeLabel={
+              acceptedConversationTitle
+                ? `Close ${accessibleName}`
+                : presentation.closeName
+            }
             dropIntent={reorderDrag.dropIntentFor(identity)}
             registerRef={(node) => registerTabRef(identity, node)}
             dragSourceProps={reorderDrag.dragSourcePropsFor(identity)}
@@ -252,15 +267,15 @@ export function WorkspaceTabStrip({
           />
         );
         })}
+        {launchContext && (
+          <WorkspaceLauncher
+            bucket={bucket}
+            launchContext={launchContext}
+            triggerRef={launcherTriggerRef}
+            onTaskAgentLaunched={onTaskAgentLaunched}
+          />
+        )}
       </div>
-      {launchContext && (
-        <WorkspaceLauncher
-          bucket={bucket}
-          launchContext={launchContext}
-          triggerRef={launcherTriggerRef}
-          onTaskAgentLaunched={onTaskAgentLaunched}
-        />
-      )}
     </div>
   );
 }

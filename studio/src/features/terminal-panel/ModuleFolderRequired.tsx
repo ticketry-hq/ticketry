@@ -15,7 +15,8 @@ import {
   ModuleFolderSelection,
   useModuleFolderSelection,
 } from "../agents/terminal/ModuleFolderSelection";
-import { setModuleFolder } from "../module-links";
+import { moduleFolderSaveError, setModuleFolder } from "../module-links";
+import { studioRuntime, type StudioRuntime } from "../../runtime";
 
 const REFUSAL_MESSAGE: Record<string, string> = {
   module_folder_unset: "This module has no folder yet.",
@@ -30,10 +31,12 @@ export function ModuleFolderRequired({
   moduleId,
   reason,
   onLinked,
+  runtime = studioRuntime(),
 }: {
   moduleId: string;
   reason: string;
   onLinked: () => void;
+  runtime?: StudioRuntime;
 }) {
   const selection = useModuleFolderSelection();
   const [busy, setBusy] = useState(false);
@@ -45,10 +48,10 @@ export function ModuleFolderRequired({
     setBusy(true);
     setError(null);
     try {
-      await setModuleFolder(moduleId, path);
+      if (!(await setModuleFolder(moduleId, path, runtime))) return;
       onLinked();
-    } catch {
-      setError("Could not save the module folder. Retry to continue.");
+    } catch (cause) {
+      setError(moduleFolderSaveError(cause, "Could not save the module folder. Retry to continue."));
     } finally {
       setBusy(false);
     }
@@ -66,6 +69,7 @@ export function ModuleFolderRequired({
       </p>
       <ModuleFolderSelection
         selection={selection}
+        disabled={busy}
         ariaLabel="Module folder for the terminal panel"
         placeholder="Local folder"
       />

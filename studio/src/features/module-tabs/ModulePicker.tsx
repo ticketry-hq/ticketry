@@ -91,7 +91,10 @@ export function ModulePicker({
   }
 
   function handleFocusLeave(event: FocusEvent<HTMLDivElement>) {
-    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+    if (
+      event.relatedTarget
+      && !event.currentTarget.contains(event.relatedTarget as Node)
+    ) {
       setOpen(false);
     }
   }
@@ -144,7 +147,7 @@ export function ModulePicker({
         aria-haspopup="dialog"
         aria-controls={DIALOG_ID}
         onClick={togglePicker}
-        className="flex w-8 shrink-0 items-center justify-center border-r border-pane-border text-sm text-text-muted hover:bg-pane-panel hover:text-text-primary"
+        className="flex w-8 shrink-0 items-center justify-center border-l border-pane-border text-sm text-text-muted hover:bg-pane-panel hover:text-text-primary"
       >
         +
       </button>
@@ -154,7 +157,7 @@ export function ModulePicker({
           role="dialog"
           aria-label="Module picker"
           onKeyDown={handlePickerKeyDown}
-          className="absolute left-0 top-full z-30 mt-1 flex w-64 flex-col border border-pane-border bg-pane-panel p-1 shadow-lg"
+          className="absolute right-0 top-full z-30 mt-1 flex w-64 flex-col border border-pane-border bg-pane-panel p-1 shadow-lg"
         >
           <input
             ref={searchRef}

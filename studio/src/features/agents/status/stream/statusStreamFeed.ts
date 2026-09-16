@@ -287,33 +287,32 @@ export const statusStreamFeed = {
       }
       const next = createStatusStreamClient({
         projectId,
-        subscriptionId: `run-status_${projectId}_${subscription}`,
+        // The host survives a WebView reload, including its old subscriptions.
+        // A document-local counter alone can collide with that old registry.
+        subscriptionId: `run-status_${crypto.randomUUID()}`,
         cursors,
         createProxy: options.createProxy,
         handlers: {
           onSnapshot(frame) {
             if (!owns(subscription)) return;
             attempt = 0;
-            const runIds = frame.runs.length > 0
-              ? frame.runs.map((run) => run.agent_run_id)
-              : [null];
-            for (const runId of runIds) {
-              recordLaunchDiscovery(
-                "graphql-frame-received",
-                identity(runId, frame.cursor),
-                { frameType: "snapshot" },
-              );
-            }
+            // One record per snapshot, not one per run. Every console line
+            // costs a main-thread IPC invoke under desktop file logging, and a
+            // snapshot is a single event about a whole holding. Per-event
+            // logging below stays per run, where the run is the subject.
+            recordLaunchDiscovery(
+              "graphql-frame-received",
+              identity(null, frame.cursor),
+              { frameType: "snapshot", runCount: frame.runs.length },
+            );
             const applied = applySnapshotFrame(frame);
-            if (applied) snapshotCursor = frame.cursor;
             if (applied) {
-              for (const run of frame.runs) {
-                recordLaunchDiscovery(
-                  "apollo-run-applied",
-                  identity(run.agent_run_id, frame.cursor),
-                  { source: "snapshot" },
-                );
-              }
+              snapshotCursor = frame.cursor;
+              recordLaunchDiscovery(
+                "apollo-run-applied",
+                identity(null, frame.cursor),
+                { source: "snapshot", runCount: frame.runs.length },
+              );
             }
           },
           onEvent(frame) {

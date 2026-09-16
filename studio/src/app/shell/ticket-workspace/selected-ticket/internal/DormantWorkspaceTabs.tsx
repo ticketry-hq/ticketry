@@ -41,7 +41,7 @@ export function DormantWorkspaceTabs({
   }
 
   return (
-    <div className="mb-1 flex shrink-0 flex-wrap gap-1">
+    <div className="mb-1 flex max-h-[25%] shrink-0 flex-wrap gap-1 overflow-y-auto">
       {closedDocuments.map((document) => (
         <button
           key={document.id}

@@ -66,6 +66,12 @@ export {
   excludeResumableTerminalRuns,
   selectWorkspaceTerminalRuns,
 } from "./runTabRestoration";
+// Ended runs are no longer pushed by the status stream; a Story and a module
+// scratch workspace each read their own through the generated WorkItem model.
+export {
+  useModuleScratchEndedRuns,
+  useStoryEndedRuns,
+} from "./workItemRunRestoration";
 export {
   presentDormantTerminalChips,
   type DormantTerminalChip,

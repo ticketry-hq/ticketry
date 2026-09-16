@@ -130,29 +130,12 @@ describe("overhaul acceptance — Run Now", () => {
 
     useClientStore.getState().selectTask("key-idea");
     await within(details).findByRole("button", { name: "Run now" });
-    http.failNextRunNow(409, {
-      target_id: "key-idea",
-      committed_state: null,
-      run: null,
-      detail: "An agent is already running for this Story. Close it before trying again.",
-      code: "task_already_active",
-    });
-    fireEvent.keyDown(window, { key: "r" });
-    await waitFor(() => expect(http.runNowCount("key-idea")).toBe(1));
-    await waitFor(() =>
-      expect(hasToast("error", "Close its terminal before trying again."))
-        .toBe(true),
-    );
-    expect(hasToast("success", "Keyboard idea")).toBe(false);
-    expect(useClientStore.getState().workspaces["key-idea"]?.active)
-      .not.toBe("terminal");
-
     fireEvent.keyDown(window, { key: "r" });
     await waitFor(() =>
       expect(useClientStore.getState().workspaces["key-idea"]?.active)
         .toBe("terminal"),
     );
-    expect(http.runNowCount("key-idea")).toBe(2);
+    expect(http.runNowCount("key-idea")).toBe(1);
 
     useClientStore.getState().selectTask("refusal-idea");
     const refusalRunNow = await within(details).findByRole("button", { name: "Run now" });

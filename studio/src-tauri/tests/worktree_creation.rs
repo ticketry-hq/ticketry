@@ -12,6 +12,9 @@ use std::process::Command;
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection, DbBackend, Statement};
 use tauri_graphql::{TransportApi, TransportApiImpl};
 use ticketry_graphql_schema::initialize_with_worktracker_commands_and_install;
+use ticketry_provider::{
+    provider_contract, DirectoryTrustContext, DirectoryTrustInspection, Provider,
+};
 
 const PROJECT: &str = "10000000000000000000000000000000";
 const TASK_TYPE: &str = "30000000000000000000000000000001";
@@ -122,6 +125,7 @@ fn unique(name: &str) -> String {
 
 /// One `worktrees` row, as the assertions read it.
 struct IndexedWorktree {
+    id: String,
     task_id: String,
     branch: String,
     base_branch: String,
@@ -191,17 +195,18 @@ impl Fixture {
     async fn rows(&self) -> Vec<IndexedWorktree> {
         rows(
             &self.database().await,
-            "SELECT task_id, branch, base_branch, base_commit, path, status FROM worktrees ORDER BY task_id",
+            "SELECT id, task_id, branch, base_branch, base_commit, path, status FROM worktrees ORDER BY task_id",
         )
         .await
         .into_iter()
         .map(|row| IndexedWorktree {
-            task_id: text(&row, 0),
-            branch: text(&row, 1),
-            base_branch: text(&row, 2),
-            base_commit: text(&row, 3),
-            path: text(&row, 4),
-            status: text(&row, 5),
+            id: text(&row, 0),
+            task_id: text(&row, 1),
+            branch: text(&row, 2),
+            base_branch: text(&row, 3),
+            base_commit: text(&row, 4),
+            path: text(&row, 5),
+            status: text(&row, 6),
         })
         .collect()
     }
@@ -604,6 +609,40 @@ async fn the_same_operation_identity_returns_the_same_worktree() {
         1
     );
     assert_eq!(fixture.facts().await.len(), 1, "one creation, one fact");
+}
+
+#[tokio::test]
+async fn retry_after_post_creation_setup_failure_reuses_the_checkout() {
+    let fixture = fixture().await;
+    let first = fixture
+        .created(PARENT_TASK, &uuid::Uuid::new_v4().to_string())
+        .await;
+    let first_row = fixture.rows().await.remove(0);
+
+    // Provider trust runs after this mutation and can fail independently.
+    let malformed_config = fixture.directory.path().join("gemini-trust.json");
+    std::fs::write(&malformed_config, "{").expect("write malformed provider config");
+    assert!(matches!(
+        provider_contract(Provider::Gemini).inspect_directory_trust(DirectoryTrustContext {
+            directory: Path::new(first["path"].as_str().expect("created checkout path")),
+            trust_file: Some(&malformed_config),
+        }),
+        DirectoryTrustInspection::Failed(_)
+    ));
+
+    // A retry is a new UI intent, but must still recover this exact checkout.
+    let retried = fixture
+        .created(PARENT_TASK, &uuid::Uuid::new_v4().to_string())
+        .await;
+    let retried_rows = fixture.rows().await;
+
+    assert_eq!(retried, first);
+    assert_eq!(retried_rows.len(), 1);
+    assert_eq!(retried_rows[0].id, first_row.id);
+    assert_eq!(retried_rows[0].path, first_row.path);
+    assert_eq!(retried_rows[0].branch, first_row.branch);
+    assert_eq!(fixture.operations().await.len(), 1);
+    assert_eq!(fixture.facts().await.len(), 1);
 }
 
 #[tokio::test]

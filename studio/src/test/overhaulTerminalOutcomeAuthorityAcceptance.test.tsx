@@ -286,29 +286,30 @@ describe("overhaul acceptance — terminal outcome authority", () => {
     expect(useAgentStatusStore.getState().runs["run-1"].state).toBe("quiet");
   });
 
-  it("[overhaul-238] closes a terminal when an authoritative snapshot reports its run exited", () => {
+  it("[overhaul-238] closes a terminal the authoritative snapshot no longer carries as live", () => {
     renderWorkspace();
     expect(screen.getByRole("tab", { name: "Implement codex terminal" }))
       .toBeInTheDocument();
 
+    // The snapshot carries live runs only, so a run that ended while this
+    // client was away is simply absent from it.
     act(() => {
       applySnapshotFrame({
         __typename: "RunStatusSnapshot",
         project_id: "project-1",
         cursor: 4,
-        runs: [
-          statusRunHolding(run({
-            state: "exited",
-            effective_state: "exited",
-            updated_at: TERMINATED_AT,
-          })),
-        ],
+        runs: [],
         automation_attempts: [],
         at: TERMINATED_AT,
       });
     });
 
-    expectExitedEverywhere();
+    expect(screen.queryByLabelText(STALLED_TITLE)).not.toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "codex terminal" })).not.toBeInTheDocument();
+    expect(screen.queryByTestId("agent-state-badge")).not.toBeInTheDocument();
     expect(useTerminalStore.getState().sessions).toEqual({});
+    // Absence means "not live", never "exited": no outcome is invented for a
+    // run the snapshot merely stopped carrying.
+    expect(useAgentStatusStore.getState().runs["run-1"]).toBeUndefined();
   });
 });

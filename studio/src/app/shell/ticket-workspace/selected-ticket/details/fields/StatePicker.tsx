@@ -5,7 +5,7 @@ import {
 } from "../../../../../../features/projects";
 import { compareStateOrder, stateColor, stateLabel } from "../../../../../../shared/utilities/display";
 import type { State } from "../../../../../../shared/api/types";
-import Popover, { PopoverOption } from "./Popover";
+import Popover, { PopoverOption } from "../../../../../../shared/ui/Popover";
 import PickerTrigger from "./PickerTrigger";
 
 interface Props {

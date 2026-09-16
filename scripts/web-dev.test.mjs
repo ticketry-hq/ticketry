@@ -34,7 +34,7 @@ test("local web defaults apply without overriding explicit environment", () => {
   writeFileSync(configPath, JSON.stringify({
     environment: {
       MUXED_DATA_DIR: "/configured/data",
-      MUXED_DESKTOP_MCP_PORT: "8124",
+      TICKETRY_GRAPHQL_ADAPTER_PORT: "8794",
       MUXED_TMUX_SOCKET: "configured-socket",
     },
     logToFile: true,
@@ -46,7 +46,7 @@ test("local web defaults apply without overriding explicit environment", () => {
   }), {
     environment: {
       MUXED_DATA_DIR: "/explicit/data",
-      MUXED_DESKTOP_MCP_PORT: "8124",
+      TICKETRY_GRAPHQL_ADAPTER_PORT: "8794",
       MUXED_TMUX_SOCKET: "configured-socket",
       PRESERVED: "yes",
     },
@@ -73,7 +73,7 @@ test("authoritative local web defaults replace inherited profile settings", () =
   writeFileSync(configPath, JSON.stringify({
     environment: {
       MUXED_DATA_DIR: "/configured/data",
-      MUXED_DESKTOP_MCP_PORT: "8124",
+      TICKETRY_GRAPHQL_ADAPTER_PORT: "8794",
     },
     overrideEnvironment: true,
     reuseGraphqlAdapter: true,
@@ -85,7 +85,7 @@ test("authoritative local web defaults replace inherited profile settings", () =
   });
   assert.deepEqual(defaults.environment, {
     MUXED_DATA_DIR: "/configured/data",
-    MUXED_DESKTOP_MCP_PORT: "8124",
+    TICKETRY_GRAPHQL_ADAPTER_PORT: "8794",
   });
   assert.equal(defaults.reuseGraphqlAdapter, true);
   rmSync(directory, { recursive: true });
@@ -316,13 +316,16 @@ test("web development builds the hook runner beside Cargo debug binaries", () =>
     cwd: "/repository",
     platform: "darwin",
   }), {
-    command: "rustc",
+    command: "cargo",
     args: [
-      "/repository/studio/src-tauri/native/ticketry_hook.rs",
-      "--edition",
-      "2021",
-      "-o",
-      "/repository/studio/src-tauri/target/debug/ticketry-hook",
+      "build",
+      "--locked",
+      "--manifest-path",
+      "/repository/studio/src-tauri/Cargo.toml",
+      "-p",
+      "ticketry-hook",
+      "--bin",
+      "ticketry-hook",
     ],
     output: "/repository/studio/src-tauri/target/debug/ticketry-hook",
   });
@@ -339,21 +342,21 @@ test("Rust adapter and frontend port selection shift independently", async () =>
   );
 });
 
-test("web development reserves the fixed MCP port", async () => {
-  const available = async (port) => port !== 8123;
-  await assert.rejects(
-    selectWebPort({ requestedPort: 8123, firstPort: 8123, isAvailable: available }),
-    /Requested port 8123 is unavailable/,
-  );
-  assert.equal(
-    await selectWebPort({ requestedPort: 8123, firstPort: 8123, isAvailable: async () => true }),
-    8123,
-  );
-});
 
 test("web development stops waiting when the GraphQL adapter exits", async () => {
   await assert.rejects(
     waitUntilGraphqlReady(8790, 180_000, () => true),
     /GraphQL adapter stopped before it became ready/,
   );
+});
+
+test("web defaults reject the retired MCP TCP override", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "ticketry-web-retired-port-"));
+  const configPath = path.join(directory, "web-defaults.json");
+  try {
+    writeFileSync(configPath, JSON.stringify({ environment: { MUXED_DESKTOP_MCP_PORT: "8123" } }));
+    assert.throws(() => loadWebDevDefaults({ configPath, environment: {} }), /unsupported setting/);
+  } finally {
+    rmSync(directory, { recursive: true });
+  }
 });

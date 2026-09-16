@@ -154,6 +154,28 @@ async fn codex_profiles_are_trimmed_deduplicated_and_validate_the_default() {
 }
 
 #[tokio::test]
+async fn persisted_codex_profiles_are_normalized_without_rewriting_configuration() {
+    let raw = r#"{"codex_profiles":[" work ","","work"]}"#;
+    let (_directory, database) = fixture(Some(raw)).await;
+    let service = ProviderCatalogService::open(database.clone())
+        .await
+        .unwrap();
+
+    assert_eq!(service.load().await.unwrap().codex_profiles.0, ["work"]);
+    let persisted = database
+        .query_one_raw(sea_orm::Statement::from_string(
+            sea_orm::DbBackend::Sqlite,
+            "SELECT value FROM app_settings".to_owned(),
+        ))
+        .await
+        .unwrap()
+        .unwrap()
+        .try_get::<String>("", "value")
+        .unwrap();
+    assert_eq!(persisted, raw);
+}
+
+#[tokio::test]
 async fn existing_rows_keep_stable_ids_compatibility_and_deterministic_order() {
     let (_directory, database) = fixture(None).await;
     let service = ProviderCatalogService::open(database).await.unwrap();
@@ -185,6 +207,56 @@ async fn existing_rows_keep_stable_ids_compatibility_and_deterministic_order() {
             .map(|row| row.name.as_str())
             .collect::<Vec<_>>(),
         vec!["high", "low"]
+    );
+}
+
+#[tokio::test]
+async fn catalog_updates_preserve_custom_models_ids_and_effort_compatibility() {
+    let (directory, database) = fixture(None).await;
+    let service = ProviderCatalogService::open(database.clone())
+        .await
+        .unwrap();
+
+    service
+        .update(update(
+            &["codex"],
+            Some("codex"),
+            Some("gpt-mini"),
+            Some("low"),
+        ))
+        .await
+        .unwrap();
+    database.close().await.unwrap();
+
+    let reopened = Database::connect(format!(
+        "sqlite:{}?mode=rw",
+        directory.path().join("state.db").display()
+    ))
+    .await
+    .unwrap();
+    let catalog = ProviderCatalogService::open(reopened)
+        .await
+        .unwrap()
+        .load()
+        .await
+        .unwrap();
+
+    assert_eq!(
+        catalog
+            .agent_models
+            .iter()
+            .find(|row| row.name == "gpt-mini")
+            .map(|row| row.id.as_str()),
+        Some(MINI)
+    );
+    assert_eq!(
+        catalog.global_default.unwrap(),
+        GlobalLaunchDefault {
+            provider: "codex".into(),
+            profile: None,
+            model: Some("gpt-mini".into()),
+            reasoning: Some("low".into()),
+        }
     );
 }
 
@@ -298,6 +370,53 @@ async fn invalid_updates_reject_without_partial_activation_changes() {
             .await
             .unwrap()
             .is_none());
+    }
+}
+
+#[tokio::test]
+async fn provider_profile_contract_rejects_unsupported_unregistered_and_conflicting_defaults() {
+    let (_directory, database) = fixture(None).await;
+    let service = ProviderCatalogService::open(database.clone())
+        .await
+        .unwrap();
+    let before = activation(&database).await;
+    let candidates = [
+        ProviderCatalogUpdate {
+            activated_providers: vec!["claude".into()],
+            codex_profiles: vec!["work".into()],
+            global_default: Some(GlobalLaunchDefault {
+                provider: "claude".into(),
+                profile: Some("work".into()),
+                model: None,
+                reasoning: None,
+            }),
+        },
+        ProviderCatalogUpdate {
+            activated_providers: vec!["codex".into()],
+            codex_profiles: vec!["work".into()],
+            global_default: Some(GlobalLaunchDefault {
+                provider: "codex".into(),
+                profile: Some("missing".into()),
+                model: None,
+                reasoning: None,
+            }),
+        },
+        ProviderCatalogUpdate {
+            activated_providers: vec!["codex".into()],
+            codex_profiles: vec!["work".into()],
+            global_default: Some(GlobalLaunchDefault {
+                provider: "codex".into(),
+                profile: Some("work".into()),
+                model: Some("gpt-5.4".into()),
+                reasoning: None,
+            }),
+        },
+    ];
+
+    for candidate in candidates {
+        let error = service.update(candidate).await.unwrap_err();
+        assert_eq!(error.field(), Some("default_profile"));
+        assert_eq!(activation(&database).await, before);
     }
 }
 

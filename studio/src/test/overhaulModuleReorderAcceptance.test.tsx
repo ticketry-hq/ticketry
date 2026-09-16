@@ -66,8 +66,8 @@ describe("module sidebar reorder acceptance", () => {
     const settle = deferred<WorkItem>();
     reorderWorkItem.mockReturnValue(settle.promise);
 
-    // Drag the last module above the first. The order the user can see is the
-    // activity-sorted one, which only Studio knows — so it must be the baseline.
+    // Drag the last module above the first. The canonical order the user can
+    // see must be the baseline sent to the server.
     dragModule("module-c", "module-a", "near");
 
     await waitFor(() => expect(reorderWorkItem).toHaveBeenCalled());
@@ -104,8 +104,7 @@ describe("module sidebar reorder acceptance", () => {
 
     settle.resolve(moved("module-c"));
 
-    // Recency still reports a as the most recent module; a manual project must
-    // ignore it and keep the server's persisted order.
+    // A manual project keeps the server's persisted order after the refresh.
     await waitFor(() => expect(listProjects).toHaveBeenCalledTimes(2));
     await waitFor(() =>
       expect(sidebarOrder()).toEqual(["module-c", "module-a", "module-b"]),
@@ -139,13 +138,13 @@ describe("module sidebar reorder acceptance", () => {
     expect(sidebarOrder()).toEqual(["module-c", "module-a", "module-b"]);
     expect(tabStripOrder()).toEqual(["C", "A", "B"]);
 
-    // Once reads recover, the server's newest-first automatic order wins.
+    // Once reads recover, the server's creation-order automatic mode wins.
     listProjects.mockResolvedValue([project(false)]);
-    listModules.mockResolvedValue(modules("module-c", "module-b", "module-a"));
+    listModules.mockResolvedValue(modules("module-a", "module-b", "module-c"));
     await loadModules(PROJECT_ID);
 
     await waitFor(() =>
-      expect(sidebarOrder()).toEqual(["module-c", "module-b", "module-a"]),
+      expect(sidebarOrder()).toEqual(["module-a", "module-b", "module-c"]),
     );
   });
 

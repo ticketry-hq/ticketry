@@ -13,6 +13,7 @@
     "desktop:build": "node scripts/release-build.mjs",
     "desktop:deploy": "node scripts/desktop-deploy.mjs",
     "desktop:dev": "node scripts/desktop-dev.mjs",
+    "desktop:dev:test": "node --test scripts/desktop-dev.test.mjs scripts/desktop-hook-runner.test.mjs",
     "release:build": "node scripts/release-build.mjs",
     "release:validate": "node scripts/release-build.mjs --validate",
     "release:test": "node --test scripts/release-build.test.mjs scripts/release-provenance.test.mjs scripts/desktop-deploy.test.mjs scripts/installed-artifact-acceptance.test.mjs scripts/installed-artifact-acceptance-driver.test.mjs scripts/packaged-update-build.test.mjs scripts/packaged-update-feed.test.mjs scripts/packaged-update-acceptance.test.mjs scripts/packaged-update-acceptance-command.test.mjs scripts/packaged-update-acceptance-environment.test.mjs scripts/packaged-update-acceptance-driver.test.mjs scripts/packaged-update-acceptance-runner.test.mjs scripts/packaged-update-webdriver.test.mjs scripts/release-publish.test.mjs scripts/public-update-publisher.test.mjs scripts/update-acceptance.test.mjs scripts/update-acceptance-driver.test.mjs",

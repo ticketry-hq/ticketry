@@ -4,8 +4,8 @@ import {
 } from "../../../../../../features/settings";
 import type { IssueType } from "../../../../../../shared/api/types";
 import { IssueTypeLabel } from "../../../../../../shared/ui/IssueTypeLabel";
-import Popover, { PopoverOption } from "./Popover";
-import PopoverContent from "./PopoverContent";
+import Popover, { PopoverOption } from "../../../../../../shared/ui/Popover";
+import PopoverContent from "../../../../../../shared/ui/PopoverContent";
 import PickerTrigger from "./PickerTrigger";
 
 const EMPTY_ISSUE_TYPES: IssueType[] = [];

@@ -68,6 +68,7 @@ fn main() {
         "libghostty_command_routing.m",
         "libghostty_view_bridge.m",
         "libghostty_view_handles.m",
+        "libghostty_zoom.m",
     ] {
         println!("cargo:rerun-if-changed={}", native.join(source).display());
     }

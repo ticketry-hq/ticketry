@@ -2,7 +2,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { gql } from "@apollo/client";
 
-import DocViewer from "../app/shell/ticket-workspace/selected-ticket/documents/DocViewer";
+import { DocViewer } from "../features/documents";
 import {
   listScratchDocuments,
   listTaskDocuments,

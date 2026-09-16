@@ -12,7 +12,9 @@ import {
   useSetWorkItemState,
   usePlanningFilterStore,
   useWorkItemAttachments,
-  useModuleOpen,
+  StoriesTreeProvider,
+  useStoriesTree,
+  useWorkItem,
 } from "../../../../../features/work-items";
 import { dialog, toast, useClientStore } from "../../../../../state/clientStore";
 import { useStudioStore } from "../../../../../features/projects";
@@ -41,8 +43,19 @@ import { LaunchAgentAction } from "./LaunchAgentAction";
 import { SubtreeRunActions } from "./SubtreeRunActions";
 import { RunNowAction } from "./RunNowAction";
 import { readVersionedItem } from "../../../../../shared/storage/versioned";
+import { recordSelectionProfilePoint } from "../../../../../shared/utilities/selectionProfile";
 
-const DescriptionEditor = lazy(() => import("../documents/DescriptionEditor"));
+import { taskDetailPoint } from "../../../../../shared/utilities/taskDetailProbe";
+import { useTaskDetailCommit } from "../../../../../shared/utilities/useTaskDetailCommit";
+
+const DescriptionEditor = lazy(async () => {
+  const probe = taskDetailPoint();
+  const started = performance.now();
+  probe("description-import-start");
+  const loaded = await import("../../../../../features/documents/DescriptionEditor");
+  probe("description-import-ready", { import_ms: performance.now() - started });
+  return loaded;
+});
 
 // The Details sidebar's visibility persists globally (#837).
 const SIDEBAR_KEY = "studio.issueDetail.sidebarVisible:v1";
@@ -53,13 +66,30 @@ function readSidebarVisible(): boolean {
   return readVersionedItem(SIDEBAR_KEY, LEGACY_SIDEBAR_KEYS) !== "0";
 }
 
-// The two-pane issue body reads the same per-id holding as the Stories row.
-// A mounted query requests only when that holding is genuinely absent.
-export default function IssueDetail({ issueId }: { issueId: string }) {
+// Details subscribe to the selected normalized record and share list membership.
+export default function IssueDetail({
+  issueId,
+  detailsVisible = true,
+}: {
+  issueId: string;
+  detailsVisible?: boolean;
+}) {
+  return <StoriesTreeProvider><IssueDetailContent issueId={issueId} detailsVisible={detailsVisible} /></StoriesTreeProvider>;
+}
+
+function IssueDetailContent({ issueId, detailsVisible }: { issueId: string; detailsVisible: boolean }) {
+  recordSelectionProfilePoint("issue-detail-render");
   const selectedModuleId = useClientStore((s) => s.selectedModuleId);
   const selectedProjectId = useStudioStore((s) => s.selectedProjectId);
-  const { tree: membership, items, loading } = useModuleOpen(selectedModuleId);
-  const task = items.find((item) => item.id === issueId) ?? null;
+  const { tree: membership, items, itemsById, loading } = useStoriesTree();
+  const { data: selectedTask } = useWorkItem(issueId);
+  const task = selectedTask ?? null;
+  useTaskDetailCommit(
+    issueId,
+    selectedModuleId,
+    task ? "details-data-ready" : "details-data-pending",
+    detailsVisible,
+  );
   const taskQuery = {
     isPending: loading,
     error: undefined as Error | undefined,
@@ -68,7 +98,7 @@ export default function IssueDetail({ issueId }: { issueId: string }) {
   const displayedChildIds = task
     ? membership.children[task.id] ?? NO_CHILD_IDS
     : NO_CHILD_IDS;
-  const displayedChildren = items.filter((item) => displayedChildIds.includes(item.id));
+  const displayedChildren = displayedChildIds.flatMap((id) => itemsById[id] ? [itemsById[id]!] : []);
   const projectContextId = selectedProjectId ?? task?.project_id ?? null;
   const modules = useModulesQuery(projectContextId).data ?? EMPTY_MODULES;
   const projects = useProjectsQuery().data ?? EMPTY_PROJECTS;
@@ -203,7 +233,7 @@ export default function IssueDetail({ issueId }: { issueId: string }) {
       danger: true,
     });
     if (!ok) return;
-    await deleteWorkItem(task.id);
+    await deleteWorkItem(task.id, { moduleId: epic?.id ?? selectedModuleId ?? undefined });
   };
 
   return (
@@ -229,6 +259,11 @@ export default function IssueDetail({ issueId }: { issueId: string }) {
             aria-label={sidebarVisible ? "Hide details panel" : "Show details panel"}
             title={sidebarVisible ? "Hide details panel" : "Show details panel"}
             data-testid="issue-sidebar-toggle"
+            ref={(element) => {
+              if (element && detailsVisible && !element.disabled) {
+                taskDetailPoint(task.id)("details-sidebar-toggle-enabled");
+              }
+            }}
             className={`flex-none p-1 transition-colors hover:bg-pane-title hover:text-text-primary ${
               sidebarVisible ? "text-text-secondary" : "text-focus-accent"
             }`}
@@ -279,9 +314,11 @@ export default function IssueDetail({ issueId }: { issueId: string }) {
           <Suspense fallback={null}>
             <DescriptionEditor
               key={task.id}
+              issueId={task.id}
               value={descriptionValue}
+              detailsVisible={detailsVisible}
               onSave={(description) =>
-                editDescription.mutate(
+                editDescription.mutateAsync(
                   { id: task.id, description },
                   { onError: reportMutationError },
                 )
@@ -333,7 +370,7 @@ export default function IssueDetail({ issueId }: { issueId: string }) {
           }
           setParent={(parentId) =>
             setParent.mutate(
-              { id: task.id, parentId },
+              { id: task.id, parentId, moduleId: epic?.id ?? selectedModuleId ?? undefined },
               { onError: reportMutationError },
             )
           }

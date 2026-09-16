@@ -1,5 +1,6 @@
 use sea_orm::{
-    ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, QuerySelect, QueryTrait,
+    ColumnTrait, Condition, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, QuerySelect,
+    QueryTrait,
 };
 
 use super::{
@@ -186,7 +187,11 @@ async fn retryable(
 /// Auto-start occurrences that have not already produced a decision.
 fn pending_query() -> sea_orm::Select<transition_occurrence::Entity> {
     transition_occurrence::Entity::find()
-        .filter(transition_occurrence::Column::DestinationAutoStart.eq(true))
+        .filter(
+            Condition::any()
+                .add(transition_occurrence::Column::DestinationAutoStart.eq(true))
+                .add(transition_occurrence::Column::Handoff.eq(true)),
+        )
         .filter(transition_occurrence::Column::RunNowDecisionId.is_null())
         .filter(
             transition_occurrence::Column::OccurrenceId.not_in_subquery(
@@ -213,6 +218,8 @@ mod tests {
         database: &DatabaseConnection,
         id: &str,
         run_now_decision_id: Option<&str>,
+        auto_start: bool,
+        handoff: bool,
     ) {
         transition_occurrence::ActiveModel {
             occurrence_id: Set(id.to_owned()),
@@ -226,8 +233,8 @@ mod tests {
             to_group: Set("started".to_owned()),
             work_item_revision: Set(2),
             workflow_revision: Set(3),
-            destination_auto_start: Set(true),
-            handoff: Set(false),
+            destination_auto_start: Set(auto_start),
+            handoff: Set(handoff),
             origin: Set("agent".to_owned()),
             run_now_decision_id: Set(run_now_decision_id.map(str::to_owned)),
             committed_at: sea_orm::ActiveValue::NotSet,
@@ -248,11 +255,30 @@ mod tests {
             .await
             .unwrap();
         let database = open_for_commands(&path).await.unwrap();
-        occurrence(&database, "claimed", Some("run-now-decision")).await;
-        occurrence(&database, "ordinary", None).await;
+        occurrence(&database, "claimed", Some("run-now-decision"), true, false).await;
+        occurrence(&database, "ordinary", None, true, false).await;
 
         let pending = unjudged(&database, 10).await.unwrap();
         assert_eq!(pending.len(), 1);
         assert_eq!(pending[0].occurrence_id, "ordinary");
+    }
+
+    #[tokio::test]
+    async fn handoff_is_pending_without_destination_auto_start() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("state.db");
+        Database::connect(format!("sqlite:{}?mode=rwc", path.display()))
+            .await
+            .unwrap()
+            .close()
+            .await
+            .unwrap();
+        let database = open_for_commands(&path).await.unwrap();
+        occurrence(&database, "handoff", None, false, true).await;
+        occurrence(&database, "inactive", None, false, false).await;
+
+        let pending = unjudged(&database, 10).await.unwrap();
+        assert_eq!(pending.len(), 1);
+        assert_eq!(pending[0].occurrence_id, "handoff");
     }
 }

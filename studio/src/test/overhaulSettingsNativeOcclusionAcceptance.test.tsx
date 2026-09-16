@@ -5,9 +5,10 @@
  * stack directly. What is asserted here is the integration users actually hit:
  * the real footer Settings action and the real global Settings binding, taken
  * while one libghostty viewer is attached and presented, must expose the
- * singleton dialog and commit a native hide — without detaching the viewer,
- * releasing its lease, closing the terminal, or ending the run — and closing
- * the dialog must remeasure the host and reveal the same handle.
+ * singleton dialog while the viewer stays presented beneath it as a WebView
+ * sibling (CODING-1497): input ownership moves to the WebView, no hide, no
+ * detach, no lease traffic, no terminal close, and the run keeps its session.
+ * Closing the dialog leaves the same presented handle in place.
  */
 
 import { act, fireEvent, render, renderHook, screen, waitFor, within } from "@testing-library/react";
@@ -211,7 +212,7 @@ describe("overhaul acceptance — Settings over an attached native terminal", ()
     vi.unstubAllGlobals();
   });
 
-  it("[overhaul-117] opens Settings from the footer over a presented native terminal, hides that viewer without tearing it down, and restores the same handle on close", async () => {
+  it("[overhaul-117] opens Settings from the footer over a presented native terminal, keeps that viewer presented while the WebView owns input, and leaves the same handle in place on close", async () => {
     const view = renderStudioWithAttachedTerminal();
     await waitForPresentedViewer();
 
@@ -236,14 +237,17 @@ describe("overhaul acceptance — Settings over an attached native terminal", ()
     expect(dialog.parentElement).toHaveClass("fixed", "inset-0", "bg-black/60");
     expect(within(dialog).getByRole("button", { name: "Close dialog" })).toBeEnabled();
 
+    // The viewer stays presented beneath the dialog; only input ownership moves.
     await waitFor(() => {
-      expect(tauri.invoke).toHaveBeenCalledWith("native_terminal_hide", {
+      expect(invocations("native_terminal_set_webview_interaction").at(-1)?.[0]).toMatchObject({
         handle: HANDLE,
+        webviewFocus: true,
       });
     });
+    expect(invocations("native_terminal_hide")).toHaveLength(0);
 
-    // Occlusion is presentation only: no detach, no second attachment, no
-    // lease traffic, no terminal close, and the run keeps its session.
+    // Occlusion is input only: no detach, no second attachment, no lease
+    // traffic, no terminal close, and the run keeps its session.
     expect(invocations("native_terminal_detach")).toHaveLength(0);
     expect(invocations("native_terminal_attach")).toHaveLength(1);
     expect(claims()).toHaveLength(claimsBeforeSettings);
@@ -255,7 +259,7 @@ describe("overhaul acceptance — Settings over an attached native terminal", ()
       status: "ready",
     });
 
-    // A hidden viewer cannot accept focus while the dialog is up.
+    // A presented viewer still cannot take focus while the dialog is up.
     act(() => focusTerminal("session-1"));
     expect(invocations("native_terminal_focus")).toHaveLength(0);
 
@@ -266,12 +270,10 @@ describe("overhaul acceptance — Settings over an attached native terminal", ()
       ).not.toBeInTheDocument();
     });
 
-    // The same handle is revealed against the host's current measurement.
-    await waitFor(() => {
-      expect(invocations("native_terminal_show")).toHaveLength(2);
-    });
-    expect(invocations("native_terminal_show").at(-1)).toEqual([
-      { handle: HANDLE, frame: FRAME },
+    // Nothing was hidden, so nothing is re-shown: the one reveal stands.
+    expect(invocations("native_terminal_hide")).toHaveLength(0);
+    expect(invocations("native_terminal_show")).toEqual([
+      [{ handle: HANDLE, frame: FRAME }],
     ]);
     expect(invocations("native_terminal_attach")).toHaveLength(1);
     expect(acquisitions()).toHaveLength(1);
@@ -302,13 +304,15 @@ describe("overhaul acceptance — Settings over an attached native terminal", ()
     expect(useModalStore.getState().modalStack).toEqual([{ type: "settings" }]);
 
     await waitFor(() => {
-      expect(tauri.invoke).toHaveBeenCalledWith("native_terminal_hide", {
+      expect(invocations("native_terminal_set_webview_interaction").at(-1)?.[0]).toMatchObject({
         handle: HANDLE,
+        webviewFocus: true,
       });
     });
+    expect(invocations("native_terminal_hide")).toHaveLength(0);
 
-    // Terminal input is suspended: the hidden viewer neither takes focus nor
-    // opens a second Settings from another report of the same chord.
+    // Terminal input is suspended: the presented viewer neither takes focus
+    // nor opens a second Settings from another report of the same chord.
     act(() => focusTerminal("session-1"));
     act(() => {
       reportNativeSettingsChord();

@@ -8,6 +8,7 @@ import {
   STATE_HEADER as HEADER,
   type PlanningRow as Row,
   type PlanningTreeRow as TreeRow,
+  StoriesTreeProvider,
   useStoriesTree,
   useReorderWorkItem,
   useSetWorkItemState,
@@ -34,7 +35,6 @@ import {
   useSelectedPlanningRowId,
 } from "./internal/instantRunTicketNavigation";
 import { startInstantChangeFlow } from "../../../../features/studio/modals/PlanFeature";
-import { ConversationStateBadge } from "../../../../features/agents/lifecycle";
 import {
   ConversationDesignPrototype,
   hasConversationDesignPrototype,
@@ -48,6 +48,9 @@ export {
   type ScratchRow,
   type WorkItemRow,
 } from "../../../../features/work-items";
+import { recordSelectionProfilePoint } from "../../../../shared/utilities/selectionProfile";
+import { selectedRunSession } from "../../../../features/agents/actions/selectedAgentRun";
+import { useTerminalStore } from "../../../../features/agents/terminal/appNavigation";
 
 export function planningRowId(row: Row): string {
   if (row.kind === "work-item") return row.id;
@@ -60,12 +63,6 @@ interface TicketDragPayload {
 }
 
 const stateDropTargetId = (stateId: string) => `state:${stateId}`;
-
-const recordSelectionProfilePoint = (point: string) => {
-  (globalThis as typeof globalThis & {
-    __ticketrySelectionProfileProbe?: (point: string) => void;
-  }).__ticketrySelectionProfileProbe?.(point);
-};
 
 const ticketDragCodec: DragPayloadCodec<TicketDragPayload> = {
   type: "application/x-ticketry-workflow-ticket",
@@ -104,6 +101,10 @@ function groupRootBlocks(rows: TreeRow[]): RenderBlock[] {
 }
 
 export function TasksPane() {
+  return <StoriesTreeProvider><TasksPaneContent /></StoriesTreeProvider>;
+}
+
+function TasksPaneContent() {
   recordSelectionProfilePoint("tasks-pane-render");
   const selectedProjectId = useStudioStore((s) => s.selectedProjectId);
   const selectedRowId = useSelectedPlanningRowId();
@@ -291,6 +292,22 @@ export function TasksPane() {
     },
     [selectedProjectId, toggleStateConfiguration],
   );
+  const handleToggleConversationConfiguration = useCallback(() => {
+    if (selectedProjectId && selectedModuleId) {
+      const closing = useClientStore.getState().workspaceSelection.kind ===
+        "conversation-configuration";
+      useClientStore.getState().toggleConversationConfiguration(
+        selectedProjectId,
+        selectedModuleId,
+      );
+      if (closing) {
+        requestAnimationFrame(() => {
+          const session = selectedRunSession();
+          if (session) useTerminalStore.getState().focusSession(session.sessionId);
+        });
+      }
+    }
+  }, [selectedModuleId, selectedProjectId]);
 
   function renderNonTaskRow(r: Exclude<TreeRow, Row>) {
     if ("kind" in r && r.kind === HEADER) {
@@ -312,6 +329,11 @@ export function TasksPane() {
           }
           onToggle={handleToggleStateCollapsed}
           onConfigure={handleToggleStateConfiguration}
+          onConfigureSection={
+            r.stateId === null && r.stateName === "Conversations"
+              ? handleToggleConversationConfiguration
+              : undefined
+          }
           stateId={r.stateId}
           dropTargetProps={
             targetId && !isSearchActive
@@ -319,16 +341,6 @@ export function TasksPane() {
               : undefined
           }
           showDropSeam={isTarget}
-          statusAdornment={
-            r.stateId === null && r.stateName === "Conversations"
-              ? (
-                  <ConversationStateBadge
-                    projectId={selectedProjectId}
-                    moduleId={selectedModuleId}
-                  />
-                )
-              : undefined
-          }
         />
       );
     }

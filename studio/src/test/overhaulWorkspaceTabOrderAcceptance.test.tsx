@@ -32,10 +32,7 @@ const documentRegistry = vi.hoisted(() => ({
 }));
 const saves = vi.hoisted(() => vi.fn());
 
-vi.mock("../features/documents", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../features/documents")>()),
-  ...documentRegistry,
-}));
+vi.mock("../features/documents/documentRegistry", () => documentRegistry);
 
 vi.mock(
   "../app/shell/ticket-workspace/selected-ticket/terminals/SelectedTicketTerminal",

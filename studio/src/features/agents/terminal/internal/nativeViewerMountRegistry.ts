@@ -1,9 +1,6 @@
 import { useEffect, useRef, useSyncExternalStore } from "react";
 
-import {
-  recordNativeViewerFailureEvidence,
-  type NativeViewerFailureReport,
-} from "./nativeViewerFailureEvidence";
+import { recordNativeRendererFallback } from "./terminalViewerDiagnostics";
 import { nativeViewerSessionIsLive } from "./nativeViewerSessionLiveness";
 import { useTerminalStore } from "./sessionStore";
 
@@ -12,7 +9,6 @@ type MountEntry = {
   handle: string | null;
   presentedBy: symbol | null;
   lifecycleStarted: boolean;
-  fail: ((reason: string) => void) | null;
   teardown: (() => void) | null;
 };
 
@@ -100,7 +96,6 @@ export function useNativeViewerMount(runId: string | null, retained: boolean) {
 export function startNativeViewerLifecycle(
   runId: string,
   token: symbol,
-  fail: (reason: string) => void,
   teardown: () => void,
 ): boolean {
   let entry = entries.get(runId);
@@ -111,14 +106,12 @@ export function startNativeViewerLifecycle(
       handle: null,
       presentedBy: null,
       lifecycleStarted: false,
-      fail: null,
       teardown: null,
     };
     entries.set(runId, entry);
   }
   if (entry.token !== token || entry.lifecycleStarted) return false;
   entry.lifecycleStarted = true;
-  entry.fail = fail;
   entry.teardown = teardown;
   return true;
 }
@@ -170,17 +163,22 @@ export function beginNativeViewerRelease(runId: string, token: symbol): void {
 export function failNativeViewerMount(
   runId: string,
   reason: string,
-  evidence: Omit<NativeViewerFailureReport, "reason"> = { origin: "unspecified" },
+  evidence: { origin: string; handle?: string | null; error?: unknown } = {
+    origin: "unspecified",
+  },
 ): void {
   watchSessionLiveness();
-  recordNativeViewerFailureEvidence(runId, {
-    ...evidence,
+  recordNativeRendererFallback({
+    runId,
+    sessionId: useTerminalStore.getState().sessionByRun[runId] ?? null,
+    origin: evidence.origin,
     reason,
     handle: evidence.handle ?? entries.get(runId)?.handle ?? null,
+    error: evidence.error,
   });
   if (!failedRuns.has(runId)) {
     failedRuns.set(runId, reason);
     publish();
   }
-  entries.get(runId)?.fail?.(reason);
+  entries.get(runId)?.teardown?.();
 }

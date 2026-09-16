@@ -1,13 +1,9 @@
 import { useEffect } from "react";
 
-import {
-  useTaskWorktreeAvailability,
-  WorktreeChangesDocument,
-} from "../../../../../features/agents/worktrees";
+import { useTaskWorktreeAvailability } from "../../../../../features/agents/worktrees";
 import type { ForegroundOwner } from "../../../../../features/agents/terminal";
-import { studioApolloClient } from "../../../../../shared/apollo/client";
 import { useClientStore } from "../../../../../state/clientStore";
-import { rememberStudioWorkspaceTarget } from "./studioWorkspaceTarget";
+import { rememberStudioWorkspaceTarget } from "../../../../../features/workspace-state/studioWorkspaceTarget";
 
 export function useTaskWorktreeChangesTabLifecycle({
   taskId,
@@ -18,15 +14,6 @@ export function useTaskWorktreeChangesTabLifecycle({
 }): boolean {
   const availability = useTaskWorktreeAvailability(taskId);
   const setActive = useClientStore((state) => state.setActive);
-
-  useEffect(() => {
-    if (!taskId || availability !== "worktree") return;
-    void studioApolloClient().query({
-      query: WorktreeChangesDocument,
-      variables: { taskId },
-      fetchPolicy: "network-only",
-    }).catch(() => undefined);
-  }, [availability, taskId]);
 
   useEffect(() => {
     if (

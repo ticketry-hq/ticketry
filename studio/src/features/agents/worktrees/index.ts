@@ -8,11 +8,7 @@ export {
   useTaskWorktreeAvailability,
   type TaskWorktreeAvailability,
 } from "./queries/useHasTaskWorktree";
-export type {
-  WorktreeContext,
-  WorktreeStatus,
-  DiscardResult,
-} from "./internal/types";
+export type { WorktreeStatus, DiscardResult } from "./internal/types";
 export { WorktreeChangesDocument } from "./generated/worktreeChanges.documents";
 export { WorktreeFileDiffDocument } from "./generated/worktreeFileDiff.documents";
 export { ModuleFileDiffDocument } from "./generated/moduleFileDiff.documents";

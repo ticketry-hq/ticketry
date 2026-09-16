@@ -60,9 +60,13 @@ export function modulesFromProjectOpen(
       is_archived: module.is_archived,
       issue_type: publicWorktrackerId(module.issue_type),
     }));
+  const moduleIds = new Set(modules.map(({ id }) => id));
   const ranks = new Map(
     result.module_presentations.nodes
-      .filter((presentation) => presentation.rank !== "")
+      .filter((presentation) =>
+        presentation.rank !== ""
+        && moduleIds.has(publicWorktrackerId(presentation.module_id))
+      )
       .map((presentation) => [
         publicWorktrackerId(presentation.module_id),
         presentation.rank,
@@ -70,8 +74,13 @@ export function modulesFromProjectOpen(
   );
   if (ranks.size === 0) return modules;
   return modules.slice().sort((left, right) => {
-    const leftRank = ranks.get(left.id) ?? "";
-    const rightRank = ranks.get(right.id) ?? "";
+    const leftRank = ranks.get(left.id);
+    const rightRank = ranks.get(right.id);
+    if (leftRank === undefined) {
+      if (rightRank !== undefined) return -1;
+      return left.id.localeCompare(right.id);
+    }
+    if (rightRank === undefined) return 1;
     if (leftRank < rightRank) return -1;
     if (leftRank > rightRank) return 1;
     return left.id.localeCompare(right.id);
@@ -106,10 +115,6 @@ export async function readProjectOpen(
     project: projectFromRow(row),
     modules: modulesFromProjectOpen(data!),
   };
-}
-
-export async function readModules(projectId: string): Promise<Module[]> {
-  return (await readProjectOpen(projectId)).modules;
 }
 
 /**

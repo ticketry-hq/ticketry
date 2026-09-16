@@ -9,6 +9,7 @@ import {
   type KeyChord,
 } from "../navigation/keymapRegistry";
 import { EDIT_VIEW_BODY_DISENGAGE_CHORD } from "../navigation/three-zone/threeZoneNavigation";
+import { KeyChordHint } from "../../shared/ui/KeyChordHint";
 
 type FooterHint = {
   key: string;
@@ -55,23 +56,14 @@ export function StudioFooterHints() {
   const zone = useClientStore((state) => state.editViewZone);
   const hints = getFooterHints(sidebarVisible, zone, bodyEngaged);
 
-  return hints.map((hint) => <FooterHintItem key={hint.label} hint={hint} />);
-}
-
-function FooterHintItem({ hint }: { hint: FooterHint }) {
-  const keyTone =
-    hint.tone === "engaged"
-      ? "text-lifecycle-success"
-      : "text-focus-accent";
-
-  return (
-    <span className="flex items-center gap-1">
-      <span className={`bg-pane-bg px-1.5 py-0.5 font-bold ${keyTone}`}>
-        {hint.key}
-      </span>
-      <span className="text-text-muted">— {hint.label}</span>
-    </span>
-  );
+  return hints.map((hint) => (
+    <KeyChordHint
+      key={hint.label}
+      chord={hint.key}
+      label={hint.label}
+      tone={hint.tone}
+    />
+  ));
 }
 
 function getFooterHints(

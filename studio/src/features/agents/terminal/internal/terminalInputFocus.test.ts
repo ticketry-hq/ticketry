@@ -46,6 +46,13 @@ describe("hasFocusedTerminalInput", () => {
     expect(hasFocusedTerminalInput(container)).toBe(false);
   });
 
+  it("is true while a contained native host owns keyboard input", () => {
+    const container = mount('<div data-native-terminal-input></div>');
+    expect(hasFocusedTerminalInput(container)).toBe(true);
+    container.firstElementChild!.removeAttribute("data-native-terminal-input");
+    expect(hasFocusedTerminalInput(container)).toBe(false);
+  });
+
   it("is false when focus rests on a non-terminal element or nothing", () => {
     const container = mount("<input />");
     (container.firstElementChild as HTMLInputElement).focus();

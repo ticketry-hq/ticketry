@@ -29,7 +29,6 @@ function sample(renderer, overrides = {}) {
     paintMsMax: 4,
     paintMsP50: 1,
     paintMsP95: 3,
-    wasmMemoryBytes: null,
     ...overrides,
   };
 }
@@ -38,7 +37,7 @@ test("every renderer gets a row even without a capture", () => {
   const { rows } = buildRendererComparison([]);
   assert.deepEqual(
     rows.map((row) => row.renderer),
-    ["native", "xterm", "ghostty-wasm"],
+    ["native", "xterm"],
   );
   assert.equal(rows[0].samples, 0);
   assert.equal(rows[0].coldAttachMs, null);
@@ -51,15 +50,25 @@ test("samples are averaged per renderer and totals summed", () => {
       samples: [
         sample("native", { coldAttachMs: 100, frames: 10 }),
         sample("native", { coldAttachMs: 200, frames: 5 }),
-        sample("ghostty-wasm", { coldAttachMs: 300, wasmMemoryBytes: 4 * 1024 * 1024 }),
+        sample("xterm", { coldAttachMs: 300 }),
       ],
     },
   ]);
   const native = rows.find((row) => row.renderer === "native");
   assert.equal(native.coldAttachMs, 150);
   assert.equal(native.frames, 15);
-  const wasm = rows.find((row) => row.renderer === "ghostty-wasm");
-  assert.equal(wasm.wasmMemoryBytes, 4 * 1024 * 1024);
+  const xterm = rows.find((row) => row.renderer === "xterm");
+  assert.equal(xterm.coldAttachMs, 300);
+});
+
+// CODING-1487 — the retired WASM renderer is not a renderer this repository
+// can measure any more, so a capture naming it is an unknown renderer.
+test("the retired WASM renderer is no longer a comparison row", () => {
+  const { rows, problems } = buildRendererComparison([
+    { context, samples: [sample("ghostty-wasm")] },
+  ]);
+  assert.equal(rows.some((row) => row.renderer === "ghostty-wasm"), false);
+  assert.equal(problems[0].unknownRenderer, "ghostty-wasm");
 });
 
 test("missing measurement context is reported, never dropped", () => {
@@ -89,7 +98,7 @@ test("the rendered table lists every renderer and any incomplete capture", () =>
   );
   assert.match(table, /\| `native`/);
   assert.match(table, /\| `xterm`/);
-  assert.match(table, /\| `ghostty-wasm`/);
   assert.match(table, /Incomplete captures/);
+  assert.equal(table.includes("Wasm memory"), false);
   assert.match(table, /partial: missing command/);
 });

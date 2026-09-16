@@ -53,6 +53,10 @@ replacement CRUD, DAO/repository layers that mirror SeaORM, mirrored DTOs,
 identifies the missing behavior, rejected framework/database facilities, the
 smallest custom seam, and its drift-prevention test.
 
+The MCP listener binds `<data-directory>/mcp.sock` under the data-directory
+ownership guard. Provider MCP uses the packaged `ticketry-hook mcp` stdio bridge;
+there is no MCP TCP port or port override.
+
 Ticketry has no product REST API. Browser development may use the Rust GraphQL
 adapter, but it must not grow into a second backend or external compatibility
 contract.

@@ -76,6 +76,7 @@ ticketry-graphql-schema.workspace = true
 ticketry-installation.workspace = true
 ticketry-launch.workspace = true
 ticketry-mcp = { workspace = true, features = ["test-support"] }
+ticketry-provider.workspace = true
 ticketry-runs = { workspace = true, features = ["test-support"] }
 ticketry-settings.workspace = true
 ticketry-terminal.workspace = true
@@ -121,6 +122,7 @@ tauri-graphql = { path = "crates/foundation/tauri-graphql" }
 tauri-plugin-launchkey-adaptor = { git = "https://github.com/charleeagni/launchkey-adaptor", rev = "60e7b541ba1225491f2b3083960bdf1f1f362b8c" }
 taurpc = "=0.8.2"
 tempfile = "=3.23.0"
+toml_edit = "=0.25.13"
 ticketry-agent-execution = { path = "crates/execution/ticketry-agent-execution" }
 ticketry-codex-app-server = { path = "crates/execution/ticketry-codex-app-server" }
 ticketry-data-directory = { path = "crates/foundation/ticketry-data-directory" }
@@ -133,6 +135,7 @@ ticketry-graphql-schema = { path = "crates/surfaces/ticketry-graphql-schema" }
 ticketry-installation = { path = "crates/execution/ticketry-installation" }
 ticketry-launch = { path = "crates/execution/ticketry-launch" }
 ticketry-mcp = { path = "crates/surfaces/ticketry-mcp" }
+ticketry-provider = { path = "crates/foundation/ticketry-provider" }
 ticketry-runs = { path = "crates/worktracking/ticketry-runs" }
 ticketry-settings = { path = "crates/config/ticketry-settings" }
 ticketry-terminal = { path = "crates/execution/ticketry-terminal" }

@@ -3,8 +3,8 @@ use sea_orm::{
     ActiveModelTrait, ConnectionTrait, DatabaseTransaction, DbBackend, NotSet, Set, Statement,
 };
 
-use crate::work_management::commands::CommandError;
 use crate::commands::workflow::TransitionOrigin;
+use crate::work_management::commands::CommandError;
 use ticketry_entities::transition_occurrence;
 
 pub async fn ensure_schema(database: &impl ConnectionTrait) -> Result<(), sea_orm::DbErr> {
@@ -317,10 +317,10 @@ mod tests {
                 to_group: "started",
                 work_item_revision: 2,
                 workflow_revision: 3,
-            destination_auto_start: false,
-            handoff: true,
-            origin: TransitionOrigin::Agent,
-            run_now_decision_id: None,
+                destination_auto_start: false,
+                handoff: true,
+                origin: TransitionOrigin::Agent,
+                run_now_decision_id: None,
             },
         )
         .await

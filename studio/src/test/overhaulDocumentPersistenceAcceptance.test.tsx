@@ -1,10 +1,10 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import DocViewer from "../app/shell/ticket-workspace/selected-ticket/documents/DocViewer";
+import { DocViewer } from "../features/documents";
 import type { DesignDoc } from "../features/agents/types";
 
-vi.mock("../app/shell/ticket-workspace/selected-ticket/documents/RichMarkdownEditor", () => ({
+vi.mock("../features/documents/RichMarkdownEditor", () => ({
   default: ({
     markdown,
     onChange,
@@ -85,6 +85,9 @@ describe("overhaul acceptance — documents and persisted layout", () => {
       target: { value: "# Unsaved design" },
     });
     expect(screen.getByText("Unsaved changes")).toBeVisible();
+    await screen.findByRole("heading", { name: "Notes", hidden: true });
+    const fetchMock = vi.mocked(fetch);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
 
     fireEvent.click(screen.getByRole("tab", { name: "Notes" }));
     expect(await screen.findByRole("heading", { name: "Notes" })).toBeVisible();
@@ -94,6 +97,56 @@ describe("overhaul acceptance — documents and persisted layout", () => {
       "# Unsaved design",
     );
     expect(screen.getByText("Unsaved changes")).toBeVisible();
+    expect(screen.queryByText(/changed on disk/)).not.toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("[overhaul-265] ignores obsolete document responses and preserves edits made during a reload", async () => {
+    const pending = new Map<string, (response: Response) => void>();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((_input: RequestInfo | URL, init?: RequestInit) =>
+        new Promise<Response>((resolve) => {
+          const digest = String(init?.headers ?? pending.size + 1);
+          pending.set(digest, resolve);
+          init?.signal?.addEventListener("abort", () => {
+            // The runtime may still deliver a response after cancellation.
+            // The viewer's generation check must reject that stale delivery.
+          });
+        }),
+      ),
+    );
+
+    const { rerender } = render(
+      <DocViewer doc={{ ...DESIGN, content_digest: "digest-a" }} editable />,
+    );
+    rerender(
+      <DocViewer doc={{ ...DESIGN, content_digest: "digest-b" }} editable />,
+    );
+    const resolvers = [...pending.values()];
+    expect(resolvers).toHaveLength(2);
+    await act(async () => {
+      resolvers[1](new Response("# New", { headers: { ETag: '"digest-b"' } }));
+    });
+    expect(await screen.findByLabelText("Document content")).toHaveValue("# New");
+    await act(async () => {
+      resolvers[0](new Response("# Old", { headers: { ETag: '"digest-a"' } }));
+    });
+    expect(screen.getByLabelText("Document content")).toHaveValue("# New");
+
+    rerender(
+      <DocViewer doc={{ ...DESIGN, content_digest: "digest-c" }} editable />,
+    );
+    await waitFor(() => expect(pending.size).toBe(3));
+    fireEvent.change(screen.getByLabelText("Document content"), {
+      target: { value: "# My draft" },
+    });
+    const latest = [...pending.values()][2];
+    await act(async () => {
+      latest(new Response("# External", { headers: { ETag: '"digest-c"' } }));
+    });
+    expect(screen.getByLabelText("Document content")).toHaveValue("# My draft");
+    expect(await screen.findByText(/changed on disk/)).toBeVisible();
   });
 
   it("[overhaul-12] restores layout preferences and the remembered task after reload", async () => {

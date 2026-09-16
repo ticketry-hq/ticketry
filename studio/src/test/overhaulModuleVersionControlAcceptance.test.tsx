@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { FooterChangesToggle } from "../app/shell/FooterChangesToggle";
 import { StudioFooter } from "../app/shell/StudioFooter";
+import { SelectedTicket } from "../app/shell/ticket-workspace/selected-ticket/SelectedTicket";
 import { SelectedTicketContent } from "../app/shell/ticket-workspace/selected-ticket/SelectedTicketContent";
 import { scratchBucketId } from "../features/agents/terminal";
 import { TEMP_TASK_ID } from "../features/agents/types";
@@ -167,6 +168,185 @@ describe("overhaul acceptance - module Changes and current worktrees", () => {
     expect(operations).toContain("ModuleVersionControl");
   });
 
+  it("[overhaul-272] keeps long module Changes columns bounded with one scroll owner each", async () => {
+    const http = fixture();
+    const taskRows = Array.from({ length: 60 }, (_, index) => ({
+      __typename: "CurrentWorktreeView",
+      kind: "task",
+      task_id: `task-${index + 1}`,
+      task_key: `CODING-${1500 + index}`,
+      task_name: `Long-running implementation ${index + 1}`,
+      branch: `wt/CODING-${1500 + index}`,
+      available: true,
+      clean: false,
+      dirty: true,
+      unpushed_count: index + 1,
+      pull_request_state: "none",
+      pull_request: pullRequest(),
+      reason: null,
+    }));
+    const changedFiles = Array.from({ length: 80 }, (_, index) => ({
+      __typename: "ChangedFile",
+      path: `studio/src/features/module/file-${String(index + 1).padStart(2, "0")}.tsx`,
+      previous_path: null,
+      status: "modified",
+    }));
+    http.tree("module-1", { rootIds: [], children: {}, order: [] });
+
+    mountStudio({
+      http,
+      children: (
+        <>
+          <FooterChangesToggle />
+          <SelectedTicket />
+        </>
+      ),
+      graphQlExecute: async (document, variables) => {
+        if (documentOperationName(document) === "ModuleVersionControl") {
+          return {
+            module_version_control: {
+              __typename: "ModuleVersionControlView",
+              module_id: "module-1",
+              worktrees_truncated: true,
+              checkout: moduleCheckout({
+                clean: false,
+                dirty: true,
+                truncated: true,
+                files: changedFiles,
+              }),
+              worktrees: [moduleRow(), ...taskRows],
+            },
+          } as never;
+        }
+        return http.executeGraphQl(document, variables);
+      },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Open module Changes" }));
+
+    const moduleChanges = await screen.findByTestId("module-version-control");
+    const pane = moduleChanges.closest<HTMLElement>(
+      '[data-pane="details-or-terminal"]',
+    );
+    expect(pane).not.toBeNull();
+    const worktrees = within(moduleChanges).getByRole("region", {
+      name: "Current worktrees",
+    });
+    const checkout = within(moduleChanges).getByRole("region", {
+      name: "Module checkout changes",
+    });
+    const declaredVerticalOwners = (node: HTMLElement) => {
+      const owners: HTMLElement[] = [];
+      for (
+        let candidate: HTMLElement | null = node;
+        candidate;
+        candidate = candidate.parentElement
+      ) {
+        if (
+          [
+            "overflow-auto",
+            "overflow-y-auto",
+            "overflow-scroll",
+            "overflow-y-scroll",
+          ].some((className) => candidate.classList.contains(className))
+        ) {
+          owners.push(candidate);
+        }
+        if (candidate === pane) break;
+      }
+      return owners;
+    };
+
+    expect(worktrees).toHaveClass("h-full", "min-h-0", "overflow-auto");
+    expect(declaredVerticalOwners(worktrees)).toEqual([worktrees]);
+    expect(declaredVerticalOwners(checkout)).toEqual([checkout]);
+    expect(within(worktrees).getAllByRole("button")).toHaveLength(61);
+    expect(within(checkout).getAllByRole("listitem")).toHaveLength(80);
+    expect(within(worktrees).getByText(/current-worktree limit was reached/)).toBeVisible();
+    expect(within(checkout).getByText(/changed-file limit was reached/)).toBeVisible();
+  });
+
+  it("[overhaul-273] keeps checkout Changes reachable when the workspace pane is narrow", async () => {
+    const http = fixture();
+    http.tree("module-1", { rootIds: [], children: {}, order: [] });
+
+    mountStudio({
+      http,
+      children: (
+        <>
+          <FooterChangesToggle />
+          <SelectedTicket />
+        </>
+      ),
+      graphQlExecute: async (document, variables) => {
+        if (documentOperationName(document) === "ModuleVersionControl") {
+          return {
+            module_version_control: {
+              __typename: "ModuleVersionControlView",
+              module_id: "module-1",
+              worktrees_truncated: false,
+              checkout: moduleCheckout({
+                clean: false,
+                dirty: true,
+                files: [{
+                  __typename: "ChangedFile",
+                  path: "studio/src/features/module/narrow-pane-change.tsx",
+                  previous_path: null,
+                  status: "modified",
+                }],
+              }),
+              worktrees: [moduleRow()],
+            },
+          } as never;
+        }
+        return http.executeGraphQl(document, variables);
+      },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Open module Changes" }));
+
+    const moduleChanges = await screen.findByTestId("module-version-control");
+    const checkout = within(moduleChanges).getByRole("region", {
+      name: "Module checkout changes",
+    });
+    const paneBody = moduleChanges.closest<HTMLElement>(
+      '[data-testid="details-or-terminal-pane-body"]',
+    );
+    expect(paneBody).not.toBeNull();
+
+    const sharedAncestors: HTMLElement[] = [];
+    for (
+      let candidate: HTMLElement | null = checkout;
+      candidate && candidate !== paneBody;
+      candidate = candidate.parentElement
+    ) {
+      if (candidate.contains(moduleChanges.firstElementChild)) {
+        sharedAncestors.push(candidate);
+      }
+    }
+    const horizontalOwner = sharedAncestors.find((candidate) =>
+      ["overflow-x-auto", "overflow-x-scroll"].some((className) =>
+        candidate.classList.contains(className),
+      ),
+    );
+
+    expect(horizontalOwner).toBeDefined();
+    expect(horizontalOwner).not.toBe(paneBody);
+    expect(horizontalOwner).toContainElement(checkout);
+    expect(horizontalOwner).toHaveClass("overflow-y-hidden");
+    expect(moduleChanges).toHaveClass(
+      "grid-cols-[minmax(18rem,22rem)_minmax(18rem,1fr)]",
+    );
+    expect(paneBody).toHaveClass("overflow-hidden");
+    fireEvent.change(within(checkout).getByRole("textbox", { name: "Commit message" }), {
+      target: { value: "Keep checkout reachable" },
+    });
+    expect(within(checkout).getByRole("button", { name: "Commit" })).toBeEnabled();
+    expect(within(checkout).getByRole("listitem", {
+      name: /narrow-pane-change\.tsx: Modified/,
+    })).toBeVisible();
+  });
+
   it("[overhaul-188] orders all required facts and navigates module and task rows without a write", async () => {
     const http = fixture();
     const operations: string[] = [];
@@ -325,7 +505,7 @@ describe("overhaul acceptance - module Changes and current worktrees", () => {
     expect(operations).not.toContain("WorktreeDiscard");
   });
 
-  it("[overhaul-298] keeps long truncated patches readable below the file list", async () => {
+  it("[overhaul-307] keeps long truncated patches readable below the file list", async () => {
     const http = fixture();
     const path = "studio/src/features/agents/worktrees/changes/ChangesFileReview.tsx";
     const patch = "diff --git a/review.tsx b/review.tsx\n+const line = \"a long patch line that must stay intact and scroll horizontally instead of wrapping into fragments\";";

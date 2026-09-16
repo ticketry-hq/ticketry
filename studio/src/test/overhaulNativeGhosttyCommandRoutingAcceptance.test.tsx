@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 describe("native Ghostty command routing acceptance", () => {
   it("[overhaul-178] gives only the focused, live Ghostty surface first refusal of its Command bindings", async () => {
-    const [routing, owner, view, bridge] = await Promise.all([
+    const [routing, owner, bridge] = await Promise.all([
       readFile(
         `${process.cwd()}/src-tauri/native/libghostty_command_routing.m`,
         "utf8",
@@ -12,7 +12,6 @@ describe("native Ghostty command routing acceptance", () => {
         `${process.cwd()}/src-tauri/native/libghostty_surface_owner.m`,
         "utf8",
       ),
-      readFile(`${process.cwd()}/src-tauri/native/libghostty_view.m`, "utf8"),
       readFile(
         `${process.cwd()}/src-tauri/native/libghostty_view_bridge.m`,
         "utf8",
@@ -22,7 +21,6 @@ describe("native Ghostty command routing acceptance", () => {
     const keyEquivalent = routing.match(
       /- \(BOOL\)performKeyEquivalent:[\s\S]*?\n}/,
     )?.[0];
-    const dealloc = view.match(/- \(void\)dealloc \{[\s\S]*?\n}/)?.[0];
     const free = bridge.match(
       /void muxed_ghostty_view_free[\s\S]*?\n}/,
     )?.[0];
@@ -33,9 +31,12 @@ describe("native Ghostty command routing acceptance", () => {
     expect(keyEquivalent).toContain("[self keyDown:event]");
     expect(keyEquivalent).toContain("return NO");
     expect(owner).toContain("owner->available = false");
-    expect(dealloc?.indexOf("muxed_ghostty_surface_owner_invalidate")).toBeLessThan(
-      dealloc?.indexOf("ghostty_surface_free") ?? 0,
+    // Explicit detach owns the surface lifetime, even when AppKit or a
+    // redraw waiter retains the view beyond detach.
+    expect(free?.indexOf("muxed_ghostty_surface_owner_invalidate")).toBeLessThan(
+      free?.indexOf("ghostty_surface_free") ?? 0,
     );
+    expect(free).toContain("muxed_ghostty_take_view");
     expect(free).toContain("muxed_ghostty_surface_owner_invalidate");
   });
 });

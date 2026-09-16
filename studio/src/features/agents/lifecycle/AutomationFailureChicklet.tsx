@@ -16,9 +16,9 @@ export function AutomationFailureChicklet({
   const attempts = useTaskAutomationAttempts(issueId, descendantIds);
   const [isRetrying, setIsRetrying] = useState(false);
   const [retryError, setRetryError] = useState<string | null>(null);
-  if (attempts.length === 0) return null;
-
   const failed = attempts.filter((attempt) => attempt.status === "failed");
+  if (failed.length === 0) return null;
+
   const retryable = failed.filter((attempt) => attempt.retryable);
   const pending = attempts.filter((attempt) => attempt.status === "pending");
   const retryPending = isRetrying || pending.length > 0;

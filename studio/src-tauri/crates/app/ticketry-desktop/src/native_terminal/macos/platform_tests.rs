@@ -140,7 +140,7 @@ mod tests {
 
     #[test]
     fn command_number_selects_the_matching_module_position() {
-        for (index, key_code) in NUMBER_KEYS.into_iter().enumerate() {
+        for (index, key_code) in NUMBER_KEYS.into_iter().take(9).enumerate() {
             assert_eq!(
                 studio_chord(COMMAND, key_code),
                 Some(StudioChord::ModulePosition((index + 1) as u8))
@@ -148,6 +148,11 @@ mod tests {
             assert_eq!(studio_chord(0, key_code), None);
             assert_eq!(studio_chord(COMMAND | SHIFT, key_code), None);
         }
+        assert_eq!(studio_chord(COMMAND, 0x1D), Some(StudioChord::ZoomReset));
+        assert_eq!(
+            studio_chord(COMMAND | SHIFT, 0x1D),
+            Some(StudioChord::ModulePosition(10))
+        );
     }
 
     #[test]

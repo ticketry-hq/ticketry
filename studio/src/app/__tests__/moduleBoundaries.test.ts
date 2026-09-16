@@ -22,6 +22,7 @@ const PUBLIC_ENTRYPOINTS = new Set([
   "features/agents/lifecycle",
   "features/agents/status",
   "features/agents/status/launchDiscoveryTrace",
+  "features/agents/status/stream/liveRunPreload",
   "features/agents/status/stream/statusStreamFeed",
   "features/agents/terminal",
   "features/agents/terminal/appNavigation",

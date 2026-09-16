@@ -1,6 +1,5 @@
 const revisions = new Map<string, number>();
 const authoritativeStates = new Map<string, Map<string, CatalogState>>();
-let generation = 0;
 
 interface CatalogState {
   id: string | null;
@@ -20,7 +19,6 @@ export function advanceStateCatalogRevision(
   states?: CatalogState | CatalogState[],
 ): void {
   revisions.set(projectId, stateCatalogRevision(projectId) + 1);
-  generation += 1;
   if (!states) return;
   const projectStates = authoritativeStates.get(projectId) ?? new Map();
   for (const state of Array.isArray(states) ? states : [states]) {
@@ -28,16 +26,6 @@ export function advanceStateCatalogRevision(
     projectStates.set(state.id, state);
   }
   authoritativeStates.set(projectId, projectStates);
-}
-
-export function stateCatalogGeneration(): number {
-  return generation;
-}
-
-export function stateCatalogChangedSinceGeneration(
-  previousGeneration: number,
-): boolean {
-  return generation !== previousGeneration;
 }
 
 export function stateCatalogChangedSince(

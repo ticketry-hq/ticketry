@@ -34,7 +34,7 @@ function trustedBuild(overrides = {}) {
   };
 }
 
-test("arm64 acceptance builds use an unsigned Tauri config overlay and both runtime features", () => {
+test("arm64 acceptance builds use the shipping renderer feature selection", () => {
   const build = createPackagedUpdateBuildCommand(trustedBuild());
   const configIndex = build.args.indexOf("--config");
   const config = JSON.parse(build.args[configIndex + 1]);
@@ -48,7 +48,7 @@ test("arm64 acceptance builds use an unsigned Tauri config overlay and both runt
     "--target",
     "aarch64-apple-darwin",
     "--features",
-    "native-libghostty,desktop-acceptance",
+    "desktop-acceptance",
   ]);
   assert.deepEqual(build.args.slice(configIndex + 2), ["--", "--bin", "ticketry"]);
   assert.deepEqual(config, {

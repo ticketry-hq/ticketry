@@ -87,7 +87,7 @@ describe("module tab strip reorder acceptance", () => {
     expect(screen.queryByTestId("module-drop-seam")).toBeNull();
 
     // The left half of a tab means "before it", and the baseline is the
-    // activity-sorted order the user could actually see.
+    // canonical order the user could actually see.
     dragTab("module-c", "module-a", "near");
 
     await waitFor(() => expect(reorderWorkItem).toHaveBeenCalled());
@@ -163,7 +163,7 @@ describe("module tab strip reorder acceptance", () => {
     expect(sidebarOrder()).toEqual(["module-b", "module-a", "module-c"]);
   });
 
-  it("[overhaul-52] keeps tab navigation and the fixed module picker intact across a reorder", async () => {
+  it("[overhaul-52] keeps tab navigation and the trailing module picker intact across a reorder", async () => {
     const scrolledInto: Element[] = [];
     Element.prototype.scrollIntoView = vi.fn(function (this: Element) {
       scrolledInto.push(this);
@@ -187,10 +187,10 @@ describe("module tab strip reorder acceptance", () => {
       name: /^(Open|Close) Modules pane$/,
     });
 
-    // The sidebar toggle and picker stay ahead of the project's Modules. They
-    // cannot be picked up, and the picker cannot receive a tab.
+    // The sidebar toggle stays before the project's Modules and the picker
+    // stays after them. Neither control can be picked up or receive a tab.
     expect(strip.parentElement?.firstElementChild).toBe(modulesToggle);
-    expect(modulesToggle.nextElementSibling).toContainElement(pickerButton);
+    expect(strip.nextElementSibling).toContainElement(pickerButton);
     expect(pickerButton.getAttribute("draggable")).toBeNull();
 
     const transfer = dataTransfer();
@@ -215,7 +215,7 @@ describe("module tab strip reorder acceptance", () => {
     expect(tabBadges("module-c")).toHaveLength(1);
     expect(tabBadges("module-a")).toEqual([]);
     expect(strip.parentElement?.firstElementChild).toBe(modulesToggle);
-    expect(modulesToggle.nextElementSibling).toContainElement(pickerButton);
+    expect(strip.nextElementSibling).toContainElement(pickerButton);
 
     // The selected tab kept its id but changed position, so it must be scrolled
     // back into the strip's horizontal viewport (#369).

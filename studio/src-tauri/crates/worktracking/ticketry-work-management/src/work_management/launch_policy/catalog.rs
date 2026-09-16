@@ -3,6 +3,7 @@ use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 use super::rows::BindingRow;
 use super::LaunchPolicyError;
 use ticketry_entities::{agent_model, agent_model_reasoning_level, provider, reasoning_level};
+use ticketry_provider::{provider_contract, Provider};
 use ticketry_settings::{read_global_launch_default, GlobalLaunchDefault};
 
 pub(super) struct CatalogReader<'a> {
@@ -38,11 +39,15 @@ impl<'a> CatalogReader<'a> {
             ));
         }
 
-        let configured_provider = binding.profile.as_ref().map(|_| "codex").or_else(|| {
-            configured_model
-                .as_ref()
-                .map(|model| model.provider_slug.as_str())
-        });
+        let configured_provider = binding
+            .profile
+            .as_ref()
+            .map(|_| Provider::Codex.slug())
+            .or_else(|| {
+                configured_model
+                    .as_ref()
+                    .map(|model| model.provider_slug.as_str())
+            });
         let mut provider = provider_override.or(configured_provider).map(str::to_owned);
         let provider_changed = provider_override.is_some()
             && configured_provider.is_some()
@@ -122,13 +127,15 @@ impl<'a> CatalogReader<'a> {
             }
             None => None,
         };
+        let supports_unattended = Provider::from_slug(&provider)
+            .is_some_and(|provider| provider_contract(provider).metadata().supports_unattended);
 
         Ok(ProviderSelection {
             provider,
             profile,
             model: model.map(|value| value.name),
             reasoning,
-            supports_unattended: provider_row.supports_unattended,
+            supports_unattended,
         })
     }
 

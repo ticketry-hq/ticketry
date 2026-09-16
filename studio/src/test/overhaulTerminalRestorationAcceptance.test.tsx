@@ -1,4 +1,10 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { ServiceHealthGate } from "../app/startup/ServiceHealthGate";
+import { studioRuntime, type ServiceHealth } from "../runtime";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { useEffect, useRef } from "react";
+import { dispatchAgentRunAction } from "../features/agents/actions/agentRunActions";
+import { AGENT_RUN_ACTIONS } from "../app/navigation/actionIds";
+import { rememberStudioWorkspaceTarget } from "../features/workspace-state/studioWorkspaceTarget";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SelectedTicketContent } from "../app/shell/ticket-workspace/selected-ticket/SelectedTicketContent";
 import { ProjectRunTerminalTabBridge } from "../app/shell/ProjectRunTerminalTabBridge";
@@ -49,9 +55,15 @@ const terminalReads = vi.hoisted(() => {
 vi.mock(
   "../app/shell/ticket-workspace/selected-ticket/terminals/SelectedTicketTerminal",
   () => ({
-    SelectedTicketTerminal: ({ bucket, active }: { bucket: string; active: boolean }) => (
-      <div data-testid="selected-ticket-terminal" data-active={String(active)}>{bucket}</div>
-    ),
+    SelectedTicketTerminal: ({ bucket, active, focusSignal }: { bucket: string; active: boolean; focusSignal: number }) => {
+      const input = useRef<HTMLTextAreaElement>(null);
+      useEffect(() => {
+        if (active && focusSignal > 0) input.current?.focus();
+      }, [active, focusSignal]);
+      return <div className="xterm" data-testid="selected-ticket-terminal" data-active={String(active)}>
+        {bucket}<textarea ref={input} aria-label="Agent input" />
+      </div>;
+    },
   }),
 );
 
@@ -129,7 +141,7 @@ describe("overhaul acceptance — terminals", () => {
     terminalReads.readTaskResumableTerminalSessions.mockResolvedValue([]);
   });
 
-  it("[overhaul-35] labels task-bound terminal tabs with their captured launch state", async () => {
+  it("[overhaul-35] preserves live and restored launch identities when socket startup reaches ready", async () => {
     // A live spawn and a restored attach both read the launch state their own
     // durable run recorded — never the ticket identifier the workspace already
     // shows, and never the Story's current state.
@@ -151,7 +163,20 @@ describe("overhaul acceptance — terminals", () => {
     );
     expect(restored?.taskId).toBe("story-1");
 
+    let publishHealth: (health: ServiceHealth) => void = () => {};
+    const runtime = {
+      ...studioRuntime(),
+      startup: () => ({
+        serviceHealth: { state: "migrating" as const, service: "runtime", message: null, logPointer: null },
+        initialNotices: [],
+      }),
+      subscribeServiceHealth: (listener: (health: ServiceHealth) => void) => {
+        publishHealth = listener;
+        return () => {};
+      },
+    };
     render(
+      <ServiceHealthGate runtime={runtime}>
         <SelectedTicketContent
           bucket="story-1"
           projectId="project-1"
@@ -159,7 +184,11 @@ describe("overhaul acceptance — terminals", () => {
           owner="studio"
           details={<div>Issue details</div>}
         />
+      </ServiceHealthGate>,
     );
+    expect(screen.getByRole("heading", { name: "Preparing Ticketry data" })).toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "Grill codex terminal" })).not.toBeInTheDocument();
+    act(() => publishHealth({ state: "ready", service: null, message: null, logPointer: null }));
 
     await waitFor(() => {
       expect(screen.getByRole("tab", { name: "Grill codex terminal" }))
@@ -175,6 +204,15 @@ describe("overhaul acceptance — terminals", () => {
 
     // Identity, persistence, and run ownership stay on the opaque identifiers.
     expect(useTerminalStore.getState().sessionByRun["run-live"]).toBe("session-live");
+    expect(useTerminalStore.getState().sessionByRun["run-restored"]).toBe(restored?.sessionId);
+    // Reconciliation may publish the same surviving tmux run again. Attach
+    // remains idempotent and never resumes the provider as a new Agent Run.
+    act(() => useTerminalStore.getState().attachRun("run-restored"));
+    expect(useTerminalStore.getState().sessionByRun["run-restored"]).toBe(restored?.sessionId);
+    expect(Object.values(useTerminalStore.getState().sessions).filter(
+      (meta) => meta.agentRunId === "run-restored",
+    )).toHaveLength(1);
+    expect(terminalApi.resumeTerminal).not.toHaveBeenCalled();
 
     // Scratch runs have no workflow state and keep their lowercase launch
     // modes; a run with no recorded launch state falls back to its provider.
@@ -195,6 +233,34 @@ describe("overhaul acceptance — terminals", () => {
     const unrecorded = presentTerminalRuns([{ ...scratch, isPlanning: false }])[0];
     expect(unrecorded.label).toBe("codex");
     expect(unrecorded.accessibleName).toBe("codex terminal");
+  });
+
+  it("[overhaul-276] opens a pad-selected terminal over remembered Details on the first press and focuses input", async () => {
+    useClientStore.setState({ selectedTaskId: "other-story", sidebarVisible: false, editViewBodyEngaged: false });
+    useAgentStatusStore.setState({ runs: { "run-1": run("run-1", "story-1") } });
+    useTerminalStore.setState({
+      sessions: { "session-1": session("session-1", "story-1", "run-1") },
+      sessionByRun: { "run-1": "session-1" },
+    });
+    rememberStudioWorkspaceTarget("story-1", { kind: "details" });
+    function Workspace() {
+      const bucket = useClientStore((state) => state.selectedTaskId);
+      return <SelectedTicketContent bucket={bucket} projectId="project-1" moduleId="module-1"
+        owner="studio" details={<div>Issue details</div>} />;
+    }
+    render(<Workspace />);
+    await act(async () => {
+      await dispatchAgentRunAction(AGENT_RUN_ACTIONS.focusAgentRun, { runId: "run-1" });
+    });
+    expect(screen.getByRole("tab", { name: "codex terminal" })).toHaveAttribute("aria-selected", "true");
+    await waitFor(() => expect(screen.getByRole("textbox", { name: "Agent input" })).toHaveFocus());
+
+    fireEvent.click(screen.getByRole("tab", { name: "Details" }));
+    act(() => useClientStore.getState().setEditViewBodyEngaged(false));
+    fireEvent.click(screen.getByRole("tab", { name: "codex terminal" }));
+    expect(screen.getByRole("tab", { name: "codex terminal" })).toHaveAttribute("aria-selected", "true");
+    await waitFor(() => expect(screen.getByRole("textbox", { name: "Agent input" })).toHaveFocus());
+    expect(useClientStore.getState().editViewBodyEngaged).toBe(true);
   });
 
   it("[overhaul-49] restores a terminal directly when its run projection arrives later", async () => {

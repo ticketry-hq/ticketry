@@ -158,7 +158,7 @@ function session(sessionId: string, taskId: string, runId: string) {
     moduleId: "module-1",
     agent: "codex" as const,
     status: "ready" as const,
-    transport: "ready" as const,
+    transport: "connecting" as const,
     isPlanning: false,
     isInstant: false,
     initialPrompt: null,

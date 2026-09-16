@@ -86,8 +86,10 @@ describe("provider settings acceptance", () => {
     await waitFor(() => expect(onContinue).toHaveBeenCalledOnce());
     expect(providerApi.updateProviderCatalog).toHaveBeenCalledWith({
         activated_providers: ["claude", "codex"],
+        codex_profiles: [],
         global_default: {
           provider: "codex",
+          profile: null,
           model: "gpt-5.6-luna",
           reasoning: "medium",
         },

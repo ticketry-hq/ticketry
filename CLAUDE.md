@@ -104,6 +104,10 @@ Ticketry's Rust GraphQL surface is migration-first and generated-contract-first:
 | --- | --- |
 | [`README.md`](README.md) | Application layout and install/run/validate commands. |
 
+The MCP listener binds `<data-directory>/mcp.sock` under the data-directory
+ownership guard. Provider MCP uses the packaged `ticketry-hook mcp` stdio bridge;
+there is no MCP TCP port or port override.
+
 ## Runtime validation
 
 Embedded native libghostty is the terminal renderer in development desktop and

@@ -4,7 +4,7 @@
  * surface converges without a manual reload — while an in-flight local edit is
  * never painted over.
  */
-import { act, render, screen, within } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { studioApolloClient } from "../shared/apollo/client";
@@ -22,6 +22,10 @@ import {
 import { createBrowserRuntime } from "../runtime/browserRuntime";
 import ToastHost from "../app/shell/ToastHost";
 import { useClientStore } from "../state/clientStore";
+import { recordLocalWorkItemConvergence } from "../features/work-items/workItemConvergence";
+import { WorkTrackerModuleOpenDocument } from "../features/work-items";
+import { seedModuleOpenFixture } from "./projectOpenFixture";
+import { workItem } from "./seam";
 
 const PROJECT = "11111111-1111-1111-1111-111111111111";
 const OTHER_PROJECT = "22222222-2222-2222-2222-222222222222";
@@ -53,7 +57,7 @@ function transport() {
         payload: { data: { run_status_stream: frame } },
       }),
     );
-  return { subscriptions, send, createProxy: () => proxy as never };
+  return { subscriptions, send, proxy, createProxy: () => proxy as never };
 }
 
 const durableEvent = (
@@ -120,7 +124,57 @@ afterEach(() => {
 });
 
 describe("durable status consumer acceptance", () => {
-  it("[overhaul-82a] opens the desktop status subscription with a transport-safe identity", async () => {
+  it("[overhaul-268] skips a mutation's matching event while fetching a later external edit", async () => {
+    const server = transport();
+    const client = studioApolloClient();
+    const query = vi.spyOn(client, "query").mockResolvedValue({} as never);
+    statusStreamFeed.start(PROJECT, { createProxy: server.createProxy });
+    await vi.advanceTimersByTimeAsync(0);
+    recordLocalWorkItemConvergence("item-1", "2026-09-05 00:00:00.123456");
+    server.send(durableEvent(11, "work_item.changed", {
+      workItemId: "item-1", projectId: PROJECT, moduleId: "module-a",
+      membershipChanged: true, occurredAt: "2026-09-05T00:00:00.123456+00:00",
+    }));
+    await vi.advanceTimersByTimeAsync(60);
+    expect(query).not.toHaveBeenCalled();
+    server.send(durableEvent(12, "work_item.changed", {
+      workItemId: "item-1", projectId: PROJECT, moduleId: "module-a",
+      membershipChanged: true, occurredAt: "2026-09-05T00:00:00.123457Z",
+    }));
+    await vi.advanceTimersByTimeAsync(60);
+    expect(query.mock.calls.map(([options]) => options?.variables)).toEqual([
+      { id: "item-1" }, { moduleId: "module-a" },
+    ]);
+  });
+
+  it("[overhaul-266] refreshes both modules after an external cross-module move", async () => {
+    const server = transport();
+    seedModuleOpenFixture("module-a", [workItem({
+      id: "item-1",
+      project_id: PROJECT,
+      parent_id: "module-a",
+    })]);
+    const query = vi.spyOn(studioApolloClient(), "query")
+      .mockResolvedValue({} as never);
+
+    statusStreamFeed.start(PROJECT, { createProxy: server.createProxy });
+    await vi.advanceTimersByTimeAsync(0);
+    server.send(durableEvent(11, "work_item.changed", {
+      workItemId: "item-1",
+      projectId: PROJECT,
+      moduleId: "module-b",
+      membershipChanged: true,
+    }));
+    await vi.advanceTimersByTimeAsync(60);
+
+    const refreshedModules = query.mock.calls
+      .filter(([options]) => options?.query === WorkTrackerModuleOpenDocument)
+      .map(([options]) => options?.variables?.moduleId)
+      .sort();
+    expect(refreshedModules).toEqual(["module-a", "module-b"]);
+  });
+
+  it("[overhaul-275] restores run status with a fresh subscription identity after reload", async () => {
     const server = transport();
 
     statusStreamFeed.start(PROJECT, { createProxy: server.createProxy });
@@ -128,6 +182,35 @@ describe("durable status consumer acceptance", () => {
 
     expect(server.subscriptions).toHaveLength(1);
     expect(server.subscriptions[0].id).toMatch(/^[A-Za-z0-9_-]{1,128}$/);
+    // A reload loses the client counter but the native host can still hold
+    // the previous document's subscription. A new feed must not reuse its id.
+    statusStreamFeed.stop();
+    useAgentStatusStore.setState({ projectId: null, runs: {} });
+    statusStreamFeed.resetCursors(PROJECT);
+    statusStreamFeed.start(PROJECT, { createProxy: server.createProxy });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(server.subscriptions).toHaveLength(2);
+    expect(server.subscriptions[1].id).not.toBe(server.subscriptions[0].id);
+    server.send({
+      __typename: "RunStatusSnapshot", project_id: PROJECT, cursor: 10,
+      at: "2026-08-16T10:00:00Z", runs: [statusRun()], automation_attempts: [],
+    });
+    expect(useAgentStatusStore.getState().runs["run-1"]?.state).toBe("working");
+  });
+
+  it("retries a refused subscription and restores the live holding", async () => {
+    const server = transport();
+    server.proxy.graphql_subscribe.mockResolvedValueOnce(JSON.stringify({
+      errors: [{ message: "The subscription id is already active." }],
+    }));
+    statusStreamFeed.start(PROJECT, { createProxy: server.createProxy });
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(server.proxy.graphql_subscribe).toHaveBeenCalledTimes(2);
+    server.send({
+      __typename: "RunStatusSnapshot", project_id: PROJECT, cursor: 10,
+      at: "2026-08-16T10:00:00Z", runs: [statusRun()], automation_attempts: [],
+    });
+    expect(useAgentStatusStore.getState().runs["run-1"]?.state).toBe("working");
   });
 
   it("[overhaul-229] drops terminal history from task badges and quietly announces new losses", async () => {
@@ -206,6 +289,74 @@ describe("durable status consumer acceptance", () => {
     );
   });
 
+  it("[overhaul-278] carries live runs only and summarises each snapshot in one record", async () => {
+    const trace = vi.spyOn(console, "info").mockImplementation(() => {});
+    const server = transport();
+    const snapshot = (cursor: number, runs: unknown[]) => ({
+      __typename: "RunStatusSnapshot",
+      project_id: PROJECT,
+      cursor,
+      at: "2026-08-16T10:00:00+00:00",
+      runs,
+      automation_attempts: [],
+    });
+
+    statusStreamFeed.start(PROJECT, { createProxy: server.createProxy });
+    await vi.advanceTimersByTimeAsync(0);
+    act(() => {
+      server.send(snapshot(10, [
+        statusRun({ agent_run_id: "run-1" }),
+        statusRun({ agent_run_id: "run-2" }),
+        statusRun({ agent_run_id: "run-3" }),
+      ]));
+    });
+    expect(Object.keys(useAgentStatusStore.getState().runs).sort())
+      .toEqual(["run-1", "run-2", "run-3"]);
+
+    // A live run reaching a terminal outcome updates in place, through its
+    // own event, while it is still held.
+    act(() => {
+      server.send(durableEvent(
+        11,
+        "agent_run.terminal",
+        {
+          agentRunId: "run-1",
+          state: "exited",
+          occurredAt: "2026-08-16T10:01:00+00:00",
+        },
+        { subject_kind: "agent_run", agent_run_id: "run-1" },
+      ));
+    });
+    expect(useAgentStatusStore.getState().runs["run-1"].state).toBe("exited");
+
+    // A reconnect or visibility restore delivers a fresh live-only snapshot.
+    // `run-1` has ended and `run-2` ended while this client was away: both
+    // leave the live holding, and neither is fabricated as exited.
+    act(() => {
+      server.send(snapshot(12, [statusRun({ agent_run_id: "run-3" })]));
+    });
+    expect(Object.keys(useAgentStatusStore.getState().runs)).toEqual(["run-3"]);
+    expect(useAgentStatusStore.getState().runs["run-3"].state).toBe("working");
+
+    // Two snapshots cost two summary records each, not one pair per run. Each
+    // console line is one main-thread IPC invoke under desktop file logging.
+    const snapshotRecords = trace.mock.calls
+      .filter(([label]) => label === "[launch-discovery]")
+      .map(([, record]) => record as Record<string, unknown>)
+      .filter((record) =>
+        record.frameType === "snapshot" || record.source === "snapshot"
+      );
+    expect(snapshotRecords.map((record) => [record.event, record.runCount]))
+      .toEqual([
+        ["graphql-frame-received", 3],
+        ["apollo-run-applied", 3],
+        ["graphql-frame-received", 1],
+        ["apollo-run-applied", 1],
+      ]);
+    expect(snapshotRecords.every((record) => record.agentRunId === null))
+      .toBe(true);
+  });
+
   it("[overhaul-82c] applies the durable status subscription in browser Studio", async () => {
     let stream!: ReadableStreamDefaultController<Uint8Array>;
     const fetch = vi.spyOn(globalThis, "fetch").mockResolvedValue(
@@ -259,10 +410,10 @@ describe("durable status consumer acceptance", () => {
                 root_attempt_id: "attempt-1",
                 retry_of_attempt_id: null,
                 work_item_id: "task-1",
-                status: "failed",
-                error: "Provider exited before launch",
+                status: "pending",
+                error: null,
                 failure: null,
-                retryable: false,
+                retryable: true,
                 agent_run_id: "browser-run",
                 updated_at: "2026-08-16T09:01:00+00:00",
               }],
@@ -278,10 +429,39 @@ describe("durable status consumer acceptance", () => {
       "data-state",
       "active",
     );
-    expect(
-      within(screen.getByTestId("agent-state-badge"))
-        .getByLabelText("Agent is actively working"),
-    ).toBeInTheDocument();
+    expect(screen.queryByTestId("automation-failure-chicklet"))
+      .not.toBeInTheDocument();
+
+    await act(async () => {
+      stream.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({
+        type: "next",
+        payload: {
+          data: {
+            run_status_stream: {
+              __typename: "RunStatusSnapshot",
+              project_id: PROJECT,
+              cursor: 2,
+              at: "2026-08-16T10:01:00+00:00",
+              runs: [],
+              automation_attempts: [{
+                attempt_id: "attempt-1",
+                root_attempt_id: "attempt-1",
+                retry_of_attempt_id: null,
+                work_item_id: "task-1",
+                status: "failed",
+                error: "Provider exited before launch",
+                failure: null,
+                retryable: false,
+                agent_run_id: "browser-run",
+                updated_at: "2026-08-16T09:02:00+00:00",
+              }],
+            },
+          },
+        },
+      })}\n\n`));
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
     expect(screen.getByTestId("automation-failure-chicklet"))
       .toHaveTextContent("!1Fix required");
     expect(fetch).toHaveBeenCalledWith(

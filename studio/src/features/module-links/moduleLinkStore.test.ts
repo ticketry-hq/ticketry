@@ -6,7 +6,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createBrowserRuntime } from "../../runtime/browserRuntime";
-import { createDesktopRuntime } from "../../runtime/desktopRuntime";
+import {
+  createDesktopRuntime,
+  type DesktopInvoke,
+} from "../../runtime/desktopRuntime";
 import { initializeStudioRuntime } from "../../runtime";
 import {
   clearModuleFolder,
@@ -37,7 +40,11 @@ async function installHost(
 ): Promise<void> {
   initializeStudioRuntime(
     await createDesktopRuntime({
-      invoke: vi.fn().mockResolvedValue(startup),
+      invoke: vi.fn(async (command) =>
+        command === "desktop_runtime_configuration"
+          ? startup
+          : { status: "already_trusted", approval: null },
+      ) as DesktopInvoke,
       createGraphQlProxy: () => ({
         graphql_execute: async (requestJson: string) =>
           respond(JSON.parse(requestJson) as Request),
@@ -117,7 +124,11 @@ describe("module link store", () => {
     });
 
     await loadModuleLinks();
-    const write = setModuleFolder("module-1", "/repos/ticketry");
+    const write = setModuleFolder(
+      "module-1",
+      "/repos/ticketry",
+      createBrowserRuntime({ environment: {} }),
+    );
     await Promise.resolve();
 
     expect(getModuleFolder("module-1")).toBe("/repos/ticketry");

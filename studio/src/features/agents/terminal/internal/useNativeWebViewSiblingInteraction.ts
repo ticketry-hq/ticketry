@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { type RefObject, useEffect, useRef } from "react";
 
 import type { NativeTerminalFrame } from "./nativeTerminalFrame";
+import { NATIVE_TERMINAL_INPUT_ATTRIBUTE } from "./terminalInputFocus";
 
 const WEBVIEW_OVERLAY_SELECTOR = [
   '[aria-modal="true"]',
@@ -67,11 +68,11 @@ function publishInteraction(
   handle: string,
   webviewFocus: boolean,
   overlayFrames: NativeTerminalFrame[],
-): void {
+): Promise<void> {
   const host = hostForHandle(handle);
-  if (!host) return;
+  if (!host) return Promise.resolve();
   interactionGeneration += 1;
-  void invoke("native_terminal_set_webview_interaction", {
+  return invoke<void>("native_terminal_set_webview_interaction", {
     handle,
     webviewFocus,
     overlayFrames,
@@ -82,19 +83,53 @@ function publishInteraction(
   });
 }
 
+/** Programmatic focus must transfer native input ownership just like a click. */
+export function selectNativeTerminalInput(handle: string): Promise<void> | null {
+  if (!hostForHandle(handle)) return null;
+  selectedHandle = handle;
+  markSelectedHost(handle);
+  return publishInteraction(handle, false, []);
+}
+
+function markSelectedHost(handle: string | null): void {
+  for (const owner of interactionHosts.values()) {
+    const host = owner.hostRef.current;
+    if (!host) continue;
+    if (handle !== null && owner.handle === handle) {
+      host.setAttribute(NATIVE_TERMINAL_INPUT_ATTRIBUTE, "");
+    } else {
+      host.removeAttribute(NATIVE_TERMINAL_INPUT_ATTRIBUTE);
+    }
+  }
+}
+
 function lowerSelected(overlayFrames = currentOverlayFrames()): void {
   const previousHandle = selectedHandle;
   selectedHandle = null;
+  markSelectedHost(null);
   if (previousHandle) publishInteraction(previousHandle, true, overlayFrames);
 }
 
-function selectFromPointer(event: PointerEvent): void {
-  const targetElement = event.target instanceof Element
-    ? event.target
-    : event.target instanceof Node
-      ? event.target.parentElement
+function isFocusPreserving(target: EventTarget | null): boolean {
+  const element = target instanceof Element
+    ? target
+    : target instanceof Node
+      ? target.parentElement
       : null;
-  if (targetElement?.closest("[data-native-terminal-focus-preserving]")) return;
+  return element?.closest("[data-native-terminal-focus-preserving]") != null;
+}
+
+// The click that selects a native host must not also run the browser's default
+// mousedown action: that moves DOM focus to the focusable workspace body and
+// WebKit then takes first responder back from the terminal the user just
+// clicked into. Propagation continues, so the body still engages the tab.
+function preventFocusSteal(event: MouseEvent): void {
+  if (isFocusPreserving(event.target)) return;
+  if (selectedHandleForTarget(event.target)) event.preventDefault();
+}
+
+function selectFromPointer(event: PointerEvent): void {
+  if (isFocusPreserving(event.target)) return;
   const nextHandle = selectedHandleForTarget(event.target);
   if (!nextHandle) {
     lowerSelected();
@@ -102,6 +137,7 @@ function selectFromPointer(event: PointerEvent): void {
   }
   if (nextHandle === selectedHandle) return;
   selectedHandle = nextHandle;
+  markSelectedHost(nextHandle);
   publishInteraction(nextHandle, false, []);
 }
 
@@ -116,7 +152,9 @@ function installWindowListeners(): () => void {
     if (animationFrame) cancelAnimationFrame(animationFrame);
     animationFrame = requestAnimationFrame(inspectOverlays);
   };
-  const lowerForWindowBlur = () => lowerSelected();
+  // No window-blur handler: WebKit fires DOM `blur` on the window the moment
+  // the native terminal becomes first responder, so lowering on blur would
+  // hand input straight back to the WebView after every selecting click.
   const observer = new MutationObserver(scheduleOverlayInspection);
   observer.observe(document.body, {
     childList: true,
@@ -127,13 +165,13 @@ function installWindowListeners(): () => void {
   window.addEventListener("resize", scheduleOverlayInspection);
   window.addEventListener("scroll", scheduleOverlayInspection, true);
   window.addEventListener("pointerdown", selectFromPointer, true);
-  window.addEventListener("blur", lowerForWindowBlur);
+  window.addEventListener("mousedown", preventFocusSteal, true);
   return () => {
     observer.disconnect();
     window.removeEventListener("resize", scheduleOverlayInspection);
     window.removeEventListener("scroll", scheduleOverlayInspection, true);
     window.removeEventListener("pointerdown", selectFromPointer, true);
-    window.removeEventListener("blur", lowerForWindowBlur);
+    window.removeEventListener("mousedown", preventFocusSteal, true);
     if (animationFrame) cancelAnimationFrame(animationFrame);
   };
 }
@@ -141,7 +179,7 @@ function installWindowListeners(): () => void {
 function registerInteractionHost(token: symbol, host: InteractionHost): () => void {
   const handleAlreadyRegistered = hostForHandle(host.handle) !== null;
   interactionHosts.set(token, host);
-  document.documentElement.classList.add("native-webview-sibling-spike");
+  document.documentElement.classList.add("native-webview-sibling");
   releaseWindowListeners ??= installWindowListeners();
   if (!handleAlreadyRegistered) publishInteraction(host.handle, true, []);
 
@@ -150,6 +188,7 @@ function registerInteractionHost(token: symbol, host: InteractionHost): () => vo
     const handleStillRegistered = hostForHandle(host.handle) !== null;
     if (selectedHandle === host.handle && !handleStillRegistered) {
       selectedHandle = null;
+      markSelectedHost(null);
       interactionGeneration += 1;
       void invoke("native_terminal_set_webview_interaction", {
         handle: host.handle,
@@ -161,7 +200,7 @@ function registerInteractionHost(token: symbol, host: InteractionHost): () => vo
     if (interactionHosts.size > 0) return;
     releaseWindowListeners?.();
     releaseWindowListeners = null;
-    document.documentElement.classList.remove("native-webview-sibling-spike");
+    document.documentElement.classList.remove("native-webview-sibling");
   };
 }
 

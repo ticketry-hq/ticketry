@@ -24,13 +24,10 @@
 //! planning types here without reaching into implementation modules.
 
 mod authority;
-mod directory_trust;
 mod paths;
 mod planning;
 mod terminal_session;
 mod trace_reasons;
-
-pub use directory_trust::{DirectoryTrustOutcome, DirectoryTrustSetup};
 
 pub use authority::{
     compose_task_prompt, InteractiveLaunchAuthority, LaunchAuthorityError,

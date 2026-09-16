@@ -13,6 +13,7 @@ sha2.workspace = true
 ticketry-diagnostics.workspace = true
 ticketry-documents.workspace = true
 ticketry-entities.workspace = true
+ticketry-provider.workspace = true
 ticketry-runs.workspace = true
 ticketry-settings.workspace = true
 ticketry-work-management.workspace = true

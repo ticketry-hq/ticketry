@@ -15,7 +15,7 @@ const MODULE: Module = {
 };
 
 describe("module tab close acceptance", () => {
-  it("[overhaul-183] keeps the close hover background to a compact square inside the tab", () => {
+  it("[overhaul-183] wraps tab content while reserving a constant compact close target", () => {
     render(
       <ModuleTab
         module={MODULE}
@@ -30,6 +30,9 @@ describe("module tab close acceptance", () => {
     const close = screen.getByRole("button", { name: "Hide Ticketry tab" });
     const closeBackground = close.querySelector("span");
 
+    const tab = screen.getByRole("tab", { name: "Ticketry" });
+    expect(tab.parentElement).toHaveClass("w-max", "shrink-0");
+    expect(tab).toHaveClass("pr-7");
     expect(close).toHaveClass("h-full", "w-7");
     expect(close).not.toHaveClass("hover:bg-pane-bg");
     expect(closeBackground).toHaveClass(

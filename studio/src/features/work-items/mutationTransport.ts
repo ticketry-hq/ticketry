@@ -17,10 +17,30 @@ import {
   recordStoryMove,
   storyMoveError,
 } from "./internal/storyMoveDiagnostics";
+import { recordLocalWorkItemConvergence } from "./workItemConvergence";
 
 export interface WorkItemWriteOptions {
   optimistic?: GeneratedWorkTrackerWorkItemFieldsFragment;
   moduleId?: string;
+  moduleIds?: readonly string[];
+}
+
+function affectedModuleIds(options: WorkItemWriteOptions): string[] {
+  return [...new Set(
+    [options.moduleId, ...(options.moduleIds ?? [])]
+      .filter((id): id is string => Boolean(id))
+      .map(compactWorktrackerId),
+  )];
+}
+
+async function refreshModuleLists(options: WorkItemWriteOptions): Promise<void> {
+  const client = studioApolloClient();
+  await Promise.all(affectedModuleIds(options).map((moduleId) =>
+    client.query({
+      query: WorkTrackerModuleOpenDocument,
+      variables: { moduleId },
+      fetchPolicy: "network-only",
+    })));
 }
 
 export async function createWorkItem(
@@ -63,9 +83,9 @@ export async function createWorkItem(
         };
       });
     },
-    refetchQueries: options.moduleId ? [WorkTrackerModuleOpenDocument] : [],
-    awaitRefetchQueries: Boolean(options.moduleId),
   });
+  await refreshModuleLists(options);
+  recordLocalWorkItemConvergence(data!.create_work_item.id, data!.create_work_item.updated_at);
   return workItemFromIssue(data!.create_work_item);
 }
 
@@ -86,6 +106,7 @@ export async function updateWorkItem(
       ? { update_work_item: options.optimistic }
       : undefined,
   });
+  recordLocalWorkItemConvergence(data!.update_work_item.id, data!.update_work_item.updated_at);
   return workItemFromIssue(data!.update_work_item);
 }
 
@@ -124,6 +145,7 @@ export async function transitionWorkItem(
         fetchPolicy: "network-only",
       });
     }
+    recordLocalWorkItemConvergence(data!.update_work_item.id, data!.update_work_item.updated_at);
     return item;
   } catch (error) {
     recordStoryMove("transition-failed", {
@@ -148,9 +170,12 @@ export async function reparentWorkItem(
     optimisticResponse: options.optimistic
       ? { update_work_item: options.optimistic }
       : undefined,
-    refetchQueries: [WorkTrackerModuleOpenDocument],
-    awaitRefetchQueries: true,
   });
+  await refreshModuleLists({
+    ...options,
+    moduleIds: [...(options.moduleIds ?? []), data!.update_work_item.module_id ?? ""],
+  });
+  recordLocalWorkItemConvergence(data!.update_work_item.id, data!.update_work_item.updated_at);
   return workItemFromIssue(data!.update_work_item);
 }
 
@@ -168,9 +193,9 @@ export async function setWorkItemBlockers(
     optimisticResponse: options.optimistic
       ? { update_work_item: options.optimistic }
       : undefined,
-    refetchQueries: [WorkTrackerModuleOpenDocument],
-    awaitRefetchQueries: true,
   });
+  await refreshModuleLists(options);
+  recordLocalWorkItemConvergence(data!.update_work_item.id, data!.update_work_item.updated_at);
   return workItemFromIssue(data!.update_work_item);
 }
 
@@ -224,6 +249,7 @@ export async function reorderWorkItem(
         moduleId: options.moduleId,
       });
     }
+    recordLocalWorkItemConvergence(data!.reorder_work_item.id, data!.reorder_work_item.updated_at);
     return item;
   } catch (error) {
     recordStoryMove("reorder-failed", {
@@ -236,7 +262,10 @@ export async function reorderWorkItem(
   }
 }
 
-export async function deleteWorkItem(id: string): Promise<void> {
+export async function deleteWorkItem(
+  id: string,
+  options: WorkItemWriteOptions = {},
+): Promise<void> {
   const client = studioApolloClient();
   await client.mutate({
     mutation: DeleteWorkTrackerWorkItemDocument,
@@ -250,8 +279,7 @@ export async function deleteWorkItem(id: string): Promise<void> {
         }),
       });
     },
-    refetchQueries: [WorkTrackerModuleOpenDocument],
-    awaitRefetchQueries: true,
   });
+  await refreshModuleLists(options);
   client.cache.gc();
 }

@@ -140,9 +140,6 @@ function committedStateFromError(error: unknown): { id: string; name: string } |
 function refusalMessage(error: unknown): string {
   if (error instanceof RunNowRefusalError) {
     const { code, detail, remedy } = error.body;
-    if (code === "task_already_active") {
-      return "An agent is already running for this Story. Close its terminal before trying again.";
-    }
     if (code === "binding_not_configured") {
       return "Configure an Implement launch binding before trying again.";
     }

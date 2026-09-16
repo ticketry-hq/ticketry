@@ -19,6 +19,7 @@ import {
 } from "../../../documents/generated/documentRegistry.documents";
 import { WorktreeStatusDocument } from "../../worktrees/generated/worktreeStatus.documents";
 import { WorkTrackerProjectOpenDocument } from "../../../projects/generated/projects.documents";
+import { recordLocalWorkItemConvergence } from "../../../work-items/workItemConvergence";
 
 const PROJECT = "11111111-1111-1111-1111-111111111111";
 const OTHER_PROJECT = "22222222-2222-2222-2222-222222222222";
@@ -196,18 +197,20 @@ describe("snapshot reconciliation", () => {
       expect.objectContaining({
         event: "graphql-frame-received",
         projectId: PROJECT,
-        agentRunId: "run-1",
+        agentRunId: null,
         cursor: 10,
         connectionGeneration: 1,
         frameType: "snapshot",
+        runCount: 1,
       }),
       expect.objectContaining({
         event: "apollo-run-applied",
         projectId: PROJECT,
-        agentRunId: "run-1",
+        agentRunId: null,
         cursor: 10,
         connectionGeneration: 1,
         source: "snapshot",
+        runCount: 1,
       }),
       expect.objectContaining({
         event: "caught-up",
@@ -415,6 +418,70 @@ describe("WorkItem convergence", () => {
       { id: "item-2" },
     ]);
     expect(refreshCollection).toHaveBeenCalledTimes(1);
+  });
+
+  it("refreshes only the module named by a membership fact", async () => {
+    const transport = harness();
+    const client = studioApolloClient();
+    const refresh = vi.spyOn(client, "query").mockResolvedValue({} as never);
+    const broadRefresh = vi.spyOn(client, "refetchQueries")
+      .mockResolvedValue([] as never);
+    statusStreamFeed.start(PROJECT, { createProxy: transport.createProxy });
+    await vi.advanceTimersByTimeAsync(0);
+
+    transport.send(
+      event(11, "work_item.changed", {
+        workItemId: "item-1",
+        moduleId: "module-1",
+        membershipChanged: true,
+      }),
+    );
+    await vi.advanceTimersByTimeAsync(60);
+
+    expect(refresh.mock.calls.map(([options]) => options?.variables)).toEqual([
+      { id: "item-1" },
+      { moduleId: "module-1" },
+    ]);
+    expect(broadRefresh).not.toHaveBeenCalled();
+  });
+
+  it("does not repeat a refresh for the exact server version a mutation adopted", async () => {
+    const transport = harness();
+    const client = studioApolloClient();
+    const refresh = vi.spyOn(client, "query").mockResolvedValue({} as never);
+    const broadRefresh = vi.spyOn(client, "refetchQueries")
+      .mockResolvedValue([] as never);
+    statusStreamFeed.start(PROJECT, { createProxy: transport.createProxy });
+    await vi.advanceTimersByTimeAsync(0);
+    recordLocalWorkItemConvergence("item-1", "2026-09-05 00:00:00.123456");
+
+    transport.send(
+      event(11, "work_item.changed", {
+        workItemId: "item-1",
+        moduleId: "module-1",
+        membershipChanged: true,
+        occurredAt: "2026-09-05T00:00:00.123456+00:00",
+      }),
+    );
+    await vi.advanceTimersByTimeAsync(60);
+
+    expect(refresh).not.toHaveBeenCalled();
+    expect(broadRefresh).not.toHaveBeenCalled();
+
+    transport.send(
+      event(12, "work_item.changed", {
+        workItemId: "item-1",
+        moduleId: "module-1",
+        membershipChanged: true,
+        occurredAt: "2026-09-05T00:00:01Z",
+      }),
+    );
+    await vi.advanceTimersByTimeAsync(60);
+
+    expect(refresh.mock.calls.map(([options]) => options?.variables)).toEqual([
+      { id: "item-1" },
+      { moduleId: "module-1" },
+    ]);
   });
 
   it("refreshes through an in-flight optimistic edit without a mutation skip", async () => {
@@ -773,12 +840,15 @@ describe("connection lifecycle", () => {
       expect.objectContaining({
         event: "apollo-run-applied",
         projectId: PROJECT,
-        agentRunId: "run-unknown",
+        agentRunId: null,
         cursor: 11,
         connectionGeneration: 3,
         source: "snapshot",
+        runCount: 1,
       }),
     ]));
+    // The summary record names no run, so the resync is proved by the holding.
+    expect(readAgentStatusHolding().runs["run-unknown"]).toBeDefined();
   });
 
   it("drops queued results from the project it no longer owns", async () => {

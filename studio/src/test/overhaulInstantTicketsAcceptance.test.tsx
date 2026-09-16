@@ -13,6 +13,7 @@ import {
   useTerminalStore,
   type SessionMeta,
 } from "../features/agents/terminal";
+import { registerTerminalFocus } from "../features/agents/terminal/internal/terminalRegistry";
 import { TEMP_TASK_ID } from "../features/agents/types";
 import { seedModuleLinks } from "../features/module-links";
 import { useStudioStore } from "../features/projects/store";
@@ -182,7 +183,7 @@ describe("overhaul acceptance — Conversations", () => {
     seedModuleOpenFixture("module-1", []);
   });
 
-  it("[overhaul-202] replaces Scratch with Conversations and selects each chat's exact terminal", async () => {
+  it("[overhaul-202] replaces Scratch with Conversations and selects each conversation's exact terminal", async () => {
     render(
       <StudioApolloProvider>
         <TasksPane />
@@ -192,27 +193,229 @@ describe("overhaul acceptance — Conversations", () => {
     const conversationsHeader = await screen.findByRole("button", {
       name: "Collapse Conversations",
     });
-    expect(conversationsHeader).toHaveTextContent("Conversations2");
-    expect(within(conversationsHeader).getByLabelText(/waiting for your input/i)).toBeVisible();
-    expect(within(conversationsHeader).getByLabelText(/actively working/i))
-      .toHaveTextContent("1");
-    expect(screen.queryByRole("button", { name: "Collapse Scratch" })).toBeNull();
-    expect(screen.getByRole("treeitem", { name: /New conversation/ })).toBeVisible();
-    const row = screen.getByRole("treeitem", {
+    const newConversation = screen.getByRole("treeitem", { name: /New conversation/ });
+    const needsInputRow = screen.getByRole("treeitem", {
       name: /Tighten the launch prompt/,
     });
-    expect(row).toHaveTextContent("Tighten the launch prompt");
-    expect(within(row).queryByLabelText(/waiting for your input/i)).toBeNull();
-    expect(within(screen.getByRole("treeitem", { name: /New conversation/ }))
-      .queryByTestId("scratch-run-chicklets")).toBeNull();
+    const workingRow = screen.getByRole("treeitem", {
+      name: /Itemize temporary chats/,
+    });
+    expect(conversationsHeader).toHaveTextContent("Conversations2");
+    expect(screen.getAllByRole("treeitem")).toEqual([
+      newConversation,
+      needsInputRow,
+      workingRow,
+    ]);
+    expect(screen.queryByRole("button", { name: "Collapse Scratch" })).toBeNull();
+    expect(newConversation).toBeVisible();
 
-    fireEvent.click(row);
+    expect(within(needsInputRow).getByLabelText("Agent is waiting for your input"))
+      .toHaveTextContent("1");
+    expect(within(workingRow).getByLabelText("Agent is actively working"))
+      .toHaveTextContent("1");
 
+    fireEvent.click(workingRow);
     const bucket = scratchBucketId("module-1");
-    await waitFor(() => expect(row).toHaveAttribute("aria-selected", "true"));
+    await waitFor(() => expect(workingRow).toHaveAttribute("aria-selected", "true"));
+    expect(useClientStore.getState().activeByTask[bucket]).toBe("session-1");
+
+    fireEvent.click(needsInputRow);
+
+    await waitFor(() => expect(needsInputRow).toHaveAttribute("aria-selected", "true"));
     expect(useClientStore.getState().selectedTaskId).toBe(TEMP_TASK_ID);
     expect(useClientStore.getState().activeByTask[bucket]).toBe("session-2");
     expect(useClientStore.getState().workspaces[bucket]?.active).toBe("terminal");
+  });
+
+  it("[overhaul-311] isolates reactive lifecycle badges by run and module", async () => {
+    render(
+      <StudioApolloProvider>
+        <TasksPane />
+      </StudioApolloProvider>,
+    );
+
+    const conversationsHeader = await screen.findByRole("button", {
+      name: "Collapse Conversations",
+    });
+    const newConversation = screen.getByRole("treeitem", { name: /New conversation/ });
+    const needsInputRow = screen.getByRole("treeitem", {
+      name: /Tighten the launch prompt/,
+    });
+    const workingRow = screen.getByRole("treeitem", {
+      name: /Itemize temporary chats/,
+    });
+    const eligibleStates = [
+      ["starting", "Agent session is starting up"],
+      ["working", "Agent is actively working"],
+      ["permission_required", "A permission decision is pending"],
+      ["reconnecting", "Reconnecting to the terminal session"],
+      ["needs_input", "Agent is waiting for your input"],
+      ["turn_complete", "Agent finished its turn and is awaiting you"],
+      ["error", "Agent session reported an error"],
+      ["stalled", "Terminal output has not changed for 60 seconds (the session is still live)"],
+      ["quiet", "No recent activity (heuristic — not a confirmed completion)"],
+    ] as const;
+    const lifecycleDescriptions = [
+      ...eligibleStates.map(([, description]) => description),
+      "Agent session has exited",
+      "The backend terminal session could not be found",
+    ];
+    const expectNoLifecycleBadge = (element: HTMLElement) => {
+      for (const description of lifecycleDescriptions) {
+        expect(within(element).queryByLabelText(description)).toBeNull();
+      }
+    };
+
+    expectNoLifecycleBadge(conversationsHeader);
+    expectNoLifecycleBadge(newConversation);
+    expect(within(needsInputRow).getByLabelText("Agent is waiting for your input"))
+      .toHaveTextContent("1");
+    expect(within(workingRow).getByLabelText("Agent is actively working"))
+      .toHaveTextContent("1");
+
+    act(() => useAgentStatusStore.getState().upsertRun({
+      agent_run_id: "other-module-run",
+      project_id: "project-1",
+      task_id: null,
+      module_id: "module-2",
+      agent: "codex",
+      scope: "instant",
+      state: "error",
+      started_at: "2026-08-30T12:00:00Z",
+      updated_at: "2026-08-30T12:00:00Z",
+    }));
+    expect(screen.queryByLabelText("Agent session reported an error")).toBeNull();
+
+    for (const [state, description] of eligibleStates) {
+      act(() => {
+        const status = useAgentStatusStore.getState();
+        status.upsertRun({
+          ...status.runs["instant-run-2"],
+          state: state === "stalled" ? "quiet" : state,
+          effective_state: state,
+          updated_at: new Date(
+            Date.parse(status.runs["instant-run-2"].updated_at) + 1_000,
+          ).toISOString(),
+        });
+      });
+      await waitFor(() => {
+        expect(within(needsInputRow).getByLabelText(description)).toHaveTextContent("1");
+        expect(within(workingRow).getByLabelText("Agent is actively working"))
+          .toHaveTextContent("1");
+      });
+    }
+
+    for (const state of ["unknown", "exited", "lost"] as const) {
+      act(() => {
+        const status = useAgentStatusStore.getState();
+        status.upsertRun({
+          ...status.runs["instant-run-2"],
+          state,
+          effective_state: state,
+          updated_at: new Date(
+            Date.parse(status.runs["instant-run-2"].updated_at) + 1_000,
+          ).toISOString(),
+        });
+      });
+      await waitFor(() => expectNoLifecycleBadge(needsInputRow));
+    }
+
+    act(() => {
+      const { ["instant-run-2"]: _absent, ...runs } = useAgentStatusStore.getState().runs;
+      useAgentStatusStore.setState({ runs });
+    });
+    await waitFor(() => expectNoLifecycleBadge(needsInputRow));
+  });
+
+  it("[overhaul-312] configures Conversations from its heading with no chats", async () => {
+    const operations: string[] = [];
+    const terminalExecutor = terminalSessionReadExecutor(emptyTerminalReads);
+    installDesktopGraphQlRuntime(async (document, variables) => {
+      const operation = documentOperationName(document);
+      operations.push(operation);
+      if (operation === "InstantRunTickets") {
+        return { tickets: [] } as never;
+      }
+      if (operation === "LoadInstantLaunchSetting") {
+        return {
+          instant_launch_setting: {
+            __typename: "KeybindingSetting",
+            scope: "host",
+            key: "instant_launch",
+            value: { initial_prompt: "Keep changes focused.", auto_close: true },
+            updated_at: "2026-09-16T10:00:00Z",
+          },
+        } as never;
+      }
+      if (operation === "WorkTrackerModuleOpen") {
+        return {
+          module: { __typename: "WorktrackerIssueConnection", nodes: [] },
+          work_items: { __typename: "WorktrackerIssueConnection", nodes: [] },
+        } as never;
+      }
+      return terminalExecutor(document, variables);
+    });
+    const bucket = scratchBucketId("module-1");
+    useClientStore.setState({
+      activeByTask: { [bucket]: "session-2" },
+      workspaces: {
+        [bucket]: { active: "terminal", activeDocId: null, closedDocIds: [] },
+      },
+    });
+
+    render(
+      <StudioApolloProvider>
+        <TasksPane />
+        <SelectedTicket />
+      </StudioApolloProvider>,
+    );
+
+    const configure = await screen.findByRole("button", {
+      name: "Configure Conversations",
+    });
+    const restoredFocus = vi.fn();
+    const releaseFocus = registerTerminalFocus("session-2", restoredFocus);
+    restoredFocus.mockClear();
+    fireEvent.click(configure);
+
+    const panel = await screen.findByRole("region", {
+      name: "Conversation configuration",
+    });
+    expect(panel).toHaveAttribute("data-native-terminal-overlay");
+    const prompt = within(panel).getByRole("textbox", {
+      name: "Conversation starter prompt",
+    });
+    expect(prompt).toHaveValue("Keep changes focused.");
+    await waitFor(() => expect(prompt).toHaveFocus());
+    expect(useClientStore.getState().selectedTaskId).toBe(TEMP_TASK_ID);
+    expect(useClientStore.getState().workspaces[bucket]?.active).toBe("terminal");
+    expect(useTerminalStore.getState().sessionByRun).toEqual({
+      "instant-run-1": "session-1",
+      "instant-run-2": "session-2",
+    });
+    expect(screen.queryByRole("dialog", { name: "Studio settings" })).toBeNull();
+    expect(operations).not.toContain("UpdateInstantLaunchSetting");
+
+    fireEvent.click(within(panel).getByRole("button", {
+      name: "Close Conversation configuration",
+    }));
+
+    await waitFor(() => expect(screen.queryByRole("region", {
+      name: "Conversation configuration",
+    })).toBeNull());
+    expect(useClientStore.getState().selectedTaskId).toBe(TEMP_TASK_ID);
+    expect(useClientStore.getState().workspaces[bucket]?.active).toBe("terminal");
+    expect(operations).not.toContain("UpdateInstantLaunchSetting");
+    await waitFor(() => expect(restoredFocus).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(configure);
+    await screen.findByRole("region", { name: "Conversation configuration" });
+    fireEvent.click(configure);
+    await waitFor(() => expect(screen.queryByRole("region", {
+      name: "Conversation configuration",
+    })).toBeNull());
+    await waitFor(() => expect(restoredFocus).toHaveBeenCalledTimes(2));
+    releaseFocus();
   });
 
   it("creates and selects a conversation when Enter activates New conversation", async () => {

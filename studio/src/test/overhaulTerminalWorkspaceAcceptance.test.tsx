@@ -49,10 +49,7 @@ function statusTransport() {
   };
 }
 
-vi.mock("../features/documents", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../features/documents")>()),
-  ...documentRegistry,
-}));
+vi.mock("../features/documents/documentRegistry", () => documentRegistry);
 
 vi.mock("../features/agents/api/agentApi", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../features/agents/api/agentApi")>()),

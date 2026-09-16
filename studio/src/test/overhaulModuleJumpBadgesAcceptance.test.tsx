@@ -135,14 +135,13 @@ describe("overhaul acceptance - module jump badges", () => {
       "⌘7",
       "⌘8",
       "⌘9",
-      "⌘0",
     ]);
     expect(firstTab.className).toBe(firstTabClass);
     const visibleTabs = within(
       screen.getByRole("tablist", { name: "Project module tabs" }),
     ).getAllByRole("tab");
     expect(
-      visibleTabs.every((tab) => tab.parentElement?.classList.contains("w-64")),
+      visibleTabs.every((tab) => tab.parentElement?.classList.contains("w-max")),
     ).toBe(true);
     expect(badges[0]).toHaveClass("absolute", "pointer-events-none");
     expect(badges[0]).toHaveAttribute("aria-hidden", "true");
@@ -168,6 +167,15 @@ describe("overhaul acceptance - module jump badges", () => {
     expect(useClientStore.getState().selectModule).toHaveBeenLastCalledWith(
       "module-12",
     );
+    const windowKeydown = vi.fn();
+    window.addEventListener("keydown", windowKeydown);
+    try {
+      fireEvent.keyDown(window, { key: "0", metaKey: true, shiftKey: true });
+      expect(windowKeydown).not.toHaveBeenCalled();
+      expect(useClientStore.getState().selectModule).toHaveBeenLastCalledWith("module-12");
+    } finally {
+      window.removeEventListener("keydown", windowKeydown);
+    }
   });
 
   it("clears stale modifier state at every keyboard ownership boundary", async () => {
@@ -176,7 +184,7 @@ describe("overhaul acceptance - module jump badges", () => {
 
     const reveal = () => {
       fireEvent.keyDown(window, { key: "Meta", metaKey: true });
-      expect(screen.getAllByTestId("module-jump-badge")).toHaveLength(10);
+      expect(screen.getAllByTestId("module-jump-badge")).toHaveLength(9);
     };
     const expectCleared = () =>
       expect(screen.queryAllByTestId("module-jump-badge")).toHaveLength(0);
@@ -205,9 +213,10 @@ describe("overhaul acceptance - module jump badges", () => {
 
     reveal();
     fireEvent.keyDown(window, { key: "Shift", metaKey: true, shiftKey: true });
-    expectCleared();
+    expect(screen.getAllByTestId("module-jump-badge")).toHaveLength(1);
+    expect(screen.getByTestId("module-jump-badge")).toHaveTextContent("⌘⇧0");
     fireEvent.keyUp(window, { key: "Shift", metaKey: true });
-    expect(screen.getAllByTestId("module-jump-badge")).toHaveLength(10);
+    expect(screen.getAllByTestId("module-jump-badge")).toHaveLength(9);
     fireEvent.keyUp(window, { key: "Meta" });
     expectCleared();
   });

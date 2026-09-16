@@ -17,7 +17,7 @@ import {
   useClientStore as useTicketWorkspaceStore,
 } from "../../../../../state/clientStore";
 import { closeTerminalTab } from "./closeTerminalTab";
-import { rememberStudioWorkspaceTarget } from "./studioWorkspaceTarget";
+import { rememberStudioWorkspaceTarget } from "../../../../../features/workspace-state/studioWorkspaceTarget";
 import type { TaskWorkspaceTabIdentity } from "./useTaskWorkspaceTabNavigation";
 import type { WorkspaceLauncherContext } from "./WorkspaceLauncher";
 
@@ -134,6 +134,13 @@ export function useWorkspaceTabActions({
     if (activate) selectWorkspaceTab(tab);
   }
 
+  function activateWorkspaceTerminal(id: string): void {
+    const tab = { kind: "terminal", id } as const;
+    if (isEditView) setEditViewZone("active-tab-body");
+    selectWorkspaceTab(tab);
+    if (isEditView) engageTab(tab);
+  }
+
   function claimPointerZone(
     zone: "tab-strip" | "active-tab-body",
   ): void {
@@ -240,6 +247,7 @@ export function useWorkspaceTabActions({
 
   return {
     selectWorkspaceTab,
+    activateWorkspaceTerminal,
     diveWorkspaceTab,
     claimPointerZone,
     closeWorkspaceDocument,

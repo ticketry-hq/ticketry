@@ -17,6 +17,16 @@ async function text(relativePath: string): Promise<string> {
  * not put the native library in the binary or its resources in the bundle.
  */
 describe("native libghostty shipping contract", () => {
+  it("leaves native crash reporting to macOS and invalidates old build recipes", async () => {
+    const prepare = await text("../../scripts/prepare-libghostty.sh");
+    expect(prepare).toContain("-Dsentry=false");
+    expect(prepare).toContain('"$VENDOR_DIR/BUILD_RECIPE"');
+    expect(prepare).toContain('"$SCRIPT_DIR/libghostty-macos-static.patch" | shasum -a 256');
+    expect(prepare).toContain("sentry_init|sentry_backend|google_breakpad");
+    expect(prepare.indexOf("refusing to stage it")).toBeLessThan(
+      prepare.indexOf('cp "$SOURCE_DIR/zig-out/lib/libghostty.a"'),
+    );
+  });
   it("ships native libghostty resources in the macOS bundle", async () => {
     const configuration = await json("../../src-tauri/tauri.conf.json");
     const { resources = {} } = configuration.bundle as {

@@ -147,14 +147,3 @@ export function useIssueTypesQuery(projectId: string | null) {
       : undefined,
   };
 }
-
-export function seedIssueTypes(projectId: string, issueTypes: IssueType[]): void {
-  setIssueTypes(projectId, issueTypes);
-}
-
-export function seedCapabilities(
-  projectId: string,
-  map: SubtreeRunCapabilityMap,
-): void {
-  setCapabilities(projectId, map);
-}

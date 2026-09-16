@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import {
+  clearProviderHolding,
   providerApi,
   providerCapability,
   setProviderCapabilities,
@@ -9,12 +10,6 @@ import {
   workspaceView,
 } from "./taskAgentLaunchAcceptanceHarness";
 import type { WorkspaceLauncherContext } from "./taskAgentLaunchAcceptanceHarness";
-import { studioApolloClient } from "../shared/apollo/client";
-
-function clearProviderHolding(): void {
-  studioApolloClient().cache.evict({ id: "ROOT_QUERY", fieldName: "provider_catalog" });
-  studioApolloClient().cache.gc();
-}
 
 describe("overhaul acceptance — task agent launch", () => {
   it("[overhaul-128] launches one promptless task run and activates its acknowledged terminal tab", async () => {
@@ -52,18 +47,22 @@ describe("overhaul acceptance — task agent launch", () => {
       name: "codex terminal",
     });
     expect(terminalTab).toHaveAttribute("aria-selected", "true");
-    expect(useTerminalStore.getState().sessions["terminal-570"]).toMatchObject({
-      sessionId: "terminal-570",
-      taskId: "task-570",
-      projectId: "project-570",
-      moduleId: "module-570",
-      agent: "codex",
-      agentRunId: "run-570",
-      status: "ready",
-      initialPrompt: null,
-      isPlanning: false,
-      isInstant: false,
-    });
+    // The xterm renderer chunk loads lazily, so the viewer that acknowledges
+    // the run under its server id attaches a tick after the tab appears.
+    await waitFor(() =>
+      expect(useTerminalStore.getState().sessions["terminal-570"]).toMatchObject({
+        sessionId: "terminal-570",
+        taskId: "task-570",
+        projectId: "project-570",
+        moduleId: "module-570",
+        agent: "codex",
+        agentRunId: "run-570",
+        status: "ready",
+        initialPrompt: null,
+        isPlanning: false,
+        isInstant: false,
+      }),
+    );
   });
 
   it("[overhaul-129] honors provider availability without changing the scratch launcher", async () => {

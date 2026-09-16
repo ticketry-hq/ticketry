@@ -20,6 +20,7 @@ import { ModuleTabStrip } from "../app/shell/ticket-workspace/ModuleTabStrip";
 import {
   getModulePresentationsSnapshot,
 } from "../features/module-tabs";
+import { seedModuleLinks } from "../features/module-links";
 import { useStudioStore } from "../features/projects/store";
 import { createBrowserRuntime, initializeStudioRuntime } from "../runtime";
 import type { Module, ModulePresentation, Project } from "../shared/api/types";
@@ -168,7 +169,7 @@ describe("restore-aware module picker acceptance", () => {
     });
   });
 
-  it("[overhaul-237] puts the Modules pane toggle at the top before module creation", async () => {
+  it("[overhaul-237] puts module creation immediately beside the last module tab", async () => {
     render(
       <>
         <ModuleTabStrip />
@@ -180,12 +181,19 @@ describe("restore-aware module picker acceptance", () => {
     const modulesToggle = screen.getByRole("button", {
       name: /^(Open|Close) Modules pane$/,
     });
+    const tablist = screen.getByRole("tablist", {
+      name: "Project module tabs",
+    });
     const modulePicker = await screen.findByRole("button", {
       name: "Open module picker",
     });
 
     expect(strip).toContainElement(modulesToggle);
-    expect(modulesToggle.nextElementSibling).toContainElement(modulePicker);
+    expect(strip.firstElementChild).toBe(modulesToggle);
+    expect(tablist.nextElementSibling).toContainElement(modulePicker);
+    expect(within(tablist).getAllByRole("tab").at(-1)).toHaveAccessibleName("Charlie");
+    expect(tablist).toHaveClass("flex-initial", "min-w-0", "overflow-x-auto");
+    expect(tablist).not.toHaveClass("flex-1", "grow");
   });
 
   it("opens creation as the first action and keeps the coach mark off the trigger", async () => {
@@ -197,12 +205,40 @@ describe("restore-aware module picker acceptance", () => {
     expect(within(picker).getAllByRole("option")[0]).toHaveTextContent(
       "Create new module",
     );
+    fireEvent.blur(
+      within(picker).getByRole("combobox", { name: "Search modules" }),
+      { relatedTarget: null },
+    );
     fireEvent.click(
       within(picker).getByRole("option", { name: "Create new module" }),
     );
 
     expect(screen.queryByRole("dialog", { name: "Module picker" })).toBeNull();
     expect(useModalStore.getState().modalStack).toEqual([{ type: "add-module" }]);
+  });
+
+  it("selects a linked fallback when the active module tab is hidden", async () => {
+    seedModuleLinks([{
+      id: "link-charlie",
+      moduleId: "module-c",
+      path: "/repos/charlie",
+    }]);
+    useClientStore.setState({ selectedModuleId: "module-a" });
+    render(<ModuleTabStrip />);
+
+    fireEvent.click(await screen.findByRole("button", {
+      name: "Hide Alpha tab",
+    }));
+
+    await waitFor(() =>
+      expect(useClientStore.getState().selectModule).toHaveBeenCalledWith(
+        "module-c",
+      )
+    );
+    expect(useClientStore.getState().selectModule).not.toHaveBeenCalledWith(
+      "module-b",
+    );
+    expect(useModalStore.getState().modalStack).toEqual([]);
   });
 
   it("searches hidden non-archived modules without changing canonical order", async () => {

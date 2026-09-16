@@ -105,7 +105,7 @@ async fn fixture() -> (tempfile::TempDir, sea_orm::DatabaseConnection) {
                 (agent_model_id, reasoning_level_id) VALUES ('{GPT}', '{HIGH}');
             INSERT INTO app_settings VALUES
                 ('host', 'provider_catalog',
-                 '{{"global_default":{{"provider":"codex","model":"gpt-5.6","reasoning":"high"}}}}',
+                 '{{"codex_profiles":["careful","fast"],"global_default":{{"provider":"codex","model":"gpt-5.6","reasoning":"high"}}}}',
                  CURRENT_TIMESTAMP);
             "#
         ))
@@ -247,6 +247,16 @@ async fn binding_profile_round_trips_and_rejects_model_combinations() {
         .await
         .unwrap_err();
     assert_eq!(error.code(), "profile_conflicts_with_model");
+
+    let mut unregistered = patch(REVIEW);
+    unregistered.workflow_revision = 2;
+    unregistered.profile = workflow::PatchValue::Value("missing".to_owned());
+    unregistered.model_id = workflow::PatchValue::Null;
+    unregistered.reasoning_id = workflow::PatchValue::Null;
+    let error = workflow::patch_launch_binding(&database, unregistered)
+        .await
+        .unwrap_err();
+    assert_eq!(error.code(), "profile_not_registered");
 }
 
 #[tokio::test]
@@ -295,7 +305,10 @@ async fn profile_only_automation_is_validated_against_codex() {
     // No global default at all: the binding's own Codex profile must supply the
     // provider the automation checks run against.
     database
-        .execute_unprepared("DELETE FROM app_settings")
+        .execute_unprepared(
+            r#"UPDATE app_settings
+               SET value = '{"codex_profiles":["careful","fast"],"global_default":null}'"#,
+        )
         .await
         .unwrap();
     let mut input = patch(BUILD);
@@ -320,6 +333,21 @@ async fn profile_only_automation_is_validated_against_codex() {
         .unwrap_err();
     assert_eq!(error.code(), "provider_not_activated");
     assert_no_effect(&database).await;
+}
+
+#[tokio::test]
+async fn automation_capability_comes_from_the_provider_contract() {
+    let (_directory, database) = fixture().await;
+    database
+        .execute_unprepared(
+            "UPDATE worktracker_provider SET supports_unattended = 0 WHERE slug = 'codex'",
+        )
+        .await
+        .unwrap();
+
+    workflow::patch_launch_binding(&database, patch(BUILD))
+        .await
+        .expect("the registered Codex adapter supports unattended launches");
 }
 
 #[tokio::test]

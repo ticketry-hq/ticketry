@@ -12,6 +12,7 @@ const terminalTransport = vi.hoisted(() => ({ attach: vi.fn() }));
 const providerApi = vi.hoisted(() => ({
   getProviderCatalog: vi.fn(),
   getLaunchProviderCapabilities: vi.fn(),
+  prefetchProviderCatalog: vi.fn(),
 }));
 
 vi.doMock("../features/agents/api/agentApi", async (importOriginal) => ({
@@ -38,6 +39,7 @@ vi.doMock("../features/workflows/providerQueries", async (importOriginal) => {
       providerApi.getLaunchProviderCapabilities.mockResolvedValue(capabilities);
     },
     loadProviderCapabilities: providerApi.getLaunchProviderCapabilities,
+    prefetchProviderCatalog: providerApi.prefetchProviderCatalog,
     loadProviderCatalog: async () => (await providerApi.getProviderCatalog()).value,
     useProviderCapabilitiesQuery: () => {
       const initial = actual.getProviderCapabilitiesSnapshot();
@@ -100,6 +102,16 @@ const { setProviderCapabilities } = await import(
   "../features/workflows/providerQueries"
 );
 const { useClientStore } = await import("../state/clientStore");
+const { studioApolloClient } = await import("../shared/apollo/client");
+
+/**
+ * Drop the cached provider catalog so the next launch surface mounts cold —
+ * the state the placeholder branches and the catalog warm are about.
+ */
+function clearProviderHolding(): void {
+  studioApolloClient().cache.evict({ id: "ROOT_QUERY", fieldName: "provider_catalog" });
+  studioApolloClient().cache.gc();
+}
 
 class TestResizeObserver {
   observe() {}
@@ -202,6 +214,7 @@ const providerCapability = (agent: string) => ({
 });
 
 export {
+  clearProviderHolding,
   providerApi,
   providerCapability,
   setProviderCapabilities,

@@ -1,9 +1,13 @@
-import { describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { StrictMode } from "react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 
+import { useModalStore } from "../app/modal";
+import { DialogHost } from "../app/shell/DialogHost";
 import { WorktreeBlock } from "../features/agents/worktrees";
 import { createDesktopRuntime } from "../runtime/desktopRuntime";
-import { initializeStudioRuntime } from "../runtime";
+import { initializeStudioRuntime, type DirectoryTrustResult } from "../runtime";
+import { useClientStore } from "../state/clientStore";
 
 const startup = {
   serviceHealth: {
@@ -58,16 +62,22 @@ interface Request {
   variables: Record<string, unknown>;
 }
 
-async function installDesktopRuntime(requests: Request[]) {
+type Trust = (provider: string, directory: string, approval: string | null) => Promise<DirectoryTrustResult>;
+
+async function installDesktopRuntime(
+  requests: Request[],
+  trust?: Trust,
+  recovered: typeof created | false = false,
+) {
   const graphqlExecute = vi.fn(async (requestJson: string) => {
     const request = JSON.parse(requestJson) as Request;
     requests.push(request);
     if (request.operationName === "WorktreeStatus") {
-      const answered = requests.some(
+      const answered = recovered || requests.some(
         (earlier) => earlier.operationName === "WorktreeCreate",
       );
       return JSON.stringify({
-        data: { worktree_status: answered ? created : absent },
+        data: { worktree_status: recovered || (answered ? created : absent) },
       });
     }
     if (request.operationName === "WorktreeCreate") {
@@ -77,7 +87,17 @@ async function installDesktopRuntime(requests: Request[]) {
   });
   initializeStudioRuntime(
     await createDesktopRuntime({
-      invoke: vi.fn().mockResolvedValue(startup),
+      invoke: vi.fn(async (command: string, args?: Record<string, unknown>) => {
+        if (command === "desktop_runtime_configuration") return startup;
+        if (command === "desktop_prepare_directory_trust" && trust) {
+          return trust(
+            args?.provider as string,
+            args?.directory as string,
+            (args?.approval as string | null) ?? null,
+          );
+        }
+        throw new Error(`Unexpected command ${command}`);
+      }) as never,
       createGraphQlProxy: () => ({
         graphql_execute: graphqlExecute,
         graphql_subscribe: vi.fn(),
@@ -87,6 +107,11 @@ async function installDesktopRuntime(requests: Request[]) {
 }
 
 describe("worktree creation desktop runtime acceptance", () => {
+  beforeEach(() => {
+    useClientStore.setState({ dialogs: [] });
+    useModalStore.setState({ modalStack: [] });
+  });
+
   it("[overhaul-88] opts a task into a worktree by identity alone and renders the authoritative result", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
@@ -98,9 +123,6 @@ describe("worktree creation desktop runtime acceptance", () => {
         taskId={TASK}
         parentId={null}
         moduleId="m1"
-        projectId="p1"
-        ticketSeq={881}
-        taskName="Parent story"
       />,
     );
 
@@ -144,7 +166,7 @@ describe("worktree creation desktop runtime acceptance", () => {
     await installDesktopRuntime(requests);
 
     const first = render(
-      <WorktreeBlock taskId={TASK} moduleId="m1" ticketSeq={881} />,
+      <WorktreeBlock taskId={TASK} moduleId="m1" />,
     );
     fireEvent.click(
       await screen.findByRole("button", { name: "+ Create worktree" }),
@@ -152,7 +174,7 @@ describe("worktree creation desktop runtime acceptance", () => {
     await screen.findByText("wt/CODIN-881-parent-story → main");
     first.unmount();
 
-    render(<WorktreeBlock taskId={TASK} moduleId="m1" ticketSeq={881} />);
+    render(<WorktreeBlock taskId={TASK} moduleId="m1" />);
     await waitFor(() =>
       expect(
         screen.queryByRole("button", { name: "+ Create worktree" }),
@@ -166,5 +188,112 @@ describe("worktree creation desktop runtime acceptance", () => {
     // A second intent would mint its own identity; this one never re-asks,
     // because the worktree it created is already the answer.
     expect(new Set(identities).size).toBe(identities.length);
+  });
+
+  it("[overhaul-308] creates the checkout before asking to trust its canonical external directory", async () => {
+    const requests: Request[] = [];
+    const trust = vi.fn(async (provider: string, _directory: string, approval: string | null) => ({
+      status: approval ? "prepared" as const : "approval_required" as const,
+      approval: approval ? null : `${provider}-approval`,
+      directory: "/canonical/external/CODIN-881-parent-story",
+    }));
+    await installDesktopRuntime(requests, trust);
+
+    render(<><WorktreeBlock taskId={TASK} moduleId="m1" /><DialogHost /></>);
+    fireEvent.click(await screen.findByRole("button", { name: "+ Create worktree" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Trust worktree?" });
+    expect(dialog).toHaveTextContent("/canonical/external/CODIN-881-parent-story");
+    expect(dialog).toHaveTextContent("Codex, Gemini, and Claude");
+    expect(screen.getByText("wt/CODIN-881-parent-story → main")).toBeTruthy();
+    expect(trust.mock.calls.every(([, directory]) => directory === created.path)).toBe(true);
+    expect(trust.mock.calls.every(([, , approval]) => approval === null)).toBe(true);
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Trust worktree" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Trust worktree?" })).toBeNull());
+    expect(trust.mock.calls.filter(([, , approval]) => approval !== null)).toHaveLength(3);
+  });
+
+  it("[overhaul-309] silently accepts trusted reuse and keeps a recovered checkout after refusal", async () => {
+    const requests: Request[] = [];
+    const trust = vi.fn<Trust>(async () => ({
+      status: "already_trusted" as const,
+      approval: null,
+      directory: created.path,
+    }));
+    const shared = {
+      ...created,
+      task_id: `${TASK}-child`,
+      top_level_task_id: TASK,
+      is_shared: true,
+    };
+    await installDesktopRuntime(requests, trust, shared);
+
+    const first = render(<><WorktreeBlock taskId={`${TASK}-child`} moduleId="m1" /><DialogHost /></>);
+    expect(await screen.findByText(`Shares the worktree owned by top-level task (${TASK}).`)).toBeTruthy();
+    await waitFor(() => expect(trust).toHaveBeenCalledTimes(3));
+    expect(screen.queryByRole("dialog", { name: "Trust worktree?" })).toBeNull();
+    expect(requests.filter(({ operationName }) => operationName === "WorktreeCreate")).toHaveLength(0);
+    first.unmount();
+
+    trust.mockImplementation(async (provider) => ({
+      status: "approval_required",
+      approval: `${provider}-approval`,
+      directory: created.path,
+    }));
+    render(
+      <StrictMode>
+        <WorktreeBlock taskId={`${TASK}-refused`} moduleId="m1" />
+        <DialogHost />
+      </StrictMode>,
+    );
+    const dialog = await screen.findByRole("dialog", { name: "Trust worktree?" });
+    expect(trust).toHaveBeenCalledTimes(6);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+
+    expect(await screen.findByText("Worktree trust was not approved. Retry to continue.")).toBeTruthy();
+    expect(screen.getByText(`Shares the worktree owned by top-level task (${TASK}).`)).toBeTruthy();
+    expect(requests.filter(({ operationName }) => operationName === "WorktreeCreate")).toHaveLength(0);
+
+    fireEvent.click(screen.getByRole("button", { name: "Retry trust" }));
+    const retry = await screen.findByRole("dialog", { name: "Trust worktree?" });
+    expect(trust).toHaveBeenCalledTimes(9);
+    fireEvent.click(within(retry).getByRole("button", { name: "Cancel" }));
+    expect(await screen.findByText("Worktree trust was not approved. Retry to continue.")).toBeTruthy();
+  });
+
+  it("[overhaul-310] retains partial trust and retries the same checkout without creating again", async () => {
+    const requests: Request[] = [];
+    let codexTrusted = false;
+    let claudePrepares = 0;
+    const trust = vi.fn(async (provider: string, _directory: string, approval: string | null) => {
+      if (provider === "codex") {
+        if (codexTrusted) return { status: "already_trusted" as const, approval: null, directory: created.path };
+        if (approval) { codexTrusted = true; return { status: "prepared" as const, approval: null, directory: created.path }; }
+      }
+      if (provider === "gemini") return { status: "already_trusted" as const, approval: null, directory: created.path };
+      if (provider === "claude" && approval && claudePrepares++ === 0) throw new Error("config busy");
+      return {
+        status: approval ? "prepared" as const : "approval_required" as const,
+        approval: approval ? null : `${provider}-approval`,
+        directory: created.path,
+      };
+    });
+    await installDesktopRuntime(requests, trust);
+
+    render(<><WorktreeBlock taskId={TASK} moduleId="m1" /><DialogHost /></>);
+    fireEvent.click(await screen.findByRole("button", { name: "+ Create worktree" }));
+    fireEvent.click(within(await screen.findByRole("dialog", { name: "Trust worktree?" })).getByRole("button", { name: "Trust worktree" }));
+
+    expect(await screen.findByText(/Could not prepare Claude folder trust: config busy/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Retry trust" }));
+    const retry = await screen.findByRole("dialog", { name: "Trust worktree?" });
+    expect(retry).toHaveTextContent("Claude");
+    expect(retry).not.toHaveTextContent("Codex and Claude");
+    fireEvent.click(within(retry).getByRole("button", { name: "Trust worktree" }));
+
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Retry trust" })).toBeNull());
+    expect(screen.getByText("wt/CODIN-881-parent-story → main")).toBeTruthy();
+    expect(requests.filter(({ operationName }) => operationName === "WorktreeCreate")).toHaveLength(1);
   });
 });

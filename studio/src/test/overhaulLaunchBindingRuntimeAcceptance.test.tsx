@@ -54,6 +54,7 @@ function catalog(subtreeRunEnabled: boolean, workflowRevision: number) {
         id: 1, issue_type: "story", state: "build", prompt: "Implement it.",
         required_skills: ["tdd"], model: model.id, reasoning: reasoning.id,
         entry_skill: "tdd",
+        profile: null,
         auto_start: false, subtree_run_enabled: subtreeRunEnabled,
         created_at: "", updated_at: "", state_record: { __typename: "WorktrackerState", id: "build", sort_order: 0 },
       }] },
@@ -62,6 +63,7 @@ function catalog(subtreeRunEnabled: boolean, workflowRevision: number) {
       __typename: "ProviderCatalog",
       configurable_providers: [provider], providers: [provider],
       agent_models: [model], reasoning_levels: [reasoning],
+      codex_profiles: ["careful", "fast"],
       global_default: { __typename: "GlobalLaunchDefault", provider: "codex", model: model.name, reasoning: "medium" },
     },
   };

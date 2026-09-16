@@ -1,6 +1,6 @@
 import { execFileSync, spawn } from "node:child_process";
-import { createHash } from "node:crypto";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { createHash, randomUUID } from "node:crypto";
+import { appendFileSync, mkdirSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { createRequire } from "node:module";
 import net from "node:net";
 import { tmpdir } from "node:os";
@@ -11,6 +11,8 @@ import {
   productIdentity,
   resolveProductDataDirectory,
 } from "../../scripts/product-identity.mjs";
+import { awaitStartupRegressionReport } from "../../scripts/startup-trace-regression.mjs";
+import { prepareDesktopHookRunner } from "./desktop-hook-runner.mjs";
 
 const studioRoot = fileURLToPath(new URL("..", import.meta.url));
 const require = createRequire(import.meta.url);
@@ -78,6 +80,29 @@ export function prepareDevelopmentLog({ root = workspaceRoot } = {}) {
   const logPath = resolveDevelopmentLogPath({ root });
   mkdirSync(path.dirname(logPath), { recursive: true });
   return logPath;
+}
+
+export function createStartupTrace({
+  logPath,
+  id = randomUUID(),
+  startedAt = Date.now(),
+  now = Date.now,
+} = {}) {
+  let previousAt = startedAt;
+  const record = (stage) => {
+    const recordedAt = now();
+    const details = JSON.stringify({
+      startup_id: id,
+      stage,
+      elapsed_ms: recordedAt - startedAt,
+      duration_ms: recordedAt - previousAt,
+    });
+    appendFileSync(logPath, `${new Date(recordedAt).toISOString()} [launcher][info] startup.timeline ${details}\n`, {
+      mode: 0o600,
+    });
+    previousAt = recordedAt;
+  };
+  return { id, record };
 }
 
 function parseFrontendPort(value) {
@@ -201,8 +226,9 @@ export function stopTemporaryTmuxServer(
 
 export function buildTauriDevelopmentConfig(port) {
   const origin = `http://127.0.0.1:${port}`;
-  // CODIN-1514 diagnostic hook. ghostty-wasm needs no flag because it is the
-  // default; native and xterm remain available for renderer comparisons.
+  // CODIN-1514 diagnostic hook. Native libghostty is the desktop default and
+  // needs no flag; the override exists to force the xterm compatibility
+  // renderer for comparisons.
   const renderer = process.env.MUXED_TERMINAL_RENDERER;
   const devUrl = renderer
     ? `${origin}/?terminalRenderer=${encodeURIComponent(renderer)}`
@@ -283,10 +309,13 @@ export async function main() {
   const options = parseDesktopDevOptions(process.argv.slice(2));
   const { dataDirectory, tmuxSocket } = resolveDesktopDevelopmentProfile({ options });
   const logPath = prepareDevelopmentLog();
+  const startupTrace = createStartupTrace({ logPath });
+  startupTrace.record("launcher-started");
   const buildEnvironment = {
     ...process.env,
     MUXED_DATA_DIR: dataDirectory,
     MUXED_DEVELOPMENT_LOG_PATH: logPath,
+    MUXED_STARTUP_TRACE_ID: startupTrace.id,
     MUXED_ENABLE_LOCAL_POSTGRES: "true",
     MUXED_TMUX_SOCKET: tmuxSocket,
   };
@@ -294,10 +323,12 @@ export async function main() {
     buildEnvironment.MUXED_FORCE_SQLITE = "true";
   }
   try {
+    prepareDesktopHookRunner({ root: workspaceRoot, environment: buildEnvironment });
     const frontendPort = await selectFrontendPort({
       requestedPort: process.env.MUXED_FRONTEND_PORT,
     });
     const frontendOrigin = `http://127.0.0.1:${frontendPort}`;
+    startupTrace.record("frontend-port-selected");
     const environment = {
       ...buildEnvironment,
       MUXED_DESKTOP_ORIGIN: frontendOrigin,
@@ -312,14 +343,15 @@ export async function main() {
       console.log("Ticketry Dev is using writable production data; the installed app must remain closed.");
     }
     console.log(`Ticketry development logs: ${logPath}`);
+    startupTrace.record("tauri-cli-spawned");
+    // Every launch is a startup measurement; shout into this terminal if it got slower.
+    awaitStartupRegressionReport({ logPath, startupId: startupTrace.id }).then((report) => console.error(`\n${report}\n`));
     await run(process.execPath, [
       resolveTauriCliPath(),
       "dev",
       "--no-watch",
       "--config",
       config,
-      "--features",
-      "native-libghostty",
     ], environment);
   } finally {
     if (options.temporarySqlite) {

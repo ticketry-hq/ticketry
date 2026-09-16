@@ -26,10 +26,7 @@ struct RejectingRuntime;
 
 #[async_trait]
 impl TerminalLaunchRuntime for RejectingRuntime {
-    async fn preflight(
-        &self,
-        _request: &CreateTerminalSession,
-    ) -> Result<(), TerminalLaunchError> {
+    async fn preflight(&self, _request: &CreateTerminalSession) -> Result<(), TerminalLaunchError> {
         Err(TerminalLaunchError::new(
             TerminalLaunchErrorCode::UnusableFolder,
             "the module folder disappeared since the decision",
@@ -53,7 +50,10 @@ struct SettlingCleanupRuntime;
 
 #[async_trait]
 impl TerminalCleanupRuntime for SettlingCleanupRuntime {
-    async fn inspect(&self, _terminal: &ticketry_entities::session::Model) -> CleanupRuntimeObservation {
+    async fn inspect(
+        &self,
+        _terminal: &ticketry_entities::session::Model,
+    ) -> CleanupRuntimeObservation {
         CleanupRuntimeObservation::Missing
     }
 
@@ -129,7 +129,9 @@ async fn a_rejected_preparation_leaves_the_live_agent_alone() {
         .unwrap();
     // A linked module folder the runtime will then refuse to launch in, so
     // preparation rejects at preflight rather than at scope validation.
-    ticketry_work_management::schema::install(&database).await.unwrap();
+    ticketry_work_management::schema::install(&database)
+        .await
+        .unwrap();
     ticketry_work_management::ModuleLinkStore::new(database.clone())
         .set(MODULE, &directory.path().display().to_string())
         .await
@@ -152,7 +154,8 @@ async fn a_rejected_preparation_leaves_the_live_agent_alone() {
     let decision = decision();
     record(&database, &decision).await.unwrap();
 
-    let launch = TerminalLaunchService::new(database.clone(), std::sync::Arc::new(RejectingRuntime));
+    let launch =
+        TerminalLaunchService::new(database.clone(), std::sync::Arc::new(RejectingRuntime));
     let cleanup = TerminalCleanupService::new(
         database.clone(),
         std::sync::Arc::new(SettlingCleanupRuntime),
@@ -185,12 +188,20 @@ async fn a_rejected_preparation_leaves_the_live_agent_alone() {
         1
     );
     assert_eq!(
-        count(&database, "SELECT COUNT(*) AS count FROM terminal_cleanup_effects").await,
+        count(
+            &database,
+            "SELECT COUNT(*) AS count FROM terminal_cleanup_effects"
+        )
+        .await,
         0
     );
     // A rejected preparation mints nothing and leaves the decision replayable.
     assert_eq!(
-        count(&database, "SELECT COUNT(*) AS count FROM runs_launch_effects").await,
+        count(
+            &database,
+            "SELECT COUNT(*) AS count FROM runs_launch_effects"
+        )
+        .await,
         0
     );
     assert_eq!(

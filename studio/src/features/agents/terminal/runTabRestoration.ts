@@ -9,7 +9,9 @@ import { isScratchBucket } from "./internal/sessionStore";
  * addressed by agent_run_id, so a second AgentTerminalSessions listing adds no
  * identity the viewer needs and can disagree with the status snapshot's scope.
  * Ended runs remain in this result so reconciliation clears their local
- * restoration bookkeeping without reopening them.
+ * restoration bookkeeping without reopening them. The holding only carries an
+ * ended run in the window after its own terminal event; the durable source for
+ * both buckets is the WorkItem read.
  */
 export function selectWorkspaceTerminalRuns(
   holding: AgentStatusData,

@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import DocViewer from "../app/shell/ticket-workspace/selected-ticket/documents/DocViewer";
+import { DocViewer } from "../features/documents";
 import type { DesignDoc } from "../features/documents";
 import { initializeStudioRuntime } from "../runtime";
 import { createBrowserRuntime } from "../runtime/browserRuntime";
@@ -11,7 +11,7 @@ vi.mock("../state/clientStore", () => ({
   dialog: { confirm: vi.fn().mockResolvedValue(true) },
 }));
 
-vi.mock("../app/shell/ticket-workspace/selected-ticket/documents/RichMarkdownEditor", () => ({
+vi.mock("../features/documents/RichMarkdownEditor", () => ({
   default: ({
     markdown,
     onChange,
@@ -82,9 +82,38 @@ async function desktopStudio(
 
 describe("document save desktop runtime acceptance", () => {
   afterEach(() => {
+    vi.useRealTimers();
     initializeStudioRuntime(createBrowserRuntime({ environment: {} }));
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+  });
+
+  it("surfaces an autosave conflict as an external change before offering overwrite", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(async () =>
+        new Response("# original", { headers: { ETag: '"digest-original"' } })
+      ),
+    );
+    const { saves } = await desktopStudio([
+      { digest: "digest-theirs", saved: false, stale: true },
+    ]);
+
+    render(<DocViewer doc={doc} editable />);
+    fireEvent.change(await screen.findByLabelText("Document content"), {
+      target: { value: "# mine" },
+    });
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    expect(saves).toHaveLength(1);
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "This document changed on disk. Your edits are still here.",
+    );
+    expect(screen.getByRole("button", { name: "Compare versions" }))
+      .toBeVisible();
+    expect(screen.queryByRole("button", { name: "Overwrite with mine" }))
+      .not.toBeInTheDocument();
   });
 
   it("[overhaul-87] saves through the runtime and preserves the draft through a stale conflict", async () => {

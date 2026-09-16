@@ -24,6 +24,7 @@ import { StudioFooter } from "../app/shell/StudioFooter";
 import { ModulesPane } from "../app/shell/sidebar/modules/ModulesPane";
 import { routeFullSidebarViewFocusedPaneNavigation } from "../app/navigation/full-sidebar-view/fullSidebarViewNavigation";
 import { useRestoreAndSelectModule } from "../features/module-tabs";
+import { seedModuleLinks } from "../features/module-links";
 import { useAgentStatusStore } from "../features/agents/status/testStore";
 import { useStudioStore } from "../features/projects/store";
 import { useModalStore } from "../app/modal/modalStore";
@@ -155,6 +156,7 @@ describe("module tab visibility acceptance", () => {
     modulesForRead = MODULES;
     failNextVisibility = false;
     mutationCalls = [];
+    seedModuleLinks([]);
     projectReads.readProjectOpen.mockReset().mockImplementation(async () => projectOpenResult());
     installVisibilityTransport();
     localStorage.clear();
@@ -322,6 +324,12 @@ describe("module tab visibility acceptance", () => {
   });
 
   it("selects the nearest visible tab to the right, then the left", async () => {
+    const links = MODULES.map((module) => ({
+      id: `link-${module.id}`,
+      moduleId: module.id,
+      path: `/repos/${module.id}`,
+    }));
+    seedModuleLinks(links);
     useClientStore.setState({ selectedModuleId: "module-b" });
     const view = render(<ModuleTabStrip />);
     await waitFor(() => expect(tabNames()).toHaveLength(3));
@@ -332,6 +340,7 @@ describe("module tab visibility acceptance", () => {
 
     view.unmount();
     await resetStudioApolloClient();
+    seedModuleLinks(links);
     hiddenIds = new Set();
     useStudioStore.setState({ selectedProjectId: PROJECT_ID, error: null });
     const selectModule = vi.fn(async (moduleId: string) => {

@@ -270,6 +270,24 @@ async fn explicit_provider_never_inherits_another_providers_defaults() {
 }
 
 #[tokio::test]
+async fn resolution_reads_unattended_capability_from_the_provider_contract() {
+    let (_directory, database, resolver) = fixture().await;
+    database
+        .execute_unprepared(
+            "UPDATE worktracker_provider SET supports_unattended = 0 WHERE slug = 'codex'",
+        )
+        .await
+        .unwrap();
+
+    let decision = resolver
+        .resolve(request(CallerScope::AutoStart, "shared-capability"))
+        .await
+        .expect("the registered Codex adapter supports unattended launches");
+
+    assert_eq!(decision.provider, "codex");
+}
+
+#[tokio::test]
 async fn workflow_profile_overrides_and_empty_selection_inherits_the_global_profile() {
     let (_directory, database, resolver) = fixture().await;
     database.execute_unprepared(

@@ -35,9 +35,10 @@ export {
   useWorkItem,
   useWorkItemAttachments,
   useModuleOpen,
+  useModuleItems,
   useModuleTree,
 } from "./queries";
-export { useStoriesTree } from "./queries/useStoriesTree";
+export { StoriesTreeProvider, useStoriesTree } from "./queries/StoriesTreeProvider";
 export { getModuleTaskOrderSnapshot } from "./queries/moduleTaskOrderSnapshot";
 export {
   deriveEpic,

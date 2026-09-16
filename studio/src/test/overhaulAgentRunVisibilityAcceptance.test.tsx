@@ -96,6 +96,9 @@ describe("overhaul acceptance - acknowledged Agent Run visibility", () => {
     const executeGraphQl: typeof http.executeGraphQl = async (document, variables) => {
       const operation = documentOperationName(document);
       if (operation === "InstantRunTickets") return { tickets: [] } as never;
+      if (operation === "WorkItemEndedRuns") {
+        return { work_item: { nodes: [] } } as never;
+      }
       if (
         operation === "TaskResumableTerminalSessions" ||
         operation === "ScratchResumableTerminalSessions"

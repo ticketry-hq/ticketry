@@ -37,7 +37,7 @@ typedef enum {
   MUXED_GHOSTTY_CHORD_PANEL_TOGGLE = 1,
   // The global Settings chord (Cmd+E).
   MUXED_GHOSTTY_CHORD_SETTINGS = 2,
-  // Module-position chords (Cmd+1 through Cmd+9, then Cmd+0).
+  // Module-position chords (Cmd+1 through Cmd+9, then Cmd+Shift+0).
   MUXED_GHOSTTY_CHORD_MODULE_POSITION_1 = 3,
   MUXED_GHOSTTY_CHORD_MODULE_POSITION_2 = 4,
   MUXED_GHOSTTY_CHORD_MODULE_POSITION_3 = 5,
@@ -50,6 +50,9 @@ typedef enum {
   MUXED_GHOSTTY_CHORD_MODULE_POSITION_10 = 12,
   // The edit-view body disengage chord (Cmd+Escape).
   MUXED_GHOSTTY_CHORD_BODY_DISENGAGE = 13,
+  MUXED_GHOSTTY_CHORD_ZOOM_IN = 14,
+  MUXED_GHOSTTY_CHORD_ZOOM_OUT = 15,
+  MUXED_GHOSTTY_CHORD_ZOOM_RESET = 16,
 } muxed_ghostty_chord_e;
 
 // Reported when the hosted view recognises a Studio chord instead of

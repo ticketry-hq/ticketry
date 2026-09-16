@@ -2,9 +2,9 @@ import { reachable } from "../../../../../../features/work-items";
 import { stateById, useCachedStates } from "../../../../../../features/projects";
 import type { WorkItem } from "../../../../../../shared/api/types";
 import { stateColor } from "../../../../../../shared/utilities/display";
-import Popover from "./Popover";
+import Popover from "../../../../../../shared/ui/Popover";
 import { GhostChipAdd } from "./QuietChipControls";
-import WorkItemSearchList from "./WorkItemSearchList";
+import WorkItemSearchList from "../../../../../../features/work-items/WorkItemSearchList";
 
 interface Props {
   /** The issue being edited. */

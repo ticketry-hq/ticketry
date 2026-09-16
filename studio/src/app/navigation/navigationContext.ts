@@ -21,6 +21,7 @@ import {
   currentPlanningRowId,
   selectPlanningRowId,
 } from "../shell/ticket-workspace/tasks/internal/instantRunTicketNavigation";
+import { recordSelectionProfilePoint } from "../../shared/utilities/selectionProfile";
 
 type Direction = 1 | -1;
 
@@ -104,6 +105,7 @@ export function moveTaskSelection(
   direction: Direction,
 ): boolean {
   consume(ctx.event);
+  recordSelectionProfilePoint("keydown:tasks.move");
   const selected = selectedTaskIndex(
     ctx.taskRows,
     ctx.tasks.selectedPlanningRowId,

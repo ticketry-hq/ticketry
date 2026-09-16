@@ -52,6 +52,8 @@ muxed_ghostty_scroll_mods(NSEvent *event) {
   BOOL _acceptsInput;
   BOOL _reportsGridResize;
   NSView *_webview;
+  float _baseFontSize;
+  double _fontZoom;
 }
 - (instancetype)initWithRuntime:(MuxedGhosttyRuntime *)runtime
                          parent:(NSView *)parent
@@ -102,6 +104,8 @@ muxed_ghostty_scroll_mods(NSEvent *event) {
   self.layer.contentsScale = scale;
 
   ghostty_surface_config_s config = ghostty_surface_config_new();
+  ghostty_config_get(runtime->config, &_baseFontSize, "font-size", 9);
+  _fontZoom = 1.0;
   config.platform_tag = GHOSTTY_PLATFORM_MACOS;
   config.platform.macos.nsview = self;
   config.userdata = &_surfaceOwner;
@@ -237,7 +241,9 @@ muxed_ghostty_scroll_mods(NSEvent *event) {
   uint8_t chord = muxed_ghostty_studio_chord(event.modifierFlags, event.keyCode);
   if (chord != MUXED_GHOSTTY_CHORD_NONE) {
     muxed_focus_trace(self, "disengaged by studio chord", _acceptsInput);
-    [self.window makeFirstResponder:self.superview];
+    if (chord < MUXED_GHOSTTY_CHORD_ZOOM_IN ||
+        chord > MUXED_GHOSTTY_CHORD_ZOOM_RESET)
+      [self.window makeFirstResponder:self.superview];
     if (_chordCallback != NULL) _chordCallback(_chordContext, chord);
     return;
   }

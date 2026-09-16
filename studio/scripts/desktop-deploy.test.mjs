@@ -4,7 +4,23 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { replaceInstalledApp, stagedAppPath } from "./desktop-deploy.mjs";
+import {
+  desktopBuildArguments,
+  replaceInstalledApp,
+  stagedAppPath,
+} from "./desktop-deploy.mjs";
+
+test("local deployment builds the dirty working tree in unsigned mode", () => {
+  assert.deepEqual(desktopBuildArguments({ id: "macos-aarch64" }), [
+    "run",
+    "desktop:build",
+    "--",
+    "--target",
+    "macos-aarch64",
+    "--allow-unsigned",
+    "--allow-dirty",
+  ]);
+});
 
 test("stagedAppPath resolves the verified release output", () => {
   assert.equal(

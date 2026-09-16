@@ -18,6 +18,7 @@ export function StudioLayout() {
 
   return (
     <PanelGroup
+      key={sidebarVisible ? "with-sidebar" : "without-sidebar"}
       ref={outerGroupRef}
       direction="horizontal"
       className="h-full w-full"

@@ -2,10 +2,141 @@
 //! policy: the provider catalog, the launch binding, the document registry,
 //! and the canonical prompt shapes decide what a run is allowed to start with.
 
+use std::path::Path;
+use std::process::Command;
+
 use sea_orm::ConnectionTrait;
 use ticketry_launch::{InteractiveLaunchAuthority, TerminalLaunchKind};
+use ticketry_provider::{
+    provider_contract, DirectoryTrustContext, DirectoryTrustInspection, DirectoryTrustPreparation,
+    Provider,
+};
 
-use crate::launch_fixture::{caller_request, fixture, DOCUMENT, MODULE};
+use crate::launch_fixture::{
+    caller_request, fixture, DOCUMENT, MODULE, PROJECT, STATE, TASK, TYPE,
+};
+
+#[test]
+fn worktree_launch_trust_uses_disposable_provider_state() {
+    let state = tempfile::tempdir().unwrap();
+    let trust_file = state.path().join("gemini-trust.json");
+    assert!(Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "interactive_launch_authority::worktree_launch_trust_child",
+            "--ignored",
+            "--nocapture",
+        ])
+        .env("TICKETRY_WORKTREE_TRUST_TEST_FILE", &trust_file)
+        .env("GEMINI_CLI_TRUSTED_FOLDERS_PATH", trust_file)
+        .status()
+        .unwrap()
+        .success());
+}
+
+#[tokio::test]
+#[ignore]
+async fn worktree_launch_trust_child() {
+    let Some(trust_file) = std::env::var_os("TICKETRY_WORKTREE_TRUST_TEST_FILE") else {
+        return;
+    };
+    assert_eq!(
+        std::env::var_os("GEMINI_CLI_TRUSTED_FOLDERS_PATH").as_deref(),
+        Some(trust_file.as_os_str()),
+    );
+    let fixture = fixture().await;
+    let checkout = Path::new(&fixture.folder).join("external-worktree");
+    std::fs::create_dir(&checkout).unwrap();
+    fixture
+        .database
+        .execute_unprepared(&format!(
+            r#"
+        UPDATE worktracker_provider SET activated = 1 WHERE slug = 'gemini';
+        INSERT INTO worktrees VALUES (
+            '71000000000000000000000000000000', '{TASK}', 'meml', '{PROJECT}',
+            '{MODULE}', 965, '{module}', '{checkout}', 'wt/CODIN-965-resolve-launch-policy',
+            'main', 'base', 'active', 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, NULL
+        );
+    "#,
+            module = fixture.folder,
+            checkout = checkout.display()
+        ))
+        .await
+        .unwrap();
+
+    let mut unattended = caller_request(TerminalLaunchKind::Automation);
+    unattended.provider = Some("gemini".to_owned());
+    let refusal = fixture.authority.resolve(&unattended).await.unwrap_err();
+    assert!(refusal
+        .to_string()
+        .contains("worktree_trust_approval_required"));
+    assert!(refusal.to_string().contains(checkout.to_str().unwrap()));
+
+    let provider = provider_contract(Provider::Gemini);
+    let context = DirectoryTrustContext {
+        directory: &checkout,
+        trust_file: None,
+    };
+    let DirectoryTrustInspection::ApprovalRequired(approval) =
+        provider.inspect_directory_trust(context)
+    else {
+        panic!("fresh external Worktree must require approval");
+    };
+    assert_eq!(
+        provider.prepare_directory_trust(context, Some(&approval)),
+        DirectoryTrustPreparation::Prepared,
+    );
+    fixture.authority.resolve(&unattended).await.unwrap();
+
+    const CHILD: &str = "60000000000000000000000000000001";
+    fixture
+        .database
+        .execute_unprepared(&format!(
+            r#"
+        INSERT INTO worktracker_issue VALUES
+            ('{CHILD}', '{PROJECT}', 'task', '{TYPE}', '{TASK}', '{MODULE}', '{STATE}', 0,
+             'Shared child', 966, 0, 'O', '', '[]', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+    "#
+        ))
+        .await
+        .unwrap();
+    let mut shared = caller_request(TerminalLaunchKind::Task);
+    shared.issue_id = CHILD.to_owned();
+    shared.target_id = CHILD.to_owned();
+    shared.working_directory_identity = format!("task:{CHILD}");
+    shared.provider = Some("gemini".to_owned());
+    fixture.authority.resolve(&shared).await.unwrap();
+}
+
+#[tokio::test]
+async fn agy_worktree_launch_does_not_require_directory_trust() {
+    let fixture = fixture().await;
+    let checkout = Path::new(&fixture.folder).join("agy-worktree");
+    std::fs::create_dir(&checkout).unwrap();
+    fixture
+        .database
+        .execute_unprepared(&format!(
+            r#"
+        INSERT INTO worktracker_provider VALUES
+            ('70000000000000000000000000000003', 'agy', 1, 1);
+        INSERT INTO worktrees VALUES (
+            '71000000000000000000000000000001', '{TASK}', 'meml', '{PROJECT}',
+            '{MODULE}', 965, '{module}', '{checkout}', 'wt/CODIN-965-agy-launch',
+            'main', 'base', 'active', 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, NULL
+        );
+    "#,
+            module = fixture.folder,
+            checkout = checkout.display()
+        ))
+        .await
+        .unwrap();
+
+    let mut request = caller_request(TerminalLaunchKind::Task);
+    request.provider = Some("agy".to_owned());
+
+    let resolved = fixture.authority.resolve(&request).await.unwrap();
+    assert_eq!(resolved.provider.as_deref(), Some("agy"));
+}
 
 #[tokio::test]
 async fn a_manual_task_launch_keeps_ticket_context_without_the_workflow_prompt() {

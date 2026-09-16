@@ -21,9 +21,10 @@ import {
   defaultDesktopBinary,
   spawnTicketry,
   stopProcess,
-  waitForPort,
 } from "./desktop-webdriver-session.mjs";
 import { proveDescriptionSaveAndStorySwitch } from "./desktop-description-acceptance.mjs";
+import { verifyLiveMcpRecovery } from "./desktop-mcp-recovery-acceptance.mjs";
+import { callSocketMcpTool } from "./mcp-socket-client.mjs";
 import { captureIdea, click, openExistingStory } from "./desktop-studio-ui.mjs";
 
 const studioRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -31,9 +32,7 @@ const repositoryRoot = path.resolve(studioRoot, "..");
 const builtBinary = defaultDesktopBinary();
 const tmux = process.env.TICKETRY_DESKTOP_ACCEPTANCE_TMUX
   ?? ["/opt/homebrew/bin/tmux", "/usr/local/bin/tmux", "/usr/bin/tmux"].find(existsSync);
-const mcpPort = 8123;
-const rotatedMcpPort = 8124;
-const rotatedMcpUrl = `http://127.0.0.1:${rotatedMcpPort}/mcp`;
+const obsoleteMcpPorts = Array.from({ length: 10 }, (_, index) => 8123 + index);
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
@@ -73,48 +72,25 @@ async function closeServer(server) {
     server.close((error) => error ? reject(error) : resolve()));
 }
 
-async function waitForMcpPing(url, child, timeoutMs = 30_000) {
+async function waitForMcpPing(dataDirectory, child, timeoutMs = 30_000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     if (child.exitCode !== null) {
       throw new Error(`Ticketry exited before its MCP listener became ready (${child.exitCode})`);
     }
-    const controller = new AbortController();
-    const attemptTimeout = setTimeout(
-      () => controller.abort(),
-      Math.min(1_000, deadline - Date.now()),
-    );
     try {
-      const response = await fetch(url, {
-        method: "POST",
-        signal: controller.signal,
-        headers: {
-          accept: "application/json, text/event-stream",
-          "content-type": "application/json",
-          "mcp-protocol-version": "2025-03-26",
-        },
-        body: JSON.stringify({
-          jsonrpc: "2.0",
-          id: "desktop-port-rotation",
-          method: "tools/call",
-          params: { name: "mcp_ping", arguments: {} },
-        }),
-      });
-      const payload = await response.json();
-      if (
-        payload?.result?.structuredContent?.status === "ok"
-        && payload.result.structuredContent.server === "worktracker-agent"
-      ) {
-        return;
+      const result = await callSocketMcpTool(dataDirectory, "mcp_ping", {}, 1_000);
+      if (result.structuredContent?.status === "ok"
+          && result.structuredContent.server === "ticketry") {
+        const projects = await callSocketMcpTool(dataDirectory, "list_projects", {}, 1_000);
+        if (!projects.isError && Array.isArray(projects.structuredContent?.result)) return;
       }
     } catch {
-      // The desktop can become WebDriver-ready just before its MCP listener.
-    } finally {
-      clearTimeout(attemptTimeout);
+      // WebDriver can start before MCP reconciliation finishes.
     }
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
-  throw new Error(`Ticketry MCP did not answer at the selected endpoint ${url}`);
+  throw new Error(`Ticketry MCP did not answer through ${path.join(dataDirectory, "mcp.sock")}`);
 }
 
 function provisionDisposableTools(root) {
@@ -125,101 +101,25 @@ function provisionDisposableTools(root) {
   mkdirSync(dataDirectory, { recursive: true });
 
   const codex = path.join(toolDirectory, "codex");
+  const quote = (value) => "'" + value.replaceAll("'", "'\"'\"'") + "'";
+  const providerFixture = path.join(studioRoot, "scripts", "desktop-acceptance-provider.mjs");
   writeFileSync(codex, `#!/bin/sh
-if [ "$1" = "--version" ]; then
-  printf 'codex-cli 0.0.0-ticketry-acceptance\\n'
-  exit 0
-fi
-acceptance_root=${JSON.stringify(root)}
-hook_settings=""
-mcp_settings=""
-prompt=""
-for argument in "$@"; do
-  case "$argument" in
-    hooks=*) hook_settings="$argument" ;;
-    mcp_servers=*) mcp_settings="$argument" ;;
-  esac
-  prompt="$argument"
-done
-
-hook_command=$(printf '%s\\n' "$hook_settings" | /usr/bin/sed -n 's/.*command="\\([^"]*\\)".*/\\1/p')
-mcp_url=$(printf '%s\\n' "$mcp_settings" | /usr/bin/sed -n 's/.*url="\\([^"]*\\)".*/\\1/p')
-mcp_authorization=$(printf '%s\\n' "$mcp_settings" | /usr/bin/sed -n 's/.*Authorization="\\([^"]*\\)".*/\\1/p')
-project_id=$(printf '%s\\n' "$prompt" | /usr/bin/sed -n 's/^Project ID: //p' | /usr/bin/sed -n '1p')
-task_id=$(printf '%s\\n' "$prompt" | /usr/bin/sed -n 's/^Work Item ID: //p' | /usr/bin/sed -n '1p')
-if [ -f "$acceptance_root/provider-task" ]; then
-  [ -n "$task_id" ] || task_id=$(/usr/bin/sed -n '1p' "$acceptance_root/provider-task")
-  [ -n "$project_id" ] || project_id=$(/usr/bin/sed -n '2p' "$acceptance_root/provider-task")
-fi
-
-if [ -z "$hook_command" ] || [ -z "$mcp_url" ] || [ -z "$mcp_authorization" ] || [ -z "$project_id" ] || [ -z "$task_id" ]; then
-  printf '%s\\n' "$prompt" > "$acceptance_root/provider-prompt.log"
-  printf 'Ticketry acceptance launch material was incomplete: hook=%s url=%s authorization=%s project=%s task=%s\\n' \
-    "$([ -n "$hook_command" ] && printf present || printf missing)" \
-    "$([ -n "$mcp_url" ] && printf present || printf missing)" \
-    "$([ -n "$mcp_authorization" ] && printf present || printf missing)" \
-    "$([ -n "$project_id" ] && printf present || printf missing)" \
-    "$([ -n "$task_id" ] && printf present || printf missing)" > "$acceptance_root/provider-error.log"
-  exit 64
-fi
-
-emit_hook() {
-  printf '{"hook_event_name":"%s","session_id":"ticketry-acceptance-provider"}' "$1" \
-    | /bin/sh -c "$hook_command" || exit 68
-  printf '%s\n' "$1" >> "$acceptance_root/provider-hooks.log"
-}
-
-move_task() {
-  state="$1"
-  request=$(printf '{"jsonrpc":"2.0","id":"desktop-acceptance","method":"tools/call","params":{"name":"update_task_status","arguments":{"project_id":"%s","task_id":"%s","status_name":"%s"}}}' "$project_id" "$task_id" "$state")
-  response=$(/usr/bin/curl --silent --show-error --fail \
-    --header 'content-type: application/json' \
-    --header 'accept: application/json, text/event-stream' \
-    --header 'mcp-protocol-version: 2025-03-26' \
-    --header "authorization: $mcp_authorization" \
-    --data "$request" "$mcp_url") || exit 65
-  printf '%s\\n' "$response" >> "$acceptance_root/provider-mcp.log"
-  case "$response" in
-    *'"ok":true'*) ;;
-    *) printf 'Ticketry MCP refused state %s\\n' "$state" > "$acceptance_root/provider-error.log"; exit 66 ;;
-  esac
-}
-
-wait_for_signal() {
-  signal="$1"
-  attempts=0
-  while [ ! -f "$acceptance_root/$signal" ] && [ "$attempts" -lt 240 ]; do
-    sleep 0.25
-    attempts=$((attempts + 1))
-  done
-  [ -f "$acceptance_root/$signal" ] || exit 67
-}
-
-printf '{"pid":%s,"cwd":"%s","task_id":"%s","project_id":"%s","hook":true,"mcp_url":"%s","mcp_authorization":true}\\n' \
-  "$$" "$PWD" "$task_id" "$project_id" "$mcp_url" > ${JSON.stringify(marker)}
-printf 'Ticketry desktop acceptance provider started\\n'
-emit_hook SessionStart
-emit_hook UserPromptSubmit
-
-for state in Implement Review Done; do
-  wait_for_signal "advance-$state"
-  printf 'Ticketry provider moving ticket to %s\\n' "$state"
-  move_task "$state"
-  emit_hook PostToolUse
-done
-
-wait_for_signal provider-exit
-emit_hook Stop
-printf 'Ticketry desktop acceptance provider completed\\n'
+exec ${quote(process.execPath)} ${quote(providerFixture)} ${quote(root)} "$@"
 `, { mode: 0o755 });
   chmodSync(codex, 0o755);
 
   const hook = path.join(toolDirectory, "ticketry-hook");
-  run("rustc", [
-    path.join(studioRoot, "src-tauri", "native", "ticketry_hook.rs"),
-    "-o",
-    hook,
+  run("cargo", [
+    "build",
+    "--locked",
+    "--manifest-path",
+    path.join(studioRoot, "src-tauri", "Cargo.toml"),
+    "-p",
+    "ticketry-hook",
+    "--bin",
+    "ticketry-hook",
   ]);
+  copyFileSync(path.join(studioRoot, "src-tauri", "target", "debug", "ticketry-hook"), hook);
 
   writeFileSync(path.join(dataDirectory, "approved-executables.json"), JSON.stringify({
     tools: [
@@ -389,12 +289,12 @@ async function main() {
   let tools;
   let child;
   let browser;
-  let mcpBlocker;
+  const mcpBlockers = [];
   let cleanupPromise;
   const cleanup = () => cleanupPromise ??= (async () => {
     if (browser) await browser.deleteSession().catch(() => {});
     await stopProcess(child);
-    await closeServer(mcpBlocker).catch(() => {});
+    await Promise.all(mcpBlockers.map((server) => closeServer(server).catch(() => {})));
     spawnSync(tmux, ["-L", "ticketry-e2e", "kill-server"], {
       env: { ...process.env, TMUX_TMPDIR: tmuxDirectory },
       stdio: "ignore",
@@ -414,10 +314,10 @@ async function main() {
     mkdirSync(workspaceDirectory);
     mkdirSync(tmuxDirectory);
     mkdirSync(runtimeTempDirectory);
-    tools = provisionDisposableTools(root);
     const binary = path.join(applicationDirectory, "ticketry");
     const hook = path.join(applicationDirectory, "ticketry-hook");
     copyFileSync(builtBinary, binary);
+    tools = provisionDisposableTools(root);
     copyFileSync(tools.hook, hook);
     chmodSync(binary, 0o755);
     chmodSync(hook, 0o755);
@@ -430,13 +330,14 @@ async function main() {
       TMUX_TMPDIR: tmuxDirectory,
       TMPDIR: runtimeTempDirectory,
       MUXED_OUTPUT_SWEEP_SECONDS: "1",
+      MUXED_DEVELOPMENT_LOG_PATH: path.join(artifacts, "ticketry.log"),
     };
-    const nextPortReservation = await occupyPort(rotatedMcpPort);
-    await closeServer(nextPortReservation);
-    try {
-      mcpBlocker = await occupyPort(mcpPort);
-    } catch (error) {
-      if (error?.code !== "EADDRINUSE") throw error;
+    for (const obsoletePort of obsoleteMcpPorts) {
+      try {
+        mcpBlockers.push(await occupyPort(obsoletePort));
+      } catch (error) {
+        if (error?.code !== "EADDRINUSE") throw error;
+      }
     }
     child = spawnTicketry(binary, {
       ...applicationEnvironment,
@@ -444,16 +345,18 @@ async function main() {
       TICKETRY_DESKTOP_ACCEPTANCE_SWEEP_MILLIS: "250",
     }, stdout, stderr);
     browser = await connectToStudio(port, child);
-    await waitForMcpPing(rotatedMcpUrl, child);
-    if (!(mcpBlocker?.listening || await portIsOccupied(mcpPort))) {
-      throw new Error(
-        `the port ${mcpPort} reservation ended before desktop startup completed`,
-      );
+    await waitForMcpPing(tools.dataDirectory, child);
+    for (const obsoletePort of obsoleteMcpPorts) {
+      if (!await portIsOccupied(obsoletePort)) {
+        throw new Error(`Port ${obsoletePort} stopped being occupied during desktop startup`);
+      }
     }
     const story = await createStoryThroughStudio(browser, workspaceDirectory);
     await waitForState(browser, "Ideas");
     // CODING-1528: prove the description seam in WebKit before any run exists.
-    await proveDescriptionSaveAndStorySwitch(browser, story.taskId);
+    if (!process.argv.includes("--mcp-recovery")) {
+      await proveDescriptionSaveAndStorySwitch(browser, story.taskId);
+    }
     await openExistingStory(browser, story.taskId);
     story.launch = await browser.$("aria/Run agent");
     writeFileSync(path.join(root, "provider-task"), `${story.taskId}\nCoding\n`);
@@ -479,8 +382,8 @@ async function main() {
     if (provider.task_id !== story.taskId || provider.cwd !== workspaceDirectory) {
       throw new Error("the disposable provider did not receive Ticketry's task and CWD");
     }
-    if (provider.mcp_url !== rotatedMcpUrl || provider.mcp_authorization !== true) {
-      throw new Error("the disposable provider did not receive Ticketry's rotated MCP authority");
+    if (provider.mcp_data_directory !== tools.dataDirectory || provider.mcp_authorization !== true) {
+      throw new Error("the disposable provider did not receive Ticketry's data-directory MCP authority");
     }
     const inventory = tmuxInventory(root);
     if (inventory.includes("<no private tmux sessions>") || !inventory.includes("|0|")) {
@@ -498,7 +401,26 @@ async function main() {
     await terminalTab.waitForDisplayed({ timeout: 30_000 });
     await (await terminalTab.$("aria/Agent is actively working"))
       .waitForDisplayed({ timeout: 30_000 });
-    await assertNativeRendererOwnsTheRun(browser);
+    if (!process.argv.includes("--mcp-recovery")) {
+      await assertNativeRendererOwnsTheRun(browser);
+    }
+
+    ({ child, browser } = await verifyLiveMcpRecovery({
+      root, dataDirectory: tools.dataDirectory, child, browser,
+      inventory: () => tmuxInventory(root),
+      restart: async () => {
+        port = await availablePort();
+        child = spawnTicketry(binary, {
+          ...applicationEnvironment,
+          TAURI_WEBDRIVER_PORT: String(port),
+          TICKETRY_DESKTOP_ACCEPTANCE_SWEEP_MILLIS: "250",
+        }, stdout, stderr);
+        browser = await connectToStudio(port, child);
+        await waitForMcpPing(tools.dataDirectory, child);
+        await openExistingStory(browser, story.taskId);
+        return { child, browser };
+      },
+    }));
 
     for (const state of ["Implement", "Review", "Done"]) {
       writeFileSync(path.join(root, `advance-${state}`), "");
@@ -508,8 +430,20 @@ async function main() {
     writeFileSync(path.join(root, "provider-exit"), "");
     const completedRun = await browser.$("aria/Resume Ideas codex terminal");
     await completedRun.waitForDisplayed({ timeout: 30_000 });
+    if (process.argv.includes("--mcp-recovery")) {
+      const hooks = readFileSync(path.join(root, "provider-hooks.log"), "utf8");
+      for (const event of ["SessionStart", "UserPromptSubmit", "PostToolUse", "Stop"]) {
+        if (!hooks.includes(event)) throw new Error(`Missing provider hook ${event}`);
+      }
+      for (const mode of ["orderly", "sigkill"]) {
+        const evidence = JSON.parse(readFileSync(path.join(root, `recovery-${mode}.json`), "utf8"));
+        console.log(`${mode} MCP recovery passed; outage error in ${evidence.outage_ms.toFixed(2)} ms`);
+      }
+      console.log("Ticketry desktop MCP recovery acceptance passed (Codex fixture).");
+      return;
+    }
     await browser.waitUntil(async () =>
-      !(await moduleActivity.isDisplayed().catch(() => false)), {
+      !(await (await browser.$('button[role="tab"][aria-label="Acceptance Module"] [aria-label="Agent is actively working"]')).isDisplayed().catch(() => false)), {
       timeout: 30_000,
       timeoutMsg: "the module lifecycle badge did not clear after completion",
     });
@@ -590,11 +524,13 @@ async function main() {
         JSON.stringify(diagnostic, null, 2),
       );
     }
+    const readiness = path.join(tools?.dataDirectory ?? root, "slice2-readiness.json");
+    if (existsSync(readiness)) copyFileSync(readiness, path.join(artifacts, "slice2-readiness.json"));
     writeFileSync(path.join(artifacts, "ticketry.stdout.log"), Buffer.concat(stdout));
     writeFileSync(path.join(artifacts, "ticketry.stderr.log"), Buffer.concat(stderr));
     writeFileSync(path.join(artifacts, "tmux-inventory.txt"), tmuxInventory(root));
     writeFileSync(path.join(artifacts, "provider-output.log"), tmuxCapture(root));
-    for (const evidence of ["provider-error.log", "provider-hooks.log", "provider-mcp.log", "provider-prompt.log", "provider-started.json"]) {
+    for (const evidence of ["provider-error.log", "provider-hooks.log", "provider-mcp.log", "provider-prompt.log", "provider-started.json", "recovery-orderly.json", "recovery-sigkill.json"]) {
       const source = path.join(root, evidence);
       if (existsSync(source)) copyFileSync(source, path.join(artifacts, evidence));
     }

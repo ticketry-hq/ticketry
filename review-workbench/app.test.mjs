@@ -163,3 +163,74 @@ test("edits and republishes the fetched artifact", async () => {
 
   dom.window.close();
 });
+
+test("an empty prompt outside a workflow does not block finalizing", async () => {
+  const dom = installDom();
+  // PathFind routes only Spec, Done, and Cancelled, so an empty Ideas prompt is
+  // a coverage gap that no launch can reach.
+  const fetchedArtifact = structuredClone(trackedArtifact);
+  fetchedArtifact.prompts.PathFind.Ideas = "   ";
+  let finalizedPayload = null;
+  globalThis.fetch = async (url, options = {}) => {
+    if (!options.method) {
+      return { ok: true, async json() { return { review: fetchedArtifact }; } };
+    }
+    finalizedPayload = JSON.parse(options.body);
+    return { ok: true, async json() { return { ok: true, savedAs: "defaults" }; } };
+  };
+
+  await import(`./app.js?inactive-empty-test=${Date.now()}`);
+
+  document.querySelector('[data-view="review"]').click();
+  const cards = document.querySelectorAll(".summary-card");
+  assert.match(cards[0].querySelector("p").textContent, /1 need attention/);
+  assert.equal(
+    cards[1].querySelector("p").textContent,
+    "All routed states are launch-ready",
+  );
+
+  document.querySelector("#finalize-review").click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.ok(finalizedPayload, "an unroutable empty cell must not block finalize");
+  assert.equal(
+    document.querySelector(".finalize-card h2").textContent,
+    "Review finalized",
+  );
+
+  dom.window.close();
+});
+
+test("an empty prompt inside a workflow blocks finalizing", async () => {
+  const dom = installDom();
+  // Spec is routed for PathFind, so the same emptiness is launch-blocking.
+  const fetchedArtifact = structuredClone(trackedArtifact);
+  fetchedArtifact.prompts.PathFind.Spec = "   ";
+  let finalizedPayload = null;
+  globalThis.fetch = async (url, options = {}) => {
+    if (!options.method) {
+      return { ok: true, async json() { return { review: fetchedArtifact }; } };
+    }
+    finalizedPayload = JSON.parse(options.body);
+    return { ok: true, async json() { return { ok: true, savedAs: "defaults" }; } };
+  };
+
+  await import(`./app.js?active-empty-test=${Date.now()}`);
+
+  document.querySelector('[data-view="review"]').click();
+  const cards = document.querySelectorAll(".summary-card");
+  assert.equal(
+    cards[1].querySelector("p").textContent,
+    "A routed prompt is empty",
+  );
+
+  document.querySelector("#finalize-review").click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(finalizedPayload, null);
+  assert.equal(
+    document.querySelector("#toast").textContent,
+    "Complete required guidance before finalizing",
+  );
+  assert.equal(document.querySelector("#toast").dataset.tone, "danger");
+
+  dom.window.close();
+});

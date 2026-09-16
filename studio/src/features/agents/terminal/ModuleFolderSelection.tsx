@@ -131,7 +131,9 @@ export function ModuleFolderSelection({
             {selection.recentFolders.map((folder, index) => (
               <li
                 key={folder}
+                aria-disabled={disabled || undefined}
                 onClick={() => {
+                  if (disabled) return;
                   selection.setValue(folder);
                   selection.setHighlight(-1);
                 }}

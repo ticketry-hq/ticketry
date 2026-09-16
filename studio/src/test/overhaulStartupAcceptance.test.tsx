@@ -39,7 +39,10 @@ import { getProjectsSnapshot, seedProjects, useStudioStore } from "../features/p
 import * as projectQueries from "../features/projects/queries";
 import * as workItemReadTransport from "../features/work-items/queries/readTransport";
 import { useClientStore } from "../state/clientStore";
-import { RECENT_MODULE_KEY } from "../state/persistence";
+import { RECENT_MODULE_KEY, rememberTaskSelection } from "../state/persistence";
+import { TEMP_TASK_ID, type TabKind } from "../features/agents/types";
+import { scratchBucketId } from "../features/agents/terminal";
+import { readStudioWorkspaceTarget, rememberStudioWorkspaceTarget } from "../features/workspace-state/studioWorkspaceTarget";
 
 const loadProjects = projectQueries.loadProjects as ReturnType<typeof vi.fn>;
 const loadModules = projectQueries.loadModules as ReturnType<typeof vi.fn>;
@@ -149,6 +152,40 @@ describe("startup acceptance", () => {
 
     expect(useClientStore.getState().selectedModuleId).toBe("module-1");
     expect(useClientStore.getState().focusedPane).toBe("tasks");
+  });
+
+  it("[overhaul-288] launches the restored Story or scratch workspace on Details without removing its tabs", async () => {
+    for (const taskId of ["story-1", TEMP_TASK_ID]) {
+      for (const active of ["terminal", "doc", "changes"] as TabKind[]) {
+        useStudioStore.setState({ selectedProjectId: null });
+        localStorage.setItem(RECENT_MODULE_KEY, "module-1");
+        rememberTaskSelection("module-1", taskId);
+        readModuleTree.mockResolvedValue({
+          rootIds: ["story-1"], children: { "story-1": [] }, order: ["story-1"], states: [], workItems: [],
+        });
+        const bucket = taskId === TEMP_TASK_ID ? scratchBucketId("module-1") : taskId;
+        useClientStore.setState({
+          selectedModuleId: null, selectedTaskId: null,
+          workspaces: { [bucket]: { active, activeDocId: "doc-1", closedDocIds: ["doc-2"] } },
+          activeByTask: { [bucket]: "session-1" },
+        });
+        rememberStudioWorkspaceTarget(bucket, active === "terminal"
+          ? { kind: "terminal", agentRunId: "run-1" }
+          : active === "doc" ? { kind: "doc", relPath: "spec.md" } : { kind: "changes" });
+
+        expect(await bootstrapStudio()).toBe("ready");
+        expect(useClientStore.getState().selectedTaskId).toBe(taskId);
+        expect(useClientStore.getState().workspaces[bucket]).toEqual({
+          active: "details", activeDocId: "doc-1", closedDocIds: ["doc-2"],
+        });
+        expect(useClientStore.getState().activeByTask[bucket]).toBe("session-1");
+        expect(readStudioWorkspaceTarget(bucket)).toEqual({ kind: "details" });
+
+        // After startup, an explicit tab selection still works normally.
+        useClientStore.getState().setActive(bucket, "terminal");
+        expect(useClientStore.getState().workspaces[bucket].active).toBe("terminal");
+      }
+    }
   });
 
   it("uses the first visible linked module when the remembered module is hidden", async () => {

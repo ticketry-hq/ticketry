@@ -7,6 +7,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { useModalStore } from "../../../../../app/modal/modalStore";
+import { prefetchProviderCatalog } from "../../../../../features/workflows";
 import { loadSelectedTicketTerminal } from "../terminals/selectedTicketTerminalLoader";
 
 /** Taskless scratch run intents offered by the scratch launcher menu. */
@@ -84,6 +85,16 @@ export function WorkspaceLauncher({
     context: ScratchLaunchContext;
   } | null>(null);
   currentLauncherIdentityRef.current = launcherIdentity;
+
+  // The agent picker reads the provider catalog out of the Apollo cache when it
+  // mounts, and nothing else in a session subscribes to it (CODING-1463), so a
+  // picker that mounts cold opens on an inert "Loading providers…" list. The
+  // launcher is the surface that owns the picker and is mounted long before the
+  // click, so it is what warms the catalog — for every route into the picker,
+  // not only this trigger.
+  useEffect(() => {
+    prefetchProviderCatalog();
+  }, []);
 
   // The launcher menu never survives a workspace-context change: switching
   // bucket or launcher kind must not leave a hidden launch in progress.
@@ -166,6 +177,14 @@ export function WorkspaceLauncher({
       window.removeEventListener("scroll", updatePosition, true);
     };
   }, [launchOpen]);
+
+  // Hover and focus are the launcher's intent seam: they start the (large)
+  // terminal chunk download, and retry a catalog warm that has not landed yet,
+  // before a run is actually started.
+  function warmLaunchIntent() {
+    void loadSelectedTicketTerminal();
+    prefetchProviderCatalog();
+  }
 
   function activateLauncherItem(id: string) {
     if (launchCommittedRef.current) return;
@@ -252,8 +271,8 @@ export function WorkspaceLauncher({
             return !open;
           });
         }}
-        onPointerEnter={() => void loadSelectedTicketTerminal()}
-        onFocus={() => void loadSelectedTicketTerminal()}
+        onPointerEnter={warmLaunchIntent}
+        onFocus={warmLaunchIntent}
         aria-haspopup={launchContext.kind === "task" ? "dialog" : "menu"}
         aria-expanded={launchContext.kind === "scratch" ? launchOpen : undefined}
         title={

@@ -5,8 +5,9 @@
  * repairs descendants), so identities are collected in a short window and
  * invalidated once. Two rules make the batch safe:
  *
- * - The canonical entity is always refreshed; its containing collection only
- *   when a fact actually claimed a membership change.
+ * - The canonical entity is refreshed unless the fact names the exact server
+ *   version a completed local mutation already adopted. Its containing
+ *   collection refreshes only when the fact claims a membership change.
  * Apollo keeps an optimistic layer above incoming network data, so external
  * refreshes can proceed while a local write is in flight without painting an
  * older value over the edit.
@@ -15,10 +16,12 @@ import { compactWorktrackerId } from "../../../../shared/api/generatedWorktracke
 import { studioApolloClient } from "../../../../shared/apollo/client";
 import { loadModules } from "../../../projects";
 import {
+  GeneratedWorkTrackerWorkItemFieldsFragmentDoc,
   WorkTrackerModuleOpenDocument,
   WorkTrackerWorkItemDocument,
 } from "../../../work-items";
 import type { WorkItemFact } from "./statusFacts";
+import { consumeLocalWorkItemConvergence } from "../../../work-items/workItemConvergence";
 
 export const WORK_ITEM_INVALIDATION_WINDOW_MS = 50;
 
@@ -37,7 +40,8 @@ export function createWorkItemInvalidator(
   const pending = new Set<string>();
   const removed = new Set<string>();
   const moduleProjects = new Set<string>();
-  let taskMembershipChanged = false;
+  const taskModules = new Set<string>();
+  let unknownTaskMembershipChanged = false;
   let timer: ReturnType<typeof setTimeout> | null = null;
 
   const flush = () => {
@@ -48,11 +52,13 @@ export function createWorkItemInvalidator(
     const ids = [...pending];
     const evicted = [...removed];
     const projects = [...moduleProjects];
+    const modules = [...taskModules];
     pending.clear();
     removed.clear();
     moduleProjects.clear();
-    const refreshTaskMembership = taskMembershipChanged;
-    taskMembershipChanged = false;
+    taskModules.clear();
+    const refreshUnknownTaskMembership = unknownTaskMembershipChanged;
+    unknownTaskMembershipChanged = false;
     const client = studioApolloClient();
     for (const id of evicted) {
       client.cache.evict({
@@ -72,7 +78,14 @@ export function createWorkItemInvalidator(
     for (const projectId of projects) {
       void loadModules(projectId, { queryDeduplication: false }).catch(() => {});
     }
-    if (refreshTaskMembership) {
+    for (const moduleId of modules) {
+      void client.query({
+        query: WorkTrackerModuleOpenDocument,
+        variables: { moduleId: compactWorktrackerId(moduleId) },
+        fetchPolicy: "network-only",
+      }).catch(() => {});
+    }
+    if (refreshUnknownTaskMembership) {
       void client.refetchQueries({ include: [WorkTrackerModuleOpenDocument] })
         .catch(() => {});
     }
@@ -81,16 +94,32 @@ export function createWorkItemInvalidator(
 
   return {
     record(fact) {
+      const convergedLocally = consumeLocalWorkItemConvergence(
+        fact.workItemId,
+        fact.occurredAt,
+      );
+      const cachedModuleId = fact.itemKind === "module"
+        ? null
+        : studioApolloClient().readFragment({
+          fragment: GeneratedWorkTrackerWorkItemFieldsFragmentDoc,
+          from: {
+            __typename: "WorktrackerIssue",
+            id: compactWorktrackerId(fact.workItemId),
+          },
+          optimistic: false,
+        })?.module_id;
       if (fact.removed) {
         removed.add(fact.workItemId);
         pending.delete(fact.workItemId);
-      } else if (fact.itemKind !== "module") {
+      } else if (fact.itemKind !== "module" && !convergedLocally) {
         pending.add(fact.workItemId);
       }
       if (fact.itemKind === "module" && fact.projectId) {
         moduleProjects.add(fact.projectId);
-      } else {
-        taskMembershipChanged ||= fact.membershipChanged || fact.removed;
+      } else if (!convergedLocally && (fact.membershipChanged || fact.removed)) {
+        if (cachedModuleId) taskModules.add(cachedModuleId);
+        if (fact.moduleId) taskModules.add(fact.moduleId);
+        if (!cachedModuleId && !fact.moduleId) unknownTaskMembershipChanged = true;
       }
       timer ??= setTimeout(flush, windowMs);
     },
@@ -99,7 +128,8 @@ export function createWorkItemInvalidator(
       pending.clear();
       removed.clear();
       moduleProjects.clear();
-      taskMembershipChanged = false;
+      taskModules.clear();
+      unknownTaskMembershipChanged = false;
       if (timer) {
         clearTimeout(timer);
         timer = null;

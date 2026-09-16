@@ -1,13 +1,11 @@
 /**
  * Where opting into a worktree goes.
  *
- * On the desktop the authority is the in-process Rust runtime: it derives the
- * owning Work Item, the module's configured repository, the committed HEAD,
- * the base, the branch, and the checkout path itself, so the request carries
- * one Work Item identity and one operation identity and nothing the client
- * could get wrong. That is production: the legacy host route was retired at the
- * Slice 4 handoff and refuses. What remains below it is the browser-only
- * development path, which has no in-process runtime to ask.
+ * The request carries one Work Item identity and one operation identity, and
+ * nothing else. The in-process Rust runtime derives the owning Work Item, the
+ * module's configured repository, the committed HEAD, the base, the branch,
+ * and the checkout path itself, so there is nothing here the client could get
+ * wrong.
  *
  * The operation identity is what makes a repeated request safe. It is minted
  * once per user intent and reused for every retry of *that* intent, so a
@@ -20,15 +18,13 @@ import {
   adaptWorktreeStatus,
   type WorktreeStatusPayload,
 } from "./statusTransport";
-import type { WorktreeContext, WorktreeStatus } from "./types";
+import type { WorktreeStatus } from "./types";
 export { newOperationId } from "./operationId";
 
 export function requestWorktreeCreate(
   taskId: string,
   operationId: string,
-  ctx: WorktreeContext,
 ): Promise<WorktreeStatus> {
-  void ctx;
   return studioRuntime().writeWorkTracker({
     graphQl: async (execute) =>
       adaptWorktreeStatus(

@@ -3,8 +3,9 @@ import { useRef, useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ModalShell } from "../app/modal/ModalShell";
+import { useModalStore } from "../app/modal/modalStore";
 import IssueActionsMenu from "../app/shell/ticket-workspace/selected-ticket/details/IssueActionsMenu";
-import { NativeGhosttyTerminal } from "../features/agents/terminal/NativeGhosttyTerminal";
+import { Terminal } from "../features/agents/terminal/Terminal";
 import { useTerminalForegroundStore } from "../features/agents/terminal/internal/foregroundStore";
 import { useTerminalStore } from "../features/agents/terminal/internal/sessionStore";
 import { useNativeWebViewSiblingInteraction } from "../features/agents/terminal/internal/useNativeWebViewSiblingInteraction";
@@ -55,17 +56,22 @@ function NativeSpikeHarness() {
   const [modalOpen, setModalOpen] = useState(false);
   return (
     <>
-      <NativeGhosttyTerminal
+      <Terminal
         sessionId="session-spike"
         owner="studio"
-        webviewSiblingSpike
       />
-      <button type="button" onClick={() => setModalOpen(true)}>
+      <button type="button" onClick={() => {
+        useModalStore.setState({ modalStack: [{ type: "settings" }] });
+        setModalOpen(true);
+      }}>
         Open spike modal
       </button>
       <IssueActionsMenu hasSubtasks={false} onDelete={async () => {}} />
       {modalOpen ? (
-        <ModalShell title="Spike modal" onClose={() => setModalOpen(false)}>
+        <ModalShell title="Spike modal" onClose={() => {
+          useModalStore.setState({ modalStack: [] });
+          setModalOpen(false);
+        }}>
           Native terminal stays attached beneath this translucent scrim.
         </ModalShell>
       ) : null}
@@ -123,6 +129,7 @@ function FailingInteractionOwner({
 describe("native terminal below the WebView acceptance", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    window.history.replaceState({}, "", "/?terminalRenderer=native");
     installDesktopGraphQlRuntime();
     vi.stubGlobal("ResizeObserver", ResizeObserverStub);
     vi.stubGlobal(
@@ -189,20 +196,21 @@ describe("native terminal below the WebView acceptance", () => {
   });
 
   afterEach(() => {
+    useModalStore.setState({ modalStack: [] });
     useTerminalStore.setState({ sessions: {}, sessionByRun: {} });
     useTerminalForegroundStore.setState({ claims: {}, hostTargets: {} });
     vi.unstubAllGlobals();
   });
 
-  it("[overhaul-233] keeps the native underlay experiment opt-in while normal terminals accept direct selection", async () => {
+  it("[overhaul-233] keeps normal terminals visible beneath modals while the WebView owns input", async () => {
     const view = render(<NativeSpikeHarness />);
-    const host = screen.getByTestId("native-terminal-host");
+    const host = await screen.findByTestId("native-terminal-host");
 
     expect(host).toHaveClass("bg-transparent");
     expect(host.parentElement).toHaveClass("bg-transparent");
     await waitFor(() =>
       expect(document.documentElement).toHaveClass(
-        "native-webview-sibling-spike",
+        "native-webview-sibling",
       ),
     );
 
@@ -225,25 +233,12 @@ describe("native terminal below the WebView acceptance", () => {
       });
     });
 
+    // The native view taking first responder blurs the DOM window. That must
+    // not hand input back to the WebView.
+    const raiseCount = invocations("native_terminal_set_webview_interaction").length;
     fireEvent.blur(window);
-    await waitFor(() => {
-      expect(invocations("native_terminal_set_webview_interaction").at(-1)).toEqual({
-        handle: "native-spike",
-        webviewFocus: true,
-        overlayFrames: [],
-        generation: expect.any(Number),
-      });
-    });
-
-    fireEvent.pointerDown(host);
-    await waitFor(() => {
-      expect(invocations("native_terminal_set_webview_interaction").at(-1)).toEqual({
-        handle: "native-spike",
-        webviewFocus: false,
-        overlayFrames: [],
-        generation: expect.any(Number),
-      });
-    });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(invocations("native_terminal_set_webview_interaction")).toHaveLength(raiseCount);
 
     const tooltip = document.createElement("div");
     tooltip.setAttribute("role", "tooltip");
@@ -310,7 +305,7 @@ describe("native terminal below the WebView acceptance", () => {
     });
 
     view.unmount();
-    expect(document.documentElement).not.toHaveClass("native-webview-sibling-spike");
+    expect(document.documentElement).not.toHaveClass("native-webview-sibling");
 
     const { readFile } = await import("node:fs/promises");
     const terminalSource = await readFile(
@@ -334,7 +329,7 @@ describe("native terminal below the WebView acceptance", () => {
       "utf8",
     );
     expect(nativeTerminalSource).toMatch(
-      /useNativeWebViewSiblingInteraction\([\s\S]{0,180}webviewSiblingSpike && visible && presentedHere/,
+      /useNativeWebViewSiblingInteraction\([\s\S]{0,180}visible && presentedHere/,
     );
     const capability = await readFile(
       `${process.cwd()}/src-tauri/capabilities/studio-main.json`,
@@ -348,7 +343,7 @@ describe("native terminal below the WebView acceptance", () => {
       "utf8",
     );
     expect(studioStyles).toMatch(
-      /html\.native-webview-sibling-spike \[data-pane="details-or-terminal"\][^{]*\{\s*background-color:\s*transparent;/s,
+      /html\.native-webview-sibling \[data-pane="details-or-terminal"\][^{]*\{\s*background-color:\s*transparent;/s,
     );
   });
 
@@ -356,18 +351,18 @@ describe("native terminal below the WebView acceptance", () => {
     const view = render(<RetainedNativeHosts second />);
     await waitFor(() =>
       expect(document.documentElement).toHaveClass(
-        "native-webview-sibling-spike",
+        "native-webview-sibling",
       ),
     );
 
     view.rerender(<RetainedNativeHosts second={false} />);
     expect(document.documentElement).toHaveClass(
-      "native-webview-sibling-spike",
+      "native-webview-sibling",
     );
 
     view.unmount();
     expect(document.documentElement).not.toHaveClass(
-      "native-webview-sibling-spike",
+      "native-webview-sibling",
     );
   });
 
@@ -415,6 +410,27 @@ describe("native terminal below the WebView acceptance", () => {
         generation: initialGenerations[1] + 3,
       }),
     );
+  });
+
+  it("keeps the selecting click from moving DOM focus and marks the host as the keyboard owner", async () => {
+    render(<RetainedNativeHosts second={false} />);
+    await waitFor(() =>
+      expect(invocations("native_terminal_set_webview_interaction")).toHaveLength(1),
+    );
+    const host = screen.getByTestId("native-first");
+
+    fireEvent.pointerDown(host);
+    const mouseDown = new MouseEvent("mousedown", { bubbles: true, cancelable: true });
+    host.dispatchEvent(mouseDown);
+    expect(mouseDown.defaultPrevented).toBe(true);
+    expect(host).toHaveAttribute("data-native-terminal-input");
+
+    const webviewButton = screen.getByRole("button", { name: "WebView action" });
+    fireEvent.pointerDown(webviewButton);
+    const webviewMouseDown = new MouseEvent("mousedown", { bubbles: true, cancelable: true });
+    webviewButton.dispatchEvent(webviewMouseDown);
+    expect(webviewMouseDown.defaultPrevented).toBe(false);
+    expect(host).not.toHaveAttribute("data-native-terminal-input");
   });
 
   it("publishes one selection when duplicate retained hosts share a native handle", async () => {

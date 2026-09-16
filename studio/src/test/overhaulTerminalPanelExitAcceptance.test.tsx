@@ -16,13 +16,19 @@
 
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { loadXtermTerminal } from "../features/agents/terminal/xtermTerminalLoader";
+
+// The compatibility renderer is a lazily fetched chunk; preload it so the
+// xterm host can be queried synchronously after render.
+beforeEach(async () => {
+  await loadXtermTerminal();
+});
 
 import { useGlobalKeymap } from "../app/navigation/useGlobalKeymap";
 import { useAgentStatusStore } from "../features/agents/status/testStore";
 import {
   selectModuleLifecycleCounts,
   selectScratchLifecycleChips,
-  selectScratchRunIds,
   selectTaskLifecycleChips,
   selectTaskRunCount,
 } from "../features/agents/status/selectors";
@@ -349,7 +355,6 @@ describe("terminal panel shell exit acceptance", () => {
     ]);
     // The module's scratch chicklets are plan/instant work; a shell is neither.
     expect(selectScratchLifecycleChips(status, "project-1", "module-1")).toEqual([]);
-    expect(selectScratchRunIds(status, "project-1", "module-1")).toEqual([]);
 
     // The cycle walks the work-item tree's agent terminals. Even with the shell
     // session presented as if it belonged to the task, it is not one of them.

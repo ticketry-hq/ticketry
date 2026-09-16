@@ -33,6 +33,18 @@ export function stagedAppPath(manifest, target, root = studioRoot) {
   );
 }
 
+export function desktopBuildArguments(target) {
+  return [
+    "run",
+    "desktop:build",
+    "--",
+    "--target",
+    target.id,
+    "--allow-unsigned",
+    "--allow-dirty",
+  ];
+}
+
 async function exists(filePath) {
   try {
     await access(filePath);
@@ -103,7 +115,7 @@ export async function deploy({ execute = run, installPath = defaultInstallPath }
 
   await execute(
     "npm",
-    ["run", "desktop:build", "--", "--target", target.id, "--allow-unsigned", "--allow-dirty"],
+    desktopBuildArguments(target),
     "unsigned local desktop build",
   );
   const source = stagedAppPath(manifest, target);

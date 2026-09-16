@@ -64,6 +64,7 @@ export interface WorkItemFact {
   readonly itemKind: "module" | "task" | "unknown";
   readonly removed: boolean;
   readonly membershipChanged: boolean;
+  readonly occurredAt: string | null;
 }
 
 export interface WorkflowStateFact {
@@ -248,6 +249,7 @@ export function readStatusFact(frame: RunStatusEventFrame): StatusFact | null {
         membershipChanged:
           payload.membershipChanged === true ||
           frame.event_kind === WORK_ITEM_DELETED,
+        occurredAt: text(payload.occurredAt),
       };
     }
     case WORKFLOW_STATE_CHANGED:

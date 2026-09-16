@@ -14,6 +14,7 @@ serde_json.workspace = true
 sha2.workspace = true
 ticketry-data-directory.workspace = true
 ticketry-entities.workspace = true
+ticketry-provider.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]

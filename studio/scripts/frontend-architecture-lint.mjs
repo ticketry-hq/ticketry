@@ -21,7 +21,6 @@ const existingFeatureToAppImports = new Set([
   "features/agents/terminal/PromptInput.tsx -> app/navigation/keymapRegistry",
   "features/agents/terminal/internal/modalOcclusion.ts -> app/modal/modalStore",
   "features/agents/terminal/internal/modalOcclusion.ts -> app/shell/dialogStore",
-  "features/agents/terminal/internal/nativeRenderRecovery.ts -> app/startup/reloadStudio",
   "features/module-tabs/moduleJumpBadgeState.ts -> app/navigation/keymapRegistry",
   "features/module-tabs/useModuleJumpBadges.ts -> app/navigation/chordLabel",
   "features/module-tabs/useModuleJumpBadges.ts -> app/navigation/keymapRegistry",
@@ -56,16 +55,6 @@ const existingFeatureToAppImports = new Set([
   "features/workspace-state/types.ts -> app/shell/toastStore",
   "features/workspace-state/workspaceStore.ts -> app/shell/dialogStore",
   "features/workspace-state/workspaceStore.ts -> app/shell/toastStore"
-]);
-
-const existingDocumentUiFiles = new Set([
-  "app/shell/ticket-workspace/selected-ticket/documents/DescriptionEditor.tsx",
-  "app/shell/ticket-workspace/selected-ticket/documents/DocViewer.tsx",
-  "app/shell/ticket-workspace/selected-ticket/documents/RichMarkdownEditor.tsx",
-  "app/shell/ticket-workspace/selected-ticket/documents/WorkspaceDocument.tsx",
-  "app/shell/ticket-workspace/selected-ticket/documents/codeMirrorDarkTheme.ts",
-  "app/shell/ticket-workspace/selected-ticket/documents/markdown.ts",
-  "app/shell/ticket-workspace/selected-ticket/documents/queries.ts",
 ]);
 
 function importedSpecifiers(source) {
@@ -104,7 +93,7 @@ export function architectureViolations(entries) {
     const normalizedFile = file.split(path.sep).join("/");
     if (
       normalizedFile.startsWith("app/shell/ticket-workspace/selected-ticket/documents/")
-      && !existingDocumentUiFiles.has(normalizedFile)
+      && normalizedFile !== "app/shell/ticket-workspace/selected-ticket/documents/WorkspaceDocument.tsx"
     ) {
       violations.push(`${normalizedFile}: document UI belongs in features/documents`);
     }

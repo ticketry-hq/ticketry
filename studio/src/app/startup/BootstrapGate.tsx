@@ -22,14 +22,21 @@ const STATUS_MESSAGES: Record<ConnectingStatus, string> = {
 export function BootstrapGate({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<BootstrapStatus>("connecting");
   const latestAttempt = useRef(0);
+  const inFlight = useRef<Promise<BootstrapOutcome> | null>(null);
 
   const attemptBootstrap = useCallback(() => {
     const attempt = ++latestAttempt.current;
     setStatus("connecting");
 
-    void bootstrapStudio().then((outcome) => {
-      if (attempt === latestAttempt.current) setStatus(outcome);
-    });
+    const pending = inFlight.current ?? bootstrapStudio();
+    inFlight.current = pending;
+    void pending
+      .then((outcome) => {
+        if (attempt === latestAttempt.current) setStatus(outcome);
+      })
+      .finally(() => {
+        if (inFlight.current === pending) inFlight.current = null;
+      });
   }, []);
 
   useEffect(() => {

@@ -65,6 +65,7 @@ function normalizeLaunchBindings(catalog: WorkTrackerProjectOpenQuery) {
       prompt: binding.prompt,
       required_skills: stringList(binding.required_skills),
       entry_skill: binding.entry_skill ?? null,
+      profile: binding.profile ?? null,
       model: binding.model ? publicWorktrackerId(binding.model) : null,
       reasoning: binding.reasoning ? publicWorktrackerId(binding.reasoning) : null,
       auto_start: binding.auto_start,

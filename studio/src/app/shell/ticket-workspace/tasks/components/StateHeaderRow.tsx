@@ -22,6 +22,7 @@ interface StateHeaderRowProps {
   // header without defeating React.memo.
   onToggle: (stateId: string) => void;
   onConfigure?: (stateId: string) => void;
+  onConfigureSection?: () => void;
   stateId?: string | null;
   dropTargetProps?: DropTargetProps;
   showDropSeam?: boolean;
@@ -53,6 +54,7 @@ export const StateHeaderRow = React.memo(function StateHeaderRow({
   isCollapsed,
   onToggle,
   onConfigure,
+  onConfigureSection,
   stateId,
   dropTargetProps,
   showDropSeam = false,
@@ -98,11 +100,11 @@ export const StateHeaderRow = React.memo(function StateHeaderRow({
           <span className="ml-auto pl-2">{statusAdornment}</span>
         ) : null}
       </button>
-      {stateId && onConfigure ? (
+      {(stateId && onConfigure) || onConfigureSection ? (
         <button
           type="button"
-          aria-label={`Configure ${stateName} state`}
-          onClick={() => onConfigure(stateId)}
+          aria-label={stateId ? `Configure ${stateName} state` : `Configure ${stateName}`}
+          onClick={() => stateId ? onConfigure?.(stateId) : onConfigureSection?.()}
           className="ml-1 inline-flex shrink-0 items-center justify-center p-1 text-text-muted opacity-50 group-hover:opacity-100 hover:text-text-primary hover:opacity-100 focus-visible:opacity-100"
         >
           <IconSettings />

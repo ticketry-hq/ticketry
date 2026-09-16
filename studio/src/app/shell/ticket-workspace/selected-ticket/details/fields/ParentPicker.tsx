@@ -2,9 +2,9 @@ import { useModulesQuery, useStudioStore } from "../../../../../../features/proj
 import { formatWorkItemDisplayIdentifier } from "../../../../../../features/work-items";
 import type { Module, WorkItem } from "../../../../../../shared/api/types";
 import { IconCornerDownRight } from "../../../../../../shared/ui/icons";
-import Popover from "./Popover";
+import Popover from "../../../../../../shared/ui/Popover";
 import PickerTrigger from "./PickerTrigger";
-import WorkItemSearchList from "./WorkItemSearchList";
+import WorkItemSearchList from "../../../../../../features/work-items/WorkItemSearchList";
 
 const EMPTY_MODULES: Module[] = [];
 

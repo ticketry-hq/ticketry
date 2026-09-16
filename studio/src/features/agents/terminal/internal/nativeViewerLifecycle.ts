@@ -1,7 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
-import { releasePooledTransport } from "./entryPool";
 import { serializeNativeAttach } from "./nativeAttachQueue";
 import { clippedNativeTerminalFrame } from "./nativeTerminalFrame";
 import {
@@ -112,13 +111,7 @@ export function ensureNativeViewerLifecycle({
     releaseLease();
   }
 
-  function fail(reason: string) {
-    if (tornDown) return;
-    teardown();
-    failNativeViewerMount(runId, reason);
-  }
-
-  if (!startNativeViewerLifecycle(runId, token, fail, teardown)) return;
+  if (!startNativeViewerLifecycle(runId, token, teardown)) return;
 
   const closeCompletedViewer = (completion: NativeTerminalCompletion) => {
     completedHandle = completion.handle;
@@ -223,7 +216,7 @@ export function ensureNativeViewerLifecycle({
       // makes the backend evict that socket as `replaced_by_another_viewer`.
       // The socket then marks the shared session exited and React tears down
       // the native surface that was meant to replace it.
-      releasePooledTransport(sessionId);
+      (await import("./entryPool")).releasePooledTransport(sessionId);
       const acquired = await viewerLease.acquire();
       if (!acquired || disposed || tornDown) {
         const detachedHandle = handle;
@@ -284,10 +277,10 @@ export function ensureNativeViewerLifecycle({
         });
       }, 10_000);
     } catch (error) {
-      console.error("native libghostty attach failed", error);
       failNativeViewerMount(runId, nativeFailureMessage(error), {
         origin: "attach",
         error,
+        handle,
       });
     }
   };

@@ -77,9 +77,6 @@ function renderBlock() {
       taskId="t1"
       parentId={null}
       moduleId="m1"
-      projectId="p1"
-      ticketSeq={589}
-      taskName="Worktree UI"
     />,
   );
 }
@@ -101,11 +98,7 @@ describe("WorktreeBlock (#589, shared CODIN-922)", () => {
     await waitFor(() =>
       expect(screen.getByText(/wt\/CODIN-589-worktree-ui/)).toBeTruthy(),
     );
-    expect(create).toHaveBeenCalledWith(
-      "t1",
-      "operation-1",
-      expect.objectContaining({ moduleId: "m1", ticketSeq: 589 }),
-    );
+    expect(create).toHaveBeenCalledWith("t1", "operation-1");
   });
 
   it("renders the active worktree read-only with branch/base + ahead/behind", async () => {

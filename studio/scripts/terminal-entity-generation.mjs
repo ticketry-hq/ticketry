@@ -16,10 +16,14 @@ export async function generateTerminalEntities({ rawDirectory, outputRoot }) {
   }
   agentRun = replace(agentRun, "    pub cwd: Option<String>,", "    #[seaography(ignore)]\n    pub cwd: Option<String>,", "Agent Run cwd protection");
   agentRun = replace(agentRun, "    pub design_dir: Option<String>,", "    #[seaography(ignore)]\n    pub design_dir: Option<String>,", "Agent Run design directory protection");
+  // The Work Item owns an Agent Run, and the Terminal Session record is what
+  // says whether an ended run still has a durable terminal to reattach. Both
+  // relations stay so a WorkItem read can answer resumability without a
+  // calendar cutoff.
   agentRun = replace(
     agentRun,
     "    #[sea_orm(has_one)]\n    pub agent_terminal_sessions: HasOne<super::agent_terminal_sessions::Entity>,",
-    "    #[sea_orm(belongs_to, from = \"issue_id\", to = \"id\")]\n    pub issue: BelongsTo<crate::work_management::issue::Entity>,",
+    "    #[sea_orm(belongs_to, from = \"issue_id\", to = \"id\")]\n    pub issue: BelongsTo<crate::work_management::issue::Entity>,\n    #[sea_orm(has_one, relation_enum = \"TerminalSession\", relation_reverse = \"AgentRun\")]\n    pub terminal_session: HasOne<crate::terminals::session::Entity>,",
     "Agent Run relation policy",
   );
 
@@ -44,7 +48,7 @@ export async function generateTerminalEntities({ rawDirectory, outputRoot }) {
   session = replace(
     session,
     "    #[sea_orm(\n        belongs_to,\n        from = \"agent_run_id\",\n        to = \"id\",\n        on_update = \"NoAction\",\n        on_delete = \"Cascade\"\n    )]\n    pub agent_runs: BelongsTo<super::agent_runs::Entity>,",
-    "    #[sea_orm(belongs_to, from = \"agent_run_id\", to = \"id\")]\n    pub agent_run: BelongsTo<crate::runs::agent_run::Entity>,",
+    "    #[sea_orm(\n        belongs_to,\n        relation_enum = \"AgentRun\",\n        relation_reverse = \"TerminalSession\",\n        from = \"agent_run_id\",\n        to = \"id\"\n    )]\n    pub agent_run: BelongsTo<crate::runs::agent_run::Entity>,",
     "Terminal Session Agent Run relation policy",
   );
 

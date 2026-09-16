@@ -542,5 +542,30 @@ describe("overhaul acceptance — Stories and details", () => {
 
     expect(await within(parent).findByTestId("agent-state-badge")).toHaveTextContent("▶1");
     expect(within(stories).queryByText("Implementation child")).toBeNull();
+
+    fireEvent.click(within(parent).getByRole("button", { name: "Expand subtasks" }));
+    const child = await within(stories).findByRole("treeitem", { name: /Implementation child/ });
+    expect(await within(child).findByTestId("agent-state-badge")).toHaveTextContent("▶1");
+    fireEvent.click(within(parent).getByRole("button", { name: "Collapse subtasks" }));
+    expect(within(stories).queryByText("Implementation child")).toBeNull();
+    expect(within(parent).getByTestId("agent-state-badge")).toHaveTextContent("▶1");
+
+    // A refreshed membership change moves the active child out of this branch.
+    http.tree("module-1", {
+      rootIds: ["story-1", "child-1"],
+      children: { "story-1": [], "child-1": [] },
+      order: ["story-1", "child-1"],
+    });
+    http.workItems([
+      workItem({ id: "story-1", name: "Parent story", rank: "Z" }),
+      workItem({ id: "child-1", name: "Implementation child", key: "MEML-2", rank: "A" }),
+    ]);
+    act(() => http.notifications.workItemChanged("child-1", 2, true));
+    await waitFor(() => {
+      expect(within(parent).queryByTestId("agent-state-badge")).toBeNull();
+      const moved = within(stories).getByRole("treeitem", { name: /Implementation child/ });
+      expect(within(moved).getByTestId("agent-state-badge")).toHaveTextContent("▶1");
+      expect(moved).toHaveStyle({ paddingLeft: "0ch" });
+    });
   });
 });

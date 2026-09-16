@@ -42,5 +42,7 @@ pub use work_management::{
     module_presentation, project, provider, reasoning_level,
     register_entity_modules as register_work_management_entities, state, transition_occurrence,
 };
-pub use workspace_runtime::{operation, ship_record, register_entity_modules as register_workspace_runtime_entities};
+pub use workspace_runtime::{
+    operation, register_entity_modules as register_workspace_runtime_entities, ship_record,
+};
 pub use worktrees::{register_entity_modules as register_worktree_entities, worktree};

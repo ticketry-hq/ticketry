@@ -16,6 +16,11 @@ const LAUNCH_FAILURE_REASONS: Record<string, string> = {
     "Launch blocked: this launch configuration names a provider that is "
     + "deactivated. Activate it in Settings → Model configuration, or point "
     + "the configuration at an activated provider.",
+  // Replacing a live agent refused at the end-previous-agents step; both the
+  // interactive launch and Run Now paths surface this code bare.
+  previous_agent_not_ended:
+    "The previous agent could not be ended. Close its terminal session, then "
+    + "try again.",
 };
 
 /** Translate one control-plane launch code into what the user should read. */

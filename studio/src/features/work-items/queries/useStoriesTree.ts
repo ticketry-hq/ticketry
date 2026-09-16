@@ -1,4 +1,5 @@
 import { useLayoutEffect, useMemo } from "react";
+import type { WorkItem } from "../../../shared/api/types";
 import { useClientStore } from "../../../state/clientStore";
 import { useStudioStore } from "../../projects";
 import {
@@ -7,27 +8,23 @@ import {
   orderedTaskSections,
   searchHits,
   STATE_HEADER,
-  type TreeWorkItem,
   visibleRows,
 } from "../selectors";
 import { useCachedStates } from "../../../features/projects";
 import { stateColor } from "../../../shared/utilities/display";
 import { useModuleOpen } from ".";
 import { useInstantRunTickets } from "../../agents/terminal";
+import { recordSelectionProfilePoint } from "../../../shared/utilities/selectionProfile";
+
+import { moduleLoadPoint, moduleLoadProbeActive } from "../../../shared/utilities/moduleLoadProbe";
 
 const EMPTY_EXPANDED_IDS: string[] = [];
 
-const recordSelectionProfilePoint = (point: string) => {
-  (globalThis as typeof globalThis & {
-    __ticketrySelectionProfileProbe?: (point: string) => void;
-  }).__ticketrySelectionProfileProbe?.(point);
-};
-
-export function useStoriesTree() {
+export function useDerivedStoriesTree() {
   recordSelectionProfilePoint("stories-tree-render");
   const selectedProjectId = useStudioStore((s) => s.selectedProjectId);
   const selectedModuleId = useClientStore((s) => s.selectedModuleId);
-  const { tree, items } = useModuleOpen(selectedModuleId);
+  const { tree, items, loading: queryLoading } = useModuleOpen(selectedModuleId);
   const states = useCachedStates(selectedProjectId);
   const instantRunTickets = useInstantRunTickets(
     selectedProjectId,
@@ -49,9 +46,9 @@ export function useStoriesTree() {
 
   const itemsById = useMemo(() => {
     recordSelectionProfilePoint("items-by-id-build");
-    const resolved: Record<string, TreeWorkItem> = {};
+    const resolved: Record<string, WorkItem> = {};
     for (const item of items) {
-      resolved[item.id] = item as unknown as TreeWorkItem;
+      resolved[item.id] = item;
     }
     return resolved;
   }, [items]);
@@ -66,6 +63,7 @@ export function useStoriesTree() {
   }, [migrateCollapsedStateNames, states]);
 
   const derived = useMemo(() => {
+    const started = performance.now();
     recordSelectionProfilePoint("visible-rows-build");
     const out: PlanningTreeRow[] = [];
     const sectionIdsByState: Record<string, string[]> = {};
@@ -137,6 +135,7 @@ export function useStoriesTree() {
         }
       }
     }
+    moduleLoadPoint(selectedModuleId)("rows-derived", { row_count: out.length, derive_ms: performance.now() - started });
     return { rows: out, sectionIdsByState };
   }, [
     tree,
@@ -151,8 +150,25 @@ export function useStoriesTree() {
     isSearchActive,
   ]);
 
+  useLayoutEffect(() => {
+    if (!moduleLoadProbeActive(selectedModuleId)) return;
+    const probe = moduleLoadPoint(selectedModuleId);
+    const details = { task_count: items.length, row_count: derived.rows.length, refreshing: queryLoading };
+    probe("tasks-committed", details);
+    let secondFrame = 0;
+    const firstFrame = requestAnimationFrame(() => {
+      secondFrame = requestAnimationFrame(() => probe("tasks-paint-opportunity", details));
+    });
+    return () => {
+      cancelAnimationFrame(firstFrame);
+      cancelAnimationFrame(secondFrame);
+    };
+  }, [selectedModuleId, items, derived.rows, queryLoading]);
+
   return {
     rows: derived.rows,
+    items,
+    loading: queryLoading,
     tree,
     itemsById,
     sectionIdsByState: derived.sectionIdsByState,

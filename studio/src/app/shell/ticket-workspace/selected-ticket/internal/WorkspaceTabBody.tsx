@@ -15,6 +15,7 @@ import {
   useClientStore,
   type EditViewZone,
 } from "../../../../../state/clientStore";
+import { KeyChordHint } from "../../../../../shared/ui/KeyChordHint";
 import { formatChordSymbols } from "../../../../navigation/chordLabel";
 import { EDIT_VIEW_BODY_DISENGAGE_CHORD } from "../../../../navigation/three-zone/threeZoneNavigation";
 import { LazySelectedTicketTerminal } from "../terminals/selectedTicketTerminalLoader";
@@ -28,6 +29,7 @@ import {
   openModuleChangesWorkspace,
   openTaskChangesWorkspace,
 } from "./openChangesWorkspace";
+import { DetailsSurfaceActiveContext } from "./detailsSurfaceContext";
 
 const WorkspaceDocument = lazy(async () => ({
   default: (await import("../documents/WorkspaceDocument")).WorkspaceDocument,
@@ -148,7 +150,9 @@ export function WorkspaceTabBody({
             : "hidden"
         }
       >
-        {details}
+        <DetailsSurfaceActiveContext.Provider value={activeKind === "details"}>
+          {details}
+        </DetailsSurfaceActiveContext.Provider>
       </div>
       <div
         tabIndex={-1}
@@ -242,10 +246,11 @@ export function WorkspaceTabBody({
             data-testid="terminal-mode-tag"
             className="pointer-events-none absolute left-0 top-5 z-50 flex items-center gap-2 border border-l-0 border-lifecycle-success/40 bg-pane-bg/90 px-3 py-1.5 text-sm shadow-sm"
           >
-            <span className="font-bold text-lifecycle-success">
-              {formatChordSymbols(EDIT_VIEW_BODY_DISENGAGE_CHORD)}
-            </span>
-            <span className="text-text-muted">— Disengage Body</span>
+            <KeyChordHint
+              chord={formatChordSymbols(EDIT_VIEW_BODY_DISENGAGE_CHORD)}
+              label="Disengage Body"
+              tone="engaged"
+            />
           </div>
         )}
       </div>

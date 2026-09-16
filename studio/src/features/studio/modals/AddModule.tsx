@@ -4,7 +4,7 @@ import { useModalStore } from "../../../app/modal/modalStore";
 import { useClientStore } from "../../../state/clientStore";
 import { useStudioStore } from "../../projects";
 import { MODAL_ACTIONS } from "../../../app/navigation/keymapRegistry";
-import { setModuleFolder } from "../../module-links";
+import { moduleFolderSaveError, setModuleFolder } from "../../module-links";
 import {
   ModuleFolderSelection,
   useModuleFolderSelection,
@@ -100,11 +100,9 @@ export function AddModule({ runtime }: { runtime?: StudioRuntime } = {}) {
 
       const resolvedModuleId = moduleId;
       try {
-        await setModuleFolder(resolvedModuleId, folder);
-      } catch {
-        setError(
-          "Module created, but its folder could not be saved. Retry to save the folder.",
-        );
+        if (!(await setModuleFolder(resolvedModuleId, folder, runtime))) return;
+      } catch (cause) {
+        setError(moduleFolderSaveError(cause, "Module created, but its folder could not be saved. Retry to save the folder."));
         return;
       }
       if (useClientStore.getState().selectedModuleId !== resolvedModuleId) {
@@ -140,6 +138,7 @@ export function AddModule({ runtime }: { runtime?: StudioRuntime } = {}) {
         { actionId: MODAL_ACTIONS.close, label: "Cancel" },
       ]}
       onAction={(actionId) => {
+        if (submittingRef.current) return;
         if (actionId === MODAL_ACTIONS.previous) {
           folderSelection.movePrevious();
         } else if (actionId === MODAL_ACTIONS.next) {

@@ -94,17 +94,28 @@ test("the shipping Cargo package builds one binary and no developer tools", asyn
 
 test("the release builds the target-specific hook runner expected by Tauri", () => {
   const build = hookRunnerBuild(manifest.targets[0], "/repository/studio");
-  assert.equal(build.command, "rustc");
+  assert.equal(build.command, "cargo");
   assert.deepEqual(build.args, [
-    "/repository/studio/src-tauri/native/ticketry_hook.rs",
-    "--edition",
-    "2021",
+    "build",
+    "--locked",
+    "--manifest-path",
+    "/repository/studio/src-tauri/Cargo.toml",
+    "-p",
+    "ticketry-hook",
+    "--bin",
+    "ticketry-hook",
+    "--release",
     "--target",
     "aarch64-apple-darwin",
-    "-O",
-    "-o",
-    "/repository/studio/src-tauri/binaries/ticketry-hook-aarch64-apple-darwin",
   ]);
+  assert.equal(
+    build.builtOutput,
+    "/repository/studio/src-tauri/target/aarch64-apple-darwin/release/ticketry-hook",
+  );
+  assert.equal(
+    build.output,
+    "/repository/studio/src-tauri/binaries/ticketry-hook-aarch64-apple-darwin",
+  );
 });
 
 test("manifest validation requires Rust runtime and release policy declarations", () => {
@@ -376,6 +387,8 @@ test("unsigned bundle verification checks only the app and hook binaries", async
     await rm(root, { recursive: true, force: true });
   }
   assert.equal(calls.filter(([command]) => command === "lipo").length, 2);
+  assert.equal(calls.some(([command, ...args]) => command === hook
+    && args[0] === "mcp" && args[1] === "--help"), true);
   assert.equal(calls.some((call) => call.join(" ").includes("sidecar")), false);
 });
 

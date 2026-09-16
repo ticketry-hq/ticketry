@@ -13,11 +13,13 @@ import { useQuery } from "@apollo/client/react";
 import { compactWorktrackerId } from "../../shared/api/generatedWorktracker";
 import { studioApolloClient } from "../../shared/apollo/client";
 import { isAbsoluteFolderPath } from "../studio/lib/moduleFolderPath";
+import type { StudioRuntime } from "../../runtime";
 import {
   LoadModuleLinksDocument,
   type LoadModuleLinksQuery,
   type ModuleLinkFieldsFragment,
 } from "./generated/moduleLinks.documents";
+import { prepareModuleFolderTrust } from "./moduleFolderTrust";
 import { eraseModuleLink, writeModuleLink } from "./moduleLinkTransport";
 
 export type ModuleLink = ModuleLinkFieldsFragment;
@@ -102,11 +104,14 @@ export function recentModuleFolders(links: ModuleLink[]): string[] {
 export async function setModuleFolder(
   moduleId: string,
   path: string,
-): Promise<void> {
+  runtime?: StudioRuntime,
+): Promise<boolean> {
   if (!isAbsoluteFolderPath(path)) {
     throw new Error("Module folders require a complete filesystem path.");
   }
+  if (!(await prepareModuleFolderTrust(path, runtime))) return false;
   await writeModuleLink(moduleId, path);
+  return true;
 }
 
 /** Unlink a Module from its local folder. */

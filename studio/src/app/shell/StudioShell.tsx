@@ -6,11 +6,15 @@ import { useGlobalKeymap } from "../navigation/useGlobalKeymap";
 import { startAgentStatusServices } from "../startup/startAgentStatusServices";
 import { StudioFooter } from "./StudioFooter";
 import { StudioLayout } from "./StudioLayout";
-import { useStoriesTree } from "../../features/work-items";
+import { StoriesTreeProvider, useStoriesTree } from "../../features/work-items";
 import { statusStreamTransport } from "../../runtime";
 import { ProjectRunTerminalTabBridge } from "./ProjectRunTerminalTabBridge";
 
 export function StudioShell() {
+  return <StoriesTreeProvider><StudioShellContent /></StoriesTreeProvider>;
+}
+
+function StudioShellContent() {
   const { rows } = useStoriesTree();
   const selectedProjectId = useStudioStore((state) => state.selectedProjectId);
   const selectTask = useClientStore((state) => state.selectTask);

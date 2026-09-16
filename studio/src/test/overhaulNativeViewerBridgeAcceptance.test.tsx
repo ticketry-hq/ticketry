@@ -131,12 +131,14 @@ describe("native viewer attachment acceptance", () => {
   });
 
   it("[overhaul-63] matches Ghostty's background seams to Studio's pane panel", async () => {
+    // The host paints nothing itself: the native sibling shows through it, so
+    // the seam match comes from Ghostty's own theme, asserted below.
     const view = render(
       <NativeGhosttyTerminal sessionId="session-1" owner="studio" />,
     );
     const host = view.getByTestId("native-terminal-host");
-    expect(host).toHaveClass("bg-pane-panel");
-    expect(host.parentElement).toHaveClass("bg-pane-panel");
+    expect(host).toHaveClass("bg-transparent");
+    expect(host.parentElement).toHaveClass("bg-transparent");
     view.unmount();
 
     const { readFile } = await import("node:fs/promises");

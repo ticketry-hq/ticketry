@@ -1,7 +1,8 @@
+use chrono::{DateTime, NaiveDateTime};
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QueryOrder};
 use serde_json::{json, Value};
 
-use ticketry_entities::{agent_run, issue, issue_type_transition, state};
+use ticketry_entities::{agent_run, issue, issue_type_transition, state, transition_occurrence};
 
 use super::RunPrincipal;
 
@@ -60,6 +61,24 @@ pub(super) async fn rejection(
         .map(|transition| transition.to_state_id)
         .collect();
     let current_id = item.state_id.as_deref();
+    if let (Some(current), Some(started_at)) = (current_id, parse_timestamp(&run.started_at)) {
+        let latest = transition_occurrence::Entity::find()
+            .filter(transition_occurrence::Column::IssueId.eq(&run.issue_id))
+            .filter(transition_occurrence::Column::CommittedAt.gte(started_at))
+            .order_by_desc(transition_occurrence::Column::CommittedAt)
+            .order_by_desc(transition_occurrence::Column::OccurrenceId)
+            .one(database)
+            .await;
+        match latest {
+            Ok(Some(transition)) if transition.to_state_id == current => {
+                return transition
+                    .handoff
+                    .then(|| handoff_continues(&principal.agent_run_id));
+            }
+            Ok(_) => {}
+            Err(_) => return Some(unavailable("terminate_failed")),
+        }
+    }
     if current_id.is_some_and(|current| destination_ids.iter().any(|id| id == current)) {
         return None;
     }
@@ -84,6 +103,24 @@ pub(super) async fn rejection(
         current_name.as_deref(),
         allowed.into_iter().map(|state| state.name).collect(),
     ))
+}
+
+fn parse_timestamp(value: &str) -> Option<NaiveDateTime> {
+    DateTime::parse_from_rfc3339(value)
+        .ok()
+        .map(|timestamp| timestamp.naive_utc())
+        .or_else(|| NaiveDateTime::parse_from_str(value, "%Y-%m-%d %H:%M:%S%.f").ok())
+}
+
+fn handoff_continues(agent_run_id: &str) -> Value {
+    json!({
+        "ok": true,
+        "termination_requested": false,
+        "terminated": false,
+        "already_terminated": false,
+        "continued_by_handoff": true,
+        "agent_run_id": agent_run_id,
+    })
 }
 
 fn transition_required(

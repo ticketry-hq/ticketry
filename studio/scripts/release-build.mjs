@@ -260,7 +260,6 @@ export function tauriBuildArguments(manifest, target, environment = process.env,
 }
 
 export function hookRunnerBuild(target, root = studioRoot) {
-  const source = path.join(root, "src-tauri", "native", "ticketry_hook.rs");
   const output = path.join(
     root,
     "src-tauri",
@@ -268,8 +267,21 @@ export function hookRunnerBuild(target, root = studioRoot) {
     `ticketry-hook-${target.rust_target}`,
   );
   return {
-    command: "rustc",
-    args: [source, "--edition", "2021", "--target", target.rust_target, "-O", "-o", output],
+    command: "cargo",
+    args: [
+      "build",
+      "--locked",
+      "--manifest-path",
+      path.join(root, "src-tauri", "Cargo.toml"),
+      "-p",
+      "ticketry-hook",
+      "--bin",
+      "ticketry-hook",
+      "--release",
+      "--target",
+      target.rust_target,
+    ],
+    builtOutput: path.join(root, "src-tauri", "target", target.rust_target, "release", "ticketry-hook"),
     output,
   };
 }
@@ -565,6 +577,11 @@ export async function verifyMacOSBundle(
     ["--verify", "--deep", "--strict", "--verbose=2", artifacts.app],
     `signature verification for ${target.id}`,
   );
+  await execute(
+    embeddedHookRunner,
+    ["mcp", "--help"],
+    `embedded MCP bridge help check for ${target.id}`,
+  );
   if (allowUnsigned) {
     log(`Skipping spctl assessment for ${target.id} because --allow-unsigned was specified.`);
   } else {
@@ -712,6 +729,7 @@ export async function buildRelease(
       hookRunner.args,
       `hook runner build for ${target.id}`,
     );
+    await cp(hookRunner.builtOutput, hookRunner.output);
     const [tauriCommand] = manifest.artifacts.tauri.command;
     await execute(
       tauriCommand,

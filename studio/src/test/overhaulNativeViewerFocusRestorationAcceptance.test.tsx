@@ -1,4 +1,4 @@
-import { render, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { NativeGhosttyTerminal } from "../features/agents/terminal/NativeGhosttyTerminal";
@@ -95,9 +95,16 @@ describe("native viewer focus restoration acceptance", () => {
   // `native_terminal_focus` rejects a viewer whose presentation has not
   // committed, and the caller spends the signal either way. Focus therefore
   // must never be requested before the reveal resolves.
-  it("holds a focus request until the viewer is presented, then focuses it", async () => {
+  it("[overhaul-277] transfers input ownership before focusing the presented native terminal", async () => {
     const pendingShow: { finish: (() => void) | null } = { finish: null };
-    tauri.invoke.mockImplementation((command: string) => {
+    let acceptsInput = false;
+    let keyboardFocused = false;
+    tauri.invoke.mockImplementation((command: string, args?: { webviewFocus?: boolean }) => {
+      if (command === "native_terminal_set_webview_interaction") {
+        acceptsInput = !args?.webviewFocus;
+        if (!acceptsInput) keyboardFocused = false;
+      }
+      if (command === "native_terminal_focus") keyboardFocused = acceptsInput;
       if (command === "native_terminal_available") return Promise.resolve(true);
       if (command === "native_terminal_attach") {
         return Promise.resolve({
@@ -130,6 +137,13 @@ describe("native viewer focus restoration acceptance", () => {
 
     pendingShow.finish?.();
     await waitFor(() => expect(focusCalls()).toHaveLength(1));
+    expect(keyboardFocused).toBe(true);
+
+    fireEvent.pointerDown(document.body);
+    expect(keyboardFocused).toBe(false);
+    await act(async () => useTerminalStore.getState().focusSession("session-1"));
+    await waitFor(() => expect(keyboardFocused).toBe(true));
+    expect(view.container.querySelector("[data-native-terminal-input]")).not.toBeNull();
 
     view.unmount();
   });

@@ -1,3 +1,4 @@
+import { FindingLocationLabel } from "../../../../../features/work-items/FindingLocationLabel";
 import { type WorkItem } from "../../../../../shared/api/types";
 import { stateColor, stateLabel } from "../../../../../shared/utilities/display";
 import { useClientStore } from "../../../../../state/clientStore";
@@ -7,7 +8,6 @@ import { formatWorkItemDisplayIdentifier } from "../../../../../features/work-it
 import {
   findings as selectFindings,
   queuedFindingCount,
-  formatFindingLocation,
   isCancellable,
 } from "./internal/findings";
 
@@ -49,7 +49,6 @@ export default function FindingsPanel({ children, projectId, onCancel }: Finding
       </div>
       <div className="overflow-hidden border border-pane-border" data-testid="findings-list">
         {items.map((f) => {
-          const location = formatFindingLocation(f.description);
           const state = stateById(states, f.state);
           const identifier = formatWorkItemDisplayIdentifier(f.sequence_id);
           return (
@@ -67,15 +66,7 @@ export default function FindingsPanel({ children, projectId, onCancel }: Finding
                   {identifier}
                 </span>
                 <span className="min-w-0 flex-1 truncate text-base text-text-primary">{f.name}</span>
-                {location && (
-                  <span
-                    className="hidden flex-none truncate font-mono text-xs text-text-muted sm:inline"
-                    data-testid="finding-location"
-                    title={location}
-                  >
-                    {location}
-                  </span>
-                )}
+                <FindingLocationLabel issueId={f.id} />
               </button>
               <span
                 className="flex-none px-1.5 py-0.5 text-xs"

@@ -1,6 +1,7 @@
 import { render, type RenderResult } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach } from "vitest";
+import { StoriesTreeProvider } from "../features/work-items";
 import { TasksPane } from "../app/shell/ticket-workspace/tasks/TasksPane";
 import { SelectedTicketDetails } from "../app/shell/ticket-workspace/selected-ticket/details/SelectedTicketDetails";
 import { useAgentStatusStore } from "../features/agents/status/testStore";
@@ -38,6 +39,8 @@ import { WorkTrackerProjectOpenDocument } from "../features/projects/generated/p
 export interface HttpFixture {
   tree(moduleId: string, tree: ModuleTree): void;
   workItems(items: WorkItem[]): void;
+  /** Another client's write: patch the server row and bump its revision. */
+  revise(id: string, patch: Partial<WorkItem>): void;
   runs(issueId: string, runs: RunRecord[]): void;
   documents(issueId: string, docs: DesignDoc[]): void;
   attachments(issueId: string, attachments: Attachment[]): void;
@@ -213,6 +216,13 @@ class BoundaryFixture implements StudioFixture {
       const { __state: _state, __issueType: _issueType, ...record } = item;
       this.items.set(item.id, record);
     }
+  }
+
+  revise(id: string, patch: Partial<WorkItem>): void {
+    const current = this.items.get(id);
+    if (!current) throw new Error(`fixture has no work item ${id}`);
+    this.items.set(id, { ...current, ...patch });
+    this.revisions.set(id, (this.revisions.get(id) ?? 1) + 1);
   }
 
   runs(issueId: string, runs: RunRecord[]): void {
@@ -1016,13 +1026,15 @@ export function workItem(overrides: WorkItemOverrides = {}): FixtureWorkItem {
 function StudioBehaviourSurface({ children }: { children?: ReactNode }) {
   return (
     <StudioApolloProvider>
-      <div>
-        <section role="region" aria-label="Stories">
-          <TasksPane />
-        </section>
-        <SelectedTicketDetails />
-        {children}
-      </div>
+      <StoriesTreeProvider>
+        <div>
+          <section role="region" aria-label="Stories">
+            <TasksPane />
+          </section>
+          <SelectedTicketDetails />
+          {children}
+        </div>
+      </StoriesTreeProvider>
     </StudioApolloProvider>
   );
 }

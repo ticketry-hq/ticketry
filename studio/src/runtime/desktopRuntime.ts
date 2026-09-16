@@ -1,6 +1,7 @@
 import type {
   RuntimeStartupConfiguration,
   CrashCollectionOutcome,
+  DirectoryTrustStatus,
   ServiceHealth,
   ServiceHealthListener,
   StudioRuntime,
@@ -37,6 +38,7 @@ type DesktopCommand =
   | "desktop_update_restart"
   | "desktop_latest_crash_collection_outcome"
   | "desktop_reveal_crash_report_folder"
+  | "desktop_prepare_directory_trust"
   | "desktop_toggle_handy_transcription"
   | "viewer_input";
 
@@ -83,6 +85,37 @@ function validatePickedFolder(value: unknown): string | null {
     "picked folder",
     "must be an absolute path or null",
   );
+}
+
+function validateDirectoryTrustResult(value: unknown) {
+  const result = record(value);
+  const statuses = [
+    "already_trusted",
+    "approval_required",
+    "denied",
+    "unsupported",
+    "prepared",
+  ];
+  if (
+    !result ||
+    !statuses.includes(String(result.status)) ||
+    (result.approval !== null && typeof result.approval !== "string") ||
+    (result.directory !== undefined &&
+      (typeof result.directory !== "string" || !result.directory)) ||
+    (result.status === "approval_required" && !result.approval)
+  ) {
+    return initializationError(
+      "directory trust result",
+      "must contain a known status and any required approval token",
+    );
+  }
+  return {
+    status: result.status as DirectoryTrustStatus,
+    approval: result.approval as string | null,
+    ...(typeof result.directory === "string"
+      ? { directory: result.directory }
+      : {}),
+  };
 }
 
 function validateAppUpdateCheckResult(value: unknown): AppUpdateCheckResult {
@@ -295,6 +328,18 @@ export async function createDesktopRuntime({
     statusStream: () => createGraphQlProxy,
     documentUrl: (documentId: string, relPath: string) =>
       desktopDocumentUrl(documentId, relPath),
+    prepareDirectoryTrust: async (
+      provider: string,
+      directory: string,
+      approval: string | null,
+    ) =>
+      validateDirectoryTrustResult(
+        await invoke<unknown>("desktop_prepare_directory_trust", {
+          provider,
+          directory,
+          approval,
+        }),
+      ),
     appUpdates: Object.freeze({
       check: async () => {
         try {

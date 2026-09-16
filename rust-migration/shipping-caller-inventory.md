@@ -10,7 +10,7 @@ CODING-993 checks callers before CODING-994 deletes the retired implementations.
 | Terminal sessions and bytes | Rust GraphQL lifecycle plus native Tauri renderer | numbered terminal transport acceptance |
 | Documents and worktrees | Rust GraphQL plus read-only document protocol | numbered acceptance 97 |
 | Module-folder validation | Narrow `desktop_validate_module_folder` Tauri command | `studio/src-tauri/src/desktop/commands.rs` |
-| Provider hooks | Atomic files in the Rust-owned lifecycle spool | `ticketry_hook.rs`; Rust lifecycle acceptance |
+| Provider hooks | Atomic files in the Rust-owned lifecycle spool | `ticketry-hook` Cargo binary; Rust lifecycle acceptance |
 | Provider work-management tools | Authenticated in-process Rust MCP listener | CODING-992 acceptance suite |
 | MCP registration | OS-assigned loopback listener, run-scoped authority | CODING-992 listener tests |
 | Browser development | Owned GraphQL documents through `/graphql` adapter | numbered acceptance 158; `studio/vite.proxy.ts` |

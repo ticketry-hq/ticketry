@@ -27,6 +27,7 @@ ticketry-codex-app-server.workspace = true
 ticketry-entities.workspace = true
 ticketry-launch.workspace = true
 ticketry-runs.workspace = true
+ticketry-settings.workspace = true
 ticketry-tool-discovery.workspace = true
 ticketry-work-management.workspace = true
 ticketry-workspace-runtime.workspace = true

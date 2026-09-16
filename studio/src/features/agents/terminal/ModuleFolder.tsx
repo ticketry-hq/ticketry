@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { ModalShell } from "../../../app/modal/ModalShell";
 import { useModalStore, type StandardModalType } from "../../../app/modal/modalStore";
-import { setModuleFolder, useModuleFolder } from "../../module-links";
+import { moduleFolderSaveError, setModuleFolder, useModuleFolder } from "../../module-links";
 import { MODAL_ACTIONS } from "../../../app/navigation/keymapRegistry";
 import { studioRuntime, type StudioRuntime } from "../../../runtime";
 import {
@@ -56,9 +56,9 @@ export function ModuleFolder({
     setError(null);
     try {
       try {
-        await setModuleFolder(moduleId, trimmedValue);
-      } catch {
-        setError("Could not save the module folder. Retry to continue.");
+        if (!(await setModuleFolder(moduleId, trimmedValue, runtime))) return;
+      } catch (cause) {
+        setError(moduleFolderSaveError(cause, "Could not save the module folder. Retry to continue."));
         return;
       }
       popModal();
@@ -77,6 +77,7 @@ export function ModuleFolder({
   }
 
   function onAction(actionId: string): void {
+    if (saveInFlight.current) return;
     if (actionId === MODAL_ACTIONS.next) {
       selection.moveNext();
       return;
@@ -114,7 +115,7 @@ export function ModuleFolder({
       onAction={onAction}
       width="w-[80ch]"
     >
-      <ModuleFolderSelection selection={selection} autoFocus />
+      <ModuleFolderSelection selection={selection} autoFocus disabled={busy} />
       {error && (
         <div className="mt-2 text-sm text-red-400" role="alert">
           {error}

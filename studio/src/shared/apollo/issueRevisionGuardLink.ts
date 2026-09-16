@@ -1,6 +1,7 @@
 import { ApolloLink, type InMemoryCache } from "@apollo/client";
 import { type DocumentNode, type FieldNode, type FragmentDefinitionNode, Kind } from "graphql";
 import { map } from "rxjs";
+import { moduleLoadPoint } from "../utilities/moduleLoadProbe";
 
 type CacheFragment = Parameters<InMemoryCache["readFragment"]>[0]["fragment"];
 
@@ -108,7 +109,14 @@ export function createIssueRevisionGuardLink(cache: InMemoryCache): ApolloLink {
       if (result.data === undefined) return result;
       const fragments = revisionFragments(operation.query);
       if (fragments.length === 0) return result;
-      return { ...result, data: guardedValue(result.data, cache, fragments) as typeof result.data };
+      const started = performance.now();
+      const data = guardedValue(result.data, cache, fragments) as typeof result.data;
+      if (import.meta.env.DEV && operation.operationName === "WorkTrackerModuleOpen") {
+        moduleLoadPoint(operation.variables.moduleId as string)("revision-guard-completed", {
+          guard_ms: performance.now() - started,
+        });
+      }
+      return { ...result, data };
     }),
   ));
 }

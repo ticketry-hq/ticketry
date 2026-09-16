@@ -21,6 +21,11 @@ export default defineConfig({
   },
   server: {
     port: 5174,
+    // Transform the initial module graph while Tauri compiles Rust, before
+    // the new webview requests it. Keep optional feature chunks on demand.
+    warmup: {
+      clientFiles: ["./index.html"],
+    },
     fs: {
       // Workspace dependencies are installed at the repository root.
       allow: [".."],
@@ -29,8 +34,14 @@ export default defineConfig({
     watch: {
       // Playwright writes traces/reports into studio/ while the dev server
       // serves the app; watching those paths triggers full page reloads that
-      // race the integration suite's interactions.
-      ignored: ["**/playwright-report/**", "**/test-results/**"],
+      // race the integration suite's interactions. The profiling build writes
+      // its own optimized bundle into studio/dist-performance for the same
+      // reason: a profiling run must not reload somebody else's dev server.
+      ignored: [
+        "**/playwright-report/**",
+        "**/test-results/**",
+        "**/dist-performance/**",
+      ],
     },
   },
 });

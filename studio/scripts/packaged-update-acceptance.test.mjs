@@ -168,7 +168,7 @@ test("version A and B builds trust the throwaway key and produce updater artifac
   assert.deepEqual(plan.builds, {
     versionA: {
       version: versionA,
-      features: ["native-libghostty", "desktop-acceptance"],
+      features: ["desktop-acceptance"],
       tauriConfig: {
         version: versionA,
         bundle: {
@@ -185,7 +185,7 @@ test("version A and B builds trust the throwaway key and produce updater artifac
     },
     versionB: {
       version: versionB,
-      features: ["native-libghostty", "desktop-acceptance"],
+      features: ["desktop-acceptance"],
       tauriConfig: {
         version: versionB,
         bundle: {

@@ -14,12 +14,12 @@ fn packaged_stdio_mcp_keeps_credentials_in_environment_for_every_provider() {
             (
                 "/private/Ticketry Data",
                 "/Applications/Ticketry App/ticketry-hook",
-                r#"mcp_servers={ticketry={args=["mcp","--data-dir","/private/Ticketry Data","--agent-run-id","run-1"],command="/Applications/Ticketry App/ticketry-hook",env_vars=["TICKETRY_MCP_AUTHORIZATION"]}}"#,
+                r#"mcp_servers={ticketry={args=["mcp","--data-dir","/private/Ticketry Data","--agent-run-id","run-1"],command="/Applications/Ticketry App/ticketry-hook",env_vars=["TICKETRY_MCP_AUTHORIZATION"],required=true}}"#,
             ),
             (
                 "/private/Ticketry \"Data\"\\cache\nnext\trow",
                 "/Applications/Ticketry's \"App\"\\build/ticketry-hook",
-                r#"mcp_servers={ticketry={args=["mcp","--data-dir","/private/Ticketry \"Data\"\\cache\nnext\trow","--agent-run-id","run-1"],command="/Applications/Ticketry's \"App\"\\build/ticketry-hook",env_vars=["TICKETRY_MCP_AUTHORIZATION"]}}"#,
+                r#"mcp_servers={ticketry={args=["mcp","--data-dir","/private/Ticketry \"Data\"\\cache\nnext\trow","--agent-run-id","run-1"],command="/Applications/Ticketry's \"App\"\\build/ticketry-hook",env_vars=["TICKETRY_MCP_AUTHORIZATION"],required=true}}"#,
             ),
         ] {
             let authority = ExecutionAuthority::new(
@@ -30,6 +30,7 @@ fn packaged_stdio_mcp_keeps_credentials_in_environment_for_every_provider() {
                 data_directory.into(),
                 "Bearer secret-mcp".into(),
                 BTreeSet::new(),
+                Vec::new(),
             );
             let durable = DurableLaunchMaterial::new(
                 "run-1",

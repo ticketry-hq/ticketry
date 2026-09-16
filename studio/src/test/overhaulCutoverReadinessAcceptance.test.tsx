@@ -41,6 +41,24 @@ function runtime(health: ServiceHealth): StudioRuntime {
 }
 
 describe("cutover readiness", () => {
+  it("[overhaul-289] opens Studio when services became ready before the WebView subscribed", () => {
+    // No health event is delivered: the early startup worker has already
+    // finished, so the initial configuration must be sufficient to open Studio.
+    render(
+      <ServiceHealthGate runtime={runtime({
+        state: "ready",
+        service: null,
+        message: null,
+        logPointer: null,
+      })}>
+        <button type="button">Create work item</button>
+      </ServiceHealthGate>,
+    );
+
+    expect(screen.getByRole("button", { name: "Create work item" })).toBeEnabled();
+    expect(screen.queryByText("Preparing Ticketry data")).not.toBeInTheDocument();
+  });
+
   it("[overhaul-156] keeps Studio closed through adoption and names the recovery boundary", () => {
     render(
       <ServiceHealthGate runtime={runtime({
@@ -55,7 +73,9 @@ describe("cutover readiness", () => {
 
     expect(screen.getByRole("heading", { name: "Preparing Ticketry data" }))
       .toBeInTheDocument();
-    expect(screen.getByText(/snapshot verification, event publication, and runtime reconciliation/))
+    expect(screen.getByText(/snapshot verification and event publication finish/))
+      .toBeInTheDocument();
+    expect(screen.getByText(/Terminal recovery finishes behind the open window/))
       .toBeInTheDocument();
     expect(screen.getByText(/automatic restore point until Studio opens/))
       .toBeInTheDocument();

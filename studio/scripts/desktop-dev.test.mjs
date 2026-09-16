@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   existsSync,
   mkdtempSync,
+  readFileSync,
   realpathSync,
   rmSync,
   symlinkSync,
@@ -13,6 +14,7 @@ import test from "node:test";
 import { productIdentity } from "../../scripts/product-identity.mjs";
 
 import {
+  createStartupTrace,
   createTemporarySqliteProfile,
   formatDevelopmentIdentity,
   parseDesktopDevOptions,
@@ -89,6 +91,27 @@ test("development logs use one stable workspace-local location", () => {
     resolveDevelopmentLogPath({ root: "/repository" }),
     "/repository/.ticketry-dev/logs/ticketry.log",
   );
+});
+
+test("startup traces use one ID and record elapsed stage durations", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "ticketry-startup-trace-"));
+  const logPath = path.join(directory, "ticketry.log");
+  const trace = createStartupTrace({
+    logPath,
+    id: "startup-1",
+    startedAt: 1_000,
+    now: () => 1_000,
+  });
+  trace.record("launcher-started");
+
+  const record = JSON.parse(readFileSync(logPath, "utf8").match(/\{.*\}/)?.[0] ?? "{}");
+  assert.deepEqual(record, {
+    startup_id: "startup-1",
+    stage: "launcher-started",
+    elapsed_ms: 0,
+    duration_ms: 0,
+  });
+  rmSync(directory, { recursive: true });
 });
 
 test("resolution outside a Git worktree fails closed with the launch directory", () => {

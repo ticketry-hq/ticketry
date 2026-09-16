@@ -25,6 +25,7 @@ import "./app/styles/tailwind.css";
 import "./app/styles/studio-surface.css";
 import { createDesktopRuntime } from "./runtime/desktopRuntime";
 import { suppressNativeContextMenu } from "./app/startup/suppressNativeContextMenu";
+import { recordStartupStage } from "./app/startup/startupTrace";
 import { reportPendingStudioReload } from "./app/startup/reloadStudio";
 import {
   initializeBrowserRuntime,
@@ -55,14 +56,17 @@ async function startStudio(): Promise<void> {
   try {
     if (isTauri()) {
       await installDesktopFileLogging({ invoke });
+      recordStartupStage("frontend-file-logging-ready");
       const runtime = await createDesktopRuntime({ invoke, listen });
       initializeStudioRuntime(runtime);
     } else {
       await installWebFileLogging();
+      recordStartupStage("frontend-file-logging-ready");
       initializeBrowserRuntime();
     }
     reportPendingStudioReload();
     setLaunchDiscoveryRuntimeInstance(runtimeConfiguration().runtimeInstance ?? null);
+    recordStartupStage("frontend-runtime-configured");
     root.render(
       <React.StrictMode>
         <StudioApolloProvider>
@@ -78,6 +82,7 @@ async function startStudio(): Promise<void> {
         </StudioApolloProvider>
       </React.StrictMode>,
     );
+    recordStartupStage("frontend-render-scheduled");
   } catch (error) {
     console.error("[startup] Studio could not start", error);
     const message = error instanceof Error ? error.message : String(error);

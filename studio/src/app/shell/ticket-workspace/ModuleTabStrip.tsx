@@ -13,6 +13,7 @@ import {
   useModulesQuery,
   useStudioStore,
 } from "../../../features/projects";
+import { getModuleFolder } from "../../../features/module-links";
 import { useClientStore } from "../../../state/clientStore";
 import { ModuleTab } from "./ModuleTab";
 import { ModulesPaneToggle } from "./ModulesPaneToggle";
@@ -55,10 +56,14 @@ export function ModuleTabStrip() {
         const hiddenIndex = modules.findIndex((module) => module.id === moduleId);
         const shownIds = new Set(shownModules.map((module) => module.id));
         const fallback =
-          modules.slice(hiddenIndex + 1).find((module) => shownIds.has(module.id))
+          modules.slice(hiddenIndex + 1).find((module) =>
+            shownIds.has(module.id) && getModuleFolder(module.id)
+          )
           ?? [...modules.slice(0, hiddenIndex)]
             .reverse()
-            .find((module) => shownIds.has(module.id));
+            .find((module) =>
+              shownIds.has(module.id) && getModuleFolder(module.id)
+            );
         if (fallback) void selectModule(fallback.id);
         else deselectModule();
       }
@@ -92,17 +97,10 @@ export function ModuleTabStrip() {
       className="flex h-7 min-w-0 shrink-0 border-b border-pane-border bg-pane-title"
     >
       <ModulesPaneToggle />
-      {!loading ? (
-        <ModulePicker
-          modules={modules}
-          presentations={presentations}
-          onCreate={() => pushModal({ type: "add-module" })}
-        />
-      ) : null}
       <div
         role="tablist"
         aria-label="Project module tabs"
-        className="flex min-w-0 flex-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="flex min-w-0 flex-initial overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         {!loading
           ? shownModules.map((module, index) => (
@@ -121,6 +119,13 @@ export function ModuleTabStrip() {
             ))
           : null}
       </div>
+      {!loading ? (
+        <ModulePicker
+          modules={modules}
+          presentations={presentations}
+          onCreate={() => pushModal({ type: "add-module" })}
+        />
+      ) : null}
     </div>
   );
 }

@@ -1,9 +1,11 @@
+import { useContext } from "react";
 import { useStudioStore } from "../../../../../features/projects";
 import { useClientStore } from "../../../../../state/clientStore";
 import { TEMP_TASK_ID } from "../../../../../features/agents/types";
 import { useScratchLifecycleChips } from "../../../../../features/agents/status";
 import { ScratchStateBadge } from "../../../../../features/agents/lifecycle";
 import IssueDetail from "./IssueDetail";
+import { DetailsSurfaceActiveContext } from "../internal/detailsSurfaceContext";
 
 function ScratchDetails({
   projectId,
@@ -30,6 +32,7 @@ function ScratchDetails({
  * scratch task shows its module's lifecycle aggregate.
  */
 export function SelectedTicketDetails() {
+  const detailsVisible = useContext(DetailsSurfaceActiveContext);
   const selectedTaskId = useClientStore((s) => s.selectedTaskId);
   const selectedProjectId = useStudioStore((s) => s.selectedProjectId);
   const selectedModuleId = useClientStore((s) => s.selectedModuleId);
@@ -50,5 +53,5 @@ export function SelectedTicketDetails() {
   // IssueDetail resolves this id from the canonical work-item owner during
   // render. Its refresh is deliberately post-paint, so selection itself never
   // waits for a request.
-  return <IssueDetail issueId={selectedTaskId} />;
+  return <IssueDetail issueId={selectedTaskId} detailsVisible={detailsVisible} />;
 }

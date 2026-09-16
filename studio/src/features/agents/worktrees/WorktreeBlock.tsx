@@ -1,6 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@apollo/client/react";
-import { type WorktreeContext } from "./internal/types";
 import {
   adaptWorktreeStatus,
   type WorktreeStatusPayload,
@@ -16,14 +15,31 @@ import {
   type WorktreeStatusQuery,
 } from "./generated/worktreeStatus.documents";
 import type { WorktreeStatus } from "./internal/types";
+import {
+  moduleFolderSaveError,
+  prepareDirectoryTrust,
+} from "../../module-links";
+
+async function worktreeTrustFailure(path: string): Promise<string | null> {
+  try {
+    const approved = await prepareDirectoryTrust(path, undefined, {
+      title: "Trust worktree?",
+      subject: "worktree",
+      confirmLabel: "Trust worktree",
+    });
+    return approved ? null : "Worktree trust was not approved. Retry to continue.";
+  } catch (cause) {
+    return moduleFolderSaveError(
+      cause,
+      "Could not prepare worktree trust. Retry to continue.",
+    );
+  }
+}
 
 interface WorktreeBlockProps {
   taskId: string;
   parentId?: string | null;
   moduleId?: string | null;
-  projectId?: string | null;
-  ticketSeq?: number | null;
-  taskName?: string | null;
 }
 
 function worktreeQueryData(status: WorktreeStatus): WorktreeStatusQuery {
@@ -57,21 +73,16 @@ export function WorktreeBlock({
   taskId,
   parentId,
   moduleId,
-  projectId,
-  ticketSeq,
-  taskName,
 }: WorktreeBlockProps) {
   const [busy, setBusy] = useState(false);
   const [mutationError, setMutationError] = useState<string | null>(null);
+  const [trustError, setTrustError] = useState<string | null>(null);
+  const [trustBusy, setTrustBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
-
-  const ctx: WorktreeContext = {
-    parentId,
-    moduleId,
-    projectId,
-    ticketSeq,
-    taskName,
-  };
+  const inspection = useRef<{
+    key: string;
+    result: Promise<string | null>;
+  } | null>(null);
 
   const client = studioApolloClient();
   const statusQuery = useQuery(WorktreeStatusDocument, {
@@ -84,13 +95,53 @@ export function WorktreeBlock({
     )
     : null;
   const error =
-    mutationError ??
+    trustError ?? mutationError ??
     (statusQuery.error ? "Could not load worktree status" : null);
 
   useEffect(() => {
     setConfirming(false);
     setMutationError(null);
+    setTrustError(null);
   }, [moduleId, parentId, taskId]);
+
+  const worktreePath = status?.kind === "worktree"
+    ? status.path
+    : null;
+
+  useEffect(() => {
+    if (!worktreePath) {
+      inspection.current = null;
+      return;
+    }
+    const key = `${taskId}\0${worktreePath}`;
+    if (inspection.current?.key !== key) {
+      inspection.current = {
+        key,
+        result: worktreeTrustFailure(worktreePath),
+      };
+    }
+    const current = inspection.current;
+    let active = true;
+    setTrustBusy(true);
+    void current.result.then((failure) => {
+      if (!active) return;
+      setTrustError(failure);
+      setTrustBusy(false);
+    });
+    return () => { active = false; };
+  }, [taskId, worktreePath]);
+
+  const retryTrust = async () => {
+    if (!worktreePath) return;
+    const result = worktreeTrustFailure(worktreePath);
+    inspection.current = { key: `${taskId}\0${worktreePath}`, result };
+    setTrustBusy(true);
+    setTrustError(null);
+    const failure = await result;
+    if (inspection.current?.result !== result) return;
+    setTrustError(failure);
+    setTrustBusy(false);
+  };
 
   const onCreate = async () => {
     setBusy(true);
@@ -99,7 +150,7 @@ export function WorktreeBlock({
     // converges on the same worktree rather than cutting a second branch.
     const operationId = newOperationId();
     try {
-      const created = await requestWorktreeCreate(taskId, operationId, ctx);
+      const created = await requestWorktreeCreate(taskId, operationId);
       client.writeQuery<WorktreeStatusQuery>({
         query: WorktreeStatusDocument,
         variables: { taskId },
@@ -119,7 +170,7 @@ export function WorktreeBlock({
     // same durable removal rather than throwing anything else away.
     const operationId = newOperationId();
     try {
-      const result = await requestWorktreeDiscard(taskId, operationId, ctx);
+      const result = await requestWorktreeDiscard(taskId, operationId);
       setConfirming(false);
       // The mutation's own response is authoritative for this window; a
       // transport that cannot answer with one falls back to a refetch.
@@ -255,6 +306,16 @@ export function WorktreeBlock({
       <div className={`mb-1 ${labelCls}`}>Worktree</div>
       {body}
       {error ? <div className="mt-1 text-lifecycle-danger">{error}</div> : null}
+      {trustError ? (
+        <button
+          type="button"
+          disabled={trustBusy}
+          onClick={retryTrust}
+          className="mt-1 border border-pane-border px-2 py-0.5 text-text-primary disabled:opacity-50"
+        >
+          Retry trust
+        </button>
+      ) : null}
     </div>
   );
 }

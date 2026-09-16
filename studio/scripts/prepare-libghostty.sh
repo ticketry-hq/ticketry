@@ -11,6 +11,7 @@ VENDOR_DIR="$STUDIO_DIR/src-tauri/vendor/libghostty"
 CACHE_DIR="${MUXED_LIBGHOSTTY_CACHE_DIR:-$STUDIO_DIR/.cache/libghostty}"
 SOURCE_DIR="$CACHE_DIR/ghostty"
 ZIG_DIR="$CACHE_DIR/zig-$ZIG_VERSION"
+BUILD_RECIPE=$(cat "$SCRIPT_DIR/prepare-libghostty.sh" "$SCRIPT_DIR/libghostty-macos-static.patch" | shasum -a 256 | awk '{print $1}')
 
 case "$(uname -s)-$(uname -m)" in
   Darwin-arm64) ZIG_ARCHIVE="zig-aarch64-macos-$ZIG_VERSION" ;;
@@ -23,6 +24,8 @@ esac
 
 if [ -f "$VENDOR_DIR/REVISION" ] &&
     [ "$(tr -d '\r\n' < "$VENDOR_DIR/REVISION")" = "$GHOSTTY_REVISION" ] &&
+    [ -f "$VENDOR_DIR/BUILD_RECIPE" ] &&
+    [ "$(tr -d '\r\n' < "$VENDOR_DIR/BUILD_RECIPE")" = "$BUILD_RECIPE" ] &&
     [ -f "$VENDOR_DIR/include/ghostty.h" ] &&
     [ -f "$VENDOR_DIR/lib/libghostty.a" ] &&
     [ -d "$VENDOR_DIR/resources/ghostty" ] &&
@@ -72,8 +75,17 @@ export ZIG_GLOBAL_CACHE_DIR="$CACHE_DIR/zig-global-cache"
     -Dapp-runtime=none \
     -Demit-xcframework=false \
     -Demit-macos-app=false \
+    -Dsentry=false \
     -Doptimize=ReleaseFast
 )
+
+# Ticketry collects OS-native reports. An embedded exception handler consumes
+# faults before macOS can record them and makes a crash look like a normal exit.
+NATIVE_SYMBOLS=$(nm "$SOURCE_DIR/zig-out/lib/libghostty.a" 2>/dev/null)
+if printf '%s\n' "$NATIVE_SYMBOLS" | grep -Eq 'sentry_init|sentry_backend|google_breakpad'; then
+  echo "libghostty still contains an embedded crash handler; refusing to stage it" >&2
+  exit 1
+fi
 
 mkdir -p "$VENDOR_DIR/include" "$VENDOR_DIR/lib"
 cp "$SOURCE_DIR/zig-out/include/ghostty.h" "$VENDOR_DIR/include/ghostty.h"
@@ -83,5 +95,6 @@ mkdir -p "$VENDOR_DIR/resources"
 cp -R "$SOURCE_DIR/zig-out/share/ghostty" "$VENDOR_DIR/resources/ghostty"
 cp -R "$SOURCE_DIR/zig-out/share/terminfo" "$VENDOR_DIR/resources/terminfo"
 printf '%s\n' "$GHOSTTY_REVISION" > "$VENDOR_DIR/REVISION"
+printf '%s\n' "$BUILD_RECIPE" > "$VENDOR_DIR/BUILD_RECIPE"
 
 echo "Prepared libghostty $GHOSTTY_TAG ($GHOSTTY_REVISION)"

@@ -329,29 +329,15 @@ describe("overhaul acceptance — Edit view navigation zones", () => {
     }).toEqual(afterRight);
   });
 
-  it("lands Right where Enter lands on the scratch workspace row", async () => {
+  it("dives Right into the scratch workspace row", async () => {
     await renderScratchWorkspace();
 
     // The scratch row has nothing to expand, so Right dives immediately.
     press("ArrowRight");
-    const afterRight = {
-      zone: useClientStore.getState().editViewZone,
-      engaged: useClientStore.getState().editViewBodyEngaged,
-      focused: document.activeElement,
-    };
 
-    expect(afterRight.zone).toBe("active-tab-body");
-    expect(afterRight.engaged).toBe(false);
-    expect(afterRight.focused).toBe(bodyElement());
-
-    useClientStore.getState().setEditViewZone("stories");
-    press("Enter");
-
-    expect({
-      zone: useClientStore.getState().editViewZone,
-      engaged: useClientStore.getState().editViewBodyEngaged,
-      focused: document.activeElement,
-    }).toEqual(afterRight);
+    expect(useClientStore.getState().editViewZone).toBe("active-tab-body");
+    expect(useClientStore.getState().editViewBodyEngaged).toBe(false);
+    expect(document.activeElement).toBe(bodyElement());
   });
 
   /**

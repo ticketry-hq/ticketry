@@ -18,7 +18,7 @@ import {
   readStudioWorkspaceTarget,
   rememberStudioWorkspaceTarget,
   type StudioWorkspaceTarget,
-} from "./studioWorkspaceTarget";
+} from "../../../../../features/workspace-state/studioWorkspaceTarget";
 
 export function useStudioWorkspaceRestoration({
   bucket,
@@ -66,6 +66,16 @@ export function useStudioWorkspaceRestoration({
     if (explicitTerminalRunIdRef.current) return;
     const target = readStudioWorkspaceTarget(bucket);
     if (!target) return;
+    if (target.kind === "terminal") {
+      const terminals = useTerminalStore.getState();
+      const sessionId = terminals.sessionByRun[target.agentRunId];
+      const session = sessionId ? terminals.sessions[sessionId] : null;
+      if (session && bucketOfMeta(session) === bucket) {
+        useWorkspaceTabsStore.getState().tabSelected(bucket, sessionId);
+        setActive(bucket, "terminal");
+        return;
+      }
+    }
     // Keep Details visible while durable targets hydrate.
     restoreRequestRef.current = { bucket, generation, target };
     setActive(bucket, "details");

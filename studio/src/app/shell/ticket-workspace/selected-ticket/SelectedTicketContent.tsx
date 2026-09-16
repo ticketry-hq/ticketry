@@ -6,7 +6,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { useWorkspaceDocuments } from "./documents/queries";
+import { useWorkspaceDocuments } from "../../../../features/documents";
 import {
   isScratchBucket,
   useTerminalStore,
@@ -64,6 +64,7 @@ export function SelectedTicketContent({
   onBeforeFirstTab,
   modal = false,
   conversationRunId = null,
+  conversationTitle = null,
 }: {
   bucket: string | null;
   projectId: string | null;
@@ -77,6 +78,8 @@ export function SelectedTicketContent({
   modal?: boolean;
   /** Restrict a Conversations row to the one terminal run that row owns. */
   conversationRunId?: string | null;
+  /** Selected conversation title read from its Apollo Instant ticket row. */
+  conversationTitle?: string | null;
 }) {
   const {
     sessions,
@@ -84,6 +87,7 @@ export function SelectedTicketContent({
     activeTerminalId: activeTermIdOrNull,
     scratch,
     workspaceRuns,
+    endedRuns,
     resumableSessions,
     restorationExcludedRunIds,
   } = useWorkspaceTerminalSessions(
@@ -252,6 +256,7 @@ export function SelectedTicketContent({
     terminalTabs: tabs,
     activeTerminalId: activeTermId,
     resumableSessions,
+    endedRuns,
     savedTabOrder: savedTabOrder.order,
     hasChangesTab,
     terminalOnly: Boolean(conversationRunId),
@@ -293,6 +298,7 @@ export function SelectedTicketContent({
 
   const {
     selectWorkspaceTab,
+    activateWorkspaceTerminal,
     diveWorkspaceTab,
     claimPointerZone,
     closeWorkspaceDocument,
@@ -370,9 +376,11 @@ export function SelectedTicketContent({
         reorderDrag={workspaceTabReorder}
         bucket={bucket}
         launchContext={launchContext}
+        conversationTitle={conversationTitle}
         onClaimPointerZone={claimPointerZone}
         onSetEditViewZone={setEditViewZone}
         onSelectTab={selectWorkspaceTab}
+        onActivateTerminal={activateWorkspaceTerminal}
         onCloseDocument={closeWorkspaceDocument}
         onCloseTerminal={closeWorkspaceTerminal}
         onTaskAgentLaunched={rememberLaunchedTaskAgent}

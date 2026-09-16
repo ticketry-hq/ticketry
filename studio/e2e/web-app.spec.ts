@@ -1,3 +1,4 @@
+import { callSocketMcpTool } from "../scripts/mcp-socket-client.mjs";
 import { execFile } from "node:child_process";
 import { access, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -78,9 +79,16 @@ async function ensureModulesPane(
 ): Promise<Locator> {
   const pane = page.getByTestId("pane-modules");
   const toggle = page.getByTestId("modules-pane-toggle");
-  if (options.mayAlreadyBeOpen && await pane.isVisible()) return pane;
+  if (
+    options.mayAlreadyBeOpen
+    && await toggle.getAttribute("aria-expanded") === "true"
+  ) {
+    await expect(pane).toBeVisible();
+    return pane;
+  }
   await expect(toggle).toHaveAttribute("aria-label", "Open Modules pane");
   await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
   await expect(pane).toBeVisible();
   return pane;
 }
@@ -278,6 +286,7 @@ async function seedProject(request: APIRequestContext): Promise<void> {
 }
 
 async function openSettings(page: Page): Promise<Locator> {
+  await expect(page.getByTestId("module-workspace-region")).toBeVisible();
   await page.getByRole("button", { name: "Open Settings" }).click();
   const dialog = page.getByRole("dialog", { name: "Studio settings" });
   await expect(dialog).toBeVisible();
@@ -314,33 +323,16 @@ async function selectState(page: Page, stateName: string): Promise<void> {
 }
 
 async function callMcpTool<TResult>(
-  request: APIRequestContext,
-  id: number,
   name: string,
   arguments_: Record<string, unknown>,
 ): Promise<TResult> {
-  const mcpPort = process.env.TICKETRY_E2E_MCP_PORT
-    ?? process.env.MUXED_DESKTOP_MCP_PORT
-    ?? "8123";
-  const response = await request.post(`http://127.0.0.1:${mcpPort}/mcp`, {
-    headers: {
-      accept: "application/json, text/event-stream",
-      "mcp-protocol-version": "2025-03-26",
-    },
-    data: {
-      jsonrpc: "2.0",
-      id,
-      method: "tools/call",
-      params: { name, arguments: arguments_ },
-    },
-  });
-  const responseText = await response.text();
-  expect(response.ok(), responseText).toBeTruthy();
-  const envelope = JSON.parse(responseText) as {
-    result?: { structuredContent?: TResult };
+  const dataDirectory = process.env.TICKETRY_E2E_DATA_DIR;
+  if (!dataDirectory) throw new Error("E2E data directory was not configured");
+  const result = await callSocketMcpTool(dataDirectory, name, arguments_) as {
+    structuredContent?: TResult;
   };
-  expect(envelope.result?.structuredContent, responseText).toBeTruthy();
-  return envelope.result!.structuredContent!;
+  expect(result.structuredContent, JSON.stringify(result)).toBeTruthy();
+  return result.structuredContent!;
 }
 
 async function clearModuleLinkEventually(
@@ -459,8 +451,8 @@ test.describe("complete browser application", () => {
     const moduleTabs = page.getByRole("tablist", {
       name: "Project module tabs",
     });
-    const first = moduleTabs.getByRole("tab", { name: names.secondModule });
-    const second = moduleTabs.getByRole("tab", { name: names.module });
+    const first = moduleTabs.getByRole("tab", { name: names.module });
+    const second = moduleTabs.getByRole("tab", { name: names.secondModule });
     const sidebarModuleNames = () => modulesPane
       .locator("li[data-module-id]")
       .allTextContents()
@@ -471,9 +463,9 @@ test.describe("complete browser application", () => {
     await expect.poll(async () =>
       (await moduleTabs.getByRole("tab").allTextContents())
         .filter((label) => [names.module, names.secondModule].includes(label))
-    ).toEqual([names.secondModule, names.module]);
+    ).toEqual([names.module, names.secondModule]);
     await expect.poll(sidebarModuleNames)
-      .toEqual([names.secondModule, names.module]);
+      .toEqual([names.module, names.secondModule]);
 
     const target = await first.boundingBox();
     expect(target).toBeTruthy();
@@ -490,19 +482,19 @@ test.describe("complete browser application", () => {
     await expect.poll(async () =>
       (await moduleTabs.getByRole("tab").allTextContents())
         .filter((label) => [names.module, names.secondModule].includes(label))
-    ).toEqual([names.module, names.secondModule]);
+    ).toEqual([names.secondModule, names.module]);
     await expect.poll(sidebarModuleNames)
-      .toEqual([names.module, names.secondModule]);
+      .toEqual([names.secondModule, names.module]);
 
     await page.reload();
     await expect.poll(async () =>
       (await page.getByRole("tablist", { name: "Project module tabs" })
         .getByRole("tab").allTextContents())
         .filter((label) => [names.module, names.secondModule].includes(label))
-    ).toEqual([names.module, names.secondModule]);
+    ).toEqual([names.secondModule, names.module]);
     await ensureModulesPane(page);
     await expect.poll(sidebarModuleNames)
-      .toEqual([names.module, names.secondModule]);
+      .toEqual([names.secondModule, names.module]);
   });
 
   test("reorders modules by dragging inside the Modules pane", async ({
@@ -1070,11 +1062,8 @@ test.describe("complete browser application", () => {
 
   test("renders an attachment created through the Rust MCP", async ({
     page,
-    request,
   }) => {
     const result = await callMcpTool<{ success?: boolean }>(
-      request,
-      1,
       "attach_file",
       {
         project_id: fixture.project.id,
@@ -1108,13 +1097,12 @@ test.describe("complete browser application", () => {
 
   test("rejects a missing MCP attachment without creating a phantom row", async ({
     page,
-    request,
   }) => {
     const result = await callMcpTool<{
       success?: boolean;
       message?: string;
       data?: unknown;
-    }>(request, 16, "attach_file", {
+    }>("attach_file", {
       project_id: fixture.project.id,
       task_id: fixture.parent.id,
       file_path: join(fixture.folder, "missing-e2e-evidence.txt"),
@@ -1136,7 +1124,6 @@ test.describe("complete browser application", () => {
 
   test("converges an ordinary MCP task edit and workflow move into the open UI", async ({
     page,
-    request,
   }) => {
     await openModule(page, names.module);
     await openWorkItem(page, names.moving);
@@ -1146,7 +1133,7 @@ test.describe("complete browser application", () => {
     const updated = await callMcpTool<{
       ok?: boolean;
       updated_fields?: string[];
-    }>(request, 3, "update_task", {
+    }>("update_task", {
       id_or_key: fixture.moving.id,
       name: changedName,
       description: changedDescription,
@@ -1161,8 +1148,6 @@ test.describe("complete browser application", () => {
     await expect(page.getByRole("treeitem", { name: changedName })).toBeVisible();
 
     const moved = await callMcpTool<{ ok?: boolean; status?: string }>(
-      request,
-      4,
       "update_task_status",
       {
         project_id: fixture.project.id,
@@ -1181,8 +1166,6 @@ test.describe("complete browser application", () => {
     await expect(page.getByTestId("status-row")).toContainText("Grill");
 
     const restored = await callMcpTool<{ ok?: boolean }>(
-      request,
-      5,
       "update_task",
       {
         id_or_key: fixture.moving.id,
@@ -1192,8 +1175,6 @@ test.describe("complete browser application", () => {
     );
     expect(restored.ok).toBe(true);
     const restoredState = await callMcpTool<{ ok?: boolean; status?: string }>(
-      request,
-      6,
       "update_task_status",
       {
         project_id: fixture.project.id,
@@ -1208,7 +1189,6 @@ test.describe("complete browser application", () => {
 
   test("appends MCP description content without replacing the human-authored body", async ({
     page,
-    request,
   }) => {
     await openModule(page, names.module);
     await openWorkItem(page, names.moving);
@@ -1217,8 +1197,6 @@ test.describe("complete browser application", () => {
     await editDescription(page, baseline);
 
     const result = await callMcpTool<{ result?: boolean }>(
-      request,
-      14,
       "append_task_description",
       {
         project_id: fixture.project.id,
@@ -1235,8 +1213,6 @@ test.describe("complete browser application", () => {
     await expect(page.getByTestId("issue-description")).toContainText(appended);
 
     const restored = await callMcpTool<{ ok?: boolean }>(
-      request,
-      15,
       "update_task",
       {
         id_or_key: fixture.moving.id,
@@ -1249,7 +1225,6 @@ test.describe("complete browser application", () => {
 
   test("keeps a human-only workflow edge closed to the Rust MCP agent", async ({
     page,
-    request,
   }) => {
     await openModule(page, names.module);
     await openWorkItem(page, names.moving);
@@ -1262,7 +1237,7 @@ test.describe("complete browser application", () => {
       detail?: string;
       from?: string;
       to?: string;
-    }>(request, 11, "update_task_status", {
+    }>("update_task_status", {
       project_id: fixture.project.id,
       task_id: fixture.moving.id,
       status_name: "Implement",
@@ -1289,14 +1264,11 @@ test.describe("complete browser application", () => {
 
   test("streams an MCP-created root Story into the module and deletes it through UI", async ({
     page,
-    request,
   }) => {
     await openModule(page, names.module);
     const createdName = "Root Story created through MCP";
     const createdDescription = "Created outside the UI through the Rust MCP.";
     const created = await callMcpTool<{ result?: string }>(
-      request,
-      7,
       "create_task",
       {
         project_id: fixture.project.id,
@@ -1330,15 +1302,12 @@ test.describe("complete browser application", () => {
 
   test("streams MCP sub-task creation and partial reparenting into the open hierarchy", async ({
     page,
-    request,
   }) => {
     await openModule(page, names.module);
     await openWorkItem(page, names.hierarchyParent);
     const childName = "MCP-created hierarchy child";
     const childDescription = "Created and reparented through the Rust MCP.";
     const created = await callMcpTool<{ result?: string }>(
-      request,
-      17,
       "create_sub_task",
       {
         project_id: fixture.project.id,
@@ -1364,7 +1333,7 @@ test.describe("complete browser application", () => {
       reparented?: unknown[];
       skipped?: unknown[];
       failed?: Array<{ task_id?: string; error?: string }>;
-    }>(request, 18, "reparent_tasks", {
+    }>("reparent_tasks", {
       project_id: fixture.project.id,
       parent_task_id: created.result,
       task_ids: [fixture.hierarchyParent.id],
@@ -1387,7 +1356,7 @@ test.describe("complete browser application", () => {
       reparented?: Array<{ task_id?: string; previous_parent_id?: string }>;
       skipped?: Array<{ task_id?: string; reason?: string }>;
       failed?: unknown[];
-    }>(request, 19, "reparent_tasks", {
+    }>("reparent_tasks", {
       project_id: fixture.project.id,
       parent_task_id: fixture.blocker.id,
       task_ids: [created.result, missingKey],
@@ -1425,7 +1394,6 @@ test.describe("complete browser application", () => {
 
   test("persists, guards, and clears an MCP blocker edge in both visible directions", async ({
     page,
-    request,
   }) => {
     await openModule(page, names.module);
     await openWorkItem(page, names.moving);
@@ -1434,7 +1402,7 @@ test.describe("complete browser application", () => {
       task_id?: string;
       blocked_by_ids?: string[];
       blocks_ids?: string[];
-    }>(request, 8, "set_task_blockers", {
+    }>("set_task_blockers", {
       task_id: fixture.moving.id,
       blocked_by_ids: [fixture.blocker.id],
     });
@@ -1454,7 +1422,7 @@ test.describe("complete browser application", () => {
     const refusedCycle = await callMcpTool<{
       task_id?: string;
       error?: string;
-    }>(request, 9, "set_task_blockers", {
+    }>("set_task_blockers", {
       task_id: fixture.blocker.id,
       blocked_by_ids: [fixture.moving.id],
     });
@@ -1471,7 +1439,7 @@ test.describe("complete browser application", () => {
     const cleared = await callMcpTool<{
       task_id?: string;
       blocked_by_ids?: string[];
-    }>(request, 10, "set_task_blockers", {
+    }>("set_task_blockers", {
       task_id: fixture.moving.id,
       blocked_by_ids: [],
     });
@@ -1490,7 +1458,6 @@ test.describe("complete browser application", () => {
 
   test("rejects malformed and out-of-phase MCP review findings without creating children", async ({
     page,
-    request,
   }) => {
     await openModule(page, names.module);
     await openWorkItem(page, names.parent);
@@ -1502,7 +1469,7 @@ test.describe("complete browser application", () => {
       ok?: boolean;
       code?: string;
       field?: string;
-    }>(request, 12, "create_review_finding", {
+    }>("create_review_finding", {
       project_id: fixture.project.id,
       parent_id: fixture.parent.id,
       name: "Malformed MCP finding",
@@ -1520,7 +1487,7 @@ test.describe("complete browser application", () => {
       ok?: boolean;
       code?: string;
       field?: string;
-    }>(request, 13, "create_review_finding", {
+    }>("create_review_finding", {
       project_id: fixture.project.id,
       parent_id: fixture.parent.id,
       name: "Out-of-phase MCP finding",
@@ -1549,7 +1516,6 @@ test.describe("complete browser application", () => {
 
   test("streams an MCP review finding into the visible Story", async ({
     page,
-    request,
   }) => {
     await openModule(page, names.module);
     await openWorkItem(page, names.parent);
@@ -1582,8 +1548,6 @@ test.describe("complete browser application", () => {
     await expect(page.getByTestId("status-row")).toContainText("Review");
 
     const result = await callMcpTool<{ ok?: boolean; task_id?: string }>(
-      request,
-      2,
       "create_review_finding",
       {
         project_id: fixture.project.id,
@@ -1819,6 +1783,8 @@ test.describe("complete browser application", () => {
 
     const first = page.getByRole("treeitem", { name: names.reorderFirst });
     const second = page.getByRole("treeitem", { name: names.reorderSecond });
+    await expect(first).toBeVisible();
+    await expect(second).toBeVisible();
     const target = await first.boundingBox();
     expect(target).toBeTruthy();
     await second.dragTo(first, {
@@ -1895,8 +1861,8 @@ test.describe("complete browser application", () => {
     await expect(page.getByTestId("pane-modules")).toHaveCount(0);
     await expect(toggle).toHaveAttribute("aria-expanded", "false");
     await toggle.click();
-    await expect(page.getByTestId("pane-modules")).toBeVisible();
     await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await expect(page.getByTestId("pane-modules")).toBeVisible();
   });
 
   test("focuses story search with a shortcut and returns to the tree", async ({
@@ -2680,6 +2646,94 @@ test.describe("complete browser application", () => {
     await expect(workspaceTabs.getByRole("tab")).toHaveCount(initialTabCount);
   });
 
+  test("keeps the full Changes column reachable in a short window", async ({
+    page,
+  }) => {
+    const readmePath = join(fixture.folder, "README.md");
+    const readme = await readFile(readmePath);
+    await writeFile(readmePath, "Ticketry browser E2E\nChanged\n");
+    try {
+      await page.setViewportSize({ width: 720, height: 480 });
+      await openModule(page, names.module);
+      await page.getByRole("button", { name: "Open module Changes" }).click();
+      await page.getByRole("button", { name: "Open terminal panel" }).click();
+
+      const column = page.getByRole("region", { name: "Module checkout changes" });
+      await column.getByRole("button", { name: "Commit & push" }).click();
+      const confirmation = column.getByRole("dialog", { name: "Confirm Changes action" });
+      const changedFile = column.getByRole("button", { name: "README.md" });
+
+      await expect(confirmation).toBeVisible();
+      await changedFile.scrollIntoViewIfNeeded();
+      await expect(changedFile).toBeVisible();
+      await expect.poll(() => column.evaluate((node) => node.scrollTop))
+        .toBeGreaterThan(0);
+      await column.evaluate((node) => node.scrollTo({ top: 0 }));
+      await expect(confirmation).toBeVisible();
+    } finally {
+      await writeFile(readmePath, readme);
+    }
+  });
+
+  test("scrolls to and opens the last checkout in a short window", async ({
+    page,
+  }) => {
+    await page.route("**/graphql", async (route) => {
+      const body = route.request().postDataJSON();
+      if (body?.operationName !== "ModuleVersionControl") {
+        await route.continue();
+        return;
+      }
+      const response = await route.fetch();
+      const payload = await response.json();
+      const result = payload.data.module_version_control;
+      const moduleCheckout = result.worktrees[0];
+      result.worktrees = [
+        moduleCheckout,
+        ...Array.from({ length: 12 }, (_, index) => ({
+          ...moduleCheckout,
+          kind: "task",
+          task_id: `overflow-checkout-${index}`,
+          task_key: `CODING-${9000 + index}`,
+          task_name: `Overflow checkout ${index + 1}`,
+        })),
+        {
+          ...moduleCheckout,
+          kind: "task",
+          task_id: fixture.blocker.id,
+          task_key: fixture.blocker.key,
+          task_name: "Last overflow checkout",
+        },
+      ];
+      await route.fulfill({ response, json: payload });
+    });
+
+    await page.setViewportSize({ width: 720, height: 480 });
+    await openModule(page, names.module);
+    await page.getByRole("button", { name: "Open module Changes" }).click();
+    await page.getByRole("button", { name: "Open terminal panel" }).click();
+
+    const checkouts = page.getByRole("region", { name: "Current worktrees" });
+    const lastCheckout = checkouts.getByRole("button", {
+      name: `Open ${fixture.blocker.key} Last overflow checkout Changes`,
+    });
+    await expect.poll(() => checkouts.evaluate((node) =>
+      node.scrollHeight > node.clientHeight
+    )).toBe(true);
+    await lastCheckout.scrollIntoViewIfNeeded();
+    await expect(lastCheckout).toBeVisible();
+    await expect.poll(() => checkouts.evaluate((node) => node.scrollTop))
+      .toBeGreaterThan(0);
+
+    const selected = page.waitForRequest((request) =>
+      request.url().endsWith("/graphql")
+      && request.postDataJSON()?.operationName === "WorktreeChanges"
+      && request.postDataJSON()?.variables?.taskId === fixture.blocker.id
+    );
+    await lastCheckout.click();
+    await selected;
+  });
+
   test("opens the shared provider picker from the workspace launcher", async ({
     page,
   }) => {
@@ -2822,18 +2876,20 @@ test.describe("complete browser application", () => {
     );
     await expect(panel.getByRole("tab", { name: "Shell 1" })).toBeVisible();
 
-    const terminalInput = panel.getByTestId("ghostty-wasm-input");
-    const terminalRows = panel.getByTestId("ghostty-wasm-output");
-    await expect(terminalInput).toBeVisible();
-    await terminalInput.click();
+    // CODING-1487 — browser development renders with xterm over the WebSocket
+    // terminal adapter, so one host element both takes keystrokes and holds
+    // the rendered rows.
+    const terminal = panel.getByTestId("terminal-host");
+    await expect(terminal).toBeVisible();
+    await terminal.click();
     await page.keyboard.type("pwd");
     await page.keyboard.press("Enter");
-    await expect(terminalRows).toContainText(fixture.folder);
+    await expect(terminal).toContainText(fixture.folder);
     await page.keyboard.type(
       "printf '\\124\\111\\103\\113\\105\\124\\122\\131\\137\\120\\124\\131\\137\\117\\113\\012'",
     );
     await page.keyboard.press("Enter");
-    await expect(terminalRows).toContainText("TICKETRY_PTY_OK");
+    await expect(terminal).toContainText("TICKETRY_PTY_OK");
 
     // Leave terminal typing mode before exercising the WebView-owned grip.
     await page.keyboard.press("Meta+Escape");
@@ -2858,7 +2914,7 @@ test.describe("complete browser application", () => {
       String(ordinaryHeight + 24),
     );
     await expect(panel.getByRole("tab", { name: "Shell 1" })).toBeVisible();
-    await expect(panel.getByTestId("ghostty-wasm-output"))
+    await expect(panel.getByTestId("terminal-host"))
       .toContainText("TICKETRY_PTY_OK");
 
     await panel.getByRole("button", { name: "Maximize terminal panel" }).click();
@@ -3061,9 +3117,9 @@ test.describe("complete browser application", () => {
     await openModule(page, names.module);
     await page.getByRole("button", { name: "Open terminal panel" }).click();
     const panel = page.getByTestId("terminal-panel");
-    const input = panel.getByTestId("ghostty-wasm-input");
-    await expect(input).toBeVisible();
-    await input.click();
+    const terminal = panel.getByTestId("terminal-host");
+    await expect(terminal).toBeVisible();
+    await terminal.click();
     await page.keyboard.type("exit 7");
     await page.keyboard.press("Enter");
 
@@ -3077,6 +3133,7 @@ test.describe("complete browser application", () => {
   }) => {
     await openModule(page, names.nonRepoModule);
     const openFolderCommand = async (): Promise<Locator> => {
+      await expect(page.getByTestId("module-workspace-region")).toBeVisible();
       await page.getByRole("button", { name: "Open Settings" }).focus();
       await page.keyboard.press("f");
       const dialog = page.getByRole("dialog", { name: "Module Folder" });
@@ -3099,13 +3156,12 @@ test.describe("complete browser application", () => {
 
     await page.getByRole("button", { name: "Open terminal panel" }).click();
     const panel = page.getByTestId("terminal-panel");
-    const terminalInput = panel.getByTestId("ghostty-wasm-input");
-    await expect(terminalInput).toBeVisible();
-    await terminalInput.click();
+    const terminal = panel.getByTestId("terminal-host");
+    await expect(terminal).toBeVisible();
+    await terminal.click();
     await page.keyboard.type("pwd");
     await page.keyboard.press("Enter");
-    await expect(panel.getByTestId("ghostty-wasm-output"))
-      .toContainText(fixture.alternateFolder);
+    await expect(terminal).toContainText(fixture.alternateFolder);
     await panel.getByRole("button", { name: "Close shell 1" }).click();
     await panel.getByRole("button", { name: "Minimize terminal panel" }).click();
 
@@ -3122,6 +3178,9 @@ test.describe("complete browser application", () => {
 
   test("supports three-zone edit-view keyboard navigation", async ({ page }) => {
     await openModule(page, names.module);
+    await expect(page.getByTestId("modules-pane-toggle"))
+      .toHaveAttribute("aria-expanded", "false");
+    await ensureModulesPane(page, { mayAlreadyBeOpen: true });
     await page.getByRole("button", { name: "Open Settings" }).focus();
     await page.keyboard.press("Backslash");
     await expect(page.getByTestId("pane-modules")).not.toBeVisible();
@@ -3216,6 +3275,7 @@ test.describe("complete browser application", () => {
     await dialog.getByRole("button", { name: "Close dialog" }).click();
 
     await page.reload();
+    await expect(page.getByTestId("module-workspace-region")).toBeVisible();
     await page.getByRole("button", { name: "Open Settings" }).focus();
     await page.keyboard.press("/");
     await expect(page.getByRole("textbox", { name: "Search stories" }))

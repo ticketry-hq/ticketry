@@ -14,6 +14,17 @@ uint8_t muxed_ghostty_studio_chord(uint64_t modifier_flags,
   NSEventModifierFlags chord =
       modifier_flags & (NSEventModifierFlagControl | NSEventModifierFlagCommand |
                         NSEventModifierFlagOption | NSEventModifierFlagShift);
+  if (chord == NSEventModifierFlagCommand ||
+      chord == (NSEventModifierFlagCommand | NSEventModifierFlagShift)) {
+    if (key_code == 0x18 || key_code == 0x45) return MUXED_GHOSTTY_CHORD_ZOOM_IN;
+  }
+  if (chord == NSEventModifierFlagCommand) {
+    if (key_code == 0x1B || key_code == 0x4E) return MUXED_GHOSTTY_CHORD_ZOOM_OUT;
+    if (key_code == 0x1D || key_code == 0x52) return MUXED_GHOSTTY_CHORD_ZOOM_RESET;
+  }
+  if (key_code == 0x1D &&
+      chord == (NSEventModifierFlagCommand | NSEventModifierFlagShift))
+    return MUXED_GHOSTTY_CHORD_MODULE_POSITION_10;
   if (key_code == kMuxedGraveKeyCode && chord == NSEventModifierFlagControl) {
     return MUXED_GHOSTTY_CHORD_PANEL_TOGGLE;
   }
@@ -25,7 +36,7 @@ uint8_t muxed_ghostty_studio_chord(uint64_t modifier_flags,
     return MUXED_GHOSTTY_CHORD_BODY_DISENGAGE;
   }
   if (chord == NSEventModifierFlagCommand) {
-    for (uint8_t index = 0; index < 10; index++) {
+    for (uint8_t index = 0; index < 9; index++) {
       if (key_code == kMuxedModulePositionKeyCodes[index]) {
         return MUXED_GHOSTTY_CHORD_MODULE_POSITION_1 + index;
       }

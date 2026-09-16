@@ -148,9 +148,6 @@ export default function IssueSidebar({
         taskId={task.id}
         parentId={task.parent_id}
         moduleId={moduleId}
-        projectId={task.project_id}
-        ticketSeq={task.sequence_id}
-        taskName={task.name}
       />
     </div>
   );

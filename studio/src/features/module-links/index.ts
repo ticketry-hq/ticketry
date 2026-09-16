@@ -11,3 +11,4 @@ export {
   type ModuleLink,
 } from "./moduleLinkStore";
 export { eraseModuleLink, writeModuleLink } from "./moduleLinkTransport";
+export { moduleFolderSaveError, prepareDirectoryTrust } from "./moduleFolderTrust";

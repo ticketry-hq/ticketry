@@ -1,10 +1,10 @@
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { documentOperationName } from "../graphql-foundation/typedDocument";
 import { fixture, mountStudio, workItem } from "./seam";
 
-vi.mock("../app/shell/ticket-workspace/selected-ticket/documents/RichMarkdownEditor", () => ({
+vi.mock("../features/documents/RichMarkdownEditor", () => ({
   default: ({
     markdown,
     onChange,
@@ -66,6 +66,7 @@ describe("overhaul acceptance — selected Story description", () => {
 
     const stories = await screen.findByRole("region", { name: "Stories" });
     const details = screen.getByRole("region", { name: "Details" });
+    await act(() => vi.dynamicImportSettled());
     fireEvent.click(await within(details).findByTestId("issue-description"));
     fireEvent.change(await within(details).findByLabelText("Story description"), {
       target: { value: "Story A unsaved draft" },
@@ -105,9 +106,15 @@ describe("overhaul acceptance — selected Story description", () => {
     });
     fireEvent.click(within(details).getByRole("button", { name: "Cancel" }));
 
+    // Switching Stories wrote Story A's dirty draft (CODING-1525); Story B's
+    // explicit Save is the only other write. Cancel wrote nothing.
     await waitFor(() => {
-      expect(updates).toHaveLength(1);
+      expect(updates).toHaveLength(2);
       expect(updates[0]).toMatchObject({
+        id: expect.stringContaining("story-a"),
+        description: "Story A unsaved draft",
+      });
+      expect(updates[1]).toMatchObject({
         id: expect.stringContaining("story-b"),
         description: "Story B draft",
       });

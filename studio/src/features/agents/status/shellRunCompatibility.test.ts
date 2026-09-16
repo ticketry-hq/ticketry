@@ -14,7 +14,6 @@ import {
   MODULE_LIFECYCLE_STATES,
   selectModuleLifecycleCounts,
   selectScratchLifecycleChips,
-  selectScratchRunIds,
   selectTaskRunCount,
 } from "./selectors";
 import { useAgentStatusStore } from "./testStore";
@@ -105,7 +104,6 @@ describe("agent activity surfaces stay agent-only", () => {
     useAgentStatusStore.getState().upsertRun(shellRun());
 
     const data = useAgentStatusStore.getState();
-    expect(selectScratchRunIds(data, "project-1", "module-1")).toEqual(["run-plan"]);
     // The plan run's own chip is unchanged by the shell run sharing its module.
     expect(
       selectScratchLifecycleChips(data, "project-1", "module-1"),

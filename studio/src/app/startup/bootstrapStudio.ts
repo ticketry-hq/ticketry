@@ -1,8 +1,13 @@
+import { preloadLiveRunStatus } from "../../features/agents/status/stream/liveRunPreload";
 import { loadOnboardingState } from "../onboarding/onboardingStore";
 import { loadModuleLinks } from "../../features/module-links";
 import { loadProjects, useStudioStore } from "../../features/projects";
 import { resolveDefaultProject } from "../../features/studio/lib/defaultProject";
 import { loadKeybindingOverrides } from "../navigation/keymapSettings";
+import { recordStartupStage } from "./startupTrace";
+import { TEMP_TASK_ID } from "../../features/agents/types";
+import { scratchBucketId } from "../../features/agents/terminal";
+import { rememberStudioWorkspaceTarget } from "../../features/workspace-state/studioWorkspaceTarget";
 import {
   useClientStore,
   visiblePaneOrder,
@@ -21,10 +26,14 @@ export type BootstrapOutcome = "provisioning" | "unavailable" | "ready";
  */
 export async function bootstrapStudio(): Promise<BootstrapOutcome> {
   try {
+    recordStartupStage("frontend-bootstrap-started");
     await loadBootstrapData();
+    recordStartupStage("frontend-bootstrap-data-loaded");
     await restoreWorkspace();
+    recordStartupStage("frontend-workspace-restored");
     return "ready";
   } catch (error) {
+    recordStartupStage("frontend-bootstrap-failed");
     console.warn("[BootstrapGate] installation project resolve failed", error);
     return error instanceof TypeError ? "unavailable" : "provisioning";
   }
@@ -47,7 +56,25 @@ async function loadBootstrapData(): Promise<void> {
 
 async function restoreWorkspace(): Promise<void> {
   const project = await resolveDefaultProject();
-  await useStudioStore.getState().selectProject(project.id);
+  await Promise.all([
+    useStudioStore.getState().selectProject(project.id),
+    // Concurrent with the selection, so it costs no serial time: the point is
+    // only that the live-run holding is filled before the shell first renders.
+    preloadLiveRunStatus(project.id),
+  ]);
+
+  // Start the restored item on Details. Change only the active surface, so
+  // document and terminal tabs remain available when the workspace mounts.
+  const client = useClientStore.getState();
+  const bucket = client.selectedTaskId === TEMP_TASK_ID
+    ? scratchBucketId(client.selectedModuleId ?? "")
+    : client.selectedTaskId;
+  if (bucket) {
+    client.setActive(bucket, "details");
+    // The workspace restoration effect must not switch back to yesterday's
+    // document or terminal after its asynchronous records arrive.
+    rememberStudioWorkspaceTarget(bucket, { kind: "details" });
+  }
 
   // Selecting the project restores the remembered module when it is still
   // present and linked, so the pane to open is whichever one now has content.

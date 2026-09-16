@@ -10,8 +10,8 @@ use std::collections::HashMap;
 
 use sea_orm::{
     sea_query::{Expr, OnConflict},
-    ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, NotSet, QueryFilter, QueryOrder,
-    QuerySelect, Schema, Set,
+    ColumnTrait, Condition, ConnectionTrait, DatabaseConnection, EntityTrait, NotSet, QueryFilter,
+    QueryOrder, QuerySelect, Schema, Set,
 };
 use serde::Serialize;
 
@@ -151,7 +151,11 @@ pub async fn for_work_item(
 ) -> Result<Vec<LaunchPolicyRejection>, LaunchPolicyError> {
     let occurrences = transition_occurrence::Entity::find()
         .filter(transition_occurrence::Column::IssueId.eq(compact_uuid(work_item_id)))
-        .filter(transition_occurrence::Column::DestinationAutoStart.eq(true))
+        .filter(
+            Condition::any()
+                .add(transition_occurrence::Column::DestinationAutoStart.eq(true))
+                .add(transition_occurrence::Column::Handoff.eq(true)),
+        )
         .all(database)
         .await?;
     if occurrences.is_empty() {

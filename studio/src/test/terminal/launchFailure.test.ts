@@ -47,4 +47,13 @@ describe("launchFailureMessage", () => {
       }),
     ).toBe("Select a Studio launch profile before trying again.");
   });
+
+  it("translates the previous-agent refusal into a retry remedy", () => {
+    expect(
+      launchFailureMessage({ body: { detail: "previous_agent_not_ended" } }),
+    ).toBe(
+      "The previous agent could not be ended. Close its terminal session, "
+        + "then try again.",
+    );
+  });
 });

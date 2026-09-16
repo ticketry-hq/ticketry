@@ -91,6 +91,11 @@ describe("overhaul acceptance - merged worktree cleanup", () => {
           return {
             worktree_changes: mergedChanges({
               work_item_done: blocker !== "work_item_not_done",
+              clean: blocker !== "checkout_dirty",
+              dirty: blocker === "checkout_dirty",
+              files: blocker === "checkout_dirty" ? [{
+                __typename: "ChangedFile", path: "README.md", status: "modified", previous_path: null,
+              }] : [],
               closure_failure: closureFailure,
               cleanup: {
                 __typename: "WorktreeCleanupStatusView",
@@ -107,6 +112,9 @@ describe("overhaul acceptance - merged worktree cleanup", () => {
 
     expect(await screen.findByLabelText("Worktree cleanup status")).toHaveTextContent(reason);
     expect(screen.queryByRole("button", { name: "Cleanup local worktree" })).toBeNull();
+    if (blocker === "checkout_dirty") {
+      expect(screen.getByRole("list", { name: "Cumulative changed files" })).toHaveTextContent("README.md");
+    }
     if (closureFailure) {
       expect(screen.getByLabelText("Work Item closure failure")).toHaveTextContent("human-only");
       expect(screen.getByLabelText("Pull request status")).toHaveTextContent("Merged");

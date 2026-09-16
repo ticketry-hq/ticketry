@@ -32,6 +32,9 @@ export type NativeTerminalChord =
   | "panel-toggle"
   | "settings"
   | "body-disengage"
+  | "zoom-in"
+  | "zoom-out"
+  | "zoom-reset"
   | `module-position-${ModulePosition}`;
 
 interface NativeTerminalChordEvent {
@@ -56,6 +59,21 @@ function modulePositionFromChord(
 
 function runChord(payload: NativeTerminalChordEvent["payload"]): void {
   const chord = payload?.chord;
+  if (chord === "zoom-in" || chord === "zoom-out" || chord === "zoom-reset") {
+    if (
+      payload?.handle && payload.runId &&
+      isNativeTerminalKeyboardOwner({
+        handle: payload.handle,
+        runId: payload.runId,
+      })
+    ) {
+      window.dispatchEvent(new KeyboardEvent("keydown", {
+        key: chord === "zoom-in" ? "+" : chord === "zoom-out" ? "-" : "0",
+        metaKey: true,
+      }));
+    }
+    return;
+  }
   if (chord === "body-disengage") {
     if (
       useModalStore.getState().modalStack.length === 0 &&

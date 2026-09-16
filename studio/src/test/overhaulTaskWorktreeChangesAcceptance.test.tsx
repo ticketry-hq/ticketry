@@ -2,10 +2,11 @@ import { act, fireEvent, screen, waitFor, within } from "@testing-library/react"
 import { describe, expect, it } from "vitest";
 
 import { SelectedTicketContent } from "../app/shell/ticket-workspace/selected-ticket/SelectedTicketContent";
+import { SelectedTicket } from "../app/shell/ticket-workspace/selected-ticket/SelectedTicket";
 import {
   readStudioWorkspaceTarget,
   rememberStudioWorkspaceTarget,
-} from "../app/shell/ticket-workspace/selected-ticket/internal/studioWorkspaceTarget";
+} from "../features/workspace-state/studioWorkspaceTarget";
 import { documentOperationName } from "../graphql-foundation/typedDocument";
 import { studioApolloClient } from "../shared/apollo/client";
 import { FoundationGraphQlError } from "../shared/apollo/errorLink";
@@ -145,7 +146,7 @@ describe("overhaul acceptance - task worktree Changes", () => {
     const tabs = await screen.findByRole("tablist", { name: "Workspace tabs" });
     const changesTab = await within(tabs).findByRole("tab", { name: "Changes" });
     expect(changesTab).toBeVisible();
-    await waitFor(() => expect(changesRequests).toBe(1));
+    expect(changesRequests).toBe(0);
     await waitFor(() =>
       expect(savedTabOrders).toContainEqual([
         { kind: "details" },
@@ -154,6 +155,7 @@ describe("overhaul acceptance - task worktree Changes", () => {
     );
 
     fireEvent.click(changesTab);
+    await waitFor(() => expect(changesRequests).toBe(1));
 
     const list = await screen.findByRole("list", {
       name: "Cumulative changed files",
@@ -182,7 +184,7 @@ describe("overhaul acceptance - task worktree Changes", () => {
     fireEvent.click(within(tabs).getByRole("tab", { name: "Details" }));
     expect(within(tabs).getByRole("tab", { name: "Changes" })).toBeVisible();
     fireEvent.click(within(tabs).getByRole("tab", { name: "Changes" }));
-    await waitFor(() => expect(changesRequests).toBe(3));
+    await waitFor(() => expect(changesRequests).toBe(2));
 
     expect(
       studioApolloClient().readQuery({
@@ -190,6 +192,100 @@ describe("overhaul acceptance - task worktree Changes", () => {
         variables: { taskId: TASK_ID },
       }),
     ).toEqual({ worktree_changes: cumulativeChanges });
+  });
+
+  it("[overhaul-271] scrolls a long task Changes page through one workspace owner", async () => {
+    const http = fixture();
+    const longChanges = {
+      ...cumulativeChanges,
+      truncated: true,
+      files: Array.from({ length: 80 }, (_, index) => ({
+        __typename: "ChangedFile",
+        path: `src/long-list/file-${String(index + 1).padStart(2, "0")}.ts`,
+        status: "modified",
+        previous_path: null,
+      })),
+    };
+    http.tree("module-1", {
+      rootIds: [TASK_ID],
+      children: { [TASK_ID]: [] },
+      order: [TASK_ID],
+    });
+    http.workItems([
+      workItem({
+        id: TASK_ID,
+        name: "Scroll cumulative task-worktree changes",
+        parent_id: "module-1",
+        sequence_id: 1465,
+      }),
+    ]);
+
+    mountStudio({
+      http,
+      selectedTaskId: TASK_ID,
+      children: <SelectedTicket />,
+      graphQlExecute: async (document, variables) => {
+        const operation = documentOperationName(document);
+        if (operation === "WorktreeStatus") {
+          return { worktree_status: activeCleanWorktree } as never;
+        }
+        if (operation === "WorktreeChanges") {
+          return { worktree_changes: longChanges } as never;
+        }
+        return http.executeGraphQl(document, variables);
+      },
+    });
+
+    const tabs = await screen.findByRole("tablist", { name: "Workspace tabs" });
+    fireEvent.click(await within(tabs).findByRole("tab", { name: "Changes" }));
+
+    const page = await screen.findByTestId("task-worktree-changes");
+    const pane = page.closest<HTMLElement>('[data-pane="details-or-terminal"]');
+    expect(pane).not.toBeNull();
+    const list = within(page).getByRole("list", {
+      name: "Cumulative changed files",
+    });
+    const rows = within(list).getAllByRole("listitem");
+    const lastRow = rows.at(-1)!;
+    const declaredVerticalOwnersThroughPane = (node: HTMLElement) => {
+      const owners: HTMLElement[] = [];
+      for (
+        let candidate = node.parentElement;
+        candidate;
+        candidate = candidate.parentElement
+      ) {
+        if (
+          [
+            "overflow-auto",
+            "overflow-y-auto",
+            "overflow-scroll",
+            "overflow-y-scroll",
+          ].some((className) => candidate.classList.contains(className))
+        ) {
+          owners.push(candidate);
+        }
+        if (candidate === pane) break;
+      }
+      return owners;
+    };
+
+    const summary = within(page).getByText("80 cumulative changes");
+    expect(declaredVerticalOwnersThroughPane(summary)).toEqual([page]);
+    expect(declaredVerticalOwnersThroughPane(lastRow)).toEqual([page]);
+    expect(summary).toBeVisible();
+    expect(within(page).getByLabelText("Changes commands")).toBeVisible();
+    expect(within(page).getByLabelText("Worktree cleanup status")).toBeVisible();
+    expect(within(page).getByText(/changed-file limit was reached/)).toBeVisible();
+    expect(rows).toHaveLength(80);
+    expect(lastRow).toHaveAccessibleName(/file-80\.ts: Modified/);
+    expect(page.lastElementChild).toBe(list);
+    expect(list.lastElementChild).toBe(lastRow);
+    expect(pane).toContainElement(tabs);
+    expect(page).not.toContainElement(tabs);
+    expect(screen.getByTestId("workspace-changes-surface")).toHaveAttribute(
+      "tabindex",
+      "-1",
+    );
   });
 
   it("[overhaul-185] restores Details when a worktree disappears and explains non-list states", async () => {

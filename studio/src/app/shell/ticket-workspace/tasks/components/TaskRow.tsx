@@ -11,16 +11,27 @@ import {
   AutomationDeliveryChicklet,
   AutomationFailureChicklet,
 } from "../../../../../features/agents/lifecycle";
+import {
+  isLiveAgentRunState,
+  useRunState,
+  type RunPresentationState,
+} from "../../../../../features/agents/status";
+import { LifecycleBadge } from "../../../../../features/agents/terminal";
 import { TEMP_TASK_ID } from "../../../../../features/agents/types";
 import { useStudioStore } from "../../../../../features/projects";
 import { WorkItemRowLabel } from "./WorkItemRowLabel";
-import { useClientStore } from "../../../../../state/clientStore";
 import {
-  useModuleOpen,
+  useStoriesTree,
+  useWorkItem,
 } from "../../../../../features/work-items";
 import { stateById, useCachedStates } from "../../../../../features/projects";
 import type { DragSourceProps } from "../../../../../shared/dragDrop/useAxisDragAndDrop";
 import { instantRunPlanningRowId } from "../internal/instantRunTicketNavigation";
+import { recordSelectionProfilePoint } from "../../../../../shared/utilities/selectionProfile";
+import {
+  beginTaskDetailFromClick,
+  recordTaskDetailClick,
+} from "../../../../../shared/utilities/taskDetailProbe";
 
 // Warm the description-editor chunk on first row hover so it is already
 // cached when a selected issue's details render. Fired at most once.
@@ -28,13 +39,7 @@ let editorWarmed = false;
 const preloadDescriptionEditor = () => {
   if (editorWarmed) return;
   editorWarmed = true;
-  void import("../../selected-ticket/documents/DescriptionEditor");
-};
-
-const recordSelectionProfilePoint = (point: string) => {
-  (globalThis as typeof globalThis & {
-    __ticketrySelectionProfileProbe?: (point: string) => void;
-  }).__ticketrySelectionProfileProbe?.(point);
+  void import("../../../../../features/documents/DescriptionEditor");
 };
 
 interface TaskRowProps {
@@ -87,11 +92,11 @@ function WorkItemPlanningRow({
   onToggleExpand,
   dragSourceProps,
 }: Omit<TaskRowProps, "row"> & { row: WorkItemRow }) {
+  recordSelectionProfilePoint("work-item-row-render");
   const projectId = useStudioStore((state) => state.selectedProjectId);
   const states = useCachedStates(projectId);
-  const moduleId = useClientStore((state) => state.selectedModuleId);
-  const { tree, items } = useModuleOpen(moduleId);
-  const task = items.find((item) => item.id === row.id);
+  const { tree } = useStoriesTree();
+  const { data: task } = useWorkItem(row.id);
   const descendantIds = useMemo(() => {
     const ids: string[] = [];
     const seen = new Set([row.id]);
@@ -134,6 +139,7 @@ function InstantRunPlanningRow({
   row: InstantRunRow;
 }) {
   const id = instantRunPlanningRowId(row.runId);
+  const runState = useRunState(row.runId);
   return (
     <PlanningRowView
       id={id}
@@ -149,6 +155,7 @@ function InstantRunPlanningRow({
       dragSourceProps={dragSourceProps}
       descendantIds={[]}
       showAgentBadges={false}
+      runState={isLiveAgentRunState(runState) ? runState : null}
     />
   );
 }
@@ -193,6 +200,7 @@ interface PlanningRowViewProps {
   dragSourceProps?: DragSourceProps;
   descendantIds: string[];
   showAgentBadges?: boolean;
+  runState?: RunPresentationState | null;
 }
 
 function PlanningRowView({
@@ -209,6 +217,7 @@ function PlanningRowView({
   dragSourceProps,
   descendantIds,
   showAgentBadges = true,
+  runState,
 }: PlanningRowViewProps) {
   const caret = expandable ? (expanded ? "▾" : "▸") : " ";
 
@@ -220,7 +229,15 @@ function PlanningRowView({
       data-task-id={id}
       tabIndex={-1}
       {...dragSourceProps}
-      onClick={() => onClick(id)}
+      onPointerDownCapture={(event) => {
+        if (event.button !== 0) return;
+        if ((event.target as Element).closest("[data-task-expand-toggle]")) return;
+        beginTaskDetailFromClick(id, event.timeStamp);
+      }}
+      onClick={(event) => {
+        recordTaskDetailClick(id, event.timeStamp);
+        onClick(id);
+      }}
       onPointerEnter={preloadDescriptionEditor}
       className={`flex min-w-0 cursor-pointer items-center px-1 py-0.5 outline-none ${
         isSelected
@@ -234,6 +251,7 @@ function PlanningRowView({
       {expandable ? (
         <span
           role="button"
+          data-task-expand-toggle
           aria-label={expanded ? "Collapse subtasks" : "Expand subtasks"}
           onClick={(e) => {
             // Don't let the toggle also fire the row's select handler.
@@ -255,6 +273,12 @@ function PlanningRowView({
         stateColor={stateColor}
         name={name}
       />
+
+      {runState ? (
+        <span className="ml-2">
+          <LifecycleBadge state={runState} showLabel={false} alwaysShowCount />
+        </span>
+      ) : null}
 
       {showAgentBadges ? (
         <>

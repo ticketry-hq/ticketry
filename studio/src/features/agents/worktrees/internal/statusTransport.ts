@@ -1,42 +1,16 @@
 /**
- * Where the worktree block's status comes from.
+ * How the worktree block's status payload becomes Studio's own shape.
  *
- * On the desktop the authority is the in-process Rust runtime: it derives the
- * owning Work Item, the module's configured folder, the repository, and the
- * live Git facts itself, so the query sends one identity and nothing the
- * client could get wrong. That is production: the legacy host route was retired
- * at the Slice 4 handoff and refuses. What remains below it is the browser-only
- * development path, which has no in-process runtime to ask.
+ * The status query itself is issued by `WorktreeBlock` through Apollo, sending
+ * one Work Item identity and nothing else: the in-process Rust runtime derives
+ * the owning Work Item, the module's configured folder, the repository, and
+ * the live Git facts itself. This module owns only the adaptation of that
+ * answer.
  */
-import { studioApolloClient } from "../../../../shared/apollo/client";
-import {
-  WorktreeStatusDocument,
-} from "../generated/worktreeStatus.documents";
 import type { WorktreeStatusQuery } from "../generated/worktreeStatus.documents";
-import type { WorktreeContext, WorktreeStatus } from "./types";
+import type { WorktreeStatus } from "./types";
 
 export type WorktreeStatusPayload = WorktreeStatusQuery["worktree_status"];
-
-export function readWorktreeStatus(
-  taskId: string,
-  ctx: WorktreeContext,
-  signal?: AbortSignal,
-): Promise<WorktreeStatus> {
-  void ctx;
-  void signal;
-  return studioApolloClient()
-    .query({
-      query: WorktreeStatusDocument,
-      variables: { taskId },
-      fetchPolicy: "network-only",
-    })
-    .then(({ data }) => {
-      if (!data) throw new Error("Worktree status returned no data.");
-      return adaptWorktreeStatus(
-        data.worktree_status as WorktreeStatusPayload,
-      );
-    });
-}
 
 /**
  * The discriminated contract, field by field. Absence stays absent: a `none`

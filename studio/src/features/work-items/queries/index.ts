@@ -15,6 +15,9 @@ import {
   readWorkItem,
 } from "./readTransport";
 import { orderedWorkItems, workItemFromIssue } from "../issueAdapter";
+import { recordSelectionProfilePoint } from "../../../shared/utilities/selectionProfile";
+
+import { moduleLoadPoint } from "../../../shared/utilities/moduleLoadProbe";
 
 export const EMPTY_MODULE_TREE: ModuleTree = {
   rootIds: [],
@@ -26,12 +29,6 @@ const issueReference = (id: string) => ({
   __typename: "WorktrackerIssue" as const,
   id: compactWorktrackerId(id),
 });
-
-const recordSelectionProfilePoint = (point: string) => {
-  (globalThis as typeof globalThis & {
-    __ticketrySelectionProfileProbe?: (point: string) => void;
-  }).__ticketrySelectionProfileProbe?.(point);
-};
 
 function moduleTreeFromResult(
   moduleId: string,
@@ -79,29 +76,41 @@ export function useModuleOpen(moduleId: string | null): {
   loading: boolean;
 } {
   recordSelectionProfilePoint("module-open-hook");
-  const query = useQuery(
+  const query = useModuleQuery(moduleId);
+  const opened = useMemo(() => {
+    if (!moduleId || !query.data) {
+      return { tree: EMPTY_MODULE_TREE, items: [] };
+    }
+    const started = performance.now();
+    const items = orderedWorkItems(query.data.work_items.nodes).filter((item) => !item.is_archived);
+    recordSelectionProfilePoint("module-open-materialize");
+    const tree = moduleTreeFromWorkItems(moduleId, items);
+    moduleLoadPoint(moduleId)("tree-materialized", { task_count: items.length, materialize_ms: performance.now() - started });
+    return { tree, items };
+  }, [moduleId, query.data]);
+  return { ...opened, loading: query.loading };
+}
+
+function useModuleQuery(moduleId: string | null, fetchPolicy: "cache-and-network" | "cache-only" = "cache-and-network") {
+  return useQuery(
     WorkTrackerModuleOpenDocument,
     moduleId
       ? {
           variables: { moduleId: compactWorktrackerId(moduleId) },
           client: studioApolloClient(),
-          fetchPolicy: "cache-and-network",
-          nextFetchPolicy: "cache-first",
+          fetchPolicy,
+          nextFetchPolicy: fetchPolicy === "cache-only" ? "cache-only" : "cache-first",
         }
       : skipToken,
   );
-  const opened = useMemo(() => {
-    if (!moduleId || !query.data) {
-      return { tree: EMPTY_MODULE_TREE, items: [] };
-    }
-    const items = orderedWorkItems(query.data.work_items.nodes);
-    recordSelectionProfilePoint("module-open-materialize");
-    return {
-      tree: moduleTreeFromWorkItems(moduleId, items),
-      items,
-    };
-  }, [moduleId, query.data]);
-  return { ...opened, loading: query.loading };
+}
+
+/** Dialog candidates use the central fetch's cache without building a hierarchy. */
+export function useModuleItems(moduleId: string | null) {
+  const { data } = useModuleQuery(moduleId, "cache-only");
+  return useMemo(() => data
+    ? orderedWorkItems(data.work_items.nodes).filter((item) => !item.is_archived)
+    : [], [data]);
 }
 
 /** Subscribe to the normalized Apollo row for one work item. */

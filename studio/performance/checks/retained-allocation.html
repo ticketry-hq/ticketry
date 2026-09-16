@@ -1,0 +1,31 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>Profiling collector check: retained allocation</title>
+<h1>Retained allocation</h1>
+<p>
+  Each cycle retains objects and strings on the JavaScript heap and appends DOM
+  nodes that are never removed. The memory collector is only trusted to report
+  growth in Ticketry once it reports growth here.
+</p>
+<script>
+  window.__retained = [];
+  window.__checkCycle = function retainOneBatch() {
+    // Ordinary heap objects and strings, not typed arrays: a typed array's
+    // backing store is external memory and would not exercise the JS heap
+    // measurement this collector actually reports.
+    const batch = [];
+    for (let index = 0; index < 20000; index += 1) {
+      batch.push({ index, label: "retained-" + index + "-" + Math.random() });
+    }
+    window.__retained.push(batch);
+    const block = document.createElement("div");
+    for (let index = 0; index < 500; index += 1) {
+      const row = document.createElement("span");
+      row.textContent = "retained " + index;
+      block.appendChild(row);
+    }
+    document.body.appendChild(block);
+    return window.__retained.length;
+  };
+  window.__checkReady = true;
+</script>

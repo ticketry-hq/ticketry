@@ -53,7 +53,20 @@ query WorkTrackerModuleOpen($moduleId: String!) {
     }
     orderBy: { rank: ASC, sequenceId: ASC }
   ) {
-    nodes { ...GeneratedWorkTrackerWorkItemFields }
+    nodes {
+      ...GeneratedWorkTrackerWorkItemFields @nonreactive
+      id
+      name
+      project_id: projectId
+      sequence_id: sequenceId
+      parent_id: parentId
+      module_id: moduleId
+      is_archived: isArchived
+      rank
+      state_id: stateId
+      issue_type_id: issueTypeId
+      project { id slug }
+    }
   }
 }
 

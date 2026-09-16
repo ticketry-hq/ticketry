@@ -130,13 +130,31 @@ describe("launch-binding model identity acceptance", () => {
     );
   });
 
-  it("[overhaul-226] refuses an agent selection with no model instead of storing nothing", async () => {
+  // An agent carries no identity of its own: the row records its provider
+  // through the chosen model or Codex profile. An agent with neither is
+  // therefore the empty inheriting binding, which is what "No profile" and
+  // "Not configured" produce, so it is written rather than refused
+  // (ticket #1824). `LaunchDefaultPicker` is what keeps a half-made
+  // provider-only selection from being committed: choosing a provider seeds
+  // its first catalog model, and a provider with no catalog model stays
+  // uncommitted until one is entered.
+  it("[overhaul-226] stores an agent selection with no model as the empty inheriting binding", async () => {
     const operations: string[] = [];
+    let upsertVariables: Record<string, unknown> | undefined;
     const graphqlExecute = vi.fn(async (encoded: string) => {
-      const request = JSON.parse(encoded) as { operationName: string };
+      const request = JSON.parse(encoded) as {
+        operationName: string;
+        variables: Record<string, unknown>;
+      };
       operations.push(request.operationName);
       if (request.operationName === "WorkTrackerProjectOpen") {
         return JSON.stringify({ data: catalog });
+      }
+      if (request.operationName === "UpsertWorkTrackerLaunchBinding") {
+        upsertVariables = request.variables;
+        return JSON.stringify({
+          data: { upsert_issue_type_launch_binding: { id: 1 } },
+        });
       }
       throw new Error(`Unexpected operation ${request.operationName}`);
     });
@@ -166,9 +184,11 @@ describe("launch-binding model identity acceptance", () => {
       "launch",
     );
 
-    expect(useWorkflowEditorStore.getState().controlErrors.launch)
-      .toContain("Choose a model for agent/provider 'codex'");
-    expect(operations).not.toContain("UpsertWorkTrackerLaunchBinding");
+    expect(useWorkflowEditorStore.getState().controlErrors.launch).toBeFalsy();
+    expect(operations).toContain("UpsertWorkTrackerLaunchBinding");
+    // The overrides the caller dropped are cleared, not restored from the
+    // previously stored row.
+    expect(upsertVariables).toMatchObject({ modelId: null, reasoningId: null });
   });
 
   it("[overhaul-227] saves catalog UUIDs after the editor routes its capabilities back into the cache", async () => {

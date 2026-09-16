@@ -10,7 +10,6 @@ import {
   selectConversationLifecycleChips,
   selectRunState,
   selectScratchLifecycleChips,
-  selectScratchRunIds,
   selectTaskAgentLifecycle,
   selectTaskAutomationAttempts,
   selectTaskLifecycleChips,
@@ -136,12 +135,6 @@ export const useConversationLifecycleChips = (
   (holding) => selectConversationLifecycleChips(holding, projectId, moduleId),
   selectionEqual,
 );
-
-export const useScratchRunIds = (projectId: string, moduleId: string) =>
-  useAgentStatusSelection(
-    (holding) => selectScratchRunIds(holding, projectId, moduleId),
-    selectionEqual,
-  );
 
 export const useModuleLifecycleCounts = (moduleId: string) =>
   useAgentStatusSelection(

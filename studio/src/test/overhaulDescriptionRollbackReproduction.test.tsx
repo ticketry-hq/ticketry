@@ -26,6 +26,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { documentOperationName } from "../graphql-foundation/typedDocument";
 import { statusStreamFeed } from "../features/agents/status/stream/statusStreamFeed";
 import { fixture, mountStudio, workItem, type StudioFixture } from "./seam";
+import {
+  resetFactCursor,
+  statusFeedTransport,
+  workItemChangedFact,
+} from "./statusStreamFeedFixture";
 
 vi.mock("../features/documents/RichMarkdownEditor", () => ({
   default: ({
@@ -47,50 +52,6 @@ const PROJECT = "project-1"; // the seam workItem() default
 const ORIGINAL = "Original description";
 const SAVED = "Saved description";
 const SAVED_AT = "2026-08-06T12:00:00Z"; // the fixture's constant updated_at
-
-function feedTransport() {
-  const deliveries: Array<(encoded: string) => void> = [];
-  const proxy = {
-    graphql_execute: vi.fn(async () => "{}"),
-    graphql_subscribe: vi.fn(
-      async (_id: string, _request: string, onEvent: (value: string) => void) => {
-        deliveries.push(onEvent);
-        return '{"type":"accepted"}';
-      },
-    ),
-    graphql_unsubscribe: vi.fn(async () => true),
-  };
-  return {
-    ready: () => deliveries.length > 0,
-    send: (frame: unknown) =>
-      deliveries[deliveries.length - 1](JSON.stringify({
-        type: "next",
-        payload: { data: { run_status_stream: frame } },
-      })),
-    createProxy: () => proxy as never,
-  };
-}
-
-let cursor = 100;
-const workItemChanged = (
-  projectId: string,
-  workItemId: string,
-  payload: Record<string, unknown>,
-) => ({
-  __typename: "RunStatusEvent",
-  cursor: ++cursor,
-  event_id: `event-${cursor}`,
-  project_id: projectId,
-  event_kind: "work_item.changed",
-  payload_version: 1,
-  subject_kind: "work_item",
-  subject_id: workItemId,
-  agent_run_id: null,
-  automation_attempt_id: null,
-  work_item_id: workItemId,
-  payload: { workItemId, projectId, moduleId: "module-1", ...payload },
-  committed_at: "2026-09-05T10:00:00+00:00",
-});
 
 /** The description for story-a carried by one GraphQL response, if any. */
 function descriptionIn(operation: string, result: unknown): string | null {
@@ -157,7 +118,7 @@ function seed() {
 async function mountWithFeed() {
   const http = seed();
   const wire = instrument(http);
-  const feed = feedTransport();
+  const feed = statusFeedTransport();
   mountStudio({ http, selectedTaskId: "story-a", graphQlExecute: wire.execute });
   statusStreamFeed.start(PROJECT, { createProxy: feed.createProxy });
   await waitFor(() => expect(feed.ready()).toBe(true));
@@ -168,7 +129,7 @@ async function mountWithFeed() {
 }
 
 const fact = (workItemId: string, payload: Record<string, unknown> = {}) =>
-  workItemChanged(PROJECT, workItemId, payload);
+  workItemChangedFact(PROJECT, workItemId, payload);
 
 async function saveDescription(details: HTMLElement, wire: ReturnType<typeof instrument>) {
   fireEvent.change(await within(details).findByLabelText("Story description"), {
@@ -228,7 +189,7 @@ async function dirtyEditorThenStaleModuleRead() {
 }
 
 beforeEach(() => {
-  cursor = 100;
+  resetFactCursor();
 });
 
 afterEach(() => {

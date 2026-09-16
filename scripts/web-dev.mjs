@@ -154,13 +154,16 @@ export function buildWebHookRunnerCommand({
   const executable = `ticketry-hook${platform === "win32" ? ".exe" : ""}`;
   const output = path.join(cwd, "studio", "src-tauri", "target", "debug", executable);
   return {
-    command: "rustc",
+    command: "cargo",
     args: [
-      path.join(cwd, "studio", "src-tauri", "native", "ticketry_hook.rs"),
-      "--edition",
-      "2021",
-      "-o",
-      output,
+      "build",
+      "--locked",
+      "--manifest-path",
+      path.join(cwd, "studio", "src-tauri", "Cargo.toml"),
+      "-p",
+      "ticketry-hook",
+      "--bin",
+      "ticketry-hook",
     ],
     output,
   };
@@ -177,7 +180,7 @@ function prepareWebHookRunner() {
     throw new Error(`Could not build ticketry-hook: ${result.error.message}`);
   }
   if (result.status !== 0) {
-    throw new Error(`Could not build ticketry-hook: rustc exited with ${result.status}`);
+    throw new Error(`Could not build ticketry-hook: cargo exited with ${result.status}`);
   }
   return build.output;
 }
@@ -274,15 +277,6 @@ export async function main() {
         requestedPort: defaults.environment.TICKETRY_GRAPHQL_ADAPTER_PORT,
         firstPort: 8790,
       });
-  const mcpPort = defaults.reuseGraphqlAdapter
-    ? configuredWebPort(
-        defaults.environment.MUXED_DESKTOP_MCP_PORT ?? 8123,
-        "MUXED_DESKTOP_MCP_PORT",
-      )
-    : await selectWebPort({
-        requestedPort: defaults.environment.MUXED_DESKTOP_MCP_PORT ?? 8123,
-        firstPort: 8123,
-      });
   const frontendPort = await selectWebPort({
     requestedPort: defaults.environment.MUXED_FRONTEND_PORT,
     firstPort: 5174,
@@ -295,7 +289,6 @@ export async function main() {
     ...launch.environment,
     TICKETRY_GRAPHQL_ADAPTER_PORT: String(adapterPort),
     TICKETRY_GRAPHQL_ADAPTER_HOOK_RUNNER: hookRunner,
-    MUXED_DESKTOP_MCP_PORT: String(mcpPort),
     MUXED_VITE_GRAPHQL_ORIGIN: `http://127.0.0.1:${adapterPort}`,
   }, { enabled: logToFile, logPath: logs.logPath });
   const dataSource = launch.productDataDirectory
@@ -306,7 +299,7 @@ export async function main() {
         ? `development profile ${launch.dataDirectory}`
         : `explicit profile ${launch.dataDirectory}`;
   console.log(
-    `[web] data=${launch.dataDirectory} source=${dataSource} mcp=http://127.0.0.1:${mcpPort}/mcp`,
+    `[web] data=${launch.dataDirectory} source=${dataSource} mcp=${path.join(launch.dataDirectory, "mcp.sock")}`,
   );
   if (defaults.reuseGraphqlAdapter) {
     console.log(`[web] reusing GraphQL adapter=http://127.0.0.1:${adapterPort}/graphql`);

@@ -53,6 +53,7 @@ fragment GeneratedWorkTrackerIssueTypeFields on WorktrackerIssuetype {
       prompt
       required_skills: requiredSkills
       entry_skill: entrySkill
+      profile
       model: modelId
       reasoning: reasoningId
       auto_start: autoStart
@@ -92,7 +93,7 @@ query WorkTrackerProjectOpen($projectId: String!) {
       type: { eq: "module" }
       isArchived: { eq: false }
     }
-    orderBy: { rank: ASC, sequenceId: DESC }
+    orderBy: { sequenceId: ASC }
   ) {
     nodes {
       id
@@ -105,7 +106,15 @@ query WorkTrackerProjectOpen($projectId: String!) {
       project { id slug }
     }
   }
-  module_presentations: worktrackerModulepresentation {
+  module_presentations: worktrackerModulepresentation(
+    having: {
+      module: {
+        projectId: { eq: $projectId }
+        type: { eq: "module" }
+        isArchived: { eq: false }
+      }
+    }
+  ) {
     nodes {
       module_id: moduleId
       rank
@@ -137,7 +146,8 @@ query WorkTrackerProjectOpen($projectId: String!) {
       }
     }
     reasoning_levels { id name }
-    global_default { provider model reasoning }
+    codex_profiles
+    global_default { provider profile model reasoning }
   }
 }
 

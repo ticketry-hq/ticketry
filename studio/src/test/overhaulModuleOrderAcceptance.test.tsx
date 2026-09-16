@@ -63,11 +63,11 @@ const listProjects = api.listProjects as ReturnType<typeof vi.fn>;
 
 const PROJECT_ID = "project-1";
 
-/** The server's answer: automatic mode is newest-created-first. */
+/** The server's answer: automatic mode follows module creation order. */
 const SERVER_ORDER: Module[] = [
-  { id: "module-c", name: "Charlie", sequence_id: 3 },
-  { id: "module-b", name: "Bravo", sequence_id: 2 },
   { id: "module-a", name: "Alpha", sequence_id: 1 },
+  { id: "module-b", name: "Bravo", sequence_id: 2 },
+  { id: "module-c", name: "Charlie", sequence_id: 3 },
 ].map((module) => ({
   ...module,
   project_id: PROJECT_ID,
@@ -157,8 +157,8 @@ describe("canonical module order acceptance", () => {
       useClientStore.setState({ selectedModuleId: moduleId });
     });
     useClientStore.setState({
-      selectedModuleId: "module-c",
-      modulesCursorId: "module-c",
+      selectedModuleId: "module-a",
+      modulesCursorId: "module-a",
       sidebarVisible: false,
       focusedPane: "tasks",
       selectModule,
@@ -167,7 +167,7 @@ describe("canonical module order acceptance", () => {
     render(<KeyboardModuleSurface />);
     fireEvent.click(screen.getByRole("button", { name: "Open Modules pane" }));
     await waitFor(() =>
-      expect(sidebarOrder()).toEqual(["Charlie", "Bravo", "Alpha"]),
+      expect(sidebarOrder()).toEqual(["Alpha", "Bravo", "Charlie"]),
     );
     expect(useClientStore.getState().focusedPane).toBe("modules");
 
@@ -181,45 +181,45 @@ describe("canonical module order acceptance", () => {
     fireEvent.keyDown(window, { key: "Enter" });
 
     await waitFor(() =>
-      expect(selectModule).toHaveBeenLastCalledWith("module-c"),
+      expect(selectModule).toHaveBeenLastCalledWith("module-a"),
     );
-    expect(useClientStore.getState().selectedModuleId).toBe("module-c");
+    expect(useClientStore.getState().selectedModuleId).toBe("module-a");
   });
 
   it("[overhaul-37] gives every module consumer one canonical order", async () => {
     seedProjects([project(false)]);
 
-    await renderModuleSurfaces(["Charlie", "Bravo", "Alpha"]);
+    await renderModuleSurfaces(["Alpha", "Bravo", "Charlie"]);
 
     // Sidebar, tab strip, keyboard position shortcuts, and backlog grouping all
     // read the same cached array — no surface re-sorts on its own.
-    expect(tabStripOrder()).toEqual(["Charlie", "Bravo", "Alpha"]);
-    expect(keyboardShortcutOrder()).toEqual(["Charlie", "Bravo", "Alpha"]);
-    expect(backlogGroupOrder()).toEqual(["Charlie", "Bravo", "Alpha"]);
+    expect(tabStripOrder()).toEqual(["Alpha", "Bravo", "Charlie"]);
+    expect(keyboardShortcutOrder()).toEqual(["Alpha", "Bravo", "Charlie"]);
+    expect(backlogGroupOrder()).toEqual(["Alpha", "Bravo", "Charlie"]);
   });
 
   it("[overhaul-38] never overlays activity recency on canonical order", async () => {
     listProjects.mockResolvedValue([project(true)]);
     seedProjects([project(true)]);
     // Presentation mode does not create a second client-side sort.
-    await renderModuleSurfaces(["Charlie", "Bravo", "Alpha"]);
+    await renderModuleSurfaces(["Alpha", "Bravo", "Charlie"]);
 
-    expect(tabStripOrder()).toEqual(["Charlie", "Bravo", "Alpha"]);
-    expect(keyboardShortcutOrder()).toEqual(["Charlie", "Bravo", "Alpha"]);
+    expect(tabStripOrder()).toEqual(["Alpha", "Bravo", "Charlie"]);
+    expect(keyboardShortcutOrder()).toEqual(["Alpha", "Bravo", "Charlie"]);
   });
 
   it("[overhaul-39] keeps the generated automatic order", async () => {
     seedProjects([project(false)]);
 
-    await renderModuleSurfaces(["Charlie", "Bravo", "Alpha"]);
+    await renderModuleSurfaces(["Alpha", "Bravo", "Charlie"]);
 
-    expect(tabStripOrder()).toEqual(["Charlie", "Bravo", "Alpha"]);
+    expect(tabStripOrder()).toEqual(["Alpha", "Bravo", "Charlie"]);
   });
 
   it("[overhaul-40] reads the ordering mode without the project cache warmed", async () => {
     listProjects.mockResolvedValue([project(true)]);
 
-    await renderModuleSurfaces(["Charlie", "Bravo", "Alpha"]);
+    await renderModuleSurfaces(["Alpha", "Bravo", "Charlie"]);
 
     expect(listProjects).toHaveBeenCalled();
   });
@@ -227,12 +227,12 @@ describe("canonical module order acceptance", () => {
   it("[overhaul-41] keeps the generated module order when the project read fails", async () => {
     listProjects.mockRejectedValue(new Error("projects unavailable"));
 
-    await renderModuleSurfaces(["Charlie", "Bravo", "Alpha"]);
+    await renderModuleSurfaces(["Alpha", "Bravo", "Charlie"]);
   });
 
   it("[overhaul-53] adopts a Manual module order this client never made", async () => {
     // This client first knows the project as automatic.
-    await renderModuleSurfaces(["Charlie", "Bravo", "Alpha"]);
+    await renderModuleSurfaces(["Alpha", "Bravo", "Charlie"]);
 
     // A teammate, or this user on another device, drags the project into a
     // Manual module order and the server now owns the whole arrangement.
@@ -248,21 +248,21 @@ describe("canonical module order acceptance", () => {
     await loadModules(PROJECT_ID);
 
     await waitFor(() =>
-      expect(sidebarOrder()).toEqual(["Bravo", "Alpha", "Charlie"]),
+      expect(sidebarOrder()).toEqual(["Bravo", "Charlie", "Alpha"]),
     );
-    expect(tabStripOrder()).toEqual(["Bravo", "Alpha", "Charlie"]);
-    expect(keyboardShortcutOrder()).toEqual(["Bravo", "Alpha", "Charlie"]);
+    expect(tabStripOrder()).toEqual(["Bravo", "Charlie", "Alpha"]);
+    expect(keyboardShortcutOrder()).toEqual(["Bravo", "Charlie", "Alpha"]);
   });
 
   it("[overhaul-54] keeps the last known mode when the project read fails", async () => {
     listProjects.mockResolvedValue([project(true)]);
 
-    await renderModuleSurfaces(["Charlie", "Bravo", "Alpha"]);
+    await renderModuleSurfaces(["Alpha", "Bravo", "Charlie"]);
 
     // A transient failure must not replace the last canonical order.
     listProjects.mockRejectedValue(new Error("projects unavailable"));
     await loadModules(PROJECT_ID);
 
-    expect(keyboardShortcutOrder()).toEqual(["Charlie", "Bravo", "Alpha"]);
+    expect(keyboardShortcutOrder()).toEqual(["Alpha", "Bravo", "Charlie"]);
   });
 });

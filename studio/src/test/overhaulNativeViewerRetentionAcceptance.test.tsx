@@ -128,7 +128,7 @@ describe("native viewer attachment acceptance", () => {
     });
   });
 
-  it("[overhaul-67] retains opened native viewers across Work items and terminal tabs", async () => {
+  it("[overhaul-67] [overhaul-228] retains opened native viewers across Work items and terminal tabs without rebuilding or reattaching them", async () => {
     const leaseOperations: RecordedGraphQlOperation[] = [];
     const leases = (operationName: string) =>
       leaseOperations.filter((operation) => operation.operationName === operationName);

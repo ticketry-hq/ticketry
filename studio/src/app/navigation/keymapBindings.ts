@@ -130,7 +130,13 @@ export const DEFAULT_BINDINGS: readonly BindingDefinition[] = [
     return {
       context: "capture",
       actionId: `modules.select-position-${position}`,
-      chord: chord(position === 10 ? "0" : String(position), { meta: true }),
+      chord: chord(position === 10 ? "0" : String(position), {
+        meta: true,
+        shift: position === 10,
+      }),
+      defaultAliases: position === 10
+        ? [chord(")", { meta: true, shift: true })]
+        : undefined,
       configurable: false,
       platforms: ["desktop"],
     };

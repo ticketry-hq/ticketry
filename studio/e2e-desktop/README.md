@@ -41,11 +41,11 @@ that Done and the completed terminal remain visible. Success, failure, and
 interruption stop the app and private tmux server and remove the temporary
 profile and database.
 
-The harness does not set `MUXED_DESKTOP_MCP_PORT` and holds port 8123 from
-before desktop startup through provider execution. It requires the desktop MCP
-listener to answer on port 8124, checks that the disposable provider receives
-that exact endpoint with non-empty launch authority, and observes the provider
-move the Story through that Ticketry instance.
+The harness holds ports 8123 through 8132 from before desktop startup through
+provider execution. It requires ready health and the MCP socket in the isolated
+data directory, checks that the disposable provider receives the packaged stdio
+bridge command with non-empty launch authority, and observes the provider move
+the Story through that Ticketry instance.
 
 On failure, diagnostics are copied to the ignored `studio/test-results/`
 directory before the isolated runtime directory is removed. They include a

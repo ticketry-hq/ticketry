@@ -60,7 +60,7 @@ export function ModuleVersionControl({
 
   return (
     <div
-      className="grid h-full min-h-0 grid-cols-[minmax(18rem,22rem)_minmax(0,1fr)] text-sm"
+      className="grid h-full min-h-0 grid-cols-[minmax(18rem,22rem)_minmax(18rem,1fr)] overflow-x-auto overflow-y-hidden text-sm"
       data-testid="module-version-control"
     >
       <div className="min-h-0 border-r border-pane-border">
@@ -71,7 +71,7 @@ export function ModuleVersionControl({
           onOpenTask={onOpenTask}
         />
       </div>
-      <section aria-label="Module checkout changes" className="flex min-h-0 flex-col overflow-hidden p-4">
+      <section aria-label="Module checkout changes" className="flex min-h-0 flex-col overflow-x-hidden overflow-y-auto p-4">
         <header className="mb-3 shrink-0 border-b border-pane-border pb-3">
           <div className="flex items-baseline gap-3">
             <h2 className="font-medium text-text-primary">Module checkout Changes</h2>

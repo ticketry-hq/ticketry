@@ -100,7 +100,15 @@ export type AgentRuns = {
   scope: Scalars['String']['output'];
   startedAt: Scalars['String']['output'];
   status: Scalars['String']['output'];
+  terminalSession: AgentTerminalSessionsConnection;
   ticketSeq?: Maybe<Scalars['Int']['output']>;
+};
+
+
+export type AgentRunsTerminalSessionArgs = {
+  filters?: InputMaybe<AgentTerminalSessionsFilterInput>;
+  orderBy?: InputMaybe<AgentTerminalSessionsOrderInput>;
+  pagination?: InputMaybe<PaginationInput>;
 };
 
 export type AgentRunsConnection = {
@@ -144,6 +152,7 @@ export type AgentRunsFilterInput = {
 
 export type AgentRunsHavingInput = {
   issue?: InputMaybe<WorktrackerIssueFilterInput>;
+  terminalSession?: InputMaybe<AgentTerminalSessionsFilterInput>;
 };
 
 export type AgentRunsOrderInput = {

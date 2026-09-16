@@ -121,7 +121,7 @@ export async function resetModuleReorderHarness(): Promise<void> {
   });
 }
 
-/** The server-owned newest-first order an automatic project shows: a, b, c. */
+/** The server-owned creation order an automatic project shows: a, b, c. */
 export async function renderAutomaticProject(): Promise<void> {
   listModules.mockResolvedValue(modules("module-a", "module-b", "module-c"));
   listProjects.mockResolvedValue([project(false)]);

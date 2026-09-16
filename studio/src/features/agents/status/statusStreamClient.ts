@@ -184,7 +184,7 @@ export function createStatusStreamClient(
     async start() {
       stopped = false;
       const afterCursor = cursors.get(projectId);
-      await createProxy().graphql_subscribe(
+      const encoded = await createProxy().graphql_subscribe(
         subscriptionId,
         JSON.stringify({
           query: documentSource(RunStatusStreamDocument),
@@ -193,6 +193,10 @@ export function createStatusStreamClient(
         }),
         receive,
       );
+      const response: unknown = JSON.parse(encoded);
+      if (!isRecord(response) || response.type !== "accepted") {
+        throw new Error("The run status subscription was not accepted.");
+      }
     },
     async stop() {
       stopped = true;

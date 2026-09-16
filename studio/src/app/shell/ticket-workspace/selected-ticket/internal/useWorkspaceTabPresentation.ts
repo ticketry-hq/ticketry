@@ -7,6 +7,7 @@ import {
   type SessionTab,
 } from "../../../../../features/agents/terminal";
 import { useAgentStatusRuns } from "../../../../../features/agents/status";
+import type { RunRecord } from "../../../../../features/agents/status";
 import {
   DEFAULT_WORKSPACE,
   useClientStore as useTicketWorkspaceStore,
@@ -23,6 +24,7 @@ export function useWorkspaceTabPresentation({
   terminalTabs,
   activeTerminalId,
   resumableSessions,
+  endedRuns,
   savedTabOrder,
   hasChangesTab,
   terminalOnly = false,
@@ -34,6 +36,8 @@ export function useWorkspaceTabPresentation({
   terminalTabs: readonly SessionTab[];
   activeTerminalId: string | null;
   resumableSessions: readonly ResumableTerminalSession[];
+  /** Ended runs the WorkItem read restored; the stream no longer pushes them. */
+  endedRuns: readonly RunRecord[];
   savedTabOrder: readonly TaskWorkspaceTabIdentity[];
   hasChangesTab: boolean;
   terminalOnly?: boolean;
@@ -61,6 +65,7 @@ export function useWorkspaceTabPresentation({
     projectId,
     moduleId,
     excludedRunIds: resumableRunIds,
+    restoredRuns: endedRuns,
   });
   // Dormant chips are the same runs the strip labels, so they are presented by
   // the same rule from the same durable records (#695). The run store supplies

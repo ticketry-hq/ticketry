@@ -17,9 +17,7 @@ use super::provider_catalog_read::load_from;
 use ticketry_entities::{
     agent_model, agent_model_reasoning_level, provider, reasoning_level, StringList,
 };
-
-const ADAPTER_SLUGS: [&str; 4] = ["claude", "agy", "codex", "gemini"];
-pub(super) const CONFIGURABLE_PROVIDER_SLUGS: [&str; 3] = ["claude", "codex", "gemini"];
+use ticketry_provider::{provider_contract, ProfileSelection, Provider, ProviderErrorCode};
 
 #[derive(Clone, Debug, Eq, PartialEq, CustomOutputType)]
 pub struct ProviderCatalog {
@@ -65,7 +63,10 @@ impl ProviderCatalogService {
             .order_by_asc(provider::Column::Slug)
             .all(&self.database)
             .await?;
-        let adapters = ADAPTER_SLUGS.into_iter().collect::<BTreeSet<_>>();
+        let adapters = Provider::ALL
+            .into_iter()
+            .map(Provider::slug)
+            .collect::<BTreeSet<_>>();
         let persisted = rows
             .iter()
             .map(|row| row.slug.as_str())
@@ -98,12 +99,18 @@ impl ProviderCatalogService {
         load_from(&self.database).await
     }
 
+    pub async fn load_from(
+        database: &impl ConnectionTrait,
+    ) -> Result<ProviderCatalog, ProviderCatalogError> {
+        load_from(database).await
+    }
+
     pub async fn update(
         &self,
         update: ProviderCatalogUpdate,
     ) -> Result<ProviderCatalog, ProviderCatalogError> {
         let activated = normalized_activation(update.activated_providers)?;
-        let codex_profiles = normalized_profiles(update.codex_profiles);
+        let codex_profiles = normalized_profiles(update.codex_profiles)?;
         let global_default = normalize_default(update.global_default)?;
         let transaction = self.database.begin().await?;
         validate_update(
@@ -114,7 +121,15 @@ impl ProviderCatalogService {
         )
         .await?;
 
-        for slug in CONFIGURABLE_PROVIDER_SLUGS {
+        for slug in Provider::ALL
+            .into_iter()
+            .filter(|provider| {
+                provider_contract(*provider)
+                    .metadata()
+                    .settings_configurable
+            })
+            .map(Provider::slug)
+        {
             provider::Entity::update_many()
                 .col_expr(
                     provider::Column::Activated,
@@ -205,21 +220,21 @@ struct PersistedProviderCatalog {
     global_default: Option<GlobalLaunchDefault>,
 }
 
-fn normalized_profiles(values: Vec<String>) -> Vec<String> {
-    values
-        .into_iter()
-        .map(|value| value.trim().to_owned())
-        .filter(|value| !value.is_empty())
-        .collect::<BTreeSet<_>>()
-        .into_iter()
-        .collect()
+pub(super) fn normalized_profiles(
+    values: Vec<String>,
+) -> Result<Vec<String>, ProviderCatalogError> {
+    provider_contract(Provider::Codex)
+        .normalize_profiles(&values)
+        .map_err(|error| validation("codex_profiles", error.to_string()))
 }
 
 fn normalized_activation(values: Vec<String>) -> Result<BTreeSet<String>, ProviderCatalogError> {
     let mut normalized = BTreeSet::new();
     for value in values {
         let value = value.trim().to_owned();
-        if !CONFIGURABLE_PROVIDER_SLUGS.contains(&value.as_str()) {
+        if !Provider::from_slug(&value)
+            .is_some_and(|provider| provider_contract(provider).metadata().settings_configurable)
+        {
             return Err(validation(
                 "activated_providers",
                 format!("Provider '{value}' is not configurable in Settings."),
@@ -287,26 +302,38 @@ async fn validate_update(
             ),
         ));
     }
-    if let Some(profile) = default.profile.as_deref() {
-        if default.provider != "codex" {
-            return Err(validation(
-                "default_profile",
-                "Only Codex supports launch profiles.",
-            ));
-        }
-        if !codex_profiles.iter().any(|candidate| candidate == profile) {
-            return Err(validation(
-                "default_profile",
-                format!("Codex profile '{profile}' is not registered."),
-            ));
-        }
-        if default.model.is_some() || default.reasoning.is_some() {
-            return Err(validation(
-                "default_profile",
-                "A Codex profile cannot be combined with model or reasoning overrides.",
-            ));
-        }
-    }
+    let provider_kind = Provider::from_slug(&default.provider).ok_or_else(|| {
+        validation(
+            "default_provider",
+            format!("Provider '{}' is not registered.", default.provider),
+        )
+    })?;
+    provider_contract(provider_kind)
+        .validate_profile_selection(
+            ProfileSelection {
+                profile: default.profile.as_deref(),
+                model: default.model.as_deref(),
+                effort: default.reasoning.as_deref(),
+            },
+            codex_profiles,
+        )
+        .map_err(|error| {
+            let message = match error.code {
+                ProviderErrorCode::UnsupportedProfile => {
+                    "Only Codex supports launch profiles.".to_owned()
+                }
+                ProviderErrorCode::UnregisteredProfile => format!(
+                    "Codex profile '{}' is not registered.",
+                    default.profile.as_deref().unwrap_or_default()
+                ),
+                ProviderErrorCode::ProfileConflict => {
+                    "A Codex profile cannot be combined with model or reasoning overrides."
+                        .to_owned()
+                }
+                _ => error.to_string(),
+            };
+            validation("default_profile", message)
+        })?;
     let provider_id = provider.id;
     let model_id = match default.model.as_deref() {
         None => None,

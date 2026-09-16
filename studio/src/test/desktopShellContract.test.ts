@@ -72,6 +72,7 @@ describe("desktop shell security contract", () => {
         "allow-desktop-append-frontend-log",
         "allow-desktop-retry-services",
         "allow-desktop-pick-folder",
+        "allow-desktop-prepare-directory-trust",
         "allow-desktop-validate-module-folder",
         "allow-desktop-preflight-report",
         "allow-desktop-approve-executable-path",
@@ -313,7 +314,7 @@ describe("desktop shell security contract", () => {
 
     expect(presenter).toContain("nativeGhosttyAvailable");
     expect(presenter).toContain("<NativeGhosttyTerminal");
-    expect(presenter).toContain("<XtermTerminal");
+    expect(presenter).toContain("<LazyXtermTerminal");
     expect(presenter).toContain("if (!nativeFailureReason) return fallback");
     expect(presenter).toContain("onUnavailable={markNativeUnavailable}");
   });
@@ -424,6 +425,18 @@ describe("desktop shell security contract", () => {
       armRedraw!.indexOf("[view recordRedraw]"),
     );
     expect(armRedraw).not.toContain("ghostty_surface_refresh(view->_surface)");
+  });
+
+  it("registers directory trust setup only for the local main window", async () => {
+    const commandName = "desktop_prepare_directory_trust";
+    const run = await text("../../src-tauri/crates/app/ticketry-desktop/src/desktop/run.rs");
+    const build = await text("../../src-tauri/build.rs");
+    const capability = await json("../../src-tauri/capabilities/studio-main.json");
+    expect(run).toContain(`commands::directory_trust::${commandName}`);
+    expect(build).toContain(`"${commandName}"`);
+    expect(capability.local).toBe(true);
+    expect(capability.windows).toEqual(["main"]);
+    expect(capability.permissions).toContain("allow-desktop-prepare-directory-trust");
   });
 
   it("keeps the service retry command free of webview-supplied values", async () => {

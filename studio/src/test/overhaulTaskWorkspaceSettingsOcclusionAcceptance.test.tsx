@@ -22,6 +22,7 @@ import { StudioFooter } from "../app/shell/StudioFooter";
 import { SelectedTicketContent } from "../app/shell/ticket-workspace/selected-ticket/SelectedTicketContent";
 import { useAgentStatusStore } from "../features/agents/status/testStore";
 import { useTerminalForegroundStore } from "../features/agents/terminal/internal/foregroundStore";
+import { modalOcclusionActive } from "../features/agents/terminal/internal/modalOcclusion";
 import { useTerminalStore } from "../features/agents/terminal/internal/sessionStore";
 import { useStudioStore } from "../features/projects/store";
 import { useClientStore } from "../state/clientStore";
@@ -223,6 +224,9 @@ describe("overhaul acceptance — Task workspace Settings occlusion", () => {
     useTerminalForegroundStore.setState({ claims: {}, hostTargets: {} });
     useModalStore.setState({ modalStack: [], presentedNoticeIds: new Set() });
     useClientStore.setState({
+      selectedModuleId: "module-1",
+      selectedTaskId: "task-792",
+      workspaceSelection: { kind: "task" },
       activeByTask: {},
       workspaces: {},
       sidebarVisible: true,
@@ -278,7 +282,7 @@ describe("overhaul acceptance — Task workspace Settings occlusion", () => {
     vi.unstubAllGlobals();
   });
 
-  it("[overhaul-123] hides and restores the retained Task viewer through Settings while browser compatibility remains in the WebView", async () => {
+  it("[overhaul-123] keeps the retained Task viewer visible beneath Settings while browser compatibility remains in the WebView", async () => {
     seedTaskWorkspace("session-792", "run-792");
     const nativeView = mountTaskWorkspace();
 
@@ -296,7 +300,7 @@ describe("overhaul acceptance — Task workspace Settings occlusion", () => {
       within(dialog).getByRole("button", { name: "Close dialog" }),
     ).toBeEnabled();
     await waitFor(() => {
-      expect(invocations("native_terminal_hide")).toEqual([[{ handle: HANDLE }]]);
+      expect(invocations("native_terminal_hide")).toHaveLength(0);
     });
     expect(invocations("native_terminal_detach")).toHaveLength(0);
     expect(invocations("native_terminal_attach")).toHaveLength(1);
@@ -311,7 +315,7 @@ describe("overhaul acceptance — Task workspace Settings occlusion", () => {
 
     fireEvent.click(within(dialog).getByRole("button", { name: "Close dialog" }));
     await waitFor(() =>
-      expect(invocations("native_terminal_show")).toHaveLength(2),
+      expect(invocations("native_terminal_show")).toHaveLength(1),
     );
     expect(invocations("native_terminal_show").at(-1)).toEqual([
       { handle: HANDLE, frame: FRAME },
@@ -416,7 +420,7 @@ describe("overhaul acceptance — Task workspace Settings occlusion", () => {
     view.unmount();
   });
 
-  it("[overhaul-126] hides and restores the retained Task viewer through state configuration", async () => {
+  it("[overhaul-126] keeps the retained Task viewer beneath workspace configuration", async () => {
     seedTaskWorkspace("session-792", "run-792");
     const view = mountTaskWorkspace();
     await waitFor(() =>
@@ -429,92 +433,53 @@ describe("overhaul acceptance — Task workspace Settings occlusion", () => {
         .toggleStateConfiguration("project-1", "state-1"),
     );
     await waitFor(() =>
-      expect(invocations("native_terminal_hide")).toEqual([[{ handle: HANDLE }]]),
+      expect(invocations("native_terminal_hide")).toHaveLength(0),
     );
     expect(invocations("native_terminal_detach")).toHaveLength(0);
 
     act(() => useClientStore.getState().dismissStateConfiguration());
     await waitFor(() =>
-      expect(invocations("native_terminal_show")).toHaveLength(2),
+      expect(invocations("native_terminal_show")).toHaveLength(1),
     );
     expect(invocations("native_terminal_show").at(-1)).toEqual([
       { handle: HANDLE, frame: FRAME },
     ]);
     expect(invocations("native_terminal_attach")).toHaveLength(1);
 
+    act(() =>
+      useClientStore
+        .getState()
+        .toggleConversationConfiguration("project-1", "module-1"),
+    );
+    expect(modalOcclusionActive()).toBe(true);
+    expect(invocations("native_terminal_detach")).toHaveLength(0);
+
+    act(() => useClientStore.getState().dismissConversationConfiguration());
+    expect(modalOcclusionActive()).toBe(false);
+    expect(invocations("native_terminal_attach")).toHaveLength(1);
+
     view.unmount();
   });
 
-  it("suppresses an older same-handle reveal across a close-reopen-close Settings sequence", async () => {
+  it("keeps the same viewer presented across a close-reopen-close Settings sequence", async () => {
     seedTaskWorkspace("session-792", "run-792");
-    let deferShows = false;
-    const finishShows: Array<() => void> = [];
-    tauri.invoke.mockImplementation(
-      (command: string, input?: { runId?: string }) => {
-        if (command === "native_terminal_available") return Promise.resolve(true);
-        if (
-          command === "native_terminal_attach" ||
-          command === "native_terminal_set_frame" ||
-          command === "native_terminal_reconcile_frame"
-        ) {
-          return Promise.resolve({
-            handle: HANDLE,
-            runId: input?.runId ?? "run-792",
-            columns: 100,
-            rows: 30,
-          });
-        }
-        if (command === "native_terminal_show") {
-          const status = {
-            handle: HANDLE,
-            runId: "run-792",
-            columns: 100,
-            rows: 30,
-          };
-          if (!deferShows) return Promise.resolve(status);
-          return new Promise<typeof status>((resolve) => {
-            finishShows.push(() => resolve(status));
-          });
-        }
-        return Promise.resolve();
-      },
-    );
     const view = mountTaskWorkspace();
     await waitFor(() =>
       expect(invocations("native_terminal_show")).toHaveLength(1),
     );
 
-    let dialog = await (async () => {
+    for (const episode of [1, 2]) {
       fireEvent.click(screen.getByRole("button", { name: "Open Settings" }));
-      return screen.findByRole("dialog", { name: "Studio settings" });
-    })();
-    await waitFor(() =>
-      expect(invocations("native_terminal_hide")).toHaveLength(1),
-    );
+      const dialog = await screen.findByRole("dialog", { name: "Studio settings" });
+      expect(dialog).toBeVisible();
+      expect(invocations("native_terminal_hide"), `episode ${episode}`).toHaveLength(0);
+      fireEvent.click(within(dialog).getByRole("button", { name: "Close dialog" }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    }
 
-    deferShows = true;
-    fireEvent.click(within(dialog).getByRole("button", { name: "Close dialog" }));
-    await waitFor(() => expect(finishShows).toHaveLength(1));
-
-    fireEvent.click(screen.getByRole("button", { name: "Open Settings" }));
-    dialog = await screen.findByRole("dialog", { name: "Studio settings" });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Close dialog" }));
-
-    // The first reveal now completes under a newer request for the same native
-    // handle. Handle equality is not enough: it must be hidden before the
-    // newest reveal can commit its current geometry and focus policy.
-    await act(async () => finishShows.shift()?.());
-    await waitFor(() =>
-      expect(invocations("native_terminal_hide")).toHaveLength(2),
-    );
-    await waitFor(() => expect(finishShows).toHaveLength(1));
-
-    await act(async () => finishShows.shift()?.());
-    await waitFor(() =>
-      expect(invocations("native_terminal_show")).toHaveLength(3),
-    );
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-
+    expect(invocations("native_terminal_show")).toHaveLength(1);
+    expect(invocations("native_terminal_attach")).toHaveLength(1);
+    expect(invocations("native_terminal_detach")).toHaveLength(0);
     view.unmount();
   });
 });

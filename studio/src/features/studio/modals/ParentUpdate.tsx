@@ -7,7 +7,7 @@ import { useClientStore } from "../../../state/clientStore";
 import {
   useSetWorkItemParent,
   useWorkItem,
-  useModuleOpen,
+  useModuleItems,
 } from "../../work-items";
 import { apiErrorMessage } from "../../../shared/api/errors";
 import { toast } from "../../../state/clientStore";
@@ -36,7 +36,7 @@ export function ParentUpdate({ payload }: { payload?: ParentUpdatePayload }) {
   const selectedProjectId = useStudioStore((s) => s.selectedProjectId);
   const selectedModuleId = useClientStore((s) => s.selectedModuleId);
   const selectedTaskId = useClientStore((s) => s.selectedTaskId);
-  const { items: tasks } = useModuleOpen(selectedModuleId);
+  const tasks = useModuleItems(selectedModuleId);
   const modules = useModulesQuery(selectedProjectId).data ?? [];
   const { data: selectedTask } = useWorkItem(
     selectedTaskId && selectedTaskId !== TEMP_TASK_ID ? selectedTaskId : null,
@@ -86,7 +86,11 @@ export function ParentUpdate({ payload }: { payload?: ParentUpdatePayload }) {
     }
     setBusy(true);
     try {
-      await setParent.mutateAsync({ id: selectedTaskId, parentId: chosen.id });
+      await setParent.mutateAsync({
+        id: selectedTaskId,
+        parentId: chosen.id,
+        moduleId: mode === "epic" ? chosen.id : selectedModuleId ?? undefined,
+      });
       popModal();
     } catch (error) {
       toast.error(apiErrorMessage(error));

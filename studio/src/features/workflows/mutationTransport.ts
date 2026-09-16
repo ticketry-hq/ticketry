@@ -134,16 +134,12 @@ export function upsertIssueTypeWorkflowLaunchBinding(
         ? catalog.reasoningLevels.find((row) => row.name === binding.reasoning)
         : undefined;
       if (binding.agent && !provider) throw new Error(`Agent/provider '${binding.agent}' is not in the catalog.`);
-      // A launch binding records its provider through the chosen model, the
-      // only agent identity the row carries. Sending the model alone silently
-      // dropped an agent-without-model selection, so the state re-read as
-      // unconfigured; refuse it with the reason instead.
-      if (binding.agent && !binding.model) {
-        throw new Error(
-          `Choose a model for agent/provider '${binding.agent}'. A launch `
-          + "configuration stores its provider through the model.",
-        );
-      }
+      // A launch binding records its provider through the chosen model or
+      // profile, the only agent identity the row carries, so an agent without
+      // either is the empty inheriting binding. Clearing the profile
+      // ("No profile") arrives that way; rejecting it left the cleared profile
+      // persisted (ticket #1824). Write the cleared row instead of restoring
+      // the overrides the caller just dropped.
       if (binding.model && !model) throw new Error(`Model '${binding.model}' is not in the catalog for agent/provider '${binding.agent ?? ""}'.`);
       if (binding.reasoning && !reasoning) throw new Error(`Reasoning '${binding.reasoning}' is not in the catalog.`);
       // `prompt` and `required_skills` are omitted when the caller supplied
@@ -160,6 +156,7 @@ export function upsertIssueTypeWorkflowLaunchBinding(
         ...(binding.entry_skill === undefined
           ? {}
           : { entrySkill: binding.entry_skill }),
+        ...(binding.profile === undefined ? {} : { profile: binding.profile }),
         modelId: model?.id ?? null, reasoningId: reasoning?.id ?? null,
         autoStart, subtreeRunEnabled,
       });

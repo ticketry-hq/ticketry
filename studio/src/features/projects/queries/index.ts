@@ -24,16 +24,6 @@ import {
 const EMPTY_PROJECTS: Project[] = [];
 const EMPTY_MODULES: Module[] = [];
 
-function canonicalModules(
-  projectId: string,
-  data: Parameters<typeof modulesFromProjectOpen>[0],
-): Module[] {
-  const modules = modulesFromProjectOpen(data);
-  // The adapter joins ModulePresentation ranks onto the generated module read.
-  void projectId;
-  return modules;
-}
-
 export function getProjectsSnapshot(): Project[] {
   const data = studioApolloClient().readQuery({ query: WorkTrackerProjectsDocument });
   return data ? projectsFromResult(data) : [];
@@ -46,7 +36,7 @@ export function getModulesSnapshot(projectId: string | null): Module[] {
     variables: { projectId: compactWorktrackerId(projectId) },
     optimistic: true,
   });
-  return data ? canonicalModules(projectId, data) : [];
+  return data ? modulesFromProjectOpen(data) : [];
 }
 
 export async function loadProjects(): Promise<Project[]> {
@@ -90,7 +80,7 @@ export function useCachedModules(projectId: string | null): Module[] {
       : skipToken,
   );
   return projectId && query.data
-    ? canonicalModules(projectId, query.data)
+    ? modulesFromProjectOpen(query.data)
     : EMPTY_MODULES;
 }
 
@@ -121,6 +111,10 @@ export function useModulesQuery(projectId: string | null) {
       setLoading(false);
       return;
     }
+    if (query.data) {
+      setLoading(false);
+      return;
+    }
     let active = true;
     setLoading(true);
     void loadModules(projectId).then(
@@ -130,15 +124,21 @@ export function useModulesQuery(projectId: string | null) {
       },
     ).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [projectId]);
+  }, [projectId, query.data]);
+  // `loading` starts true and is only cleared by the effect above, which runs
+  // after the first paint. Bootstrap has usually already loaded this project,
+  // so the cache can answer on that first render — reporting "pending" anyway
+  // would blank the module tabs for a frame the render storm can stretch into
+  // a visible delay. The cache answering is the end of pending.
+  const pending = loading && !query.data;
   return {
     ...query,
     data: projectId && query.data
-      ? canonicalModules(projectId, query.data)
+      ? modulesFromProjectOpen(query.data)
       : undefined,
     error: error ?? query.error,
-    loading,
-    isPending: loading,
+    loading: pending,
+    isPending: pending,
   };
 }
 

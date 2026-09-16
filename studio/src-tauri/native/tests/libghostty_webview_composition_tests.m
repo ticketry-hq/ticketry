@@ -75,14 +75,26 @@ static void muxed_focus_trace_settled(NSView *view, const char *event) {
 
 static bool muxed_focus_trace_enabled(void) { return false; }
 
-uint8_t muxed_ghostty_studio_chord(uint64_t modifiers, uint16_t key_code) {
-  (void)modifiers;
-  (void)key_code;
-  return MUXED_GHOSTTY_CHORD_NONE;
-}
+#include "../libghostty_studio_chord.m"
 
 ghostty_surface_config_s ghostty_surface_config_new(void) {
   return (ghostty_surface_config_s){0};
+}
+bool ghostty_config_get(ghostty_config_t config, void *value,
+                        const char *key, uintptr_t length) {
+  (void)config;
+  if (length != 9 || strncmp(key, "font-size", length) != 0) return false;
+  *(float *)value = 14;
+  return true;
+}
+static char last_font_action[64];
+static size_t font_action_count = 0;
+bool ghostty_surface_binding_action(ghostty_surface_t surface,
+                                    const char *action, uintptr_t length) {
+  (void)surface;
+  snprintf(last_font_action, sizeof(last_font_action), "%.*s", (int)length, action);
+  font_action_count++;
+  return true;
 }
 ghostty_surface_t ghostty_surface_new(ghostty_app_t app,
                                      const ghostty_surface_config_s *config) {
@@ -184,6 +196,7 @@ void ghostty_surface_mouse_scroll(ghostty_surface_t surface, double x, double y,
 
 #include "../libghostty_view.m"
 #include "../libghostty_view_handles.m"
+#include "../libghostty_zoom.m"
 #include "../libghostty_view_bridge.m"
 
 @interface MuxedTestWebView : NSView
@@ -282,9 +295,11 @@ static void record_tmux_scroll(void *context, uint8_t direction,
 }
 
 #include "libghostty_view_lifetime_tests.m"
+#include "libghostty_zoom_tests.m"
 
 int main(void) {
   @autoreleasepool {
+    test_native_font_zoom();
     (void)&muxed_ghostty_owned_surface;
     (void)&runtime_action;
     NSView *content = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 800, 600)];

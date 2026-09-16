@@ -2,10 +2,9 @@
 //
 // Two native-viewer rules read the same answer: the mount registry drops a
 // run's sticky failure once its session is no longer live, and Terminal's
-// recovery gate only reports a native render failure while it still is. They
-// must agree on the same status set — if one gains a status and the other does
-// not, a dead session keeps booking Studio refreshes, or recovery silently
-// stops working for a session that is still live.
+// renderer choice only attempts native attachment while it still is. They
+// must agree on the same status set so ended sessions release their native
+// failure state and live sessions keep their compatibility fallback.
 //
 // This is deliberately not presentation/terminalLiveness.ts: that predicate
 // answers a run-state/colour question over a different state set. Keep the two

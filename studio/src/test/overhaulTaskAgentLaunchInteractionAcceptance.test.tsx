@@ -30,7 +30,8 @@ describe("overhaul acceptance — task agent launch interaction", () => {
     const launcher = screen.getByRole("button", { name: "＋ Agent" });
     const tabScroller = screen.getByTestId("workspace-tab-scroll");
     expect(tabScroller).toHaveClass("overflow-x-auto");
-    expect(tabScroller).not.toContainElement(launcher);
+    expect(tabScroller).toContainElement(launcher);
+    expect(tabScroller.lastElementChild).toBe(launcher.parentElement);
 
     fireEvent.click(launcher);
 

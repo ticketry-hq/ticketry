@@ -51,10 +51,14 @@ export function useGlobalKeymap(taskRows: TreeRow[] = EMPTY_TASK_ROWS): void {
     function onCaptureKeyDown(event: KeyboardEvent): void {
       const ui = useClientStore.getState();
       const sidebarVisible = ui.sidebarVisible;
+      const actionId = studioKeymapRegistry.resolve("capture", event);
+      if (actionId === "modules.select-position-10") {
+        event.preventDefault();
+        event.stopPropagation();
+      }
       if (hasOpenModal()) return;
       if (isLaunchMenuTarget(event.target)) return;
 
-      const actionId = studioKeymapRegistry.resolve("capture", event);
       // Ahead of body engagement: the panel toggle must reverse itself from any
       // focus position, including an agent terminal in typing mode (#667).
       if (routeTerminalPanelToggle(event, actionId)) return;

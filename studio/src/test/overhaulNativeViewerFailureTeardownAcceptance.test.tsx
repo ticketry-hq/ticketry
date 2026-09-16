@@ -1,5 +1,12 @@
 import { act, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { loadXtermTerminal } from "../features/agents/terminal/xtermTerminalLoader";
+
+// The compatibility renderer is a lazily fetched chunk; preload it so the
+// xterm host can be queried synchronously after render.
+beforeEach(async () => {
+  await loadXtermTerminal();
+});
 
 import { NativeGhosttyTerminal } from "../features/agents/terminal/NativeGhosttyTerminal";
 import { Terminal } from "../features/agents/terminal/Terminal";
@@ -76,7 +83,7 @@ describe("native viewer attachment acceptance", () => {
           moduleId: "module-1",
           agent: "codex",
           status: "ready",
-          transport: "ready",
+          transport: "connecting",
           isPlanning: false,
           isInstant: false,
           initialPrompt: null,

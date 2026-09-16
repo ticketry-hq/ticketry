@@ -10,12 +10,14 @@
  * presents the modal over it.
  */
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { StrictMode } from "react";
 
 import StudioApp from "../app/StudioApp";
 import { ModalHost } from "../app/modal/ModalHost";
 import { useModalStore } from "../app/modal/modalStore";
+import { BootstrapGate } from "../app/startup/BootstrapGate";
 import {
   createBrowserRuntime,
   initializeStudioRuntime,
@@ -82,6 +84,25 @@ describe("overhaul acceptance — web settings reachability from startup gates",
       await screen.findByText("Connecting to local work tracker…"),
     ).toBeInTheDocument();
     await openSettingsFromGate();
+  });
+
+  it("shares one in-flight bootstrap across the Strict Mode effect replay", async () => {
+    let finishBootstrap!: (outcome: "ready") => void;
+    bootstrap.bootstrapStudio.mockReturnValue(new Promise((resolve) => {
+      finishBootstrap = resolve;
+    }));
+
+    render(
+      <StrictMode>
+        <BootstrapGate>
+          <div>Studio ready</div>
+        </BootstrapGate>
+      </StrictMode>,
+    );
+
+    await waitFor(() => expect(bootstrap.bootstrapStudio).toHaveBeenCalledTimes(1));
+    finishBootstrap("ready");
+    expect(await screen.findByText("Studio ready")).toBeVisible();
   });
 
   it("[overhaul-218] opens Settings from the failed service-health screen", async () => {

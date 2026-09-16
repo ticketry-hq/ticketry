@@ -22,8 +22,8 @@ A per-workflow-edge flag. When a transition takes a handoff edge, the
 destination state's prompt and entry skill are delivered as typed input into
 the work item's still-live agent session instead of spawning a fresh agent.
 Configured beside the edge's origin permission in the workflow editor. A
-handoff edge decides *how* the destination is delivered, never *whether*: a
-destination that would not have launched still does not launch.
+handoff edge requests destination delivery even when ordinary auto-start is
+off; without a live, input-capable session, it falls back to a fresh launch.
 _Avoid_: resume-on-transition, carry-over, handoff mode
 
 **Delivery mode**:

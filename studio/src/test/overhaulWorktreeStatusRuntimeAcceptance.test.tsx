@@ -100,9 +100,6 @@ describe("worktree status desktop runtime acceptance", () => {
         taskId={PARENT}
         parentId={null}
         moduleId="m1"
-        projectId="p1"
-        ticketSeq={881}
-        taskName="Parent story"
       />,
     );
 
@@ -119,9 +116,6 @@ describe("worktree status desktop runtime acceptance", () => {
         taskId={CHILD}
         parentId={PARENT}
         moduleId="m2"
-        projectId="p1"
-        ticketSeq={882}
-        taskName="Child task"
       />,
     );
 

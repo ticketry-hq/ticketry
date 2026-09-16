@@ -82,6 +82,8 @@ muxed_ghostty_view_set_frame(void *opaque, double x, double y, double width,
     viewport = coordinateView.bounds;
   double scale_x = viewport.size.width / viewport_width;
   double scale_y = viewport.size.height / viewport_height;
+  muxed_ghostty_sync_font_zoom(view->_surface, view->_baseFontSize, scale_x,
+                              &view->_fontZoom);
   NSRect frame = NSMakeRect(NSMinX(viewport) + x * scale_x, 0,
                             width * scale_x, height * scale_y);
   if (coordinateView.isFlipped)

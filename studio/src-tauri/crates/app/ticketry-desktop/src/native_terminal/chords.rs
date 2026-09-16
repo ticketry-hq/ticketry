@@ -23,6 +23,9 @@ pub enum StudioChord {
     Settings,
     ModulePosition(u8),
     BodyDisengage,
+    ZoomIn,
+    ZoomOut,
+    ZoomReset,
 }
 
 impl StudioChord {
@@ -35,6 +38,9 @@ impl StudioChord {
             2 => Some(Self::Settings),
             3..=12 => Some(Self::ModulePosition(code - 2)),
             13 => Some(Self::BodyDisengage),
+            14 => Some(Self::ZoomIn),
+            15 => Some(Self::ZoomOut),
+            16 => Some(Self::ZoomReset),
             _ => None,
         }
     }
@@ -56,6 +62,9 @@ impl StudioChord {
             Self::ModulePosition(10) => "module-position-10",
             Self::ModulePosition(_) => unreachable!("module position was not validated"),
             Self::BodyDisengage => "body-disengage",
+            Self::ZoomIn => "zoom-in",
+            Self::ZoomOut => "zoom-out",
+            Self::ZoomReset => "zoom-reset",
         }
     }
 }
@@ -140,7 +149,10 @@ mod tests {
             Some(StudioChord::BodyDisengage)
         );
         // A code this build does not know is not acted on as another chord.
-        assert_eq!(StudioChord::from_native(14), None);
+        assert_eq!(StudioChord::from_native(14), Some(StudioChord::ZoomIn));
+        assert_eq!(StudioChord::from_native(15), Some(StudioChord::ZoomOut));
+        assert_eq!(StudioChord::from_native(16), Some(StudioChord::ZoomReset));
+        assert_eq!(StudioChord::from_native(17), None);
     }
 
     #[test]

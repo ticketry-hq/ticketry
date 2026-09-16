@@ -26,6 +26,7 @@ export {
   loadConfigurableProviderCapabilities,
   loadProviderCapabilities,
   loadProviderCatalog,
+  prefetchProviderCatalog,
   setProviderCapabilities,
   setProviderCatalog,
   useConfigurableProviderCapabilitiesQuery,

@@ -15,6 +15,7 @@ export {
 } from "./queries";
 export { useSettingsStore } from "./store";
 export { InstantSettingsPanel } from "./instant/InstantSettingsPanel";
+export { ConversationConfigurationPanel } from "./instant/ConversationConfigurationPanel";
 export {
   LoadKeybindingSettingDocument,
   UpdateKeybindingSettingDocument,

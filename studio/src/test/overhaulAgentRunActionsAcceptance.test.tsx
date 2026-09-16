@@ -1,4 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { act, render, screen } from "@testing-library/react";
+import { TasksPane } from "../app/shell/ticket-workspace/tasks/TasksPane";
+import { seedModuleOpenFixture } from "./projectOpenFixture";
+import { workItem } from "./seam";
+import { setStatesSorted } from "../features/projects";
 
 import {
   AGENT_RUN_ACTIONS,
@@ -20,6 +25,7 @@ const launchkey: LaunchkeyRuntime = {
   toggleHandyTranscription: vi.fn(async () => {}),
   submitTerminal: vi.fn(async () => {}),
 };
+const originalScroll = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollIntoView");
 
 describe("overhaul acceptance - agent run actions", () => {
   beforeEach(() => {
@@ -59,10 +65,35 @@ describe("overhaul acceptance - agent run actions", () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
+    if (originalScroll) Object.defineProperty(HTMLElement.prototype, "scrollIntoView", originalScroll);
+    else Reflect.deleteProperty(HTMLElement.prototype, "scrollIntoView");
     initializeStudioRuntime(createBrowserRuntime({ environment: {} }));
   });
 
   it("[overhaul-254] dispatches focus through workspace and terminal focus authorities", async () => {
+    seedModuleOpenFixture("module-1", [
+      workItem({ id: "parent", name: "Parent", state: "ideas", sub_issues_count: 1 }),
+      workItem({ id: "middle", name: "Middle", state: "ideas", parent_id: "parent", sub_issues_count: 1 }),
+      workItem({ id: "task-1", name: "Pad target", state: "working", parent_id: "middle" }),
+    ]);
+    setStatesSorted("project-1", [{
+      id: "ideas", name: "Ideas", group: "backlog", color: "", sort_order: 0,
+      is_protected: false,
+    }]);
+    useClientStore.setState({
+      expandedIdsByModule: {}, collapsedStateIds: new Set(["ideas"]),
+      storySearchQuery: "hides the target",
+    });
+    const frames: FrameRequestCallback[] = [];
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+      frames.push(callback);
+      return frames.length;
+    });
+    const scroll = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { configurable: true, value: scroll });
+    const pane = render(<TasksPane />);
+    expect(screen.queryByText("Pad target")).not.toBeInTheDocument();
     const terminal = document.createElement("button");
     document.body.appendChild(terminal);
 
@@ -89,15 +120,36 @@ describe("overhaul acceptance - agent run actions", () => {
       () => terminal.focus(),
     );
 
-    await expect(studioKeymapRegistry.dispatch(
-      AGENT_RUN_ACTIONS.focusAgentRun,
-      { runId: "run-1" },
-    )).resolves.toBe(true);
+    await act(async () => {
+      await expect(studioKeymapRegistry.dispatch(
+        AGENT_RUN_ACTIONS.focusAgentRun,
+        { runId: "run-1" },
+      )).resolves.toBe(true);
+    });
+    act(() => frames.splice(0).forEach((callback) => callback(0)));
+
+    expect(screen.getByText("Parent")).toBeInTheDocument();
+    expect(screen.getByText("Middle")).toBeInTheDocument();
+    const selectedRow = screen.getByText("Pad target").closest('[role="treeitem"]');
+    expect(selectedRow).toHaveAttribute("aria-selected", "true");
+    expect(scroll.mock.contexts).toContain(selectedRow);
+    expect(useClientStore.getState().collapsedStateIds.has("ideas")).toBe(false);
+    expect(useClientStore.getState().expandedIdsByModule["module-1"]).toEqual(
+      expect.arrayContaining(["parent", "middle"]),
+    );
+
+    scroll.mockClear();
+    await act(async () => {
+      await studioKeymapRegistry.dispatch(AGENT_RUN_ACTIONS.focusAgentRun, { runId: "run-1" });
+    });
+    act(() => frames.splice(0).forEach((callback) => callback(0)));
+    expect(scroll.mock.contexts).toContain(selectedRow);
 
     expect(document.activeElement).toBe(terminal);
 
     unregisterFocus();
     terminal.remove();
+    pane.unmount();
   });
 
   it("dispatches voice toggle through the runtime contract", async () => {

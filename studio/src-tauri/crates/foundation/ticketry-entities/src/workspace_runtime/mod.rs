@@ -7,8 +7,8 @@
 //! bundle. Every caller reaches it through
 //! the `workspace::operations` module, which is the only writer.
 
+mod graphql;
 pub mod operation;
 pub mod ship_record;
-mod graphql;
 
 pub use graphql::register_entity_modules;

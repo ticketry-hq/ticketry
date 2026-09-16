@@ -50,7 +50,7 @@
     "build": "npm run build --workspace @worktracker/typescript-sdk && npm run build --workspace @worktracker/studio"
   },
   "devDependencies": {
-    "@openapitools/openapi-generator-cli": "2.40.1"
+    "@openapitools/openapi-generator-cli": "2.41.0"
   },
   "overrides": {
     "@mdxeditor/editor": {

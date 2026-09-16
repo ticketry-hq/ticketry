@@ -23,7 +23,10 @@ import {
 import { getVisibleModulesSnapshot } from "../../features/module-tabs";
 import { useStudioStore } from "../../features/projects";
 import { useClientStore } from "../../state/clientStore";
-import { startRunNowForSelectedItem } from "../../features/work-items";
+import {
+  startNormalRunForSelectedItem,
+  startRunNowForSelectedItem,
+} from "../../features/work-items";
 
 const MODULE_POSITION_ACTION_PREFIX = "modules.select-position-";
 const MODULE_POSITIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as const;
@@ -99,11 +102,13 @@ export function routeSharedNavigation(
       event.preventDefault();
       return;
     case "open-agent":
-    case "open-agent-command":
       if (ctx.tasks.selectedTaskId) {
         startOpenFlow();
         event.preventDefault();
       }
+      return;
+    case "normal-run-command":
+      if (startNormalRunForSelectedItem()) event.preventDefault();
       return;
     case "plan":
       if (ctx.tasks.selectedModuleId) {

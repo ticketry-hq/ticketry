@@ -42,7 +42,7 @@ const ACTION_LABELS: Record<string, string> = {
   "focus-left": "Focus left pane",
   "focus-right": "Focus right pane",
   "open-agent": "Open Agent",
-  "open-agent-command": "Open Agent (Command)",
+  "normal-run-command": "Run selected item",
   "open-with-prompt-command": "Open Agent with Prompt (Command)",
   plan: "Plan",
   "instant-change": "Instant Change",

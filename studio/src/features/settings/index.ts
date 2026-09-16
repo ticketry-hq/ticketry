@@ -11,6 +11,7 @@ export {
   setIssueTypesSorted,
   synchronizeSubtreeRunCapabilities,
   useIssueTypesQuery,
+  useLaunchBindingStatesQuery,
   useSubtreeRunCapabilitiesQuery,
 } from "./queries";
 export { useSettingsStore } from "./store";

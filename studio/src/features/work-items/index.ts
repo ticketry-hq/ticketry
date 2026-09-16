@@ -89,6 +89,13 @@ export type {
   WorkTrackerWorkItemsQueryVariables,
 } from "./generated/workItems.documents";
 export {
+  registerNormalRunCommand,
+  runWorkItem,
+  startNormalRun,
+  startNormalRunForSelectedItem,
+} from "./normalRun";
+export type { NormalRunResult } from "./normalRun";
+export {
   isRunNowEligible,
   startRunNow,
   startRunNowForSelectedItem,

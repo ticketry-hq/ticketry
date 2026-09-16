@@ -176,7 +176,7 @@ export const DEFAULT_BINDINGS: readonly BindingDefinition[] = [
   globalBinding("open-agent", "o"),
   {
     context: "global",
-    actionId: "open-agent-command",
+    actionId: "normal-run-command",
     chord: chord("Enter", { meta: true }),
   },
   globalBinding("plan", "n"),

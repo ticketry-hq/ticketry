@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { LaunchAgentAction } from "../app/shell/ticket-workspace/selected-ticket/details/LaunchAgentAction";
+import { RunItemAction } from "../app/shell/ticket-workspace/selected-ticket/details/NormalRunAction";
 import { useAgentStatusStore } from "../features/agents/status/testStore";
 import { Terminal, useTerminalStore } from "../features/agents/terminal";
 import { useClientStore } from "../state/clientStore";
@@ -12,6 +12,7 @@ import {
   type RecordedGraphQlOperation,
 } from "./desktopGraphQlRuntime";
 import { documentOperationName } from "../graphql-foundation/typedDocument";
+import type { WorkItem } from "../shared/api/types";
 
 const tauri = vi.hoisted(() => ({
   invoke: vi.fn(),
@@ -32,6 +33,27 @@ vi.mock("../features/agents/terminal", async (importOriginal) => ({
   launchFailureMessage: (error: unknown) => String(error),
 }));
 
+function task(id = "task-1"): WorkItem {
+  return {
+    id,
+    name: "Task",
+    project_id: "project-1",
+    sequence_id: 1,
+    state: "state-1",
+    description: "",
+    parent_id: "module-1",
+    sub_issues_count: 0,
+    key: "TEST-1",
+    is_archived: false,
+    created_at: "2026-09-16T00:00:00Z",
+    updated_at: "2026-09-16T00:00:00Z",
+    rank: "a",
+    issue_type: "story",
+    blocked_by_ids: [],
+    blocks_ids: [],
+  };
+}
+
 describe("Rust launch-policy acceptance", () => {
   beforeEach(() => {
     vi.resetAllMocks();
@@ -46,20 +68,19 @@ describe("Rust launch-policy acceptance", () => {
     useClientStore.setState({ workspaces: {}, activeByTask: {} });
   });
 
-  it("[overhaul-231] selects the Run agent terminal early but waits to attach until launch returns", async () => {
+  it("[overhaul-231] selects the Run item terminal early but waits to attach until launch returns", async () => {
     let acknowledge!: (value: unknown) => void;
     tauri.invoke.mockImplementation(() => new Promise((resolve) => {
       acknowledge = resolve;
     }));
     render(
-      <LaunchAgentAction
-        issueId="task-1"
-        projectId="project-1"
+      <RunItemAction
+        task={task()}
         moduleId="module-1"
       />,
     );
 
-    const button = screen.getByRole("button", { name: "Run agent" });
+    const button = screen.getByRole("button", { name: "Run item" });
     fireEvent.click(button);
     await waitFor(() => expect(button).toHaveAttribute("aria-busy", "true"));
 
@@ -134,14 +155,13 @@ describe("Rust launch-policy acceptance", () => {
   it("[overhaul-81] routes the desktop launch action through Rust policy", async () => {
     const recorded = installGraphQlViewerLeases();
     render(
-      <LaunchAgentAction
-        issueId="task-1"
-        projectId={null}
+      <RunItemAction
+        task={task()}
         moduleId={null}
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Run agent" }));
+    fireEvent.click(screen.getByRole("button", { name: "Run item" }));
 
     await waitFor(() => {
       expect(tauri.invoke).toHaveBeenCalledWith(
@@ -159,7 +179,7 @@ describe("Rust launch-policy acceptance", () => {
     });
   });
 
-  it("[overhaul-81b] launches a browser run over the GraphQL terminal seam without overriding launch authority", async () => {
+  it("[overhaul-267] launches a browser run over the GraphQL terminal seam without overriding launch authority", async () => {
     tauri.desktopRuntime = false;
     let createVariables: Record<string, unknown> | null = null;
     const recorded = installGraphQlViewerLeases(async (document, variables) => {
@@ -179,14 +199,13 @@ describe("Rust launch-policy acceptance", () => {
       return {} as never;
     });
     render(
-      <LaunchAgentAction
-        issueId="11111111-1111-4111-8111-111111111111"
-        projectId="project-1"
+      <RunItemAction
+        task={task("11111111-1111-4111-8111-111111111111")}
         moduleId="module-1"
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Run agent" }));
+    fireEvent.click(screen.getByRole("button", { name: "Run item" }));
 
     await waitFor(() => {
       expect(createVariables).not.toBeNull();
@@ -225,7 +244,7 @@ describe("Rust launch-policy acceptance", () => {
     });
   });
 
-  it("[overhaul-81c] refuses to double-launch while a launch is in flight", async () => {
+  it("[overhaul-268] refuses to double-launch while a launch is in flight", async () => {
     tauri.desktopRuntime = true;
     let pending!: Promise<unknown>;
     tauri.invoke.mockImplementation(() => {
@@ -233,14 +252,13 @@ describe("Rust launch-policy acceptance", () => {
       return pending;
     });
     render(
-      <LaunchAgentAction
-        issueId="task-1"
-        projectId="project-1"
+      <RunItemAction
+        task={task()}
         moduleId="module-1"
       />,
     );
 
-    const button = screen.getByRole("button", { name: "Run agent" });
+    const button = screen.getByRole("button", { name: "Run item" });
     fireEvent.click(button);
     await waitFor(() => expect(button).toHaveAttribute("aria-busy", "true"));
     fireEvent.click(button);
@@ -250,7 +268,7 @@ describe("Rust launch-policy acceptance", () => {
     });
   });
 
-  it("[overhaul-81a] authorizes that launch command in the main desktop window", async () => {
+  it("[overhaul-266] authorizes that launch command in the main desktop window", async () => {
     const tauriRoot = resolve(process.cwd(), "src-tauri");
     const [build, capability] = await Promise.all([
       readFile(resolve(tauriRoot, "build.rs"), "utf8"),

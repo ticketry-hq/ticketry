@@ -27,7 +27,6 @@ export function useSubtreeRunEligibility(item: WorkItem, moduleId: string | null
   return (
     item.id !== TEMP_TASK_ID &&
     moduleId !== null &&
-    item.parent_id === moduleId &&
     item.sub_issues_count > 0 &&
     item.state !== null &&
     enabledStates?.includes(item.state) === true
@@ -50,6 +49,7 @@ interface SubtreeRunLaunchOptions {
   /** Reported when the press was accepted but launched no work item. */
   inertMessage: string;
   failureMessage: string;
+  execute?: () => Promise<{ launched: string[] }>;
 }
 
 /**
@@ -66,6 +66,7 @@ export function useSubtreeRunLaunch({
   successMessage,
   inertMessage,
   failureMessage,
+  execute,
 }: SubtreeRunLaunchOptions): SubtreeRunLaunch {
   const states = useCachedStates(item.project_id);
   const [pending, setPending] = useState(false);
@@ -79,7 +80,7 @@ export function useSubtreeRunLaunch({
     try {
       // The campaign accepts the press either way; only the launched list says
       // whether any work actually started.
-      const result = await executeTaskSubtree(item.id, mode);
+      const result = await (execute?.() ?? executeTaskSubtree(item.id, mode));
       if (result.launched.length > 0) {
         toast.success(successMessage);
       } else {

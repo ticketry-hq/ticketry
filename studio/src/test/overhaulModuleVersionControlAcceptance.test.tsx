@@ -1,5 +1,5 @@
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { FooterChangesToggle } from "../app/shell/FooterChangesToggle";
 import { StudioFooter } from "../app/shell/StudioFooter";
@@ -13,6 +13,10 @@ import { useClientStore } from "../state/clientStore";
 import { fixture, mountStudio, workItem } from "./seam";
 
 const TASK_ID = "active-task-worktree";
+
+vi.mock("../features/agents/worktrees/changes/PatchViewer", () => ({
+  default: ({ patch }: { patch: string }) => <div data-testid="patch-viewer">{patch}</div>,
+}));
 
 function moduleCheckout(overrides: Record<string, unknown> = {}) {
   return {
@@ -319,6 +323,70 @@ describe("overhaul acceptance - module Changes and current worktrees", () => {
     expect(operations).not.toContain("UpdateWorkItem");
     expect(operations).not.toContain("WorktreeCreate");
     expect(operations).not.toContain("WorktreeDiscard");
+  });
+
+  it("[overhaul-298] keeps long truncated patches readable below the file list", async () => {
+    const http = fixture();
+    const path = "studio/src/features/agents/worktrees/changes/ChangesFileReview.tsx";
+    const patch = "diff --git a/review.tsx b/review.tsx\n+const line = \"a long patch line that must stay intact and scroll horizontally instead of wrapping into fragments\";";
+    http.tree("module-1", { rootIds: [], children: {}, order: [] });
+
+    mountStudio({
+      http,
+      children: <ModuleWorkspaceHarness />,
+      graphQlExecute: async (document, variables) => {
+        const operation = documentOperationName(document);
+        if (operation === "ModuleVersionControl") {
+          return {
+            module_version_control: {
+              __typename: "ModuleVersionControlView",
+              module_id: "module-1",
+              worktrees_truncated: false,
+              checkout: moduleCheckout({
+                clean: false,
+                dirty: true,
+                files: [{
+                  __typename: "ChangedFile",
+                  path,
+                  previous_path: null,
+                  status: "modified",
+                  binary: false,
+                  insertions: 1,
+                  deletions: 0,
+                }],
+                insertions: 1,
+              }),
+              worktrees: [moduleRow()],
+            },
+          } as never;
+        }
+        if (operation === "ModuleFileDiff") {
+          expect(variables).toEqual({ moduleId: "module-1", path });
+          return {
+            module_file_diff: {
+              __typename: "FileDiffView",
+              path,
+              status: "modified",
+              binary: false,
+              patch,
+              truncated: true,
+            },
+          } as never;
+        }
+        return http.executeGraphQl(document, variables);
+      },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Open module Changes" }));
+    fireEvent.click(await screen.findByRole("button", { name: path }));
+
+    const diff = screen.getByRole("region", { name: "Selected file diff" });
+    await waitFor(() =>
+      expect(within(diff).getByRole("status")).toHaveTextContent("This diff is truncated."),
+    );
+    expect((await within(diff).findByTestId("patch-viewer")).textContent).toBe(patch);
+    expect(screen.getByTestId("changes-file-review")).toHaveClass("flex-col");
+    expect(screen.getByTestId("changes-file-review")).not.toHaveClass("grid");
   });
 
   it("[overhaul-189] distinguishes an unavailable module checkout", async () => {

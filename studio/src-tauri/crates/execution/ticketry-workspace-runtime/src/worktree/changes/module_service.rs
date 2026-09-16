@@ -20,7 +20,8 @@ impl WorktreeChangesService {
         &self,
         module_id: &str,
     ) -> Result<ModuleVersionControlView, WorktreeChangesError> {
-        let (module, project) = issue::Entity::find_by_id(module_id)
+        let module_id = status::identity::compact_uuid(module_id);
+        let (module, project) = issue::Entity::find_by_id(&module_id)
             .find_also_related(project::Entity)
             .one(self.status().work_items())
             .await?
@@ -32,7 +33,7 @@ impl WorktreeChangesService {
 
         let mut rows = worktree::Entity::find()
             .find_also_related(issue::Entity)
-            .filter(worktree::Column::ModuleId.eq(module_id))
+            .filter(worktree::Column::ModuleId.eq(&module_id))
             .filter(worktree::Column::Status.is_in(["active", "conflict"]))
             .order_by_asc(worktree::Column::TicketSeq)
             .limit(MAX_CURRENT_TASK_WORKTREES + 1)
@@ -48,7 +49,7 @@ impl WorktreeChangesService {
         }
 
         Ok(ModuleVersionControlView {
-            module_id: module.id,
+            module_id: status::identity::canonical_uuid(&module.id),
             checkout,
             worktrees,
             worktrees_truncated,

@@ -97,10 +97,10 @@ export function TaskWorktreeChanges({
   return (
     <section
       aria-label="Task worktree changes"
-      className="h-full overflow-auto p-4 text-sm"
+      className="flex h-full min-h-0 flex-col overflow-hidden p-4 text-sm"
       data-testid="task-worktree-changes"
     >
-      <header className="mb-3 border-b border-pane-border pb-3">
+      <header className="mb-3 shrink-0 border-b border-pane-border pb-3">
         <div className="font-medium text-text-primary">
           {changes.files.length} cumulative changes
         </div>

@@ -71,8 +71,8 @@ export function ModuleVersionControl({
           onOpenTask={onOpenTask}
         />
       </div>
-      <section aria-label="Module checkout changes" className="min-h-0 overflow-auto p-4">
-        <header className="mb-3 border-b border-pane-border pb-3">
+      <section aria-label="Module checkout changes" className="flex min-h-0 flex-col overflow-hidden p-4">
+        <header className="mb-3 shrink-0 border-b border-pane-border pb-3">
           <div className="flex items-baseline gap-3">
             <h2 className="font-medium text-text-primary">Module checkout Changes</h2>
             {checkout.branch ? (

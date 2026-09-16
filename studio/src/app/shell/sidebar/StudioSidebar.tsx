@@ -1,6 +1,6 @@
 import { Panel } from "react-resizable-panels";
 import { ModulesPane } from "./modules/ModulesPane";
-import { PaneResizeHandle } from "../layout/PaneResizeHandle";
+import { PaneResizeHandle } from "../../../shared/ui/PaneResizeHandle";
 
 interface StudioSidebarProps {
   layout: number[];

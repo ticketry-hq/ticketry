@@ -469,6 +469,11 @@ type LifecycleAccepted {
 	event_cursor: Int
 }
 
+type LocalMergeDestinationView {
+	branch: String!
+	checkout: String
+}
+
 type MergePreparationResult {
 	operation_id: String!
 	top_level_task_id: String!
@@ -609,8 +614,13 @@ type Mutation {
 	reorder_states(project_id: String!, ordered_ids: [String!]!): [WorktrackerState!]!
 	set_module_link(module_id: String!, link: ModuleLinkPathInput!): ModuleLinks!
 	clear_module_link(module_id: String!): Boolean!
+	worktree_merge(task_id: String!, operation_id: String!, destination_branch: String!, confirmation_token: String!): WorktreeMergeResult!
+	worktree_merge_finish(task_id: String!, operation_id: String!): WorktreeMergeResult!
+	worktree_merge_abort(task_id: String!, operation_id: String!): WorktreeMergeResult!
 	worktree_commit(task_id: String!, operation_id: String!): RepositoryCommandResult!
 	module_checkout_commit(module_id: String!, operation_id: String!): RepositoryCommandResult!
+	worktree_commit_push(task_id: String!, operation_id: String!): RepositoryCommandResult!
+	module_checkout_commit_push(module_id: String!, operation_id: String!): RepositoryCommandResult!
 	worktree_cleanup(task_id: String!, operation_id: String!, confirmed: Boolean!): WorktreeDiscardResult!
 	worktree_create(task_id: String!, operation_id: String!): WorktreeStatusView!
 	worktree_discard(task_id: String!, operation_id: String!): WorktreeDiscardResult!
@@ -740,7 +750,7 @@ type Query {
 	worktrackerAgentmodelreasoninglevel(filters: WorktrackerAgentmodelreasoninglevelFilterInput, having: WorktrackerAgentmodelreasoninglevelHavingInput, orderBy: WorktrackerAgentmodelreasoninglevelOrderInput, pagination: PaginationInput): WorktrackerAgentmodelreasoninglevelConnection!
 	worktrackerReasoninglevel(filters: WorktrackerReasoninglevelFilterInput, having: WorktrackerReasoninglevelHavingInput, orderBy: WorktrackerReasoninglevelOrderInput, pagination: PaginationInput): WorktrackerReasoninglevelConnection!
 	worktrackerTransitionoccurrence(filters: WorktrackerTransitionoccurrenceFilterInput, having: WorktrackerTransitionoccurrenceHavingInput, orderBy: WorktrackerTransitionoccurrenceOrderInput, pagination: PaginationInput): WorktrackerTransitionoccurrenceConnection!
-	ticketryShiprecords(filters: TicketryShiprecordsFilterInput, having: TicketryShiprecordsHavingInput, orderBy: TicketryShiprecordsOrderInput, pagination: PaginationInput): TicketryShiprecordsConnection!
+	shipRecords(filters: ShipRecordsFilterInput, having: ShipRecordsHavingInput, orderBy: ShipRecordsOrderInput, pagination: PaginationInput): ShipRecordsConnection!
 	graphRuns(filters: GraphRunsFilterInput, having: GraphRunsHavingInput, orderBy: GraphRunsOrderInput, pagination: PaginationInput): GraphRunsConnection!
 	moduleLinks(filters: ModuleLinksFilterInput, having: ModuleLinksHavingInput, orderBy: ModuleLinksOrderInput, pagination: PaginationInput): ModuleLinksConnection!
 	worktrees(filters: WorktreesFilterInput, having: WorktreesHavingInput, orderBy: WorktreesOrderInput, pagination: PaginationInput): WorktreesConnection!
@@ -749,6 +759,8 @@ type Query {
 	module_version_control(module_id: String!): ModuleVersionControlView!
 	worktree_file_diff(task_id: String!, path: String!): FileDiffView!
 	module_file_diff(module_id: String!, path: String!): FileDiffView!
+	worktree_merge_preview(task_id: String!, destination_branch: String): WorktreeMergePreviewView!
+	worktree_merge_recovery(task_id: String!): WorktreeMergeResult
 	keybinding_setting: KeybindingSetting
 	instant_launch_setting: KeybindingSetting
 	provider_catalog: ProviderCatalog!
@@ -835,6 +847,83 @@ type RunStatusSnapshot {
 	automation_attempts: [AutomationAttemptProjection!]!
 }
 
+type ShipRecords {
+	id: String!
+	moduleId: String!
+	taskId: String
+	checkoutKind: String!
+	checkoutLabel: String!
+	operationId: String!
+	branch: String!
+	commitShas: Json!
+	steps: Json!
+	actedAt: String!
+	prUrl: String
+	prNumber: Int
+	prState: String
+	prTargetBranch: String
+	prHeadCommit: String
+	prRefreshedAt: String
+	issue: WorktrackerIssue
+}
+
+type ShipRecordsConnection {
+	pageInfo: PageInfo!
+	paginationInfo: PaginationInfo
+	nodes: [ShipRecords!]!
+	edges: [ShipRecordsEdge!]!
+}
+
+type ShipRecordsEdge {
+	cursor: String!
+	node: ShipRecords!
+}
+
+input ShipRecordsFilterInput {
+	id: StringFilterInput
+	moduleId: StringFilterInput
+	taskId: StringFilterInput
+	checkoutKind: StringFilterInput
+	checkoutLabel: StringFilterInput
+	operationId: StringFilterInput
+	branch: StringFilterInput
+	commitShas: JsonFilterInput
+	steps: JsonFilterInput
+	actedAt: StringFilterInput
+	prUrl: StringFilterInput
+	prNumber: IntegerFilterInput
+	prState: StringFilterInput
+	prTargetBranch: StringFilterInput
+	prHeadCommit: StringFilterInput
+	prRefreshedAt: StringFilterInput
+	and: [ShipRecordsFilterInput!]
+	or: [ShipRecordsFilterInput!]
+	not: ShipRecordsFilterInput
+}
+
+input ShipRecordsHavingInput {
+	issue: WorktrackerIssueFilterInput
+}
+
+input ShipRecordsOrderInput {
+	id: OrderByEnum
+	moduleId: OrderByEnum
+	taskId: OrderByEnum
+	checkoutKind: OrderByEnum
+	checkoutLabel: OrderByEnum
+	operationId: OrderByEnum
+	branch: OrderByEnum
+	commitShas: OrderByEnum
+	steps: OrderByEnum
+	actedAt: OrderByEnum
+	prUrl: OrderByEnum
+	prNumber: OrderByEnum
+	prState: OrderByEnum
+	prTargetBranch: OrderByEnum
+	prHeadCommit: OrderByEnum
+	prRefreshedAt: OrderByEnum
+}
+
 input StringFilterInput {
 	eq: String
 	ne: String
@@ -878,77 +967,6 @@ input TextFilterInput {
 	is_null: Boolean
 	between: [String!]
 	not_between: [String!]
-}
-
-type TicketryShiprecords {
-	id: String!
-	moduleId: String!
-	taskId: String
-	checkoutKind: String!
-	checkoutLabel: String!
-	operationId: String!
-	branch: String!
-	commitShas: Json!
-	steps: Json!
-	actedAt: String!
-	prUrl: String
-	prNumber: Int
-	prState: String
-	prRefreshedAt: String
-	issue: WorktrackerIssue
-}
-
-type TicketryShiprecordsConnection {
-	pageInfo: PageInfo!
-	paginationInfo: PaginationInfo
-	nodes: [TicketryShiprecords!]!
-	edges: [TicketryShiprecordsEdge!]!
-}
-
-type TicketryShiprecordsEdge {
-	cursor: String!
-	node: TicketryShiprecords!
-}
-
-input TicketryShiprecordsFilterInput {
-	id: StringFilterInput
-	moduleId: StringFilterInput
-	taskId: StringFilterInput
-	checkoutKind: StringFilterInput
-	checkoutLabel: StringFilterInput
-	operationId: StringFilterInput
-	branch: StringFilterInput
-	commitShas: JsonFilterInput
-	steps: JsonFilterInput
-	actedAt: StringFilterInput
-	prUrl: StringFilterInput
-	prNumber: IntegerFilterInput
-	prState: StringFilterInput
-	prRefreshedAt: StringFilterInput
-	and: [TicketryShiprecordsFilterInput!]
-	or: [TicketryShiprecordsFilterInput!]
-	not: TicketryShiprecordsFilterInput
-}
-
-input TicketryShiprecordsHavingInput {
-	issue: WorktrackerIssueFilterInput
-}
-
-input TicketryShiprecordsOrderInput {
-	id: OrderByEnum
-	moduleId: OrderByEnum
-	taskId: OrderByEnum
-	checkoutKind: OrderByEnum
-	checkoutLabel: OrderByEnum
-	operationId: OrderByEnum
-	branch: OrderByEnum
-	commitShas: OrderByEnum
-	steps: OrderByEnum
-	actedAt: OrderByEnum
-	prUrl: OrderByEnum
-	prNumber: OrderByEnum
-	prState: OrderByEnum
-	prRefreshedAt: OrderByEnum
 }
 
 type WorkItemClosureFailureView {
@@ -1796,6 +1814,38 @@ type WorktreeDiscardResult {
 	branch: String
 	reason: String
 	status: WorktreeStatusView!
+}
+
+type WorktreeMergePath {
+	path: String!
+}
+
+type WorktreeMergePreviewView {
+	source_branch: String!
+	source_commit: String
+	destination_branch: String
+	destination_commit: String
+	destination_checkout: String
+	destination_checkout_identity: String
+	confirmation_token: String
+	ready: Boolean!
+	blocker: String
+	reason: String
+	requires_destination_selection: Boolean!
+	destinations: [LocalMergeDestinationView!]!
+}
+
+type WorktreeMergeResult {
+	operation_id: String!
+	outcome: String!
+	source_branch: String!
+	source_commit: String!
+	destination_branch: String!
+	destination_commit: String!
+	destination_checkout: String!
+	unmerged_paths: [WorktreeMergePath!]!
+	blocker: String
+	reason: String
 }
 
 type WorktreeStatusView {

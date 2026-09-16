@@ -6,12 +6,13 @@
 
 use serde::{Deserialize, Serialize};
 
-pub(super) const SUPPORTED_TOOLS: [SupportedTool; 5] = [
+pub(super) const SUPPORTED_TOOLS: [SupportedTool; 6] = [
     SupportedTool::Tmux,
     SupportedTool::Claude,
     SupportedTool::Agy,
     SupportedTool::Codex,
     SupportedTool::Gemini,
+    SupportedTool::Github,
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -22,6 +23,7 @@ pub enum SupportedTool {
     Agy,
     Codex,
     Gemini,
+    Github,
 }
 
 impl SupportedTool {
@@ -32,6 +34,7 @@ impl SupportedTool {
             Self::Agy => "agy",
             Self::Codex => "codex",
             Self::Gemini => "gemini",
+            Self::Github => "gh",
         }
     }
 

@@ -54,6 +54,23 @@ fn discovers_a_package_manager_fixture_without_path_or_shell() {
 }
 
 #[test]
+fn discovers_github_cli_without_path_or_shell() {
+    let root = fixture_dir("github-cli");
+    let candidate = root.join("gh");
+    executable(&candidate, b"#!/bin/sh\nprintf 'gh version 2.96.0\n'\n");
+    let service = DiscoveryService {
+        roots: vec![root.clone()],
+        approved: ApprovedToolPaths::default(),
+    };
+
+    let report = service.discover(SupportedTool::Github);
+
+    assert_eq!(report.health, ToolHealth::Ready);
+    assert_eq!(report.path.as_deref(), candidate.to_str());
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn version_manager_layout_and_paths_with_spaces_are_traversed() {
     let home = fixture_dir("home with spaces");
     let bin = home.join(".nvm/versions/node/v22.1.0/bin");

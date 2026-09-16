@@ -20,6 +20,8 @@ pub enum WorkspaceOperationKind {
     WorktreeCreate,
     /// Removal of one task checkout, its administrative record, and branch.
     WorktreeDiscard,
+    /// Fast-forward of one confirmed task commit into a checked-out destination.
+    WorktreeMerge,
 }
 
 /// The resource family a kind acts on. Reconciliation isolates an ambiguous
@@ -52,11 +54,17 @@ const REGISTRY: &[(WorkspaceOperationKind, &str, WorkspaceResourceKind, &[i32])]
         WorkspaceOperationKind::WorktreeCreate,
         "worktree_create",
         WorkspaceResourceKind::Worktree,
-        &[1],
+        &[2],
     ),
     (
         WorkspaceOperationKind::WorktreeDiscard,
         "worktree_discard",
+        WorkspaceResourceKind::Worktree,
+        &[1],
+    ),
+    (
+        WorkspaceOperationKind::WorktreeMerge,
+        "worktree_merge",
         WorkspaceResourceKind::Worktree,
         &[1],
     ),
@@ -164,6 +172,16 @@ mod tests {
         }
         assert!(WorkspaceOperationKind::DocumentSave
             .validate_version(1)
+            .is_ok());
+    }
+
+    #[test]
+    fn worktree_creation_requires_provenance_intent_version_two() {
+        assert!(WorkspaceOperationKind::WorktreeCreate
+            .validate_version(1)
+            .is_err());
+        assert!(WorkspaceOperationKind::WorktreeCreate
+            .validate_version(2)
             .is_ok());
     }
 }

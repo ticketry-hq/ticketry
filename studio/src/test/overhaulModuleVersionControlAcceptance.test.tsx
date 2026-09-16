@@ -1,8 +1,11 @@
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { createRef } from "react";
+import type { ImperativePanelGroupHandle } from "react-resizable-panels";
 import { describe, expect, it, vi } from "vitest";
 
 import { FooterChangesToggle } from "../app/shell/FooterChangesToggle";
 import { StudioFooter } from "../app/shell/StudioFooter";
+import { TicketWorkspace } from "../app/shell/ticket-workspace/TicketWorkspace";
 import { SelectedTicketContent } from "../app/shell/ticket-workspace/selected-ticket/SelectedTicketContent";
 import { scratchBucketId } from "../features/agents/terminal";
 import { TEMP_TASK_ID } from "../features/agents/types";
@@ -13,6 +16,7 @@ import { useClientStore } from "../state/clientStore";
 import { fixture, mountStudio, workItem } from "./seam";
 
 const TASK_ID = "active-task-worktree";
+const PLANNING_TASK_ID = "planning-task";
 
 vi.mock("../features/agents/worktrees/changes/PatchViewer", () => ({
   default: ({ patch }: { patch: string }) => <div data-testid="patch-viewer">{patch}</div>,
@@ -96,6 +100,29 @@ function ModuleWorkspaceHarness() {
   );
 }
 
+function FullWindowWorkspaceHarness() {
+  const selectedTaskId = useClientStore((state) => state.selectedTaskId);
+  const moduleId = useClientStore((state) => state.selectedModuleId);
+  const bucket = selectedTaskId === TEMP_TASK_ID
+    ? scratchBucketId(moduleId ?? "")
+    : selectedTaskId;
+  const changesActive = useClientStore(
+    (state) => Boolean(bucket && state.workspaces[bucket]?.active === "changes"),
+  );
+  return (
+    <>
+      <TicketWorkspace
+        tasksSize={40}
+        workspaceSize={60}
+        groupRef={createRef<ImperativePanelGroupHandle>()}
+        onLayout={() => {}}
+        changesActive={changesActive}
+      />
+      <StudioFooter />
+    </>
+  );
+}
+
 describe("overhaul acceptance - module Changes and current worktrees", () => {
   it("[overhaul-239] puts module Changes in the footer's left slot with a version-control symbol", () => {
     const http = fixture();
@@ -167,15 +194,25 @@ describe("overhaul acceptance - module Changes and current worktrees", () => {
     expect(operations).toContain("ModuleVersionControl");
   });
 
-  it("[overhaul-188] orders all required facts and navigates module and task rows without a write", async () => {
+  it("[overhaul-188] uses one full-window, resizable Changes workspace for module and task checkouts", async () => {
+    Element.prototype.scrollIntoView = vi.fn();
     const http = fixture();
     const operations: string[] = [];
+    const worktreeChangesTaskIds: string[] = [];
+    const modulePath = "studio/src/moduleChanges.tsx";
+    const taskPath = "studio/src/taskChanges.tsx";
     http.tree("module-1", {
-      rootIds: [TASK_ID],
-      children: { [TASK_ID]: [] },
-      order: [TASK_ID],
+      rootIds: [PLANNING_TASK_ID, TASK_ID],
+      children: { [PLANNING_TASK_ID]: [], [TASK_ID]: [] },
+      order: [PLANNING_TASK_ID, TASK_ID],
     });
     http.workItems([
+      workItem({
+        id: PLANNING_TASK_ID,
+        name: "Planning context",
+        parent_id: "module-1",
+        sequence_id: 1321,
+      }),
       workItem({
         id: TASK_ID,
         name: "Add module checkout Changes",
@@ -186,7 +223,8 @@ describe("overhaul acceptance - module Changes and current worktrees", () => {
 
     mountStudio({
       http,
-      children: <ModuleWorkspaceHarness />,
+      selectedTaskId: PLANNING_TASK_ID,
+      children: <FullWindowWorkspaceHarness />,
       graphQlExecute: async (document, variables) => {
         const operation = documentOperationName(document);
         operations.push(operation);
@@ -205,7 +243,7 @@ describe("overhaul acceptance - module Changes and current worktrees", () => {
                 unpushed_count: 2,
                 files: [{
                   __typename: "ChangedFile",
-                  path: "studio/src/moduleChanges.tsx",
+                  path: modulePath,
                   previous_path: null,
                   status: "modified",
                   binary: false,
@@ -270,6 +308,7 @@ describe("overhaul acceptance - module Changes and current worktrees", () => {
           } as never;
         }
         if (operation === "WorktreeChanges") {
+          worktreeChangesTaskIds.push((variables as { taskId: string }).taskId);
           return {
             worktree_changes: {
               __typename: "WorktreeChangesView",
@@ -285,9 +324,51 @@ describe("overhaul acceptance - module Changes and current worktrees", () => {
               dirty: true,
               unpushed_count: 3,
               truncated: false,
-              files: [],
-              insertions: 0,
+              work_item_done: false,
+              closure_failure: null,
+              cleanup: {
+                __typename: "WorktreeCleanupStatusView",
+                eligible: false,
+                blocker: "pull_request_absent",
+                reason: "No pull request is mapped to this worktree.",
+              },
+              files: [{
+                __typename: "ChangedFile",
+                path: taskPath,
+                previous_path: null,
+                status: "added",
+                binary: false,
+                insertions: 4,
+                deletions: 0,
+              }],
+              insertions: 4,
               deletions: 0,
+            },
+          } as never;
+        }
+        if (operation === "ModuleFileDiff") {
+          expect(variables).toEqual({ moduleId: "module-1", path: modulePath });
+          return {
+            module_file_diff: {
+              __typename: "FileDiffView",
+              path: modulePath,
+              status: "modified",
+              binary: false,
+              patch: "+module workspace",
+              truncated: false,
+            },
+          } as never;
+        }
+        if (operation === "WorktreeFileDiff") {
+          expect(variables).toEqual({ taskId: TASK_ID, path: taskPath });
+          return {
+            worktree_file_diff: {
+              __typename: "FileDiffView",
+              path: taskPath,
+              status: "added",
+              binary: false,
+              patch: "+task workspace",
+              truncated: false,
             },
           } as never;
         }
@@ -295,11 +376,28 @@ describe("overhaul acceptance - module Changes and current worktrees", () => {
       },
     });
 
+    const moduleWorkspace = await screen.findByTestId("module-workspace-region");
+    expect(moduleWorkspace.querySelector('[data-pane="tasks"]')).not.toBeNull();
+
     fireEvent.click(screen.getByRole("button", { name: "Open module Changes" }));
-    const list = await screen.findByRole("list", { name: "Current worktree checkouts" });
+    expect(useClientStore.getState().selectedTaskId).toBe(PLANNING_TASK_ID);
+    const workspace = await within(moduleWorkspace).findByTestId("changes-workspace");
+    expect(moduleWorkspace.querySelector('[data-pane="tasks"]')).toBeNull();
+    expect(screen.getByRole("button", { name: "Open terminal panel" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Open Settings" })).toBeVisible();
+
+    const checkouts = within(workspace).getByRole("region", { name: "Worktree checkouts" });
+    const files = within(workspace).getByRole("region", { name: "Changed files" });
+    const diff = within(workspace).getByRole("region", { name: "Selected file diff" });
+    expect(checkouts).toBeVisible();
+    expect(files).toBeVisible();
+    expect(diff).toBeVisible();
+
+    const list = within(checkouts).getByRole("list", { name: "Current worktree checkouts" });
     const rows = within(list).getAllByRole("button");
     expect(rows).toHaveLength(2);
     expect(rows[0]).toHaveAccessibleName("Open Module checkout Changes");
+    expect(rows[0]).toHaveAttribute("aria-pressed", "true");
     expect(rows[1]).toHaveAccessibleName(
       "Open CODING-1322 Add module checkout Changes Changes",
     );
@@ -308,24 +406,55 @@ describe("overhaul acceptance - module Changes and current worktrees", () => {
     expect(within(rows[1]).getByText("Ready to merge")).toBeVisible();
     expect(screen.getByText("Compared from the merge base with main")).toBeVisible();
 
-    fireEvent.click(rows[0]);
-    expect(useClientStore.getState().selectedTaskId).toBe(TEMP_TASK_ID);
-    fireEvent.click(rows[1]);
-    await waitFor(() => expect(useClientStore.getState().selectedTaskId).toBe(TASK_ID));
-    const tabs = await screen.findByRole("tablist", { name: "Workspace tabs" });
-    await waitFor(() =>
-      expect(within(tabs).getByRole("tab", { name: "Changes" })).toHaveAttribute(
-        "aria-selected",
-        "true",
-      ),
+    fireEvent.click(within(files).getByRole("button", { name: modulePath }));
+    expect(await within(diff).findByTestId("patch-viewer")).toHaveTextContent(
+      "+module workspace",
     );
+
+    const firstHandle = within(workspace).getByRole("separator", {
+      name: "Resize checkouts and changed files",
+    });
+    const secondHandle = within(workspace).getByRole("separator", {
+      name: "Resize changed files and diff",
+    });
+    for (const [handle, key] of [[firstHandle, "ArrowRight"], [secondHandle, "ArrowLeft"]] as const) {
+      const before = handle.getAttribute("aria-valuenow");
+      fireEvent.keyDown(handle, { key });
+      await waitFor(() => expect(handle).not.toHaveAttribute("aria-valuenow", before));
+    }
+    expect(within(moduleWorkspace).getByTestId("changes-workspace-scroll")).toHaveClass("overflow-x-auto");
+    expect(workspace).toHaveClass("min-w-[56rem]");
+
+    fireEvent.click(rows[1]);
+    expect(useClientStore.getState().selectedTaskId).toBe(PLANNING_TASK_ID);
+    expect(await within(moduleWorkspace).findByTestId("changes-workspace")).toBeVisible();
+    const taskFiles = within(moduleWorkspace).getByRole("region", { name: "Changed files" });
+    fireEvent.click(within(taskFiles).getByRole("button", { name: taskPath }));
+    expect(
+      await within(within(moduleWorkspace).getByRole("region", { name: "Selected file diff" })).findByTestId("patch-viewer"),
+    ).toHaveTextContent("+task workspace");
+
+    const tabs = within(moduleWorkspace).getByRole("tablist", { name: "Workspace tabs" });
+    fireEvent.click(within(tabs).getByRole("tab", { name: "Details" }));
+    await waitFor(() => expect(within(moduleWorkspace).queryByTestId("changes-workspace")).toBeNull());
+    expect(useClientStore.getState().selectedTaskId).toBe(PLANNING_TASK_ID);
+    expect(moduleWorkspace.querySelector('[data-pane="tasks"]')).not.toBeNull();
+    expect(
+      within(moduleWorkspace).getByRole("tab", { name: "Details" }),
+    ).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    fireEvent.click(within(tabs).getByRole("tab", { name: "Changes" }));
+    await waitFor(() => expect(worktreeChangesTaskIds).toContain(PLANNING_TASK_ID));
+    expect(useClientStore.getState().selectedTaskId).toBe(PLANNING_TASK_ID);
 
     expect(operations).not.toContain("UpdateWorkItem");
     expect(operations).not.toContain("WorktreeCreate");
     expect(operations).not.toContain("WorktreeDiscard");
   });
 
-  it("[overhaul-298] keeps long truncated patches readable below the file list", async () => {
+  it("[overhaul-285] keeps long truncated patches readable below the file list", async () => {
     const http = fixture();
     const path = "studio/src/features/agents/worktrees/changes/ChangesFileReview.tsx";
     const patch = "diff --git a/review.tsx b/review.tsx\n+const line = \"a long patch line that must stay intact and scroll horizontally instead of wrapping into fragments\";";
@@ -385,8 +514,8 @@ describe("overhaul acceptance - module Changes and current worktrees", () => {
       expect(within(diff).getByRole("status")).toHaveTextContent("This diff is truncated."),
     );
     expect((await within(diff).findByTestId("patch-viewer")).textContent).toBe(patch);
-    expect(screen.getByTestId("changes-file-review")).toHaveClass("flex-col");
-    expect(screen.getByTestId("changes-file-review")).not.toHaveClass("grid");
+    expect(screen.getByTestId("changes-workspace-scroll")).toHaveClass("overflow-x-auto");
+    expect(screen.getByTestId("changes-diff-column")).toHaveClass("overflow-hidden");
   });
 
   it("[overhaul-189] distinguishes an unavailable module checkout", async () => {

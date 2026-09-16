@@ -530,6 +530,20 @@ describe("overhaul acceptance - task worktree Changes", () => {
         if (operation === "WorktreeChanges") {
           return { worktree_changes: changes } as never;
         }
+        if (operation === "WorktreeCommitPush") {
+          commands.push({ operation, variables });
+          return {
+            worktree_commit_push: {
+              operation_id: (variables as { operationId: string }).operationId,
+              subject: "Committed task work",
+              message_source: "generated",
+              head_commit: "abcdef0123456789abcdef0123456789abcdef01",
+              dirty: false,
+              unpushed_count: 0,
+              uncommitted_work_excluded: false,
+            },
+          } as never;
+        }
         if (operation === "WorktreeCreatePullRequest") {
           commands.push({ operation, variables });
           changes = {
@@ -558,11 +572,8 @@ describe("overhaul acceptance - task worktree Changes", () => {
 
     const tabs = await screen.findByRole("tablist", { name: "Workspace tabs" });
     fireEvent.click(await within(tabs).findByRole("tab", { name: "Changes" }));
-    expect(await screen.findByRole("button", { name: "Create PR" })).toBeEnabled();
-    expect(screen.getByRole("status")).toHaveTextContent(
-      "Create PR follows the same rule.",
-    );
-    fireEvent.click(screen.getByRole("button", { name: "Create PR" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Commit, push & create PR" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
 
     const open = await screen.findByRole("link", { name: "Open PR" });
     expect(open).toHaveAttribute(
@@ -570,11 +581,13 @@ describe("overhaul acceptance - task worktree Changes", () => {
       "https://github.com/ticketry-hq/ticketry/pull/1324",
     );
     expect(screen.queryByRole("button", { name: "Create PR" })).toBeNull();
-    expect(commands).toHaveLength(1);
-    expect(commands[0]).toMatchObject({
-      operation: "WorktreeCreatePullRequest",
-      variables: { taskId: TASK_ID },
-    });
+    expect(commands.map(({ operation }) => operation)).toEqual([
+      "WorktreeCommitPush",
+      "WorktreeCreatePullRequest",
+    ]);
+    expect(commands.every(({ variables }) => (
+      variables as { taskId: string }
+    ).taskId === TASK_ID)).toBe(true);
   });
 
   it("[overhaul-193] keeps task Create PR retryable when GitHub rejects the request", async () => {
@@ -607,6 +620,12 @@ describe("overhaul acceptance - task worktree Changes", () => {
         if (operation === "WorktreeChanges") {
           return { worktree_changes: changes } as never;
         }
+        if (operation === "WorktreeMergePreview") {
+          return { worktree_merge_preview: unavailableMergePreview() } as never;
+        }
+        if (operation === "WorktreeMergeRecovery") {
+          return { worktree_merge_recovery: null } as never;
+        }
         if (operation === "WorktreeCreatePullRequest") {
           throw new FoundationGraphQlError(
             "storage_unavailable",
@@ -620,8 +639,9 @@ describe("overhaul acceptance - task worktree Changes", () => {
     const tabs = await screen.findByRole("tablist", { name: "Workspace tabs" });
     fireEvent.click(await within(tabs).findByRole("tab", { name: "Changes" }));
     fireEvent.click(await screen.findByRole("button", { name: "Create PR" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "GitHub rejected the pull-request request.",
+    expect(await screen.findByText("GitHub rejected the pull-request request.")).toHaveAttribute(
+      "role",
+      "alert",
     );
     expect(screen.getByRole("button", { name: "Create PR" })).toBeEnabled();
     expect(screen.queryByRole("link", { name: "Open PR" })).toBeNull();
@@ -954,6 +974,12 @@ describe("overhaul acceptance - task worktree Changes", () => {
         if (operation === "WorktreeChanges") {
           return { worktree_changes: changes } as never;
         }
+        if (operation === "WorktreeMergePreview") {
+          return { worktree_merge_preview: unavailableMergePreview() } as never;
+        }
+        if (operation === "WorktreeMergeRecovery") {
+          return { worktree_merge_recovery: null } as never;
+        }
         if (operation === "WorktreeMergePreparation") {
           const input = variables as { taskId: string; operationId: string };
           operations.push(input);
@@ -992,9 +1018,356 @@ describe("overhaul acceptance - task worktree Changes", () => {
 
     refuse = true;
     fireEvent.click(screen.getByRole("button", { name: "Prepare merge" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent(
+    expect(await screen.findByText(
       "Merge preparation is no longer available for this pull request.",
-    );
+    )).toHaveAttribute("role", "alert");
     expect(operations).toHaveLength(2);
   });
+
+  it("[overhaul-286] previews the source and explicit existing local merge destination without changing Git", async () => {
+    const http = fixture();
+    const previews: Array<{ taskId: string; destinationBranch?: string | null }> = [];
+    http.tree("module-1", { rootIds: [TASK_ID], children: { [TASK_ID]: [] }, order: [TASK_ID] });
+    http.workItems([workItem({ id: TASK_ID, parent_id: "module-1", sequence_id: 1892 })]);
+
+    mountStudio({
+      http,
+      selectedTaskId: TASK_ID,
+      children: (
+        <SelectedTicketContent
+          bucket={TASK_ID}
+          projectId="project-1"
+          moduleId="module-1"
+          owner="studio"
+          details={<div>Issue details</div>}
+        />
+      ),
+      graphQlExecute: async (document, variables) => {
+        const operation = documentOperationName(document);
+        if (operation === "WorktreeStatus") {
+          return { worktree_status: activeCleanWorktree } as never;
+        }
+        if (operation === "WorktreeChanges") {
+          return { worktree_changes: cumulativeChanges } as never;
+        }
+        if (operation === "WorktreeMergePreview") {
+          const input = variables as { taskId: string; destinationBranch?: string | null };
+          previews.push(input);
+          const selected = input.destinationBranch === "release/2.1";
+          return {
+            worktree_merge_preview: {
+              __typename: "WorktreeMergePreviewView",
+              source_branch: "wt/CODING-1892-merge-preview",
+              source_commit: "1111111111111111111111111111111111111111",
+              destination_branch: selected ? "release/2.1" : null,
+              destination_commit: selected ? "2222222222222222222222222222222222222222" : null,
+              destination_checkout: selected ? "/repos/ticketry-release" : null,
+              destination_checkout_identity: selected ? "release-checkout" : null,
+              confirmation_token: selected ? "selected-confirmation" : null,
+              ready: selected,
+              blocker: selected ? null : "destination_required",
+              reason: selected
+                ? null
+                : "Recorded provenance cannot be verified. Select an existing local destination.",
+              requires_destination_selection: !selected,
+              recovery: null,
+              destinations: [
+                { __typename: "WorktreeMergeDestinationView", branch: "main", checkout: "/repos/ticketry" },
+                { __typename: "WorktreeMergeDestinationView", branch: "release/2.1", checkout: "/repos/ticketry-release" },
+              ],
+            },
+          } as never;
+        }
+        return http.executeGraphQl(document, variables);
+      },
+    });
+
+    const tabs = await screen.findByRole("tablist", { name: "Workspace tabs" });
+    fireEvent.click(within(tabs).getByRole("tab", { name: "Changes" }));
+
+    const preview = await screen.findByRole("region", { name: "Local merge preview" });
+    expect(preview).toHaveTextContent("wt/CODING-1892-merge-preview");
+    expect(within(preview).getByRole("alert")).toHaveTextContent(
+      "Recorded provenance cannot be verified. Select an existing local destination.",
+    );
+
+    fireEvent.change(within(preview).getByRole("combobox", { name: "Local merge destination" }), {
+      target: { value: "release/2.1" },
+    });
+    fireEvent.click(within(preview).getByRole("button", { name: "Preview destination" }));
+
+    await waitFor(() => expect(previews).toContainEqual({
+      taskId: TASK_ID,
+      destinationBranch: "release/2.1",
+    }));
+    expect(await screen.findByText("Ready to merge locally")).toBeVisible();
+    const selectedPreview = screen.getByRole("region", { name: "Local merge preview" });
+    expect(selectedPreview).toHaveTextContent("release/2.1");
+    expect(selectedPreview).toHaveTextContent("/repos/ticketry-release");
+    expect(within(selectedPreview).queryByRole("button", { name: /merge$/i })).not.toBeInTheDocument();
+  });
+
+  it("[overhaul-287] binds, runs, and refreshes a confirmed local fast-forward", async () => {
+    const http = fixture();
+    const sourceCommit = "1111111111111111111111111111111111111111";
+    const destinationCommit = "2222222222222222222222222222222222222222";
+    const merges: Array<Record<string, string>> = [];
+    const reads: string[] = [];
+    let reject = true;
+    http.tree("module-1", { rootIds: [TASK_ID], children: { [TASK_ID]: [] }, order: [TASK_ID] });
+    http.workItems([workItem({ id: TASK_ID, parent_id: "module-1", sequence_id: 1893 })]);
+
+    mountStudio({
+      http,
+      selectedTaskId: TASK_ID,
+      children: (
+        <SelectedTicketContent
+          bucket={TASK_ID}
+          projectId="project-1"
+          moduleId="module-1"
+          owner="studio"
+          details={<div>Issue details</div>}
+        />
+      ),
+      graphQlExecute: async (document, variables) => {
+        const operation = documentOperationName(document);
+        if (["WorktreeStatus", "WorktreeChanges", "ModuleVersionControl", "WorktreeMergePreview"].includes(operation)) {
+          reads.push(operation);
+        }
+        if (operation === "WorktreeStatus") return { worktree_status: activeCleanWorktree } as never;
+        if (operation === "WorktreeChanges") return { worktree_changes: cumulativeChanges } as never;
+        if (operation === "WorktreeMergePreview") {
+          return {
+            worktree_merge_preview: {
+              __typename: "WorktreeMergePreviewView",
+              source_branch: "wt/CODING-1893-fast-forward",
+              source_commit: sourceCommit,
+              destination_branch: "main",
+              destination_commit: destinationCommit,
+              destination_checkout: "/repos/ticketry",
+              destination_checkout_identity: "main-checkout",
+              confirmation_token: "ready-confirmation",
+              ready: true,
+              blocker: null,
+              reason: null,
+              requires_destination_selection: false,
+              recovery: null,
+              destinations: [],
+            },
+          } as never;
+        }
+        if (operation === "WorktreeMerge") {
+          const input = variables as Record<string, string>;
+          merges.push(input);
+          if (reject) throw new FoundationGraphQlError("unknown", "The merge response was interrupted. Retry safely.");
+          return {
+            worktree_merge: {
+              __typename: "WorktreeMergeResult",
+              operation_id: input.operationId,
+              outcome: "fast_forwarded",
+              source_branch: "wt/CODING-1893-fast-forward",
+              source_commit: sourceCommit,
+              destination_branch: input.destinationBranch,
+              destination_commit: sourceCommit,
+              destination_checkout: "/repos/ticketry",
+              unmerged_paths: [],
+              finish_ready: false,
+              abort_ready: false,
+            },
+          } as never;
+        }
+        return http.executeGraphQl(document, variables);
+      },
+    });
+
+    const tabs = await screen.findByRole("tablist", { name: "Workspace tabs" });
+    fireEvent.click(within(tabs).getByRole("tab", { name: "Changes" }));
+    const action = await screen.findByRole("button", { name: "Merge into main" });
+    fireEvent.click(action);
+    await waitFor(() => expect(merges).toHaveLength(1));
+    expect(await screen.findByText("The merge response was interrupted. Retry safely.")).toHaveAttribute("role", "alert");
+    expect(merges[0]).toMatchObject({
+      taskId: TASK_ID,
+      destinationBranch: "main",
+      confirmationToken: "ready-confirmation",
+      operationId: expect.any(String),
+    });
+    await waitFor(() => {
+      for (const operation of ["WorktreeStatus", "WorktreeChanges", "ModuleVersionControl", "WorktreeMergePreview"]) {
+        expect(reads.filter((read) => read === operation).length).toBeGreaterThan(1);
+      }
+    });
+
+    reject = false;
+    fireEvent.click(screen.getByRole("button", { name: "Merge into main" }));
+    await waitFor(() => expect(merges).toHaveLength(2));
+    expect(merges[1]?.operationId).toBe(merges[0]?.operationId);
+    expect(await screen.findByText("Fast-forwarded main.")).toBeInTheDocument();
+  });
+
+  it("[overhaul-294] refreshes a dirty source preview after Commit and enables Merge", async () => {
+    const http = fixture();
+    let dirty = true;
+    let previewReads = 0;
+    http.tree("module-1", { rootIds: [TASK_ID], children: { [TASK_ID]: [] }, order: [TASK_ID] });
+    http.workItems([workItem({ id: TASK_ID, parent_id: "module-1", sequence_id: 1928 })]);
+
+    mountStudio({
+      http,
+      selectedTaskId: TASK_ID,
+      children: (
+        <SelectedTicketContent
+          bucket={TASK_ID}
+          projectId="project-1"
+          moduleId="module-1"
+          owner="studio"
+          details={<div>Issue details</div>}
+        />
+      ),
+      graphQlExecute: async (document, variables) => {
+        const operation = documentOperationName(document);
+        if (operation === "WorktreeStatus") {
+          return { worktree_status: { ...activeCleanWorktree, clean: !dirty, dirty } } as never;
+        }
+        if (operation === "WorktreeChanges") {
+          return { worktree_changes: { ...cumulativeChanges, clean: !dirty, dirty } } as never;
+        }
+        if (operation === "WorktreeMergePreview") {
+          previewReads += 1;
+          return {
+            worktree_merge_preview: {
+              __typename: "WorktreeMergePreviewView",
+              source_branch: "wt/CODING-1928-refresh-preview",
+              source_commit: "1111111111111111111111111111111111111111",
+              destination_branch: "main",
+              destination_commit: "2222222222222222222222222222222222222222",
+              destination_checkout: "/repos/ticketry",
+              destination_checkout_identity: "main-checkout",
+              confirmation_token: dirty ? null : "clean-source-confirmation",
+              ready: !dirty,
+              blocker: dirty ? "source_dirty" : null,
+              reason: dirty ? "Commit or discard source work before merging." : null,
+              requires_destination_selection: false,
+              recovery: null,
+              destinations: [],
+            },
+          } as never;
+        }
+        if (operation === "WorktreeMergeRecovery") {
+          return { worktree_merge_recovery: null } as never;
+        }
+        if (operation === "WorktreeCommit") {
+          dirty = false;
+          return {
+            worktree_commit: {
+              operation_id: (variables as { operationId: string }).operationId,
+              subject: "Make source mergeable",
+              message_source: "generated",
+              head_commit: "1111111111111111111111111111111111111111",
+              dirty: false,
+              unpushed_count: 1,
+              uncommitted_work_excluded: false,
+            },
+          } as never;
+        }
+        return http.executeGraphQl(document, variables);
+      },
+    });
+
+    const tabs = await screen.findByRole("tablist", { name: "Workspace tabs" });
+    fireEvent.click(within(tabs).getByRole("tab", { name: "Changes" }));
+    expect(await screen.findByText("Commit or discard source work before merging.")).toHaveAttribute("role", "alert");
+    expect(screen.queryByRole("button", { name: "Merge into main" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Commit" }));
+
+    expect(await screen.findByRole("button", { name: "Merge into main" })).toBeEnabled();
+    expect(previewReads).toBeGreaterThan(1);
+  });
+
+  it("[overhaul-295] refreshes merge eligibility after an external destination fix", async () => {
+    const http = fixture();
+    let destinationBlocked = true;
+    let previewReads = 0;
+    http.tree("module-1", { rootIds: [TASK_ID], children: { [TASK_ID]: [] }, order: [TASK_ID] });
+    http.workItems([workItem({ id: TASK_ID, parent_id: "module-1", sequence_id: 1928 })]);
+
+    mountStudio({
+      http,
+      selectedTaskId: TASK_ID,
+      children: (
+        <SelectedTicketContent
+          bucket={TASK_ID}
+          projectId="project-1"
+          moduleId="module-1"
+          owner="studio"
+          details={<div>Issue details</div>}
+        />
+      ),
+      graphQlExecute: async (document, variables) => {
+        const operation = documentOperationName(document);
+        if (operation === "WorktreeStatus") {
+          return { worktree_status: activeCleanWorktree } as never;
+        }
+        if (operation === "WorktreeChanges") {
+          return { worktree_changes: cumulativeChanges } as never;
+        }
+        if (operation === "WorktreeMergePreview") {
+          previewReads += 1;
+          return {
+            worktree_merge_preview: {
+              __typename: "WorktreeMergePreviewView",
+              source_branch: "wt/CODING-1928-refresh-preview",
+              source_commit: "1111111111111111111111111111111111111111",
+              destination_branch: "release/2.1",
+              destination_commit: "2222222222222222222222222222222222222222",
+              destination_checkout: destinationBlocked ? null : "/repos/ticketry-release",
+              destination_checkout_identity: destinationBlocked ? null : "release-checkout",
+              confirmation_token: destinationBlocked ? null : "destination-fixed-confirmation",
+              ready: !destinationBlocked,
+              blocker: destinationBlocked ? "destination_checkout_missing" : null,
+              reason: destinationBlocked
+                ? "Check out release/2.1, then refresh merge eligibility."
+                : null,
+              requires_destination_selection: false,
+              recovery: null,
+              destinations: [],
+            },
+          } as never;
+        }
+        if (operation === "WorktreeMergeRecovery") {
+          return { worktree_merge_recovery: null } as never;
+        }
+        return http.executeGraphQl(document, variables);
+      },
+    });
+
+    const tabs = await screen.findByRole("tablist", { name: "Workspace tabs" });
+    fireEvent.click(within(tabs).getByRole("tab", { name: "Changes" }));
+    expect(await screen.findByText("Check out release/2.1, then refresh merge eligibility.")).toHaveAttribute("role", "alert");
+
+    destinationBlocked = false;
+    fireEvent.click(screen.getByRole("button", { name: "Refresh merge eligibility" }));
+
+    expect(await screen.findByRole("button", { name: "Merge into release/2.1" })).toBeEnabled();
+    expect(previewReads).toBeGreaterThan(1);
+  });
 });
+
+function unavailableMergePreview() {
+  return {
+    __typename: "WorktreeMergePreviewView",
+    source_branch: activeCleanWorktree.branch,
+    source_commit: null,
+    destination_branch: null,
+    destination_commit: null,
+    destination_checkout: null,
+    destination_checkout_identity: null,
+    confirmation_token: null,
+    ready: false,
+    blocker: "unavailable",
+    reason: null,
+    requires_destination_selection: false,
+    destinations: [],
+  };
+}

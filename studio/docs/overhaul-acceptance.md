@@ -170,7 +170,7 @@ named gate before the full Studio suite, typecheck, and build.
 | 185 | A task workspace restores Details and explains the state when its worktree disappears. |
 | 186 | One caught-up project feed selects one guarded launch's terminal from its authoritative update, defers viewer attachment until runtime acknowledgement, and never needs a second click, subscription, or reconnect. |
 | 187 | A clean module opens Changes beside Terminal and presents the empty task list. |
-| 188 | Module Changes orders the required facts and navigates module and task rows without a write. |
+| 188 | Changes replaces planning with one three-column workspace for module and task checkouts, keeps both dividers keyboard-resizable and every column reachable in narrow windows, updates the selected file diff without a Git write, and restores the prior Details workspace. |
 | 189 | Module Changes distinguishes an unavailable module checkout. |
 | 190 | Task Commit and Push remain independent, and Push excludes dirty work. |
 | 191 | Module Push is offered for a clean ahead branch while Commit requires dirty work. |
@@ -273,6 +273,18 @@ named gate before the full Studio suite, typecheck, and build.
 
 | 282 | A selected instant conversation whose run has already left the live holding is still titled: eligibility comes from the module WorkItem ended-runs read, so a Codex conversation that ended keeps refreshing its thread title. |
 | 283 | Success, info, and error toasts paint an opaque panel beneath their lifecycle tint. |
+| 284 | Codex profiles register, deduplicate, select, save, and remove through the Settings contract. |
+| 285 | Long truncated Changes patches remain readable below the file list. |
+| 286 | Task Changes previews the source and an explicit existing local merge destination without offering a Git write. |
+| 287 | Task Changes binds and runs a confirmed local fast-forward, keeps one operation identity across retry, and refreshes affected Apollo views on failure and success. |
+| 288 | Task Changes reports a completed divergent merge and refreshes affected checkout summaries. |
+| 289 | A conflicting local merge lists its unmerged files and destination checkout and remains recoverable after restart even when subsequent source edits block a new merge. |
+| 290 | Finish merge commits only the explicitly staged resolution after confirmation and stays retryable after hook failure. |
+| 291 | Abort merge targets the matching operation, preserves recovery after refusal, and reports completion truthfully. |
+| 292 | Restart recovery reports merges finished or aborted outside Ticketry without stale controls. |
+| 293 | Finishing or aborting a conflicting merge retires its recovery state and gives the next merge a fresh operation identity. |
+| 294 | Committing dirty source work refreshes local merge eligibility and enables Merge without reopening Changes. |
+| 295 | Refreshing merge eligibility after an external destination fix enables Merge without reopening Changes. |
 
 Each executable case carries one stable `[overhaul-NN]` marker. The gate has a
 contract test that fails if a marker is missing or duplicated. A case whose

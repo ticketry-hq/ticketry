@@ -10,12 +10,22 @@ const FOUNDATION_MUTATIONS = ["migrationProbesCreateOne"];
 // product-contract drift check also guards this exception registry.
 const WORKTREE_GIT_OPERATION_EXCEPTIONS = {
   module_checkout_commit: "Commit uncommitted files in the module's linked checkout.",
+  module_checkout_commit_push:
+    "Commit uncommitted module-checkout files, then push the resulting branch through one confirmed action.",
   module_checkout_pull_request_create:
     "Push committed module-checkout work when needed and create a ready GitHub pull request.",
   module_checkout_push: "Push committed module-checkout work to its Git remote.",
   worktree_commit: "Commit uncommitted files in an indexed task worktree.",
+  worktree_commit_push:
+    "Commit uncommitted task-worktree files, then push the resulting branch through one confirmed action.",
   worktree_cleanup:
     "After explicit confirmation, remove an eligible merged task checkout, its local branch, and its Worktree row while preserving remote state.",
+  worktree_merge:
+    "After explicit confirmation, merge the selected task-worktree commit into the validated local destination checkout.",
+  worktree_merge_abort:
+    "After explicit confirmation, abort only the matching pending local merge without a destructive reset.",
+  worktree_merge_finish:
+    "After explicit confirmation, commit the staged resolution for only the matching pending local merge.",
   worktree_pull_request_create:
     "Push committed task-worktree work when needed, create a ready GitHub pull request, and map its confirmed URL.",
   worktree_pull_request_follow_up:
@@ -99,7 +109,7 @@ const GENERATED_PRODUCT_QUERIES = [
   "worktrackerProvider",
   "worktrackerReasoninglevel",
   "worktrackerState",
-  "ticketryShiprecords",
+  "shipRecords",
   "worktrackerTransitionoccurrence",
   "worktrees",
 ];
@@ -118,6 +128,8 @@ const AUTHORED_QUERIES = [
   "resumable_terminal_sessions",
   "worktree_file_diff",
   "worktree_changes",
+  "worktree_merge_preview",
+  "worktree_merge_recovery",
   "worktree_status",
 ];
 

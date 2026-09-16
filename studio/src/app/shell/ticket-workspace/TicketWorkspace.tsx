@@ -4,7 +4,7 @@ import type { ImperativePanelGroupHandle } from "react-resizable-panels";
 import { ModuleTabStrip } from "./ModuleTabStrip";
 import { TasksPane } from "./tasks/TasksPane";
 import { SelectedTicket } from "./selected-ticket/SelectedTicket";
-import { PaneResizeHandle } from "../layout/PaneResizeHandle";
+import { PaneResizeHandle } from "../../../shared/ui/PaneResizeHandle";
 import { TerminalPanel } from "../../../features/terminal-panel";
 import { useStudioStore, useModulesQuery } from "../../../features/projects";
 import {
@@ -20,6 +20,7 @@ interface TicketWorkspaceProps {
   workspaceSize: number;
   groupRef: RefObject<ImperativePanelGroupHandle>;
   onLayout: (sizes: number[]) => void;
+  changesActive?: boolean;
 }
 
 export function TicketWorkspace({
@@ -27,6 +28,7 @@ export function TicketWorkspace({
   workspaceSize,
   groupRef,
   onLayout,
+  changesActive = false,
 }: TicketWorkspaceProps) {
   const selectedProjectId = useStudioStore((state) => state.selectedProjectId);
   const modulesQuery = useModulesQuery(selectedProjectId);
@@ -52,6 +54,8 @@ export function TicketWorkspace({
             sidebarVisible={sidebarVisible}
             onCreate={() => pushModal({ type: "add-module" })}
           />
+        ) : changesActive ? (
+          <SelectedTicket />
         ) : (
           <PanelGroup
             ref={groupRef}

@@ -9,7 +9,7 @@ import {
   splitWorkArea,
 } from "./layoutMath";
 
-export function useStudioPanelLayout() {
+export function useStudioPanelLayout(suspended = false) {
   const sidebarVisible = useClientStore((state) => state.sidebarVisible);
   const panelLayout = useClientStore((state) => state.panelLayout);
   const setPanelLayout = useClientStore((state) => state.setPanelLayout);
@@ -36,8 +36,9 @@ export function useStudioPanelLayout() {
 
   useEffect(() => {
     previousSidebarVisible.current = sidebarVisible;
+    if (suspended) return;
     applyLayout(panelLayout ?? DEFAULT_PANEL_LAYOUT, sidebarVisible);
-  }, [sidebarVisible, panelLayout]);
+  }, [sidebarVisible, panelLayout, suspended]);
 
   function handleOuterLayout(sizes: number[]) {
     if (skipNextOuterLayout.current) {

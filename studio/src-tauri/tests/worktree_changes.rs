@@ -3,9 +3,15 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use sea_orm::{ConnectionTrait, Database, DatabaseConnection};
+use sea_orm::{ConnectionTrait, Database, DatabaseConnection, DbBackend, Statement};
 use tauri_graphql::{TransportApi, TransportApiImpl};
 use ticketry_graphql_schema::initialize_with_worktracker_commands_and_install;
+
+#[path = "worktree_changes/merge_options.rs"]
+mod merge_options;
+
+#[path = "worktree_changes/source_merge_recovery.rs"]
+mod source_merge_recovery;
 
 const PROJECT: &str = "10000000000000000000000000000000";
 const TASK_TYPE: &str = "30000000000000000000000000000001";
@@ -58,6 +64,49 @@ const MODULE_VERSION_CONTROL_QUERY: &str = r#"query($moduleId: String!) {
       kind task_id task_key task_name branch available clean dirty
       unpushed_count pull_request_state reason
     }
+  }
+}"#;
+
+const MERGE_PREVIEW_QUERY: &str = r#"query($taskId: String!, $destinationBranch: String) {
+  worktree_merge_preview(task_id: $taskId, destination_branch: $destinationBranch) {
+    source_branch source_commit destination_branch destination_commit destination_checkout confirmation_token ready blocker reason
+    requires_destination_selection
+    destinations { branch checkout }
+  }
+}"#;
+
+const MERGE_MUTATION: &str = r#"mutation(
+  $taskId: String!, $operationId: String!, $destinationBranch: String!, $confirmationToken: String!
+  ) {
+  worktree_merge(
+    task_id: $taskId
+    operation_id: $operationId
+    destination_branch: $destinationBranch
+    confirmation_token: $confirmationToken
+  ) {
+    operation_id outcome source_branch source_commit destination_branch destination_commit
+    destination_checkout unmerged_paths { path }
+  }
+}"#;
+
+const FINISH_MERGE_MUTATION: &str = r#"mutation($taskId: String!, $operationId: String!) {
+  worktree_merge_finish(task_id: $taskId, operation_id: $operationId) {
+    operation_id outcome source_commit destination_commit destination_checkout
+    unmerged_paths { path }
+  }
+}"#;
+
+const ABORT_MERGE_MUTATION: &str = r#"mutation($taskId: String!, $operationId: String!) {
+  worktree_merge_abort(task_id: $taskId, operation_id: $operationId) {
+    operation_id outcome source_commit destination_commit destination_checkout
+    unmerged_paths { path }
+  }
+}"#;
+
+const MERGE_RECOVERY_QUERY: &str = r#"query($taskId: String!) {
+  worktree_merge_recovery(task_id: $taskId) {
+    operation_id outcome source_commit destination_commit destination_checkout
+    unmerged_paths { path }
   }
 }"#;
 
@@ -128,6 +177,92 @@ struct Fixture {
 }
 
 impl Fixture {
+    async fn merge_preview(&self, destination_branch: Option<&str>) -> serde_json::Value {
+        let response = self
+            .api
+            .clone()
+            .graphql_execute(
+                serde_json::json!({
+                    "query": MERGE_PREVIEW_QUERY,
+                    "variables": {
+                        "taskId": TASK,
+                        "destinationBranch": destination_branch,
+                    },
+                })
+                .to_string(),
+            )
+            .await;
+        let response: serde_json::Value =
+            serde_json::from_str(&response).expect("decode merge preview response");
+        assert_eq!(response["errors"], serde_json::Value::Null, "{response}");
+        response["data"]["worktree_merge_preview"].clone()
+    }
+
+    async fn merge(&self, operation_id: &str, preview: &serde_json::Value) -> serde_json::Value {
+        let response = self
+            .api
+            .clone()
+            .graphql_execute(
+                serde_json::json!({
+                    "query": MERGE_MUTATION,
+                    "variables": {
+                        "taskId": TASK,
+                        "operationId": operation_id,
+                        "destinationBranch": preview["destination_branch"],
+                        "confirmationToken": preview["confirmation_token"],
+                    },
+                })
+                .to_string(),
+            )
+            .await;
+        serde_json::from_str(&response).expect("decode worktree merge response")
+    }
+
+    async fn finish_merge(&self, operation_id: &str) -> serde_json::Value {
+        let response = self
+            .api
+            .clone()
+            .graphql_execute(
+                serde_json::json!({
+                    "query": FINISH_MERGE_MUTATION,
+                    "variables": { "taskId": TASK, "operationId": operation_id },
+                })
+                .to_string(),
+            )
+            .await;
+        serde_json::from_str(&response).expect("decode finish merge response")
+    }
+
+    async fn abort_merge(&self, operation_id: &str) -> serde_json::Value {
+        let response = self
+            .api
+            .clone()
+            .graphql_execute(
+                serde_json::json!({
+                    "query": ABORT_MERGE_MUTATION,
+                    "variables": { "taskId": TASK, "operationId": operation_id },
+                })
+                .to_string(),
+            )
+            .await;
+        serde_json::from_str(&response).expect("decode abort merge response")
+    }
+
+    async fn merge_recovery(&self) -> serde_json::Value {
+        let response = self
+            .api
+            .clone()
+            .graphql_execute(
+                serde_json::json!({
+                    "query": MERGE_RECOVERY_QUERY,
+                    "variables": { "taskId": TASK },
+                })
+                .to_string(),
+            )
+            .await;
+        serde_json::from_str(&response).expect("decode merge recovery response")
+    }
+
     async fn response(&self, task_id: &str) -> serde_json::Value {
         let response = self
             .api
@@ -191,6 +326,649 @@ impl Fixture {
             .await
             .expect("mutate fixture state");
     }
+}
+
+#[tokio::test]
+async fn merge_preview_reports_the_recorded_local_destination_without_writing_git() {
+    let fixture = fixture().await;
+    write(&fixture.checkout.join("task.txt"), "task work\n");
+    git(&["add", "."], &fixture.checkout);
+    git(&["commit", "-m", "task work"], &fixture.checkout);
+    let repository = fixture._directory.path().join("repositories/ticketry");
+    let refs_before = git(&["show-ref"], &repository);
+    let source_head_before = git(&["rev-parse", "HEAD"], &fixture.checkout);
+    let destination_head_before = git(&["rev-parse", "HEAD"], &repository);
+    let status_before = git(&["status", "--porcelain"], &repository);
+
+    let preview = fixture.merge_preview(None).await;
+
+    assert_eq!(preview["source_branch"], "wt/CODIN-881-task");
+    assert_eq!(preview["source_commit"], source_head_before);
+    assert_eq!(preview["destination_branch"], "main");
+    assert_eq!(preview["destination_commit"], destination_head_before);
+    assert_eq!(
+        preview["destination_checkout"],
+        repository
+            .canonicalize()
+            .expect("canonical repository")
+            .display()
+            .to_string()
+    );
+    assert_eq!(preview["ready"], true);
+    assert_eq!(preview["blocker"], serde_json::Value::Null);
+    assert_eq!(preview["requires_destination_selection"], false);
+    assert_eq!(git(&["show-ref"], &repository), refs_before);
+    assert_eq!(
+        git(&["rev-parse", "HEAD"], &fixture.checkout),
+        source_head_before
+    );
+    assert_eq!(
+        git(&["rev-parse", "HEAD"], &repository),
+        destination_head_before
+    );
+    assert_eq!(git(&["status", "--porcelain"], &repository), status_before);
+}
+
+#[tokio::test]
+async fn confirmed_fast_forward_is_idempotent_and_preserves_both_checkouts() {
+    let fixture = fixture().await;
+    write(&fixture.checkout.join("task.txt"), "task work\n");
+    git(&["add", "."], &fixture.checkout);
+    git(&["commit", "-m", "task work"], &fixture.checkout);
+    let repository = fixture._directory.path().join("repositories/ticketry");
+    let preview = fixture.merge_preview(None).await;
+    let operation_id = "90000000-0000-0000-0000-000000000001";
+
+    let first = fixture.merge(operation_id, &preview).await;
+    assert_eq!(first["errors"], serde_json::Value::Null, "{first}");
+    let result = &first["data"]["worktree_merge"];
+    assert_eq!(result["outcome"], "fast_forwarded");
+    assert_eq!(result["destination_commit"], preview["source_commit"]);
+    assert_eq!(
+        git(&["rev-parse", "HEAD"], &repository),
+        preview["source_commit"]
+    );
+    assert_eq!(git(&["status", "--porcelain"], &repository), "");
+    assert_eq!(git(&["status", "--porcelain"], &fixture.checkout), "");
+    assert!(fixture.checkout.is_dir());
+    assert_eq!(
+        git(&["rev-parse", "wt/CODIN-881-task"], &repository),
+        preview["source_commit"]
+    );
+
+    let repeated = fixture.merge(operation_id, &preview).await;
+    assert_eq!(repeated["errors"], serde_json::Value::Null, "{repeated}");
+    assert_eq!(repeated["data"]["worktree_merge"], *result);
+}
+
+#[tokio::test]
+async fn confirmed_divergence_creates_and_verifies_a_merge_commit() {
+    let fixture = fixture().await;
+    let repository = fixture._directory.path().join("repositories/ticketry");
+    write(&repository.join("destination.txt"), "destination work\n");
+    git(&["add", "."], &repository);
+    git(&["commit", "-m", "destination work"], &repository);
+    write(&fixture.checkout.join("source.txt"), "source work\n");
+    git(&["add", "."], &fixture.checkout);
+    git(&["commit", "-m", "source work"], &fixture.checkout);
+    let preview = fixture.merge_preview(None).await;
+    let source_before = git(&["rev-parse", "HEAD"], &fixture.checkout);
+    let destination_before = git(&["rev-parse", "HEAD"], &repository);
+
+    let response = fixture
+        .merge("90000000-0000-0000-0000-000000000010", &preview)
+        .await;
+
+    assert_eq!(response["errors"], serde_json::Value::Null, "{response}");
+    assert_eq!(response["data"]["worktree_merge"]["outcome"], "merged");
+    let merged = git(&["rev-parse", "HEAD"], &repository);
+    assert_ne!(merged, source_before);
+    assert_ne!(merged, destination_before);
+    assert_eq!(
+        git(&["rev-list", "--parents", "-n", "1", "HEAD"], &repository),
+        format!("{merged} {destination_before} {source_before}")
+    );
+    git(
+        &["merge-base", "--is-ancestor", &source_before, &merged],
+        &repository,
+    );
+    assert_eq!(
+        git(&["rev-parse", "--verify", "HEAD"], &fixture.checkout),
+        source_before
+    );
+    assert_eq!(git(&["status", "--porcelain"], &repository), "");
+    assert!(!PathBuf::from(git(&["rev-parse", "--git-path", "MERGE_HEAD"], &repository)).exists());
+}
+
+#[tokio::test]
+async fn divergent_conflict_returns_recoverable_destination_and_unmerged_paths() {
+    let fixture = fixture().await;
+    let repository = fixture._directory.path().join("repositories/ticketry");
+    write(&repository.join("conflict.txt"), "destination side\n");
+    git(&["commit", "-am", "destination side"], &repository);
+    write(&fixture.checkout.join("conflict.txt"), "source side\n");
+    git(&["commit", "-am", "source side"], &fixture.checkout);
+    let preview = fixture.merge_preview(None).await;
+    assert_eq!(preview["ready"], true, "{preview}");
+
+    let response = fixture
+        .merge("90000000-0000-0000-0000-000000000011", &preview)
+        .await;
+
+    assert_eq!(response["errors"], serde_json::Value::Null, "{response}");
+    let result = &response["data"]["worktree_merge"];
+    assert_eq!(result["outcome"], "conflicted");
+    assert_eq!(
+        result["destination_checkout"],
+        repository.canonicalize().unwrap().display().to_string()
+    );
+    assert_eq!(
+        result["unmerged_paths"],
+        serde_json::json!([{ "path": "conflict.txt" }])
+    );
+    assert_eq!(
+        git(&["rev-parse", "--verify", "MERGE_HEAD"], &repository),
+        preview["source_commit"].as_str().unwrap()
+    );
+    assert_eq!(
+        git(&["diff", "--name-only", "--diff-filter=U"], &repository),
+        "conflict.txt"
+    );
+}
+
+#[tokio::test]
+async fn expired_leased_conflict_remains_recoverable_for_finish_and_abort() {
+    for (operation_id, finish) in [
+        ("90000000-0000-0000-0000-000000000018", true),
+        ("90000000-0000-0000-0000-000000000019", false),
+    ] {
+        let fixture = fixture().await;
+        let repository = fixture._directory.path().join("repositories/ticketry");
+        write(&repository.join("conflict.txt"), "destination side\n");
+        git(&["commit", "-am", "destination side"], &repository);
+        write(&fixture.checkout.join("conflict.txt"), "source side\n");
+        git(&["commit", "-am", "source side"], &fixture.checkout);
+        let preview = fixture.merge_preview(None).await;
+        let conflicted = fixture.merge(operation_id, &preview).await;
+        assert_eq!(
+            conflicted["data"]["worktree_merge"]["outcome"],
+            "conflicted"
+        );
+
+        fixture
+            .execute(&format!(
+                "UPDATE workspace_operations
+                 SET state='leased', lease_owner='lost-worker',
+                     lease_expires_at='2000-01-01 00:00:00', settled_at=NULL,
+                     evidence=NULL, result_summary=NULL
+                 WHERE operation_id='{}'",
+                operation_id.replace('-', "")
+            ))
+            .await;
+
+        let retried = fixture.merge(operation_id, &preview).await;
+        assert_eq!(retried["errors"], serde_json::Value::Null, "{retried}");
+        assert_eq!(retried["data"]["worktree_merge"]["outcome"], "conflicted");
+        let recovery = fixture.merge_recovery().await;
+        assert_eq!(recovery["errors"], serde_json::Value::Null, "{recovery}");
+        assert_eq!(
+            recovery["data"]["worktree_merge_recovery"]["operation_id"],
+            operation_id.replace('-', "")
+        );
+        assert_eq!(
+            recovery["data"]["worktree_merge_recovery"]["outcome"],
+            "conflicted"
+        );
+
+        if finish {
+            write(&repository.join("conflict.txt"), "resolved\n");
+            git(&["add", "conflict.txt"], &repository);
+            let finished = fixture.finish_merge(operation_id).await;
+            assert_eq!(finished["errors"], serde_json::Value::Null, "{finished}");
+            assert_eq!(
+                finished["data"]["worktree_merge_finish"]["outcome"],
+                "merged"
+            );
+        } else {
+            let aborted = fixture.abort_merge(operation_id).await;
+            assert_eq!(aborted["errors"], serde_json::Value::Null, "{aborted}");
+            assert_eq!(
+                aborted["data"]["worktree_merge_abort"]["outcome"],
+                "aborted"
+            );
+        }
+    }
+}
+
+#[tokio::test]
+async fn finish_commits_only_the_already_staged_resolution() {
+    let fixture = fixture().await;
+    let repository = fixture._directory.path().join("repositories/ticketry");
+    write(&repository.join("conflict.txt"), "destination side\n");
+    git(&["commit", "-am", "destination side"], &repository);
+    write(&fixture.checkout.join("conflict.txt"), "source side\n");
+    git(&["commit", "-am", "source side"], &fixture.checkout);
+    let preview = fixture.merge_preview(None).await;
+    let operation_id = "90000000-0000-0000-0000-000000000012";
+    let conflicted = fixture.merge(operation_id, &preview).await;
+    assert_eq!(
+        conflicted["data"]["worktree_merge"]["outcome"],
+        "conflicted"
+    );
+
+    let refused = fixture.finish_merge(operation_id).await;
+    assert_eq!(error_code(&refused), "worktree_merge_unresolved");
+
+    write(&repository.join("conflict.txt"), "resolved\n");
+    git(&["add", "conflict.txt"], &repository);
+    write(&repository.join("not-staged.txt"), "leave me alone\n");
+    let finished = fixture.finish_merge(operation_id).await;
+
+    assert_eq!(finished["errors"], serde_json::Value::Null, "{finished}");
+    assert_eq!(
+        finished["data"]["worktree_merge_finish"]["outcome"],
+        "merged"
+    );
+    assert_eq!(
+        fixture.finish_merge(operation_id).await["data"]["worktree_merge_finish"]["outcome"],
+        "merged"
+    );
+    assert_eq!(
+        git(&["show", "--format=", "--name-only", "HEAD"], &repository),
+        "conflict.txt"
+    );
+    assert_eq!(
+        git(&["status", "--porcelain"], &repository),
+        "?? not-staged.txt"
+    );
+    assert!(!PathBuf::from(git(&["rev-parse", "--git-path", "MERGE_HEAD"], &repository)).exists());
+
+    assert_eq!(
+        fixture.merge_recovery().await["data"]["worktree_merge_recovery"],
+        serde_json::Value::Null
+    );
+    std::fs::remove_file(repository.join("not-staged.txt")).expect("remove untracked file");
+    let next_preview = fixture.merge_preview(None).await;
+    let next = fixture
+        .merge("90000000-0000-0000-0000-000000000016", &next_preview)
+        .await;
+    assert_eq!(next["errors"], serde_json::Value::Null, "{next}");
+}
+
+#[tokio::test]
+async fn abort_uses_git_merge_abort_and_preserves_untracked_work() {
+    let fixture = fixture().await;
+    let repository = fixture._directory.path().join("repositories/ticketry");
+    write(&repository.join("conflict.txt"), "destination side\n");
+    git(&["commit", "-am", "destination side"], &repository);
+    let destination_before = git(&["rev-parse", "HEAD"], &repository);
+    write(&fixture.checkout.join("conflict.txt"), "source side\n");
+    git(&["commit", "-am", "source side"], &fixture.checkout);
+    let source_before = git(&["rev-parse", "HEAD"], &fixture.checkout);
+    let preview = fixture.merge_preview(None).await;
+    let operation_id = "90000000-0000-0000-0000-000000000013";
+    let conflicted = fixture.merge(operation_id, &preview).await;
+    assert_eq!(
+        conflicted["data"]["worktree_merge"]["outcome"],
+        "conflicted"
+    );
+    write(&repository.join("keep-untracked.txt"), "keep me\n");
+
+    let aborted = fixture.abort_merge(operation_id).await;
+
+    assert_eq!(aborted["errors"], serde_json::Value::Null, "{aborted}");
+    assert_eq!(
+        aborted["data"]["worktree_merge_abort"]["outcome"],
+        "aborted"
+    );
+    assert_eq!(
+        fixture.abort_merge(operation_id).await["data"]["worktree_merge_abort"]["outcome"],
+        "aborted"
+    );
+    assert_eq!(git(&["rev-parse", "HEAD"], &repository), destination_before);
+    assert_eq!(
+        git(&["rev-parse", "HEAD"], &fixture.checkout),
+        source_before
+    );
+    assert_eq!(
+        git(&["status", "--porcelain"], &repository),
+        "?? keep-untracked.txt"
+    );
+    assert!(!PathBuf::from(git(&["rev-parse", "--git-path", "MERGE_HEAD"], &repository)).exists());
+
+    assert_eq!(
+        fixture.merge_recovery().await["data"]["worktree_merge_recovery"],
+        serde_json::Value::Null
+    );
+    std::fs::remove_file(repository.join("keep-untracked.txt")).expect("remove untracked file");
+    let next = fixture
+        .merge("90000000-0000-0000-0000-000000000017", &preview)
+        .await;
+    assert_eq!(next["errors"], serde_json::Value::Null, "{next}");
+    assert_eq!(next["data"]["worktree_merge"]["outcome"], "conflicted");
+}
+
+#[tokio::test]
+async fn recovery_read_reports_conflict_and_an_external_finish() {
+    let fixture = fixture().await;
+    let repository = fixture._directory.path().join("repositories/ticketry");
+    write(&repository.join("conflict.txt"), "destination side\n");
+    git(&["commit", "-am", "destination side"], &repository);
+    write(&fixture.checkout.join("conflict.txt"), "source side\n");
+    git(&["commit", "-am", "source side"], &fixture.checkout);
+    let operation_id = "90000000-0000-0000-0000-000000000014";
+    let preview = fixture.merge_preview(None).await;
+    fixture.merge(operation_id, &preview).await;
+
+    let conflict = fixture.merge_recovery().await;
+    assert_eq!(conflict["errors"], serde_json::Value::Null, "{conflict}");
+    assert_eq!(
+        conflict["data"]["worktree_merge_recovery"]["operation_id"],
+        operation_id.replace('-', "")
+    );
+    assert_eq!(
+        conflict["data"]["worktree_merge_recovery"]["outcome"],
+        "conflicted"
+    );
+
+    write(&repository.join("conflict.txt"), "resolved externally\n");
+    git(&["add", "conflict.txt"], &repository);
+    git(&["commit", "--no-edit"], &repository);
+    let finished = fixture.merge_recovery().await;
+    assert_eq!(finished["errors"], serde_json::Value::Null, "{finished}");
+    assert_eq!(
+        finished["data"]["worktree_merge_recovery"]["outcome"],
+        "merged"
+    );
+    assert_eq!(
+        fixture.merge_recovery().await["data"]["worktree_merge_recovery"],
+        serde_json::Value::Null
+    );
+}
+
+#[tokio::test]
+async fn recovery_read_reports_an_external_abort() {
+    let fixture = fixture().await;
+    let repository = fixture._directory.path().join("repositories/ticketry");
+    write(&repository.join("conflict.txt"), "destination side\n");
+    git(&["commit", "-am", "destination side"], &repository);
+    write(&fixture.checkout.join("conflict.txt"), "source side\n");
+    git(&["commit", "-am", "source side"], &fixture.checkout);
+    let operation_id = "90000000-0000-0000-0000-000000000015";
+    let preview = fixture.merge_preview(None).await;
+    fixture.merge(operation_id, &preview).await;
+    git(&["merge", "--abort"], &repository);
+
+    let aborted = fixture.merge_recovery().await;
+
+    assert_eq!(aborted["errors"], serde_json::Value::Null, "{aborted}");
+    assert_eq!(
+        aborted["data"]["worktree_merge_recovery"]["outcome"],
+        "aborted"
+    );
+    assert_eq!(
+        fixture.merge_recovery().await["data"]["worktree_merge_recovery"],
+        serde_json::Value::Null
+    );
+}
+
+#[tokio::test]
+async fn merge_reports_already_integrated_merges_divergence_and_blocks_stale_intent() {
+    let fixture = fixture().await;
+    write(&fixture.checkout.join("task.txt"), "task work\n");
+    git(&["add", "."], &fixture.checkout);
+    git(&["commit", "-m", "task work"], &fixture.checkout);
+    let repository = fixture._directory.path().join("repositories/ticketry");
+    let preview = fixture.merge_preview(None).await;
+    git(&["merge", "--ff-only", "wt/CODIN-881-task"], &repository);
+    let integrated_preview = fixture.merge_preview(None).await;
+    let integrated = fixture
+        .merge("90000000-0000-0000-0000-000000000002", &integrated_preview)
+        .await;
+    assert_eq!(
+        integrated["errors"],
+        serde_json::Value::Null,
+        "{integrated}"
+    );
+    assert_eq!(
+        integrated["data"]["worktree_merge"]["outcome"],
+        "already_integrated"
+    );
+
+    write(&repository.join("destination.txt"), "destination work\n");
+    git(&["add", "."], &repository);
+    git(&["commit", "-m", "destination work"], &repository);
+    write(&fixture.checkout.join("source-again.txt"), "source work\n");
+    git(&["add", "."], &fixture.checkout);
+    git(&["commit", "-m", "source again"], &fixture.checkout);
+    let divergent_preview = fixture.merge_preview(None).await;
+    assert_eq!(divergent_preview["ready"], true);
+    let merged = fixture
+        .merge("90000000-0000-0000-0000-000000000003", &divergent_preview)
+        .await;
+    assert_eq!(merged["errors"], serde_json::Value::Null, "{merged}");
+    assert_eq!(merged["data"]["worktree_merge"]["outcome"], "merged");
+    assert_eq!(git(&["status", "--porcelain"], &repository), "");
+    let refs_after_merge = git(&["show-ref"], &repository);
+
+    let stale = fixture
+        .merge("90000000-0000-0000-0000-000000000004", &preview)
+        .await;
+    assert_eq!(error_code(&stale), "worktree_merge_preview_stale");
+    assert_eq!(git(&["show-ref"], &repository), refs_after_merge);
+}
+
+#[tokio::test]
+async fn merge_preserves_staged_unstaged_and_untracked_work_in_both_checkouts() {
+    let fixture = fixture().await;
+    write(&fixture.checkout.join("task.txt"), "task work\n");
+    git(&["add", "."], &fixture.checkout);
+    git(&["commit", "-m", "task work"], &fixture.checkout);
+    let repository = fixture._directory.path().join("repositories/ticketry");
+    let preview = fixture.merge_preview(None).await;
+
+    write(&fixture.checkout.join("README.md"), "staged source\n");
+    git(&["add", "README.md"], &fixture.checkout);
+    write(
+        &fixture.checkout.join("src/unstaged.rs"),
+        "unstaged source\n",
+    );
+    write(
+        &fixture.checkout.join("source-untracked.txt"),
+        "untracked source\n",
+    );
+    let source_before = git(
+        &["status", "--porcelain=v1", "--untracked-files=all"],
+        &fixture.checkout,
+    );
+    let source_blocked = fixture
+        .merge("90000000-0000-0000-0000-000000000005", &preview)
+        .await;
+    assert_ne!(
+        source_blocked["errors"],
+        serde_json::Value::Null,
+        "{source_blocked}"
+    );
+    assert_eq!(
+        git(
+            &["status", "--porcelain=v1", "--untracked-files=all"],
+            &fixture.checkout
+        ),
+        source_before
+    );
+    assert_eq!(
+        git(&["rev-parse", "HEAD"], &repository),
+        preview["destination_commit"]
+    );
+
+    git(&["restore", "--staged", "README.md"], &fixture.checkout);
+    git(
+        &["restore", "README.md", "src/unstaged.rs"],
+        &fixture.checkout,
+    );
+    std::fs::remove_file(fixture.checkout.join("source-untracked.txt"))
+        .expect("clean source fixture");
+    write(&repository.join("README.md"), "staged destination\n");
+    git(&["add", "README.md"], &repository);
+    write(
+        &repository.join("src/unstaged.rs"),
+        "unstaged destination\n",
+    );
+    write(
+        &repository.join("destination-untracked.txt"),
+        "untracked destination\n",
+    );
+    let destination_before = git(
+        &["status", "--porcelain=v1", "--untracked-files=all"],
+        &repository,
+    );
+    let destination_blocked = fixture
+        .merge("90000000-0000-0000-0000-000000000006", &preview)
+        .await;
+    assert_ne!(
+        destination_blocked["errors"],
+        serde_json::Value::Null,
+        "{destination_blocked}"
+    );
+    assert_eq!(
+        git(
+            &["status", "--porcelain=v1", "--untracked-files=all"],
+            &repository
+        ),
+        destination_before
+    );
+    assert_eq!(
+        git(&["rev-parse", "wt/CODIN-881-task"], &repository),
+        preview["source_commit"]
+    );
+}
+
+#[tokio::test]
+async fn unverifiable_provenance_requires_an_explicit_existing_local_destination() {
+    let fixture = fixture().await;
+    fixture.execute("DELETE FROM workspace_operations").await;
+
+    let selection = fixture.merge_preview(None).await;
+    assert_eq!(selection["destination_branch"], serde_json::Value::Null);
+    assert_eq!(selection["requires_destination_selection"], true);
+    assert_eq!(selection["blocker"], "destination_selection_required");
+    assert_eq!(selection["destinations"][0]["branch"], "main");
+
+    let selected = fixture.merge_preview(Some("main")).await;
+    assert_eq!(selected["destination_branch"], "main");
+    assert_eq!(selected["ready"], true);
+    assert_eq!(selected["requires_destination_selection"], false);
+}
+
+#[tokio::test]
+async fn preview_keeps_a_selected_non_main_destination_and_explains_blockers() {
+    let fixture = fixture().await;
+    let repository = fixture._directory.path().join("repositories/ticketry");
+    let release = fixture._directory.path().join("checkouts/release");
+    git(
+        &[
+            "worktree",
+            "add",
+            "-b",
+            "release/next",
+            &release.display().to_string(),
+            "main",
+        ],
+        &repository,
+    );
+
+    let selected = fixture.merge_preview(Some("release/next")).await;
+    assert_eq!(selected["destination_branch"], "release/next");
+    assert_eq!(
+        selected["destination_checkout"],
+        release.canonicalize().unwrap().display().to_string()
+    );
+    assert_eq!(selected["ready"], true);
+
+    write(&release.join("dirty.txt"), "not committed\n");
+    let dirty = fixture.merge_preview(Some("release/next")).await;
+    assert_eq!(dirty["blocker"], "destination_dirty");
+    assert!(dirty["reason"].as_str().unwrap().contains("clean"));
+
+    let self_destination = fixture.merge_preview(Some("wt/CODIN-881-task")).await;
+    assert_eq!(self_destination["blocker"], "self_destination");
+
+    let invalid = fixture.merge_preview(Some("-invalid")).await;
+    assert_eq!(invalid["blocker"], "destination_invalid");
+
+    let missing = fixture.merge_preview(Some("release/missing")).await;
+    assert_eq!(missing["blocker"], "destination_missing");
+}
+
+#[tokio::test]
+async fn preview_requires_clean_checkouts_and_an_existing_destination_checkout() {
+    let fixture = fixture().await;
+    let repository = fixture._directory.path().join("repositories/ticketry");
+    git(&["branch", "release/not-checked-out"], &repository);
+
+    let unchecked = fixture.merge_preview(Some("release/not-checked-out")).await;
+    assert_eq!(unchecked["blocker"], "destination_checkout_missing");
+    let choice = unchecked["destinations"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|choice| choice["branch"] == "release/not-checked-out")
+        .expect("unchecked local branch remains selectable");
+    assert_eq!(choice["checkout"], serde_json::Value::Null);
+    assert!(unchecked["reason"].as_str().unwrap().contains("Check out"));
+
+    write(&fixture.checkout.join("uncommitted.txt"), "source dirt\n");
+    let dirty = fixture.merge_preview(None).await;
+    assert_eq!(dirty["blocker"], "source_dirty");
+
+    std::fs::remove_file(fixture.checkout.join("uncommitted.txt")).expect("clean source");
+    let merge_head = git(
+        &["rev-parse", "--git-path", "MERGE_HEAD"],
+        &fixture.checkout,
+    );
+    write(
+        Path::new(&merge_head),
+        &format!("{}\n", git(&["rev-parse", "HEAD"], &fixture.checkout)),
+    );
+    let merging = fixture.merge_preview(None).await;
+    assert_eq!(merging["blocker"], "source_operation_in_progress");
+
+    std::fs::remove_file(&merge_head).expect("clear merge state");
+    let rebase = PathBuf::from(git(
+        &["rev-parse", "--git-path", "rebase-merge"],
+        &fixture.checkout,
+    ));
+    let rebase = if rebase.is_absolute() {
+        rebase
+    } else {
+        fixture.checkout.join(rebase)
+    };
+    std::fs::create_dir_all(rebase).expect("create paused rebase state");
+    let rebasing = fixture.merge_preview(None).await;
+    assert_eq!(rebasing["blocker"], "source_operation_in_progress");
+}
+
+#[tokio::test]
+async fn preview_reports_a_merge_conflict_without_starting_a_merge() {
+    let fixture = fixture().await;
+    let repository = fixture._directory.path().join("repositories/ticketry");
+    write(&fixture.checkout.join("conflict.txt"), "source side\n");
+    git(&["commit", "-am", "source side"], &fixture.checkout);
+    write(&repository.join("conflict.txt"), "destination side\n");
+    git(&["commit", "-am", "destination side"], &repository);
+
+    let preview = fixture.merge_preview(None).await;
+
+    assert_eq!(preview["ready"], true);
+    assert_eq!(preview["blocker"], serde_json::Value::Null);
+    assert_eq!(git(&["status", "--porcelain"], &repository), "");
+    let merge_head = PathBuf::from(git(&["rev-parse", "--git-path", "MERGE_HEAD"], &repository));
+    let merge_head = if merge_head.is_absolute() {
+        merge_head
+    } else {
+        repository.join(merge_head)
+    };
+    assert!(!merge_head.exists());
 }
 
 fn error_code(response: &serde_json::Value) -> &str {
@@ -313,6 +1091,63 @@ async fn fixture() -> Fixture {
     .await
     .expect("compose the worktree changes schema");
 
+    let writer = Database::connect(format!("sqlite:{}?mode=rw", state.display()))
+        .await
+        .expect("reopen fixture writer");
+    let intent = serde_json::json!({
+        "kind": "worktree_create",
+        "intentVersion": 2,
+        "payload": {
+            "taskId": TASK,
+            "branch": "wt/CODIN-881-task",
+            "checkoutName": "CODIN-881-task",
+            "repositoryDigest": "a".repeat(64),
+            "baseRef": "main",
+            "baseCommit": base_commit.clone(),
+        }
+    })
+    .to_string();
+    let evidence = serde_json::json!({
+        "worktreeId": "70000000000000000000000000000001",
+        "adopted": false,
+        "branch": "wt/CODIN-881-task",
+        "baseRef": "main",
+        "baseCommit": base_commit.clone(),
+        "checkoutName": "CODIN-881-task",
+    })
+    .to_string();
+    let result = serde_json::json!({
+        "worktreeId": "70000000000000000000000000000001",
+        "taskId": TASK,
+        "branch": "wt/CODIN-881-task",
+        "checkoutName": "CODIN-881-task",
+        "baseRef": "main",
+        "baseCommit": base_commit.clone(),
+        "adopted": false,
+    })
+    .to_string();
+    writer
+        .execute_raw(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
+            "INSERT INTO workspace_operations
+             (operation_id, kind, intent_version, resource_kind, resource_key, intent,
+              intent_fingerprint, state, attempt_count, evidence, result_summary,
+              created_at, updated_at, settled_at)
+             VALUES (?, 'worktree_create', 2, 'worktree', ?, ?, ?, 'applied', 1, ?, ?,
+                     CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+            [
+                "80000000000000000000000000000001".into(),
+                format!("worktree/{TASK}").into(),
+                intent.into(),
+                "b".repeat(64).into(),
+                evidence.into(),
+                result.into(),
+            ],
+        ))
+        .await
+        .expect("record durable creation provenance");
+    drop(writer);
+
     Fixture {
         _directory: directory,
         api,
@@ -351,7 +1186,10 @@ async fn committed_task_changes_remain_visible_in_a_clean_checkout() {
         serde_json::json!([{
             "path": "src/committed.rs",
             "previous_path": null,
-            "status": "added"
+            "status": "added",
+            "binary": false,
+            "insertions": 1,
+            "deletions": 0
         }])
     );
 }
@@ -420,14 +1258,14 @@ async fn committed_index_worktree_untracked_and_conflicted_paths_form_one_net_li
     assert_eq!(
         changes["files"],
         serde_json::json!([
-            {"path": "conflict.txt", "previous_path": null, "status": "conflicted"},
-            {"path": "copy-target.txt", "previous_path": "copy-source.txt", "status": "copied"},
-            {"path": "deleted.txt", "previous_path": null, "status": "deleted"},
-            {"path": "rename-new.txt", "previous_path": "rename-old.txt", "status": "renamed"},
-            {"path": "src/committed.rs", "previous_path": null, "status": "added"},
-            {"path": "src/staged.rs", "previous_path": null, "status": "added"},
-            {"path": "src/unstaged.rs", "previous_path": null, "status": "modified"},
-            {"path": "src/untracked.rs", "previous_path": null, "status": "untracked"}
+            {"path": "conflict.txt", "previous_path": null, "status": "conflicted", "binary": false, "insertions": 5, "deletions": 1},
+            {"path": "copy-target.txt", "previous_path": "copy-source.txt", "status": "copied", "binary": false, "insertions": 0, "deletions": 0},
+            {"path": "deleted.txt", "previous_path": null, "status": "deleted", "binary": false, "insertions": 0, "deletions": 1},
+            {"path": "rename-new.txt", "previous_path": "rename-old.txt", "status": "renamed", "binary": false, "insertions": 0, "deletions": 0},
+            {"path": "src/committed.rs", "previous_path": null, "status": "added", "binary": false, "insertions": 1, "deletions": 0},
+            {"path": "src/staged.rs", "previous_path": null, "status": "added", "binary": false, "insertions": 1, "deletions": 0},
+            {"path": "src/unstaged.rs", "previous_path": null, "status": "modified", "binary": false, "insertions": 1, "deletions": 1},
+            {"path": "src/untracked.rs", "previous_path": null, "status": "untracked", "binary": false, "insertions": 1, "deletions": 0}
         ])
     );
 }

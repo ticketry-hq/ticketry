@@ -373,10 +373,17 @@ async fn compose_worktree_operations(
         eprintln!("Ticketry could not reconcile abandoned worktree discards: {error}");
         reconciled = false;
     }
+    let changes = ticketry_workspace_runtime::changes::WorktreeChangesService::from_status(
+        create.status_service().clone(),
+    );
+    if let Err(error) = changes.merge_reconciler().reconcile().await {
+        eprintln!("Ticketry could not reconcile abandoned worktree merges: {error}");
+        reconciled = false;
+    }
     ComposedWorktreeOperations {
         operations: Some(
             ticketry_workspace_runtime::worktree_operations::WorktreeOperations::new(
-                create, discard,
+                create, discard, changes,
             ),
         ),
         reconciled,

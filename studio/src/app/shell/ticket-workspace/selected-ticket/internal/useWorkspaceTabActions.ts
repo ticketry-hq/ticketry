@@ -17,6 +17,7 @@ import {
   useClientStore as useTicketWorkspaceStore,
 } from "../../../../../state/clientStore";
 import { closeTerminalTab } from "./closeTerminalTab";
+import { selectChangesCheckout } from "./openChangesWorkspace";
 import { rememberStudioWorkspaceTarget } from "./studioWorkspaceTarget";
 import type { TaskWorkspaceTabIdentity } from "./useTaskWorkspaceTabNavigation";
 import type { WorkspaceLauncherContext } from "./WorkspaceLauncher";
@@ -101,6 +102,7 @@ export function useWorkspaceTabActions({
         rememberStudioWorkspaceTarget(bucket, { kind: "details" });
       }
     } else if (tab.kind === "changes") {
+      if (moduleId) selectChangesCheckout(moduleId, scratch ? null : bucket);
       setActive(bucket, "changes");
       if (owner === "studio") {
         rememberStudioWorkspaceTarget(bucket, { kind: "changes" });

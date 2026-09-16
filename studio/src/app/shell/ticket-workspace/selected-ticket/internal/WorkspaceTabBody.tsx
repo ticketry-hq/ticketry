@@ -27,6 +27,7 @@ import { ModuleVersionControl, TaskWorktreeChanges } from "../../../../../featur
 import {
   openModuleChangesWorkspace,
   openTaskChangesWorkspace,
+  useChangesCheckoutSelection,
 } from "./openChangesWorkspace";
 
 const WorkspaceDocument = lazy(async () => ({
@@ -101,6 +102,12 @@ export function WorkspaceTabBody({
   const terminalEngaged = bodyEngaged && activeKind === "terminal";
   const terminalRingBox =
     activeKind === "terminal" ? "top-0 bottom-0 -left-2 -right-2" : "inset-0";
+  const selectedChangesTaskId = useChangesCheckoutSelection(
+    (state) => moduleId ? state.taskIdByModule[moduleId] : undefined,
+  );
+  const changesTaskId = selectedChangesTaskId === undefined
+    ? isScratchBucket(bucket) ? null : bucket
+    : selectedChangesTaskId;
 
   return (
     <div
@@ -159,17 +166,24 @@ export function WorkspaceTabBody({
             : "hidden"
         }
       >
-        {isScratchBucket(bucket) && moduleId ? (
+        {changesTaskId === null && moduleId ? (
           <ModuleVersionControl
             moduleId={moduleId}
             active={activeKind === "changes"}
             onOpenModule={() => openModuleChangesWorkspace(moduleId)}
-            onOpenTask={openTaskChangesWorkspace}
+            onOpenTask={(taskId) => openTaskChangesWorkspace(moduleId, taskId)}
           />
         ) : (
           <TaskWorktreeChanges
-            taskId={bucket}
+            taskId={changesTaskId ?? bucket}
+            moduleId={moduleId}
             active={activeKind === "changes"}
+            onOpenModule={() => {
+              if (moduleId) openModuleChangesWorkspace(moduleId);
+            }}
+            onOpenTask={(taskId) => {
+              if (moduleId) openTaskChangesWorkspace(moduleId, taskId);
+            }}
           />
         )}
       </div>

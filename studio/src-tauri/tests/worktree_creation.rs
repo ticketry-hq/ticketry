@@ -784,12 +784,17 @@ async fn a_checkout_cut_before_the_crash_is_adopted_rather_than_created_twice() 
         ],
         &fixture.repository_root,
     );
+    git(
+        &["switch", "-c", "later-selection"],
+        &fixture.repository_root,
+    );
 
     fixture.restart().await;
 
     let rows = fixture.rows().await;
     assert_eq!(rows.len(), 1, "the abandoned checkout is adopted");
     assert_eq!(rows[0].branch, "wt/CODIN-881-parent-story");
+    assert_eq!(rows[0].base_branch, "main");
     assert_eq!(rows[0].base_commit, fixture.base_commit);
     let operations = fixture.operations().await;
     assert_eq!(operations[0].operation_id, operation);
@@ -835,6 +840,36 @@ async fn a_prepared_operation_whose_effect_never_ran_is_executed_on_restart() {
 }
 
 #[tokio::test]
+async fn recovery_uses_the_originating_head_recorded_before_creation() {
+    let mut fixture = fixture().await;
+    prepared_operation(&fixture, PARENT_TASK).await;
+
+    git(
+        &["switch", "-c", "later-selection"],
+        &fixture.repository_root,
+    );
+    write(&fixture.repository_root.join("later.md"), "later\n");
+    git(&["add", "."], &fixture.repository_root);
+    git(
+        &["commit", "-m", "later selection"],
+        &fixture.repository_root,
+    );
+
+    fixture.restart().await;
+
+    let rows = fixture.rows().await;
+    assert_eq!(rows[0].base_branch, "main");
+    assert_eq!(rows[0].base_commit, fixture.base_commit);
+    assert_eq!(
+        git(
+            &["rev-parse", "HEAD"],
+            &fixture.checkout(&fixture.repository_root, "CODIN-881-parent-story")
+        ),
+        fixture.base_commit,
+    );
+}
+
+#[tokio::test]
 async fn a_repository_that_moved_under_a_prepared_operation_becomes_a_conflict() {
     let mut fixture = fixture().await;
     let operation = prepared_operation(&fixture, PARENT_TASK).await;
@@ -867,8 +902,10 @@ async fn prepared_operation(fixture: &Fixture, task_id: &str) -> String {
     let operation = uuid::Uuid::new_v4().simple().to_string();
     let intent = serde_json::json!({
         "kind": "worktree_create",
-        "intentVersion": 1,
+        "intentVersion": 2,
         "payload": {
+            "baseCommit": fixture.base_commit,
+            "baseRef": "main",
             "branch": "wt/CODIN-881-parent-story",
             "checkoutName": "CODIN-881-parent-story",
             "repositoryDigest": repository_digest(&fixture.repository_root),
@@ -885,7 +922,7 @@ async fn prepared_operation(fixture: &Fixture, task_id: &str) -> String {
             r#"INSERT INTO workspace_operations
                  (operation_id, kind, intent_version, resource_kind, resource_key,
                   intent, intent_fingerprint, state)
-               VALUES (?, 'worktree_create', 1, 'worktree', ?, ?, ?, 'prepared')"#,
+               VALUES (?, 'worktree_create', 2, 'worktree', ?, ?, ?, 'prepared')"#,
             [
                 operation.clone().into(),
                 format!("worktree/{task_id}").into(),

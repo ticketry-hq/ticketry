@@ -7289,6 +7289,7 @@ dependencies = [
  "ticketry-graphql-schema",
  "ticketry-runs",
  "ticketry-settings",
+ "ticketry-tool-discovery",
  "ticketry-work-management",
  "tokio",
  "uuid",

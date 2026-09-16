@@ -121,6 +121,18 @@ export interface CrashReportsRuntime {
   readonly revealFolder: () => Promise<void>;
 }
 
+export type DirectoryTrustStatus =
+  | "already_trusted"
+  | "approval_required"
+  | "denied"
+  | "unsupported"
+  | "prepared";
+
+export interface DirectoryTrustResult {
+  readonly status: DirectoryTrustStatus;
+  readonly approval: string | null;
+}
+
 /** Platform-neutral boundary consumed by the shared Studio application. */
 export interface StudioRuntime {
   readonly platform: StudioPlatform;
@@ -158,6 +170,12 @@ export interface StudioRuntime {
    * protocol; browser development still reads them over the legacy host route.
    */
   documentUrl(documentId: string, relPath: string): string;
+  /** Desktop-only durable directory trust. Browser development needs no host preparation. */
+  prepareDirectoryTrust?(
+    provider: string,
+    directory: string,
+    approval: string | null,
+  ): Promise<DirectoryTrustResult>;
   pickFolder(): Promise<string | null>;
   retryServices(): Promise<void>;
   startup(): RuntimeStartupConfiguration;

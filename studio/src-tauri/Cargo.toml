@@ -133,6 +133,7 @@ ticketry-graphql-schema = { path = "crates/surfaces/ticketry-graphql-schema" }
 ticketry-installation = { path = "crates/execution/ticketry-installation" }
 ticketry-launch = { path = "crates/execution/ticketry-launch" }
 ticketry-mcp = { path = "crates/surfaces/ticketry-mcp" }
+ticketry-provider = { path = "crates/foundation/ticketry-provider" }
 ticketry-runs = { path = "crates/worktracking/ticketry-runs" }
 ticketry-settings = { path = "crates/config/ticketry-settings" }
 ticketry-terminal = { path = "crates/execution/ticketry-terminal" }

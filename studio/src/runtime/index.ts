@@ -10,6 +10,8 @@ export type {
   AppUpdatesRuntime,
   CrashCollectionOutcome,
   CrashReportsRuntime,
+  DirectoryTrustResult,
+  DirectoryTrustStatus,
   RuntimeCapabilities,
   ServiceHealth,
   ServiceHealthListener,

@@ -273,6 +273,11 @@ named gate before the full Studio suite, typecheck, and build.
 
 | 282 | A selected instant conversation whose run has already left the live holding is still titled: eligibility comes from the module WorkItem ended-runs read, so a Codex conversation that ended keeps refreshing its thread title. |
 | 283 | Success, info, and error toasts paint an opaque panel beneath their lifecycle tint. |
+| 284 | Missing Gemini directory trust asks for confirmation before changing a Module link; cancellation keeps the old link. |
+| 285 | Confirmed Gemini directory trust echoes the opaque approval to preparation and saves the Module link only after preparation succeeds. |
+| 286 | Explicit denial and unsupported durable trust report their distinct result without confirmation or a Module-link write. |
+| 287 | A stale or mismatched approval cannot write trust or the Module link; retry starts with fresh inspection. |
+| 288 | Directory-trust failure keeps the old Module link and a retry starts again from inspection. |
 
 Each executable case carries one stable `[overhaul-NN]` marker. The gate has a
 contract test that fails if a marker is missing or duplicated. A case whose

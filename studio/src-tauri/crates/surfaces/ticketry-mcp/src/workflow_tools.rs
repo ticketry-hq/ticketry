@@ -1,6 +1,7 @@
 use sea_orm::DatabaseConnection;
 use serde_json::{json, Map, Value};
 
+use ticketry_provider::{provider_contract, ProfileSelection, Provider};
 use ticketry_work_management::{
     commands::{catalog, workflow, CommandError},
     read_queries,
@@ -137,7 +138,9 @@ async fn upsert_launch_binding(
     };
     let profile = patch_string(arguments, "profile")?;
     ensure_profile_supported(
-        selected_provider.as_ref().map(|provider| provider.slug.as_str()),
+        selected_provider
+            .as_ref()
+            .map(|provider| provider.slug.as_str()),
         &profile,
     )?;
     let model_id = match arguments.get("model") {
@@ -213,16 +216,26 @@ pub(crate) fn ensure_profile_supported(
     provider_slug: Option<&str>,
     profile: &workflow::PatchValue<String>,
 ) -> Result<(), CommandError> {
-    match (provider_slug, profile) {
-        (Some(slug), workflow::PatchValue::Value(_)) if slug != "codex" => {
-            Err(CommandError::Rejected {
-                message: "Only Codex supports launch profiles.".to_owned(),
-                code: "incompatible_profile",
-                field: Some("profile"),
-            })
-        }
-        _ => Ok(()),
-    }
+    let (Some(provider_slug), workflow::PatchValue::Value(_)) = (provider_slug, profile) else {
+        return Ok(());
+    };
+    let incompatible = || CommandError::Rejected {
+        message: "Only Codex supports launch profiles.".to_owned(),
+        code: "incompatible_profile",
+        field: Some("profile"),
+    };
+    let provider = Provider::from_slug(provider_slug).ok_or_else(|| incompatible())?;
+    let profile = "configured".to_owned();
+    provider_contract(provider)
+        .validate_profile_selection(
+            ProfileSelection {
+                profile: Some(&profile),
+                model: None,
+                effort: None,
+            },
+            std::slice::from_ref(&profile),
+        )
+        .map_err(|_| incompatible())
 }
 
 pub fn rejection(error: &CommandError) -> Value {

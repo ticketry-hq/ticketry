@@ -25,6 +25,7 @@ fn execution_authority() -> ExecutionAuthority {
         "/private/Ticketry Data".into(),
         "Bearer secret-mcp".into(),
         BTreeSet::from(["tdd".into()]),
+        vec!["worker".into()],
     )
 }
 

@@ -55,7 +55,10 @@ fn db_id(value: u128) -> String {
 }
 
 fn fixture_id(value: &str) -> String {
-    uuid::Uuid::parse_str(value).unwrap().hyphenated().to_string()
+    uuid::Uuid::parse_str(value)
+        .unwrap()
+        .hyphenated()
+        .to_string()
 }
 
 fn intent(seed: u128, attempt: Option<String>) -> LaunchIntent {

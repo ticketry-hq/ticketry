@@ -22,6 +22,7 @@ sha2.workspace = true
 ticketry-data-directory.workspace = true
 ticketry-diagnostics.workspace = true
 ticketry-entities.workspace = true
+ticketry-provider.workspace = true
 ticketry-runs.workspace = true
 ticketry-settings.workspace = true
 tokio.workspace = true

@@ -5,7 +5,10 @@ import {
   setModuleFolder,
 } from "../features/module-links";
 import { createBrowserRuntime } from "../runtime/browserRuntime";
-import { createDesktopRuntime } from "../runtime/desktopRuntime";
+import {
+  createDesktopRuntime,
+  type DesktopInvoke,
+} from "../runtime/desktopRuntime";
 import { initializeStudioRuntime } from "../runtime";
 
 const startup = {
@@ -50,9 +53,14 @@ describe("module link desktop runtime acceptance", () => {
       throw new Error(`Unexpected operation ${request.operationName}`);
     });
 
+    const invoke = vi.fn(async (command: string) =>
+      command === "desktop_runtime_configuration"
+        ? startup
+        : { status: "already_trusted", approval: null },
+    );
     initializeStudioRuntime(
       await createDesktopRuntime({
-        invoke: vi.fn().mockResolvedValue(startup),
+        invoke: invoke as DesktopInvoke,
         createGraphQlProxy: () => ({
           graphql_execute: graphqlExecute,
           graphql_subscribe: vi.fn(),
@@ -69,6 +77,11 @@ describe("module link desktop runtime acceptance", () => {
     // No profile selection, no profile replacement, no feature-flag write: the
     // folder is the Module's own typed row and one restricted mutation owns it.
     expect(operationNames).toEqual(["LoadModuleLinks", "SetModuleLink"]);
+    expect(invoke).toHaveBeenCalledWith("desktop_prepare_directory_trust", {
+      provider: "gemini",
+      directory: "/repos/ticketry",
+      approval: null,
+    });
     expect(getModuleFolder("module-1")).toBe("/repos/ticketry");
     expect(fetchMock).not.toHaveBeenCalled();
 

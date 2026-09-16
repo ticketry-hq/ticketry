@@ -15,6 +15,7 @@ import {
   ModuleFolderSelection,
   useModuleFolderSelection,
 } from "../agents/terminal/ModuleFolderSelection";
+import { moduleFolderSaveError } from "../module-links/moduleFolderTrust";
 import { setModuleFolder } from "../module-links";
 
 const REFUSAL_MESSAGE: Record<string, string> = {
@@ -45,10 +46,15 @@ export function ModuleFolderRequired({
     setBusy(true);
     setError(null);
     try {
-      await setModuleFolder(moduleId, path);
+      if (!(await setModuleFolder(moduleId, path))) return;
       onLinked();
-    } catch {
-      setError("Could not save the module folder. Retry to continue.");
+    } catch (cause) {
+      setError(
+        moduleFolderSaveError(
+          cause,
+          "Could not save the module folder. Retry to continue.",
+        ),
+      );
     } finally {
       setBusy(false);
     }

@@ -211,9 +211,12 @@ async fn provision_without_terminal_history(directory: &Path) {
 }
 
 async fn mutate(directory: &Path, sql: &str) {
-    let database = Database::connect(format!("sqlite:{}?mode=rw", directory.join("state.db").display()))
-        .await
-        .unwrap();
+    let database = Database::connect(format!(
+        "sqlite:{}?mode=rw",
+        directory.join("state.db").display()
+    ))
+    .await
+    .unwrap();
     database.execute_unprepared(sql).await.unwrap();
     database.close().await.unwrap();
 }

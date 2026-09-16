@@ -14,9 +14,10 @@ use sha2::{Digest, Sha256};
 use super::atomic_json::{write_json, RealAtomicFileOperations};
 use super::ownership_manifest::{
     LAUNCH_BINDING_ENTRY_SKILL_LEDGER, LAUNCH_BINDING_PROFILE_LEDGER, OWNED_ASSETS, OWNED_TABLES,
-    PROVIDER_ADAPTER_SLUGS, VERSION,
+    VERSION,
 };
 use super::SettingsPersistenceError;
+use ticketry_provider::Provider;
 
 const SNAPSHOT_GENERATIONS: usize = 3;
 const DJANGO_MIGRATIONS: [&str; 2] = ["0001_initial", "0002_migrate_profile_prompt_authority"];
@@ -374,9 +375,9 @@ async fn validate_semantics(
         .into_iter()
         .map(|row| row.try_get::<String>("", "slug"))
         .collect::<Result<BTreeSet<_>, _>>()?;
-    let expected = PROVIDER_ADAPTER_SLUGS
-        .iter()
-        .map(|slug| (*slug).to_owned())
+    let expected = Provider::ALL
+        .into_iter()
+        .map(|provider| provider.slug().to_owned())
         .collect::<BTreeSet<_>>();
     if actual != expected {
         return Err(unknown(format!(

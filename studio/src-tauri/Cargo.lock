@@ -6964,6 +6964,7 @@ dependencies = [
  "ticketry-graphql-schema",
  "ticketry-launch",
  "ticketry-mcp",
+ "ticketry-provider",
  "ticketry-runs",
  "ticketry-settings",
  "ticketry-terminal",
@@ -7129,6 +7130,7 @@ dependencies = [
  "ticketry-diagnostics",
  "ticketry-documents",
  "ticketry-entities",
+ "ticketry-provider",
  "ticketry-runs",
  "ticketry-settings",
  "ticketry-work-management",
@@ -7150,12 +7152,23 @@ dependencies = [
  "ticketry-agent-execution",
  "ticketry-data-directory",
  "ticketry-entities",
+ "ticketry-provider",
  "ticketry-runs",
  "ticketry-settings",
  "ticketry-terminal",
  "ticketry-work-management",
  "tokio",
  "tokio-util",
+ "uuid",
+]
+
+[[package]]
+name = "ticketry-provider"
+version = "0.0.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tempfile",
  "uuid",
 ]
 
@@ -7198,6 +7211,7 @@ dependencies = [
  "tempfile",
  "ticketry-data-directory",
  "ticketry-entities",
+ "ticketry-provider",
  "uuid",
 ]
 
@@ -7227,6 +7241,7 @@ dependencies = [
  "ticketry-entities",
  "ticketry-launch",
  "ticketry-runs",
+ "ticketry-settings",
  "ticketry-tool-discovery",
  "ticketry-work-management",
  "ticketry-workspace-runtime",
@@ -7263,6 +7278,7 @@ dependencies = [
  "ticketry-data-directory",
  "ticketry-diagnostics",
  "ticketry-entities",
+ "ticketry-provider",
  "ticketry-runs",
  "ticketry-settings",
  "tokio",

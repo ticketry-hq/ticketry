@@ -36,7 +36,7 @@ describe("overhaul acceptance gate", () => {
 
     expect(Object.fromEntries(counts)).toEqual(
       Object.fromEntries(
-        Array.from({ length: 283 }, (_, index) => [
+        Array.from({ length: 288 }, (_, index) => [
           String(index + 1).padStart(2, "0"),
           1,
         ]),

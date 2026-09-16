@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { ModalShell } from "../../../app/modal/ModalShell";
 import { useModalStore, type StandardModalType } from "../../../app/modal/modalStore";
 import { setModuleFolder, useModuleFolder } from "../../module-links";
+import { moduleFolderSaveError } from "../../module-links/moduleFolderTrust";
 import { MODAL_ACTIONS } from "../../../app/navigation/keymapRegistry";
 import { studioRuntime, type StudioRuntime } from "../../../runtime";
 import {
@@ -56,9 +57,14 @@ export function ModuleFolder({
     setError(null);
     try {
       try {
-        await setModuleFolder(moduleId, trimmedValue);
-      } catch {
-        setError("Could not save the module folder. Retry to continue.");
+        if (!(await setModuleFolder(moduleId, trimmedValue, runtime))) return;
+      } catch (cause) {
+        setError(
+          moduleFolderSaveError(
+            cause,
+            "Could not save the module folder. Retry to continue.",
+          ),
+        );
         return;
       }
       popModal();

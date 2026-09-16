@@ -589,13 +589,16 @@ fn a_launch_profile_is_refused_for_every_provider_but_codex() {
     use workflow_tools::ensure_profile_supported;
 
     let profile = PatchValue::Value("x".to_owned());
-    let error = ensure_profile_supported(Some("claude"), &profile)
-        .expect_err("a Claude binding must refuse a launch profile");
-    assert_eq!(error.code(), "incompatible_profile");
-    assert_eq!(error.field_name(), Some("profile"));
-    assert_eq!(error.to_string(), "Only Codex supports launch profiles.");
+    for provider in ["claude", "gemini", "agy"] {
+        let error = ensure_profile_supported(Some(provider), &profile)
+            .expect_err("a non-Codex binding must refuse a launch profile");
+        assert_eq!(error.code(), "incompatible_profile");
+        assert_eq!(error.field_name(), Some("profile"));
+        assert_eq!(error.to_string(), "Only Codex supports launch profiles.");
+    }
 
     assert!(ensure_profile_supported(Some("codex"), &profile).is_ok());
+    assert!(ensure_profile_supported(Some("codex"), &PatchValue::Value("  ".to_owned())).is_ok());
     assert!(ensure_profile_supported(None, &profile).is_ok());
     assert!(ensure_profile_supported(Some("claude"), &PatchValue::Null).is_ok());
     assert!(ensure_profile_supported(Some("claude"), &PatchValue::Unset).is_ok());

@@ -12,6 +12,7 @@ fn authority(provider: Provider) -> ExecutionAuthority {
         "/private/Ticketry Data".into(),
         "Bearer secret-mcp".into(),
         BTreeSet::from(["tdd".into()]),
+        vec!["work".into()],
     )
 }
 
@@ -62,6 +63,10 @@ fn provider_contracts_keep_flags_hooks_mcp_and_timeout_units() {
     ];
     for (provider, flag, unit, events) in cases {
         let plan = materialize(&durable(provider, LaunchKind::Task), &authority(provider)).unwrap();
+        assert_eq!(
+            plan.working_directory,
+            PathBuf::from("/authorized/workspace")
+        );
         assert!(plan.argv.iter().any(|argument| argument == flag));
         assert_eq!(
             plan.environment.get("COLORTERM").map(String::as_str),
@@ -131,22 +136,34 @@ fn every_provider_builds_native_resume_argv() {
         Provider::Gemini,
         Provider::Agy,
     ] {
-        let plan = materialize(
-            &durable(
-                provider,
-                LaunchKind::Resume {
-                    provider_session_id: "session-α".into(),
-                },
-            ),
-            &authority(provider),
-        )
-        .unwrap();
+        let mut input = durable(
+            provider,
+            LaunchKind::Resume {
+                provider_session_id: "session-α".into(),
+            },
+        );
+        input.options.model = Some("resume-model-must-not-apply".into());
+        input.options.reasoning = matches!(provider, Provider::Claude | Provider::Codex)
+            .then(|| "resume-effort-must-not-apply".into());
+        let plan = materialize(&input, &authority(provider)).unwrap();
         assert_eq!(
             plan.argv[0],
             format!("/approved/{}", provider_contract(provider).slug)
         );
         assert!(plan.argv.iter().any(|argument| argument == "session-α"));
         assert!(!plan.argv.iter().any(|argument| argument == "hello"));
+        assert!(!plan
+            .argv
+            .iter()
+            .any(|argument| argument == "resume-model-must-not-apply"));
+        assert!(!plan
+            .argv
+            .iter()
+            .any(|argument| argument == "resume-effort-must-not-apply"));
+        assert_eq!(
+            plan.working_directory,
+            PathBuf::from("/authorized/workspace")
+        );
     }
 }
 
@@ -267,7 +284,7 @@ fn unavailable_skills_and_unsupported_options_fail_before_execution() {
     );
     assert_eq!(
         Provider::try_from("other").unwrap_err().code,
-        LaunchPlanningErrorCode::UnknownProvider,
+        ticketry_provider::ProviderErrorCode::UnknownProvider,
     );
     input.options = ProviderOptions::default();
     input.version = 99;

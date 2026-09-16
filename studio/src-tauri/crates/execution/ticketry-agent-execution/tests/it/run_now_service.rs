@@ -449,7 +449,10 @@ async fn run_now_with_another_live_run_replaces_it_and_launches_once() {
     assert_eq!(success.code, "run_now_started");
     assert_eq!(success.committed_state.name, "Implement");
     assert_eq!(live_run_fixture.launches.load(Ordering::SeqCst), 1);
-    assert_eq!(state_id(&live_run_fixture.database).await.as_deref(), Some(IMPLEMENT));
+    assert_eq!(
+        state_id(&live_run_fixture.database).await.as_deref(),
+        Some(IMPLEMENT)
+    );
 
     let live_terminal_fixture = fixture(None).await;
     insert_live_run(&live_terminal_fixture.database, OTHER_RUN).await;

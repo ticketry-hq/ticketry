@@ -4,6 +4,7 @@ import { useModalStore } from "../../../app/modal/modalStore";
 import { useClientStore } from "../../../state/clientStore";
 import { useStudioStore } from "../../projects";
 import { MODAL_ACTIONS } from "../../../app/navigation/keymapRegistry";
+import { moduleFolderSaveError } from "../../module-links/moduleFolderTrust";
 import { setModuleFolder } from "../../module-links";
 import {
   ModuleFolderSelection,
@@ -100,10 +101,13 @@ export function AddModule({ runtime }: { runtime?: StudioRuntime } = {}) {
 
       const resolvedModuleId = moduleId;
       try {
-        await setModuleFolder(resolvedModuleId, folder);
-      } catch {
+        if (!(await setModuleFolder(resolvedModuleId, folder, runtime))) return;
+      } catch (cause) {
         setError(
-          "Module created, but its folder could not be saved. Retry to save the folder.",
+          moduleFolderSaveError(
+            cause,
+            "Module created, but its folder could not be saved. Retry to save the folder.",
+          ),
         );
         return;
       }

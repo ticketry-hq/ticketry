@@ -45,7 +45,7 @@ pub use legacy_profile_files::{ModuleLink, Profile, ProfileCatalog};
 pub use ownership_manifest::VERSION as OWNERSHIP_MANIFEST_VERSION;
 pub use ownership_manifest::{
     DJANGO_COMPATIBILITY_PORTS, LAUNCH_BINDING_ENTRY_SKILL_LEDGER, LAUNCH_BINDING_PROFILE_LEDGER,
-    OWNED_ASSETS, OWNED_TABLES, PROVIDER_ADAPTER_SLUGS,
+    OWNED_ASSETS, OWNED_TABLES,
 };
 pub use provider_catalog::{
     ProviderCatalog, ProviderCatalogError, ProviderCatalogService, ProviderCatalogUpdate,

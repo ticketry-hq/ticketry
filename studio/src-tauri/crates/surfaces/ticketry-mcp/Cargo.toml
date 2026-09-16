@@ -18,6 +18,7 @@ serde_json.workspace = true
 ticketry-agent-execution.workspace = true
 ticketry-data-directory.workspace = true
 ticketry-entities.workspace = true
+ticketry-provider.workspace = true
 ticketry-runs.workspace = true
 ticketry-settings.workspace = true
 ticketry-terminal.workspace = true

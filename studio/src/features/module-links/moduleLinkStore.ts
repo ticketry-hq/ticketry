@@ -19,6 +19,8 @@ import {
   type ModuleLinkFieldsFragment,
 } from "./generated/moduleLinks.documents";
 import { eraseModuleLink, writeModuleLink } from "./moduleLinkTransport";
+import type { StudioRuntime } from "../../runtime";
+import { prepareModuleFolderTrust } from "./moduleFolderTrust";
 
 export type ModuleLink = ModuleLinkFieldsFragment;
 
@@ -102,11 +104,14 @@ export function recentModuleFolders(links: ModuleLink[]): string[] {
 export async function setModuleFolder(
   moduleId: string,
   path: string,
-): Promise<void> {
+  runtime?: StudioRuntime,
+): Promise<boolean> {
   if (!isAbsoluteFolderPath(path)) {
     throw new Error("Module folders require a complete filesystem path.");
   }
+  if (!(await prepareModuleFolderTrust(path, runtime))) return false;
   await writeModuleLink(moduleId, path);
+  return true;
 }
 
 /** Unlink a Module from its local folder. */

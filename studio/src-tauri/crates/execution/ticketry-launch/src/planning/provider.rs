@@ -1,38 +1,4 @@
-use serde::{Deserialize, Serialize};
-
-use super::{LaunchPlanningError, LaunchPlanningErrorCode, ProviderOptions};
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Provider {
-    Claude,
-    Codex,
-    Gemini,
-    Agy,
-}
-
-impl TryFrom<&str> for Provider {
-    type Error = LaunchPlanningError;
-
-    fn try_from(value: &str) -> Result<Self, Self::Error> {
-        match value {
-            "claude" => Ok(Self::Claude),
-            "codex" => Ok(Self::Codex),
-            "gemini" => Ok(Self::Gemini),
-            "agy" => Ok(Self::Agy),
-            _ => Err(LaunchPlanningError::new(
-                LaunchPlanningErrorCode::UnknownProvider,
-                format!("Provider '{value}' is not registered."),
-            )),
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum TimeoutUnit {
-    Seconds,
-    Milliseconds,
-}
+pub use ticketry_provider::{Provider, TimeoutUnit};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ProviderContract {
@@ -52,13 +18,7 @@ pub struct ProviderContract {
 
 impl ProviderContract {
     pub fn is_ready_composer(self, screen: &[u8]) -> bool {
-        let Some(marker) = self.ready_composer_marker else {
-            return false;
-        };
-        let rendered = String::from_utf8_lossy(screen);
-        strip_terminal_controls(&rendered)
-            .lines()
-            .any(|line| line.trim_start().starts_with(marker))
+        self.launch_metadata().is_ready_composer(screen)
     }
 
     /// The composer line and everything the provider renders below it, with
@@ -72,218 +32,44 @@ impl ProviderContract {
     /// Neither shows the payload, so callers compare this region across the
     /// paste rather than searching the capture for the text itself.
     pub fn composer_region(self, screen: &[u8]) -> Option<String> {
-        let marker = self.ready_composer_marker?;
-        let rendered = strip_terminal_controls(&String::from_utf8_lossy(screen));
-        let composer = rendered
-            .lines()
-            .position(|line| line.trim_start().starts_with(marker))?;
-        Some(
-            rendered
-                .lines()
-                .skip(composer)
-                .collect::<Vec<_>>()
-                .join("\n"),
-        )
+        self.launch_metadata().composer_region(screen)
+    }
+
+    fn launch_metadata(self) -> ticketry_provider::ProviderLaunchMetadata {
+        ticketry_provider::ProviderLaunchMetadata {
+            invocation_prefix: self.invocation_prefix,
+            ready_composer_marker: self.ready_composer_marker,
+            supports_model: self.supports_model,
+            supports_reasoning: self.supports_reasoning,
+            supports_resume: self.supports_resume,
+            supports_worktracker_mcp: self.supports_worktracker_mcp,
+            supports_required_skills: self.supports_required_skills,
+            hook_events: self.hook_events,
+            hook_timeout: self.hook_timeout,
+            hook_timeout_unit: self.hook_timeout_unit,
+            settings_environment: self.settings_environment,
+        }
     }
 }
-
-const CLAUDE_EVENTS: &[&str] = &[
-    "SessionStart",
-    "UserPromptSubmit",
-    "PreToolUse",
-    "PostToolUse",
-    "Notification",
-    "PermissionRequest",
-    "Stop",
-    "SessionEnd",
-];
-const CODEX_EVENTS: &[&str] = &[
-    "SessionStart",
-    "UserPromptSubmit",
-    "PreToolUse",
-    "PostToolUse",
-    "PermissionRequest",
-    "Stop",
-];
-const GEMINI_EVENTS: &[&str] = &[
-    "SessionStart",
-    "BeforeAgent",
-    "BeforeTool",
-    "AfterTool",
-    "Notification",
-    "AfterAgent",
-    "SessionEnd",
-];
-const AGY_EVENTS: &[&str] = &[
-    "SessionStart",
-    "PreToolUse",
-    "PostToolUse",
-    "Notification",
-    "Stop",
-    "SessionEnd",
-];
 
 pub fn provider_contract(provider: Provider) -> ProviderContract {
-    match provider {
-        Provider::Claude => contract(
-            "claude",
-            "/",
-            Some("\u{276f}"),
-            true,
-            CLAUDE_EVENTS,
-            5,
-            TimeoutUnit::Seconds,
-            None,
-        ),
-        Provider::Codex => contract(
-            "codex",
-            "$",
-            Some("\u{203a} Ask Codex"),
-            true,
-            CODEX_EVENTS,
-            5,
-            TimeoutUnit::Seconds,
-            None,
-        ),
-        Provider::Gemini => contract(
-            "gemini",
-            "/",
-            Some("> Type your message"),
-            false,
-            GEMINI_EVENTS,
-            5_000,
-            TimeoutUnit::Milliseconds,
-            Some("GEMINI_CLI_SYSTEM_SETTINGS_PATH"),
-        ),
-        Provider::Agy => contract(
-            "agy",
-            "/",
-            Some("> you:"),
-            false,
-            AGY_EVENTS,
-            5_000,
-            TimeoutUnit::Milliseconds,
-            Some("GEMINI_CLI_SYSTEM_SETTINGS_PATH"),
-        ),
-    }
-}
-
-fn contract(
-    slug: &'static str,
-    invocation_prefix: &'static str,
-    ready_composer_marker: Option<&'static str>,
-    reasoning: bool,
-    events: &'static [&'static str],
-    timeout: u64,
-    timeout_unit: TimeoutUnit,
-    settings_environment: Option<&'static str>,
-) -> ProviderContract {
+    let contract = ticketry_provider::provider_contract(provider);
+    let metadata = contract.metadata();
+    let launch = contract.launch_metadata();
     ProviderContract {
-        slug,
-        invocation_prefix,
-        ready_composer_marker,
-        supports_model: true,
-        supports_reasoning: reasoning,
-        supports_resume: true,
-        supports_worktracker_mcp: true,
-        supports_required_skills: true,
-        hook_events: events,
-        hook_timeout: timeout,
-        hook_timeout_unit: timeout_unit,
-        settings_environment,
+        slug: metadata.slug,
+        invocation_prefix: launch.invocation_prefix,
+        ready_composer_marker: launch.ready_composer_marker,
+        supports_model: launch.supports_model,
+        supports_reasoning: launch.supports_reasoning,
+        supports_resume: launch.supports_resume,
+        supports_worktracker_mcp: launch.supports_worktracker_mcp,
+        supports_required_skills: launch.supports_required_skills,
+        hook_events: launch.hook_events,
+        hook_timeout: launch.hook_timeout,
+        hook_timeout_unit: launch.hook_timeout_unit,
+        settings_environment: launch.settings_environment,
     }
-}
-
-fn strip_terminal_controls(value: &str) -> String {
-    let mut output = String::with_capacity(value.len());
-    let mut characters = value.chars().peekable();
-    while let Some(character) = characters.next() {
-        if character != '\u{1b}' {
-            output.push(character);
-            continue;
-        }
-        match characters.next() {
-            Some('[') => {
-                for control in characters.by_ref() {
-                    if ('@'..='~').contains(&control) {
-                        break;
-                    }
-                }
-            }
-            Some(']') => {
-                let mut previous_escape = false;
-                for control in characters.by_ref() {
-                    if control == '\u{7}' || (previous_escape && control == '\\') {
-                        break;
-                    }
-                    previous_escape = control == '\u{1b}';
-                }
-            }
-            Some(_) | None => {}
-        }
-    }
-    output
-}
-
-pub fn validate_options(
-    provider: Provider,
-    options: &ProviderOptions,
-) -> Result<(), LaunchPlanningError> {
-    let contract = provider_contract(provider);
-    if options.profile.is_some() && provider != Provider::Codex {
-        return Err(LaunchPlanningError::new(
-            LaunchPlanningErrorCode::UnsupportedModel,
-            format!(
-                "Provider '{}' does not support Codex profiles.",
-                contract.slug
-            ),
-        ));
-    }
-    if options
-        .profile
-        .as_deref()
-        .is_some_and(|value| !valid_option(value))
-        || options.profile.is_some() && (options.model.is_some() || options.reasoning.is_some())
-    {
-        return Err(LaunchPlanningError::new(
-            LaunchPlanningErrorCode::UnsupportedModel,
-            "A Codex profile must be non-empty and cannot be combined with model or reasoning.",
-        ));
-    }
-    if options
-        .model
-        .as_deref()
-        .is_some_and(|value| !valid_option(value))
-    {
-        return Err(LaunchPlanningError::new(
-            LaunchPlanningErrorCode::UnsupportedModel,
-            "Model must be omitted or non-empty.",
-        ));
-    }
-    if options.reasoning.is_some() && !contract.supports_reasoning {
-        return Err(LaunchPlanningError::new(
-            LaunchPlanningErrorCode::UnsupportedReasoning,
-            format!("Provider '{}' does not support reasoning.", contract.slug),
-        ));
-    }
-    if options
-        .reasoning
-        .as_deref()
-        .is_some_and(|value| !valid_option(value))
-    {
-        return Err(LaunchPlanningError::new(
-            LaunchPlanningErrorCode::UnsupportedReasoning,
-            "Reasoning must be omitted or non-empty.",
-        ));
-    }
-    Ok(())
-}
-
-fn valid_option(value: &str) -> bool {
-    !value.is_empty()
-        && value.bytes().all(|byte| {
-            byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b':' | b'/' | b'-')
-        })
 }
 
 #[cfg(test)]

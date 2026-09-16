@@ -1,7 +1,8 @@
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection};
+use ticketry_settings::ProviderCatalogService;
 use ticketry_work_management::{
     launch_policy::{self, CallerScope, LaunchPolicyRequest, LaunchPolicyResolver},
-    open_for_commands,
+    open_for_commands, read_queries,
 };
 
 const PROJECT: &str = "20000000000000000000000000000000";
@@ -267,6 +268,62 @@ async fn explicit_provider_never_inherits_another_providers_defaults() {
     assert_eq!(decision.provider, "claude");
     assert_eq!(decision.model.as_deref(), Some("opus"));
     assert_eq!(decision.reasoning, None);
+}
+
+#[tokio::test]
+async fn catalog_and_launch_share_the_provider_contract_capability() {
+    let (_directory, database, resolver) = fixture().await;
+    database
+        .execute_unprepared(
+            "UPDATE worktracker_provider SET supports_unattended = 0 WHERE slug = 'codex'",
+        )
+        .await
+        .unwrap();
+
+    let settings_catalog = ProviderCatalogService::load_from(&database).await.unwrap();
+    assert_eq!(
+        settings_catalog
+            .providers
+            .iter()
+            .find(|provider| provider.slug == "codex")
+            .map(|provider| (
+                provider.id.as_str(),
+                provider.activated,
+                provider.supports_unattended
+            )),
+        Some((CODEX, true, true))
+    );
+    assert_eq!(
+        settings_catalog
+            .providers
+            .iter()
+            .find(|provider| provider.slug == "interactive")
+            .map(|provider| provider.supports_unattended),
+        Some(false)
+    );
+
+    let public_catalog = read_queries::providers(&database).await.unwrap();
+    assert_eq!(
+        public_catalog
+            .iter()
+            .find(|provider| provider.slug == "codex")
+            .map(|provider| (provider.activated, provider.supports_unattended)),
+        Some((true, true))
+    );
+    assert_eq!(
+        public_catalog
+            .iter()
+            .find(|provider| provider.slug == "interactive")
+            .map(|provider| provider.supports_unattended),
+        Some(false)
+    );
+
+    let decision = resolver
+        .resolve(request(CallerScope::AutoStart, "shared-capability"))
+        .await
+        .expect("the registered Codex adapter supports unattended launches");
+
+    assert_eq!(decision.provider, "codex");
 }
 
 #[tokio::test]

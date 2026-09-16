@@ -3,7 +3,8 @@ use serde::Deserialize;
 
 use super::super::CommandError;
 use ticketry_entities::{agent_model, agent_model_reasoning_level, provider};
-use ticketry_settings::read_global_launch_default;
+use ticketry_provider::{provider_contract, ProfileSelection, Provider};
+use ticketry_settings::{read_global_launch_default, ProviderCatalogService};
 
 const REQUIRED_SKILL_LOCK: &str =
     include_str!("../../../../../../../resources/launch/skills.lock.json");
@@ -27,7 +28,6 @@ struct RequiredSkillLock {
 struct ProviderSelection {
     slug: String,
     activated: bool,
-    supports_unattended: bool,
 }
 
 pub(super) async fn validate_launch_binding(
@@ -55,21 +55,42 @@ pub(super) async fn validate_launch_binding(
             "Choose a catalog model before configuring reasoning.",
         ));
     }
-    if candidate.profile.is_some()
-        && (candidate.model_id.is_some() || candidate.reasoning_id.is_some())
-    {
-        return Err(rejected(
-            "profile",
-            "profile_conflicts_with_model",
-            "A Codex profile cannot be combined with model or reasoning overrides.",
-        ));
+    if let Some(profile) = candidate.profile {
+        let profiles = ProviderCatalogService::load_from(database)
+            .await
+            .map_err(|error| CommandError::Storage(error.to_string()))?
+            .codex_profiles
+            .0;
+        provider_contract(Provider::Codex)
+            .validate_profile_selection(
+                ProfileSelection {
+                    profile: Some(profile),
+                    model: candidate.model_id,
+                    effort: candidate.reasoning_id,
+                },
+                &profiles,
+            )
+            .map_err(|error| {
+                let (code, message) = match error.code {
+                    ticketry_provider::ProviderErrorCode::UnregisteredProfile => (
+                        "profile_not_registered",
+                        format!("Codex profile '{profile}' is not registered."),
+                    ),
+                    _ => (
+                        "profile_conflicts_with_model",
+                        "A Codex profile cannot be combined with model or reasoning overrides."
+                            .to_owned(),
+                    ),
+                };
+                rejected("profile", code, message)
+            })?;
     }
 
     // A profile is a Codex-only option, so a profile-only binding is a Codex
     // binding even though it names no catalog model. Without this the
     // automation checks below fall through to the global default's provider.
     let provider = match (candidate.profile, candidate.model_id) {
-        (Some(_), _) => provider_by_slug(database, "codex").await?,
+        (Some(_), _) => provider_by_slug(database, Provider::Codex.slug()).await?,
         (None, Some(model_id)) => Some(provider_for_model(database, model_id).await?),
         (None, None) => None,
     };
@@ -99,7 +120,7 @@ pub(super) async fn validate_launch_binding(
                 ),
             ));
         }
-        if !provider.supports_unattended {
+        if !supports_unattended(&provider) {
             return Err(rejected(
                 field,
                 "unattended_launch_unsupported",
@@ -181,7 +202,6 @@ async fn provider_for_model(
     let provider = ProviderSelection {
         slug: provider.slug,
         activated: provider.activated,
-        supports_unattended: provider.supports_unattended,
     };
     if !provider.activated {
         return Err(rejected(
@@ -237,7 +257,6 @@ async fn provider_by_slug(
         .map(|row| ProviderSelection {
             slug: row.slug,
             activated: row.activated,
-            supports_unattended: row.supports_unattended,
         }))
 }
 
@@ -247,6 +266,11 @@ fn automation_field(auto_start: bool) -> &'static str {
     } else {
         "subtree_run_enabled"
     }
+}
+
+fn supports_unattended(provider: &ProviderSelection) -> bool {
+    Provider::from_slug(&provider.slug)
+        .is_some_and(|provider| provider_contract(provider).metadata().supports_unattended)
 }
 
 fn rejected(field: &'static str, code: &'static str, message: impl Into<String>) -> CommandError {

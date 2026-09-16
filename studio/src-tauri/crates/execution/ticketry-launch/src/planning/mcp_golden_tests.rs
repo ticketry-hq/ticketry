@@ -30,6 +30,7 @@ fn packaged_stdio_mcp_keeps_credentials_in_environment_for_every_provider() {
                 data_directory.into(),
                 "Bearer secret-mcp".into(),
                 BTreeSet::new(),
+                Vec::new(),
             );
             let durable = DurableLaunchMaterial::new(
                 "run-1",

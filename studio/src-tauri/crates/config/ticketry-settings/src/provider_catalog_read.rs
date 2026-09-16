@@ -5,17 +5,23 @@ use sea_orm::{ConnectionTrait, EntityTrait, QueryOrder};
 use super::entities::app_settings as app_setting;
 use super::global_launch_default::read_global_launch_default;
 use super::global_launch_default::{PROVIDER_CATALOG_KEY, PROVIDER_CATALOG_SCOPE};
-use super::provider_catalog::{ProviderCatalog, ProviderCatalogError, CONFIGURABLE_PROVIDER_SLUGS};
+use super::provider_catalog::{normalized_profiles, ProviderCatalog, ProviderCatalogError};
 use sea_orm::{ColumnTrait, QueryFilter};
 use ticketry_entities::{agent_model, provider, reasoning_level, StringList};
+use ticketry_provider::{provider_contract, Provider};
 
 pub(super) async fn load_from(
     database: &impl ConnectionTrait,
 ) -> Result<ProviderCatalog, ProviderCatalogError> {
-    let provider_rows = provider::Entity::find()
+    let mut provider_rows = provider::Entity::find()
         .order_by_asc(provider::Column::Slug)
         .all(database)
         .await?;
+    for row in &mut provider_rows {
+        if let Some(provider) = Provider::from_slug(&row.slug) {
+            row.supports_unattended = provider_contract(provider).metadata().supports_unattended;
+        }
+    }
     let mut model_rows = agent_model::Entity::find().all(database).await?;
     let provider_slugs = provider_rows
         .iter()
@@ -36,7 +42,11 @@ pub(super) async fn load_from(
     Ok(ProviderCatalog {
         configurable_providers: provider_rows
             .iter()
-            .filter(|row| CONFIGURABLE_PROVIDER_SLUGS.contains(&row.slug.as_str()))
+            .filter(|row| {
+                Provider::from_slug(&row.slug).is_some_and(|provider| {
+                    provider_contract(provider).metadata().settings_configurable
+                })
+            })
             .cloned()
             .collect(),
         providers: provider_rows
@@ -46,7 +56,7 @@ pub(super) async fn load_from(
             .collect(),
         agent_models: model_rows,
         reasoning_levels: reasoning_rows,
-        codex_profiles: StringList(
+        codex_profiles: StringList(normalized_profiles(
             app_setting::Entity::find()
                 .filter(app_setting::Column::Scope.eq(PROVIDER_CATALOG_SCOPE))
                 .filter(app_setting::Column::Key.eq(PROVIDER_CATALOG_KEY))
@@ -58,7 +68,7 @@ pub(super) async fn load_from(
                 .into_iter()
                 .filter_map(|value| value.as_str().map(str::to_owned))
                 .collect(),
-        ),
+        )?),
         global_default: read_global_launch_default(database).await?,
     })
 }

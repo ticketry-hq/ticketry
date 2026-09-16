@@ -1,86 +1,57 @@
 //! Provider, model, and reasoning rows required by a new installation.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use sea_orm::{ActiveValue::NotSet, DatabaseConnection, DbErr, EntityTrait, Set, TransactionTrait};
 
 use ticketry_entities::{agent_model, agent_model_reasoning_level, provider, reasoning_level};
-
-const CLAUDE_REASONING: &[&str] = &["low", "medium", "high", "xhigh", "max"];
-const CODEX_REASONING: &[&str] = &["minimal", "low", "medium", "high", "xhigh"];
-const REASONING_LEVELS: &[&str] = &["high", "low", "max", "medium", "minimal", "xhigh"];
-
-struct ProviderDefault {
-    slug: &'static str,
-    activated: bool,
-    models: &'static [&'static str],
-    reasoning: &'static [&'static str],
-}
-
-const PROVIDERS: &[ProviderDefault] = &[
-    ProviderDefault {
-        slug: "agy",
-        activated: false,
-        models: &["vendor/model"],
-        reasoning: &[],
-    },
-    ProviderDefault {
-        slug: "claude",
-        activated: true,
-        models: &["sonnet", "opus", "haiku", "fable"],
-        reasoning: CLAUDE_REASONING,
-    },
-    ProviderDefault {
-        slug: "codex",
-        activated: true,
-        models: &["gpt-5.4"],
-        reasoning: CODEX_REASONING,
-    },
-    ProviderDefault {
-        slug: "gemini",
-        activated: true,
-        models: &["gemini-3.1-pro-preview"],
-        reasoning: &[],
-    },
-];
+use ticketry_provider::{provider_contract, Provider};
 
 pub async fn provision(database: &DatabaseConnection) -> Result<(), DbErr> {
     let transaction = database.begin().await?;
     let mut reasoning_ids = BTreeMap::new();
 
-    for name in REASONING_LEVELS {
+    let reasoning_levels = Provider::ALL
+        .into_iter()
+        .flat_map(|provider| provider_contract(provider).installation_catalog().models)
+        .flat_map(|model| model.efforts.iter().copied())
+        .collect::<BTreeSet<_>>();
+    for name in reasoning_levels {
         let id = new_id();
         reasoning_level::Entity::insert(reasoning_level::ActiveModel {
             id: Set(id.clone()),
-            name: Set((*name).to_owned()),
+            name: Set(name.to_owned()),
         })
         .exec(&transaction)
         .await?;
-        reasoning_ids.insert(*name, id);
+        reasoning_ids.insert(name, id);
     }
 
-    for definition in PROVIDERS {
+    for provider_kind in Provider::ALL {
+        let contract = provider_contract(provider_kind);
+        let metadata = contract.metadata();
+        let catalog = contract.installation_catalog();
         let provider_id = new_id();
         provider::Entity::insert(provider::ActiveModel {
             id: Set(provider_id.clone()),
-            slug: Set(definition.slug.to_owned()),
-            activated: Set(definition.activated),
-            supports_unattended: Set(true),
+            slug: Set(metadata.slug.to_owned()),
+            activated: Set(catalog.active_by_default),
+            supports_unattended: Set(metadata.supports_unattended),
         })
         .exec(&transaction)
         .await?;
 
-        for name in definition.models {
+        for model in catalog.models {
             let model_id = new_id();
             agent_model::Entity::insert(agent_model::ActiveModel {
                 id: Set(model_id.clone()),
                 provider_id: Set(provider_id.clone()),
-                name: Set((*name).to_owned()),
+                name: Set(model.name.to_owned()),
             })
             .exec(&transaction)
             .await?;
 
-            for level in definition.reasoning {
+            for level in model.efforts {
                 agent_model_reasoning_level::Entity::insert(
                     agent_model_reasoning_level::ActiveModel {
                         id: NotSet,

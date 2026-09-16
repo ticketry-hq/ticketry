@@ -311,7 +311,9 @@ impl TerminalLaunchRuntime for InteractiveTerminalLaunchRuntime {
         }
         let provider =
             ticketry_launch::Provider::try_from(material.provider.as_deref().unwrap_or_default())
-                .map_err(planning_error)?;
+                .map_err(|error| {
+                TerminalLaunchError::new(TerminalLaunchErrorCode::InvalidRequest, error.to_string())
+            })?;
         let entry_skill = entry_skill_for_effect(&authority.database, &material.effect_id).await?;
         let scope = match material.scope.as_str() {
             "task" => ticketry_launch::LaunchScope::Task,
@@ -415,6 +417,13 @@ impl TerminalLaunchRuntime for InteractiveTerminalLaunchRuntime {
         let tool = provider_tool(provider);
         let executable = crate::tmux_adapter::approved_tool_path(tool)
             .map_err(|_| invalid_launch("The approved provider executable is unavailable."))?;
+        let registered_profiles =
+            ticketry_settings::ProviderCatalogService::new(authority.database.clone())
+                .load()
+                .await
+                .map_err(|_| invalid_launch("The provider catalog is unavailable."))?
+                .codex_profiles
+                .0;
         let execution = ticketry_launch::ExecutionAuthority::new(
             executable,
             working_directory,
@@ -425,6 +434,7 @@ impl TerminalLaunchRuntime for InteractiveTerminalLaunchRuntime {
             })?,
             authorization,
             available_skills(),
+            registered_profiles,
         );
         let mut launch =
             ticketry_launch::materialize(&durable, &execution).map_err(planning_error)?;

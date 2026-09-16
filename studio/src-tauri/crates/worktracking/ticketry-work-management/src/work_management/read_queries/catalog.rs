@@ -6,6 +6,7 @@ use sea_orm::{DatabaseConnection, DbErr, EntityTrait, QueryOrder};
 use super::uuid;
 use crate::work_management::read_types as output;
 use ticketry_entities::{agent_model, agent_model_reasoning_level, provider, reasoning_level};
+use ticketry_provider::{provider_contract, Provider};
 
 pub async fn providers(database: &DatabaseConnection) -> Result<Vec<output::Provider>, DbErr> {
     Ok(provider::Entity::find()
@@ -13,11 +14,17 @@ pub async fn providers(database: &DatabaseConnection) -> Result<Vec<output::Prov
         .all(database)
         .await?
         .into_iter()
-        .map(|row| output::Provider {
-            id: uuid(&row.id),
-            slug: row.slug,
-            activated: row.activated,
-            supports_unattended: row.supports_unattended,
+        .map(|row| {
+            let supports_unattended = Provider::from_slug(&row.slug)
+                .map_or(row.supports_unattended, |provider| {
+                    provider_contract(provider).metadata().supports_unattended
+                });
+            output::Provider {
+                id: uuid(&row.id),
+                slug: row.slug,
+                activated: row.activated,
+                supports_unattended,
+            }
         })
         .collect())
 }

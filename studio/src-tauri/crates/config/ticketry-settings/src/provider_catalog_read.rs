@@ -13,10 +13,15 @@ use ticketry_provider::{provider_contract, Provider};
 pub(super) async fn load_from(
     database: &impl ConnectionTrait,
 ) -> Result<ProviderCatalog, ProviderCatalogError> {
-    let provider_rows = provider::Entity::find()
+    let mut provider_rows = provider::Entity::find()
         .order_by_asc(provider::Column::Slug)
         .all(database)
         .await?;
+    for row in &mut provider_rows {
+        if let Some(provider) = Provider::from_slug(&row.slug) {
+            row.supports_unattended = provider_contract(provider).metadata().supports_unattended;
+        }
+    }
     let mut model_rows = agent_model::Entity::find().all(database).await?;
     let provider_slugs = provider_rows
         .iter()

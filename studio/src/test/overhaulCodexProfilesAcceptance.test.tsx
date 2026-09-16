@@ -50,7 +50,7 @@ describe("Codex profile settings acceptance", () => {
     api.updateProviderCatalog.mockReset().mockImplementation(async (value) => value);
   });
 
-  it("[overhaul-258] registers, deduplicates, selects, saves, and removes Codex profiles", async () => {
+  it("[overhaul-297] registers, deduplicates, selects, saves, and removes Codex profiles", async () => {
     const ref = createRef<ModelConfigurationPanelHandle>();
     render(<ModelConfigurationPanel ref={ref} />);
 

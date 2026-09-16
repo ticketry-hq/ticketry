@@ -18,7 +18,7 @@ use crate::workspace::operations::{WorkspaceOperationIntent, WorkspaceOperationK
 use super::plan::CreatePlan;
 
 /// The intent schema version this build writes and decodes.
-pub const INTENT_VERSION: i32 = 1;
+pub const INTENT_VERSION: i32 = 2;
 
 /// A stable, path-free identity for one canonical repository.
 pub fn repository_digest(repository: &Path) -> String {
@@ -34,22 +34,29 @@ pub fn resource_key(top_level_row_id: &str) -> String {
     format!("worktree/{top_level_row_id}")
 }
 
-pub fn intent(operation_id: &str, plan: &CreatePlan) -> WorkspaceOperationIntent {
+pub fn intent(
+    operation_id: &str,
+    plan: &CreatePlan,
+    base_ref: &str,
+    base_commit: &str,
+) -> WorkspaceOperationIntent {
     WorkspaceOperationIntent {
         operation_id: operation_id.to_owned(),
         kind: WorkspaceOperationKind::WorktreeCreate,
         intent_version: INTENT_VERSION,
         resource_key: resource_key(&plan.owner.top_level_row_id()),
-        payload: payload(plan),
+        payload: payload(plan, base_ref, base_commit),
     }
 }
 
-fn payload(plan: &CreatePlan) -> Value {
+fn payload(plan: &CreatePlan, base_ref: &str, base_commit: &str) -> Value {
     json!({
         "taskId": plan.owner.top_level_row_id(),
         "branch": plan.branch,
         "checkoutName": plan.checkout_name,
         "repositoryDigest": plan.repository_digest,
+        "baseRef": base_ref,
+        "baseCommit": base_commit,
     })
 }
 
@@ -60,6 +67,8 @@ pub struct CreateIntent {
     pub branch: String,
     pub checkout_name: String,
     pub repository_digest: String,
+    pub base_ref: String,
+    pub base_commit: String,
 }
 
 impl CreateIntent {
@@ -72,6 +81,8 @@ impl CreateIntent {
             branch: field(payload, "branch")?,
             checkout_name: field(payload, "checkoutName")?,
             repository_digest: field(payload, "repositoryDigest")?,
+            base_ref: field(payload, "baseRef")?,
+            base_commit: field(payload, "baseCommit")?,
         })
     }
 
@@ -117,6 +128,8 @@ mod tests {
             "branch": "wt/CODIN-881-parent-story",
             "checkoutName": "CODIN-881-parent-story",
             "repositoryDigest": "a".repeat(64),
+            "baseRef": "main",
+            "baseCommit": "0123456789abcdef0123456789abcdef01234567",
         });
         let decoded = CreateIntent::decode(&payload).expect("decode the intent");
         assert_eq!(decoded.branch, "wt/CODIN-881-parent-story");

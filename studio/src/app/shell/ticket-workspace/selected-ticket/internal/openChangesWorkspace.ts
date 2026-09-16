@@ -1,21 +1,41 @@
 import { TEMP_TASK_ID } from "../../../../../features/agents/types";
 import { scratchBucketId } from "../../../../../features/agents/terminal";
+import { createApolloStore } from "../../../../../shared/apollo/localState";
 import { useClientStore } from "../../../../../state/clientStore";
 import { rememberStudioWorkspaceTarget } from "../../../../../features/workspace-state/studioWorkspaceTarget";
 
-export function openModuleChangesWorkspace(moduleId: string): void {
-  const bucket = scratchBucketId(moduleId);
+type ChangesCheckoutSelection = {
+  taskIdByModule: Record<string, string | null>;
+};
+
+export const useChangesCheckoutSelection = createApolloStore<ChangesCheckoutSelection>(
+  "changes-checkout-selection",
+  () => ({ taskIdByModule: {} }),
+);
+
+export function selectChangesCheckout(moduleId: string, taskId: string | null): void {
+  useChangesCheckoutSelection.setState((state) => ({
+    taskIdByModule: { ...state.taskIdByModule, [moduleId]: taskId },
+  }));
+}
+
+function openChangesWorkspace(moduleId: string, taskId: string | null): void {
   const client = useClientStore.getState();
-  client.selectTask(TEMP_TASK_ID);
+  const planningTaskId = client.selectedTaskId;
+  const bucket = planningTaskId && planningTaskId !== TEMP_TASK_ID
+    ? planningTaskId
+    : scratchBucketId(moduleId);
+  selectChangesCheckout(moduleId, taskId);
+  client.selectTask(planningTaskId ?? TEMP_TASK_ID);
   client.ensureWorkspace(bucket);
   client.setActive(bucket, "changes");
   rememberStudioWorkspaceTarget(bucket, { kind: "changes" });
 }
 
-export function openTaskChangesWorkspace(taskId: string): void {
-  const client = useClientStore.getState();
-  client.selectTask(taskId);
-  client.ensureWorkspace(taskId);
-  client.setActive(taskId, "changes");
-  rememberStudioWorkspaceTarget(taskId, { kind: "changes" });
+export function openModuleChangesWorkspace(moduleId: string): void {
+  openChangesWorkspace(moduleId, null);
+}
+
+export function openTaskChangesWorkspace(moduleId: string, taskId: string): void {
+  openChangesWorkspace(moduleId, taskId);
 }

@@ -147,7 +147,7 @@ impl CreateExecutor {
         // One repository at a time; unrelated repositories stay free. No
         // database transaction is open across any of the Git work below.
         let _guard = self.locks.acquire(&plan.repository).await;
-        let outcome = self.converge(&plan).await;
+        let outcome = self.converge(&plan, &intent).await;
         match outcome {
             Ok(Converged::Existing(outcome)) => self.settled(claim, outcome).await,
             Ok(Converged::Proved(settled)) => self.settle_created(claim, &plan, settled).await,
@@ -157,7 +157,11 @@ impl CreateExecutor {
 
     /// Bring the repository and the index to the intended state, or explain
     /// why they cannot be.
-    async fn converge(&self, plan: &CreatePlan) -> Result<Converged, WorkspaceOperationOutcome> {
+    async fn converge(
+        &self,
+        plan: &CreatePlan,
+        intent: &CreateIntent,
+    ) -> Result<Converged, WorkspaceOperationOutcome> {
         if let Some(row) = self
             .existing_row(plan)
             .await
@@ -173,48 +177,46 @@ impl CreateExecutor {
         match observation {
             // A checkout this operation already cut, whose row never
             // committed. It is adopted rather than created a second time.
-            CheckoutObservation::Matching { head_commit } => {
-                Ok(Converged::Proved(SettledWorktree {
-                    worktree_id: uuid::Uuid::new_v4().simple().to_string(),
-                    base_ref: self.base_ref(plan, &head_commit).await,
-                    base_commit: head_commit,
-                    adopted: true,
-                }))
-            }
+            CheckoutObservation::Matching { .. } => Ok(Converged::Proved(SettledWorktree {
+                worktree_id: uuid::Uuid::new_v4().simple().to_string(),
+                base_ref: intent.base_ref.clone(),
+                base_commit: intent.base_commit.clone(),
+                adopted: true,
+            })),
             CheckoutObservation::Conflicting { code, detail } => Err(conflicted(
                 &code,
                 &detail,
                 json!({ "conflict": code, "branch": plan.branch, "checkoutName": plan.checkout_name }),
             )),
-            CheckoutObservation::Clear => self.cut(plan).await.map(Converged::Proved),
+            CheckoutObservation::Clear => self.cut(plan, intent).await.map(Converged::Proved),
         }
     }
 
     /// Cut the branch from the repository's committed HEAD and prove the
     /// result before anything is written.
-    async fn cut(&self, plan: &CreatePlan) -> Result<SettledWorktree, WorkspaceOperationOutcome> {
-        let head = git_effects::head(self.git(), &plan.repository)
-            .await
-            .map_err(|error| retryable(error.code_str(), error.to_string()))?;
+    async fn cut(
+        &self,
+        plan: &CreatePlan,
+        intent: &CreateIntent,
+    ) -> Result<SettledWorktree, WorkspaceOperationOutcome> {
         if let Err(error) = git_effects::create(
             self.git(),
             &plan.repository,
             &plan.checkout,
             &plan.branch,
-            &head.commit,
+            &intent.base_commit,
         )
         .await
         {
             return Err(self.failed_creation(plan, error).await);
         }
-        let head_commit =
-            git_effects::verify(self.git(), &plan.repository, &plan.checkout, &plan.branch)
-                .await
-                .map_err(|error| retryable(error.code_str(), error.to_string()))?;
+        git_effects::verify(self.git(), &plan.repository, &plan.checkout, &plan.branch)
+            .await
+            .map_err(|error| retryable(error.code_str(), error.to_string()))?;
         Ok(SettledWorktree {
             worktree_id: uuid::Uuid::new_v4().simple().to_string(),
-            base_ref: head.base_ref,
-            base_commit: head_commit,
+            base_ref: intent.base_ref.clone(),
+            base_commit: intent.base_commit.clone(),
             adopted: false,
         })
     }
@@ -266,18 +268,15 @@ impl CreateExecutor {
         };
         Ok(Some(WorkspaceOperationOutcome::Applied {
             result: settled.result(plan),
-            evidence: json!({ "adopted": true, "indexed": true, "branch": row.branch }),
+            evidence: json!({
+                "adopted": true,
+                "indexed": true,
+                "branch": row.branch,
+                "worktreeId": row.id,
+                "baseRef": row.base_branch,
+                "baseCommit": row.base_commit,
+            }),
         }))
-    }
-
-    /// The base an adopted checkout integrates back into. The repository's
-    /// current named HEAD is the same answer creation would have recorded; a
-    /// detached repository falls back to the proved commit.
-    async fn base_ref(&self, plan: &CreatePlan, head_commit: &str) -> String {
-        match git_effects::head(self.git(), &plan.repository).await {
-            Ok(head) => head.base_ref,
-            Err(_) => head_commit.to_owned(),
-        }
     }
 
     /// Settle a proved checkout together with its row and its durable fact.
@@ -295,6 +294,7 @@ impl CreateExecutor {
                 "baseRef": settled.base_ref,
                 "baseCommit": settled.base_commit,
                 "checkoutName": plan.checkout_name,
+                "worktreeId": settled.worktree_id,
             }),
         };
         let events = self.events.clone();

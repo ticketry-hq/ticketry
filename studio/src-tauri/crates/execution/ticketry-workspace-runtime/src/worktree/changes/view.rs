@@ -67,3 +67,50 @@ impl WorktreeCleanupStatusView {
         }
     }
 }
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, CustomOutputType)]
+pub struct LocalMergeDestinationView {
+    pub branch: String,
+    pub checkout: Option<String>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, CustomOutputType)]
+pub struct WorktreeMergePreviewView {
+    pub source_branch: String,
+    pub source_commit: Option<String>,
+    pub destination_branch: Option<String>,
+    pub destination_commit: Option<String>,
+    pub destination_checkout: Option<String>,
+    pub destination_checkout_identity: Option<String>,
+    pub confirmation_token: Option<String>,
+    pub ready: bool,
+    pub blocker: Option<String>,
+    pub reason: Option<String>,
+    pub requires_destination_selection: bool,
+    pub destinations: Vec<LocalMergeDestinationView>,
+}
+
+pub(super) fn blocked(
+    source_branch: String,
+    destination_branch: Option<String>,
+    destination_checkout: Option<String>,
+    blocker: &str,
+    reason: &str,
+    requires_destination_selection: bool,
+    destinations: Vec<LocalMergeDestinationView>,
+) -> WorktreeMergePreviewView {
+    WorktreeMergePreviewView {
+        source_branch,
+        source_commit: None,
+        destination_branch,
+        destination_commit: None,
+        destination_checkout,
+        destination_checkout_identity: None,
+        confirmation_token: None,
+        ready: false,
+        blocker: Some(blocker.to_owned()),
+        reason: Some(reason.to_owned()),
+        requires_destination_selection,
+        destinations,
+    }
+}

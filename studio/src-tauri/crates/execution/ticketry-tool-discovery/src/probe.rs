@@ -7,9 +7,14 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::thread;
+use std::time::{Duration, Instant};
 
 use super::diagnostics::{display_path, ToolDiagnostic, ToolHealth};
 use super::supported_tools::SupportedTool;
+
+const VERSION_PROBE_TIMEOUT: Duration = Duration::from_secs(2);
+const WAIT_POLL_INTERVAL: Duration = Duration::from_millis(10);
 
 pub(super) fn inspect_candidate<F>(
     candidate: &Path,
@@ -45,7 +50,7 @@ where
 }
 
 pub(super) fn version_probe(candidate: &Path, flag: &str) -> Result<String, String> {
-    let output = Command::new(candidate)
+    let mut child = Command::new(candidate)
         .arg(flag)
         .env_clear()
         // Node-installed CLIs commonly use `#!/usr/bin/env node`.  Give that
@@ -55,8 +60,27 @@ pub(super) fn version_probe(candidate: &Path, flag: &str) -> Result<String, Stri
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .output()
+        .spawn()
         .map_err(|_| "version probe could not start".to_owned())?;
+    let deadline = Instant::now() + VERSION_PROBE_TIMEOUT;
+    loop {
+        if child
+            .try_wait()
+            .map_err(|_| "version probe could not be read".to_owned())?
+            .is_some()
+        {
+            break;
+        }
+        if Instant::now() >= deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err("version probe timed out".to_owned());
+        }
+        thread::sleep(WAIT_POLL_INTERVAL);
+    }
+    let output = child
+        .wait_with_output()
+        .map_err(|_| "version probe could not be read".to_owned())?;
     if !output.status.success() {
         return Err("version probe returned a failure status".to_owned());
     }

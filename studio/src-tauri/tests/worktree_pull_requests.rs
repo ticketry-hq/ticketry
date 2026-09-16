@@ -944,6 +944,12 @@ async fn graphql_creates_only_eligible_confirmed_pull_requests() {
         )
         .await;
     assert_eq!(error_code(&rejected), "github_pull_request_rejected");
+    assert!(
+        rejected["errors"][0]["message"]
+            .as_str()
+            .is_some_and(|message| message.contains("provider rejected request")),
+        "{rejected:#}"
+    );
     let unmapped = failed
         .graphql(TASK_CHANGES, serde_json::json!({"taskId": TASK}))
         .await;

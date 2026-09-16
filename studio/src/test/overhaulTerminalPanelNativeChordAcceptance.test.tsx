@@ -68,7 +68,7 @@ describe("terminal panel — native chord", () => {
     vi.clearAllMocks();
   });
 
-  it("[overhaul-272] reveals and reverses the panel from an engaged native terminal", async () => {
+  it("reveals and reverses the panel from an engaged native terminal", async () => {
     const keymap = renderHook(() => useGlobalKeymap());
     await act(async () => {});
 
@@ -91,7 +91,7 @@ describe("terminal panel — native chord", () => {
     expect(host.listeners.has(NATIVE_TERMINAL_CHORD_EVENT)).toBe(false);
   });
 
-  it("[overhaul-273] leaves another surface's chord alone", async () => {
+  it("leaves another surface's chord alone", async () => {
     const keymap = renderHook(() => useGlobalKeymap());
     await act(async () => {});
 
@@ -151,7 +151,7 @@ describe("terminal panel — native chord", () => {
     keymap.unmount();
   });
 
-  it("[overhaul-274] leaves the browser build with no host subscription", async () => {
+  it("leaves the browser build with no host subscription", async () => {
     runtime.desktop = false;
     renderHook(() => useGlobalKeymap());
     await act(async () => {});

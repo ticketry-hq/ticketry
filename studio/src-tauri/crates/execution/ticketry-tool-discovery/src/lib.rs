@@ -34,11 +34,12 @@ pub use consulted::{consulted_discovery, ConsultedDiscovery};
 pub use diagnostics::{AccessHint, PreflightReport, ToolDiagnostic, ToolHealth};
 pub use supported_tools::SupportedTool;
 
+pub fn discover_tool(tool: SupportedTool) -> ToolDiagnostic {
+    discovery_service().discover(tool)
+}
+
 pub fn preflight_report() -> PreflightReport {
-    let service = DiscoveryService::from_environment().unwrap_or_else(|_| DiscoveryService {
-        roots: trusted_roots(env::var_os("HOME").as_deref().map(Path::new)),
-        approved: ApprovedToolPaths::default(),
-    });
+    let service = discovery_service();
     let tools = SUPPORTED_TOOLS
         .into_iter()
         .map(|tool| service.discover(tool))
@@ -50,6 +51,13 @@ pub fn preflight_report() -> PreflightReport {
         repository_access,
         os_permission_hint: platform_permission_hint(),
     }
+}
+
+fn discovery_service() -> DiscoveryService {
+    DiscoveryService::from_environment().unwrap_or_else(|_| DiscoveryService {
+        roots: trusted_roots(env::var_os("HOME").as_deref().map(Path::new)),
+        approved: ApprovedToolPaths::default(),
+    })
 }
 
 struct DiscoveryService {

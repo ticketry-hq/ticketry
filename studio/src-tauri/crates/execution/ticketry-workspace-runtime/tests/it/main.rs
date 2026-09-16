@@ -7,5 +7,3 @@
 mod execution_legacy_fixture;
 mod slice4_ownership_handoff;
 mod worktree_metadata_adoption;
-#[path = "../../../../../tests/common/execution_legacy_fixture.rs"]
-mod execution_legacy_fixture;

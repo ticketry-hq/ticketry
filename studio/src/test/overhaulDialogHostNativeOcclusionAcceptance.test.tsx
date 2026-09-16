@@ -200,7 +200,7 @@ describe("overhaul acceptance — DialogHost confirms over a native viewer", () 
     vi.unstubAllGlobals();
   });
 
-  it("[overhaul-277] keeps a presented panel viewer on screen under a DialogHost confirm, hands input to the WebView, and leaves its frame untouched when the confirm is answered", async () => {
+  it("keeps a presented panel viewer on screen under a DialogHost confirm, hands input to the WebView, and leaves its frame untouched when the confirm is answered", async () => {
     const view = render(<PanelShellStudio />);
 
     await waitFor(() => {
@@ -261,7 +261,7 @@ describe("overhaul acceptance — DialogHost confirms over a native viewer", () 
     view.unmount();
   });
 
-  it("[overhaul-278] presents a late-attaching panel viewer beneath an open Settings modal without waiting for it to close (CODING-1500)", async () => {
+  it("presents a late-attaching panel viewer beneath an open Settings modal without waiting for it to close (CODING-1500)", async () => {
     act(() => useModalStore.getState().openSettings());
     expect(useModalStore.getState().modalStack).toHaveLength(1);
 

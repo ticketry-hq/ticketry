@@ -26,7 +26,8 @@ use ticketry_runs::StatusEventRepository;
 
 use super::error::{WorktreeCreateError, WorktreeCreateErrorCode};
 use super::executor::CreateExecutor;
-use super::identity;
+use super::git_effects;
+use super::identity::{self, CreateIntent};
 use super::plan::{self, PlanResolution};
 use super::probe::CreateProbe;
 
@@ -95,10 +96,30 @@ impl WorktreeCreateService {
             return Ok(self.status.status(task_id).await?);
         }
 
+        let recorded = self
+            .executor
+            .journal()
+            .find(operation_id)
+            .await?
+            .and_then(|operation| operation.intent_payload())
+            .and_then(|payload| CreateIntent::decode(&payload))
+            .filter(|intent| intent.matches(&plan));
+        let (base_ref, base_commit) = match recorded {
+            Some(intent) => (intent.base_ref, intent.base_commit),
+            None => {
+                let origin = git_effects::head(self.executor.git(), &plan.repository).await?;
+                (origin.base_ref, origin.commit)
+            }
+        };
         let prepared = self
             .executor
             .journal()
-            .prepare(identity::intent(operation_id, &plan))
+            .prepare(identity::intent(
+                operation_id,
+                &plan,
+                &base_ref,
+                &base_commit,
+            ))
             .await?;
         if prepared.reused {
             if let Some(answer) = self.replayed(task_id, &prepared.operation).await? {

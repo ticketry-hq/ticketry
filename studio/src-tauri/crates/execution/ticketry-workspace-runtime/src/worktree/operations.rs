@@ -20,11 +20,20 @@ use crate::worktree::status::WorktreeStatusService;
 pub struct WorktreeOperations {
     create: WorktreeCreateService,
     discard: WorktreeDiscardService,
+    changes: WorktreeChangesService,
 }
 
 impl WorktreeOperations {
-    pub fn new(create: WorktreeCreateService, discard: WorktreeDiscardService) -> Self {
-        Self { create, discard }
+    pub fn new(
+        create: WorktreeCreateService,
+        discard: WorktreeDiscardService,
+        changes: WorktreeChangesService,
+    ) -> Self {
+        Self {
+            create,
+            discard,
+            changes,
+        }
     }
 
     pub fn create(&self) -> &WorktreeCreateService {
@@ -43,6 +52,6 @@ impl WorktreeOperations {
     }
 
     pub fn changes_service(&self) -> WorktreeChangesService {
-        WorktreeChangesService::from_status(self.status_service().clone())
+        self.changes.clone()
     }
 }

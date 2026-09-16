@@ -7,6 +7,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use serde::Deserialize;
+use ticketry_tool_discovery::{discover_tool, SupportedTool, ToolHealth};
 
 use super::WorktreeChangesError;
 
@@ -89,7 +90,12 @@ impl GithubPort {
             )
             .await?;
         if !outcome.succeeded {
-            return Err(WorktreeChangesError::github_rejected());
+            let detail = if outcome.stderr.trim().is_empty() {
+                &outcome.stdout
+            } else {
+                &outcome.stderr
+            };
+            return Err(WorktreeChangesError::github_rejected(detail));
         }
         if outcome.truncated || !outcome.valid_utf8 {
             return Err(WorktreeChangesError::github_response_unavailable());
@@ -174,11 +180,12 @@ impl GithubPort {
         checkout: &Path,
         timeout: Duration,
     ) -> Result<GithubOutcome, WorktreeChangesError> {
-        let executable = approved_executable()?;
         let checkout = checkout.to_owned();
-        tokio::task::spawn_blocking(move || run_command(executable, arguments, checkout, timeout))
-            .await
-            .map_err(|_| WorktreeChangesError::github_unavailable())?
+        tokio::task::spawn_blocking(move || {
+            run_command(approved_executable()?, arguments, checkout, timeout)
+        })
+        .await
+        .map_err(|_| WorktreeChangesError::github_unavailable())?
     }
 }
 
@@ -228,7 +235,14 @@ fn approved_executable() -> Result<PathBuf, WorktreeChangesError> {
                 Err(WorktreeChangesError::github_unavailable())
             }
         }
-        _ => Ok(PathBuf::from("gh")),
+        _ => {
+            let tool = discover_tool(SupportedTool::Github);
+            (tool.health == ToolHealth::Ready)
+                .then_some(tool.path)
+                .flatten()
+                .map(PathBuf::from)
+                .ok_or_else(WorktreeChangesError::github_unavailable)
+        }
     }
 }
 
@@ -382,6 +396,15 @@ fn canonical_pull_request_url(output: &str) -> Option<String> {
 mod tests {
     use super::*;
 
+    #[cfg(unix)]
+    use std::ffi::OsString;
+    #[cfg(unix)]
+    use std::fs;
+    #[cfg(unix)]
+    use std::os::unix::fs::PermissionsExt;
+    #[cfg(unix)]
+    use std::sync::{Mutex, OnceLock};
+
     #[test]
     fn accepts_only_canonical_https_pull_request_urls() {
         assert_eq!(
@@ -400,5 +423,101 @@ mod tests {
             canonical_pull_request_url("http://github.com/a/b/pull/1"),
             None
         );
+    }
+
+    #[cfg(unix)]
+    #[tokio::test(flavor = "current_thread")]
+    async fn default_resolution_ignores_other_tools_and_bounds_a_stalled_gh() {
+        static ENVIRONMENT: OnceLock<Mutex<()>> = OnceLock::new();
+        let _lock = ENVIRONMENT.get_or_init(|| Mutex::new(())).lock().unwrap();
+        let root = tempfile::tempdir().unwrap();
+        let bin = root.path().join("bin");
+        let data = root.path().join("data");
+        fs::create_dir_all(&bin).unwrap();
+        fs::create_dir_all(&data).unwrap();
+        let gh = bin.join("gh");
+        let claude = bin.join("claude");
+        write_executable(
+            &claude,
+            "#!/bin/sh\nprintf probed > \"$0.probed\"\nsleep 2\nprintf 'claude 1.0.0\\n'\n",
+        );
+        write_executable(
+            &gh,
+            "#!/bin/sh\nif [ \"$1\" = --version ]; then printf 'gh version 2.96.0\\n'; else printf '{\"state\":\"CLOSED\",\"baseRefName\":\"main\",\"headRefOid\":\"0000000000000000000000000000000000000000\",\"mergeable\":\"UNKNOWN\",\"reviewDecision\":\"\"}\\n'; fi\n",
+        );
+        fs::write(
+            data.join("approved-executables.json"),
+            format!(
+                "{{\"tools\":[{{\"tool\":\"claude\",\"path\":{:?}}},{{\"tool\":\"github\",\"path\":{:?}}}]}}",
+                claude.to_string_lossy(),
+                gh.to_string_lossy()
+            ),
+        )
+        .unwrap();
+        let _environment = Environment::set(&[
+            ("TICKETRY_DATA_DIR", Some(data.as_os_str())),
+            (APPROVED_PATH_ENV, None),
+        ]);
+
+        GithubPort::new()
+            .pull_request(root.path(), "https://github.com/a/b/pull/1")
+            .await
+            .unwrap();
+        assert!(!claude.with_extension("probed").exists());
+
+        write_executable(&gh, "#!/bin/sh\nsleep 5\nprintf 'gh version 2.96.0\\n'\n");
+        let started = Instant::now();
+        let github = GithubPort::new();
+        let request = github.pull_request(root.path(), "https://github.com/a/b/pull/1");
+        tokio::pin!(request);
+        tokio::select! {
+            _ = tokio::time::sleep(Duration::from_millis(100)) => {}
+            _ = &mut request => panic!("stalled discovery blocked the async executor"),
+        }
+        assert!(started.elapsed() < Duration::from_secs(1));
+        let error = tokio::time::timeout(Duration::from_secs(3), request)
+            .await
+            .expect("the gh version probe is bounded")
+            .unwrap_err();
+        assert_eq!(error.code_str(), "github_cli_unavailable");
+    }
+
+    #[cfg(unix)]
+    fn write_executable(path: &Path, contents: &str) {
+        fs::write(path, contents).unwrap();
+        fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
+    }
+
+    #[cfg(unix)]
+    struct Environment(Vec<(&'static str, Option<OsString>)>);
+
+    #[cfg(unix)]
+    impl Environment {
+        fn set(values: &[(&'static str, Option<&std::ffi::OsStr>)]) -> Self {
+            let previous = values
+                .iter()
+                .map(|(name, value)| {
+                    let previous = std::env::var_os(name);
+                    match value {
+                        Some(value) => std::env::set_var(name, value),
+                        None => std::env::remove_var(name),
+                    }
+                    (*name, previous)
+                })
+                .collect();
+            Self(previous)
+        }
+    }
+
+    #[cfg(unix)]
+    impl Drop for Environment {
+        fn drop(&mut self) {
+            for (name, value) in self.0.drain(..) {
+                match value {
+                    Some(value) => std::env::set_var(name, value),
+                    None => std::env::remove_var(name),
+                }
+            }
+        }
     }
 }

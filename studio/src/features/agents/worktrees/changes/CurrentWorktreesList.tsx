@@ -57,11 +57,13 @@ function pullRequestState(state: string): string {
 export function CurrentWorktreesList({
   rows,
   truncated,
+  selectedTaskId,
   onOpenModule,
   onOpenTask,
 }: {
   rows: readonly CurrentWorktree[];
   truncated: boolean;
+  selectedTaskId?: string | null;
   onOpenModule: () => void;
   onOpenTask: (taskId: string) => void;
 }) {
@@ -79,6 +81,9 @@ export function CurrentWorktreesList({
             : `${row.task_key ?? "Work Item"} ${row.task_name ?? ""}`.trim();
           const state = checkoutState(row);
           const unpushed = row.unpushed_count ?? 0;
+          const selected = row.kind === "module"
+            ? selectedTaskId === null
+            : row.task_id === selectedTaskId;
           return (
             <li key={row.kind === "module" ? "module" : row.task_id ?? label}>
               <button
@@ -86,8 +91,13 @@ export function CurrentWorktreesList({
                 onClick={() => row.kind === "module"
                   ? onOpenModule()
                   : row.task_id && onOpenTask(row.task_id)}
-                className="w-full border border-pane-border px-2.5 py-2 text-left hover:bg-pane-title focus-visible:ring-1 focus-visible:ring-focus-accent"
+                className={`w-full border px-2.5 py-2 text-left hover:bg-pane-title focus-visible:ring-1 focus-visible:ring-focus-accent ${
+                  selected
+                    ? "border-focus-accent bg-pane-title"
+                    : "border-pane-border"
+                }`}
                 aria-label={`Open ${label} Changes`}
+                aria-pressed={selected}
               >
                 <span className="flex items-center gap-2">
                   <span className="min-w-0 flex-1 truncate font-medium text-text-primary">

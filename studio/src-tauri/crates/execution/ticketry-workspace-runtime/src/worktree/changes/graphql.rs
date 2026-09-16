@@ -6,13 +6,15 @@ use seaography::{
 };
 
 use super::{
-    ChangedFile, CurrentWorktreeView, FileDiffView, ModuleCheckoutChangesView,
-    ModuleVersionControlView, PullRequestCreationResult, PullRequestStatusView,
-    RepositoryCommandResult, WorkItemClosureFailureView, WorktreeChangesError,
-    WorktreeChangesService, WorktreeChangesView, WorktreeCleanupStatusView,
+    ChangedFile, CurrentWorktreeView, FileDiffView, LocalMergeDestinationView,
+    ModuleCheckoutChangesView, ModuleVersionControlView, PullRequestCreationResult,
+    PullRequestStatusView, RepositoryCommandResult, WorkItemClosureFailureView,
+    WorktreeChangesError, WorktreeChangesService, WorktreeChangesView, WorktreeCleanupStatusView,
+    WorktreeMergePath, WorktreeMergePreviewView, WorktreeMergeResult,
 };
 
 pub struct WorktreeChangesQueries;
+pub struct WorktreeChangesMutations;
 
 #[CustomFields]
 impl WorktreeChangesQueries {
@@ -57,6 +59,72 @@ impl WorktreeChangesQueries {
             .await
             .map_err(changes_error)
     }
+
+    /// Live registry and checkout state cannot be represented by generated
+    /// Worktree columns, so merge preview remains one read-only authored query.
+    async fn worktree_merge_preview(
+        ctx: &Context<'_>,
+        task_id: String,
+        destination_branch: Option<String>,
+    ) -> Result<WorktreeMergePreviewView> {
+        service(ctx)?
+            .merge_preview(&task_id, destination_branch.as_deref())
+            .await
+            .map_err(changes_error)
+    }
+
+    async fn worktree_merge_recovery(
+        ctx: &Context<'_>,
+        task_id: String,
+    ) -> Result<Option<WorktreeMergeResult>> {
+        service(ctx)?
+            .merge_recovery(&task_id)
+            .await
+            .map_err(changes_error)
+    }
+}
+
+#[CustomFields]
+impl WorktreeChangesMutations {
+    async fn worktree_merge(
+        ctx: &Context<'_>,
+        task_id: String,
+        operation_id: String,
+        destination_branch: String,
+        confirmation_token: String,
+    ) -> Result<WorktreeMergeResult> {
+        service(ctx)?
+            .merge(
+                &task_id,
+                &operation_id,
+                &destination_branch,
+                &confirmation_token,
+            )
+            .await
+            .map_err(changes_error)
+    }
+
+    async fn worktree_merge_finish(
+        ctx: &Context<'_>,
+        task_id: String,
+        operation_id: String,
+    ) -> Result<WorktreeMergeResult> {
+        service(ctx)?
+            .finish_merge(&task_id, &operation_id)
+            .await
+            .map_err(changes_error)
+    }
+
+    async fn worktree_merge_abort(
+        ctx: &Context<'_>,
+        task_id: String,
+        operation_id: String,
+    ) -> Result<WorktreeMergeResult> {
+        service(ctx)?
+            .abort_merge(&task_id, &operation_id)
+            .await
+            .map_err(changes_error)
+    }
 }
 
 pub(super) fn register(mut builder: seaography::Builder) -> seaography::Builder {
@@ -71,7 +139,12 @@ pub(super) fn register(mut builder: seaography::Builder) -> seaography::Builder 
     builder.register_custom_output::<FileDiffView>();
     builder.register_custom_output::<RepositoryCommandResult>();
     builder.register_custom_output::<PullRequestCreationResult>();
+    builder.register_custom_output::<LocalMergeDestinationView>();
+    builder.register_custom_output::<WorktreeMergePreviewView>();
+    builder.register_custom_output::<WorktreeMergePath>();
+    builder.register_custom_output::<WorktreeMergeResult>();
     builder.register_custom_query::<WorktreeChangesQueries>();
+    builder.register_custom_mutation::<WorktreeChangesMutations>();
     builder
 }
 

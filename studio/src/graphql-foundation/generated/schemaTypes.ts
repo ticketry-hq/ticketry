@@ -515,6 +515,12 @@ export type LifecycleAccepted = {
   state?: Maybe<Scalars['String']['output']>;
 };
 
+export type LocalMergeDestinationView = {
+  __typename?: 'LocalMergeDestinationView';
+  branch: Scalars['String']['output'];
+  checkout?: Maybe<Scalars['String']['output']>;
+};
+
 export type MergePreparationResult = {
   __typename?: 'MergePreparationResult';
   agent: Scalars['String']['output'];
@@ -673,6 +679,7 @@ export type Mutation = {
   ingest_agent_lifecycle: LifecycleAccepted;
   migrationProbesCreateOne: MigrationProbesBasic;
   module_checkout_commit: RepositoryCommandResult;
+  module_checkout_commit_push: RepositoryCommandResult;
   module_checkout_pull_request_create: PullRequestCreationResult;
   module_checkout_push: RepositoryCommandResult;
   refresh_scratch_document_registry: Array<DesignDocuments>;
@@ -703,8 +710,12 @@ export type Mutation = {
   worktrackerIssuetypeCreateOne: WorktrackerIssuetypeBasic;
   worktree_cleanup: WorktreeDiscardResult;
   worktree_commit: RepositoryCommandResult;
+  worktree_commit_push: RepositoryCommandResult;
   worktree_create: WorktreeStatusView;
   worktree_discard: WorktreeDiscardResult;
+  worktree_merge: WorktreeMergeResult;
+  worktree_merge_abort: WorktreeMergeResult;
+  worktree_merge_finish: WorktreeMergeResult;
   worktree_pull_request_create: PullRequestCreationResult;
   worktree_pull_request_follow_up: PullRequestCreationResult;
   worktree_pull_request_merge_prepare: MergePreparationResult;
@@ -837,6 +848,12 @@ export type MutationMigrationProbesCreateOneArgs = {
 
 
 export type MutationModule_Checkout_CommitArgs = {
+  module_id: Scalars['String']['input'];
+  operation_id: Scalars['String']['input'];
+};
+
+
+export type MutationModule_Checkout_Commit_PushArgs = {
   module_id: Scalars['String']['input'];
   operation_id: Scalars['String']['input'];
 };
@@ -1076,6 +1093,12 @@ export type MutationWorktree_CommitArgs = {
 };
 
 
+export type MutationWorktree_Commit_PushArgs = {
+  operation_id: Scalars['String']['input'];
+  task_id: Scalars['String']['input'];
+};
+
+
 export type MutationWorktree_CreateArgs = {
   operation_id: Scalars['String']['input'];
   task_id: Scalars['String']['input'];
@@ -1083,6 +1106,26 @@ export type MutationWorktree_CreateArgs = {
 
 
 export type MutationWorktree_DiscardArgs = {
+  operation_id: Scalars['String']['input'];
+  task_id: Scalars['String']['input'];
+};
+
+
+export type MutationWorktree_MergeArgs = {
+  confirmation_token: Scalars['String']['input'];
+  destination_branch: Scalars['String']['input'];
+  operation_id: Scalars['String']['input'];
+  task_id: Scalars['String']['input'];
+};
+
+
+export type MutationWorktree_Merge_AbortArgs = {
+  operation_id: Scalars['String']['input'];
+  task_id: Scalars['String']['input'];
+};
+
+
+export type MutationWorktree_Merge_FinishArgs = {
   operation_id: Scalars['String']['input'];
   task_id: Scalars['String']['input'];
 };
@@ -1209,7 +1252,7 @@ export type Query = {
   module_version_control: ModuleVersionControlView;
   provider_catalog: ProviderCatalog;
   resumable_terminal_sessions: Array<AgentRuns>;
-  ticketryShiprecords: TicketryShiprecordsConnection;
+  shipRecords: ShipRecordsConnection;
   worktrackerAgentmodel: WorktrackerAgentmodelConnection;
   worktrackerAgentmodelreasoninglevel: WorktrackerAgentmodelreasoninglevelConnection;
   worktrackerAttachment: WorktrackerAttachmentConnection;
@@ -1226,6 +1269,8 @@ export type Query = {
   worktrackerTransitionoccurrence: WorktrackerTransitionoccurrenceConnection;
   worktree_changes: WorktreeChangesView;
   worktree_file_diff: FileDiffView;
+  worktree_merge_preview: WorktreeMergePreviewView;
+  worktree_merge_recovery?: Maybe<WorktreeMergeResult>;
   worktree_status: WorktreeStatusView;
   worktrees: WorktreesConnection;
 };
@@ -1333,10 +1378,10 @@ export type QueryResumable_Terminal_SessionsArgs = {
 };
 
 
-export type QueryTicketryShiprecordsArgs = {
-  filters?: InputMaybe<TicketryShiprecordsFilterInput>;
-  having?: InputMaybe<TicketryShiprecordsHavingInput>;
-  orderBy?: InputMaybe<TicketryShiprecordsOrderInput>;
+export type QueryShipRecordsArgs = {
+  filters?: InputMaybe<ShipRecordsFilterInput>;
+  having?: InputMaybe<ShipRecordsHavingInput>;
+  orderBy?: InputMaybe<ShipRecordsOrderInput>;
   pagination?: InputMaybe<PaginationInput>;
 };
 
@@ -1464,6 +1509,17 @@ export type QueryWorktree_File_DiffArgs = {
 };
 
 
+export type QueryWorktree_Merge_PreviewArgs = {
+  destination_branch?: InputMaybe<Scalars['String']['input']>;
+  task_id: Scalars['String']['input'];
+};
+
+
+export type QueryWorktree_Merge_RecoveryArgs = {
+  task_id: Scalars['String']['input'];
+};
+
+
 export type QueryWorktree_StatusArgs = {
   task_id: Scalars['String']['input'];
 };
@@ -1556,6 +1612,86 @@ export type RunStatusSnapshot = {
   runs: Array<AgentRunHolding>;
 };
 
+export type ShipRecords = {
+  __typename?: 'ShipRecords';
+  actedAt: Scalars['String']['output'];
+  branch: Scalars['String']['output'];
+  checkoutKind: Scalars['String']['output'];
+  checkoutLabel: Scalars['String']['output'];
+  commitShas: Scalars['Json']['output'];
+  id: Scalars['String']['output'];
+  issue?: Maybe<WorktrackerIssue>;
+  moduleId: Scalars['String']['output'];
+  operationId: Scalars['String']['output'];
+  prHeadCommit?: Maybe<Scalars['String']['output']>;
+  prNumber?: Maybe<Scalars['Int']['output']>;
+  prRefreshedAt?: Maybe<Scalars['String']['output']>;
+  prState?: Maybe<Scalars['String']['output']>;
+  prTargetBranch?: Maybe<Scalars['String']['output']>;
+  prUrl?: Maybe<Scalars['String']['output']>;
+  steps: Scalars['Json']['output'];
+  taskId?: Maybe<Scalars['String']['output']>;
+};
+
+export type ShipRecordsConnection = {
+  __typename?: 'ShipRecordsConnection';
+  edges: Array<ShipRecordsEdge>;
+  nodes: Array<ShipRecords>;
+  pageInfo: PageInfo;
+  paginationInfo?: Maybe<PaginationInfo>;
+};
+
+export type ShipRecordsEdge = {
+  __typename?: 'ShipRecordsEdge';
+  cursor: Scalars['String']['output'];
+  node: ShipRecords;
+};
+
+export type ShipRecordsFilterInput = {
+  actedAt?: InputMaybe<StringFilterInput>;
+  and?: InputMaybe<Array<ShipRecordsFilterInput>>;
+  branch?: InputMaybe<StringFilterInput>;
+  checkoutKind?: InputMaybe<StringFilterInput>;
+  checkoutLabel?: InputMaybe<StringFilterInput>;
+  commitShas?: InputMaybe<JsonFilterInput>;
+  id?: InputMaybe<StringFilterInput>;
+  moduleId?: InputMaybe<StringFilterInput>;
+  not?: InputMaybe<ShipRecordsFilterInput>;
+  operationId?: InputMaybe<StringFilterInput>;
+  or?: InputMaybe<Array<ShipRecordsFilterInput>>;
+  prHeadCommit?: InputMaybe<StringFilterInput>;
+  prNumber?: InputMaybe<IntegerFilterInput>;
+  prRefreshedAt?: InputMaybe<StringFilterInput>;
+  prState?: InputMaybe<StringFilterInput>;
+  prTargetBranch?: InputMaybe<StringFilterInput>;
+  prUrl?: InputMaybe<StringFilterInput>;
+  steps?: InputMaybe<JsonFilterInput>;
+  taskId?: InputMaybe<StringFilterInput>;
+};
+
+export type ShipRecordsHavingInput = {
+  issue?: InputMaybe<WorktrackerIssueFilterInput>;
+};
+
+export type ShipRecordsOrderInput = {
+  actedAt?: InputMaybe<OrderByEnum>;
+  branch?: InputMaybe<OrderByEnum>;
+  checkoutKind?: InputMaybe<OrderByEnum>;
+  checkoutLabel?: InputMaybe<OrderByEnum>;
+  commitShas?: InputMaybe<OrderByEnum>;
+  id?: InputMaybe<OrderByEnum>;
+  moduleId?: InputMaybe<OrderByEnum>;
+  operationId?: InputMaybe<OrderByEnum>;
+  prHeadCommit?: InputMaybe<OrderByEnum>;
+  prNumber?: InputMaybe<OrderByEnum>;
+  prRefreshedAt?: InputMaybe<OrderByEnum>;
+  prState?: InputMaybe<OrderByEnum>;
+  prTargetBranch?: InputMaybe<OrderByEnum>;
+  prUrl?: InputMaybe<OrderByEnum>;
+  steps?: InputMaybe<OrderByEnum>;
+  taskId?: InputMaybe<OrderByEnum>;
+};
+
 export type StringFilterInput = {
   between?: InputMaybe<Array<Scalars['String']['input']>>;
   ci_eq?: InputMaybe<Scalars['String']['input']>;
@@ -1607,80 +1743,6 @@ export type TextFilterInput = {
   lte?: InputMaybe<Scalars['String']['input']>;
   ne?: InputMaybe<Scalars['String']['input']>;
   not_between?: InputMaybe<Array<Scalars['String']['input']>>;
-};
-
-export type TicketryShiprecords = {
-  __typename?: 'TicketryShiprecords';
-  actedAt: Scalars['String']['output'];
-  branch: Scalars['String']['output'];
-  checkoutKind: Scalars['String']['output'];
-  checkoutLabel: Scalars['String']['output'];
-  commitShas: Scalars['Json']['output'];
-  id: Scalars['String']['output'];
-  issue?: Maybe<WorktrackerIssue>;
-  moduleId: Scalars['String']['output'];
-  operationId: Scalars['String']['output'];
-  prNumber?: Maybe<Scalars['Int']['output']>;
-  prRefreshedAt?: Maybe<Scalars['String']['output']>;
-  prState?: Maybe<Scalars['String']['output']>;
-  prUrl?: Maybe<Scalars['String']['output']>;
-  steps: Scalars['Json']['output'];
-  taskId?: Maybe<Scalars['String']['output']>;
-};
-
-export type TicketryShiprecordsConnection = {
-  __typename?: 'TicketryShiprecordsConnection';
-  edges: Array<TicketryShiprecordsEdge>;
-  nodes: Array<TicketryShiprecords>;
-  pageInfo: PageInfo;
-  paginationInfo?: Maybe<PaginationInfo>;
-};
-
-export type TicketryShiprecordsEdge = {
-  __typename?: 'TicketryShiprecordsEdge';
-  cursor: Scalars['String']['output'];
-  node: TicketryShiprecords;
-};
-
-export type TicketryShiprecordsFilterInput = {
-  actedAt?: InputMaybe<StringFilterInput>;
-  and?: InputMaybe<Array<TicketryShiprecordsFilterInput>>;
-  branch?: InputMaybe<StringFilterInput>;
-  checkoutKind?: InputMaybe<StringFilterInput>;
-  checkoutLabel?: InputMaybe<StringFilterInput>;
-  commitShas?: InputMaybe<JsonFilterInput>;
-  id?: InputMaybe<StringFilterInput>;
-  moduleId?: InputMaybe<StringFilterInput>;
-  not?: InputMaybe<TicketryShiprecordsFilterInput>;
-  operationId?: InputMaybe<StringFilterInput>;
-  or?: InputMaybe<Array<TicketryShiprecordsFilterInput>>;
-  prNumber?: InputMaybe<IntegerFilterInput>;
-  prRefreshedAt?: InputMaybe<StringFilterInput>;
-  prState?: InputMaybe<StringFilterInput>;
-  prUrl?: InputMaybe<StringFilterInput>;
-  steps?: InputMaybe<JsonFilterInput>;
-  taskId?: InputMaybe<StringFilterInput>;
-};
-
-export type TicketryShiprecordsHavingInput = {
-  issue?: InputMaybe<WorktrackerIssueFilterInput>;
-};
-
-export type TicketryShiprecordsOrderInput = {
-  actedAt?: InputMaybe<OrderByEnum>;
-  branch?: InputMaybe<OrderByEnum>;
-  checkoutKind?: InputMaybe<OrderByEnum>;
-  checkoutLabel?: InputMaybe<OrderByEnum>;
-  commitShas?: InputMaybe<OrderByEnum>;
-  id?: InputMaybe<OrderByEnum>;
-  moduleId?: InputMaybe<OrderByEnum>;
-  operationId?: InputMaybe<OrderByEnum>;
-  prNumber?: InputMaybe<OrderByEnum>;
-  prRefreshedAt?: InputMaybe<OrderByEnum>;
-  prState?: InputMaybe<OrderByEnum>;
-  prUrl?: InputMaybe<OrderByEnum>;
-  steps?: InputMaybe<OrderByEnum>;
-  taskId?: InputMaybe<OrderByEnum>;
 };
 
 export type WorkItemClosureFailureView = {
@@ -2701,6 +2763,41 @@ export type WorktreeDiscardResult = {
   status: WorktreeStatusView;
   task_id: Scalars['String']['output'];
   top_level_task_id: Scalars['String']['output'];
+};
+
+export type WorktreeMergePath = {
+  __typename?: 'WorktreeMergePath';
+  path: Scalars['String']['output'];
+};
+
+export type WorktreeMergePreviewView = {
+  __typename?: 'WorktreeMergePreviewView';
+  blocker?: Maybe<Scalars['String']['output']>;
+  confirmation_token?: Maybe<Scalars['String']['output']>;
+  destination_branch?: Maybe<Scalars['String']['output']>;
+  destination_checkout?: Maybe<Scalars['String']['output']>;
+  destination_checkout_identity?: Maybe<Scalars['String']['output']>;
+  destination_commit?: Maybe<Scalars['String']['output']>;
+  destinations: Array<LocalMergeDestinationView>;
+  ready: Scalars['Boolean']['output'];
+  reason?: Maybe<Scalars['String']['output']>;
+  requires_destination_selection: Scalars['Boolean']['output'];
+  source_branch: Scalars['String']['output'];
+  source_commit?: Maybe<Scalars['String']['output']>;
+};
+
+export type WorktreeMergeResult = {
+  __typename?: 'WorktreeMergeResult';
+  blocker?: Maybe<Scalars['String']['output']>;
+  destination_branch: Scalars['String']['output'];
+  destination_checkout: Scalars['String']['output'];
+  destination_commit: Scalars['String']['output'];
+  operation_id: Scalars['String']['output'];
+  outcome: Scalars['String']['output'];
+  reason?: Maybe<Scalars['String']['output']>;
+  source_branch: Scalars['String']['output'];
+  source_commit: Scalars['String']['output'];
+  unmerged_paths: Array<WorktreeMergePath>;
 };
 
 export type WorktreeStatusView = {

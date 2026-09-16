@@ -1844,6 +1844,62 @@ test.describe("complete browser application", () => {
     expect(Math.abs(restored - resized)).toBeLessThanOrEqual(1);
   });
 
+  test("keeps all Changes columns usable while resizing and in a narrow window", async ({
+    page,
+  }) => {
+    const readmePath = join(fixture.folder, "README.md");
+    const original = await readFile(readmePath, "utf8");
+    await writeFile(readmePath, `${original}Three-column Changes workspace\n`);
+
+    try {
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await openModule(page, names.module);
+      await page.getByRole("button", { name: "Open module Changes" }).click();
+
+      const checkouts = page.getByTestId("changes-checkouts-column");
+      const files = page.getByTestId("changes-files-column");
+      const diff = page.getByTestId("changes-diff-column");
+      await expect(checkouts).toBeVisible();
+      await expect(files).toBeVisible();
+      await expect(diff).toBeVisible();
+      await expect(page.locator('[data-pane="tasks"]')).toHaveCount(0);
+      await files.getByRole("button", { name: "README.md" }).click();
+      await expect(diff).toContainText("README.md");
+
+      const drag = async (testId: string, delta: number): Promise<void> => {
+        const handle = page.getByTestId(testId);
+        const before = await handle.getAttribute("aria-valuenow");
+        const box = await handle.boundingBox();
+        expect(box).toBeTruthy();
+        await page.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 2);
+        await page.mouse.down();
+        await page.mouse.move(box!.x + delta, box!.y + box!.height / 2, {
+          steps: 12,
+        });
+        await page.mouse.up();
+        await expect(handle).not.toHaveAttribute("aria-valuenow", before!);
+      };
+
+      await drag("changes-checkouts-resize-handle", 900);
+      await drag("changes-diff-resize-handle", -900);
+      expect((await checkouts.boundingBox())!.width).toBeGreaterThanOrEqual(160);
+      expect((await files.boundingBox())!.width).toBeGreaterThanOrEqual(210);
+      expect((await diff.boundingBox())!.width).toBeGreaterThanOrEqual(265);
+
+      await page.setViewportSize({ width: 700, height: 700 });
+      const scroll = page.getByTestId("changes-workspace-scroll");
+      await expect.poll(async () =>
+        scroll.evaluate((element) => element.scrollWidth > element.clientWidth)
+      ).toBe(true);
+      await diff.scrollIntoViewIfNeeded();
+      expect(await scroll.evaluate((element) => element.scrollLeft))
+        .toBeGreaterThan(0);
+      await expect(diff).toContainText("README.md");
+    } finally {
+      await writeFile(readmePath, original);
+    }
+  });
+
   test("persists and restores Modules pane visibility", async ({
     page,
   }) => {

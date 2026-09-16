@@ -15,6 +15,7 @@ serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
 ticketry-settings.workspace = true
+ticketry-tool-discovery.workspace = true
 ticketry-data-directory.workspace = true
 ticketry-documents.workspace = true
 ticketry-entities.workspace = true

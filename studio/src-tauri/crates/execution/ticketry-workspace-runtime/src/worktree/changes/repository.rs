@@ -4,7 +4,7 @@ use crate::worktree::status::{self, GitPort};
 
 use super::WorktreeChangesError;
 
-pub(super) fn recorded_paths(
+pub(crate) fn recorded_paths(
     repository: &str,
     checkout: &str,
 ) -> Result<(PathBuf, PathBuf), WorktreeChangesError> {
@@ -22,7 +22,7 @@ pub(super) fn recorded_paths(
     Ok((repository, checkout))
 }
 
-pub(super) fn recorded_repository(repository: &str) -> Result<PathBuf, WorktreeChangesError> {
+pub(crate) fn recorded_repository(repository: &str) -> Result<PathBuf, WorktreeChangesError> {
     let repository = PathBuf::from(repository);
     if !repository.is_absolute() {
         return Err(WorktreeChangesError::invalid_path());
@@ -36,7 +36,7 @@ pub(super) fn recorded_repository(repository: &str) -> Result<PathBuf, WorktreeC
     Ok(repository)
 }
 
-pub(super) async fn validate_membership(
+pub(crate) async fn validate_membership(
     git: &GitPort,
     repository: &Path,
     checkout: &Path,

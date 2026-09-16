@@ -79,7 +79,7 @@ async function openCampaignDetails(): Promise<HTMLElement> {
 }
 
 describe("overhaul acceptance — subtree execution", () => {
-  it("[overhaul-284] routes guarded Cmd+Enter through the selected item's normal play command", async () => {
+  it("routes guarded Cmd+Enter through the selected item's normal play command", async () => {
     const http = campaignFixture();
     useModalStore.setState({ modalStack: [] });
     let leafLaunches = 0;
@@ -195,7 +195,7 @@ describe("overhaul acceptance — subtree execution", () => {
     expect(leafLaunches).toBe(1);
   });
 
-  it("[overhaul-283] routes normal play by the selected work item's shape", async () => {
+  it("routes normal play by the selected work item's shape", async () => {
     const http = campaignFixture();
     mountStudio({ http, selectedTaskId: "child-1", graphQlExecution: true });
 

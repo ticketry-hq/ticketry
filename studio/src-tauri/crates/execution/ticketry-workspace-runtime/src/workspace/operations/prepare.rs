@@ -8,7 +8,8 @@
 //! rebinding a durable identity to new intent would make recovery a guess.
 
 use sea_orm::{
-    ActiveModelTrait, ActiveValue::NotSet, ActiveValue::Set, EntityTrait, TransactionTrait,
+    ActiveModelTrait, ActiveValue::NotSet, ActiveValue::Set, ColumnTrait, EntityTrait, QueryFilter,
+    QueryOrder, TransactionTrait,
 };
 
 use super::entities::operation as operation_entity;
@@ -173,6 +174,39 @@ impl WorkspaceOperationJournal {
             return Ok(None);
         };
         Ok(operation_entity::Entity::find_by_id(&operation_id)
+            .one(self.database())
+            .await?
+            .map(operation))
+    }
+
+    /// Read the newest settled success for one typed resource.
+    pub async fn find_latest_applied(
+        &self,
+        kind: super::WorkspaceOperationKind,
+        resource_key: &str,
+    ) -> Result<Option<WorkspaceOperationRecord>, WorkspaceOperationError> {
+        Ok(operation_entity::Entity::find()
+            .filter(operation_entity::Column::Kind.eq(kind.code()))
+            .filter(operation_entity::Column::ResourceKey.eq(resource_key))
+            .filter(operation_entity::Column::State.eq("applied"))
+            .order_by_desc(operation_entity::Column::CreatedAt)
+            .order_by_desc(operation_entity::Column::OperationId)
+            .one(self.database())
+            .await?
+            .map(operation))
+    }
+
+    pub async fn find_latest_conflicted(
+        &self,
+        kind: super::WorkspaceOperationKind,
+        resource_key: &str,
+    ) -> Result<Option<WorkspaceOperationRecord>, WorkspaceOperationError> {
+        Ok(operation_entity::Entity::find()
+            .filter(operation_entity::Column::Kind.eq(kind.code()))
+            .filter(operation_entity::Column::ResourceKey.eq(resource_key))
+            .filter(operation_entity::Column::State.eq("conflicted"))
+            .order_by_desc(operation_entity::Column::CreatedAt)
+            .order_by_desc(operation_entity::Column::OperationId)
             .one(self.database())
             .await?
             .map(operation))

@@ -654,7 +654,7 @@ mod provider_control_tests {
         );
     }
 
-    /// `[overhaul-228]` The runtime-spawn path carries the prompt in its
+    /// `[overhaul-245]` The runtime-spawn path carries the prompt in its
     /// already-materialized command and types only the provider-formatted
     /// entry skill after the pane exists.
     #[tokio::test]

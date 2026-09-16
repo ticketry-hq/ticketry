@@ -14,6 +14,18 @@ import type { WorktreeCleanupMutation } from "../generated/worktreeCleanup.docum
 import { WorktreeCreatePullRequestDocument } from "../generated/worktreeCreatePullRequest.documents";
 import { WorktreeFollowUpPullRequestDocument } from "../generated/worktreeFollowUpPullRequest.documents";
 import { WorktreeMergePreparationDocument } from "../generated/worktreeMergePreparation.documents";
+import {
+  WorktreeMergeDocument,
+  type WorktreeMergeMutation,
+} from "../generated/worktreeMerge.documents";
+import {
+  WorktreeMergeAbortDocument,
+  type WorktreeMergeAbortMutation,
+} from "../generated/worktreeMergeAbort.documents";
+import {
+  WorktreeMergeFinishDocument,
+  type WorktreeMergeFinishMutation,
+} from "../generated/worktreeMergeFinish.documents";
 import { WorktreePushDocument } from "../generated/worktreePush.documents";
 import { WorktreeReplacePullRequestDocument } from "../generated/worktreeReplacePullRequest.documents";
 
@@ -156,6 +168,55 @@ export function prepareTaskPullRequestMerge(
   return studioRuntime().writeWorkTracker({
     graphQl: async (execute) => {
       await execute(WorktreeMergePreparationDocument, { taskId, operationId });
+    },
+  });
+}
+
+export function mergeTaskWorktree(
+  taskId: string,
+  operationId: string,
+  destinationBranch: string,
+  confirmationToken: string,
+): Promise<WorktreeMergeMutation["worktree_merge"]> {
+  return studioRuntime().writeWorkTracker({
+    graphQl: async (execute) => {
+      const result = await execute(WorktreeMergeDocument, {
+        taskId,
+        operationId,
+        destinationBranch,
+        confirmationToken,
+      });
+      return result.worktree_merge;
+    },
+  });
+}
+
+export function finishTaskWorktreeMerge(
+  taskId: string,
+  operationId: string,
+): Promise<WorktreeMergeFinishMutation["worktree_merge_finish"]> {
+  return studioRuntime().writeWorkTracker({
+    graphQl: async (execute) => {
+      const result = await execute(WorktreeMergeFinishDocument, {
+        taskId,
+        operationId,
+      });
+      return result.worktree_merge_finish;
+    },
+  });
+}
+
+export function abortTaskWorktreeMerge(
+  taskId: string,
+  operationId: string,
+): Promise<WorktreeMergeAbortMutation["worktree_merge_abort"]> {
+  return studioRuntime().writeWorkTracker({
+    graphQl: async (execute) => {
+      const result = await execute(WorktreeMergeAbortDocument, {
+        taskId,
+        operationId,
+      });
+      return result.worktree_merge_abort;
     },
   });
 }

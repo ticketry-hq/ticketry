@@ -141,7 +141,14 @@ export function ChangesActions({
       return;
     }
     steps.push({ name: "push", status: "ok" });
-    steps.push({ name: "pull_request", status: "skipped" });
+    if (stackKind === "task" && pullRequestCreationEligible && onCreatePullRequest) {
+      if (!(await run("pull_request", async () => { await onCreatePullRequest(); }))) {
+        setBusy(null);
+        return;
+      }
+    } else {
+      steps.push({ name: "pull_request", status: "skipped" });
+    }
     setOutcome({ steps });
     setBusy(null);
   };

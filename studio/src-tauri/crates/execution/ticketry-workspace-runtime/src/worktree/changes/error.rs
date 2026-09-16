@@ -66,6 +66,16 @@ impl WorktreeChangesError {
         Self::new("worktree_changes_git_unavailable", message)
     }
 
+    pub(super) fn merge_blocked(code: &'static str, message: impl Into<String>) -> Self {
+        Self::new(code, message)
+    }
+
+    pub(super) fn merge_operation(
+        error: crate::workspace::operations::WorkspaceOperationError,
+    ) -> Self {
+        Self::new("worktree_merge_operation_invalid", error.to_string())
+    }
+
     pub fn invalid_operation() -> Self {
         Self::new(
             "worktree_command_operation_invalid",
@@ -154,10 +164,11 @@ impl WorktreeChangesError {
         )
     }
 
-    pub fn github_rejected() -> Self {
-        Self::new(
+    pub fn github_rejected(detail: &str) -> Self {
+        Self::git_command_failed(
             "github_pull_request_rejected",
             "GitHub rejected the pull-request request.",
+            detail,
         )
     }
 

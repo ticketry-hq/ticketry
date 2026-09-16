@@ -304,6 +304,16 @@ named gate before the full Studio suite, typecheck, and build.
 | 311 | Instant conversation rows react to their own Agent Run lifecycle changes without leaking activity across runs or modules. `starting`, `working`, `permission_required`, `reconnecting`, `needs_input`, `turn_complete`, `error`, `stalled`, and `quiet` show the eligible badge with count-one semantics; absent, `unknown`, `exited`, and `lost` states show none. The Conversations heading and New conversation show no lifecycle badge. |
 | 312 | The Conversations heading configures host-wide conversation defaults in the retained right workspace, including with zero chats. Close and repeated activation restore the prior workspace without launching a run, opening a modal, writing settings, or replacing terminal identities. |
 | 313 | Conversation settings report load and save failures without false success. A failed save keeps its draft for retry, and Discard restores the last loaded or saved prompt and auto-close values. |
+| 314 | Task Changes previews the source and an explicit existing local merge destination without offering a Git write. |
+| 315 | Task Changes binds and runs a confirmed local fast-forward, keeps one operation identity across retry, and refreshes affected Apollo views on failure and success. |
+| 316 | Task Changes reports a completed divergent merge and refreshes affected checkout summaries. |
+| 317 | A conflicting local merge lists its unmerged files and destination checkout and remains recoverable after restart even when subsequent source edits block a new merge. |
+| 318 | Finish merge commits only the explicitly staged resolution after confirmation and stays retryable after hook failure. |
+| 319 | Abort merge targets the matching operation, preserves recovery after refusal, and reports completion truthfully. |
+| 320 | Restart recovery reports merges finished or aborted outside Ticketry without stale controls. |
+| 321 | Finishing or aborting a conflicting merge retires its recovery state and gives the next merge a fresh operation identity. |
+| 322 | Committing dirty source work refreshes local merge eligibility and enables Merge without reopening Changes. |
+| 323 | Refreshing merge eligibility after an external destination fix enables Merge without reopening Changes. |
 
 Each executable case carries one stable `[overhaul-NN]` marker. The gate has a
 contract test that fails if a marker is missing or duplicated. A case whose

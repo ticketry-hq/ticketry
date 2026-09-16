@@ -179,7 +179,7 @@ describe("Rust launch-policy acceptance", () => {
     });
   });
 
-  it("[overhaul-267] launches a browser run over the GraphQL terminal seam without overriding launch authority", async () => {
+  it("launches a browser run over the GraphQL terminal seam without overriding launch authority", async () => {
     tauri.desktopRuntime = false;
     let createVariables: Record<string, unknown> | null = null;
     const recorded = installGraphQlViewerLeases(async (document, variables) => {
@@ -244,7 +244,7 @@ describe("Rust launch-policy acceptance", () => {
     });
   });
 
-  it("[overhaul-268] refuses to double-launch while a launch is in flight", async () => {
+  it("refuses to double-launch while a launch is in flight", async () => {
     tauri.desktopRuntime = true;
     let pending!: Promise<unknown>;
     tauri.invoke.mockImplementation(() => {
@@ -268,7 +268,7 @@ describe("Rust launch-policy acceptance", () => {
     });
   });
 
-  it("[overhaul-266] authorizes that launch command in the main desktop window", async () => {
+  it("authorizes that launch command in the main desktop window", async () => {
     const tauriRoot = resolve(process.cwd(), "src-tauri");
     const [build, capability] = await Promise.all([
       readFile(resolve(tauriRoot, "build.rs"), "utf8"),

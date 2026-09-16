@@ -125,6 +125,52 @@ impl WorkspaceOperationJournal {
             settled: true,
         })
     }
+
+    /// Replace a resolved conflict with its replayable terminal result.
+    pub(crate) async fn retire_conflict(
+        &self,
+        operation_id: &str,
+        result: Value,
+        evidence: Value,
+    ) -> Result<SettledOperation, WorkspaceOperationError> {
+        let outcome = validated(WorkspaceOperationOutcome::Applied { result, evidence })?;
+        let operation_id = intent::database_uuid(operation_id).ok_or_else(|| {
+            WorkspaceOperationError::invalid("The Workspace Operation ID is not a UUID.")
+        })?;
+        let _write_guard = self.lock_write().await;
+        let transaction = self.database().begin().await?;
+        let current = load(&transaction, &operation_id).await?;
+        if current.state == "applied" {
+            let WorkspaceOperationOutcome::Applied { result, .. } = &outcome else {
+                unreachable!()
+            };
+            if current.result().as_ref() != Some(&sanitize::redact(result)) {
+                return Err(WorkspaceOperationError::new(
+                    WorkspaceOperationErrorCode::AlreadySettled,
+                    "The Workspace Operation already holds a different terminal outcome.",
+                ));
+            }
+            transaction.commit().await?;
+            return Ok(SettledOperation {
+                operation: current,
+                settled: false,
+            });
+        }
+        if current.state != "conflicted" {
+            return Err(WorkspaceOperationError::new(
+                WorkspaceOperationErrorCode::AlreadySettled,
+                "Only a resolved conflict can be retired.",
+            ));
+        }
+        let now = timestamp::database_format(Utc::now());
+        apply(&transaction, &operation_id, &outcome, &now).await?;
+        let operation = load(&transaction, &operation_id).await?;
+        transaction.commit().await?;
+        Ok(SettledOperation {
+            operation,
+            settled: true,
+        })
+    }
 }
 
 async fn apply(

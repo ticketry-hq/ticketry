@@ -25,8 +25,8 @@ describe("overhaul acceptance - stacked Changes actions", () => {
     fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
 
     await waitFor(() => expect(screen.getByLabelText("Changes action outcome")).toHaveTextContent("Action complete"));
-    expect(calls).toEqual(["commit_push"]);
+    expect(calls).toEqual(["commit_push", "pull_request"]);
     expect(screen.getByLabelText("Changes action outcome")).toHaveTextContent("stage: skipped");
-    expect(screen.getByLabelText("Changes action outcome")).toHaveTextContent("pull request: skipped");
+    expect(screen.getByLabelText("Changes action outcome")).toHaveTextContent("pull request: ok");
   });
 });

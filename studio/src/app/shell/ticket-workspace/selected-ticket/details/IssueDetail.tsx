@@ -37,8 +37,8 @@ import FindingsPanel from "./FindingsPanel";
 import { hasFindingsPanel } from "./internal/findings";
 import IssueSidebar from "./IssueSidebar";
 import IssueActionsMenu from "./IssueActionsMenu";
-import { LaunchAgentAction } from "./LaunchAgentAction";
-import { SubtreeRunActions } from "./SubtreeRunActions";
+import { NormalRunAction } from "./NormalRunAction";
+import { SerialRunAction } from "./SerialRunAction";
 import { RunNowAction } from "./RunNowAction";
 import { readVersionedItem } from "../../../../../shared/storage/versioned";
 
@@ -249,9 +249,9 @@ export default function IssueDetail({ issueId }: { issueId: string }) {
         />
 
         <div className="mt-4 flex items-center gap-3" data-testid="status-row">
-          <LaunchAgentAction
-            issueId={task.id}
-            projectId={task.project_id}
+          <NormalRunAction
+            key={`normal-run-${task.id}`}
+            task={task}
             moduleId={epic?.id ?? selectedModuleId ?? null}
           />
           <StatePicker
@@ -271,7 +271,11 @@ export default function IssueDetail({ issueId }: { issueId: string }) {
             states={states}
             issueTypes={issueTypes}
           />
-          <SubtreeRunActions task={task} moduleId={epic?.id ?? null} />
+          <SerialRunAction
+            key={`serial-run-${task.id}`}
+            task={task}
+            moduleId={epic?.id ?? selectedModuleId ?? null}
+          />
         </div>
 
         <div className="mt-6">

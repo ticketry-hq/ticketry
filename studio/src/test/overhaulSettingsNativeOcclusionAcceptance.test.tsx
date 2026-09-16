@@ -282,7 +282,7 @@ describe("overhaul acceptance — Settings over an attached native terminal", ()
     view.unmount();
   });
 
-  it("[overhaul-117-keymap] reaches the same singleton dialog from the native Settings chord while the terminal owns focus", async () => {
+  it("[overhaul-276] reaches the same singleton dialog from the native Settings chord while the terminal owns focus", async () => {
     const view = renderStudioWithAttachedTerminal();
     const keymap = renderHook(() => useGlobalKeymap());
     await waitForPresentedViewer();

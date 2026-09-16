@@ -102,7 +102,7 @@ export function useGlobalKeymap(taskRows: TreeRow[] = EMPTY_TASK_ROWS): void {
         event.metaKey &&
         !event.altKey &&
         !event.ctrlKey &&
-        (globalAction === "open-agent-command" ||
+        (globalAction === "normal-run-command" ||
           globalAction === "open-with-prompt-command")
       ) {
         routeSharedNavigation(event, taskRowsRef.current, globalAction);

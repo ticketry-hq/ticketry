@@ -1,7 +1,10 @@
 import { setIssueTypeMetadata as setIssueTypes } from "../workflows/queries/issueTypeMetadata";
 import { skipToken, useQuery } from "@apollo/client/react";
 import type { IssueType, SubtreeRunCapabilityMap } from "../../shared/api/types";
-import { compactWorktrackerId } from "../../shared/api/generatedWorktracker";
+import {
+  compactWorktrackerId,
+  publicWorktrackerId,
+} from "../../shared/api/generatedWorktracker";
 import { studioApolloClient } from "../../shared/apollo/client";
 import {
   readProjectOpen,
@@ -127,6 +130,27 @@ export function useSubtreeRunCapabilitiesQuery(projectId: string | null) {
     ...query,
     data: projectId && query.data ? capabilitiesFromProject(projectId) : undefined,
   };
+}
+
+export function useLaunchBindingStatesQuery(projectId: string | null) {
+  const query = useQuery(
+    WorkTrackerProjectIssueTypesDocument,
+    projectId
+      ? {
+          variables: { projectId: compactWorktrackerId(projectId) },
+          client: studioApolloClient(),
+          fetchPolicy: "cache-first",
+        }
+      : skipToken,
+  );
+  const data: SubtreeRunCapabilityMap = {};
+  for (const type of query.data?.issue_types.nodes ?? []) {
+    const typeId = publicWorktrackerId(type.id);
+    data[typeId] = type.launch_bindings.nodes.map((binding) =>
+      publicWorktrackerId(binding.state),
+    );
+  }
+  return { ...query, data: query.data ? data : undefined };
 }
 
 export function useIssueTypesQuery(projectId: string | null) {

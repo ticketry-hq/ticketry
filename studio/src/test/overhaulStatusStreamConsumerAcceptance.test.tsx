@@ -120,7 +120,7 @@ afterEach(() => {
 });
 
 describe("durable status consumer acceptance", () => {
-  it("[overhaul-82a] opens the desktop status subscription with a transport-safe identity", async () => {
+  it("[overhaul-269] opens the desktop status subscription with a transport-safe identity", async () => {
     const server = transport();
 
     statusStreamFeed.start(PROJECT, { createProxy: server.createProxy });
@@ -206,7 +206,7 @@ describe("durable status consumer acceptance", () => {
     );
   });
 
-  it("[overhaul-82c] applies the durable status subscription in browser Studio", async () => {
+  it("[overhaul-271] applies the durable status subscription in browser Studio", async () => {
     let stream!: ReadableStreamDefaultController<Uint8Array>;
     const fetch = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(new ReadableStream({
@@ -290,7 +290,7 @@ describe("durable status consumer acceptance", () => {
     );
   });
 
-  it("[overhaul-82b] updates terminal discovery from ProjectRunStatus without a second read", async () => {
+  it("[overhaul-270] updates terminal discovery from ProjectRunStatus without a second read", async () => {
     const server = transport();
     const refetch = vi.spyOn(studioApolloClient(), "refetchQueries")
       .mockResolvedValue([]);

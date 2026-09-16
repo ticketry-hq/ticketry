@@ -322,7 +322,7 @@ describe("terminal panel tab acceptance", () => {
     expect(shellApi.createModuleShell).toHaveBeenCalledTimes(3);
   });
 
-  it("[overhaul-100b] leaves a closed shell out of the module's dismissal ledger", async () => {
+  it("[overhaul-275] leaves a closed shell out of the module's dismissal ledger", async () => {
     renderPanel();
     pressTogglePanel();
     await waitFor(() => expect(tabs()).toHaveLength(1));

@@ -353,7 +353,7 @@ describe("onboarding and module-folder acceptance", () => {
     ).toBeVisible();
   });
 
-  it("[overhaul-29a] restores the module coach mark when Add Module is cancelled", async () => {
+  it("[overhaul-262] restores the module coach mark when Add Module is cancelled", async () => {
     useStudioStore.setState({ selectedProjectId: "project-1" });
     useOnboardingTourStore.getState().start("project-1");
 
@@ -372,7 +372,7 @@ describe("onboarding and module-folder acceptance", () => {
     expect(useOnboardingTourStore.getState().step).toBe("module-create");
   });
 
-  it("[overhaul-29b] keeps the desktop folder picker beside the described CWD input", () => {
+  it("[overhaul-263] keeps the desktop folder picker beside the described CWD input", () => {
     useStudioStore.setState({ selectedProjectId: "project-1" });
 
     render(<AddModule runtime={folderPickerRuntime()} />);
@@ -424,7 +424,7 @@ describe("onboarding and module-folder acceptance", () => {
     expect(api.writeModuleLink).not.toHaveBeenCalled();
   });
 
-  it("[overhaul-29c] keeps modal teaching cards beside their fields inside the modal", async () => {
+  it("[overhaul-265] keeps modal teaching cards beside their fields inside the modal", async () => {
     useStudioStore.setState({ selectedProjectId: "project-1" });
     useOnboardingTourStore.getState().start("project-1");
     useModalStore.setState({ modalStack: [{ type: "add-module" }] });

@@ -325,7 +325,7 @@ describe("overhaul acceptance - module Changes and current worktrees", () => {
     expect(operations).not.toContain("WorktreeDiscard");
   });
 
-  it("[overhaul-298] keeps long truncated patches readable below the file list", async () => {
+  it("[overhaul-260] keeps long truncated patches readable below the file list", async () => {
     const http = fixture();
     const path = "studio/src/features/agents/worktrees/changes/ChangesFileReview.tsx";
     const patch = "diff --git a/review.tsx b/review.tsx\n+const line = \"a long patch line that must stay intact and scroll horizontally instead of wrapping into fragments\";";

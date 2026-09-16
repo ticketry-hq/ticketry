@@ -3,6 +3,7 @@ import { SETTINGS_FIELD_CLASS } from "../../shared/ui/SettingsPrimitives";
 
 export interface LaunchDefaultPickerValue {
   provider: string;
+  profile: string;
   model: string;
   reasoning: string;
 }
@@ -14,6 +15,7 @@ interface LaunchDefaultPickerProps {
     field: keyof LaunchDefaultPickerValue,
   ) => void;
   providerCapabilities: ProviderCapabilities[];
+  codexProfiles?: string[];
   value: LaunchDefaultPickerValue;
 }
 
@@ -21,6 +23,7 @@ export function LaunchDefaultPicker({
   onChange,
   onCommit,
   providerCapabilities,
+  codexProfiles,
   value,
 }: LaunchDefaultPickerProps) {
   const selectedCapability = providerCapabilities.find((candidate) =>
@@ -28,6 +31,9 @@ export function LaunchDefaultPicker({
   const modelAliases = selectedCapability?.model_aliases ?? [];
   const unsupportedCurrentModel = Boolean(
     value.model && !modelAliases.includes(value.model),
+  );
+  const unsupportedCurrentProfile = Boolean(
+    value.profile && !(codexProfiles ?? []).includes(value.profile),
   );
   const reasoningLevels = value.model
     ? selectedCapability?.model_reasoning_levels?.[value.model]
@@ -53,10 +59,15 @@ export function LaunchDefaultPicker({
       ? {
           ...value,
           provider: nextFieldValue,
+          profile: "",
           model: nextProvider?.model_aliases?.[0] ?? "",
           reasoning: "",
         }
-      : { ...value, [field]: nextFieldValue };
+      : field === "profile"
+        ? { ...value, profile: nextFieldValue, model: "", reasoning: "" }
+        : field === "model" && nextFieldValue
+          ? { ...value, profile: "", model: nextFieldValue }
+          : { ...value, [field]: nextFieldValue };
     onChange(nextValue);
     // A provider is persisted through its model. Prefer the first catalog
     // model; if none exists, keep the local selection editable until a model
@@ -85,11 +96,32 @@ export function LaunchDefaultPicker({
         </select>
       </label>
 
+      {codexProfiles && value.provider === "codex" ? (
+        <label className="grid gap-1 text-sm text-text-muted">
+          Profile
+          <select
+            aria-label="Codex profile"
+            value={value.profile}
+            onChange={(event) => update("profile", event.target.value, true)}
+            className={SETTINGS_FIELD_CLASS}
+          >
+            <option value="">No profile</option>
+            {unsupportedCurrentProfile ? (
+              <option value={value.profile}>{value.profile} (unregistered)</option>
+            ) : null}
+            {codexProfiles.map((profile) => (
+              <option key={profile} value={profile}>{profile}</option>
+            ))}
+          </select>
+        </label>
+      ) : null}
+
       <label className="grid gap-1 text-sm text-text-muted">
         Model
         <select
           aria-label="Model"
           value={value.model}
+          disabled={Boolean(value.profile)}
           onChange={(event) => update("model", event.target.value, true)}
           className={SETTINGS_FIELD_CLASS}
         >
@@ -108,6 +140,7 @@ export function LaunchDefaultPicker({
         <select
           aria-label="Reasoning"
           value={value.reasoning}
+          disabled={Boolean(value.profile)}
           onChange={(event) => update("reasoning", event.target.value, true)}
           className={SETTINGS_FIELD_CLASS}
         >

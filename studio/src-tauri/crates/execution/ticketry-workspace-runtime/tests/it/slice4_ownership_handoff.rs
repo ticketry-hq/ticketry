@@ -7,8 +7,7 @@
 //! rather than degrading, and the published record states that no Django write
 //! fallback exists.
 
-use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::path::Path;
 
 use sea_orm::{ConnectionTrait, Database, DbBackend, Statement};
 use ticketry_workspace_runtime::handoff;
@@ -17,36 +16,16 @@ use ticketry_workspace_runtime::handoff::{
     WorkspaceReadinessGate,
 };
 
-fn root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../../../..")
-        .canonicalize()
-        .unwrap()
-}
-
 /// A Django-shaped store at the current leaf, built by the real migrations so
 /// adoption takes its production path rather than a shortcut this test wrote.
-fn django_fixture(path: &Path) {
-    let script = r#"
-import os, sys
-from pathlib import Path
-p=Path(sys.argv[1]).resolve(); os.environ['DJANGO_SETTINGS_MODULE']='studio_server.settings'; os.environ['MUXED_STATE_DB']=str(p); os.environ['MUXED_DATA_DIR']=str(p.parent); os.environ['MUXED_FORCE_SQLITE']='true'
-import django; django.setup()
-from django.core.management import call_command
-call_command('migrate', interactive=False, verbosity=0)
-"#;
-    let output = Command::new(root().join("backend/.venv/bin/python"))
-        .arg("-c")
-        .arg(script)
-        .arg(path)
-        .current_dir(root())
-        .output()
+async fn django_fixture(path: &Path) {
+    super::execution_legacy_fixture::provision_current(path.parent().unwrap()).await;
+    let database = open(path).await;
+    database
+        .execute_unprepared("DELETE FROM design_documents; DELETE FROM worktrees")
+        .await
         .unwrap();
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
+    database.close().await.unwrap();
 }
 
 async fn open(path: &Path) -> sea_orm::DatabaseConnection {
@@ -59,7 +38,7 @@ async fn open(path: &Path) -> sea_orm::DatabaseConnection {
 async fn the_manifest_names_exactly_the_tables_the_handoff_installs() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("state.db");
-    django_fixture(&path);
+    django_fixture(&path).await;
     handoff::adopt(directory.path())
         .await
         .expect("adopt the workspace schema");
@@ -94,54 +73,18 @@ async fn the_manifest_names_exactly_the_tables_the_handoff_installs() {
 /// pre-cutover store is referentially valid exactly as a real installation is.
 /// Adoption refuses a store with foreign-key violations, and rightly so — a
 /// hand-written row set would be testing a shape production never has.
-fn seed_workspace_rows(path: &Path) {
-    let script = r#"
-import os, sys
-from pathlib import Path
-p=Path(sys.argv[1]).resolve(); os.environ['DJANGO_SETTINGS_MODULE']='studio_server.settings'; os.environ['MUXED_STATE_DB']=str(p); os.environ['MUXED_DATA_DIR']=str(p.parent); os.environ['MUXED_FORCE_SQLITE']='true'
-import django; django.setup()
-from worktracker.models import Issue, IssueType, Project, Workspace
-from apps.documents.models import DesignDocument
-from apps.worktrees.models import Worktree
-
-workspace = Workspace.objects.create(id='0'*31+'1', name='Memory', slug='meml')
-project = Project.objects.create(id='0'*31+'2', workspace=workspace, name='Coding', slug='CODIN', description='')
-issue_type = IssueType.objects.create(id='0'*31+'3', project=project, name='Implementation', level='task', color='', sort_order=1)
-issue = Issue.objects.create(id='0'*31+'4', project=project, issue_type=issue_type, type='task', name='Cut over', sequence_id=766, description='', rank='n', state_revision=0)
-
-DesignDocument.objects.create(
-    id='d1', module_id='m1', task_id=str(issue.id), scope='task',
-    root_dir='/repos/ticketry/spec/mod--abc/T766--slug', rel_path='SPEC.md',
-    discovered_by_run_id=None, created_at='2026-08-01', updated_at='2026-08-01',
-)
-Worktree.objects.create(
-    id='w1', task_id=str(issue.id), workspace_slug='meml', project_id=str(project.id),
-    module_id='m1', ticket_seq=766, repo_root='/repos/ticketry', path='/checkouts/t766',
-    branch='wt/CODIN-766-cut-over', base_branch='main', base_commit='abc123',
-    status='active', ephemeral=False, created_at='2026-08-01', updated_at='2026-08-01',
-)
-print(issue.id)
-"#;
-    let output = Command::new(root().join("backend/.venv/bin/python"))
-        .arg("-c")
-        .arg(script)
-        .arg(path)
-        .current_dir(root())
-        .output()
-        .unwrap();
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
+async fn seed_workspace_rows(path: &Path) {
+    let database = open(path).await;
+    database.execute_unprepared("INSERT INTO design_documents (id,module_id,task_id,scope,root_dir,rel_path,discovered_by_run_id,created_at,updated_at) VALUES ('d1','m1','00000000000000000000000000089307','task','/repos/ticketry/spec/mod--abc/T766--slug','SPEC.md',NULL,'2026-08-01','2026-08-01'); INSERT INTO worktrees (id,task_id,workspace_slug,project_id,module_id,ticket_seq,repo_root,path,branch,base_branch,base_commit,status,ephemeral,created_at,updated_at) VALUES ('w1','00000000000000000000000000089307','meml','00000000000000000000000000089301','m1',766,'/repos/ticketry','/checkouts/t766','wt/CODIN-766-cut-over','main','abc123','active',0,'2026-08-01','2026-08-01')").await.unwrap();
+    database.close().await.unwrap();
 }
 
 #[tokio::test]
 async fn adoption_preserves_every_existing_document_and_worktree_row() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("state.db");
-    django_fixture(&path);
-    seed_workspace_rows(&path);
+    django_fixture(&path).await;
+    seed_workspace_rows(&path).await;
 
     let evidence = handoff::adopt(directory.path())
         .await
@@ -206,7 +149,7 @@ async fn adoption_preserves_every_existing_document_and_worktree_row() {
 async fn adoption_is_repeatable_across_a_restart() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("state.db");
-    django_fixture(&path);
+    django_fixture(&path).await;
 
     let first = handoff::adopt(directory.path())
         .await
@@ -224,7 +167,7 @@ async fn adoption_is_repeatable_across_a_restart() {
 async fn adoption_refuses_an_unknown_documents_schema_before_the_lease_changes_hands() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("state.db");
-    django_fixture(&path);
+    django_fixture(&path).await;
     let database = open(&path).await;
     database
         .execute_raw(Statement::from_sql_and_values(
@@ -250,7 +193,7 @@ async fn adoption_refuses_an_unknown_documents_schema_before_the_lease_changes_h
 async fn a_drifted_owned_table_is_refused_rather_than_written_through() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("state.db");
-    django_fixture(&path);
+    django_fixture(&path).await;
     handoff::adopt(directory.path())
         .await
         .expect("adopt the workspace schema");
@@ -314,20 +257,4 @@ fn a_partial_result_is_refused_rather_than_published() {
     // published record says so rather than leaving it implied.
     assert!(!Slice4Readiness::complete().django_write_fallback);
     assert!(!Slice4Readiness::unavailable().django_write_fallback);
-}
-
-#[test]
-fn the_python_boundary_names_exactly_the_tables_rust_owns() {
-    // The Django guard is the other half of the one-writer contract, and the two
-    // halves must name the same surface. A table added to the Rust manifest and
-    // forgotten in Python would be a silent second writer.
-    let guard = std::fs::read_to_string(root().join("backend/apps/workspace_write_ownership.py"))
-        .expect("the Python one-writer guard must ship");
-
-    for table in manifest::owned_tables() {
-        assert!(
-            guard.contains(&format!("\"{table}\"")),
-            "the Python boundary does not refuse writes to {table}"
-        );
-    }
 }

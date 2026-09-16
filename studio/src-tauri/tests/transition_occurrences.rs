@@ -65,7 +65,7 @@ async fn fixture() -> (tempfile::TempDir, sea_orm::DatabaseConnection) {
                 id integer PRIMARY KEY AUTOINCREMENT, issue_type_id char(32) NOT NULL,
                 state_id char(32) NOT NULL, prompt text NOT NULL,
                 required_skills text NOT NULL, entry_skill varchar(128),
-                model_id char(32), reasoning_id char(32),
+                model_id char(32), reasoning_id char(32), profile varchar,
                 auto_start bool NOT NULL, subtree_run_enabled bool NOT NULL,
                 created_at datetime NOT NULL, updated_at datetime NOT NULL,
                 UNIQUE(issue_type_id, state_id)
@@ -122,7 +122,7 @@ async fn committed_transition_appends_one_durable_frozen_occurrence() {
             DbBackend::Sqlite,
             "SELECT version, issue_id, project_id, issue_type_id, from_state_id, \
                     to_state_id, from_group, to_group, work_item_revision, \
-                    workflow_revision, destination_auto_start \
+                    workflow_revision, destination_auto_start, handoff, origin \
              FROM worktracker_transitionoccurrence"
                 .to_owned(),
         ))
@@ -143,6 +143,8 @@ async fn committed_transition_appends_one_durable_frozen_occurrence() {
     assert_eq!(row.try_get::<i64>("", "work_item_revision").unwrap(), 8);
     assert_eq!(row.try_get::<i64>("", "workflow_revision").unwrap(), 11);
     assert!(row.try_get::<bool>("", "destination_auto_start").unwrap());
+    assert!(!row.try_get::<bool>("", "handoff").unwrap());
+    assert_eq!(row.try_get::<String>("", "origin").unwrap(), "agent");
 
     drop(database);
     let reopened = open_for_commands(&directory.path().join("state.db"))
@@ -292,7 +294,7 @@ async fn handoff_is_recorded_identically_for_human_and_agent_movers() {
         let row = database
             .query_one_raw(Statement::from_string(
                 DbBackend::Sqlite,
-                "SELECT handoff FROM worktracker_transitionoccurrence".to_owned(),
+                "SELECT handoff, origin FROM worktracker_transitionoccurrence".to_owned(),
             ))
             .await
             .unwrap()
@@ -300,6 +302,15 @@ async fn handoff_is_recorded_identically_for_human_and_agent_movers() {
         assert!(
             row.try_get::<bool>("", "handoff").unwrap(),
             "{origin:?} must record the edge's handoff flag"
+        );
+        assert_eq!(
+            row.try_get::<String>("", "origin").unwrap(),
+            if origin == TransitionOrigin::Agent {
+                "agent"
+            } else {
+                "human"
+            },
+            "{origin:?} must record its own origin"
         );
         drop(directory);
     }

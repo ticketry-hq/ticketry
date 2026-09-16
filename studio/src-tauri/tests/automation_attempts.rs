@@ -1,46 +1,14 @@
-use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::path::Path;
 
 use sea_orm::{ConnectionTrait, Database, DbBackend, Statement};
 use ticketry_runs::{
     adopt, AttemptOutcome, RunsPersistenceErrorCode, RunsServices, TransitionOccurrence,
 };
 
-fn root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+mod common;
 
-fn fixture(path: &Path) {
-    let script = r#"
-import os, sys, uuid
-from pathlib import Path
-p=Path(sys.argv[1]).resolve(); os.environ['DJANGO_SETTINGS_MODULE']='studio_server.settings'; os.environ['MUXED_STATE_DB']=str(p); os.environ['MUXED_DATA_DIR']=str(p.parent); os.environ['MUXED_FORCE_SQLITE']='true'
-import django; django.setup()
-from django.core.management import call_command
-from worktracker.models import Workspace, Project, State, IssueType, Issue
-call_command('migrate', interactive=False, verbosity=0)
-w=Workspace.objects.create(id=uuid.UUID(int=800),slug='attempt-fixture',name='Attempt Fixture')
-for base in (800, 810):
-    project=Project.objects.create(id=uuid.UUID(int=base+1),workspace=w,name=f'Project {base}',slug=f'P{base}')
-    state=State.objects.create(id=uuid.UUID(int=base+2),project=project,name='Todo',group='unstarted',sort_order=1)
-    kind=IssueType.objects.create(id=uuid.UUID(int=base+3),project=project,name='Story',level='task',sort_order=1,start_state=state)
-    Issue.objects.create(id=uuid.UUID(int=base+4),project=project,type='task',issue_type=kind,state=state,name='Attempt fixture',sequence_id=base,rank='z')
-"#;
-    let output = Command::new(root().join("backend/.venv/bin/python"))
-        .arg("-c")
-        .arg(script)
-        .arg(path)
-        .current_dir(root())
-        .output()
-        .unwrap();
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
+async fn fixture(path: &Path) {
+    common::execution_legacy_fixture::provision_runs_fixture(path.parent().unwrap()).await;
 }
 
 async fn open(path: &Path) -> sea_orm::DatabaseConnection {
@@ -85,7 +53,7 @@ async fn event_count(database: &sea_orm::DatabaseConnection) -> i64 {
 async fn projections_publish_retryability_only_for_failures_and_list_newest_first() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("state.db");
-    fixture(&path);
+    fixture(&path).await;
     adopt(directory.path()).await.unwrap();
     let services = RunsServices::new(open(&path).await);
 
@@ -163,7 +131,7 @@ async fn projections_publish_retryability_only_for_failures_and_list_newest_firs
 async fn attempts_are_idempotent_durable_scoped_and_event_atomic() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("state.db");
-    fixture(&path);
+    fixture(&path).await;
     adopt(directory.path()).await.unwrap();
     let database = open(&path).await;
     let services = RunsServices::new(database.clone());

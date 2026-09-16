@@ -11,6 +11,7 @@ pub(super) struct CatalogReader<'a> {
 
 pub(super) struct ProviderSelection {
     pub(super) provider: String,
+    pub(super) profile: Option<String>,
     pub(super) model: Option<String>,
     pub(super) reasoning: Option<String>,
     pub(super) supports_unattended: bool,
@@ -37,9 +38,11 @@ impl<'a> CatalogReader<'a> {
             ));
         }
 
-        let configured_provider = configured_model
-            .as_ref()
-            .map(|model| model.provider_slug.as_str());
+        let configured_provider = binding.profile.as_ref().map(|_| "codex").or_else(|| {
+            configured_model
+                .as_ref()
+                .map(|model| model.provider_slug.as_str())
+        });
         let mut provider = provider_override.or(configured_provider).map(str::to_owned);
         let provider_changed = provider_override.is_some()
             && configured_provider.is_some()
@@ -48,22 +51,31 @@ impl<'a> CatalogReader<'a> {
         let mut reasoning_id = (!provider_changed)
             .then(|| binding.reasoning_id.clone())
             .flatten();
+        // A profile is a Codex-only option, so an override to another
+        // agent/provider drops it along with the model and reasoning it owns.
+        let mut profile = (!provider_changed)
+            .then(|| binding.profile.clone())
+            .flatten();
 
+        // A profile owns its own model and reasoning. Inheriting either from
+        // the global default hands the planner a profile-plus-model
+        // combination it rejects, so the default only fills a selection that
+        // resolved without a profile.
         if let Some(default) = self.global_default().await? {
             if provider.is_none() {
-                provider = Some(default.provider);
-                model = match default.model {
-                    Some(name) => Some(
-                        self.model_by_name(provider.as_deref().unwrap(), &name)
-                            .await?,
-                    ),
-                    None => None,
-                };
-                reasoning_id = match default.reasoning {
-                    Some(name) => Some(self.reasoning_by_name(&name).await?.id),
-                    None => None,
-                };
-            } else if provider.as_deref() == Some(default.provider.as_str()) {
+                provider = Some(default.provider.clone());
+                profile = default.profile;
+                if profile.is_none() {
+                    model = match default.model {
+                        Some(name) => Some(self.model_by_name(&default.provider, &name).await?),
+                        None => None,
+                    };
+                    reasoning_id = match default.reasoning {
+                        Some(name) => Some(self.reasoning_by_name(&name).await?.id),
+                        None => None,
+                    };
+                }
+            } else if provider.as_deref() == Some(default.provider.as_str()) && profile.is_none() {
                 if model.is_none() {
                     model = match default.model {
                         Some(name) => Some(self.model_by_name(&default.provider, &name).await?),
@@ -113,6 +125,7 @@ impl<'a> CatalogReader<'a> {
 
         Ok(ProviderSelection {
             provider,
+            profile,
             model: model.map(|value| value.name),
             reasoning,
             supports_unattended: provider_row.supports_unattended,

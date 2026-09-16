@@ -11,6 +11,7 @@ interface Binding {
   prompt?: string;
   required_skills?: unknown;
   entry_skill?: string | null;
+  profile?: string | null;
   model?: string | null;
   reasoning?: string | null;
   auto_start?: boolean;
@@ -67,7 +68,7 @@ export function assembleScopedWorkflowSettings(
     const model = binding.model
       ? modelById.get(compactWorktrackerId(binding.model))
       : undefined;
-    const provider = model
+    const provider = binding.profile ? providers.find((item) => item.slug === "codex") : model
       ? providerById.get(compactWorktrackerId(model.provider))
         ?? providers.find((item) => item.slug === model.provider)
       : undefined;
@@ -79,6 +80,7 @@ export function assembleScopedWorkflowSettings(
         : [],
       entry_skill: binding.entry_skill ?? null,
       agent: provider?.slug ?? null,
+      profile: binding.profile ?? null,
       model: model?.name ?? null,
       reasoning: binding.reasoning
         ? reasoningById.get(compactWorktrackerId(binding.reasoning))?.name ?? null

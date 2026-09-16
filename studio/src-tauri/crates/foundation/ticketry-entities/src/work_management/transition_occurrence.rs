@@ -18,6 +18,7 @@ pub struct Model {
     pub workflow_revision: i32,
     pub destination_auto_start: bool,
     pub handoff: bool,
+    pub origin: String,
     pub run_now_decision_id: Option<String>,
     #[sea_orm(default_expr = "Expr::current_timestamp()")]
     pub committed_at: DateTime,

@@ -1,44 +1,27 @@
-use std::path::{Path, PathBuf};
-use std::process::Command;
+mod common;
+
+use std::path::Path;
 
 use sea_orm::{ConnectionTrait, Database, DbBackend, Statement, TransactionTrait};
 use ticketry_runs::{adopt, LaunchIntent, RunsServices, SourceClassification};
 
-fn root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
-
-fn fixture(path: &Path) {
-    let script = r#"
-import os, sys, uuid
-from pathlib import Path
-p=Path(sys.argv[1]).resolve(); os.environ['DJANGO_SETTINGS_MODULE']='studio_server.settings'; os.environ['MUXED_STATE_DB']=str(p); os.environ['MUXED_DATA_DIR']=str(p.parent); os.environ['MUXED_FORCE_SQLITE']='true'
-import django; django.setup()
-from django.core.management import call_command
-from worktracker.models import Workspace, Project, State, IssueType, Issue
-from apps.runs.models import AgentRun, AutomationAttempt
-call_command('migrate', interactive=False, verbosity=0)
-w=Workspace.objects.create(id=uuid.UUID(int=800),slug='runs-fixture',name='Runs Fixture'); pjt=Project.objects.create(id=uuid.UUID(int=801),workspace=w,name='Runs',slug='RUN'); s=State.objects.create(id=uuid.UUID(int=802),project=pjt,name='Todo',group='unstarted',sort_order=1); t=IssueType.objects.create(id=uuid.UUID(int=803),project=pjt,name='Story',level='task',sort_order=1,start_state=s)
-i=Issue.objects.create(id=uuid.UUID(int=804),project=pjt,type='task',issue_type=t,state=s,name='Runs fixture',sequence_id=991,rank='z')
-AgentRun.objects.create(id='run-stable',issue=i,ticket_seq=991,agent='codex',status='completed',started_at='2026-01-01T00:00:00+00:00',ended_at='2026-01-01T01:00:00+00:00',exit_code=0,provider_session_id='provider-stable',lifecycle_state='exited',lifecycle_updated_at='2026-01-01T01:00:00+00:00',scope='task')
-a=AutomationAttempt.objects.create(id=uuid.UUID(int=901),transition_id=uuid.UUID(int=902),issue=i,from_state_id=s.id,to_state_id=s.id,workflow_revision=7,status='failed',agent='codex',agent_run_id='run-stable',error='fixture',retryable=True)
-AutomationAttempt.objects.filter(id=a.id).update(created_at='2026-01-01 00:00:00',updated_at='2026-01-01 01:00:00',dismissed_at='2026-01-02 00:00:00')
-"#;
-    let output = Command::new(root().join("backend/.venv/bin/python"))
-        .arg("-c")
-        .arg(script)
-        .arg(path)
-        .current_dir(root())
-        .output()
-        .unwrap();
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
+async fn fixture(path: &Path) {
+    let directory = path.parent().expect("the database has a data directory");
+    common::execution_legacy_fixture::provision_runs_fixture(directory).await;
+    common::execution_legacy_fixture::mutate(
+        directory,
+        r#"
+INSERT INTO agent_runs
+    (id,ticket_seq,agent,status,started_at,ended_at,exit_code,cwd,provider_session_id,lifecycle_state,lifecycle_updated_at,scope,issue_id)
+VALUES
+    ('run-stable',991,'codex','completed','2026-01-01T00:00:00+00:00','2026-01-01T01:00:00+00:00',0,NULL,'provider-stable','exited','2026-01-01T01:00:00+00:00','task','00000000000000000000000000000324');
+INSERT INTO automation_attempts
+    (id,transition_id,from_state_id,to_state_id,workflow_revision,status,agent,agent_run_id,error,created_at,updated_at,issue_id,error_details,retryable,retry_of_id,root_attempt_id,dismissed_at)
+VALUES
+    ('00000000000000000000000000000385','00000000000000000000000000000386','00000000000000000000000000000322','00000000000000000000000000000322',7,'failed','codex','run-stable','fixture','2026-01-01 00:00:00','2026-01-01 01:00:00','00000000000000000000000000000324',NULL,1,NULL,NULL,'2026-01-02 00:00:00');
+"#,
+    )
+    .await;
 }
 
 async fn open(path: &Path) -> sea_orm::DatabaseConnection {
@@ -51,7 +34,7 @@ async fn open(path: &Path) -> sea_orm::DatabaseConnection {
 async fn adopts_current_history_without_rewriting_and_reopens_deterministically() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("state.db");
-    fixture(&path);
+    fixture(&path).await;
     let first = adopt(directory.path()).await.unwrap();
     assert!(matches!(first.source, SourceClassification::Django(_)));
     let second = adopt(directory.path()).await.unwrap();
@@ -103,7 +86,7 @@ async fn adopts_current_history_without_rewriting_and_reopens_deterministically(
 async fn adopts_live_launch_metadata_lineage_without_losing_agentless_runs() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("state.db");
-    fixture(&path);
+    fixture(&path).await;
     let db = open(&path).await;
     db.execute_unprepared(
         "UPDATE agent_runs SET launch_model='legacy-model' WHERE id='run-stable';
@@ -134,13 +117,11 @@ async fn adopts_live_launch_metadata_lineage_without_losing_agentless_runs() {
     let row = db
         .query_one_raw(Statement::from_string(
             DbBackend::Sqlite,
-            "SELECT model, launch_state, launch_model FROM agent_runs WHERE id='run-stable'"
-                .to_owned(),
+            "SELECT launch_state, launch_model FROM agent_runs WHERE id='run-stable'".to_owned(),
         ))
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(row.try_get::<String>("", "model").unwrap(), "legacy-model");
     assert!(row
         .try_get::<Option<String>>("", "launch_state")
         .unwrap()
@@ -171,7 +152,7 @@ async fn rejects_unknown_schema_before_mutation() {
     ] {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("state.db");
-        fixture(&path);
+        fixture(&path).await;
         let db = open(&path).await;
         db.execute_unprepared(mutation).await.unwrap();
         db.close().await.unwrap();
@@ -193,7 +174,7 @@ async fn rejects_unknown_schema_before_mutation() {
 async fn rollback_hides_events_effects_and_watermarks_and_intent_rejects_unsafe_fields() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("state.db");
-    fixture(&path);
+    fixture(&path).await;
     adopt(directory.path()).await.unwrap();
     let db = open(&path).await;
     let services = RunsServices::new(db.clone());

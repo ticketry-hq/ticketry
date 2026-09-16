@@ -8,7 +8,8 @@
 use async_trait::async_trait;
 use chrono::Utc;
 use sea_orm::{
-    sea_query::Expr, ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter, TransactionTrait,
+    sea_query::Expr, ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter,
+    SqliteTransactionMode, TransactionOptions, TransactionTrait,
 };
 use serde_json::{json, Value};
 
@@ -107,7 +108,15 @@ impl EffectService {
         validate_owner(lease_owner)?;
         validate_outcome(&outcome)?;
         let effect_id = database_uuid(effect_id);
-        let transaction = self.database().begin().await?;
+        // Reserve the writer before reading the effect. A deferred WAL
+        // read-to-write upgrade can fail immediately despite busy_timeout.
+        let transaction = self
+            .database()
+            .begin_with_options(TransactionOptions {
+                sqlite_transaction_mode: Some(SqliteTransactionMode::Immediate),
+                ..TransactionOptions::default()
+            })
+            .await?;
         let current = load(&transaction, &effect_id).await?;
 
         if let Some(settled) = already_settled(&current, &outcome)? {

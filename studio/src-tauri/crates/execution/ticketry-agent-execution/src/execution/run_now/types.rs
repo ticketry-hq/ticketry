@@ -6,17 +6,6 @@ pub enum RunNowCaller {
     Agent { authenticated_run_id: String },
 }
 
-impl RunNowCaller {
-    pub fn excluded_run_id(&self) -> Option<&str> {
-        match self {
-            Self::Human => None,
-            Self::Agent {
-                authenticated_run_id,
-            } => Some(authenticated_run_id),
-        }
-    }
-}
-
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RunNowRequest {
     pub id_or_key: String,

@@ -12,28 +12,40 @@ const TASK_TYPE: &str = "30000000000000000000000000000001";
 const MODULE_TYPE: &str = "30000000000000000000000000000003";
 const BACKLOG: &str = "40000000000000000000000000000001";
 const MODULE: &str = "20000000000000000000000000000001";
+const MODULE_PUBLIC: &str = "20000000-0000-0000-0000-000000000001";
 const TASK: &str = "60000000000000000000000000000001";
 const CHILD_TASK: &str = "60000000000000000000000000000002";
 
 const CHANGES_QUERY: &str = r#"query($taskId: String!) {
-  worktree_changes(task_id: $taskId) {
+    worktree_changes(task_id: $taskId) {
     task_id
     top_level_task_id
     is_shared
     base_commit
-    truncated
-    files {
-      path
-      previous_path
-      status
+      truncated
+      files {
+        path
+        previous_path
+        status
+        binary
+        insertions
+        deletions
+      }
+      insertions
+      deletions
     }
-  }
 }"#;
 
 const STATUS_AND_CHANGES_QUERY: &str = r#"query($taskId: String!) {
   worktree_status(task_id: $taskId) { dirty }
   worktree_changes(task_id: $taskId) {
     files { path previous_path status }
+  }
+}"#;
+
+const FILE_DIFF_QUERY: &str = r#"query($taskId: String!, $path: String!) {
+  worktree_file_diff(task_id: $taskId, path: $path) {
+    path status binary patch truncated
   }
 }"#;
 
@@ -159,7 +171,7 @@ impl Fixture {
             .graphql_execute(
                 serde_json::json!({
                     "query": MODULE_VERSION_CONTROL_QUERY,
-                    "variables": { "moduleId": MODULE },
+                    "variables": { "moduleId": MODULE_PUBLIC },
                 })
                 .to_string(),
             )
@@ -619,6 +631,7 @@ async fn module_list_is_read_only_current_and_ordered_from_the_checkout() {
     let response = fixture.module_version_control().await;
     assert_eq!(response["errors"], serde_json::Value::Null, "{response}");
     let view = &response["data"]["module_version_control"];
+    assert_eq!(view["module_id"], MODULE_PUBLIC);
     assert_eq!(view["checkout"]["available"], true);
     assert_eq!(view["checkout"]["clean"], true);
     assert_eq!(view["worktrees"][0]["kind"], "module");

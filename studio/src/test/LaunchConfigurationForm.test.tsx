@@ -37,6 +37,7 @@ const binding: ScopedWorkflowLaunchBinding = {
   required_skills: [],
   entry_skill: null,
   agent: "claude",
+  profile: null,
   model: "opus",
   reasoning: "high",
   auto_start: false,
@@ -73,6 +74,7 @@ describe("LaunchConfigurationForm", () => {
       prompt: "do the thing",
       entry_skill: null,
       agent: "gemini",
+      profile: null,
       model: null,
       reasoning: null,
     });
@@ -91,6 +93,7 @@ describe("LaunchConfigurationForm", () => {
       prompt: "do the thing",
       entry_skill: null,
       agent: "claude",
+      profile: null,
       model: "opus",
       reasoning: "low",
     });
@@ -132,6 +135,7 @@ describe("LaunchConfigurationForm", () => {
       prompt: "do the thing",
       entry_skill: null,
       agent: "claude",
+      profile: null,
       model: "opus",
       reasoning: "low",
     });
@@ -169,6 +173,7 @@ describe("LaunchConfigurationForm", () => {
       prompt: "implement the slice",
       entry_skill: null,
       agent: "claude",
+      profile: null,
       model: "opus",
       reasoning: "low",
     });

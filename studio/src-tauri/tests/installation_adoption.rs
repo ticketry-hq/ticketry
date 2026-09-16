@@ -41,23 +41,6 @@ async fn scalar(data_directory: &Path, query: &str) -> String {
     value
 }
 
-async fn django_migration_provenance(data_directory: &Path) -> String {
-    if scalar(
-        data_directory,
-        "SELECT CAST(COUNT(*) AS TEXT) FROM sqlite_master WHERE type='table' AND name='django_migrations'",
-    )
-    .await
-        == "0"
-    {
-        return "absent".to_owned();
-    }
-    scalar(
-        data_directory,
-        "SELECT group_concat(app || '.' || name, '|') FROM (SELECT app, name FROM django_migrations ORDER BY app, name)",
-    )
-    .await
-}
-
 /// Run the sequence production runs: adopt, hand the capabilities over, open.
 ///
 /// The Runs handoff sits between the two adoption calls because it is what
@@ -406,11 +389,11 @@ async fn an_empty_data_directory_is_provisioned_at_the_current_leaf() {
     assert_eq!(
         scalar(
             installation.path(),
-            "SELECT CAST(COUNT(*) AS TEXT) FROM worktracker_workspace"
+            "SELECT CAST(COUNT(*) AS TEXT) FROM sqlite_master WHERE type='table' AND name='worktracker_workspace'"
         )
         .await,
-        "1",
-        "a first launch provisions the one workspace the recorded leaf still requires"
+        "0",
+        "the final Rust schema has no legacy Workspace table"
     );
     assert_eq!(
         scalar(
@@ -424,7 +407,7 @@ async fn an_empty_data_directory_is_provisioned_at_the_current_leaf() {
     assert_eq!(
         scalar(
             installation.path(),
-            "SELECT CAST(onboarding_required AS TEXT) FROM worktracker_workspace"
+            "SELECT CAST(onboarding_required AS TEXT) FROM worktracker_project"
         )
         .await,
         "1",
@@ -479,7 +462,12 @@ async fn a_first_launch_exposes_the_shipping_provider_catalog() {
             "haiku",
             "opus",
             "sonnet",
+            "gpt-5.3-codex-spark",
             "gpt-5.4",
+            "gpt-5.6-luna",
+            "gpt-5.6-sol",
+            "gpt-5.6-terra",
+            "gpt-6-astra",
             "gemini-3.1-pro-preview",
         ]
     );
@@ -489,22 +477,40 @@ async fn a_first_launch_exposes_the_shipping_provider_catalog() {
             .iter()
             .map(|level| level.name.as_str())
             .collect::<Vec<_>>(),
-        ["high", "low", "max", "medium", "minimal", "xhigh"]
+        ["high", "low", "max", "medium", "minimal", "ultra", "xhigh"]
     );
 }
 
 #[tokio::test]
 async fn a_provisioned_installation_reproduces_the_adopted_schema() {
+    use sea_orm::Database;
+
     let provisioned = tempfile::tempdir().expect("create an empty data directory");
     adopt_and_open(provisioned.path()).await;
     let adopted = corpus::install("django-current");
     adopt_and_open(adopted.path()).await;
+    let database = Database::connect(format!(
+        "sqlite:{}?mode=rw",
+        adopted.path().join("state.db").display()
+    ))
+    .await
+    .expect("open the adopted installation");
+    adoption::install_final_schema_migrations(&database)
+        .await
+        .expect("bring the adopted installation to the shipping leaf");
+    database
+        .close()
+        .await
+        .expect("close the adopted installation");
 
-    // Both paths must arrive at one schema, or every later migration would
-    // have two starting points to be correct against.
+    let schema = "SELECT group_concat(name || ':' || sql, '|') FROM (
+        SELECT name, sql FROM sqlite_master
+        WHERE type='table' AND name NOT LIKE 'sqlite_%'
+        ORDER BY name
+    )";
     assert_eq!(
-        ledger(provisioned.path()).await.source_fingerprint,
-        ledger(adopted.path()).await.source_fingerprint,
+        scalar(provisioned.path(), schema).await,
+        scalar(adopted.path(), schema).await,
         "a provisioned installation and an adopted one must be the same shape"
     );
 }
@@ -513,9 +519,9 @@ async fn a_provisioned_installation_reproduces_the_adopted_schema() {
 async fn reopening_a_provisioned_installation_is_idempotent() {
     let installation = tempfile::tempdir().expect("create an empty data directory");
     adopt_and_open(installation.path()).await;
-    let workspace = scalar(
+    let project = scalar(
         installation.path(),
-        "SELECT group_concat(quote(id) || quote(slug), '|') FROM worktracker_workspace",
+        "SELECT group_concat(quote(id) || quote(slug), '|') FROM worktracker_project",
     )
     .await;
 
@@ -523,13 +529,13 @@ async fn reopening_a_provisioned_installation_is_idempotent() {
 
     assert_eq!(reopened.path, AdoptionPath::Reopened);
     assert_eq!(
-        workspace,
+        project,
         scalar(
             installation.path(),
-            "SELECT group_concat(quote(id) || quote(slug), '|') FROM worktracker_workspace"
+            "SELECT group_concat(quote(id) || quote(slug), '|') FROM worktracker_project"
         )
         .await,
-        "a second launch must not provision a second workspace"
+        "a second launch must not provision a second project"
     );
     assert_eq!(
         scalar(
@@ -609,63 +615,31 @@ async fn a_semantically_defective_installation_is_refused_with_its_defects() {
 }
 
 #[tokio::test]
-async fn a_rust_owned_orphaned_document_is_repaired_from_a_verified_snapshot() {
+async fn a_plain_reopen_skips_the_optional_whole_store_verification() {
     let installation = tempfile::tempdir().expect("create an installation");
     adopt_and_open(installation.path()).await;
     insert_orphaned_document_metadata(installation.path()).await;
 
-    let repaired = adoption::adopt(installation.path())
+    let reopened = adoption::adopt(installation.path())
         .await
-        .expect("the registered semantic bridge must repair the installation");
+        .expect("a plain reopen must use the fast path");
 
-    assert_eq!(repaired.path, AdoptionPath::Reopened);
-    assert_eq!(
-        repaired.bridges,
-        vec!["remove-orphaned-design-document-metadata.v1"]
-    );
-    let snapshot = repaired
-        .snapshot
-        .clone()
-        .expect("the repair must have a recovery snapshot");
-    assert!(snapshot.verified);
+    assert_eq!(reopened.path, AdoptionPath::Reopened);
+    assert!(reopened.bridges.is_empty());
+    assert!(reopened.snapshot.is_none());
     assert_eq!(
         scalar(
             installation.path(),
             "SELECT CAST(COUNT(*) AS TEXT) FROM design_documents",
         )
         .await,
-        "0"
-    );
-    let recovery_directory = tempfile::tempdir().expect("create recovery inspection directory");
-    let recovery_database = recovery_directory.path().join("state.db");
-    std::fs::copy(installation.path().join(&snapshot.file), &recovery_database)
-        .expect("copy the recovery point for inspection");
-    assert_eq!(
-        scalar(
-            recovery_directory.path(),
-            "SELECT CAST(COUNT(*) AS TEXT) FROM design_documents",
-        )
-        .await,
         "1",
-        "the recovery point must retain the removed metadata"
+        "plain startup leaves support-only verification work untouched"
     );
-    let ready = adoption::open_readiness(installation.path(), repaired)
-        .await
-        .expect("the repaired installation must open readiness");
-    assert_eq!(ready.readiness, Readiness::Open);
-    let recorded = ledger(installation.path()).await;
-    assert_eq!(recorded.bridges, ready.bridges);
-    assert_eq!(recorded.snapshot_file, Some(snapshot.file));
-
-    let reopened = adoption::adopt(installation.path())
-        .await
-        .expect("a repaired installation must reopen without another bridge");
-    assert!(reopened.snapshot.is_none());
-    assert_eq!(reopened.bridges, ready.bridges);
 }
 
 #[tokio::test]
-async fn a_semantic_bridge_fault_rolls_back_the_repair_and_ledger() {
+async fn a_fast_reopen_still_honors_the_preflight_fault_boundary() {
     let installation = tempfile::tempdir().expect("create an installation");
     adopt_and_open(installation.path()).await;
     insert_orphaned_document_metadata(installation.path()).await;
@@ -673,10 +647,10 @@ async fn a_semantic_bridge_fault_rolls_back_the_repair_and_ledger() {
 
     let failure = adoption::adopt_with(
         installation.path(),
-        &AdoptionPlan::failing_after(Phase::BridgeWork),
+        &AdoptionPlan::failing_after(Phase::Preflight),
     )
     .await
-    .expect_err("the bridge fault must stop adoption");
+    .expect_err("the preflight fault must stop the fast reopen");
 
     assert_eq!(failure.refusal(), Refusal::InjectedFault);
     assert_eq!(
@@ -690,92 +664,45 @@ async fn a_semantic_bridge_fault_rolls_back_the_repair_and_ledger() {
     assert_eq!(ledger(installation.path()).await, before);
 }
 
-#[tokio::test]
-async fn every_historical_generation_bridges_to_one_canonical_leaf_and_reopens_twice() {
-    use sea_orm::Database;
-    let canonical = corpus::install("django-current");
+async fn alembic_fixture() -> (tempfile::TempDir, sea_orm::DatabaseConnection) {
+    use sea_orm::{ConnectionTrait, Database};
+
+    let directory = tempfile::tempdir().expect("create an Alembic fixture");
     let database = Database::connect(format!(
-        "sqlite:{}?mode=ro",
-        canonical.path().join("state.db").display()
+        "sqlite:{}?mode=rwc",
+        directory.path().join("state.db").display()
     ))
     .await
-    .expect("open the canonical fixture");
-    let canonical_inventory = adoption::read_inventory(&database)
+    .expect("open the Alembic fixture");
+    database
+        .execute_unprepared(
+            "CREATE TABLE agent_runs (id TEXT PRIMARY KEY); \
+             CREATE TABLE agent_terminal_sessions (agent_run_id TEXT PRIMARY KEY); \
+             CREATE TABLE app_settings (scope TEXT, \"key\" TEXT, value TEXT, updated_at TEXT); \
+             CREATE TABLE design_documents (id TEXT PRIMARY KEY);",
+        )
         .await
-        .expect("inventory the canonical fixture");
-    database.close().await.expect("close the canonical fixture");
+        .expect("create the four pre-Django product tables");
+    (directory, database)
+}
 
-    for generation in classification::manifest()
-        .generations
-        .iter()
-        .filter(|generation| generation.expected == "bridge")
-    {
-        let installation = corpus::install(&generation.name);
-        let migration_rows = django_migration_provenance(installation.path()).await;
-
-        let bridged = adoption::adopt(installation.path())
-            .await
-            .unwrap_or_else(|error| panic!("{} must bridge: {error}", generation.name));
-        assert_eq!(bridged.path, AdoptionPath::Bridged, "{}", generation.name);
-        assert_eq!(
-            bridged.counts, canonical_inventory.counts,
-            "{}",
-            generation.name
-        );
-        assert_eq!(bridged.bridges.len(), 1, "{}", generation.name);
-        let committed = ledger(installation.path()).await;
-        assert_eq!(committed.bridges, bridged.bridges, "{}", generation.name);
-        assert_eq!(
-            committed.preserved_digest, bridged.preserved_digest,
-            "{}",
-            generation.name
-        );
-        assert_eq!(
-            migration_rows,
-            django_migration_provenance(installation.path()).await,
-            "{} changed Django provenance",
-            generation.name
-        );
-
-        for cycle in 1..=2 {
-            let reopened = adoption::adopt(installation.path())
-                .await
-                .unwrap_or_else(|error| {
-                    panic!("{} reopen {cycle} failed: {error}", generation.name)
-                });
-            assert_eq!(reopened.path, AdoptionPath::Reopened);
-            assert_eq!(reopened.bridges, bridged.bridges);
-            assert_eq!(reopened.preserved_digest, bridged.preserved_digest);
-        }
-    }
+fn alembic_bridge() -> &'static adoption::Bridge {
+    let generation = classification::manifest()
+        .generation("alembic-0006_design_documents")
+        .expect("the Alembic generation stays recorded");
+    adoption::select_bridge(&generation.name, &generation.fingerprint)
+        .expect("the Alembic bridge stays recorded")
 }
 
 #[tokio::test]
 async fn an_alembic_source_with_rows_fails_its_recorded_precondition() {
-    use sea_orm::{Database, TransactionTrait};
-    let installation = corpus::install("alembic-0006_design_documents");
-    corpus::execute(
-        installation.path(),
+    use sea_orm::{ConnectionTrait, TransactionTrait};
+    let (_directory, database) = alembic_fixture().await;
+    database.execute_unprepared(
         "INSERT INTO app_settings (scope, \"key\", value, updated_at) VALUES ('global', 'theme', 'dark', '2026-08-23')",
-    )
-    .await;
-
-    let classified = classification::classify(installation.path())
-        .await
-        .expect("the Alembic source must classify");
-    let Installation::SqliteHistorical(generation) = classified else {
-        panic!("the source must be historical")
-    };
-    let selected = adoption::select_bridge(&generation.name, &generation.fingerprint)
-        .expect("the source must have a bridge");
-    let database = Database::connect(format!(
-        "sqlite:{}?mode=rw",
-        installation.path().join("state.db").display()
-    ))
-    .await
-    .expect("open the source");
+    ).await.expect("seed one pre-Django row");
     let transaction = database.begin().await.expect("begin the bridge boundary");
-    let failure = adoption::apply_bridge(&transaction, &[selected])
+    let failure = adoption::apply_bridge(&transaction, &[alembic_bridge()])
         .await
         .expect_err("the empty-only Alembic correction must refuse rows");
     assert_eq!(failure.phase(), Phase::BridgeWork);
@@ -786,29 +713,22 @@ async fn an_alembic_source_with_rows_fails_its_recorded_precondition() {
 
 #[tokio::test]
 async fn a_historical_bridge_crash_before_commit_leaves_the_source_reusable() {
-    let installation = corpus::install("django-current-shipping");
-
-    let failure = adoption::adopt_with(
-        installation.path(),
-        &AdoptionPlan::failing_after(Phase::BridgeWork),
-    )
-    .await
-    .expect_err("the fault must roll the bridge back");
-
-    assert_eq!(failure.refusal(), Refusal::InjectedFault);
-    assert!(matches!(
-        classification::classify(installation.path())
-            .await
-            .expect("the rolled-back source must classify"),
-        Installation::SqliteHistorical(_)
-    ));
-    assert_eq!(
-        adoption::adopt(installation.path())
-            .await
-            .expect("retry must bridge")
-            .path,
-        AdoptionPath::Bridged
-    );
+    use sea_orm::{ConnectionTrait, DbBackend, Statement, TransactionTrait};
+    let (_directory, database) = alembic_fixture().await;
+    let transaction = database.begin().await.expect("begin the bridge boundary");
+    adoption::apply_bridge(&transaction, &[alembic_bridge()])
+        .await
+        .expect("apply the historical bridge");
+    transaction
+        .rollback()
+        .await
+        .expect("simulate a crash before commit");
+    let tables = database.query_one_raw(Statement::from_string(
+        DbBackend::Sqlite,
+        "SELECT COUNT(*) AS count FROM sqlite_master WHERE type='table' AND name IN ('agent_runs','agent_terminal_sessions','app_settings','design_documents')".to_owned(),
+    )).await.expect("inspect rolled-back source").expect("the count returned").try_get::<i64>("", "count").expect("read the count");
+    assert_eq!(tables, 4);
+    database.close().await.expect("close the source");
 }
 
 #[tokio::test]

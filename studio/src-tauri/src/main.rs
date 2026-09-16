@@ -3,6 +3,14 @@ use ticketry_terminal::{TemporarySqliteProfile, TEMP_SQLITE_FLAG};
 
 fn main() {
     let arguments: Vec<_> = std::env::args_os().skip(1).collect();
+    if arguments
+        .iter()
+        .any(|argument| argument == ticketry_installation::VERIFY_STORE_FLAG)
+    {
+        // The installation crate reads the policy from the environment so the
+        // flag reaches it without threading through every startup layer.
+        std::env::set_var(ticketry_installation::VERIFY_STORE_ENV, "1");
+    }
     let temporary_profile = if arguments
         .iter()
         .any(|argument| argument == TEMP_SQLITE_FLAG)

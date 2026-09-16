@@ -8,6 +8,8 @@ mod error;
 #[cfg(test)]
 mod golden_tests;
 mod materialize;
+#[cfg(test)]
+mod mcp_golden_tests;
 mod prompt;
 mod provider;
 mod types;

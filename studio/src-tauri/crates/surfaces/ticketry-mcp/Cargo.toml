@@ -5,23 +5,19 @@ edition = "2021"
 publish = false
 
 [features]
-# Fixture MCP authorizer and HTTP helpers the root package's `mcp_acceptance`
-# integration binary needs; never enabled in a shipped build.
-test-support = ["dep:reqwest", "ticketry-runs/test-support"]
+# Socket client fixture the root package's `mcp_acceptance` integration
+# binary needs; never enabled in a shipped build.
+test-support = ["ticketry-runs/test-support", "ticketry-work-management/test-support"]
 
 [dependencies]
-axum.workspace = true
 chrono.workspace = true
-http.workspace = true
-reqwest = { workspace = true, optional = true }
 rmcp.workspace = true
 sea-orm.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 ticketry-agent-execution.workspace = true
-ticketry-diagnostics.workspace = true
+ticketry-data-directory.workspace = true
 ticketry-entities.workspace = true
-ticketry-launch.workspace = true
 ticketry-runs.workspace = true
 ticketry-settings.workspace = true
 ticketry-terminal.workspace = true
@@ -31,6 +27,5 @@ tokio-util.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
-reqwest.workspace = true
 tempfile.workspace = true
 ticketry-runs = { workspace = true, features = ["test-support"] }

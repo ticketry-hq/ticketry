@@ -24,6 +24,7 @@ pub(super) const PROVIDER_CATALOG_KEY: &str = "provider_catalog";
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, CustomOutputType)]
 pub struct GlobalLaunchDefault {
     pub provider: String,
+    pub profile: Option<String>,
     pub model: Option<String>,
     pub reasoning: Option<String>,
 }
@@ -53,7 +54,7 @@ pub fn parse_global_launch_default(value: &str) -> Option<GlobalLaunchDefault> {
     let object = raw.as_object()?;
     if object
         .keys()
-        .any(|key| !matches!(key.as_str(), "provider" | "model" | "reasoning"))
+        .any(|key| !matches!(key.as_str(), "provider" | "profile" | "model" | "reasoning"))
     {
         return None;
     }
@@ -71,6 +72,7 @@ pub fn parse_global_launch_default(value: &str) -> Option<GlobalLaunchDefault> {
     };
     Some(GlobalLaunchDefault {
         provider,
+        profile: optional("profile")?,
         model: optional("model")?,
         reasoning: optional("reasoning")?,
     })
@@ -115,6 +117,7 @@ mod tests {
             ),
             Some(GlobalLaunchDefault {
                 provider: "codex".to_owned(),
+                profile: None,
                 model: Some("gpt-5.4".to_owned()),
                 reasoning: None,
             })

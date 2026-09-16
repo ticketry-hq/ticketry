@@ -1,7 +1,7 @@
 use sea_orm::{
     sea_query::OnConflict, ActiveModelTrait, ActiveValue::NotSet, ActiveValue::Set, ColumnTrait,
-    ConnectionTrait, DatabaseConnection, DatabaseTransaction, DbErr, EntityTrait, PaginatorTrait,
-    QueryFilter, QueryOrder, QuerySelect,
+    ConnectionTrait, DatabaseConnection, DatabaseTransaction, DbErr, EntityTrait, QueryFilter,
+    QueryOrder, QuerySelect,
 };
 use serde_json::Value;
 
@@ -234,15 +234,6 @@ impl StatusEventRepository {
             .exec(&self.database)
             .await?;
         Ok(deleted.rows_affected)
-    }
-
-    /// How many rows one project still retains. Used by compaction evidence and
-    /// by the bounded-memory tests.
-    pub async fn count_for_project(&self, project_id: &str) -> Result<u64, RunsPersistenceError> {
-        Ok(status_event_entity::Entity::find()
-            .filter(status_event_entity::Column::ProjectId.eq(project_id))
-            .count(&self.database)
-            .await?)
     }
 }
 

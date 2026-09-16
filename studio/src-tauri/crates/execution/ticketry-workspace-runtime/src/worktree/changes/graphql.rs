@@ -6,10 +6,10 @@ use seaography::{
 };
 
 use super::{
-    ChangedFile, CurrentWorktreeView, ModuleCheckoutChangesView, ModuleVersionControlView,
-    PullRequestCreationResult, PullRequestStatusView, RepositoryCommandResult,
-    WorkItemClosureFailureView, WorktreeChangesError, WorktreeChangesService, WorktreeChangesView,
-    WorktreeCleanupStatusView,
+    ChangedFile, CurrentWorktreeView, FileDiffView, ModuleCheckoutChangesView,
+    ModuleVersionControlView, PullRequestCreationResult, PullRequestStatusView,
+    RepositoryCommandResult, WorkItemClosureFailureView, WorktreeChangesError,
+    WorktreeChangesService, WorktreeChangesView, WorktreeCleanupStatusView,
 };
 
 pub struct WorktreeChangesQueries;
@@ -35,6 +35,28 @@ impl WorktreeChangesQueries {
             .await
             .map_err(changes_error)
     }
+
+    async fn worktree_file_diff(
+        ctx: &Context<'_>,
+        task_id: String,
+        path: String,
+    ) -> Result<FileDiffView> {
+        service(ctx)?
+            .file_diff(&task_id, &path)
+            .await
+            .map_err(changes_error)
+    }
+
+    async fn module_file_diff(
+        ctx: &Context<'_>,
+        module_id: String,
+        path: String,
+    ) -> Result<FileDiffView> {
+        service(ctx)?
+            .module_file_diff(&module_id, &path)
+            .await
+            .map_err(changes_error)
+    }
 }
 
 pub(super) fn register(mut builder: seaography::Builder) -> seaography::Builder {
@@ -46,6 +68,7 @@ pub(super) fn register(mut builder: seaography::Builder) -> seaography::Builder 
     builder.register_custom_output::<ModuleCheckoutChangesView>();
     builder.register_custom_output::<CurrentWorktreeView>();
     builder.register_custom_output::<ModuleVersionControlView>();
+    builder.register_custom_output::<FileDiffView>();
     builder.register_custom_output::<RepositoryCommandResult>();
     builder.register_custom_output::<PullRequestCreationResult>();
     builder.register_custom_query::<WorktreeChangesQueries>();

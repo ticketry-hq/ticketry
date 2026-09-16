@@ -52,39 +52,6 @@ pub fn preflight_report() -> PreflightReport {
     }
 }
 
-/// Environment entries for the packaged backend. The values are created only
-/// from the discovery service's validated results, never from webview input.
-pub fn resolved_tool_environment() -> Result<Vec<(String, String)>, String> {
-    let service = DiscoveryService::from_environment()?;
-    Ok(resolved_tool_environment_from_service(&service))
-}
-
-fn resolved_tool_environment_from_service(service: &DiscoveryService) -> Vec<(String, String)> {
-    let mut resolved = Vec::new();
-    let mut directories = Vec::new();
-    for tool in SUPPORTED_TOOLS {
-        let diagnostic = service.discover(tool);
-        if diagnostic.health != ToolHealth::Ready {
-            continue;
-        }
-        let path = diagnostic.path.expect("ready diagnostics have a path");
-        if let Some(parent) = Path::new(&path).parent() {
-            directories.push(parent.to_path_buf());
-        }
-        resolved.push((tool.environment_name().to_owned(), path));
-    }
-    directories.sort();
-    directories.dedup();
-    // libtmux internally uses `which("tmux")`; this deliberately bounded PATH
-    // lets that dependency find only the same Rust-approved binary. Agent
-    // commands are replaced with their absolute approved paths below.
-    let mut probe_path = directories;
-    probe_path.extend([PathBuf::from("/usr/bin"), PathBuf::from("/bin")]);
-    let path = env::join_paths(probe_path).unwrap_or_default();
-    resolved.push(("PATH".to_owned(), path.to_string_lossy().into_owned()));
-    resolved
-}
-
 struct DiscoveryService {
     roots: Vec<PathBuf>,
     approved: ApprovedToolPaths,

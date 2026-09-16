@@ -241,15 +241,7 @@ async fn request_sweep(
 
     loop {
         state.requested.store(false, Ordering::Release);
-        let pass = async {
-            work.drain_spool().await?;
-            work.reconcile().await?;
-            work.expire_stale_viewer_leases().await?;
-            Ok::<(), String>(())
-        };
-        if let Ok(Err(error)) = timeout(deadline, pass).await {
-            eprintln!("Ticketry terminal sweep failed: {error}");
-        }
+        let _ = super::sweep::run(work.as_ref(), deadline).await;
         if !state.requested.swap(false, Ordering::AcqRel) {
             state.running.store(false, Ordering::Release);
             if !state.requested.load(Ordering::Acquire) {
@@ -300,7 +292,6 @@ mod tests {
                 launches: TerminalLaunchRecoveryReport::default(),
                 cleanups: TerminalCleanupRecoveryReport::default(),
                 sessions: Vec::new(),
-                sessions_saturated: false,
                 unrecorded: Vec::new(),
                 conflicts: Vec::new(),
                 inventory_unavailable: false,
@@ -533,6 +524,17 @@ mod tests {
             .await
             .expect("shutdown terminal lifecycle");
         assert_eq!(work.all_lease_expiries.load(Ordering::SeqCst), 2);
+    }
+
+    #[tokio::test]
+    async fn sweep_timeout_identifies_the_blocked_stage() {
+        let work = FakeWork::default();
+        work.drain_delay_ms.store(100, Ordering::SeqCst);
+        let error = super::super::sweep::run(&work, Duration::from_millis(5))
+            .await
+            .expect_err("a stalled hook drain must be diagnosed");
+        assert!(error.contains("provider-hook-drain exceeded"));
+        assert_eq!(work.reconciliations.load(Ordering::SeqCst), 0);
     }
 
     #[tokio::test]

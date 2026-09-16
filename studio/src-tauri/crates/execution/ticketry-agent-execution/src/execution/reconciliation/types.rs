@@ -17,9 +17,12 @@ pub struct ExecutionReconciliationReport {
 
 impl ExecutionReconciliationReport {
     pub fn needs_terminal_reconciliation(&self) -> bool {
-        self.roots
-            .iter()
-            .any(|root| root.terminal_reconciliation_requested)
+        self.automation_decisions > 0
+            || !self.automation_failures.is_empty()
+            || self
+                .roots
+                .iter()
+                .any(|root| root.terminal_reconciliation_requested)
     }
 
     pub fn merge(&mut self, mut other: Self) {
@@ -29,5 +32,29 @@ impl ExecutionReconciliationReport {
         self.diagnostics.append(&mut other.diagnostics);
         self.roots.append(&mut other.roots);
         self.next_root_id = other.next_root_id;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn idle_automation_does_not_request_another_terminal_sweep() {
+        assert!(!ExecutionReconciliationReport::default().needs_terminal_reconciliation());
+    }
+
+    #[test]
+    fn dispatched_or_failed_automation_requires_terminal_observation() {
+        let dispatched = ExecutionReconciliationReport {
+            automation_decisions: 1,
+            ..Default::default()
+        };
+        assert!(dispatched.needs_terminal_reconciliation());
+        let failed = ExecutionReconciliationReport {
+            automation_failures: vec!["dispatch may have partially completed".into()],
+            ..Default::default()
+        };
+        assert!(failed.needs_terminal_reconciliation());
     }
 }

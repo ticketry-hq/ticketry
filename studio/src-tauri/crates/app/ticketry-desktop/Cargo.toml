@@ -9,10 +9,12 @@ default = []
 # The wdio webdriver plugin the Playwright acceptance build drives. Forwarded
 # from the root package so `studio/e2e` keeps building the same shell.
 desktop-acceptance = ["dep:tauri-plugin-wdio-webdriver"]
-# The macOS libghostty viewer. The `cc` glue and link directives stay in the
-# root package's `build.rs`, which owns `tauri.conf.json`; this feature only
-# gates the Rust side.
+# The macOS libghostty viewer. This crate owns both the Rust calls and their
+# native bridge; the root package only stages Tauri resources.
 native-libghostty = []
+
+[build-dependencies]
+cc = "1"
 
 [dependencies]
 axum.workspace = true
@@ -52,3 +54,4 @@ uuid.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
+ticketry-mcp = { workspace = true, features = ["test-support"] }

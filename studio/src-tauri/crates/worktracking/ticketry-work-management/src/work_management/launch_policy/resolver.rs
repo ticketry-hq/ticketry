@@ -116,6 +116,7 @@ impl LaunchPolicyResolver {
             required_skills,
             entry_skill: binding.entry_skill,
             provider: selection.provider,
+            profile: selection.profile,
             model: selection.model,
             reasoning: selection.reasoning,
             module_link,

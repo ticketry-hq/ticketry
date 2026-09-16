@@ -6,6 +6,8 @@ use serde::Serialize;
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, CustomOutputType)]
 pub struct RepositoryCommandResult {
     pub operation_id: String,
+    pub subject: String,
+    pub message_source: String,
     pub head_commit: String,
     pub dirty: bool,
     pub unpushed_count: i32,

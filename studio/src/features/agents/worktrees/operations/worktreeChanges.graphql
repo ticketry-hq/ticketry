@@ -39,6 +39,11 @@ query WorktreeChanges($taskId: String!) {
       path
       previous_path
       status
+      binary
+      insertions
+      deletions
     }
+    insertions
+    deletions
   }
 }

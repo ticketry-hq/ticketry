@@ -7,13 +7,9 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 const SESSION_MARKER_FILE: &str = "session-marker.json";
-const CRASH_REPORTS_DIRECTORY: &str = "crash-reports";
-const SIDECAR_FILE: &str = "crash-report.json";
-const NATIVE_REPORT_NOT_FOUND: &str = "no native report found";
-/// libghostty's Breakpad backend exits the process itself, so this reason is
-/// the only signal that a dirty shutdown was a native crash rather than a
-/// silent exit. See `native_minidump_report`.
-const LIBGHOSTTY_CRASH_REASON: &str = "libghostty native crash";
+pub(crate) const CRASH_REPORTS_DIRECTORY: &str = "crash-reports";
+pub(crate) const SIDECAR_FILE: &str = "crash-report.json";
+pub(crate) const NATIVE_REPORT_NOT_FOUND: &str = "no native report found";
 const EVENT_LOG_LINE_LIMIT: usize = 200;
 const REPORT_RETENTION_LIMIT: usize = 10;
 
@@ -31,23 +27,21 @@ struct SessionMarker {
     event_log_path: Option<PathBuf>,
 }
 
-#[derive(Debug, Serialize)]
-struct CrashReportSidecar {
+#[derive(Debug, Deserialize, Serialize)]
+pub(crate) struct CrashReportSidecar {
     app_version: String,
     commit: String,
     os: String,
     architecture: String,
-    session_started_at: DateTime<Utc>,
-    session_ended_at: DateTime<Utc>,
+    pub(crate) session_started_at: DateTime<Utc>,
+    pub(crate) session_ended_at: DateTime<Utc>,
     #[serde(skip_serializing_if = "Option::is_none")]
     dirty_exit_reason: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     panic_message: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     rust_backtrace: Option<String>,
-    native_report: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    libghostty_report: Option<String>,
+    pub(crate) native_report: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     event_log_tail: Option<Vec<String>>,
 }
@@ -57,17 +51,13 @@ struct CrashReportSidecar {
 pub fn collect_dirty_shutdown(
     data_directory: &Path,
     diagnostic_reports_directory: &Path,
-    sentry_database_directory: &Path,
     event_log_path: Option<&Path>,
+    app_version: &str,
+    commit: &str,
     clock: impl FnOnce() -> DateTime<Utc>,
 ) -> Option<PathBuf> {
     let now = clock();
-    let report = match collect_stale_session(
-        data_directory,
-        diagnostic_reports_directory,
-        sentry_database_directory,
-        now,
-    ) {
+    let report = match collect_stale_session(data_directory, diagnostic_reports_directory, now) {
         Ok(report) => report,
         Err(error) => {
             eprintln!("Ticketry could not collect a Crash Report: {error}");
@@ -75,9 +65,12 @@ pub fn collect_dirty_shutdown(
         }
     };
     super::panic_attribution::clear(data_directory);
-    if let Err(error) = write_session_marker(data_directory, event_log_path, now) {
+    if let Err(error) =
+        write_session_marker(data_directory, event_log_path, app_version, commit, now)
+    {
         eprintln!("Ticketry could not write its Session Marker: {error}");
     }
+    super::native_report_retry::schedule(data_directory, diagnostic_reports_directory);
     report
 }
 
@@ -100,7 +93,6 @@ pub fn system_diagnostic_reports_directory() -> PathBuf {
 fn collect_stale_session(
     data_directory: &Path,
     diagnostic_reports_directory: &Path,
-    sentry_database_directory: &Path,
     now: DateTime<Utc>,
 ) -> Result<Option<PathBuf>, String> {
     let marker_path = marker_path(data_directory);
@@ -139,27 +131,10 @@ fn collect_stale_session(
             NATIVE_REPORT_NOT_FOUND.to_owned()
         }
     };
-    let libghostty_report = match super::native_minidump_report::copy_matching_report(
-        sentry_database_directory,
-        &report_directory,
-        marker.session_started_at,
-        now,
-    ) {
-        Ok(collected) => collected,
-        Err(error) => {
-            eprintln!("Ticketry could not attach libghostty's Crash Report: {error}");
-            None
-        }
-    };
     let dirty_exit_reason = panic_attribution
         .as_ref()
         .map(|_| "panic".to_owned())
-        .or(marker.dirty_exit_reason)
-        .or_else(|| {
-            libghostty_report
-                .as_ref()
-                .map(|_| LIBGHOSTTY_CRASH_REASON.to_owned())
-        });
+        .or(marker.dirty_exit_reason);
     let sidecar = CrashReportSidecar {
         app_version: marker.app_version,
         commit: marker.commit,
@@ -173,15 +148,11 @@ fn collect_stale_session(
             .map(|attribution| attribution.panic_message.clone()),
         rust_backtrace: panic_attribution.map(|attribution| attribution.rust_backtrace),
         native_report,
-        libghostty_report,
         event_log_tail,
     };
     if let Err(error) = write_private_json(&report_directory.join(SIDECAR_FILE), &sidecar) {
         if sidecar.native_report != NATIVE_REPORT_NOT_FOUND {
             let _ = fs::remove_file(report_directory.join(&sidecar.native_report));
-        }
-        if let Some(collected) = sidecar.libghostty_report.as_deref() {
-            let _ = fs::remove_file(report_directory.join(collected));
         }
         let _ = fs::remove_dir(&report_directory);
         return Err(error);
@@ -195,6 +166,8 @@ fn collect_stale_session(
 fn write_session_marker(
     data_directory: &Path,
     event_log_path: Option<&Path>,
+    app_version: &str,
+    commit: &str,
     now: DateTime<Utc>,
 ) -> Result<(), String> {
     fs::create_dir_all(data_directory).map_err(|error| {
@@ -204,10 +177,8 @@ fn write_session_marker(
         )
     })?;
     let marker = SessionMarker {
-        app_version: env!("CARGO_PKG_VERSION").to_owned(),
-        commit: option_env!("TICKETRY_COMMIT")
-            .unwrap_or("unknown")
-            .to_owned(),
+        app_version: app_version.to_owned(),
+        commit: commit.to_owned(),
         os: std::env::consts::OS.to_owned(),
         architecture: std::env::consts::ARCH.to_owned(),
         session_started_at: now,
@@ -263,7 +234,7 @@ fn prune_old_reports(reports_directory: &Path) -> Result<(), String> {
     Ok(())
 }
 
-fn write_private_json<T: Serialize>(path: &Path, value: &T) -> Result<(), String> {
+pub(crate) fn write_private_json<T: Serialize>(path: &Path, value: &T) -> Result<(), String> {
     let mut options = OpenOptions::new();
     options.create(true).truncate(true).write(true);
     #[cfg(unix)]
@@ -305,3 +276,11 @@ fn set_private_file_permissions(path: &Path) -> Result<(), String> {
 #[cfg(test)]
 #[path = "crash_report_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "native_report_collection_tests.rs"]
+mod native_report_collection_tests;
+
+#[cfg(all(test, unix))]
+#[path = "native_report_retry_tests.rs"]
+mod native_report_retry_tests;

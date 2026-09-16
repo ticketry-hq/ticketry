@@ -23,8 +23,8 @@ pub use checkpoint::{CleanupCheckpoint, CleanupCheckpoints};
 pub use effect::{CleanupCause, CleanupEffectIdentity};
 pub use error::{TerminalCleanupError, TerminalCleanupErrorCode};
 pub use runtime::{
-    CleanupKillResult, CleanupRuntimeObservation, RuntimeInventory, TerminalCleanupRuntime,
-    TmuxCleanupRuntime,
+    CleanupKillResult, CleanupRuntimeObservation, RuntimeInventory, RuntimeSnapshot,
+    TerminalCleanupRuntime, TmuxCleanupRuntime,
 };
 pub use service::{
     AuthenticatedAgentRun, TerminalCleanupRecoveryReport, TerminalCleanupService, TerminationPatch,

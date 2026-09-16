@@ -4,6 +4,7 @@ use sea_orm::{
 };
 
 use crate::work_management::commands::CommandError;
+use crate::commands::workflow::TransitionOrigin;
 use ticketry_entities::transition_occurrence;
 
 pub async fn ensure_schema(database: &impl ConnectionTrait) -> Result<(), sea_orm::DbErr> {
@@ -77,6 +78,12 @@ pub async fn ensure_schema(database: &impl ConnectionTrait) -> Result<(), sea_or
                 .not_null()
                 .default(false),
         )
+        .col(
+            ColumnDef::new(transition_occurrence::Column::Origin)
+                .string()
+                .not_null()
+                .default("human"),
+        )
         .col(ColumnDef::new(transition_occurrence::Column::RunNowDecisionId).string())
         .col(
             ColumnDef::new(transition_occurrence::Column::CommittedAt)
@@ -114,6 +121,17 @@ pub async fn ensure_schema(database: &impl ConnectionTrait) -> Result<(), sea_or
             )
             .await?;
     }
+    let has_origin = columns.iter().any(|row| {
+        row.try_get::<String>("", "name")
+            .is_ok_and(|name| name == "origin")
+    });
+    if !has_origin {
+        database
+            .execute_unprepared(
+                "ALTER TABLE worktracker_transitionoccurrence ADD COLUMN origin varchar NOT NULL DEFAULT 'human'",
+            )
+            .await?;
+    }
     let index = Index::create()
         .name("idx_transition_occurrence_pending")
         .table(transition_occurrence::Entity)
@@ -146,6 +164,7 @@ pub struct NewTransitionOccurrence<'a> {
     pub workflow_revision: i32,
     pub destination_auto_start: bool,
     pub handoff: bool,
+    pub origin: TransitionOrigin,
     pub run_now_decision_id: Option<&'a str>,
 }
 
@@ -168,6 +187,10 @@ pub async fn append(
         workflow_revision: Set(occurrence.workflow_revision),
         destination_auto_start: Set(occurrence.destination_auto_start),
         handoff: Set(occurrence.handoff),
+        origin: Set(match occurrence.origin {
+            TransitionOrigin::Human => "human".to_owned(),
+            TransitionOrigin::Agent => "agent".to_owned(),
+        }),
         run_now_decision_id: Set(occurrence.run_now_decision_id.map(str::to_owned)),
         committed_at: NotSet,
     }
@@ -198,6 +221,7 @@ mod tests {
             work_item_revision bigint NOT NULL,
             workflow_revision integer NOT NULL,
             destination_auto_start boolean NOT NULL,
+            handoff boolean NOT NULL DEFAULT 0,
             run_now_decision_id varchar,
             committed_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP
         )";
@@ -249,6 +273,31 @@ mod tests {
         );
     }
 
+    /// A database written before the origin column existed must upgrade in
+    /// place and every pre-existing row must read as human, never ambiguous.
+    #[tokio::test]
+    async fn ensure_schema_adds_origin_to_a_table_created_without_it() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("legacy.db");
+        let connection = Database::connect(format!("sqlite:{}?mode=rwc", path.display()))
+            .await
+            .unwrap();
+        connection.execute_unprepared(LEGACY_TABLE).await.unwrap();
+        connection.execute_unprepared(LEGACY_ROW).await.unwrap();
+
+        ensure_schema(&connection).await.unwrap();
+
+        let stored = transition_occurrence::Entity::find_by_id("legacy".to_owned())
+            .one(&connection)
+            .await
+            .unwrap()
+            .expect("the pre-upgrade occurrence survives the migration");
+        assert_eq!(
+            stored.origin, "human",
+            "a row written before the column existed defaults to human"
+        );
+    }
+
     /// The commit path's flag must reach the durable record; if `append`
     /// dropped it, every later reader would see a handoff transition as ordinary.
     #[tokio::test]
@@ -268,9 +317,10 @@ mod tests {
                 to_group: "started",
                 work_item_revision: 2,
                 workflow_revision: 3,
-                destination_auto_start: false,
-                handoff: true,
-                run_now_decision_id: None,
+            destination_auto_start: false,
+            handoff: true,
+            origin: TransitionOrigin::Agent,
+            run_now_decision_id: None,
             },
         )
         .await
@@ -283,5 +333,9 @@ mod tests {
             .unwrap()
             .expect("the appended occurrence");
         assert!(stored.handoff, "append must carry the edge's handoff flag");
+        assert_eq!(
+            stored.origin, "agent",
+            "append must carry the command's origin"
+        );
     }
 }

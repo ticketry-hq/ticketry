@@ -6,8 +6,9 @@
 //! schema before the write lease changes hands, and the published record
 //! states that no Django write fallback exists.
 
-use std::path::{Path, PathBuf};
-use std::process::Command;
+mod common;
+
+use std::path::Path;
 
 use sea_orm::{ConnectionTrait, Database, DbBackend, Statement};
 use ticketry_runs::{
@@ -15,36 +16,12 @@ use ticketry_runs::{
     RunsReadinessGate, Slice3Readiness, ADOPTED_TABLES, RUN_OWNED_AUTHORED_TABLES,
 };
 
-fn root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
-
-/// A Django-shaped store at the current leaf, built by the real migrations so
-/// adoption takes its production path rather than a shortcut this test wrote.
-fn django_fixture(path: &Path) {
-    let script = r#"
-import os, sys, uuid
-from pathlib import Path
-p=Path(sys.argv[1]).resolve(); os.environ['DJANGO_SETTINGS_MODULE']='studio_server.settings'; os.environ['MUXED_STATE_DB']=str(p); os.environ['MUXED_DATA_DIR']=str(p.parent); os.environ['MUXED_FORCE_SQLITE']='true'
-import django; django.setup()
-from django.core.management import call_command
-call_command('migrate', interactive=False, verbosity=0)
-"#;
-    let output = Command::new(root().join("backend/.venv/bin/python"))
-        .arg("-c")
-        .arg(script)
-        .arg(path)
-        .current_dir(root())
-        .output()
-        .unwrap();
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
+/// A Django-shaped store at the checked final legacy leaf.
+async fn django_fixture(path: &Path) {
+    common::execution_legacy_fixture::provision_current(
+        path.parent().expect("the database has a data directory"),
+    )
+    .await;
 }
 
 async fn open(path: &Path) -> sea_orm::DatabaseConnection {
@@ -57,7 +34,7 @@ async fn open(path: &Path) -> sea_orm::DatabaseConnection {
 async fn the_manifest_names_exactly_the_tables_adoption_installs() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("state.db");
-    django_fixture(&path);
+    django_fixture(&path).await;
     adopt(directory.path())
         .await
         .expect("adopt the Runs schema");
@@ -148,7 +125,7 @@ fn a_partial_result_is_refused_rather_than_published() {
 async fn adoption_refuses_an_unknown_runs_schema_before_the_lease_changes_hands() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("state.db");
-    django_fixture(&path);
+    django_fixture(&path).await;
     let database = open(&path).await;
     database
         .execute_raw(Statement::from_sql_and_values(

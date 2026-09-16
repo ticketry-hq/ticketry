@@ -65,7 +65,7 @@ pub(crate) fn invariants() -> Vec<Invariant> {
             rule: "every Automation Attempt holds a known lifecycle status",
             requires: &["automation_attempts.status"],
             query: "SELECT id AS identity FROM automation_attempts
-                    WHERE status NOT IN ('pending', 'succeeded', 'failed')"
+                    WHERE status NOT IN ('pending', 'succeeded', 'failed', 'skipped')"
                 .to_owned(),
         },
         Invariant {

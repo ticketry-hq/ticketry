@@ -52,6 +52,7 @@ mod seaography_override;
 mod semantic_bridge;
 pub(crate) mod snapshot;
 pub(crate) mod snapshot_manifest;
+pub(crate) mod verification_policy;
 
 use std::path::Path;
 
@@ -164,36 +165,19 @@ async fn existing(
     classified: &Installation,
     plan: &AdoptionPlan,
 ) -> Result<Adoption, AdoptionFailure> {
-    let report = preflight::preflight(data_directory, classified)
-        .await
-        .map_err(|error| {
-            AdoptionFailure::new(
-                Phase::Preflight,
-                Refusal::SemanticRefusal,
-                error.to_string(),
-            )
-        })?;
-    if report.verdict() == Verdict::Refused {
-        return Err(AdoptionFailure::new(
-            Phase::Preflight,
-            Refusal::SemanticRefusal,
-            format!(
-                "{} defect(s) with no named bridge: {}",
-                report.defects.len(),
-                report
-                    .defects
-                    .iter()
-                    .filter(|defect| !defect.is_admitted())
-                    .map(|defect| format!("{} ({} row(s))", defect.code, defect.count))
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ),
-        ));
-    }
-    fault(plan, Phase::Preflight)?;
-    let semantic_bridges = report.required_bridges();
-
     let already_owned = matches!(classified, Installation::RustOwned(_));
+    // A Rust-owned store was fully preflighted when adopted and is written only
+    // through Rust's own invariant-enforcing paths, so a plain reopen skips the
+    // whole-file integrity check and the semantic rule list unless asked.
+    let semantic_bridges = if already_owned && !verification_policy::full_verification_requested() {
+        Vec::new()
+    } else {
+        preflight_for_adoption(data_directory, classified)
+            .await?
+            .required_bridges()
+    };
+    fault(plan, Phase::Preflight)?;
+
     let path = if already_owned {
         AdoptionPath::Reopened
     } else if matches!(classified, Installation::SqliteHistorical(_)) {
@@ -220,6 +204,40 @@ async fn existing(
         plan,
     )
     .await
+}
+
+/// Run the read-only preflight and refuse on any defect without a named bridge.
+async fn preflight_for_adoption(
+    data_directory: &Path,
+    classified: &Installation,
+) -> Result<crate::PreflightReport, AdoptionFailure> {
+    let report = preflight::preflight(data_directory, classified)
+        .await
+        .map_err(|error| {
+            AdoptionFailure::new(
+                Phase::Preflight,
+                Refusal::SemanticRefusal,
+                error.to_string(),
+            )
+        })?;
+    if report.verdict() == Verdict::Refused {
+        return Err(AdoptionFailure::new(
+            Phase::Preflight,
+            Refusal::SemanticRefusal,
+            format!(
+                "{} defect(s) with no named bridge: {}",
+                report.defects.len(),
+                report
+                    .defects
+                    .iter()
+                    .filter(|defect| !defect.is_admitted())
+                    .map(|defect| format!("{} ({} row(s))", defect.code, defect.count))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+        ));
+    }
+    Ok(report)
 }
 
 fn fault(plan: &AdoptionPlan, phase: Phase) -> Result<(), AdoptionFailure> {

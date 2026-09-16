@@ -132,7 +132,7 @@ async fn fixture() -> (tempfile::TempDir, sea_orm::DatabaseConnection) {
 
 fn operation_request(query: &str, operation_name: &str, variables: serde_json::Value) -> String {
     serde_json::json!({
-        "query": query,
+        "query": query.replace(" @nonreactive", ""),
         "operationName": operation_name,
         "variables": variables,
     })

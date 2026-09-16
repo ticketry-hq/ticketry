@@ -183,11 +183,9 @@ fn the_shipped_interval_is_measured_in_hours() {
 }
 
 /// The regression this ticket was filed for: the machinery existed and had no
-/// production caller. The handoff is the one production startup path, and it
-/// is not reachable from a test without a live sidecar, so the wiring itself
-/// is asserted here rather than left to be silently deleted.
+/// production caller. Both startup paths compact before publishing readiness.
 #[test]
-fn the_desktop_handoff_drives_compaction_after_reconciliation() {
+fn the_desktop_handoff_drives_compaction_before_readiness() {
     let source = std::fs::read_to_string(
         Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("crates/app/ticketry-desktop/src/desktop/runs_handoff.rs"),
@@ -197,18 +195,15 @@ fn the_desktop_handoff_drives_compaction_after_reconciliation() {
         source.contains("CompactionSchedule"),
         "the Runs handoff must install the compaction schedule"
     );
-    for gate in ["pub async fn reopen_gate", "pub async fn open_gate"] {
-        let body = source
-            .split_once(gate)
-            .expect("both gates are still declared")
-            .1;
-        let reconcile = body
-            .find("reconcile(database")
-            .expect("the gate reconciles");
-        let compact = body.find("compact(database").expect("the gate compacts");
-        assert!(
-            reconcile < compact,
-            "{gate} must compact after it reconciles"
-        );
-    }
+    let reopen = source
+        .split_once("pub async fn reopen_gate")
+        .expect("the reopen gate is still declared")
+        .1
+        .split_once("pub async fn open_gate")
+        .unwrap()
+        .0;
+    assert!(reopen.find("compact(database").unwrap() < reopen.find("publish_readiness").unwrap());
+
+    let open = source.split_once("pub async fn open_gate").unwrap().1;
+    assert!(open.find("compact(database").unwrap() < open.find("verify_status_surface").unwrap());
 }

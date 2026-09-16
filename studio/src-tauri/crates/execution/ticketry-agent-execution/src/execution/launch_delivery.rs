@@ -8,25 +8,26 @@ use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 
 use ticketry_entities::automation_attempt;
 use ticketry_launch::{
-    compose_task_prompt, provider_contract, CreateTerminalSession, TaskPromptSource,
-    TerminalLaunchKind,
+    compose_task_prompt, provider_contract, CreateTerminalSession, LaunchPathsRequest,
+    LaunchPathsService, LaunchScope, TaskPromptSource, TerminalLaunchKind,
 };
 use ticketry_runs::{AttemptOutcome, DeliveryMode, RunsServices};
-use ticketry_terminal::TerminalLaunchService;
+use ticketry_terminal::{TerminalCleanupService, TerminalLaunchService};
 use ticketry_work_management::launch_policy::{mark_delivered, CallerScope, LaunchPolicyDecision};
 
-use super::handoff;
+use super::{handoff, replacement};
 
 /// Prepare one durable policy decision through the Rust Terminal owner, then
 /// mark it delivered before attempting the recoverable external effect.
 pub async fn execute(
     database: &DatabaseConnection,
     service: &TerminalLaunchService,
+    cleanup: &TerminalCleanupService,
     decision: &LaunchPolicyDecision,
 ) -> Result<ticketry_entities::session::Model, String> {
     ticketry_diagnostics::requested_by(
         decision.caller_scope.into(),
-        execute_traced(database, service, decision),
+        execute_traced(database, service, cleanup, decision),
     )
     .await
 }
@@ -34,6 +35,7 @@ pub async fn execute(
 async fn execute_traced(
     database: &DatabaseConnection,
     service: &TerminalLaunchService,
+    cleanup: &TerminalCleanupService,
     decision: &LaunchPolicyDecision,
 ) -> Result<ticketry_entities::session::Model, String> {
     if let Some(attempt) = ticketry_diagnostics::current() {
@@ -87,6 +89,18 @@ async fn execute_traced(
         CallerScope::Retry => Some(decision.idempotency_key.clone()),
         _ => None,
     };
+    let paths = LaunchPathsService::new(database.clone())
+        .resolve(LaunchPathsRequest {
+            version: 1,
+            scope: LaunchScope::Task,
+            agent_run_id: launch_attempt_id(decision).to_owned(),
+            project_id: decision.project_id.clone(),
+            module_id: Some(decision.module_link.module_id.clone()),
+            task_id: Some(decision.task_id.clone()),
+            document_id: None,
+        })
+        .await
+        .map_err(|error| error.code_str().to_owned())?;
     let prompt = compose_task_prompt(
         database,
         TaskPromptSource {
@@ -96,7 +110,8 @@ async fn execute_traced(
             state_name: decision.state_name.as_deref(),
             workflow_prompt: &decision.prompt,
             additional_user_input: None,
-            design_directory: None,
+            design_directory: paths.design_directory_relative.as_deref(),
+            design_directory_root: paths.design_directory.as_deref(),
         },
     )
     .await
@@ -144,6 +159,13 @@ async fn execute_traced(
         )
         .await
         .map_err(|error| error.code_str().to_owned())?;
+    replacement::end_live_agents(
+        database,
+        cleanup,
+        decision,
+        automation_attempt_id.as_deref(),
+    )
+    .await?;
     mark_delivered(database, &decision.decision_id)
         .await
         .map_err(|error| error.code().to_owned())?;
@@ -242,6 +264,7 @@ fn request(
         target_id: decision.task_id.clone(),
         kind,
         provider: Some(decision.provider.clone()),
+        profile: decision.profile.clone(),
         model: decision.model.clone(),
         reasoning: decision.reasoning.clone(),
         policy_reference: Some(decision.policy_identity.clone()),
@@ -298,6 +321,7 @@ mod tests {
             required_skills: Vec::new(),
             entry_skill: Some("tdd".to_owned()),
             provider: "codex".to_owned(),
+            profile: None,
             model: Some("gpt-test".to_owned()),
             reasoning: None,
             module_link: ModuleLinkInput {

@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ModalHost, useModalStore } from "../app/modal";
+import { useGlobalKeymap } from "../app/navigation/useGlobalKeymap";
 import { SelectedTicketContent } from "../app/shell/ticket-workspace/selected-ticket/SelectedTicketContent";
 import { SelectedTicket } from "../app/shell/ticket-workspace/selected-ticket/SelectedTicket";
 import { TasksPane } from "../app/shell/ticket-workspace/tasks/TasksPane";
@@ -23,6 +24,11 @@ import {
   terminalSessionReadExecutor,
 } from "./desktopGraphQlRuntime";
 import { seedModuleOpenFixture } from "./projectOpenFixture";
+
+function ConversationKeymapHarness() {
+  useGlobalKeymap([{ kind: "scratch", moduleId: "module-1" }]);
+  return null;
+}
 
 vi.mock(
   "../app/shell/ticket-workspace/selected-ticket/terminals/selectedTicketTerminalLoader",
@@ -209,7 +215,7 @@ describe("overhaul acceptance — Conversations", () => {
     expect(useClientStore.getState().workspaces[bucket]?.active).toBe("terminal");
   });
 
-  it("starts one terminal conversation immediately with the global launch default", async () => {
+  it("creates and selects a conversation when Enter activates New conversation", async () => {
     const tickets: Array<{
       __typename: "InstantRunTicket";
       agent_run_id: string;
@@ -281,19 +287,26 @@ describe("overhaul acceptance — Conversations", () => {
       automationByTask: {},
     });
     useClientStore.setState({
-      selectedTaskId: null,
+      selectedTaskId: TEMP_TASK_ID,
+      sidebarVisible: false,
+      editViewZone: "stories",
       workspaces: {},
       activeByTask: {},
     });
 
     render(
       <StudioApolloProvider>
+        <ConversationKeymapHarness />
         <TasksPane />
         <ModalHost />
       </StudioApolloProvider>,
     );
 
-    fireEvent.click(await screen.findByRole("treeitem", { name: /New conversation/ }));
+    const newConversation = await screen.findByRole("treeitem", {
+      name: /New conversation/,
+    });
+    expect(newConversation).toHaveAttribute("aria-selected", "true");
+    fireEvent.keyDown(window, { key: "Enter" });
     const created = await screen.findByRole("treeitem", {
       name: /Untitled instant chat/,
     });

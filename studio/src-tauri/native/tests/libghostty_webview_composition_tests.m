@@ -90,7 +90,12 @@ ghostty_surface_t ghostty_surface_new(ghostty_app_t app,
   (void)config;
   return NULL;
 }
-void ghostty_surface_free(ghostty_surface_t surface) { (void)surface; }
+static size_t surface_free_count = 0;
+static ghostty_surface_t last_freed_surface = NULL;
+void ghostty_surface_free(ghostty_surface_t surface) {
+  surface_free_count++;
+  last_freed_surface = surface;
+}
 void ghostty_surface_draw(ghostty_surface_t surface) { (void)surface; }
 void *ghostty_surface_userdata(ghostty_surface_t surface) {
   (void)surface;
@@ -178,6 +183,7 @@ void ghostty_surface_mouse_scroll(ghostty_surface_t surface, double x, double y,
 }
 
 #include "../libghostty_view.m"
+#include "../libghostty_view_handles.m"
 #include "../libghostty_view_bridge.m"
 
 @interface MuxedTestWebView : NSView
@@ -275,6 +281,8 @@ static void record_tmux_scroll(void *context, uint8_t direction,
   tmux_scroll_lines = lines;
 }
 
+#include "libghostty_view_lifetime_tests.m"
+
 int main(void) {
   @autoreleasepool {
     (void)&muxed_ghostty_owned_surface;
@@ -324,13 +332,14 @@ int main(void) {
     input_view->_surface = (ghostty_surface_t)&surface_storage;
     input_view.frame = NSMakeRect(0, 0, 200, 100);
     input_view->_webview = webview;
+    void *input_handle = muxed_ghostty_register_view(input_view);
     input_view.hidden = YES;
-    require(muxed_ghostty_view_present(input_view),
+    require(muxed_ghostty_view_present(input_handle),
             "the public presentation seam rejected valid sibling ordering");
     require(is_above(input_view, webview) && input_view->_acceptsInput,
             "the public presentation seam did not start above WebKit with input");
-    require(!muxed_ghostty_view_is_hidden(input_view) &&
-                muxed_ghostty_view_accepts_input(input_view),
+    require(!muxed_ghostty_view_is_hidden(input_handle) &&
+                muxed_ghostty_view_accepts_input(input_handle),
             "native benchmark inspection missed an interactive visible view");
     send_all_mouse_streams(input_view);
     require(mouse_position_count >= 5,
@@ -341,7 +350,7 @@ int main(void) {
     require(key_press_count == 1 && strcmp(last_key_text, "a") == 0,
             "a presented Ghostty view did not route a key press directly");
 
-    muxed_ghostty_view_set_scroll_callback(input_view, record_tmux_scroll, NULL);
+    muxed_ghostty_view_set_scroll_callback(input_handle, record_tmux_scroll, NULL);
     MuxedTestScrollEvent *scroll = [MuxedTestScrollEvent new];
     scroll->_testDeltaX = 1.25;
     scroll->_testDeltaY = 2.5;
@@ -369,28 +378,30 @@ int main(void) {
             "an uncaptured wheel gesture did not use durable tmux scrollback");
     [scroll release];
 
-    require(muxed_ghostty_view_set_webview_interaction(input_view, true),
+    require(muxed_ghostty_view_set_webview_interaction(input_handle, true),
             "the public ownership seam rejected WebView ownership");
     require(is_above(webview, input_view) && !input_view->_acceptsInput,
             "WebView ownership did not lower and disable the existing view");
     size_t lowered_mouse_positions = mouse_position_count;
     size_t lowered_mouse_buttons = mouse_button_count;
-    muxed_ghostty_view_hide(input_view);
+    muxed_ghostty_view_hide(input_handle);
     require(input_view.hidden && is_above(webview, input_view) &&
                 !input_view.acceptsFirstResponder,
             "a hidden retained view was raised or remained input eligible");
-    require(muxed_ghostty_view_is_hidden(input_view) &&
-                !muxed_ghostty_view_accepts_input(input_view),
+    require(muxed_ghostty_view_is_hidden(input_handle) &&
+                !muxed_ghostty_view_accepts_input(input_handle),
             "native benchmark inspection misreported a hidden retained view");
     send_all_mouse_streams(input_view);
     require(mouse_position_count == lowered_mouse_positions &&
                 mouse_button_count == lowered_mouse_buttons,
             "a hidden retained view forwarded pointer input");
     input_view->_webview = nil;
-    require(!muxed_ghostty_view_set_webview_interaction(input_view, false),
+    require(!muxed_ghostty_view_set_webview_interaction(input_handle, false),
             "the public ownership seam swallowed an ordering failure");
     input_view->_surface = NULL;
-    [input_view release];
+    muxed_ghostty_view_free(input_handle);
+
+    test_native_view_lifetime();
 
     [ghostty release];
     [webview release];

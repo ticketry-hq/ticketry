@@ -44,6 +44,7 @@ async fn seed_occurrence(database: &DatabaseConnection, occurrence_id: &str) {
         workflow_revision: Set(1),
         destination_auto_start: Set(true),
         handoff: Set(false),
+        origin: Set("agent".to_owned()),
         run_now_decision_id: Set(None),
         committed_at: sea_orm::NotSet,
     })

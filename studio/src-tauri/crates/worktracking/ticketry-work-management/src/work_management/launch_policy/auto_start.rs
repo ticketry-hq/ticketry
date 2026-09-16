@@ -6,8 +6,10 @@ use super::{
     record, rejections, CallerScope, LaunchPolicyDecision, LaunchPolicyError, LaunchPolicyRequest,
     LaunchPolicyResolver,
 };
-use ticketry_entities::{launch_policy_decision, launch_policy_rejection, transition_occurrence};
-use ticketry_runs::{RunsServices, TransitionOccurrence};
+use ticketry_entities::{
+    launch_policy_decision, launch_policy_rejection, session, transition_occurrence,
+};
+use ticketry_runs::{AttemptOutcome, RunsServices, TransitionOccurrence};
 
 /// Resolve pending auto-start occurrences into decisions or into a rejection
 /// explaining what still blocks them.
@@ -34,7 +36,8 @@ pub async fn prepare_pending_auto_starts(
         // The attempt is the durable statement that this transition requested
         // automation. Create or adopt it before policy resolution so rejection,
         // restart, and later repair all converge on one root lineage.
-        runs.attempts()
+        let attempt = runs
+            .attempts()
             .materialize_root(&TransitionOccurrence {
                 occurrence_id: occurrence.occurrence_id.clone(),
                 issue_id: occurrence.issue_id.clone(),
@@ -47,6 +50,35 @@ pub async fn prepare_pending_auto_starts(
             .map_err(|error| {
                 LaunchPolicyError::rejected("launch_policy_storage_failed", error.to_string())
             })?;
+        if occurrence.origin == "human"
+            && !occurrence.handoff
+            && has_live_task_session(database, &occurrence.issue_id).await?
+        {
+            runs.attempts()
+                .record_outcome(
+                    &attempt.attempt_id,
+                    AttemptOutcome::Skipped {
+                        reason: "Skipped because this work item already has a live agent."
+                            .to_owned(),
+                        details: serde_json::json!({"code": "live_agent_present"}),
+                    },
+                )
+                .await
+                .map_err(|error| {
+                    LaunchPolicyError::rejected("launch_policy_storage_failed", error.to_string())
+                })?;
+            rejections::record(
+                database,
+                CallerScope::AutoStart.as_str(),
+                &occurrence.occurrence_id,
+                &LaunchPolicyError::rejected(
+                    "live_agent_present",
+                    "Manual auto-start was skipped because this work item already has a live agent.",
+                ),
+            )
+            .await?;
+            continue;
+        }
         let request = LaunchPolicyRequest {
             task_id: occurrence.issue_id.clone(),
             destination_state_id: Some(occurrence.to_state_id),
@@ -90,6 +122,20 @@ pub async fn prepare_pending_auto_starts(
         }
     }
     Ok(decisions)
+}
+
+async fn has_live_task_session(
+    database: &DatabaseConnection,
+    task_id: &str,
+) -> Result<bool, LaunchPolicyError> {
+    Ok(session::Entity::find()
+        .filter(session::Column::TaskId.eq(task_id.replace('-', "")))
+        .filter(session::Column::Scope.eq("task"))
+        .filter(session::Column::TerminatedAt.is_null())
+        .filter(session::Column::RuntimeCleanupPending.eq(false))
+        .one(database)
+        .await?
+        .is_some())
 }
 
 /// Auto-start occurrences with neither a decision nor a rejection.
@@ -182,6 +228,7 @@ mod tests {
             workflow_revision: Set(3),
             destination_auto_start: Set(true),
             handoff: Set(false),
+            origin: Set("agent".to_owned()),
             run_now_decision_id: Set(run_now_decision_id.map(str::to_owned)),
             committed_at: sea_orm::ActiveValue::NotSet,
         }

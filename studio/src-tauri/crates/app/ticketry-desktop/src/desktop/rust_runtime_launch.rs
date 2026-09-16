@@ -5,9 +5,10 @@ use std::time::Duration;
 
 use tauri::Manager;
 
+use crate::desktop::data_directory::DesktopDataDirectoryOwnership;
 use crate::desktop::environment::automated_startup_exit_requested;
 use crate::desktop::launch_runtime::DesktopLaunchRuntime;
-use crate::desktop::mcp_runtime::{configured_mcp_ports, owned_mcp_url, start_in_process_mcp};
+use crate::desktop::mcp_runtime::start_in_process_mcp;
 use crate::desktop::packaged_binaries::hook_runner_binary;
 use crate::desktop::runtime_configuration::rust_runtime_configuration;
 use crate::desktop::service_health::ServiceHealth;
@@ -48,34 +49,47 @@ pub fn launch_rust_runtime(
         paths: ticketry_launch::LaunchPathsService::new(database.clone()),
         hook_runner,
         hook_spool_directory: spool_directory.clone(),
-        mcp_url: String::new(),
+        mcp_data_directory: None,
         run_authority: ticketry_runs::RunAuthority::new(database.clone()),
         granted_operations: ticketry_mcp::allowed_provider_operations(),
     })?;
 
-    let credential = uuid::Uuid::new_v4().simple().to_string();
-    let mut mcp_runtime = match tauri::async_runtime::block_on(start_in_process_mcp(
-        &data_directory,
-        &credential,
-        configured_mcp_ports()?,
-        Some(terminal_launch.clone()),
-    )) {
-        Ok(runtime) => Some(runtime),
-        Err(diagnostic) => {
-            eprintln!(
-                "Ticketry could not start its WorkTracker MCP listener; provider launches remain blocked: {diagnostic}"
-            );
-            state.retain_notice(crate::desktop::user_notices::mcp_unavailable());
-            None
+    let ownership = application.state::<DesktopDataDirectoryOwnership>();
+    let mut mcp_runtime = {
+        let guard = ownership
+            .guard
+            .lock()
+            .expect("data-directory lock poisoned");
+        let started = match guard.as_ref() {
+            Some(guard) => tauri::async_runtime::block_on(start_in_process_mcp(
+                &data_directory,
+                guard,
+                Some(terminal_launch.clone()),
+            )),
+            None => Err(ticketry_mcp::McpStartupError::Other {
+                diagnostic: "this process does not own the data directory".to_owned(),
+            }),
+        };
+        match started {
+            Ok(runtime) => Some(runtime),
+            Err(diagnostic) => {
+                eprintln!(
+                    "Ticketry could not start its WorkTracker MCP listener; provider launches remain blocked: {diagnostic}"
+                );
+                state.retain_notice(crate::desktop::user_notices::mcp_unavailable());
+                None
+            }
         }
     };
     startup_trace.record("mcp-listener-started");
     if let Some(runtime) = mcp_runtime.as_ref() {
-        let mcp_url = owned_mcp_url(Some(runtime.address()))
-            .ok_or_else(|| "the owned MCP listener did not publish an endpoint".to_owned())?;
-        launch_runtime.replace_terminal_mcp_authority(mcp_url, runtime.authority())?;
+        startup_trace.record("terminal-mcp-authority-replacement-started");
+        launch_runtime
+            .replace_terminal_mcp_authority(data_directory.clone(), runtime.authority())?;
+        startup_trace.record("terminal-mcp-authority-replaced");
     }
 
+    startup_trace.record("runs-handoff-opening");
     tauri::async_runtime::block_on(runs_handoff::open_gate(
         &data_directory,
         &database,
@@ -242,12 +256,14 @@ fn terminal_sweep_interval() -> Duration {
         return Duration::from_millis(milliseconds.max(25));
     }
 
-    const DEFAULT_MINUTES: u64 = 30;
-    let minutes = std::env::var("MUXED_IDLE_SWEEP_MINUTES")
-        .ok()
-        .and_then(|value| value.parse::<u64>().ok())
-        .unwrap_or(DEFAULT_MINUTES);
-    Duration::from_secs(minutes.saturating_mul(60))
+    // Launch lease recovery must not inherit the old idle-cleanup interval.
+    TerminalLifecycleConfig::default().sweep_interval
+}
+
+#[cfg(all(test, not(feature = "desktop-acceptance")))]
+#[test]
+fn launch_recovery_runs_every_fifteen_seconds() {
+    assert_eq!(terminal_sweep_interval(), Duration::from_secs(15));
 }
 
 fn provider_hook_sweep_interval() -> Duration {

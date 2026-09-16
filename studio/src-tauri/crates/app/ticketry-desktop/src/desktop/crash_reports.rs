@@ -1,5 +1,7 @@
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::Mutex;
+use std::thread::JoinHandle;
 
 use serde::Serialize;
 
@@ -7,8 +9,15 @@ use crate::desktop::lifecycle::MAIN_WINDOW_LABEL;
 
 #[derive(Debug)]
 pub struct CrashReportsRuntime {
-    report_collected: bool,
+    collection: Mutex<CrashCollection>,
     reports_directory: PathBuf,
+}
+
+/// Collection runs on a startup thread; the first reader joins it.
+#[derive(Debug)]
+enum CrashCollection {
+    Pending(JoinHandle<Option<PathBuf>>),
+    Collected(bool),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -19,18 +28,28 @@ pub enum CrashCollectionOutcome {
 }
 
 impl CrashReportsRuntime {
-    pub fn new(data_directory: &Path, latest_report: Option<PathBuf>) -> Self {
+    pub fn new(data_directory: &Path, collection: JoinHandle<Option<PathBuf>>) -> Self {
         Self {
-            report_collected: latest_report.is_some(),
+            collection: Mutex::new(CrashCollection::Pending(collection)),
             reports_directory: data_directory.join("crash-reports"),
         }
     }
 
     fn latest_collection_outcome(&self) -> CrashCollectionOutcome {
-        if self.report_collected {
-            CrashCollectionOutcome::ReportCollected
-        } else {
-            CrashCollectionOutcome::None
+        let mut collection = self
+            .collection
+            .lock()
+            .expect("crash collection lock poisoned");
+        if let CrashCollection::Pending(handle) =
+            std::mem::replace(&mut *collection, CrashCollection::Collected(false))
+        {
+            // A panicked collector counts as no report; the panic hook already logged it.
+            let collected = handle.join().ok().flatten().is_some();
+            *collection = CrashCollection::Collected(collected);
+        }
+        match *collection {
+            CrashCollection::Collected(true) => CrashCollectionOutcome::ReportCollected,
+            _ => CrashCollectionOutcome::None,
         }
     }
 
@@ -94,10 +113,11 @@ mod tests {
 
     #[test]
     fn latest_outcome_exposes_only_whether_this_launch_collected_a_report() {
-        let none = CrashReportsRuntime::new(Path::new("/tmp/ticketry"), None);
+        let none =
+            CrashReportsRuntime::new(Path::new("/tmp/ticketry"), std::thread::spawn(|| None));
         let collected = CrashReportsRuntime::new(
             Path::new("/tmp/ticketry"),
-            Some(PathBuf::from("/tmp/ticketry/crash-reports/report-1")),
+            std::thread::spawn(|| Some(PathBuf::from("/tmp/ticketry/crash-reports/report-1"))),
         );
 
         assert_eq!(

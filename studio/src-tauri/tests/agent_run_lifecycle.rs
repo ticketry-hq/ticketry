@@ -115,6 +115,21 @@ async fn event_count(database: &DatabaseConnection) -> i64 {
         .unwrap()
 }
 
+/// The runs the WorkItem ended-runs read selects, on its own predicate:
+/// `workItemRunRestoration.graphql` filters `endedAt: { is_null: false }`.
+async fn ended_run_ids(database: &DatabaseConnection) -> Vec<String> {
+    database
+        .query_all_raw(Statement::from_string(
+            DbBackend::Sqlite,
+            "SELECT id FROM agent_runs WHERE ended_at IS NOT NULL ORDER BY id".to_owned(),
+        ))
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|row| row.try_get::<String>("", "id").unwrap())
+        .collect()
+}
+
 fn ids(rows: &[AgentRunHolding]) -> Vec<&str> {
     rows.iter().map(|row| row.agent_run_id.as_str()).collect()
 }
@@ -219,26 +234,10 @@ async fn holdings_are_scoped_restart_safe_and_keep_old_active_runs() {
         .run_holdings_at("project-a", None, "2026-08-12T00:00:00Z")
         .await
         .unwrap();
-    assert_eq!(
-        ids(&project),
-        vec!["task-b", "lost", "recent-ended", "old-active"]
-    );
-    assert_eq!(
-        project
-            .iter()
-            .find(|row| row.agent_run_id == "lost")
-            .unwrap()
-            .state,
-        "lost"
-    );
-    assert_eq!(
-        project
-            .iter()
-            .find(|row| row.agent_run_id == "recent-ended")
-            .unwrap()
-            .state,
-        "exited"
-    );
+    // Ended runs - however recently they ended - are read through their
+    // WorkItem, never through this holdings read, so no calendar window can
+    // put a second copy of one on the public surface.
+    assert_eq!(ids(&project), vec!["task-b", "old-active"]);
     assert_eq!(
         project
             .iter()
@@ -253,7 +252,7 @@ async fn holdings_are_scoped_restart_safe_and_keep_old_active_runs() {
         .run_holdings_at("project-a", Some("task-a"), "2026-08-12T00:00:00Z")
         .await
         .unwrap();
-    assert_eq!(ids(&task), vec!["lost", "recent-ended", "old-active"]);
+    assert_eq!(ids(&task), vec!["old-active"]);
     drop(services);
     let reopened = RunsServices::new(database.clone());
     assert_eq!(
@@ -264,6 +263,52 @@ async fn holdings_are_scoped_restart_safe_and_keep_old_active_runs() {
             .unwrap(),
         task
     );
+}
+
+#[tokio::test]
+async fn every_run_is_carried_by_exactly_one_of_the_live_and_ended_reads() {
+    let (_directory, database, services) = fixture().await;
+    for (id, ended, status, lifecycle) in [
+        ("working", None, "running", Some("working")),
+        (
+            "exited",
+            Some("2026-08-11T00:00:00+00:00"),
+            "completed",
+            None,
+        ),
+        ("lost", Some("2026-08-11T00:00:00+00:00"), "lost", None),
+        // The agent reported `error` while its process is still alive, so the
+        // run has a lifecycle-terminal state and no `ended_at`.
+        ("failed", None, "running", Some("error")),
+    ] {
+        insert_run(
+            &database,
+            id,
+            "task-a",
+            "2026-08-10T00:00:00+00:00",
+            ended,
+            status,
+            lifecycle,
+            Some("2026-08-10T01:00:00+00:00"),
+            None,
+            "task",
+        )
+        .await;
+    }
+
+    // Both sources partition on `ended_at`. The holding carries the runs that
+    // have not ended - `failed` among them, because a lifecycle-terminal state
+    // is not an ended process - and the WorkItem read carries the rest, so no
+    // run falls between the two and none is carried twice.
+    let stream = services
+        .queries()
+        .run_holdings_at("project-a", None, "2026-08-12T00:00:00Z")
+        .await
+        .unwrap();
+    let mut live = ids(&stream);
+    live.sort_unstable();
+    assert_eq!(live, vec!["failed", "working"]);
+    assert_eq!(ended_run_ids(&database).await, vec!["exited", "lost"]);
 }
 
 #[tokio::test]
@@ -360,12 +405,22 @@ async fn lifecycle_and_terminal_facts_are_ordered_idempotent_and_atomic() {
         .unwrap();
     assert!(!late.applied);
     assert_eq!(event_count(&database).await, 3);
+    // The run has ended, so it leaves the live holding and is projected
+    // through its own row instead.
     let holding = services
         .queries()
         .run_holdings_at("project-a", Some("task-a"), "2026-08-12T12:00:00Z")
         .await
         .unwrap();
-    assert_eq!(holding[0].state, "lost");
+    assert!(ids(&holding).is_empty());
+    assert_eq!(
+        ticketry_runs::run_holding_in(&database, "run", "2026-08-12T12:00:00Z")
+            .await
+            .unwrap()
+            .unwrap()
+            .state,
+        "lost"
+    );
     let exit_after_loss = services
         .lifecycle()
         .apply_terminal_fact(TerminalFact {

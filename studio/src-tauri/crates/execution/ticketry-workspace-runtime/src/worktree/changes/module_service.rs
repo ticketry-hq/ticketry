@@ -20,7 +20,8 @@ impl WorktreeChangesService {
         &self,
         module_id: &str,
     ) -> Result<ModuleVersionControlView, WorktreeChangesError> {
-        let (module, project) = issue::Entity::find_by_id(module_id)
+        let module_id = status::identity::compact_uuid(module_id);
+        let (module, project) = issue::Entity::find_by_id(&module_id)
             .find_also_related(project::Entity)
             .one(self.status().work_items())
             .await?
@@ -32,7 +33,7 @@ impl WorktreeChangesService {
 
         let mut rows = worktree::Entity::find()
             .find_also_related(issue::Entity)
-            .filter(worktree::Column::ModuleId.eq(module_id))
+            .filter(worktree::Column::ModuleId.eq(&module_id))
             .filter(worktree::Column::Status.is_in(["active", "conflict"]))
             .order_by_asc(worktree::Column::TicketSeq)
             .limit(MAX_CURRENT_TASK_WORKTREES + 1)
@@ -48,7 +49,7 @@ impl WorktreeChangesService {
         }
 
         Ok(ModuleVersionControlView {
-            module_id: module.id,
+            module_id: status::identity::canonical_uuid(&module.id),
             checkout,
             worktrees,
             worktrees_truncated,
@@ -151,6 +152,8 @@ impl WorktreeChangesService {
             None => 0,
         };
         let changes = git::cumulative(self.status().git(), &repository, &baseline.commit).await?;
+        let insertions = changes.files.iter().filter_map(|f| f.insertions).sum();
+        let deletions = changes.files.iter().filter_map(|f| f.deletions).sum();
         Ok(ModuleCheckoutChangesView {
             available: true,
             reason: None,
@@ -167,7 +170,54 @@ impl WorktreeChangesService {
             unpushed_count: Some(baseline.unpushed_count),
             truncated: changes.truncated,
             files: changes.files,
+            insertions,
+            deletions,
         })
+    }
+}
+
+impl WorktreeChangesService {
+    pub async fn module_file_diff(
+        &self,
+        module_id: &str,
+        requested_path: &str,
+    ) -> Result<super::file_diff::FileDiffView, WorktreeChangesError> {
+        let repository = match status::repository::resolve(
+            self.status().work_items(),
+            self.status().git(),
+            Some(module_id),
+        )
+        .await?
+        {
+            RepositoryResolution::Repository(repository) => repository,
+            RepositoryResolution::NoRepository(_) => {
+                return Err(WorktreeChangesError::module_not_found());
+            }
+        };
+        let _guard = self.status().repository_locks().acquire(&repository).await;
+        let Some(baseline) = module_baseline::resolve(self.status().git(), &repository).await?
+        else {
+            return Err(WorktreeChangesError::git_state_unavailable(
+                "The module checkout has no commit to compare.",
+            ));
+        };
+        let changes = git::cumulative(self.status().git(), &repository, &baseline.commit).await?;
+        let Some(file) = changes
+            .files
+            .into_iter()
+            .find(|file| file.path == requested_path)
+        else {
+            return Err(WorktreeChangesError::file_path_invalid());
+        };
+        super::file_diff::bounded(
+            self.status().git(),
+            &repository,
+            &file.path,
+            file.previous_path.as_deref(),
+            &file.status,
+            file.binary,
+        )
+        .await
     }
 }
 

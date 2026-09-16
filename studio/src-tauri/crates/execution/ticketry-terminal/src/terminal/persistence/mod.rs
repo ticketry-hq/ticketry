@@ -15,7 +15,8 @@ mod ownership_manifest;
 mod schema;
 
 pub use adoption::{
-    adopt, preflight, terminals_adopted, AdoptionEvidence, SourceClassification, TableEvidence,
+    adopt, ensure_adopted, preflight, terminals_adopted, AdoptionEvidence, SourceClassification,
+    TableEvidence,
 };
 pub use aggregate_seaography_audit::{
     CustomField, CustomFieldKind, RawSqlEvidence, RegisteredEntity, AUDITED_MODULES,

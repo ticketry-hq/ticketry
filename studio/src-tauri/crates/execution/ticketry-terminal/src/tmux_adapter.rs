@@ -16,6 +16,7 @@ mod prompt_input;
 mod runtime_namespace;
 mod session_naming;
 mod session_records;
+mod snapshot;
 mod types;
 
 use hosted_command::HostedCommand;
@@ -23,6 +24,7 @@ pub use runtime_namespace::current_runtime_namespace;
 use session_naming::session_name;
 pub use session_naming::{PersistedSessionName, SESSION_PREFIX};
 use session_records::{observe_records, SessionRecord};
+pub(crate) use snapshot::TmuxSnapshot;
 use types::{validate_geometry, validate_identifier};
 pub use types::{
     ApprovedArgv, CreateOutcome, CreateSession, InventoryConflictKind, InventoryEntry, KillOutcome,
@@ -91,6 +93,10 @@ impl TmuxAdapter {
             ])
             .arg(&request.command.working_directory);
         for (name, value) in &request.command.environment {
+            // The private launch wrapper exports the bearer without exposing it in tmux argv.
+            if name == "TICKETRY_MCP_AUTHORIZATION" {
+                continue;
+            }
             command.args(["-e", &format!("{name}={value}")]);
         }
         for (key, value) in [

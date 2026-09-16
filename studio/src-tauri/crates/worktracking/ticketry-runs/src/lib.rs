@@ -27,14 +27,14 @@ pub use hook_spool::{
 };
 pub use persistence::timestamp::{format as format_timestamp, normalize as normalize_timestamp};
 pub use persistence::{
-    adopt, failure_code, open_status_stream, outbox_adopted, owned_run_tables, preflight,
-    publish_readiness, published_readiness_is_complete, readiness_open, readiness_unavailable,
-    record_run_ended, record_sweep_ended, register_status_graphql, reset_reason, run_holding_in,
-    terminating_signal, unavailable_error, AdoptionEvidence, AgentRunHolding, AgentRunRecord,
-    AttemptFailure, AttemptOutcome, AttemptService, AutomationAttemptProjection,
-    AutomationAttemptRecord, ClaimedLaunch, CompactionOutcome, CompactionPolicy,
-    CompactionSchedule, CompatibilityService, DeliveryMode, DjangoGeneration, EffectService,
-    EndOfLifeOrigin, LaunchDispatchService, LaunchEffectRecord, LaunchExecutor,
+    adopt, ensure_adopted, failure_code, open_status_stream, outbox_adopted, owned_run_tables,
+    preflight, publish_readiness, published_readiness_is_complete, readiness_open,
+    readiness_unavailable, record_run_ended, record_sweep_ended, register_status_graphql,
+    reset_reason, run_holding_in, terminating_signal, unavailable_error, AdoptionEvidence,
+    AgentRunHolding, AgentRunRecord, AttemptFailure, AttemptOutcome, AttemptService,
+    AutomationAttemptProjection, AutomationAttemptRecord, ClaimedLaunch, CompactionOutcome,
+    CompactionPolicy, CompactionSchedule, CompatibilityService, DeliveryMode, DjangoGeneration,
+    EffectService, EndOfLifeOrigin, LaunchDispatchService, LaunchEffectRecord, LaunchExecutor,
     LaunchExecutorFailure, LaunchIntent, LaunchOutcome, LaunchPreparationParticipant,
     LaunchReconciliationService, LaunchRuntimeEvidence, LaunchRuntimeProbe,
     LaunchSettlementParticipant, LifecycleAcceptance, LifecycleFact, LifecycleService,

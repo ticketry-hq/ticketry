@@ -8,6 +8,9 @@ pub struct ChangedFile {
     pub path: String,
     pub previous_path: Option<String>,
     pub status: String,
+    pub binary: bool,
+    pub insertions: Option<i32>,
+    pub deletions: Option<i32>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, CustomOutputType)]
@@ -28,6 +31,8 @@ pub struct WorktreeChangesView {
     pub unpushed_count: i32,
     pub truncated: bool,
     pub files: Vec<ChangedFile>,
+    pub insertions: i32,
+    pub deletions: i32,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, CustomOutputType)]

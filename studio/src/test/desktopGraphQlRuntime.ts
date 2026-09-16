@@ -72,6 +72,61 @@ export interface TerminalSessionReadFixture {
     projectId: string,
     moduleId: string,
   ): Promise<ResumableTerminalSession[]>;
+  /**
+   * A Story's ended runs, read through the generated WorkItem model. The
+   * status stream carries live runs only, so this is the durable source for
+   * runs that already exited. Omit it for a Story with none.
+   */
+  readStoryEndedRuns?(taskId: string): Promise<WorkItemEndedRunFixture[]>;
+  /**
+   * A module's ended plan, instant, and shell runs, read through the module
+   * WorkItem that owns them. Omit it for a module with none.
+   */
+  readModuleScratchEndedRuns?(
+    moduleId: string,
+  ): Promise<WorkItemEndedRunFixture[]>;
+}
+
+/** One ended run and the terminal session record that makes it restorable. */
+export interface WorkItemEndedRunFixture {
+  readonly agent_run_id: string;
+  readonly agent?: string | null;
+  readonly scope?: string;
+  readonly status?: string;
+  readonly started_at?: string;
+  readonly ended_at?: string | null;
+  readonly exit_code?: number | null;
+  readonly launch_state?: string | null;
+  readonly launch_model?: string | null;
+  readonly provider_session_id?: string | null;
+  /** `undefined` when no durable terminal session record survives. */
+  readonly terminated_at?: string | null;
+}
+
+function endedRunRow(run: WorkItemEndedRunFixture, defaultScope: string) {
+  return {
+    __typename: "AgentRuns",
+    agent_run_id: run.agent_run_id,
+    agent: run.agent ?? "codex",
+    scope: run.scope ?? defaultScope,
+    status: run.status ?? "exited",
+    started_at: run.started_at ?? "2026-08-22T10:00:00Z",
+    ended_at: run.ended_at ?? "2026-08-22T10:05:00Z",
+    exit_code: run.exit_code ?? 0,
+    launch_state: run.launch_state ?? null,
+    launch_model: run.launch_model ?? null,
+    provider_session_id: run.provider_session_id ?? null,
+    terminal_session: {
+      __typename: "AgentTerminalSessionsConnection",
+      nodes: "terminated_at" in run
+        ? [{
+            __typename: "AgentTerminalSessions",
+            agent_run_id: run.agent_run_id,
+            terminated_at: run.terminated_at ?? null,
+          }]
+        : [],
+    },
+  };
 }
 
 function terminalSessionRow(
@@ -164,6 +219,32 @@ export function terminalSessionReadExecutor(
         },
       } as never;
     }
+    if (operation === "WorkItemEndedRuns") {
+      // One operation serves both owners: a Story reads its own `task` runs and
+      // a module reads the scratch runs it owns, so the fixture branches on the
+      // issue type the caller asked for.
+      const scratch = input.issueType === "module";
+      const runs = await (scratch
+        ? fixture.readModuleScratchEndedRuns?.(input.issueId)
+        : fixture.readStoryEndedRuns?.(input.issueId)) ?? [];
+      return {
+        work_item: {
+          __typename: "WorktrackerIssueConnection",
+          nodes: [{
+            __typename: "WorktrackerIssue",
+            id: input.issueId,
+            project_id: "project-1",
+            module_id: scratch ? null : "module-1",
+            ended_runs: {
+              __typename: "AgentRunsConnection",
+              nodes: runs
+                .map((run) => endedRunRow(run, scratch ? "plan" : "task"))
+                .filter((run) => input.scopes.includes(run.scope)),
+            },
+          }],
+        },
+      } as never;
+    }
     if (operation === "TaskResumableTerminalSessions") {
       const sessions = await fixture.readTaskResumableTerminalSessions(input.taskId);
       return {
@@ -204,6 +285,10 @@ export function terminalSessionReadExecutor(
  */
 export function installDesktopGraphQlRuntime(
   execute: WorkTrackerGraphQlExecute = grantsEveryLease,
+  subscribe?: (
+    operation: RecordedGraphQlOperation,
+    next: (data: unknown) => void,
+  ) => void,
 ): RecordedGraphQlOperation[] {
   const recorded: RecordedGraphQlOperation[] = [];
   const route: StudioRuntime["readWorkTracker"] = (routes) =>
@@ -224,7 +309,15 @@ export function installDesktopGraphQlRuntime(
       );
       return JSON.stringify({ data });
     },
-    graphql_subscribe: async () => '{"type":"accepted"}',
+    graphql_subscribe: async (_subscriptionId, requestJson, onEvent) => {
+      const request = JSON.parse(requestJson) as RecordedGraphQlOperation;
+      recorded.push(request);
+      subscribe?.(request, (data) => onEvent(JSON.stringify({
+        type: "next",
+        payload: { data },
+      })));
+      return '{"type":"accepted"}';
+    },
     graphql_unsubscribe: async () => true,
   });
 

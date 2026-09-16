@@ -71,12 +71,6 @@ impl DesktopServiceState {
         inserted
     }
 
-    pub fn publish_notice(&self, application: &tauri::AppHandle, notice: UserNotice) {
-        if self.retain_notice(notice.clone()) {
-            let _ = application.emit(USER_NOTICE_EVENT, notice);
-        }
-    }
-
     pub fn configuration(&self) -> Result<RuntimeStartupConfiguration, String> {
         let mut configuration = self
             .configuration

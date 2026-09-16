@@ -57,6 +57,7 @@ struct GraphRunPolicySnapshot<'a> {
     decision_id: &'a str,
     prompt: &'a str,
     agent: &'a str,
+    profile: Option<&'a str>,
     model: Option<&'a str>,
     reasoning: Option<&'a str>,
     required_skills: &'a [String],
@@ -69,6 +70,8 @@ struct StoredGraphRunPolicy {
     policy_identity: String,
     prompt: String,
     agent: String,
+    #[serde(default)]
+    profile: Option<String>,
     model: Option<String>,
     reasoning: Option<String>,
     required_skills: Vec<String>,
@@ -238,6 +241,7 @@ impl GraphRunService {
             decision_id: &decision.decision_id,
             prompt: &decision.prompt,
             agent: &decision.provider,
+            profile: decision.profile.as_deref(),
             model: decision.model.as_deref(),
             reasoning: decision.reasoning.as_deref(),
             required_skills: &decision.required_skills,
@@ -281,6 +285,7 @@ impl GraphRunService {
                     workflow_prompt: &decision.prompt,
                     additional_user_input: None,
                     design_directory: None,
+                    design_directory_root: None,
                 },
             )
             .await?;
@@ -399,6 +404,7 @@ impl GraphRunService {
                     workflow_prompt: &policy.prompt,
                     additional_user_input: None,
                     design_directory: None,
+                    design_directory_root: None,
                 },
             )
             .await?;
@@ -589,6 +595,7 @@ fn terminal_request(
         target_id: child_id.to_owned(),
         kind: TerminalLaunchKind::Automation,
         provider: Some(decision.provider.clone()),
+        profile: decision.profile.clone(),
         model: decision.model.clone(),
         reasoning: decision.reasoning.clone(),
         policy_reference: Some(decision.policy_identity.clone()),
@@ -619,6 +626,7 @@ fn stored_terminal_request(
         target_id: child_id.to_owned(),
         kind: TerminalLaunchKind::Automation,
         provider: Some(policy.agent.clone()),
+        profile: policy.profile.clone(),
         model: policy.model.clone(),
         reasoning: policy.reasoning.clone(),
         policy_reference: Some(policy.policy_identity.clone()),

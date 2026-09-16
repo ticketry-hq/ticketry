@@ -90,6 +90,7 @@ pub async fn dispatch(
                     prompt: workflow::PatchValue::Unset,
                     required_skills: workflow::PatchValue::Unset,
                     entry_skill: workflow::PatchValue::Unset,
+                    profile: workflow::PatchValue::Unset,
                     model_id: workflow::PatchValue::Unset,
                     reasoning_id: workflow::PatchValue::Unset,
                     auto_start: workflow::PatchValue::Value(boolean(arguments, "auto_start")?),
@@ -134,6 +135,11 @@ async fn upsert_launch_binding(
     } else {
         None
     };
+    let profile = patch_string(arguments, "profile")?;
+    ensure_profile_supported(
+        selected_provider.as_ref().map(|provider| provider.slug.as_str()),
+        &profile,
+    )?;
     let model_id = match arguments.get("model") {
         None => workflow::PatchValue::Unset,
         Some(Value::Null) => workflow::PatchValue::Null,
@@ -190,6 +196,7 @@ async fn upsert_launch_binding(
             prompt: patch_string(arguments, "prompt")?,
             required_skills: patch_strings(arguments, "required_skills")?,
             entry_skill: patch_string(arguments, "entry_skill")?,
+            profile,
             model_id,
             reasoning_id,
             auto_start: workflow::PatchValue::Unset,
@@ -198,6 +205,24 @@ async fn upsert_launch_binding(
     )
     .await?;
     Ok(())
+}
+
+/// Only Codex reads a launch profile; every other provider launches from model
+/// and reasoning, so a profile named alongside one is a silently wrong launch.
+pub(crate) fn ensure_profile_supported(
+    provider_slug: Option<&str>,
+    profile: &workflow::PatchValue<String>,
+) -> Result<(), CommandError> {
+    match (provider_slug, profile) {
+        (Some(slug), workflow::PatchValue::Value(_)) if slug != "codex" => {
+            Err(CommandError::Rejected {
+                message: "Only Codex supports launch profiles.".to_owned(),
+                code: "incompatible_profile",
+                field: Some("profile"),
+            })
+        }
+        _ => Ok(()),
+    }
 }
 
 pub fn rejection(error: &CommandError) -> Value {

@@ -1,15 +1,17 @@
 import { useQuery } from "@apollo/client/react";
+import { useState } from "react";
 
 import { studioApolloClient } from "../../../../shared/apollo/client";
 import { ModuleVersionControlDocument } from "../generated/moduleVersionControl.documents";
 import {
   commitModuleChanges,
+  commitPushModuleChanges,
   createModulePullRequest,
   pushModuleChanges,
 } from "../internal/changesTransport";
 import { newOperationId } from "../internal/operationId";
 import { ChangesActions } from "./ChangesActions";
-import { ChangedFilesList } from "./ChangedFilesList";
+import { ChangesFileReview } from "./ChangesFileReview";
 import { CurrentWorktreesList } from "./CurrentWorktreesList";
 import { modulePullRequestKey, useModulePullRequestState } from "./modulePullRequestState";
 
@@ -40,6 +42,10 @@ export function ModuleVersionControl({
     fetchPolicy: "network-only",
   });
   const modulePullRequestUrls = useModulePullRequestState((state) => state.urls);
+  const [lastCommit, setLastCommit] = useState<{
+    subject: string;
+    messageSource: string;
+  } | null>(null);
   const result = query.data?.module_version_control;
   if (!active) return null;
   if (query.error) {
@@ -65,8 +71,8 @@ export function ModuleVersionControl({
           onOpenTask={onOpenTask}
         />
       </div>
-      <section aria-label="Module checkout changes" className="min-h-0 overflow-auto p-4">
-        <header className="mb-3 border-b border-pane-border pb-3">
+      <section aria-label="Module checkout changes" className="flex min-h-0 flex-col overflow-hidden p-4">
+        <header className="mb-3 shrink-0 border-b border-pane-border pb-3">
           <div className="flex items-baseline gap-3">
             <h2 className="font-medium text-text-primary">Module checkout Changes</h2>
             {checkout.branch ? (
@@ -82,14 +88,25 @@ export function ModuleVersionControl({
                 {checkout.dirty ? "Dirty" : "Clean"} · {checkout.unpushed_count ?? 0} unpushed
               </p>
               <ChangesActions
+                stackKind="module"
+                branch={checkout.branch}
                 key={`${checkout.branch ?? "none"}:${checkout.default_branch ?? "none"}`}
                 dirty={checkout.dirty === true}
                 unpushedCount={checkout.unpushed_count ?? 0}
+                commitDescription={
+                  lastCommit
+                    ? `Committed as ${lastCommit.subject} (${lastCommit.messageSource})`
+                    : null
+                }
                 pullRequestUrl={modulePullRequestUrl}
                 pullRequestCreationEligible={checkout.pull_request_creation_eligible}
-                onCommit={async (message) => {
+                onCommit={async () => {
                   try {
-                    await commitModuleChanges(moduleId, newOperationId(), message);
+                    const committed = await commitModuleChanges(moduleId, newOperationId());
+                    setLastCommit({
+                      subject: committed.subject,
+                      messageSource: committed.message_source,
+                    });
                   } finally {
                     await query.refetch();
                   }
@@ -101,6 +118,7 @@ export function ModuleVersionControl({
                     await query.refetch();
                   }
                 }}
+                onStack={async () => commitPushModuleChanges(moduleId, newOperationId())}
                 onCreatePullRequest={async () => {
                   const created = await createModulePullRequest(moduleId, newOperationId());
                   useModulePullRequestState.getState().remember(pullRequestKey, created.url);
@@ -119,17 +137,16 @@ export function ModuleVersionControl({
         ) : checkout.files.length === 0 ? (
           <div className="text-text-muted">No module changes from the selected baseline.</div>
         ) : (
-          <ChangedFilesList
+          <ChangesFileReview
+            checkoutKey={`module:${moduleId}`}
+            moduleId={moduleId}
             files={checkout.files}
+            insertions={checkout.insertions}
+            deletions={checkout.deletions}
+            truncated={checkout.truncated}
             label="Module changed files"
-            descriptionPrefix="module-change"
           />
         )}
-        {checkout.truncated ? (
-          <div className="mt-3 text-lifecycle-attention" role="status">
-            The changed-file limit was reached.
-          </div>
-        ) : null}
       </section>
     </div>
   );

@@ -1,31 +1,19 @@
-use std::path::{Path, PathBuf};
-use std::process::Command;
+mod common;
+
+use std::path::Path;
 
 use sea_orm::{ConnectionTrait, Database, DbBackend, Statement};
 use ticketry_work_management::adoption::{adopt, SourceClassification};
 use ticketry_work_management::launch_binding_entry_skill_migration;
 use ticketry_work_management::workflow_handoff_migration;
 
-fn repository_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .expect("resolve repository root")
-}
-
-fn django_fixture(database_path: &Path) {
-    let root = repository_root();
-    let output = Command::new(root.join("backend/.venv/bin/python"))
-        .arg(root.join("backend/worktracker/tests/build_shape_parity_fixture.py"))
-        .arg(database_path)
-        .current_dir(&root)
-        .output()
-        .expect("run Django fixture builder");
-    assert!(
-        output.status.success(),
-        "Django fixture builder failed:\n{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
+async fn django_fixture(database_path: &Path) {
+    common::execution_legacy_fixture::provision_current(
+        database_path
+            .parent()
+            .expect("the database has a data directory"),
+    )
+    .await;
 }
 
 async fn normalize_fixture_counters(path: &Path) {
@@ -42,7 +30,7 @@ async fn normalize_fixture_counters(path: &Path) {
 async fn adopts_current_django_data_with_verified_recovery_evidence_and_reopens() {
     let directory = tempfile::tempdir().expect("create fixture directory");
     let path = directory.path().join("state.db");
-    django_fixture(&path);
+    django_fixture(&path).await;
     normalize_fixture_counters(&path).await;
     std::fs::write(
         directory.path().join("database-url"),
@@ -71,7 +59,7 @@ async fn adopts_current_django_data_with_verified_recovery_evidence_and_reopens(
 async fn reopens_after_the_ledger_backed_entry_skill_migration() {
     let directory = tempfile::tempdir().expect("create fixture directory");
     let path = directory.path().join("state.db");
-    django_fixture(&path);
+    django_fixture(&path).await;
     normalize_fixture_counters(&path).await;
     adopt(directory.path()).await.expect("adopt fixture");
 
@@ -94,7 +82,7 @@ async fn reopens_after_the_ledger_backed_entry_skill_migration() {
 async fn reopens_after_the_ledger_backed_workflow_handoff_migration() {
     let directory = tempfile::tempdir().expect("create fixture directory");
     let path = directory.path().join("state.db");
-    django_fixture(&path);
+    django_fixture(&path).await;
     normalize_fixture_counters(&path).await;
     adopt(directory.path()).await.expect("adopt fixture");
 
@@ -117,7 +105,7 @@ async fn reopens_after_the_ledger_backed_workflow_handoff_migration() {
 async fn refuses_an_enabled_postgresql_installation_without_touching_sqlite() {
     let directory = tempfile::tempdir().expect("create fixture directory");
     let path = directory.path().join("state.db");
-    django_fixture(&path);
+    django_fixture(&path).await;
     normalize_fixture_counters(&path).await;
     std::fs::write(
         directory.path().join("database-url"),
@@ -153,7 +141,7 @@ async fn refuses_an_enabled_postgresql_installation_without_touching_sqlite() {
 async fn refuses_unknown_owned_schema_before_installing_the_ledger() {
     let directory = tempfile::tempdir().expect("create fixture directory");
     let path = directory.path().join("state.db");
-    django_fixture(&path);
+    django_fixture(&path).await;
     normalize_fixture_counters(&path).await;
     let database = Database::connect(format!("sqlite:{}?mode=rw", path.display()))
         .await

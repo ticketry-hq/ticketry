@@ -2,9 +2,12 @@ use std::collections::BTreeMap;
 
 use sea_orm::{ConnectionTrait, EntityTrait, QueryOrder};
 
+use super::entities::app_settings as app_setting;
 use super::global_launch_default::read_global_launch_default;
+use super::global_launch_default::{PROVIDER_CATALOG_KEY, PROVIDER_CATALOG_SCOPE};
 use super::provider_catalog::{ProviderCatalog, ProviderCatalogError, CONFIGURABLE_PROVIDER_SLUGS};
-use ticketry_entities::{agent_model, provider, reasoning_level};
+use sea_orm::{ColumnTrait, QueryFilter};
+use ticketry_entities::{agent_model, provider, reasoning_level, StringList};
 
 pub(super) async fn load_from(
     database: &impl ConnectionTrait,
@@ -43,6 +46,19 @@ pub(super) async fn load_from(
             .collect(),
         agent_models: model_rows,
         reasoning_levels: reasoning_rows,
+        codex_profiles: StringList(
+            app_setting::Entity::find()
+                .filter(app_setting::Column::Scope.eq(PROVIDER_CATALOG_SCOPE))
+                .filter(app_setting::Column::Key.eq(PROVIDER_CATALOG_KEY))
+                .one(database)
+                .await?
+                .and_then(|row| serde_json::from_str::<serde_json::Value>(&row.value).ok())
+                .and_then(|value| value.get("codex_profiles")?.as_array().cloned())
+                .unwrap_or_default()
+                .into_iter()
+                .filter_map(|value| value.as_str().map(str::to_owned))
+                .collect(),
+        ),
         global_default: read_global_launch_default(database).await?,
     })
 }

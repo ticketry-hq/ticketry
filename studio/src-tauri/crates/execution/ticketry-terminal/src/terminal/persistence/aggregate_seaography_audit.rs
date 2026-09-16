@@ -101,6 +101,13 @@ pub const CUSTOM_QUERIES: &[CustomField] = &[
         override_reason: "derive a safe display title from private launch material while filtering to live Instant Agent Runs; registering that model would publish the full prompt and filesystem identities",
         evidence: "terminal::instant_run_ticket::operation_registry::CUSTOM_QUERIES",
     },
+    CustomField {
+        field: "instant_run_ticket_title",
+        kind: CustomFieldKind::Query,
+        returns: "String",
+        override_reason: "read an accepted provider-owned name through the resident read-only Codex app-server after one identity-scoped SeaORM Launch Material and Agent Run join; the private prompt rejects boilerplate prefixes and generated entity reads cannot call the provider",
+        evidence: "terminal::instant_run_ticket::operation_registry::CUSTOM_QUERIES",
+    },
 ];
 
 /// Every custom write in the slice. Each one is a restricted, identity-bound,
@@ -194,6 +201,14 @@ pub const RAW_SQL_EVIDENCE_ONLY: &[RawSqlEvidence] = &[
         purpose: "pre-adoption validation, ownership ledger, and checkpoint pragmas",
     },
     RawSqlEvidence {
+        path: "crates/execution/ticketry-terminal/src/terminal/persistence/adoption/evidence.rs",
+        purpose: "post-adoption evidence and stable schema digests",
+    },
+    RawSqlEvidence {
+        path: "crates/execution/ticketry-terminal/src/terminal/persistence/adoption/schema_validation.rs",
+        purpose: "pre-adoption schema and invariant validation",
+    },
+    RawSqlEvidence {
         path: "crates/execution/ticketry-terminal/src/temporary_profile/journal.rs",
         purpose:
             "sqlite_master probe proving a discarded profile never provisioned terminal storage",
@@ -242,10 +257,10 @@ mod tests {
     #[test]
     fn the_recorded_counts_are_the_audited_counts() {
         assert_eq!(REGISTERED_ENTITIES.len(), 3);
-        assert_eq!(CUSTOM_QUERIES.len(), 2);
+        assert_eq!(CUSTOM_QUERIES.len(), 3);
         assert_eq!(CUSTOM_MUTATIONS.len(), 6);
         assert_eq!(CUSTOM_OUTPUTS.len(), 2);
-        assert_eq!(RAW_SQL_EVIDENCE_ONLY.len(), 3);
+        assert_eq!(RAW_SQL_EVIDENCE_ONLY.len(), 5);
     }
 
     #[test]

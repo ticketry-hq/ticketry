@@ -1,10 +1,12 @@
 import { useQuery } from "@apollo/client/react";
+import { useState } from "react";
 
 import { studioApolloClient } from "../../../../shared/apollo/client";
 import { WorktreeChangesDocument } from "../generated/worktreeChanges.documents";
 import { WorktreeStatusDocument } from "../generated/worktreeStatus.documents";
 import {
   commitTaskChanges,
+  commitPushTaskChanges,
   cleanupTaskWorktree,
   createTaskPullRequest,
   followUpTaskPullRequest,
@@ -14,7 +16,7 @@ import {
 } from "../internal/changesTransport";
 import { newOperationId } from "../internal/operationId";
 import { ChangesActions } from "./ChangesActions";
-import { ChangedFilesList } from "./ChangedFilesList";
+import { ChangesFileReview } from "./ChangesFileReview";
 import { WorktreeLifecycle } from "./WorktreeLifecycle";
 
 export function TaskWorktreeChanges({
@@ -31,6 +33,10 @@ export function TaskWorktreeChanges({
     fetchPolicy: "network-only",
   });
   const changes = query.data?.worktree_changes;
+  const [lastCommit, setLastCommit] = useState<{
+    subject: string;
+    messageSource: string;
+  } | null>(null);
 
   const runThenRefresh = async <T,>(action: () => Promise<T>): Promise<T> => {
     try {
@@ -91,10 +97,10 @@ export function TaskWorktreeChanges({
   return (
     <section
       aria-label="Task worktree changes"
-      className="h-full overflow-auto p-4 text-sm"
+      className="flex h-full min-h-0 flex-col overflow-hidden p-4 text-sm"
       data-testid="task-worktree-changes"
     >
-      <header className="mb-3 border-b border-pane-border pb-3">
+      <header className="mb-3 shrink-0 border-b border-pane-border pb-3">
         <div className="font-medium text-text-primary">
           {changes.files.length} cumulative changes
         </div>
@@ -102,14 +108,25 @@ export function TaskWorktreeChanges({
           Includes committed work from the recorded base.
         </div>
         <ChangesActions
+          branch={changes.pull_request?.target_branch ?? null}
+          stackKind="task"
           dirty={changes.dirty}
           unpushedCount={changes.unpushed_count}
+          commitDescription={
+            lastCommit
+              ? `Committed as ${lastCommit.subject} (${lastCommit.messageSource})`
+              : null
+          }
           pullRequestUrl={changes.pull_request_url}
           pullRequestCreationEligible={changes.pull_request_creation_eligible}
           pullRequest={changes.pull_request}
-          onCommit={async (message) => {
+          onCommit={async () => {
             await runThenRefresh(async () => {
-              await commitTaskChanges(taskId, newOperationId(), message);
+              const committed = await commitTaskChanges(taskId, newOperationId());
+              setLastCommit({
+                subject: committed.subject,
+                messageSource: committed.message_source,
+              });
             });
           }}
           onPush={async () => {
@@ -117,6 +134,7 @@ export function TaskWorktreeChanges({
               await pushTaskChanges(taskId, newOperationId());
             });
           }}
+          onStack={async () => commitPushTaskChanges(taskId, newOperationId())}
           onCreatePullRequest={() => runPullRequestThenRefresh(
             () => createTaskPullRequest(taskId, newOperationId()),
           )}
@@ -146,25 +164,19 @@ export function TaskWorktreeChanges({
         />
       </header>
 
-      {changes.truncated ? (
-        <div
-          className="mb-3 border border-lifecycle-attention/50 bg-lifecycle-attention/10 p-2 text-lifecycle-attention"
-          role="status"
-        >
-          The changed-file limit was reached. This list shows only the first
-          bounded set of paths.
-        </div>
-      ) : null}
-
       {changes.files.length === 0 ? (
         <div className="text-text-muted">
           No cumulative changes from the recorded base.
         </div>
       ) : (
-        <ChangedFilesList
+        <ChangesFileReview
+          checkoutKey={`task:${taskId}`}
+          taskId={taskId}
           files={changes.files}
+          insertions={changes.insertions}
+          deletions={changes.deletions}
+          truncated={changes.truncated}
           label="Cumulative changed files"
-          descriptionPrefix="worktree-change"
         />
       )}
     </section>

@@ -8,7 +8,7 @@
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    run_with_file_logging(false);
+    run_with_file_logging(file_logging_requested(&[]));
 }
 
 /// Hands the shell its Tauri context and runs it.
@@ -18,7 +18,9 @@ pub fn run() {
 /// so the context is built once at the root and passed down. Expanding the
 /// macro a second time would redefine `_EMBED_INFO_PLIST`.
 pub fn run_with_file_logging(requested: bool) {
-    ticketry_desktop::run(tauri::generate_context!(), requested);
+    let context = tauri::generate_context!();
+    let app_version = context.package_info().version.to_string();
+    ticketry_desktop::run(context, requested, &app_version, env!("TICKETRY_COMMIT"));
 }
 
 pub fn file_logging_requested(arguments: &[std::ffi::OsString]) -> bool {

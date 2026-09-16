@@ -6,12 +6,12 @@ use seaography::CustomOutputType;
 use serde::Serialize;
 
 use crate::worktree::status;
-use ticketry_entities::issue;
 use ticketry_entities::worktree;
+use ticketry_entities::ship_record;
 
 use super::{
-    command_git, module_baseline, repository, PullRequestStatusView, WorktreeChangesError,
-    WorktreeChangesService,
+    command_git, message_generation, module_baseline, repository, PullRequestStatusView,
+    WorktreeChangesError, WorktreeChangesService,
 };
 
 #[derive(Clone, Copy)]
@@ -25,6 +25,9 @@ enum TaskPullRequestKind {
 pub struct PullRequestCreationResult {
     pub operation_id: String,
     pub url: String,
+    pub title: String,
+    pub body: String,
+    pub message_source: String,
     pub branch: String,
     pub base_branch: String,
     pub pushed: bool,
@@ -73,10 +76,6 @@ impl WorktreeChangesService {
         let owner = status::owner::resolve(self.status().work_items(), task_id).await?;
         let row = worktree::Entity::find()
             .filter(worktree::Column::TaskId.eq(owner.top_level_row_id()))
-            .one(self.status().work_items())
-            .await?
-            .ok_or_else(WorktreeChangesError::not_found)?;
-        let task = issue::Entity::find_by_id(&row.task_id)
             .one(self.status().work_items())
             .await?
             .ok_or_else(WorktreeChangesError::not_found)?;
@@ -144,17 +143,23 @@ impl WorktreeChangesService {
         if pushed {
             command_git::push(self.status().git(), &checkout, &facts).await?;
         }
+        let text = message_generation::generate_pr_text(
+            self.status().git(),
+            self.status().work_items(),
+            &checkout,
+            &row.branch,
+            &row.base_branch,
+            &row.base_commit,
+        )
+        .await;
         let url = self
             .github()
             .create_pull_request(
                 &checkout,
                 &row.branch,
                 &row.base_branch,
-                &bounded_title(&task.name),
-                &format!(
-                    "Created by Ticketry for Work Item {}.",
-                    owner.top_level_task_id
-                ),
+                &text.title,
+                &text.body,
             )
             .await?;
 
@@ -163,9 +168,35 @@ impl WorktreeChangesService {
         updated.updated_at = Set(Utc::now().to_rfc3339_opts(SecondsFormat::Micros, false));
         updated.update(self.status().work_items()).await?;
 
+        if let Some(module_id) = row.module_id.as_deref() {
+            let _ = ship_record::append(
+                self.status().work_items(),
+                ship_record::AppendReceipt {
+                    module_id: module_id.to_owned(),
+                    task_id: Some(owner.top_level_row_id().to_owned()),
+                    checkout_kind: "task_worktree".to_owned(),
+                    checkout_label: row.path.clone(),
+                    operation_id: operation_id.to_owned(),
+                    branch: row.branch.clone(),
+                    commit_shas: vec![facts.head_commit.clone()],
+                    steps: vec![serde_json::json!({"kind": "pull_request_created"})],
+                    acted_at: Utc::now().to_rfc3339_opts(SecondsFormat::Micros, false),
+                    pr_url: Some(url.clone()),
+                    pr_number: url.rsplit('/').next().and_then(|value| value.parse().ok()),
+                    pr_state: Some("open".to_owned()),
+                    pr_target_branch: Some(row.base_branch.clone()),
+                    pr_head_commit: Some(facts.head_commit.clone()),
+                },
+            )
+            .await;
+        }
+
         Ok(PullRequestCreationResult {
             operation_id: operation_id.to_owned(),
             url,
+            title: text.title,
+            body: text.body,
+            message_source: text.source,
             branch: row.branch,
             base_branch: row.base_branch,
             pushed,
@@ -202,31 +233,36 @@ impl WorktreeChangesService {
         if pushed {
             command_git::push(self.status().git(), &repository, &facts).await?;
         }
+        let text = message_generation::generate_pr_text(
+            self.status().git(),
+            self.status().work_items(),
+            &repository,
+            &target.branch,
+            &target.base_branch,
+            &target.base_reference,
+        )
+        .await;
         let url = self
             .github()
             .create_pull_request(
                 &repository,
                 &target.branch,
                 &target.base_branch,
-                &bounded_title(&format!(
-                    "Merge {} into {}",
-                    target.branch, target.base_branch
-                )),
-                "Created by Ticketry from the module checkout.",
+                &text.title,
+                &text.body,
             )
             .await?;
 
         Ok(PullRequestCreationResult {
             operation_id: operation_id.to_owned(),
             url,
+            title: text.title,
+            body: text.body,
+            message_source: text.source,
             branch: target.branch,
             base_branch: target.base_branch,
             pushed,
             uncommitted_work_excluded: pushed && facts.dirty,
         })
     }
-}
-
-fn bounded_title(title: &str) -> String {
-    title.chars().take(256).collect()
 }

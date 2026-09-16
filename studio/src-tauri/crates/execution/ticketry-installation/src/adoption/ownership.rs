@@ -7,6 +7,7 @@
 //! in which a mutation is accepted — is the last thing that happens, and it is
 //! a separate call, because the capability handoffs run in between.
 
+use std::collections::BTreeMap;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::Path;
@@ -42,7 +43,7 @@ pub(super) async fn settle(
 ) -> Result<Adoption, AdoptionFailure> {
     let database_path = data_directory.join("state.db");
 
-    let (source, fingerprint, previously_ready, bridges) = {
+    let (source, fingerprint, previously_ready, bridges, preserved_digest) = {
         let database = exclusive::open_exclusive(&database_path).await?;
         let held = commit_ownership(
             &database,
@@ -67,7 +68,11 @@ pub(super) async fn settle(
 
     let checked = {
         let reader = exclusive::open_shared(&database_path).await?;
-        let outcome = postflight::check(data_directory, &reader, &source).await;
+        let outcome = if path == AdoptionPath::Reopened && semantic_bridges.is_empty() {
+            postflight::check_reopened(&reader, &source).await
+        } else {
+            postflight::check(data_directory, &reader, &source).await
+        };
         let _ = reader.close().await;
         outcome?
     };
@@ -82,7 +87,7 @@ pub(super) async fn settle(
         bridges,
         snapshot: protection.map(|protection| protection.record),
         counts: checked.adopted.counts.clone(),
-        preserved_digest: checked.adopted.combined_digest(),
+        preserved_digest,
         event_boundary: None,
         // The gate stays shut until the boundary is published. A record that
         // said otherwise here would be the one lie the whole sequence exists
@@ -170,10 +175,20 @@ pub(super) async fn commit_ownership(
     provided_bridges: &[String],
     semantic_bridges: &[String],
     plan: &AdoptionPlan,
-) -> Result<(Inventory, String, bool, Vec<String>), AdoptionFailure> {
-    let original = match protection {
-        Some(protection) => protection.source.clone(),
-        None => inventory::read(database).await.map_err(|error| {
+) -> Result<(Inventory, String, bool, Vec<String>, String), AdoptionFailure> {
+    let existing = ledger::read(database).await?;
+    // A plain reopen — Rust already owns the installation, nothing is being
+    // repaired, and no ledger row will be written — re-hashes nothing. The
+    // ledger already records the inventory the adoption preserved, and hashing
+    // every row again would only reproduce it for the evidence file.
+    let reopening = existing.is_some() && protection.is_none() && semantic_bridges.is_empty();
+    let original = match (protection, &existing) {
+        (Some(protection), _) => protection.source.clone(),
+        (None, Some(row)) if reopening => Inventory {
+            counts: row.counts.clone(),
+            digests: BTreeMap::new(),
+        },
+        (None, _) => inventory::read(database).await.map_err(|error| {
             AdoptionFailure::new(
                 Phase::LedgerCommit,
                 Refusal::LedgerFailed,
@@ -186,7 +201,6 @@ pub(super) async fn commit_ownership(
         None => fingerprint(database).await?,
     };
 
-    let existing = ledger::read(database).await?;
     let previously_ready = matches!(
         existing.as_ref().map(|row| row.completion),
         Some(Completion::Ready)
@@ -326,7 +340,17 @@ pub(super) async fn commit_ownership(
         }
     }
     fault(plan, Phase::LedgerCommit)?;
-    Ok((expected, fingerprint, previously_ready, bridge_ids))
+    let preserved_digest = match &existing {
+        Some(row) if reopening => row.preserved_digest.clone(),
+        _ => expected.combined_digest(),
+    };
+    Ok((
+        expected,
+        fingerprint,
+        previously_ready,
+        bridge_ids,
+        preserved_digest,
+    ))
 }
 
 fn ownership_row(

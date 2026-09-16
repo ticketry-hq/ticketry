@@ -5,7 +5,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, EntityTrait, Statement};
+use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 
 use crate::terminal::launch::{
     TerminalLaunchCheckpoint, TerminalLaunchRuntime, TerminalRuntimeObservation,
@@ -15,7 +15,7 @@ use crate::terminal::reconciliation::{
     RecordedSessionDecision, TerminalReconciliationReport, TerminalReconciliationService,
 };
 use crate::tmux_adapter::{
-    ApprovedArgv, CreateOutcome, CreateSession, PersistedSessionName, RuntimeIdentity,
+    ApprovedArgv, CreateOutcome, CreateSession, KillOutcome, PersistedSessionName, RuntimeIdentity,
     RuntimeObservation, TerminalGeometry, TmuxAdapter,
 };
 use crate::viewer_ownership::ViewerOwnershipService;
@@ -171,7 +171,7 @@ pub struct TerminalRuntimeAuthority {
     pub paths: ticketry_launch::LaunchPathsService,
     pub hook_runner: PathBuf,
     pub hook_spool_directory: PathBuf,
-    pub mcp_url: String,
+    pub mcp_data_directory: Option<PathBuf>,
     pub run_authority: RunAuthority,
     /// The operations a launched run's grant may name. The composer supplies
     /// them, so terminal never reads the MCP tool registry above it.
@@ -199,20 +199,9 @@ impl InteractiveTerminalLaunchRuntime {
             .expect("terminal authority lock poisoned") = Some(authority);
     }
 
-    pub fn clear_authority(&self) {
-        if let Some(authority) = self
-            .authority
-            .write()
-            .expect("terminal authority lock poisoned")
-            .as_mut()
-        {
-            authority.mcp_url.clear();
-        }
-    }
-
     pub fn replace_mcp_authority(
         &self,
-        mcp_url: String,
+        mcp_data_directory: PathBuf,
         run_authority: RunAuthority,
     ) -> Result<(), String> {
         let mut authority = self
@@ -222,7 +211,7 @@ impl InteractiveTerminalLaunchRuntime {
         let current = authority
             .as_mut()
             .ok_or_else(|| "the terminal launch authority is unavailable".to_owned())?;
-        current.mcp_url = mcp_url;
+        current.mcp_data_directory = Some(mcp_data_directory);
         current.run_authority = run_authority;
         Ok(())
     }
@@ -251,7 +240,7 @@ impl TerminalLaunchRuntime for InteractiveTerminalLaunchRuntime {
                     "The Rust terminal launch authority is not ready.",
                 )
             })?;
-        require_provider_control(request.kind, &authority.mcp_url)?;
+        require_provider_control(request.kind, authority.mcp_data_directory.as_deref())?;
         authority
             .paths
             .preflight_module_folder(&request.module_id)
@@ -412,6 +401,7 @@ impl TerminalLaunchRuntime for InteractiveTerminalLaunchRuntime {
             kind,
             provider,
             ticketry_launch::ProviderOptions {
+                profile: material.profile.clone(),
                 model: material.model.clone(),
                 reasoning: material.reasoning.clone(),
             },
@@ -430,7 +420,9 @@ impl TerminalLaunchRuntime for InteractiveTerminalLaunchRuntime {
             working_directory,
             authority.hook_runner.clone(),
             authority.hook_spool_directory.clone(),
-            authority.mcp_url.clone(),
+            authority.mcp_data_directory.clone().ok_or_else(|| {
+                invalid_launch("WorkTracker MCP is unavailable. Provider launch is blocked.")
+            })?,
             authorization,
             available_skills(),
         );
@@ -470,9 +462,11 @@ impl TerminalLaunchRuntime for InteractiveTerminalLaunchRuntime {
 
 fn require_provider_control(
     kind: ticketry_launch::TerminalLaunchKind,
-    mcp_url: &str,
+    mcp_data_directory: Option<&Path>,
 ) -> Result<(), TerminalLaunchError> {
-    if kind != ticketry_launch::TerminalLaunchKind::Shell && mcp_url.is_empty() {
+    if kind != ticketry_launch::TerminalLaunchKind::Shell
+        && !mcp_data_directory.is_some_and(Path::is_absolute)
+    {
         return Err(TerminalLaunchError::new(
             TerminalLaunchErrorCode::RuntimeUnavailable,
             "WorkTracker MCP is unavailable. Provider launch is blocked.",
@@ -483,14 +477,90 @@ fn require_provider_control(
 
 #[cfg(test)]
 mod provider_control_tests {
-    use super::{entry_skill_for_effect, require_provider_control};
+    use super::{
+        entry_skill_for_effect, require_provider_control, spawn_tmux_runtime_with_adapter,
+        SpawnRuntimeAdapter,
+    };
+    use crate::terminal::launch::{TerminalLaunchBoundary, TerminalLaunchCheckpoint};
+    use crate::tmux_adapter::{
+        ApprovedArgv, CreateOutcome, CreateSession, KillOutcome, RuntimeIdentity,
+    };
     use sea_orm::{ConnectionTrait, Database};
+    use std::sync::{Arc, Mutex};
     use ticketry_launch::{TerminalLaunchErrorCode, TerminalLaunchKind};
 
+    struct NoopCheckpoint;
+
+    #[async_trait::async_trait]
+    impl TerminalLaunchCheckpoint for NoopCheckpoint {
+        async fn checkpoint(
+            &self,
+            _boundary: TerminalLaunchBoundary,
+        ) -> Result<(), ticketry_launch::TerminalLaunchError> {
+            Ok(())
+        }
+    }
+
+    #[derive(Clone, Default)]
+    struct RecordingRuntime {
+        created: Arc<Mutex<usize>>,
+        submitted: Arc<Mutex<Vec<String>>>,
+        killed: Arc<Mutex<usize>>,
+    }
+
+    impl SpawnRuntimeAdapter for RecordingRuntime {
+        fn create(&self, _request: &CreateSession) -> Result<CreateOutcome, String> {
+            *self.created.lock().unwrap() += 1;
+            Ok(CreateOutcome::Created)
+        }
+
+        fn submit(
+            &self,
+            _provider: ticketry_launch::Provider,
+            _run_id: &str,
+            text: &str,
+        ) -> Result<(), String> {
+            self.submitted.lock().unwrap().push(text.to_owned());
+            Ok(())
+        }
+
+        fn kill(&self, _identity: &RuntimeIdentity) -> Result<KillOutcome, String> {
+            *self.killed.lock().unwrap() += 1;
+            Ok(KillOutcome::Killed)
+        }
+    }
+
+    fn launch_material() -> ticketry_entities::launch_material::Model {
+        ticketry_entities::launch_material::Model {
+            effect_id: "effect-1".to_owned(),
+            agent_run_id: "run-1".to_owned(),
+            schema_version: 1,
+            request_id: "request-1".to_owned(),
+            issue_id: "issue-1".to_owned(),
+            project_id: "project-1".to_owned(),
+            module_id: "module-1".to_owned(),
+            task_id: "task-1".to_owned(),
+            provider: Some("codex".to_owned()),
+            profile: None,
+            model: None,
+            reasoning: None,
+            scope: "task".to_owned(),
+            doc_rel_path: None,
+            prompt: Some("Implement the task".to_owned()),
+            resume_from_agent_run_id: None,
+            required_skills: serde_json::json!(["tdd"]),
+            working_directory_identity: "module-1".to_owned(),
+            design_directory_identity: None,
+            initial_columns: 120,
+            initial_rows: 40,
+            created_at: "2026-09-05T00:00:00Z".to_owned(),
+        }
+    }
+
     #[test]
-    fn missing_listener_blocks_provider_launch_with_an_empty_url() {
+    fn missing_listener_blocks_provider_launch_without_a_data_directory() {
         for kind in [TerminalLaunchKind::Task, TerminalLaunchKind::Planning] {
-            let error = require_provider_control(kind, "").expect_err("provider launch blocked");
+            let error = require_provider_control(kind, None).expect_err("provider launch blocked");
 
             assert_eq!(error.code, TerminalLaunchErrorCode::RuntimeUnavailable);
             assert_eq!(
@@ -502,15 +572,25 @@ mod provider_control_tests {
 
     #[test]
     fn missing_listener_does_not_block_local_shells() {
-        assert!(require_provider_control(TerminalLaunchKind::Shell, "").is_ok());
+        assert!(require_provider_control(TerminalLaunchKind::Shell, None).is_ok());
+    }
+
+    #[test]
+    fn relative_data_directory_blocks_provider_launch() {
+        assert!(require_provider_control(
+            TerminalLaunchKind::Task,
+            Some(std::path::Path::new("relative/data"))
+        )
+        .is_err());
     }
 
     #[test]
     fn owned_listener_recovery_allows_provider_launch() {
-        assert!(
-            require_provider_control(TerminalLaunchKind::Task, "http://127.0.0.1:43219/mcp")
-                .is_ok()
-        );
+        assert!(require_provider_control(
+            TerminalLaunchKind::Task,
+            Some(std::path::Path::new("/tmp/Ticketry data"))
+        )
+        .is_ok());
     }
 
     #[tokio::test]
@@ -518,11 +598,34 @@ mod provider_control_tests {
         let database = Database::connect("sqlite::memory:").await.unwrap();
         database
             .execute_unprepared(
-                "CREATE TABLE runs_launch_effects (effect_id text PRIMARY KEY, policy_reference text);\
-                 CREATE TABLE worktracker_launchbinding (id integer PRIMARY KEY, entry_skill text);\
-                 INSERT INTO worktracker_launchbinding VALUES (7, 'tdd');\
-                 INSERT INTO runs_launch_effects VALUES ('with-entry', 'launch-binding:7');\
-                 INSERT INTO runs_launch_effects VALUES ('without-entry', NULL);",
+                "CREATE TABLE runs_launch_effects (\
+                    effect_id text PRIMARY KEY, intent_version integer NOT NULL DEFAULT 1,\
+                    agent_run_id text NOT NULL DEFAULT '', automation_attempt_id text,\
+                    request_id text NOT NULL DEFAULT '', project_id text NOT NULL DEFAULT '',\
+                    issue_id text NOT NULL DEFAULT '', scope text NOT NULL DEFAULT 'task',\
+                    provider text, target_kind text NOT NULL DEFAULT 'task',\
+                    target_id text NOT NULL DEFAULT '', policy_reference text,\
+                    state text NOT NULL DEFAULT 'prepared', lease_owner text, lease_expires_at text,\
+                    attempt_count integer NOT NULL DEFAULT 0, last_error_code text,\
+                    last_error_message text, runtime_evidence text,\
+                    created_at text NOT NULL DEFAULT CURRENT_TIMESTAMP,\
+                    updated_at text NOT NULL DEFAULT CURRENT_TIMESTAMP, applied_at text\
+                 );\
+                 CREATE TABLE worktracker_launchbinding (\
+                    id integer PRIMARY KEY, issue_type_id text NOT NULL DEFAULT '',\
+                    state_id text NOT NULL DEFAULT '', prompt text NOT NULL DEFAULT '',\
+                    required_skills text NOT NULL DEFAULT '[]', entry_skill text, profile text,\
+                    model_id text,\
+                    reasoning_id text, auto_start bool NOT NULL DEFAULT 0,\
+                    subtree_run_enabled bool NOT NULL DEFAULT 0,\
+                    created_at text NOT NULL DEFAULT CURRENT_TIMESTAMP,\
+                    updated_at text NOT NULL DEFAULT CURRENT_TIMESTAMP\
+                 );\
+                 INSERT INTO worktracker_launchbinding (id, entry_skill) VALUES (7, 'tdd');\
+                 INSERT INTO runs_launch_effects (effect_id, policy_reference)\
+                    VALUES ('with-entry', 'launch-binding:7');\
+                 INSERT INTO runs_launch_effects (effect_id, policy_reference)\
+                    VALUES ('without-entry', NULL);",
             )
             .await
             .unwrap();
@@ -539,6 +642,36 @@ mod provider_control_tests {
                 .unwrap(),
             None
         );
+    }
+
+    /// `[overhaul-245]` The runtime-spawn path carries the prompt in its
+    /// already-materialized command and types only the provider-formatted
+    /// entry skill after the pane exists.
+    #[tokio::test]
+    async fn fresh_bound_launch_wires_entry_skill_delivery_after_runtime_creation() {
+        let runtime = RecordingRuntime::default();
+        let observed = runtime.clone();
+        let command = ApprovedArgv::for_login_shell(
+            std::path::PathBuf::from("/bin/sh"),
+            std::env::temp_dir(),
+        )
+        .expect("approved test shell");
+        let identity = RuntimeIdentity::new("run-1", "runtime-1").unwrap();
+
+        spawn_tmux_runtime_with_adapter(
+            runtime,
+            &launch_material(),
+            &NoopCheckpoint,
+            command,
+            Some((ticketry_launch::Provider::Codex, "tdd".to_owned())),
+            identity,
+        )
+        .await
+        .expect("spawn and entry-skill delivery succeed");
+
+        assert_eq!(*observed.created.lock().unwrap(), 1);
+        assert_eq!(*observed.submitted.lock().unwrap(), vec!["$tdd"]);
+        assert_eq!(*observed.killed.lock().unwrap(), 0);
     }
 }
 
@@ -575,6 +708,57 @@ async fn spawn_tmux_runtime(
             .map_err(|_| invalid_launch("The terminal runtime namespace is unavailable."))?,
     )
     .map_err(|_| invalid_launch("The terminal runtime identity is invalid."))?;
+    spawn_tmux_runtime_with_adapter(
+        adapter,
+        material,
+        checkpoint,
+        command,
+        entry_skill,
+        identity,
+    )
+    .await
+}
+
+trait SpawnRuntimeAdapter: Clone + Send + Sync + 'static {
+    fn create(&self, request: &CreateSession) -> Result<CreateOutcome, String>;
+    fn submit(
+        &self,
+        provider: ticketry_launch::Provider,
+        run_id: &str,
+        text: &str,
+    ) -> Result<(), String>;
+    fn kill(&self, identity: &RuntimeIdentity) -> Result<KillOutcome, String>;
+}
+
+impl SpawnRuntimeAdapter for TmuxAdapter {
+    fn create(&self, request: &CreateSession) -> Result<CreateOutcome, String> {
+        TmuxAdapter::create(self, request).map_err(|error| error.to_string())
+    }
+
+    fn submit(
+        &self,
+        provider: ticketry_launch::Provider,
+        run_id: &str,
+        text: &str,
+    ) -> Result<(), String> {
+        crate::terminal::prompt_delivery::submit_text(provider, run_id, text)
+            .map_err(|error| error.to_string())
+    }
+
+    fn kill(&self, identity: &RuntimeIdentity) -> Result<KillOutcome, String> {
+        self.kill_verified(identity)
+            .map_err(|error| error.to_string())
+    }
+}
+
+async fn spawn_tmux_runtime_with_adapter<Adapter: SpawnRuntimeAdapter>(
+    adapter: Adapter,
+    material: &ticketry_entities::launch_material::Model,
+    checkpoint: &dyn TerminalLaunchCheckpoint,
+    command: ApprovedArgv,
+    entry_skill: Option<(ticketry_launch::Provider, String)>,
+    identity: RuntimeIdentity,
+) -> Result<(), TerminalLaunchError> {
     match adapter
         .create(&CreateSession {
             identity: identity.clone(),
@@ -604,33 +788,15 @@ async fn spawn_tmux_runtime(
         _ => return Err(invalid_launch("The terminal runtime identity conflicts.")),
     }
     if let Some((provider, skill)) = entry_skill {
-        let invocation = crate::terminal::prompt_delivery::entry_skill_invocation(provider, &skill);
         let run_id = material.agent_run_id.clone();
-        let delivery = tokio::task::spawn_blocking(move || {
-            crate::terminal::prompt_delivery::submit_text(provider, &run_id, &invocation)
-        })
-        .await
-        .map_err(|error| error.to_string())
-        .and_then(|result| result.map_err(|error| error.to_string()));
-        if let Err(detail) = delivery {
-            let cleanup = adapter.kill_verified(&identity);
-            let message = match cleanup {
-                Ok(crate::tmux_adapter::KillOutcome::Killed)
-                | Ok(crate::tmux_adapter::KillOutcome::AlreadyMissing) => {
-                    format!("Entry skill delivery failed and the terminal pane was terminated: {detail}")
-                }
-                Ok(crate::tmux_adapter::KillOutcome::Refused(observation)) => format!(
-                    "Entry skill delivery failed; verified pane termination was refused ({observation:?}): {detail}"
-                ),
-                Err(error) => format!(
-                    "Entry skill delivery failed and pane termination also failed ({error}): {detail}"
-                ),
-            };
-            return Err(TerminalLaunchError::new(
-                TerminalLaunchErrorCode::PromptDeliveryFailed,
-                message,
-            ));
-        }
+        let submitter = adapter.clone();
+        super::entry_skill_delivery::deliver_entry_skill(
+            provider,
+            &skill,
+            move |invocation| submitter.submit(provider, &run_id, &invocation),
+            move || adapter.kill(&identity),
+        )
+        .await?;
     }
     checkpoint
         .checkpoint(crate::terminal::launch::TerminalLaunchBoundary::TmuxCreated)
@@ -663,12 +829,8 @@ async fn entry_skill_for_effect(
     database: &DatabaseConnection,
     effect_id: &str,
 ) -> Result<Option<String>, TerminalLaunchError> {
-    let Some(effect) = database
-        .query_one_raw(Statement::from_sql_and_values(
-            DbBackend::Sqlite,
-            "SELECT policy_reference FROM runs_launch_effects WHERE effect_id = ?",
-            [effect_id.to_owned().into()],
-        ))
+    let Some(effect) = ticketry_entities::launch_effect::Entity::find_by_id(effect_id)
+        .one(database)
         .await
         .map_err(|_| invalid_launch("The launch policy reference is unavailable."))?
     else {
@@ -676,10 +838,7 @@ async fn entry_skill_for_effect(
             "The launch policy reference is unavailable.",
         ));
     };
-    let reference = effect
-        .try_get::<Option<String>>("", "policy_reference")
-        .map_err(|_| invalid_launch("The launch policy reference is unavailable."))?;
-    let Some(reference) = reference.as_deref() else {
+    let Some(reference) = effect.policy_reference.as_deref() else {
         return Ok(None);
     };
     let Some(raw_id) = reference.strip_prefix("launch-binding:") else {
@@ -688,18 +847,13 @@ async fn entry_skill_for_effect(
     let binding_id = raw_id
         .parse::<i64>()
         .map_err(|_| invalid_launch("The launch binding reference is invalid."))?;
-    let binding = database
-        .query_one_raw(Statement::from_sql_and_values(
-            DbBackend::Sqlite,
-            "SELECT entry_skill FROM worktracker_launchbinding WHERE id = ?",
-            [binding_id.into()],
-        ))
+    let binding = ticketry_entities::launch_binding::Entity::find()
+        .filter(ticketry_entities::launch_binding::Column::Id.eq(binding_id))
+        .one(database)
         .await
         .map_err(|_| invalid_launch("The launch binding is unavailable."))?
         .ok_or_else(|| invalid_launch("The launch binding is unavailable."))?;
-    binding
-        .try_get::<Option<String>>("", "entry_skill")
-        .map_err(|_| invalid_launch("The launch binding is unavailable."))
+    Ok(binding.entry_skill)
 }
 
 fn invalid_launch(message: &'static str) -> TerminalLaunchError {

@@ -7,6 +7,8 @@ mod generated_mutation_audit;
 mod inspection;
 mod schema;
 
-pub use adoption::{adopt, preflight, AdoptionEvidence, SourceClassification, TableEvidence};
+pub use adoption::{
+    adopt, ensure_adopted, preflight, AdoptionEvidence, SourceClassification, TableEvidence,
+};
 pub use error::{ExecutionPersistenceError, ExecutionPersistenceErrorCode};
 pub use schema::{CURRENT_DJANGO_LEAF, EMPTY_DJANGO_LEAF, VERSION};

@@ -6,9 +6,8 @@ use std::{
 };
 
 use chrono::{NaiveDateTime, SecondsFormat, TimeZone, Utc};
-use sea_orm::{
-    ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QuerySelect, TransactionTrait,
-};
+use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QuerySelect};
+use ticketry_work_management::begin_write;
 use tokio::sync::Mutex as AsyncMutex;
 use uuid::Uuid;
 
@@ -157,9 +156,7 @@ impl ViewerOwnershipService {
         &self,
         input: CreateViewerLease,
     ) -> Result<viewer_lease::Model, ViewerOwnershipError> {
-        let transaction = self
-            .database
-            .begin()
+        let transaction = begin_write(&self.database)
             .await
             .map_err(ViewerOwnershipError::storage)?;
         let prepared = self.prepare_create_write(input, &transaction).await?;
@@ -182,9 +179,7 @@ impl ViewerOwnershipService {
         &self,
         input: UpdateViewerLease,
     ) -> Result<viewer_lease::Model, ViewerOwnershipError> {
-        let transaction = self
-            .database
-            .begin()
+        let transaction = begin_write(&self.database)
             .await
             .map_err(ViewerOwnershipError::storage)?;
         let prepared = self.prepare_update_write(input, &transaction).await?;
@@ -203,9 +198,7 @@ impl ViewerOwnershipService {
         &self,
         input: DeleteViewerLease,
     ) -> Result<Option<viewer_lease::Model>, ViewerOwnershipError> {
-        let transaction = self
-            .database
-            .begin()
+        let transaction = begin_write(&self.database)
             .await
             .map_err(ViewerOwnershipError::storage)?;
         let prepared = self.prepare_delete_write(input, &transaction).await?;

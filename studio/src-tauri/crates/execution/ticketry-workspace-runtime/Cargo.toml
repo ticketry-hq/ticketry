@@ -14,6 +14,7 @@ seaography.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
+ticketry-settings.workspace = true
 ticketry-data-directory.workspace = true
 ticketry-documents.workspace = true
 ticketry-entities.workspace = true
@@ -24,4 +25,5 @@ uuid.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
+ticketry-graphql-schema.workspace = true
 ticketry-work-management = { workspace = true, features = ["test-support"] }

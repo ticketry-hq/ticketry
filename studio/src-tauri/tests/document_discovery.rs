@@ -98,7 +98,9 @@ async fn fixture() -> Fixture {
             model TEXT, reasoning TEXT, status TEXT NOT NULL, started_at TEXT NOT NULL,
             ended_at TEXT, exit_code INTEGER, error TEXT, cwd TEXT, provider_session_id TEXT,
             lifecycle_state TEXT, lifecycle_updated_at TEXT, design_dir TEXT, resumed_from TEXT,
-            scope TEXT NOT NULL, launch_state TEXT, launch_model TEXT
+            scope TEXT NOT NULL, launch_state TEXT, launch_model TEXT,
+            initial_prompt TEXT, launch_reasoning TEXT,
+            launch_unattended BOOLEAN NOT NULL DEFAULT 0
         );
         INSERT INTO worktracker_issue (id, project_id, type, module_id, name, sequence_id) VALUES
             ('{MODULE}','{PROJECT}','module',NULL,'Platform Runtime',12),

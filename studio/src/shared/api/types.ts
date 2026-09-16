@@ -26,6 +26,7 @@ export interface LaunchBindingInput {
   required_skills?: string[] | null;
   entry_skill?: string | null;
   agent?: string | null;
+  profile?: string | null;
   model?: string | null;
   reasoning?: string | null;
 }
@@ -52,11 +53,13 @@ export interface StateImpact {
 export type ConfigurableProvider = "claude" | "codex" | "gemini";
 export interface GlobalLaunchDefault {
   provider: ConfigurableProvider;
+  profile: string | null;
   model: string | null;
   reasoning: string | null;
 }
 export interface ProviderCatalog {
   activated_providers: ConfigurableProvider[];
+  codex_profiles: string[];
   global_default: GlobalLaunchDefault | null;
 }
 export type SubtreeRunCapabilityMap = Record<string, string[]>;
@@ -209,6 +212,7 @@ export interface ScopedWorkflowLaunchBinding extends LaunchBindingInput {
   required_skills: string[];
   entry_skill: string | null;
   agent: string | null;
+  profile: string | null;
   model: string | null;
   reasoning: string | null;
   auto_start: boolean;

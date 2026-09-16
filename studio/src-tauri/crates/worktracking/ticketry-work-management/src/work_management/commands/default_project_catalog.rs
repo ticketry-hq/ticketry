@@ -119,6 +119,7 @@ pub async fn seed(database: &impl ConnectionTrait, project_id: &str) -> Result<(
                 prompt: Set(prompt),
                 required_skills: Set(serde_json::json!(required_skills)),
                 entry_skill: Set(entry_skills.get(&state_seed.name).cloned()),
+                profile: Set(None),
                 model_id: Set(None),
                 reasoning_id: Set(None),
                 auto_start: Set(state_seed.auto_start),

@@ -34,6 +34,10 @@ name = "report_launch_trace"
 path = "src/bin/report_launch_trace.rs"
 
 [[bin]]
+name = "mint_run_grant"
+path = "src/bin/mint_run_grant.rs"
+
+[[bin]]
 name = "ticketry_graphql_adapter"
 path = "src/bin/ticketry_graphql_adapter.rs"
 
@@ -61,11 +65,11 @@ ticketry-documents.workspace = true
 ticketry-graphql-schema.workspace = true
 ticketry-launch.workspace = true
 ticketry-mcp.workspace = true
-ticketry-runs.workspace = true
+ticketry-runs = { workspace = true, features = ["test-support"] }
 ticketry-settings.workspace = true
 ticketry-terminal.workspace = true
 ticketry-workspace-runtime.workspace = true
-tokio.workspace = true
+tokio = { workspace = true, features = ["signal"] }
 uuid.workspace = true
 
 [dev-dependencies]

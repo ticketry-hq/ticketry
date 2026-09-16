@@ -2,6 +2,7 @@ mod create;
 mod delete;
 mod support;
 mod update;
+mod write_lock;
 
 use seaography::Builder;
 

@@ -1,25 +1,11 @@
-use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::path::Path;
 
 use sea_orm::{ConnectionTrait, Database, DbBackend, Statement};
-
-const LEAVES: &[&str] = &[
-    "0001_initial",
-    "0002_agent_run_viewer_lease",
-    "0003_agentterminalsession_runtime_cleanup_pending",
-    "0004_agentterminalsession_runtime_namespace",
-    "0005_terminal_output_activity",
-    "0005_terminallaunchrequest",
-    "0006_terminal_session_optional_agent",
-    "0007_restore_agent_run_fk_cascade",
-    "0008_merge_20260819_1521",
-    "0009_alter_terminallaunchrequest_agent",
-];
 
 #[tokio::test]
 async fn fresh_database_without_terminal_history_installs_rust_schema_idempotently() {
     let directory = tempfile::tempdir().expect("create fresh Terminal fixture");
-    provision_without_terminal_history(directory.path());
+    provision_without_terminal_history(directory.path()).await;
     ticketry_runs::adopt(directory.path()).await.unwrap();
 
     assert_eq!(
@@ -42,23 +28,9 @@ async fn fresh_database_without_terminal_history_installs_rust_schema_idempotent
 }
 
 #[tokio::test]
-async fn every_supported_django_leaf_has_an_exact_classifier() {
-    for leaf in LEAVES {
-        let directory = tempfile::tempdir().expect("create Terminal leaf fixture");
-        migrate(directory.path(), leaf);
-        assert_eq!(
-            ticketry_terminal::preflight_terminal_persistence(directory.path())
-                .await
-                .unwrap_or_else(|error| panic!("{leaf} must classify: {error}")),
-            ticketry_terminal::TerminalSourceClassification::Django(leaf),
-        );
-    }
-}
-
-#[tokio::test]
 async fn adoption_preserves_history_expires_leases_and_is_idempotent() {
     let directory = tempfile::tempdir().expect("create Terminal adoption fixture");
-    provision_current(directory.path());
+    provision_current(directory.path()).await;
     ticketry_runs::preflight(directory.path()).await.unwrap();
     ticketry_runs::adopt(directory.path()).await.unwrap();
 
@@ -133,7 +105,7 @@ async fn adoption_preserves_history_expires_leases_and_is_idempotent() {
 #[tokio::test]
 async fn live_index_rename_lineage_adopts_without_inventing_legacy_launch_requests() {
     let directory = tempfile::tempdir().expect("create live-lineage fixture");
-    provision_current(directory.path());
+    provision_current(directory.path()).await;
     mutate(
         directory.path(),
         "DROP TABLE terminal_launch_requests; \
@@ -143,7 +115,7 @@ async fn live_index_rename_lineage_adopts_without_inventing_legacy_launch_reques
            ('0005_terminallaunchrequest','0008_merge_20260819_1521','0009_alter_terminallaunchrequest_agent'); \
          INSERT INTO django_migrations(app,name,applied) VALUES \
            ('terminals','0008_rename_terminal_task_index',CURRENT_TIMESTAMP);",
-    );
+    ).await;
 
     assert_eq!(
         ticketry_terminal::preflight_terminal_persistence(directory.path())
@@ -163,6 +135,43 @@ async fn live_index_rename_lineage_adopts_without_inventing_legacy_launch_reques
 }
 
 #[tokio::test]
+async fn adopted_store_gains_new_launch_material_columns_without_reownership() {
+    let directory = tempfile::tempdir().expect("create launch-material upgrade fixture");
+    provision_current(directory.path()).await;
+    ticketry_runs::preflight(directory.path()).await.unwrap();
+    ticketry_runs::adopt(directory.path()).await.unwrap();
+    ticketry_terminal::adopt_terminal_persistence(directory.path())
+        .await
+        .unwrap();
+    mutate(
+        directory.path(),
+        "ALTER TABLE terminal_launch_material DROP COLUMN profile;",
+    )
+    .await;
+
+    ticketry_terminal::ensure_terminal_persistence_adopted(directory.path())
+        .await
+        .unwrap();
+
+    let database = Database::connect(format!(
+        "sqlite:{}?mode=ro",
+        directory.path().join("state.db").display()
+    ))
+    .await
+    .unwrap();
+    let columns = database
+        .query_all_raw(Statement::from_string(
+            DbBackend::Sqlite,
+            "PRAGMA table_info('terminal_launch_material')".to_owned(),
+        ))
+        .await
+        .unwrap();
+    assert!(columns
+        .iter()
+        .any(|row| row.try_get::<String>("", "name").unwrap() == "profile"));
+}
+
+#[tokio::test]
 async fn preflight_refuses_schema_and_semantic_drift_before_mutation() {
     for (label, mutation) in [
         ("column", "ALTER TABLE agent_terminal_sessions ADD COLUMN surprise text"),
@@ -177,8 +186,8 @@ async fn preflight_refuses_schema_and_semantic_drift_before_mutation() {
         ("reference", "PRAGMA foreign_keys=OFF; UPDATE agent_terminal_sessions SET agent_run_id='missing-run' WHERE agent_run_id='run-active'"),
     ] {
         let directory = tempfile::tempdir().expect("create rejected Terminal fixture");
-        provision_current(directory.path());
-        mutate(directory.path(), mutation);
+        provision_current(directory.path()).await;
+        mutate(directory.path(), mutation).await;
         let error = ticketry_terminal::preflight_terminal_persistence(directory.path())
             .await
             .expect_err(label);
@@ -191,107 +200,20 @@ async fn preflight_refuses_schema_and_semantic_drift_before_mutation() {
     }
 }
 
-fn repository_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../../../..")
-        .canonicalize()
-        .unwrap()
+async fn provision_current(directory: &Path) {
+    super::execution_legacy_fixture::provision_current(directory).await;
+    mutate(directory, "INSERT INTO agent_runs (id,ticket_seq,status,started_at,ended_at,cwd,scope,issue_id,agent) VALUES ('run-active',865,'running','2026-08-19T12:00:00Z',NULL,'/tmp','task','00000000000000000000000000089307','codex'),('run-ended',865,'completed','2026-08-19T12:00:00Z','2026-08-19T13:00:00Z','/tmp','task','00000000000000000000000000089307','codex'); INSERT INTO agent_terminal_sessions (agent_run_id,tmux_session_name,task_id,module_id,project_id,created_at,terminated_at,scope,runtime_cleanup_pending,runtime_namespace,output_sequence,last_output_at,agent) VALUES ('run-active','run-active','00000000000000000000000000089307','00000000000000000000000000089305','00000000000000000000000000089301','2026-08-19T12:00:00Z',NULL,'task',1,'ticketry',0,'2026-08-19T12:00:00Z','codex'),('run-ended','pt-run-ended','00000000000000000000000000089307','00000000000000000000000000089305','00000000000000000000000000089301','2026-08-19T12:00:00Z','2026-08-19T13:00:00Z','task',0,'ticketry',0,'2026-08-19T12:00:00Z','codex'); INSERT INTO agent_run_viewer_leases (agent_run_id,viewer_id,transport,acquired_at,expires_at) VALUES ('run-active','viewer-1','desktop',CURRENT_TIMESTAMP,datetime('now','+1 hour')),('run-ended','viewer-2','browser',CURRENT_TIMESTAMP,datetime('now','+1 hour')); INSERT INTO terminal_launch_requests (effect_id,agent_run_id,issue_id,project_id,module_id,task_id,agent,scope,command,working_directory,environment,columns,rows,created_at) VALUES ('legacy-effect','run-active','00000000000000000000000000089307','00000000000000000000000000089301','00000000000000000000000000089305','00000000000000000000000000089307','codex','task','legacy command','/tmp','{\"LEGACY\":\"1\"}',80,24,'2026-08-19T12:00:00Z')").await;
 }
 
-fn migrate(directory: &Path, leaf: &str) {
-    let output = Command::new(repository_root().join("backend/.venv/bin/python"))
-        .arg(repository_root().join("backend/manage.py"))
-        .args(["migrate", "terminals", leaf, "--noinput"])
-        .env("MUXED_STATE_DB", directory.join("state.db"))
-        .env("MUXED_DATA_DIR", directory)
-        .env("MUXED_FORCE_SQLITE", "true")
-        .env(
-            "DJANGO_SETTINGS_MODULE",
-            "studio_server.tests.terminal_migration_settings",
-        )
-        .current_dir(repository_root())
-        .output()
-        .unwrap();
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
+async fn provision_without_terminal_history(directory: &Path) {
+    super::execution_legacy_fixture::provision_current(directory).await;
+    mutate(directory, "DROP TABLE terminal_launch_requests; DROP TABLE agent_run_viewer_leases; DROP TABLE agent_terminal_sessions; DELETE FROM django_migrations WHERE app='terminals'").await;
 }
 
-fn provision_current(directory: &Path) {
-    let script = r#"
-import os, sys
-from pathlib import Path
-db=Path(sys.argv[1]).resolve(); os.environ['DJANGO_SETTINGS_MODULE']='studio_server.settings'; os.environ['MUXED_STATE_DB']=str(db); os.environ['MUXED_DATA_DIR']=str(db.parent); os.environ['MUXED_FORCE_SQLITE']='true'
-from studio_server import settings
-settings.INSTALLED_APPS = [*settings.INSTALLED_APPS, 'apps.terminals']
-import django; django.setup()
-from django.core.management import call_command
-from worktracker.models import Workspace, Project, State, IssueType, Issue
-from apps.runs.models import AgentRun
-from apps.terminals.models import AgentTerminalSession, AgentRunViewerLease, TerminalLaunchRequest
-from django.utils import timezone
-from datetime import timedelta
-call_command('migrate', interactive=False, verbosity=0)
-w=Workspace.objects.create(id='00000000000000000000000000086500',slug='terminal-adoption',name='Terminal Adoption')
-p=Project.objects.create(id='00000000000000000000000000086501',workspace=w,name='Terminal Adoption',slug='T865',seq_counter=865)
-s=State.objects.create(id='00000000000000000000000000086502',project=p,name='Todo',group='unstarted',sort_order=1)
-t=IssueType.objects.create(id='00000000000000000000000000086503',project=p,name='Implementation',level='task',sort_order=1,start_state=s)
-i=Issue.objects.create(id='00000000000000000000000000086504',project=p,type='task',issue_type=t,state=s,name='Adopt',sequence_id=865,rank='a')
-for n, ended in [('run-active',None),('run-ended','2026-08-19T13:00:00Z')]:
- r=AgentRun.objects.create(id=n,issue=i,agent='codex',status='running' if ended is None else 'completed',started_at='2026-08-19T12:00:00Z',ended_at=ended,cwd=str(db.parent),scope='task')
- AgentTerminalSession.objects.create(agent_run=r,tmux_session_name=n if n=='run-active' else 'pt-'+n,task_id=str(i.id),module_id=str(i.id),project_id=str(p.id),agent='codex',created_at='2026-08-19T12:00:00Z',terminated_at=ended,runtime_namespace='ticketry',runtime_cleanup_pending=(n=='run-active'),scope='task',last_output_at='2026-08-19T12:00:00Z')
-active=AgentRun.objects.get(id='run-active')
-AgentRunViewerLease.objects.create(agent_run=active,viewer_id='viewer-1',transport='desktop',acquired_at=timezone.now(),expires_at=timezone.now()+timedelta(hours=1))
-ended=AgentRun.objects.get(id='run-ended')
-AgentRunViewerLease.objects.create(agent_run=ended,viewer_id='viewer-2',transport='browser',acquired_at=timezone.now(),expires_at=timezone.now()+timedelta(hours=1))
-TerminalLaunchRequest.objects.create(effect_id='legacy-effect',agent_run_id='run-active',issue_id=str(i.id),project_id=str(p.id),module_id=str(i.id),task_id=str(i.id),agent='codex',scope='task',command='legacy command',working_directory=str(db.parent),environment={'LEGACY':'1'},columns=80,rows=24,created_at='2026-08-19T12:00:00Z')
-from django.db import connection
-with connection.cursor() as c:
- c.execute('ALTER TABLE agent_runs DROP COLUMN launch_state'); c.execute('ALTER TABLE agent_runs DROP COLUMN launch_model')
- c.execute("DELETE FROM django_migrations WHERE app='runs' AND name IN ('0013_agentrun_optional_agent','0014_agentrun_launch_metadata','0015_merge_20260819_1521')")
-"#;
-    let output = Command::new(repository_root().join("backend/.venv/bin/python"))
-        .args(["-c", script])
-        .arg(directory.join("state.db"))
-        .current_dir(repository_root())
-        .output()
+async fn mutate(directory: &Path, sql: &str) {
+    let database = Database::connect(format!("sqlite:{}?mode=rw", directory.join("state.db").display()))
+        .await
         .unwrap();
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-}
-
-fn provision_without_terminal_history(directory: &Path) {
-    let output = Command::new(repository_root().join("backend/.venv/bin/python"))
-        .arg(repository_root().join("backend/manage.py"))
-        .args(["migrate", "--noinput"])
-        .env("MUXED_STATE_DB", directory.join("state.db"))
-        .env("MUXED_DATA_DIR", directory)
-        .env("MUXED_FORCE_SQLITE", "true")
-        .current_dir(repository_root())
-        .output()
-        .unwrap();
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-}
-
-fn mutate(directory: &Path, sql: &str) {
-    let output = Command::new(repository_root().join("backend/.venv/bin/python"))
-        .args(["-c", "import sqlite3,sys; c=sqlite3.connect(sys.argv[1]); c.executescript(sys.argv[2]); c.commit()"])
-        .arg(directory.join("state.db"))
-        .arg(sql)
-        .output()
-        .unwrap();
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
+    database.execute_unprepared(sql).await.unwrap();
+    database.close().await.unwrap();
 }

@@ -16,7 +16,6 @@ use ticketry_mcp::RunAuthority;
 
 use super::execution_fixture as fixture;
 
-pub(super) const AUTHORIZATION_CREDENTIAL: &str = "slice6-harness-credential";
 pub const CALLER_RUN_ID: &str = "slice6-caller";
 
 const ALLOWED_TOOLS: [&str; 3] = [

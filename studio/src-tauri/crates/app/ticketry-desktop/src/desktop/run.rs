@@ -1,6 +1,8 @@
 //! Builder wiring for the desktop application: managed state, the invoke
 //! surface, and the mapping from Tauri run events onto lifecycle actions.
 
+use std::path::Path;
+
 use chrono::Utc;
 use tauri::Manager;
 
@@ -17,7 +19,7 @@ use crate::desktop::lifecycle::{
     DesktopLifecycleAction, DesktopLifecycleEvent, MAIN_WINDOW_LABEL,
 };
 use crate::desktop::service_state::DesktopServiceState;
-use crate::desktop::startup::initialize_services;
+use crate::desktop::startup::{initialize_services, startup_plugin};
 use crate::desktop::startup_trace::DesktopStartupTrace;
 use crate::{app_updates, native_terminal};
 use ticketry_terminal::ViewerCommandState;
@@ -31,6 +33,7 @@ macro_rules! native_invoke_handler {
             commands::desktop_file_logging_enabled,
             commands::desktop_retry_services,
             commands::desktop_pick_folder,
+            commands::directory_trust::desktop_prepare_directory_trust,
             commands::desktop_validate_module_folder,
             commands::desktop_preflight_report,
             commands::desktop_approve_executable_path,
@@ -104,22 +107,39 @@ pub fn run(context: tauri::Context, file_logging_requested: bool, app_version: &
     );
     let startup_trace = DesktopStartupTrace::begin(file_log.clone(), process_started);
     startup_trace.record("ownership-and-file-log-ready");
-    let diagnostic_reports_directory = ticketry_diagnostics::system_diagnostic_reports_directory();
-    let crash_report = ticketry_diagnostics::collect_dirty_shutdown(
-        &ownership.data_directory,
-        &diagnostic_reports_directory,
-        file_log.path(),
-        app_version,
-        commit,
-        Utc::now,
-    );
-    startup_trace.record("dirty-shutdown-collected");
-    ticketry_diagnostics::install_panic_attribution_hook(&ownership.data_directory);
-    #[cfg(debug_assertions)]
-    if development_panic_abort_requested() {
-        ticketry_diagnostics::force_development_panic_abort();
-    }
-    let crash_reports = CrashReportsRuntime::new(&ownership.data_directory, crash_report);
+    // Crash-report collection scans ~/Library/Logs/DiagnosticReports, which
+    // took 90-120 ms on the main thread ahead of window creation. Nothing the
+    // window needs depends on it, so it runs beside Tauri's builder and the
+    // crash-reports state joins it on first use.
+    let crash_collection = {
+        let data_directory = ownership.data_directory.clone();
+        let event_log_path = file_log.path().map(Path::to_path_buf);
+        let startup_trace = startup_trace.clone();
+        let app_version = app_version.to_owned();
+        let commit = commit.to_owned();
+        std::thread::spawn(move || {
+            let diagnostic_reports_directory =
+                ticketry_diagnostics::system_diagnostic_reports_directory();
+            let crash_report = ticketry_diagnostics::collect_dirty_shutdown(
+                &data_directory,
+                &diagnostic_reports_directory,
+                event_log_path.as_deref(),
+                &app_version,
+                &commit,
+                Utc::now,
+            );
+            startup_trace.record("dirty-shutdown-collected");
+            // Installed after collection clears the previous session's
+            // attribution, so an early panic is never wiped by the scan.
+            ticketry_diagnostics::install_panic_attribution_hook(&data_directory);
+            #[cfg(debug_assertions)]
+            if development_panic_abort_requested() {
+                ticketry_diagnostics::force_development_panic_abort();
+            }
+            crash_report
+        })
+    };
+    let crash_reports = CrashReportsRuntime::new(&ownership.data_directory, crash_collection);
     if let Some(error) = ownership.startup_error.as_deref() {
         eprintln!("Ticketry could not acquire data-directory ownership: {error}");
     }
@@ -128,6 +148,7 @@ pub fn run(context: tauri::Context, file_logging_requested: bool, app_version: &
     let setup_graphql_api = graphql_api.clone();
     let builder = tauri::Builder::default()
         .plugin(trace_plugin("builder-started"))
+        .plugin(startup_plugin(graphql_api.clone()))
         .plugin(tauri_plugin_dialog::init())
         .plugin(trace_plugin("dialog-plugin-initialized"))
         .plugin(tauri_plugin_launchkey_adaptor::init())

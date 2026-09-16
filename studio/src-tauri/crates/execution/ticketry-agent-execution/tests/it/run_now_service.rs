@@ -137,7 +137,7 @@ async fn fixture(failure: Option<&str>) -> Fixture {
                 id integer PRIMARY KEY AUTOINCREMENT, issue_type_id char(32) NOT NULL,
                 state_id char(32) NOT NULL, prompt text NOT NULL,
                 required_skills text NOT NULL, entry_skill varchar(128),
-                model_id char(32), reasoning_id char(32),
+                profile varchar(128), model_id char(32), reasoning_id char(32),
                 auto_start bool NOT NULL, subtree_run_enabled bool NOT NULL,
                 created_at datetime NOT NULL, updated_at datetime NOT NULL,
                 UNIQUE(issue_type_id, state_id)
@@ -163,7 +163,9 @@ async fn fixture(failure: Option<&str>) -> Fixture {
                 started_at text NOT NULL, ended_at text, exit_code integer, error text,
                 cwd text, provider_session_id text, lifecycle_state text,
                 lifecycle_updated_at text, design_dir text, resumed_from text,
-                scope text NOT NULL, launch_state text, launch_model text
+                scope text NOT NULL, launch_state text, launch_model text,
+                initial_prompt text, launch_reasoning text,
+                launch_unattended bool NOT NULL DEFAULT 0
             );
             CREATE TABLE agent_terminal_sessions (
                 agent_run_id text PRIMARY KEY, tmux_session_name text NOT NULL,
@@ -429,11 +431,11 @@ async fn concurrent_same_and_distinct_identities_commit_one_claim_and_one_launch
 }
 
 #[tokio::test]
-async fn another_live_run_returns_the_stable_active_work_refusal_without_effects() {
+async fn run_now_with_another_live_run_replaces_it_and_launches_once() {
     let live_run_fixture = fixture(None).await;
     insert_live_run(&live_run_fixture.database, CALLER_RUN).await;
     insert_live_run(&live_run_fixture.database, OTHER_RUN).await;
-    let refusal = live_run_fixture
+    let success = live_run_fixture
         .service
         .execute(RunNowRequest {
             id_or_key: TASK.to_owned(),
@@ -443,17 +445,14 @@ async fn another_live_run_returns_the_stable_active_work_refusal_without_effects
             },
         })
         .await
-        .unwrap_err();
-    assert_eq!(refusal.code, "task_already_active");
-    assert!(refusal.committed_state.is_none());
-    assert!(refusal.run.is_none());
-    assert_eq!(live_run_fixture.launches.load(Ordering::SeqCst), 0);
-    assert_eq!(
-        state_id(&live_run_fixture.database).await.as_deref(),
-        Some(IDEAS)
-    );
+        .unwrap();
+    assert_eq!(success.code, "run_now_started");
+    assert_eq!(success.committed_state.name, "Implement");
+    assert_eq!(live_run_fixture.launches.load(Ordering::SeqCst), 1);
+    assert_eq!(state_id(&live_run_fixture.database).await.as_deref(), Some(IMPLEMENT));
 
     let live_terminal_fixture = fixture(None).await;
+    insert_live_run(&live_terminal_fixture.database, OTHER_RUN).await;
     live_terminal_fixture
         .database
         .execute_unprepared(&format!(
@@ -463,17 +462,18 @@ async fn another_live_run_returns_the_stable_active_work_refusal_without_effects
         ))
         .await
         .unwrap();
-    let refusal = live_terminal_fixture
+    let success = live_terminal_fixture
         .service
         .execute(human(TASK))
         .await
-        .unwrap_err();
-    assert_eq!(refusal.code, "task_already_active");
+        .unwrap();
+    assert_eq!(success.code, "run_now_started");
+    assert_eq!(success.committed_state.name, "Implement");
+    assert_eq!(live_terminal_fixture.launches.load(Ordering::SeqCst), 1);
     assert_eq!(
         state_id(&live_terminal_fixture.database).await.as_deref(),
-        Some(IDEAS)
+        Some(IMPLEMENT)
     );
-    assert_eq!(live_terminal_fixture.launches.load(Ordering::SeqCst), 0);
 }
 
 #[tokio::test]

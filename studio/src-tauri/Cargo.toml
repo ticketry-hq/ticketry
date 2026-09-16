@@ -12,7 +12,6 @@ name = "muxed_studio_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
-cc = "1"
 tauri-build = { version = "=2.6.3", features = [] }
 
 [features]
@@ -26,9 +25,8 @@ default = ["native-libghostty"]
 # package keep working instead of failing on an unknown feature.
 development-tools = []
 # Both are the desktop shell's features; the root package forwards them so
-# `studio/e2e` and the libghostty build keep the same command line, and so
-# `build.rs` (which owns tauri.conf.json and the `cc` glue) still sees
-# CARGO_FEATURE_NATIVE_LIBGHOSTTY.
+# `studio/e2e` and the libghostty build keep the same command line. The root
+# build script uses it to stage the resources owned by `tauri.conf.json`.
 desktop-acceptance = ["ticketry-desktop/desktop-acceptance"]
 native-libghostty = ["ticketry-desktop/native-libghostty"]
 
@@ -48,6 +46,7 @@ tauri.workspace = true
 tauri-plugin-launchkey-adaptor.workspace = true
 ticketry-desktop.workspace = true
 ticketry-diagnostics.workspace = true
+ticketry-installation.workspace = true
 ticketry-terminal.workspace = true
 
 [dev-dependencies]
@@ -79,6 +78,7 @@ ticketry-launch.workspace = true
 ticketry-mcp = { workspace = true, features = ["test-support"] }
 ticketry-runs = { workspace = true, features = ["test-support"] }
 ticketry-settings.workspace = true
+ticketry-terminal.workspace = true
 ticketry-tool-discovery.workspace = true
 ticketry-work-management = { workspace = true, features = ["test-support"] }
 ticketry-workspace-runtime.workspace = true
@@ -107,7 +107,7 @@ portable-pty = "0.9"
 rand = "0.8"
 reqwest = { version = "=0.13.4", default-features = false, features = ["json", "rustls"] }
 rustls-pki-types = "=1.15.1"
-rmcp = { version = "=3.0.0", features = ["transport-streamable-http-server"] }
+rmcp = { version = "=3.0.0" }
 sea-orm = { version = "=2.0.1", features = ["runtime-tokio-rustls", "seaography", "sqlx-postgres", "sqlx-sqlite"] }
 sea-orm-migration = { version = "=2.0.1", features = ["runtime-tokio-rustls", "sqlx-sqlite"] }
 seaography = { version = "=2.0.0-rc.9", default-features = false, features = ["field-camel-case", "macros", "with-chrono", "with-json"] }

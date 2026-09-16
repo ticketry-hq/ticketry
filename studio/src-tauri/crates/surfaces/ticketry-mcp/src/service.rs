@@ -15,10 +15,15 @@ use ticketry_terminal::TerminalCleanupService;
 use ticketry_work_management::commands::attachments::AttachmentStorage;
 use ticketry_work_management::launch_policy::LaunchPolicyResolver;
 
+use super::connection_handshake::ConnectionAuthorization;
 use super::{dispatch, registry, RunAuthority};
 
 #[derive(Clone)]
 pub struct WorktrackerMcpService {
+    /// Who this connection was admitted as. `None` only on the shared
+    /// prototype the listener clones from; every served connection carries
+    /// its own value.
+    connection: Option<ConnectionAuthorization>,
     database: DatabaseConnection,
     storage: AttachmentStorage,
     authority: RunAuthority,
@@ -42,6 +47,7 @@ impl WorktrackerMcpService {
         readiness_data_directory: PathBuf,
     ) -> Self {
         Self {
+            connection: None,
             database,
             storage,
             authority,
@@ -51,6 +57,14 @@ impl WorktrackerMcpService {
             terminal_launch,
             readiness_data_directory,
             tools: Arc::new(registry::tools()),
+        }
+    }
+
+    /// The service one admitted socket connection dispatches through.
+    pub(super) fn for_connection(&self, connection: ConnectionAuthorization) -> Self {
+        Self {
+            connection: Some(connection),
+            ..self.clone()
         }
     }
 
@@ -67,26 +81,27 @@ impl WorktrackerMcpService {
 pub(super) async fn execute_launch_decision(
     database: &DatabaseConnection,
     service: Option<&ticketry_terminal::TerminalLaunchService>,
+    cleanup: &TerminalCleanupService,
     decision: &ticketry_work_management::launch_policy::LaunchPolicyDecision,
-) -> Result<ticketry_entities::session::Model, ()> {
+) -> Result<ticketry_entities::session::Model, String> {
     let Some(service) = service else {
-        return Err(());
+        return Err("terminal_launch_unavailable".to_owned());
     };
-    ticketry_agent_execution::launch_delivery::execute(database, service, decision)
+    ticketry_agent_execution::launch_delivery::execute(database, service, cleanup, decision)
         .await
         .map_err(|error| {
             eprintln!(
                 "Ticketry could not execute Rust launch policy decision {}: {error}",
                 decision.decision_id,
             );
+            error
         })
 }
 
 impl ServerHandler for WorktrackerMcpService {
     fn get_info(&self) -> ServerInfo {
-        ServerInfo::new(ServerCapabilities::builder().enable_tools().build()).with_server_info(
-            rmcp::model::Implementation::new("worktracker-agent", "0.1.0"),
-        )
+        ServerInfo::new(ServerCapabilities::builder().enable_tools().build())
+            .with_server_info(rmcp::model::Implementation::new("ticketry", "0.1.0"))
     }
 
     async fn list_tools(
@@ -106,16 +121,15 @@ impl ServerHandler for WorktrackerMcpService {
     async fn call_tool(
         &self,
         request: CallToolRequestParams,
-        context: RequestContext<rmcp::RoleServer>,
+        _context: RequestContext<rmcp::RoleServer>,
     ) -> Result<CallToolResponse, ErrorData> {
         if self.get_tool(request.name.as_ref()).is_none() {
             return Err(ErrorData::invalid_params("Unknown WorkTracker tool.", None));
         }
-        let authorization = context
-            .extensions
-            .get::<http::request::Parts>()
-            .and_then(|parts| parts.headers.get("authorization"))
-            .and_then(|value| value.to_str().ok());
+        let authorization = self
+            .connection
+            .as_ref()
+            .and_then(ConnectionAuthorization::bearer);
         let principal = if authorization.is_none() && request.name != "terminate_current_run" {
             super::RunPrincipal::global()
         } else {
@@ -133,7 +147,7 @@ impl ServerHandler for WorktrackerMcpService {
         let arguments: Map<String, Value> = request.arguments.unwrap_or_default();
         if request.name == "mcp_ping" {
             return Ok(Self::result(dispatch::DispatchOutput {
-                value: json!({"status": "ok", "server": "worktracker-agent"}),
+                value: json!({"status": "ok", "server": "ticketry"}),
                 wrap_result: false,
             }));
         }
@@ -150,19 +164,21 @@ impl ServerHandler for WorktrackerMcpService {
             }))
             .into());
         }
-        Ok(Self::result(
-            dispatch::dispatch(
-                &self.database,
-                &self.storage,
-                &self.launch_policy,
-                self.graph_runs.as_ref(),
-                &self.terminal_cleanup,
-                self.terminal_launch.as_ref(),
-                &principal,
-                request.name.as_ref(),
-                &arguments,
-            )
-            .await,
+        // Dispatch is one very wide future (every tool's arm is inlined into
+        // it). Boxing it keeps the per-request poll off the connection task's
+        // stack frame chain.
+        let output = Box::pin(dispatch::dispatch(
+            &self.database,
+            &self.storage,
+            &self.launch_policy,
+            self.graph_runs.as_ref(),
+            &self.terminal_cleanup,
+            self.terminal_launch.as_ref(),
+            &principal,
+            request.name.as_ref(),
+            &arguments,
         ))
+        .await;
+        Ok(Self::result(output))
     }
 }

@@ -3,11 +3,12 @@ use std::collections::{BTreeMap, BTreeSet};
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection, DbBackend, Statement};
 use ticketry_settings as provider_catalog_migrations;
 use ticketry_work_management::{
-    launch_binding_entry_skill_migration, module_presentation_migration,
-    project_onboarding_migration, workflow_color_migration, workflow_handoff_migration,
-    workspace_tab_order_migration,
+    launch_binding_entry_skill_migration, launch_binding_profile_migration,
+    module_presentation_migration, project_onboarding_migration, workflow_color_migration,
+    workflow_handoff_migration, workspace_tab_order_migration,
 };
 use ticketry_workspace_runtime::persistence::pull_request_url_migration;
+use ticketry_workspace_runtime::persistence::ship_record_migration;
 
 const PROJECT: &str = "00000000000000000000000000001001";
 const GRILL: &str = "00000000000000000000000000001002";
@@ -191,7 +192,7 @@ pub async fn assert_final(database: &DatabaseConnection) {
              JOIN worktracker_provider provider ON provider.id=model.provider_id
              LEFT JOIN worktracker_agentmodelreasoninglevel link ON link.agent_model_id=model.id
              LEFT JOIN worktracker_reasoninglevel reasoning ON reasoning.id=link.reasoning_level_id
-             WHERE provider.slug='codex' AND (model.name LIKE 'gpt-5.6-%' OR model.name='gpt-5.3-codex-spark')
+             WHERE provider.slug='codex' AND (model.name LIKE 'gpt-5.6-%' OR model.name='gpt-6-astra' OR model.name='gpt-5.3-codex-spark' OR model.name='glm-5.3-flash')
              ORDER BY model.name,reasoning.name"
                 .to_owned(),
         ))
@@ -205,6 +206,7 @@ pub async fn assert_final(database: &DatabaseConnection) {
             .extend(row.try_get::<Option<String>>("", "reasoning").unwrap());
     }
     assert_eq!(matrix["gpt-5.3-codex-spark"], Vec::<String>::new());
+    assert_eq!(matrix["glm-5.3-flash"], Vec::<String>::new());
     assert_eq!(
         matrix["gpt-5.6-luna"]
             .iter()
@@ -213,7 +215,8 @@ pub async fn assert_final(database: &DatabaseConnection) {
         BTreeSet::from(["low", "medium", "high", "xhigh", "max"])
     );
     let full_reasoning = BTreeSet::from(["low", "medium", "high", "xhigh", "max", "ultra"]);
-    for model in ["gpt-5.6-sol", "gpt-5.6-terra"] {
+    assert!(!matrix.contains_key("gpt-5.6-astra"));
+    for model in ["gpt-6-astra", "gpt-5.6-sol", "gpt-5.6-terra"] {
         assert_eq!(
             matrix[model]
                 .iter()
@@ -291,6 +294,26 @@ pub async fn assert_final(database: &DatabaseConnection) {
         (
             workflow_handoff_migration::LEDGER_TABLE,
             workflow_handoff_migration::MIGRATION_ID,
+        ),
+        (
+            provider_catalog_migrations::CODEX_ASTRA_LEDGER,
+            provider_catalog_migrations::CODEX_ASTRA_MIGRATION_ID,
+        ),
+        (
+            provider_catalog_migrations::CODEX_6_ASTRA_LEDGER,
+            provider_catalog_migrations::CODEX_6_ASTRA_MIGRATION_ID,
+        ),
+        (
+            launch_binding_profile_migration::LEDGER_TABLE,
+            launch_binding_profile_migration::MIGRATION_ID,
+        ),
+        (
+            provider_catalog_migrations::CODEX_GLM_5_3_FLASH_LEDGER,
+            provider_catalog_migrations::CODEX_GLM_5_3_FLASH_MIGRATION_ID,
+        ),
+        (
+            ship_record_migration::LEDGER_TABLE,
+            ship_record_migration::MIGRATION_ID,
         ),
     ] {
         let row = database

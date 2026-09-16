@@ -1,11 +1,22 @@
-import { useId, useState } from "react";
+import { useState } from "react";
 
 import { PullRequestStatus, type PullRequestStatusValue } from "./PullRequestStatus";
+
+type ActionStep = {
+  name: "stage" | "generate_message" | "commit" | "push" | "pull_request";
+  status: "ok" | "skipped" | "failed";
+};
+
+type ActionOutcome = {
+  steps: ActionStep[];
+  error?: string;
+};
 
 export function ChangesActions({
   dirty,
   unpushedCount,
   onCommit,
+  commitDescription,
   onPush,
   pullRequestUrl,
   pullRequestCreationEligible,
@@ -14,10 +25,14 @@ export function ChangesActions({
   onReplacePullRequest,
   onFollowUpPullRequest,
   onPrepareMerge,
+  onStack,
+  stackKind,
+  branch,
 }: {
   dirty: boolean;
   unpushedCount: number;
-  onCommit: (message: string) => Promise<void>;
+  onCommit: () => Promise<void>;
+  commitDescription?: string | null;
   onPush: () => Promise<void>;
   pullRequestUrl?: string | null;
   pullRequestCreationEligible?: boolean;
@@ -26,22 +41,24 @@ export function ChangesActions({
   onReplacePullRequest?: () => Promise<{ url: string }>;
   onFollowUpPullRequest?: () => Promise<{ url: string }>;
   onPrepareMerge?: () => Promise<void>;
+  onStack?: () => Promise<{ head_commit?: string; subject?: string; message_source?: string }>;
+  stackKind?: "task" | "module";
+  branch?: string | null;
 }) {
-  const [message, setMessage] = useState("");
-  const messageId = useId();
   const [busy, setBusy] = useState<
-    "commit" | "push" | "pull-request" | "merge-preparation" | null
+    "commit" | "push" | "pull-request" | "merge-preparation" | "stack" | null
   >(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [confirmingStack, setConfirmingStack] = useState(false);
+  const [outcome, setOutcome] = useState<ActionOutcome | null>(null);
 
   const commit = async () => {
     setBusy("commit");
     setError(null);
     setNotice(null);
     try {
-      await onCommit(message.trim());
-      setMessage("");
+      await onCommit();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Commit failed.");
     } finally {
@@ -93,28 +110,72 @@ export function ChangesActions({
     }
   };
 
+  const runStack = async () => {
+    setBusy("stack");
+    setError(null);
+    setNotice(null);
+    setOutcome(null);
+    setConfirmingStack(false);
+    const steps: ActionStep[] = [];
+    const run = async (name: ActionStep["name"], action: () => Promise<void>) => {
+      try {
+        await action();
+        steps.push({ name, status: "ok" });
+        return true;
+      } catch (cause) {
+        const message = cause instanceof Error ? cause.message : `${name} failed.`;
+        steps.push({ name, status: "failed" });
+        setOutcome({ steps: [...steps], error: message });
+        return false;
+      }
+    };
+    steps.push({ name: "stage", status: "skipped" });
+    steps.push({ name: "generate_message", status: "skipped" });
+    if (!onStack) {
+      setOutcome({ steps, error: "Stacked action is unavailable." });
+      setBusy(null);
+      return;
+    }
+    if (!(await run("commit", async () => { await onStack(); }))) {
+      setBusy(null);
+      return;
+    }
+    steps.push({ name: "push", status: "ok" });
+    steps.push({ name: "pull_request", status: "skipped" });
+    setOutcome({ steps });
+    setBusy(null);
+  };
+
+  const stackLabel = stackKind === "task" && pullRequestCreationEligible
+    ? "Commit, push & create PR"
+    : "Commit & push";
+
   return (
     <div className="mt-3 space-y-2" aria-label="Changes commands">
       <div className="flex flex-wrap items-center gap-2">
-        <label className="sr-only" htmlFor={messageId}>
-          Commit message
-        </label>
-        <input
-          id={messageId}
-          value={message}
-          onChange={(event) => setMessage(event.target.value)}
-          placeholder="Commit message"
-          disabled={!dirty || busy !== null}
-          className="min-w-56 border border-pane-border bg-pane-bg px-2 py-1 text-text-primary disabled:opacity-50"
-        />
+        {stackKind ? (
+          <button
+            type="button"
+            disabled={(!dirty && unpushedCount <= 0) || busy !== null}
+            onClick={() => setConfirmingStack(true)}
+            className="border border-pane-border bg-text-primary px-2 py-1 text-pane-bg disabled:opacity-50"
+          >
+            {busy === "stack" ? "Running..." : stackLabel}
+          </button>
+        ) : null}
         <button
           type="button"
-          disabled={!dirty || !message.trim() || busy !== null}
+          disabled={!dirty || busy !== null}
           onClick={() => void commit()}
           className="border border-pane-border px-2 py-1 text-text-primary disabled:opacity-50"
         >
           {busy === "commit" ? "Committing..." : "Commit"}
         </button>
+        {commitDescription ? (
+          <span className="text-xs text-text-muted" role="status">
+            {commitDescription}
+          </span>
+        ) : null}
         <button
           type="button"
           disabled={unpushedCount <= 0 || busy !== null}
@@ -173,6 +234,32 @@ export function ChangesActions({
           </button>
         ) : null}
       </div>
+      {confirmingStack ? (
+        <div className="border border-pane-border p-2" role="dialog" aria-label="Confirm Changes action">
+          <p className="text-xs text-text-muted">
+            {stackLabel} on {branch ?? "the current branch"} will publish {unpushedCount + (dirty ? 1 : 0)} commit{unpushedCount + (dirty ? 1 : 0) === 1 ? "" : "s"}.
+          </p>
+          <div className="mt-2 flex gap-2">
+            <button type="button" onClick={() => void runStack()} className="border border-pane-border px-2 py-1 text-text-primary">
+              Confirm
+            </button>
+            <button type="button" onClick={() => setConfirmingStack(false)} className="border border-pane-border px-2 py-1 text-text-primary">
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : null}
+      {outcome ? (
+        <div className="border border-pane-border p-2 text-xs" role="status" aria-label="Changes action outcome">
+          <div className="font-medium text-text-primary">{outcome.error ? "Action partially completed" : "Action complete"}</div>
+          <ol className="mt-1 space-y-1">
+            {outcome.steps.map((step) => (
+              <li key={step.name}>{step.name.replace("_", " ")}: {step.status}</li>
+            ))}
+          </ol>
+          {outcome.error ? <div className="mt-1 text-lifecycle-danger">{outcome.error}</div> : null}
+        </div>
+      ) : null}
       <PullRequestStatus status={pullRequest} />
       {dirty && (unpushedCount > 0 || pullRequestCreationEligible) ? (
         <p className="text-xs text-lifecycle-attention" role="status">

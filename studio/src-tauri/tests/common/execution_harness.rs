@@ -29,10 +29,11 @@ use tauri_graphql::{TransportApi, TransportApiImpl};
 use ticketry_agent_execution::reconciliation::{
     ExecutionReconciliationConfig, ExecutionReconciliationRuntime, ExecutionReconciliationService,
 };
+use ticketry_data_directory::DataDirectoryGuard;
 use ticketry_graphql_schema::{
     adopt_worktracker_and_install, ComposedCommandRuntime, InstallationOwnership,
 };
-use ticketry_mcp::{McpConfiguration, McpRuntime};
+use ticketry_mcp::{McpConfiguration, McpRuntime, SocketClient};
 use ticketry_runs::{publish_readiness, Slice3Readiness};
 use ticketry_terminal::{
     ProductionTerminalLifecycleWork, TerminalLifecycleConfig, TerminalLifecycleRuntime,
@@ -41,7 +42,7 @@ use ticketry_terminal::{
 use ticketry_terminal::{TerminalLaunchBoundary, TerminalLaunchService};
 use ticketry_work_management::launch_policy::LaunchPolicyResolver;
 
-use super::execution_authorization::{Authorization, AUTHORIZATION_CREDENTIAL};
+use super::execution_authorization::{Authorization, CALLER_RUN_ID};
 use super::execution_fixture as fixture;
 use super::execution_legacy_fixture as legacy_fixture;
 use super::isolated_tmux::{IsolatedTmux, TmuxEnvironmentOverride, TMUX_ENV_LOCK};
@@ -80,7 +81,9 @@ pub struct ExecutionHarness {
     terminal: Option<Arc<TerminalLifecycleRuntime>>,
     execution: Option<ExecutionReconciliationRuntime>,
     mcp: Option<McpRuntime>,
-    mcp_url: String,
+    /// The socket listener runs under the harness's own data-directory lease,
+    /// exactly as the desktop's does.
+    ownership: Option<DataDirectoryGuard>,
 }
 
 impl ExecutionHarness {
@@ -130,9 +133,11 @@ impl ExecutionHarness {
             terminal: None,
             execution: None,
             mcp: None,
-            mcp_url: String::new(),
+            ownership: None,
         };
-        harness.compose(fresh_campaign).await;
+        // The composition future is wide; a `#[tokio::test]` polls it on a
+        // 2 MiB thread stack, so it lives on the heap instead.
+        Box::pin(harness.compose(fresh_campaign)).await;
         harness
     }
 
@@ -168,7 +173,7 @@ impl ExecutionHarness {
         self.stop().await;
         self.options.stop_once_at = None;
         self.api = TransportApiImpl::new();
-        self.compose(false).await;
+        Box::pin(self.compose(false)).await;
     }
 
     /// Normal shutdown: stop accepting mutations and cancel future passes,
@@ -187,6 +192,7 @@ impl ExecutionHarness {
         if let Some(mcp) = self.mcp.take() {
             mcp.shutdown().await;
         }
+        self.ownership.take();
         if let Some(composed) = &self.composed {
             self.authorization.stop(composed.commands()).await;
         }
@@ -241,20 +247,21 @@ impl ExecutionHarness {
             launch = launch.stopping_once_at(boundary);
         }
 
+        let ownership = DataDirectoryGuard::acquire(&data_directory)
+            .expect("own the execution harness data directory");
         let mcp = McpRuntime::start_with_terminal_launch(
             McpConfiguration {
-                address: ticketry_mcp::loopback(0).expect("loopback address"),
                 database_path: data_directory.join("state.db"),
                 media_root: data_directory.join("media"),
-                ingress_credential: AUTHORIZATION_CREDENTIAL.to_owned(),
             },
+            &ownership,
             launch.clone(),
         )
         .await
         .expect("start the in-process MCP listener");
         let run_authority = mcp.authority();
         self.authorization.start(&commands, &run_authority).await;
-        self.mcp_url = format!("http://{}/mcp", mcp.address());
+        self.ownership = Some(ownership);
 
         // Startup is what points the interactive runtime at the launch paths,
         // hook spool, and run authorization it needs.
@@ -265,7 +272,7 @@ impl ExecutionHarness {
                 paths: ticketry_launch::LaunchPathsService::new(commands.clone()),
                 hook_runner: provider_directory(&data_directory).join("ticketry-hook-runner"),
                 hook_spool_directory: spool_directory.clone(),
-                mcp_url: format!("http://{}/mcp", mcp.address()),
+                mcp_data_directory: Some(data_directory.clone()),
                 run_authority: mcp.authority(),
                 granted_operations: ticketry_mcp::allowed_provider_operations(),
             });
@@ -424,30 +431,18 @@ impl ExecutionHarness {
             .expect("decode execution GraphQL response")
     }
 
-    /// Call one MCP tool over the listener's own HTTP transport, so the tool
-    /// registry, authorization, and dispatch are all real.
+    /// Call one MCP tool over the listener's own socket transport, so the
+    /// handshake, tool registry, authorization, and dispatch are all real.
     pub async fn mcp(&self, name: &str, arguments: Value) -> Value {
         self.authorization.refresh_binding(self.commands()).await;
         let credential = self.authorization.credential();
-        let response = reqwest::Client::new()
-            .post(&self.mcp_url)
-            .header("content-type", "application/json")
-            .header("accept", "application/json, text/event-stream")
-            .header("mcp-protocol-version", "2025-03-26")
-            .header("authorization", credential)
-            .json(&json!({
-                "jsonrpc": "2.0",
-                "id": "slice6",
-                "method": "tools/call",
-                "params": {"name": name, "arguments": arguments},
-            }))
-            .send()
-            .await
-            .expect("call the MCP listener")
-            .json::<Value>()
-            .await
-            .expect("decode the MCP response");
-        response["result"]["structuredContent"].clone()
+        let socket = self
+            .mcp
+            .as_ref()
+            .expect("the harness MCP listener is running")
+            .socket_path();
+        let mut client = SocketClient::connect_run(socket, CALLER_RUN_ID, &credential).await;
+        client.structured(6, name, arguments).await
     }
 
     /// A second read-write pool, for the durable facts a test inspects without

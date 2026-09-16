@@ -13,7 +13,8 @@ use sha2::{Digest, Sha256};
 
 use super::atomic_json::{write_json, RealAtomicFileOperations};
 use super::ownership_manifest::{
-    LAUNCH_BINDING_ENTRY_SKILL_LEDGER, OWNED_ASSETS, OWNED_TABLES, PROVIDER_ADAPTER_SLUGS, VERSION,
+    LAUNCH_BINDING_ENTRY_SKILL_LEDGER, LAUNCH_BINDING_PROFILE_LEDGER, OWNED_ASSETS, OWNED_TABLES,
+    PROVIDER_ADAPTER_SLUGS, VERSION,
 };
 use super::SettingsPersistenceError;
 
@@ -65,8 +66,11 @@ pub async fn preflight(data_directory: &Path) -> Result<(), SettingsPersistenceE
     reject_symlink(data_directory)?;
     reject_symlink(&database_path)?;
     let database = connect(&database_path, true).await?;
-    integrity(&database).await?;
-    classify(&database).await?;
+    // The installation preflight already ran SQLite's integrity check on this
+    // file during the same launch; a Rust-owned store does not repeat it.
+    if classify(&database).await? != SourceClassification::RustOwned {
+        integrity(&database).await?;
+    }
     validate_manifest(&database).await?;
     validate_semantics(&database).await?;
     settings_digest(&database).await?;
@@ -93,8 +97,10 @@ pub async fn adopt(data_directory: &Path) -> Result<AdoptionEvidence, SettingsPe
     reject_symlink(&database_path)?;
 
     let database = connect(&database_path, true).await?;
-    integrity(&database).await?;
     let source = classify(&database).await?;
+    if source != SourceClassification::RustOwned {
+        integrity(&database).await?;
+    }
     validate_manifest(&database).await?;
     validate_semantics(&database).await?;
     let digest = settings_digest(&database).await?;
@@ -418,12 +424,16 @@ async fn effective_owned_tables(
     database: &impl ConnectionTrait,
 ) -> Result<Vec<(&'static str, Vec<&'static str>)>, SettingsPersistenceError> {
     let entry_skill_installed = table_exists(database, LAUNCH_BINDING_ENTRY_SKILL_LEDGER).await?;
+    let profile_installed = table_exists(database, LAUNCH_BINDING_PROFILE_LEDGER).await?;
     Ok(OWNED_TABLES
         .iter()
         .map(|(table, columns)| {
             let mut columns = columns.to_vec();
             if *table == "worktracker_launchbinding" && entry_skill_installed {
                 columns.push("entry_skill");
+            }
+            if *table == "worktracker_launchbinding" && profile_installed {
+                columns.push("profile");
             }
             (*table, columns)
         })

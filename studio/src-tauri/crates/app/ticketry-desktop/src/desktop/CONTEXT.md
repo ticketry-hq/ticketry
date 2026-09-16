@@ -28,8 +28,3 @@ The bundle Ticketry assembles on the launch after a Dirty Shutdown: a metadata
 sidecar plus, when found, a copy of the operating system's native crash
 report. Stored locally, capped to the most recent ten, exported manually.
 _Avoid_: dump, minidump, telemetry
-
-**Crash Notice**:
-The dismissible, non-blocking message shown on the launch after a Dirty
-Shutdown, offering to reveal the Crash Report folder.
-_Avoid_: crash dialog, error popup

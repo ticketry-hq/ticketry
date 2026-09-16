@@ -1,22 +1,17 @@
 mod common;
 
-use std::collections::HashSet;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
-use async_trait::async_trait;
 use common::submitted_launch_authority::launch_service;
 use common::terminal_lifecycle_harness::{TerminalLifecycleHarness, MODULE_ID, TASK_ID};
+use common::terminal_reconciliation_runtime::ScriptedRuntime;
 use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter};
 use ticketry_agent_execution::{
     reconciliation::ExecutionReconciliationService,
     run_now::{RunNowCaller, RunNowRequest, RunNowService},
 };
 use ticketry_entities::launch_material;
-use ticketry_launch::TerminalLaunchError;
-use ticketry_terminal::{
-    TerminalLaunchBoundary, TerminalLaunchCheckpoint, TerminalLaunchRuntime,
-    TerminalRuntimeObservation, VerifiedTerminalRuntime,
-};
+use ticketry_terminal::TerminalCleanupService;
 use ticketry_work_management::launch_policy::{
     self, CallerScope, LaunchPolicyRequest, LaunchPolicyResolver,
 };
@@ -26,49 +21,16 @@ const MODEL: &str = "00000000000000000000000000008958";
 const ROOT_ATTEMPT: &str = "a1000000000000000000000000000001";
 const RETRY_ATTEMPT: &str = "a1000000000000000000000000000002";
 const AUTO_START_TRANSITION: &str = "b1000000000000000000000000000001";
-
-#[derive(Default)]
-struct Runtime {
-    created: Mutex<HashSet<String>>,
-}
-
-#[async_trait]
-impl TerminalLaunchRuntime for Runtime {
-    async fn observe(&self, agent_run_id: &str) -> TerminalRuntimeObservation {
-        if self.created.lock().unwrap().contains(agent_run_id) {
-            TerminalRuntimeObservation::Running(VerifiedTerminalRuntime {
-                tmux_session_name: format!("prompt-{agent_run_id}"),
-                runtime_namespace: "task-prompt-test".to_owned(),
-            })
-        } else {
-            TerminalRuntimeObservation::Missing
-        }
-    }
-
-    async fn materialize_and_create(
-        &self,
-        material: &launch_material::Model,
-        checkpoint: &dyn TerminalLaunchCheckpoint,
-    ) -> Result<(), TerminalLaunchError> {
-        self.created
-            .lock()
-            .unwrap()
-            .insert(material.agent_run_id.clone());
-        checkpoint
-            .checkpoint(TerminalLaunchBoundary::TmuxCreated)
-            .await?;
-        checkpoint
-            .checkpoint(TerminalLaunchBoundary::OwnershipMetadataWritten)
-            .await
-    }
-}
+const DESIGN_DIR: &str = "spec/harness-module--00000000/T864--harness-task";
 
 #[tokio::test]
 async fn policy_driven_task_launches_include_the_work_item_description() {
     let harness = TerminalLifecycleHarness::start().await;
     let database = harness.database().await;
     seed(&database, harness.data_directory()).await;
-    let terminal = launch_service(database.clone(), Arc::new(Runtime::default()));
+    let runtime = Arc::new(ScriptedRuntime::default());
+    let terminal = launch_service(database.clone(), runtime.clone());
+    let cleanup = TerminalCleanupService::new(database.clone(), runtime);
     let resolver = LaunchPolicyResolver::new(database.clone());
 
     let run_now = RunNowService::new(database.clone(), resolver.clone(), terminal.clone(), None)
@@ -107,10 +69,11 @@ async fn policy_driven_task_launches_include_the_work_item_description() {
             .await
             .unwrap();
         launch_policy::record(&database, &decision).await.unwrap();
-        let report = ExecutionReconciliationService::new(
+        let report = ExecutionReconciliationService::with_cleanup(
             database.clone(),
             resolver.clone(),
             terminal.clone(),
+            cleanup.clone(),
         )
         .reconcile_automation(10)
         .await;
@@ -137,6 +100,96 @@ fn assert_complete_prompt(prompt: &str) {
     assert!(prompt
         .starts_with("Selected workflow prompt:\nInitial policy.\n\nWork item context (factual):"));
     assert!(prompt.contains("Description:\nPolicy launch details."));
+}
+
+#[tokio::test]
+async fn a_replacement_launch_names_the_previous_state_handoff_note() {
+    let harness = TerminalLifecycleHarness::start().await;
+    let database = harness.database().await;
+    seed(&database, harness.data_directory()).await;
+    let design = harness.data_directory().join(DESIGN_DIR);
+    std::fs::create_dir_all(&design).unwrap();
+    std::fs::write(
+        design.join("ideas-handoff.md"),
+        "Context from the previous agent.",
+    )
+    .unwrap();
+    let runtime = Arc::new(ScriptedRuntime::default());
+    let terminal = launch_service(database.clone(), runtime.clone());
+
+    let run_now = RunNowService::new(
+        database.clone(),
+        LaunchPolicyResolver::new(database.clone()),
+        terminal,
+        None,
+    )
+    .execute(RunNowRequest {
+        id_or_key: compact(TASK_ID),
+        request_identity: "run-now-handoff-note".to_owned(),
+        caller: RunNowCaller::Human,
+    })
+    .await
+    .unwrap();
+
+    let prompt = launch_material::Entity::find()
+        .filter(launch_material::Column::AgentRunId.eq(run_now.run.agent_run_id))
+        .one(&database)
+        .await
+        .unwrap()
+        .unwrap()
+        .prompt
+        .unwrap();
+    assert_complete_prompt(&prompt);
+    assert!(
+        prompt
+            .lines()
+            .filter(|line| {
+                *line
+                    == format!(
+                        "Handoff note: {DESIGN_DIR}/ideas-handoff.md — read it before starting."
+                    )
+            })
+            .count()
+            == 1,
+        "expected exactly one handoff-note line, got: {prompt}"
+    );
+}
+
+#[tokio::test]
+async fn a_replacement_launch_is_silent_without_a_handoff_note() {
+    let harness = TerminalLifecycleHarness::start().await;
+    let database = harness.database().await;
+    seed(&database, harness.data_directory()).await;
+    let runtime = Arc::new(ScriptedRuntime::default());
+    let terminal = launch_service(database.clone(), runtime.clone());
+
+    let run_now = RunNowService::new(
+        database.clone(),
+        LaunchPolicyResolver::new(database.clone()),
+        terminal,
+        None,
+    )
+    .execute(RunNowRequest {
+        id_or_key: compact(TASK_ID),
+        request_identity: "run-now-no-note".to_owned(),
+        caller: RunNowCaller::Human,
+    })
+    .await
+    .unwrap();
+
+    let prompt = launch_material::Entity::find()
+        .filter(launch_material::Column::AgentRunId.eq(run_now.run.agent_run_id))
+        .one(&database)
+        .await
+        .unwrap()
+        .unwrap()
+        .prompt
+        .unwrap();
+    assert_complete_prompt(&prompt);
+    assert!(
+        !prompt.contains("Handoff note:"),
+        "no handoff line expected when the note is absent: {prompt}"
+    );
 }
 
 async fn seed(database: &sea_orm::DatabaseConnection, directory: &std::path::Path) {

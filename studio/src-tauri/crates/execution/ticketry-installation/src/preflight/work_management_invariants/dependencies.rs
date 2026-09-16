@@ -81,13 +81,16 @@ pub(crate) fn invariants() -> Vec<Invariant> {
                 "worktracker_issue_blocked_by.from_issue_id",
                 "worktracker_issue_blocked_by.to_issue_id",
             ],
-            query: "WITH RECURSIVE reach(root, node, depth) AS (
-                      SELECT from_issue_id, to_issue_id, 1 FROM worktracker_issue_blocked_by
-                      UNION ALL
-                      SELECT reach.root, edge.to_issue_id, reach.depth + 1
+            // UNION (not UNION ALL) visits each (root, node) pair once, so the
+            // walk is bounded by the graph's size rather than by the number of
+            // paths through it, and terminates on a cycle without a depth cap.
+            query: "WITH RECURSIVE reach(root, node) AS (
+                      SELECT from_issue_id, to_issue_id FROM worktracker_issue_blocked_by
+                      UNION
+                      SELECT reach.root, edge.to_issue_id
                       FROM reach
                       JOIN worktracker_issue_blocked_by edge ON edge.from_issue_id = reach.node
-                      WHERE reach.depth < 64)
+                      WHERE reach.node <> reach.root)
                     SELECT DISTINCT root AS identity FROM reach WHERE node = root"
                 .to_owned(),
         },

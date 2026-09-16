@@ -5,8 +5,7 @@
 //! digest across a verified snapshot and a restart. An installation whose
 //! schema this runtime does not recognise must be left untouched.
 
-use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::path::Path;
 
 use sea_orm::{ConnectionTrait, Database, DbBackend, Statement};
 use ticketry_documents::{
@@ -14,37 +13,14 @@ use ticketry_documents::{
     LEDGER_TABLE,
 };
 
-fn root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../../../..")
-        .canonicalize()
-        .unwrap()
-}
-
-fn fixture(path: &Path) {
-    let script = r#"
-import os, sys, uuid
-from pathlib import Path
-p=Path(sys.argv[1]).resolve(); os.environ['DJANGO_SETTINGS_MODULE']='studio_server.settings'; os.environ['MUXED_STATE_DB']=str(p); os.environ['MUXED_DATA_DIR']=str(p.parent); os.environ['MUXED_FORCE_SQLITE']='true'
-import django; django.setup()
-from django.core.management import call_command
-from apps.documents.models import DesignDocument
-call_command('migrate', interactive=False, verbosity=0)
-DesignDocument.objects.create(id=uuid.UUID(int=600).hex,module_id=uuid.UUID(int=601).hex,task_id=uuid.UUID(int=602).hex,scope='task',root_dir='/modules/ticketry/spec/rusting--cf2de16d/T755--adopt-design-document-metadata-with-safe',rel_path='SPEC.md',discovered_by_run_id='run-documents-fixture',created_at='2026-01-01T00:00:00+00:00',updated_at='2026-01-02T00:00:00+00:00')
-DesignDocument.objects.create(id=uuid.UUID(int=603).hex,module_id=uuid.UUID(int=601).hex,task_id='00000000-0000-0000-0000-000000000000',scope='plan',root_dir='/modules/ticketry/spec/planning--3f2a',rel_path='nested/Design.HTML',discovered_by_run_id=None,created_at='2026-01-03T00:00:00+00:00',updated_at='2026-01-03T00:00:00+00:00')
-"#;
-    let output = Command::new(root().join("backend/.venv/bin/python"))
-        .arg("-c")
-        .arg(script)
-        .arg(path)
-        .current_dir(root())
-        .output()
+async fn fixture(path: &Path) {
+    let database = Database::connect(format!("sqlite:{}?mode=rwc", path.display()))
+        .await
         .unwrap();
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
+    database.execute_unprepared(include_str!("../../../../execution/ticketry-installation/src/adoption/provisioning.v1.sql")).await.unwrap();
+    database.execute_unprepared(include_str!("../../../../execution/ticketry-installation/src/adoption/provisioning-ledger.v1.sql")).await.unwrap();
+    database.execute_unprepared("INSERT INTO design_documents (id,module_id,task_id,scope,root_dir,rel_path,discovered_by_run_id,created_at,updated_at) VALUES ('00000000000000000000000000000258','00000000000000000000000000000259','0000000000000000000000000000025a','task','/modules/ticketry/spec/rusting--cf2de16d/T755--adopt-design-document-metadata-with-safe','SPEC.md','run-documents-fixture','2026-01-01T00:00:00+00:00','2026-01-02T00:00:00+00:00'),('0000000000000000000000000000025b','00000000000000000000000000000259','00000000-0000-0000-0000-000000000000','plan','/modules/ticketry/spec/planning--3f2a','nested/Design.HTML',NULL,'2026-01-03T00:00:00+00:00','2026-01-03T00:00:00+00:00')").await.unwrap();
+    database.close().await.unwrap();
 }
 
 async fn open(path: &Path) -> sea_orm::DatabaseConnection {
@@ -67,7 +43,7 @@ async fn scalar(database: &sea_orm::DatabaseConnection, query: &str) -> String {
 async fn preflight_classifies_django_documents_without_writing() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("state.db");
-    fixture(&path);
+    fixture(&path).await;
 
     let source = preflight(directory.path()).await.unwrap();
 
@@ -80,7 +56,7 @@ async fn preflight_classifies_django_documents_without_writing() {
 async fn adopts_existing_rows_in_place_and_reopens_deterministically() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("state.db");
-    fixture(&path);
+    fixture(&path).await;
 
     let first = adopt(directory.path()).await.unwrap();
     let second = adopt(directory.path()).await.unwrap();
@@ -142,7 +118,7 @@ async fn adopts_existing_rows_in_place_and_reopens_deterministically() {
 async fn refuses_an_unknown_document_schema() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("state.db");
-    fixture(&path);
+    fixture(&path).await;
     let database = open(&path).await;
     database
         .execute_unprepared("ALTER TABLE design_documents ADD COLUMN unexpected varchar NULL")
@@ -164,7 +140,7 @@ async fn refuses_an_unknown_document_schema() {
 async fn refuses_a_registry_whose_scope_is_not_a_known_document_scope() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("state.db");
-    fixture(&path);
+    fixture(&path).await;
     let database = open(&path).await;
     database
         .execute_unprepared("UPDATE design_documents SET scope='review'")
@@ -183,7 +159,7 @@ async fn refuses_a_registry_whose_scope_is_not_a_known_document_scope() {
 async fn refuses_a_registry_that_escapes_its_authorized_root() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("state.db");
-    fixture(&path);
+    fixture(&path).await;
     let database = open(&path).await;
     database
         .execute_unprepared(
@@ -202,7 +178,7 @@ async fn refuses_a_registry_that_escapes_its_authorized_root() {
 async fn refuses_a_relative_authorized_root() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("state.db");
-    fixture(&path);
+    fixture(&path).await;
     let database = open(&path).await;
     database
         .execute_unprepared(
@@ -221,7 +197,7 @@ async fn refuses_a_relative_authorized_root() {
 async fn refuses_a_store_without_django_document_history() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("state.db");
-    fixture(&path);
+    fixture(&path).await;
     let database = open(&path).await;
     database
         .execute_unprepared("DELETE FROM django_migrations WHERE app='documents'")

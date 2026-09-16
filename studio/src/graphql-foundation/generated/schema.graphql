@@ -235,6 +235,9 @@ type ChangedFile {
 	path: String!
 	previous_path: String
 	status: String!
+	binary: Boolean!
+	insertions: Int
+	deletions: Int
 }
 
 type CurrentWorktreeView {
@@ -316,6 +319,14 @@ type DocumentSaveOutcome {
 	stale: Boolean!
 }
 
+type FileDiffView {
+	path: String!
+	status: String!
+	binary: Boolean!
+	patch: String!
+	truncated: Boolean!
+}
+
 input FloatFilterInput {
 	eq: Float
 	ne: Float
@@ -332,6 +343,7 @@ input FloatFilterInput {
 
 type GlobalLaunchDefault {
 	provider: String!
+	profile: String
 	model: String
 	reasoning: String
 }
@@ -524,6 +536,8 @@ type ModuleCheckoutChangesView {
 	unpushed_count: Int
 	truncated: Boolean!
 	files: [ChangedFile!]!
+	insertions: Int!
+	deletions: Int!
 }
 
 input ModuleLinkPathInput {
@@ -595,8 +609,8 @@ type Mutation {
 	reorder_states(project_id: String!, ordered_ids: [String!]!): [WorktrackerState!]!
 	set_module_link(module_id: String!, link: ModuleLinkPathInput!): ModuleLinks!
 	clear_module_link(module_id: String!): Boolean!
-	worktree_commit(task_id: String!, operation_id: String!, message: String!): RepositoryCommandResult!
-	module_checkout_commit(module_id: String!, operation_id: String!, message: String!): RepositoryCommandResult!
+	worktree_commit(task_id: String!, operation_id: String!): RepositoryCommandResult!
+	module_checkout_commit(module_id: String!, operation_id: String!): RepositoryCommandResult!
 	worktree_cleanup(task_id: String!, operation_id: String!, confirmed: Boolean!): WorktreeDiscardResult!
 	worktree_create(task_id: String!, operation_id: String!): WorktreeStatusView!
 	worktree_discard(task_id: String!, operation_id: String!): WorktreeDiscardResult!
@@ -619,10 +633,10 @@ type Mutation {
 	update_issue_type_transition(issue_type_id: String!, from_state_id: String!, to_state_id: String!, agent_allowed: Boolean!, handoff: Boolean!, workflow_revision: Int!): WorktrackerIssuetypetransition!
 	delete_issue_type_transition(issue_type_id: String!, from_state_id: String!, to_state_id: String!, workflow_revision: Int!): Boolean!
 	remove_state_from_issue_type_workflow(issue_type_id: String!, state_id: String!, workflow_revision: Int!): Boolean!
-	upsert_issue_type_launch_binding(issue_type_id: String!, state_id: String!, workflow_revision: Int!, prompt: String, required_skills: [String!], entry_skill: String, model_id: String, reasoning_id: String, auto_start: Boolean, subtree_run_enabled: Boolean): WorktrackerLaunchbinding!
+	upsert_issue_type_launch_binding(issue_type_id: String!, state_id: String!, workflow_revision: Int!, prompt: String, required_skills: [String!], entry_skill: String, profile: String, model_id: String, reasoning_id: String, auto_start: Boolean, subtree_run_enabled: Boolean): WorktrackerLaunchbinding!
 	update_instant_launch_setting(initial_prompt: String!, auto_close: Boolean!): KeybindingSetting!
 	update_keybinding_setting(value: Json!): KeybindingSetting!
-	update_provider_catalog(activated_providers: [String!]!, default_provider: String, default_model: String, default_reasoning: String): ProviderCatalog!
+	update_provider_catalog(activated_providers: [String!]!, codex_profiles: [String!]!, default_provider: String, default_profile: String, default_model: String, default_reasoning: String): ProviderCatalog!
 	retry_automation_attempt(attempt_id: String!): AutomationAttemptProjection!
 	dismiss_automation_attempt(attempt_id: String!): AutomationAttemptProjection!
 	ingest_agent_lifecycle(agent_run_id: String!, kind: String!, occurred_at: String!, provider_session_id: String): LifecycleAccepted!
@@ -681,12 +695,16 @@ type ProviderCatalog {
 	providers: [WorktrackerProvider!]!
 	agent_models: [WorktrackerAgentmodel!]!
 	reasoning_levels: [WorktrackerReasoninglevel!]!
+	codex_profiles: [String!]!
 	global_default: GlobalLaunchDefault
 }
 
 type PullRequestCreationResult {
 	operation_id: String!
 	url: String!
+	title: String!
+	body: String!
+	message_source: String!
 	branch: String!
 	base_branch: String!
 	pushed: Boolean!
@@ -721,12 +739,16 @@ type Query {
 	worktrackerAgentmodel(filters: WorktrackerAgentmodelFilterInput, having: WorktrackerAgentmodelHavingInput, orderBy: WorktrackerAgentmodelOrderInput, pagination: PaginationInput): WorktrackerAgentmodelConnection!
 	worktrackerAgentmodelreasoninglevel(filters: WorktrackerAgentmodelreasoninglevelFilterInput, having: WorktrackerAgentmodelreasoninglevelHavingInput, orderBy: WorktrackerAgentmodelreasoninglevelOrderInput, pagination: PaginationInput): WorktrackerAgentmodelreasoninglevelConnection!
 	worktrackerReasoninglevel(filters: WorktrackerReasoninglevelFilterInput, having: WorktrackerReasoninglevelHavingInput, orderBy: WorktrackerReasoninglevelOrderInput, pagination: PaginationInput): WorktrackerReasoninglevelConnection!
+	worktrackerTransitionoccurrence(filters: WorktrackerTransitionoccurrenceFilterInput, having: WorktrackerTransitionoccurrenceHavingInput, orderBy: WorktrackerTransitionoccurrenceOrderInput, pagination: PaginationInput): WorktrackerTransitionoccurrenceConnection!
+	ticketryShiprecords(filters: TicketryShiprecordsFilterInput, having: TicketryShiprecordsHavingInput, orderBy: TicketryShiprecordsOrderInput, pagination: PaginationInput): TicketryShiprecordsConnection!
 	graphRuns(filters: GraphRunsFilterInput, having: GraphRunsHavingInput, orderBy: GraphRunsOrderInput, pagination: PaginationInput): GraphRunsConnection!
 	moduleLinks(filters: ModuleLinksFilterInput, having: ModuleLinksHavingInput, orderBy: ModuleLinksOrderInput, pagination: PaginationInput): ModuleLinksConnection!
 	worktrees(filters: WorktreesFilterInput, having: WorktreesHavingInput, orderBy: WorktreesOrderInput, pagination: PaginationInput): WorktreesConnection!
 	worktree_status(task_id: String!): WorktreeStatusView!
 	worktree_changes(task_id: String!): WorktreeChangesView!
 	module_version_control(module_id: String!): ModuleVersionControlView!
+	worktree_file_diff(task_id: String!, path: String!): FileDiffView!
+	module_file_diff(module_id: String!, path: String!): FileDiffView!
 	keybinding_setting: KeybindingSetting
 	instant_launch_setting: KeybindingSetting
 	provider_catalog: ProviderCatalog!
@@ -736,6 +758,7 @@ type Query {
 	agentTerminalSessions(filters: AgentTerminalSessionsFilterInput, having: AgentTerminalSessionsHavingInput, orderBy: AgentTerminalSessionsOrderInput, pagination: PaginationInput): AgentTerminalSessionsConnection!
 	agentRunViewerLeases(filters: AgentRunViewerLeasesFilterInput, having: AgentRunViewerLeasesHavingInput, orderBy: AgentRunViewerLeasesOrderInput, pagination: PaginationInput): AgentRunViewerLeasesConnection!
 	instant_run_tickets(project_id: String!, module_id: String!): [InstantRunTicket!]!
+	instant_run_ticket_title(agent_run_id: String!): String
 	resumable_terminal_sessions(task_id: String, project_id: String, module_id: String): [AgentRuns!]!
 	designDocuments(filters: DesignDocumentsFilterInput, having: DesignDocumentsHavingInput, orderBy: DesignDocumentsOrderInput, pagination: PaginationInput): DesignDocumentsConnection!
 	directory_completions(path: String!): [String!]!
@@ -743,6 +766,8 @@ type Query {
 
 type RepositoryCommandResult {
 	operation_id: String!
+	subject: String!
+	message_source: String!
 	head_commit: String!
 	dirty: Boolean!
 	unpushed_count: Int!
@@ -832,6 +857,7 @@ input StringFilterInput {
 
 type Subscription {
 	run_status_stream(project_id: String!, after_cursor: Int): RunStatusFrame!
+	instant_run_ticket_title_restarted: Boolean!
 }
 
 type TerminalOutputObservation {
@@ -852,6 +878,77 @@ input TextFilterInput {
 	is_null: Boolean
 	between: [String!]
 	not_between: [String!]
+}
+
+type TicketryShiprecords {
+	id: String!
+	moduleId: String!
+	taskId: String
+	checkoutKind: String!
+	checkoutLabel: String!
+	operationId: String!
+	branch: String!
+	commitShas: Json!
+	steps: Json!
+	actedAt: String!
+	prUrl: String
+	prNumber: Int
+	prState: String
+	prRefreshedAt: String
+	issue: WorktrackerIssue
+}
+
+type TicketryShiprecordsConnection {
+	pageInfo: PageInfo!
+	paginationInfo: PaginationInfo
+	nodes: [TicketryShiprecords!]!
+	edges: [TicketryShiprecordsEdge!]!
+}
+
+type TicketryShiprecordsEdge {
+	cursor: String!
+	node: TicketryShiprecords!
+}
+
+input TicketryShiprecordsFilterInput {
+	id: StringFilterInput
+	moduleId: StringFilterInput
+	taskId: StringFilterInput
+	checkoutKind: StringFilterInput
+	checkoutLabel: StringFilterInput
+	operationId: StringFilterInput
+	branch: StringFilterInput
+	commitShas: JsonFilterInput
+	steps: JsonFilterInput
+	actedAt: StringFilterInput
+	prUrl: StringFilterInput
+	prNumber: IntegerFilterInput
+	prState: StringFilterInput
+	prRefreshedAt: StringFilterInput
+	and: [TicketryShiprecordsFilterInput!]
+	or: [TicketryShiprecordsFilterInput!]
+	not: TicketryShiprecordsFilterInput
+}
+
+input TicketryShiprecordsHavingInput {
+	issue: WorktrackerIssueFilterInput
+}
+
+input TicketryShiprecordsOrderInput {
+	id: OrderByEnum
+	moduleId: OrderByEnum
+	taskId: OrderByEnum
+	checkoutKind: OrderByEnum
+	checkoutLabel: OrderByEnum
+	operationId: OrderByEnum
+	branch: OrderByEnum
+	commitShas: OrderByEnum
+	steps: OrderByEnum
+	actedAt: OrderByEnum
+	prUrl: OrderByEnum
+	prNumber: OrderByEnum
+	prState: OrderByEnum
+	prRefreshedAt: OrderByEnum
 }
 
 type WorkItemClosureFailureView {
@@ -1281,6 +1378,7 @@ type WorktrackerLaunchbinding {
 	prompt: String!
 	requiredSkills: Json!
 	entrySkill: String
+	profile: String
 	modelId: String
 	reasoningId: String
 	autoStart: Boolean!
@@ -1312,6 +1410,7 @@ input WorktrackerLaunchbindingFilterInput {
 	prompt: StringFilterInput
 	requiredSkills: JsonFilterInput
 	entrySkill: StringFilterInput
+	profile: StringFilterInput
 	modelId: StringFilterInput
 	reasoningId: StringFilterInput
 	autoStart: BooleanFilterInput
@@ -1337,6 +1436,7 @@ input WorktrackerLaunchbindingOrderInput {
 	prompt: OrderByEnum
 	requiredSkills: OrderByEnum
 	entrySkill: OrderByEnum
+	profile: OrderByEnum
 	modelId: OrderByEnum
 	reasoningId: OrderByEnum
 	autoStart: OrderByEnum
@@ -1577,6 +1677,91 @@ input WorktrackerStateOrderInput {
 	updatedAt: OrderByEnum
 }
 
+type WorktrackerTransitionoccurrence {
+	occurrenceId: String!
+	version: Int!
+	issueId: String!
+	projectId: String!
+	issueTypeId: String!
+	fromStateId: String!
+	toStateId: String!
+	fromGroup: String!
+	toGroup: String!
+	workItemRevision: Int!
+	workflowRevision: Int!
+	destinationAutoStart: Boolean!
+	handoff: Boolean!
+	origin: String!
+	runNowDecisionId: String
+	committedAt: String!
+	issue: WorktrackerIssue
+	project: WorktrackerProject
+	issueType: WorktrackerIssuetype
+	fromState: WorktrackerState
+	toState: WorktrackerState
+}
+
+type WorktrackerTransitionoccurrenceConnection {
+	pageInfo: PageInfo!
+	paginationInfo: PaginationInfo
+	nodes: [WorktrackerTransitionoccurrence!]!
+	edges: [WorktrackerTransitionoccurrenceEdge!]!
+}
+
+type WorktrackerTransitionoccurrenceEdge {
+	cursor: String!
+	node: WorktrackerTransitionoccurrence!
+}
+
+input WorktrackerTransitionoccurrenceFilterInput {
+	occurrenceId: StringFilterInput
+	version: IntegerFilterInput
+	issueId: StringFilterInput
+	projectId: StringFilterInput
+	issueTypeId: StringFilterInput
+	fromStateId: StringFilterInput
+	toStateId: StringFilterInput
+	fromGroup: StringFilterInput
+	toGroup: StringFilterInput
+	workItemRevision: IntegerFilterInput
+	workflowRevision: IntegerFilterInput
+	destinationAutoStart: BooleanFilterInput
+	handoff: BooleanFilterInput
+	origin: StringFilterInput
+	runNowDecisionId: StringFilterInput
+	committedAt: TextFilterInput
+	and: [WorktrackerTransitionoccurrenceFilterInput!]
+	or: [WorktrackerTransitionoccurrenceFilterInput!]
+	not: WorktrackerTransitionoccurrenceFilterInput
+}
+
+input WorktrackerTransitionoccurrenceHavingInput {
+	issue: WorktrackerIssueFilterInput
+	project: WorktrackerProjectFilterInput
+	issueType: WorktrackerIssuetypeFilterInput
+	fromState: WorktrackerStateFilterInput
+	toState: WorktrackerStateFilterInput
+}
+
+input WorktrackerTransitionoccurrenceOrderInput {
+	occurrenceId: OrderByEnum
+	version: OrderByEnum
+	issueId: OrderByEnum
+	projectId: OrderByEnum
+	issueTypeId: OrderByEnum
+	fromStateId: OrderByEnum
+	toStateId: OrderByEnum
+	fromGroup: OrderByEnum
+	toGroup: OrderByEnum
+	workItemRevision: OrderByEnum
+	workflowRevision: OrderByEnum
+	destinationAutoStart: OrderByEnum
+	handoff: OrderByEnum
+	origin: OrderByEnum
+	runNowDecisionId: OrderByEnum
+	committedAt: OrderByEnum
+}
+
 type WorktreeChangesView {
 	task_id: String!
 	top_level_task_id: String!
@@ -1594,6 +1779,8 @@ type WorktreeChangesView {
 	unpushed_count: Int!
 	truncated: Boolean!
 	files: [ChangedFile!]!
+	insertions: Int!
+	deletions: Int!
 }
 
 type WorktreeCleanupStatusView {

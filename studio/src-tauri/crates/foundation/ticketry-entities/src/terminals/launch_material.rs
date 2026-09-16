@@ -14,6 +14,7 @@ pub struct Model {
     pub module_id: String,
     pub task_id: String,
     pub provider: Option<String>,
+    pub profile: Option<String>,
     pub model: Option<String>,
     pub reasoning: Option<String>,
     pub scope: String,

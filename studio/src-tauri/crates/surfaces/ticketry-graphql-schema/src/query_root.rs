@@ -19,6 +19,7 @@ pub struct TerminalServices {
     pub launch: ticketry_terminal::TerminalLaunchService,
     pub viewers: ticketry_terminal::ViewerOwnershipService,
     pub output_activity: ticketry_terminal::TerminalOutputActivityService,
+    pub instant_run_ticket_titles: Option<ticketry_terminal::InstantRunTicketTitleService>,
 }
 
 #[derive(Clone, Copy)]
@@ -190,8 +191,8 @@ fn build_schema(
     };
     let mut builder = Builder::new(&CONTEXT, entity_database.clone());
     builder.mutation = Object::new("Mutation");
-    // The Runs status stream registers the only subscription field, so the
-    // subscription root is always populated.
+    // The Runs status stream keeps the subscription root populated; focused
+    // runtime services may register additional notification fields.
     builder.schema = Schema::build("Query", Some("Mutation"), Some("Subscription"));
 
     // `migration_probes` belongs only to the disposable foundation database.
@@ -203,6 +204,7 @@ fn build_schema(
         builder
     };
     let builder = ticketry_entities::register_work_management_entities(builder);
+    let builder = ticketry_entities::register_workspace_runtime_entities(builder);
     let builder = if contract.product_generated_mutations {
         ticketry_entities::register_execution_entities(builder)
     } else {
@@ -241,6 +243,12 @@ fn build_schema(
     let builder = ticketry_workspace_runtime::design_document::register_graphql(builder);
     let builder = ticketry_workspace_runtime::directory_completion_query::register(builder);
     let mut schema = builder.schema_builder().data(entity_database);
+    if let Some(title_service) = terminal_services
+        .as_ref()
+        .and_then(|services| services.instant_run_ticket_titles.clone())
+    {
+        schema = schema.data(title_service);
+    }
     if contract.product_generated_mutations {
         schema = schema.data(ticketry_agent_execution::GraphRunCaller);
     }

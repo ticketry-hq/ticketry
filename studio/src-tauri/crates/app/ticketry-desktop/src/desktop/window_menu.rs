@@ -14,7 +14,9 @@ const CLOSE_WINDOW_TEXT: &str = "Close Window";
 pub(crate) fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     let menu = Menu::default(app)?;
     for item in menu.items()? {
-        let MenuItemKind::Submenu(submenu) = item else { continue };
+        let MenuItemKind::Submenu(submenu) = item else {
+            continue;
+        };
         for child in submenu.items()? {
             if is_close_window(&child) {
                 submenu.remove(&child)?;

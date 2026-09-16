@@ -19,10 +19,13 @@ use super::phase::Phase;
 pub(crate) const REMOVE_ORPHANED_DOCUMENT_METADATA: &str =
     "remove-orphaned-design-document-metadata.v1";
 
+/// Mirrors the `document-work-item-missing` preflight rule: identities compare
+/// by compact spelling, and the all-zero scratch task placeholder is not missing.
 const ORPHAN_PREDICATE: &str = "NOT EXISTS (SELECT 1 FROM worktracker_issue module
-                 WHERE module.id = design_documents.module_id)
-     OR NOT EXISTS (SELECT 1 FROM worktracker_issue task
-                    WHERE task.id = design_documents.task_id)";
+                 WHERE module.id = replace(design_documents.module_id, '-', ''))
+     OR (replace(design_documents.task_id, '-', '') <> '00000000000000000000000000000000'
+         AND NOT EXISTS (SELECT 1 FROM worktracker_issue task
+                         WHERE task.id = replace(design_documents.task_id, '-', '')))";
 
 pub(crate) async fn apply(
     transaction: &DatabaseTransaction,

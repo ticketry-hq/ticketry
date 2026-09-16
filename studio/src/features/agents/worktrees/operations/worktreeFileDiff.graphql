@@ -1,0 +1,9 @@
+query WorktreeFileDiff($taskId: String!, $path: String!) {
+  worktree_file_diff(task_id: $taskId, path: $path) {
+    path
+    status
+    binary
+    patch
+    truncated
+  }
+}

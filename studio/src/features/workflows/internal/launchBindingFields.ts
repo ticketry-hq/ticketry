@@ -6,6 +6,7 @@ export interface LaunchBindingFields {
   prompt: string;
   entrySkill: string;
   agent: string;
+  profile: string;
   model: string;
   reasoning: string;
 }
@@ -18,6 +19,7 @@ export function storedLaunchBindingFields(
     prompt: binding?.prompt ?? "",
     entrySkill: binding?.entry_skill ?? "",
     agent: binding?.agent ?? "",
+    profile: binding?.profile ?? "",
     model: binding?.model ?? "",
     reasoning: binding?.reasoning ?? "",
   };

@@ -2,6 +2,9 @@ mutation WorktreeReplacePullRequest($taskId: String!, $operationId: String!) {
   worktree_pull_request_replace(task_id: $taskId, operation_id: $operationId) {
     operation_id
     url
+    title
+    body
+    message_source
     branch
     base_branch
     pushed

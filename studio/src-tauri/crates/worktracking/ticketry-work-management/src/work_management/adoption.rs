@@ -50,7 +50,21 @@ impl std::fmt::Display for AdoptionError {
 
 impl std::error::Error for AdoptionError {}
 
+/// Validate and adopt for startup without hashing unchanged history on reopen.
+pub async fn ensure_adopted(data_directory: &Path) -> Result<(), AdoptionError> {
+    adopt_inner(data_directory, false).await.map(drop)
+}
+
 pub async fn adopt(data_directory: &Path) -> Result<AdoptionEvidence, AdoptionError> {
+    Ok(adopt_inner(data_directory, true)
+        .await?
+        .expect("adoption evidence requested"))
+}
+
+async fn adopt_inner(
+    data_directory: &Path,
+    capture_evidence: bool,
+) -> Result<Option<AdoptionEvidence>, AdoptionError> {
     reject_postgresql(data_directory)?;
     let database_path = data_directory.join("state.db");
     reject_unsafe_path(data_directory, &database_path)?;
@@ -61,22 +75,31 @@ pub async fn adopt(data_directory: &Path) -> Result<AdoptionEvidence, AdoptionEr
     }
 
     let database = connect(&database_path, false).await?;
-    integrity(&database).await?;
     let source = classify(&database).await?;
+    // The installation preflight already integrity-checked this file during
+    // the same launch; a Rust-owned reopen does not repeat it.
+    if capture_evidence || source != SourceClassification::RustOwned {
+        integrity(&database).await?;
+    }
     let generation = schema_generation(&database).await?;
     validate_manifest(&database, generation).await?;
     validate_semantics(&database).await?;
+    // Reopening retains validation and schema repair, but needs no migration digest.
+    if !capture_evidence && source == SourceClassification::RustOwned {
+        database.close().await.map_err(sqlite_error)?;
+        return Ok(None);
+    }
     let before = stable_digest(&database, generation).await?;
 
     if source == SourceClassification::RustOwned {
-        return Ok(AdoptionEvidence {
+        return Ok(Some(AdoptionEvidence {
             version: VERSION,
             source,
             snapshot_path: None,
             snapshot_sha256: None,
             stable_digest: before,
             restoration_verified: true,
-        });
+        }));
     }
 
     checkpoint(&database).await?;
@@ -117,7 +140,7 @@ pub async fn adopt(data_directory: &Path) -> Result<AdoptionEvidence, AdoptionEr
         restoration_verified: true,
     };
     write_evidence(data_directory, &evidence)?;
-    Ok(evidence)
+    Ok(Some(evidence))
 }
 
 fn reject_postgresql(data_directory: &Path) -> Result<(), AdoptionError> {
@@ -378,6 +401,11 @@ async fn effective_owned_tables(
         super::launch_binding_entry_skill_migration::LEDGER_TABLE,
     )
     .await?;
+    let profile_installed = table_exists(
+        database,
+        super::launch_binding_profile_migration::LEDGER_TABLE,
+    )
+    .await?;
     let workflow_handoff_installed =
         table_exists(database, super::workflow_handoff_migration::LEDGER_TABLE).await?;
     Ok(owned_tables(generation)
@@ -386,6 +414,9 @@ async fn effective_owned_tables(
             let mut columns = columns.to_vec();
             if table == "worktracker_launchbinding" && entry_skill_installed {
                 columns.push("entry_skill");
+            }
+            if table == "worktracker_launchbinding" && profile_installed {
+                columns.push("profile");
             }
             if table == "worktracker_issuetypetransition" && workflow_handoff_installed {
                 columns.push("handoff");

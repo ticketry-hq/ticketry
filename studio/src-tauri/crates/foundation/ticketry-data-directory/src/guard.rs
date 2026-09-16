@@ -7,7 +7,6 @@ use std::path::{Path, PathBuf};
 
 use super::advisory_lock::{owner_is_alive, try_lock_exclusive, unlock};
 use super::error::{io_error, OwnershipError};
-use super::location::established_data_directory;
 use super::owner_record::{
     clear_owner, now_millis, random_nonce, read_owner, write_owner, OwnerIdentity, LOCK_FILE_NAME,
 };
@@ -24,10 +23,6 @@ pub struct DataDirectoryGuard {
 }
 
 impl DataDirectoryGuard {
-    pub fn acquire_established() -> Result<Self, OwnershipError> {
-        Self::acquire(&established_data_directory()?)
-    }
-
     pub fn acquire(data_directory: &Path) -> Result<Self, OwnershipError> {
         fs::create_dir_all(data_directory).map_err(|error| {
             OwnershipError::Io(format!(

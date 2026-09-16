@@ -65,6 +65,8 @@ bool muxed_ghostty_host_is_main_thread(void);
 void *muxed_ghostty_runtime_new(void);
 void muxed_ghostty_runtime_free(void *runtime);
 
+// View values are opaque, non-reused handles, never NSView pointers. Detached
+// handles are rejected by every command, including commands already queued.
 void *muxed_ghostty_view_new(void *runtime, void *parent_view,
                              const char *command,
                              muxed_ghostty_process_exit_cb process_exit_callback,

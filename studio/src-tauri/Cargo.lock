@@ -4885,25 +4885,17 @@ checksum = "fcd2b6dd3b18129368955f32661a7718969e8c152c7d8866434c09cf15a512e0"
 dependencies = [
  "async-trait",
  "base64 0.23.0",
- "bytes",
  "chrono",
  "futures",
- "http",
- "http-body",
- "http-body-util",
  "pastey",
  "pin-project-lite",
- "rand 0.10.2",
  "rmcp-macros",
  "schemars 1.2.1",
  "serde",
  "serde_json",
- "sse-stream",
  "thiserror 2.0.19",
  "tokio",
- "tokio-stream",
  "tokio-util",
- "tower-service",
  "tracing",
  "uuid",
 ]
@@ -5495,6 +5487,7 @@ version = "1.0.151"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c841b55ecdae098c80dcae9cf767f6f8a0c2cdb3416bbef72181df4d0fe73f14"
 dependencies = [
+ "indexmap 2.14.0",
  "itoa",
  "memchr",
  "serde",
@@ -6081,19 +6074,6 @@ dependencies = [
  "tracing",
  "url",
  "uuid",
-]
-
-[[package]]
-name = "sse-stream"
-version = "0.2.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c123f296ade4ec4b8b0f6162116e6629f5146922ca5ab40ca9d3c2e73ab4761e"
-dependencies = [
- "bytes",
- "futures-util",
- "http-body",
- "http-body-util",
- "pin-project-lite",
 ]
 
 [[package]]
@@ -6867,7 +6847,6 @@ version = "0.2.0"
 dependencies = [
  "async-graphql",
  "async-trait",
- "cc",
  "chrono",
  "futures-util",
  "http",
@@ -6885,6 +6864,7 @@ dependencies = [
  "tauri-plugin-launchkey-adaptor",
  "tempfile",
  "ticketry-agent-execution",
+ "ticketry-codex-app-server",
  "ticketry-data-directory",
  "ticketry-desktop",
  "ticketry-diagnostics",
@@ -6930,6 +6910,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "ticketry-codex-app-server"
+version = "0.0.0"
+dependencies = [
+ "async-trait",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
 name = "ticketry-data-directory"
 version = "0.0.0"
 dependencies = [
@@ -6947,6 +6938,7 @@ version = "0.0.0"
 dependencies = [
  "axum",
  "base64 0.22.1",
+ "cc",
  "chrono",
  "http",
  "notify",
@@ -7050,6 +7042,7 @@ dependencies = [
  "sea-orm",
  "seaography",
  "serde",
+ "serde_json",
  "tokio",
  "uuid",
 ]
@@ -7071,6 +7064,7 @@ dependencies = [
  "taurpc",
  "tempfile",
  "ticketry-agent-execution",
+ "ticketry-diagnostics",
  "ticketry-documents",
  "ticketry-entities",
  "ticketry-installation",
@@ -7078,10 +7072,24 @@ dependencies = [
  "ticketry-runs",
  "ticketry-settings",
  "ticketry-terminal",
+ "ticketry-tool-discovery",
  "ticketry-work-management",
  "ticketry-workspace-runtime",
  "tokio",
  "uuid",
+]
+
+[[package]]
+name = "ticketry-hook"
+version = "0.0.0"
+dependencies = [
+ "sea-orm",
+ "serde_json",
+ "tempfile",
+ "ticketry-data-directory",
+ "ticketry-mcp",
+ "ticketry-work-management",
+ "tokio",
 ]
 
 [[package]]
@@ -7133,19 +7141,15 @@ dependencies = [
 name = "ticketry-mcp"
 version = "0.0.0"
 dependencies = [
- "axum",
  "chrono",
- "http",
- "reqwest",
  "rmcp",
  "sea-orm",
  "serde",
  "serde_json",
  "tempfile",
  "ticketry-agent-execution",
- "ticketry-diagnostics",
+ "ticketry-data-directory",
  "ticketry-entities",
- "ticketry-launch",
  "ticketry-runs",
  "ticketry-settings",
  "ticketry-terminal",
@@ -7205,6 +7209,7 @@ dependencies = [
  "async-trait",
  "blake2",
  "chrono",
+ "futures-util",
  "libc",
  "portable-pty",
  "rand 0.8.7",
@@ -7216,6 +7221,7 @@ dependencies = [
  "sha2 0.10.9",
  "tauri",
  "tempfile",
+ "ticketry-codex-app-server",
  "ticketry-diagnostics",
  "ticketry-documents",
  "ticketry-entities",
@@ -7280,7 +7286,9 @@ dependencies = [
  "ticketry-data-directory",
  "ticketry-documents",
  "ticketry-entities",
+ "ticketry-graphql-schema",
  "ticketry-runs",
+ "ticketry-settings",
  "ticketry-work-management",
  "tokio",
  "uuid",

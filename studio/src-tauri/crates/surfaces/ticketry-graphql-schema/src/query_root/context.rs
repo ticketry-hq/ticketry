@@ -21,6 +21,8 @@ pub(super) fn builder_context() -> BuilderContext {
     context.entity_object.type_name = Box::new(move |entity_name| {
         if entity_name == "app_settings" {
             "KeybindingSetting".to_owned()
+        } else if entity_name == "ticketry_shiprecords" {
+            "ShipRecords".to_owned()
         } else {
             default_entity_type_name(entity_name)
         }
@@ -135,6 +137,14 @@ pub(super) fn builder_context() -> BuilderContext {
             terminal_session::Column::TaskId,
         ],
     );
+    add_uuid_columns::<ticketry_entities::ship_record::Entity>(
+        &mut context,
+        [
+            ticketry_entities::ship_record::Column::Id,
+            ticketry_entities::ship_record::Column::ModuleId,
+            ticketry_entities::ship_record::Column::TaskId,
+        ],
+    );
     add_uuid_columns::<ticketry_entities::graph_run::Entity>(
         &mut context,
         [
@@ -157,7 +167,8 @@ pub(super) fn builder_context() -> BuilderContext {
     context.hooks = LifecycleHooks::new(
         MultiLifecycleHooks::default()
             .add(ticketry_terminal::TerminalReadScope)
-            .add(ticketry_agent_execution::GraphRunReadScope),
+            .add(ticketry_agent_execution::GraphRunReadScope)
+            .add(ticketry_workspace_runtime::persistence::ShipRecordReadScope),
     );
 
     context

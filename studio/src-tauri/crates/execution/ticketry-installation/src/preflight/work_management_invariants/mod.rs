@@ -46,17 +46,21 @@ mod tests {
 
     #[test]
     fn both_graph_walks_are_bounded() {
-        // A cycle is found long before the bound. The bound exists so a cyclic
-        // graph cannot make the walk itself unbounded, and it sits far past any
-        // real planning depth.
+        // A cyclic graph must not make either walk unbounded. The ancestry walk
+        // caps its depth; the blocker walk is set-based (UNION), so it visits
+        // each (root, node) pair once and is bounded by the graph's size rather
+        // than by the number of paths through it.
         let bounded = invariants()
             .into_iter()
             .filter(|invariant| invariant.query.contains("RECURSIVE"))
             .collect::<Vec<_>>();
         assert_eq!(bounded.len(), 2, "ancestry and blockers are the two walks");
         for invariant in bounded {
+            let capped = invariant.query.contains("depth < 64");
+            let set_based =
+                invariant.query.contains("UNION") && !invariant.query.contains("UNION ALL");
             assert!(
-                invariant.query.contains("depth < 64"),
+                capped || set_based,
                 "{} walks without a bound",
                 invariant.code
             );

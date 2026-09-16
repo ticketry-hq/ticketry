@@ -16,13 +16,17 @@ pub(crate) fn invariants() -> Vec<Invariant> {
                 "design_documents.task_id",
                 "worktracker_issue",
             ],
+            // Registry rows spell identities hyphenated while Work Items spell
+            // them compact, and a module's scratch documents carry the all-zero
+            // task placeholder; neither is an orphan.
             query: "SELECT document.id AS identity FROM design_documents document
                     WHERE NOT EXISTS (
                             SELECT 1 FROM worktracker_issue module
-                            WHERE module.id = document.module_id)
-                       OR NOT EXISTS (
+                            WHERE module.id = replace(document.module_id, '-', ''))
+                       OR (replace(document.task_id, '-', '') <> '00000000000000000000000000000000'
+                           AND NOT EXISTS (
                             SELECT 1 FROM worktracker_issue task
-                            WHERE task.id = document.task_id)"
+                            WHERE task.id = replace(document.task_id, '-', '')))"
                 .to_owned(),
         },
         Invariant {

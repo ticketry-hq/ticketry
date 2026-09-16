@@ -7,15 +7,23 @@ mod file_log;
 mod launch_discovery;
 mod launch_trace;
 mod native_crash_report;
-mod native_minidump_report;
+mod native_report_retry;
 mod panic_attribution;
+
+#[cfg(test)]
+#[path = "panic_attribution_concurrency_tests.rs"]
+mod panic_attribution_concurrency_tests;
+#[cfg(test)]
+#[path = "panic_attribution_tests.rs"]
+mod panic_attribution_tests;
 
 pub use crash_report::{
     clean_session_marker, collect_dirty_shutdown, system_diagnostic_reports_directory,
 };
 
 pub use file_log::{
-    configure_process_file_log, file_logging_requested, record_story_move, FileLog,
+    configure_process_file_log, file_logging_requested, process_file_log, record_story_move,
+    FileLog,
 };
 pub use launch_discovery::{
     record as record_launch_discovery, runtime_instance, LaunchDiscoveryRecord,
@@ -34,7 +42,8 @@ pub use launch_trace::{
     PROMPT_DELIVERED, PROVIDER_VALIDATED, REQUESTED, RUNTIME_SPAWNED, RUN_ENDED_STAGE, SWEEP_STAGE,
     VISIBILITY_STAGES,
 };
-pub use native_minidump_report::ghostty_sentry_database_directory;
 #[cfg(debug_assertions)]
 pub use panic_attribution::force_development_panic_abort;
-pub use panic_attribution::install_hook as install_panic_attribution_hook;
+pub use panic_attribution::{
+    catch_unwind_without_crash_attribution, install_hook as install_panic_attribution_hook,
+};

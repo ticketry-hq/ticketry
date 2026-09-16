@@ -209,7 +209,7 @@ async fn visibility_preserves_rank_and_an_empty_rank_does_not_enable_manual_orde
     let (_directory, database) = fixture().await;
     let hidden = update_visibility(&database, B, true).await;
     assert_eq!((hidden.rank.as_str(), hidden.tab_hidden), ("", true));
-    assert_eq!(active_order(&database).await, ["c", "b", "a"]);
+    assert_eq!(active_order(&database).await, ["a", "b", "c"]);
 
     let mut ranked: presentation::ActiveModel = hidden.into();
     ranked.rank = Set("existing-rank".to_owned());
@@ -219,6 +219,48 @@ async fn visibility_preserves_rank_and_an_empty_rank_does_not_enable_manual_orde
     assert_eq!(
         (shown.rank.as_str(), shown.tab_hidden),
         ("existing-rank", false)
+    );
+}
+
+#[tokio::test]
+async fn an_archived_rank_does_not_enable_manual_order_for_active_modules() {
+    let (_directory, database) = fixture().await;
+    for (module_id, rank) in [(A, ""), (ARCHIVED, "archived-rank")] {
+        presentation::ActiveModel {
+            module_id: Set(module_id.to_owned()),
+            rank: Set(rank.to_owned()),
+            tab_hidden: Set(false),
+        }
+        .insert(&database)
+        .await
+        .unwrap();
+    }
+
+    assert_eq!(active_order(&database).await, ["a", "b", "c"]);
+
+    let created = work_items::create(
+        &database,
+        work_items::CreateWorkItem {
+            project_id: PROJECT.to_owned(),
+            name: "automatic-new".to_owned(),
+            issue_type_id: MODULE_TYPE.to_owned(),
+            description: None,
+            state_id: None,
+            parent_id: None,
+        },
+        None,
+    )
+    .await
+    .unwrap();
+
+    assert!(presentation::Entity::find_by_id(created)
+        .one(&database)
+        .await
+        .unwrap()
+        .is_none());
+    assert_eq!(
+        active_order(&database).await,
+        ["a", "b", "c", "automatic-new"]
     );
 }
 
@@ -270,7 +312,7 @@ async fn visibility_requires_a_valid_module_identity() {
 }
 
 #[tokio::test]
-async fn automatic_and_manual_module_creation_use_their_canonical_front() {
+async fn automatic_and_manual_module_creation_use_their_canonical_end() {
     let (_directory, database) = fixture().await;
     let automatic = work_items::create(
         &database,
@@ -291,16 +333,24 @@ async fn automatic_and_manual_module_creation_use_their_canonical_front() {
         .await
         .unwrap()
         .is_none());
-    assert_eq!(active_order(&database).await[0], "automatic-new");
+    assert_eq!(
+        active_order(&database).await.last().unwrap(),
+        "automatic-new"
+    );
 
     reorder::reorder_module_presentation(
         &database,
-        move_module(A, None, Some(&automatic), Some(vec![&automatic, C, B, A])),
+        move_module(
+            A,
+            Some(C),
+            Some(&automatic),
+            Some(vec![A, B, C, &automatic]),
+        ),
         None,
     )
     .await
     .unwrap();
-    let mut archived: issue::ActiveModel = issue::Entity::find_by_id(A)
+    let mut archived: issue::ActiveModel = issue::Entity::find_by_id(&automatic)
         .one(&database)
         .await
         .unwrap()
@@ -308,7 +358,7 @@ async fn automatic_and_manual_module_creation_use_their_canonical_front() {
         .into();
     archived.is_archived = Set(true);
     archived.update(&database).await.unwrap();
-    let first_active_rank = presentation::Entity::find_by_id(&automatic)
+    let last_active_rank = presentation::Entity::find_by_id(A)
         .one(&database)
         .await
         .unwrap()
@@ -335,8 +385,8 @@ async fn automatic_and_manual_module_creation_use_their_canonical_front() {
         .unwrap()
         .unwrap()
         .rank;
-    assert!(manual_rank < first_active_rank);
-    assert_eq!(active_order(&database).await[0], "manual-new");
+    assert!(manual_rank > last_active_rank);
+    assert_eq!(active_order(&database).await.last().unwrap(), "manual-new");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

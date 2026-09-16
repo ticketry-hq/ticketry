@@ -73,6 +73,8 @@ pub struct LaunchPolicyDecision {
     #[serde(default)]
     pub entry_skill: Option<String>,
     pub provider: String,
+    #[serde(default)]
+    pub profile: Option<String>,
     pub model: Option<String>,
     pub reasoning: Option<String>,
     pub module_link: ModuleLinkInput,

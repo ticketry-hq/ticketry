@@ -14,7 +14,7 @@ const APPROVED_PATH_ENV: &str = "MUXED_APPROVED_GH_PATH";
 const MAX_OUTPUT_BYTES: usize = 64 * 1024;
 const AUTH_TIMEOUT: Duration = Duration::from_secs(30);
 const CREATE_TIMEOUT: Duration = Duration::from_secs(120);
-const READ_TIMEOUT: Duration = Duration::from_secs(30);
+const READ_TIMEOUT: Duration = Duration::from_secs(5);
 const WAIT_POLL_INTERVAL: Duration = Duration::from_millis(10);
 
 #[derive(Clone, Copy, Debug, Default)]

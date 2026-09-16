@@ -13,6 +13,7 @@
 
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Instant;
 
 use sea_orm::DatabaseConnection;
 use tauri_graphql::TransportApi;
@@ -33,8 +34,7 @@ pub async fn reopen_gate(
     database: &DatabaseConnection,
 ) -> Result<(), String> {
     compact(database).await;
-    ticketry_runs::publish_readiness(data_directory, &Slice3Readiness::complete())
-        .map_err(|error| format!("could not publish Slice 3 readiness: {error}"))
+    publish_readiness(data_directory)
 }
 
 /// Whether this process has already installed the periodic compaction driver.
@@ -51,6 +51,7 @@ static PERIODIC_COMPACTION_INSTALLED: AtomicBool = AtomicBool::new(false);
 /// that could not be pruned still answers every status subscription correctly,
 /// and the periodic driver offers it the next pass.
 async fn compact(database: &DatabaseConnection) {
+    let started = Instant::now();
     let schedule = CompactionSchedule::new(database.clone());
     if let Err(error) = schedule.pass().await {
         eprintln!("Ticketry could not compact the Runs status outbox: {error}");
@@ -58,6 +59,7 @@ async fn compact(database: &DatabaseConnection) {
     if !PERIODIC_COMPACTION_INSTALLED.swap(true, Ordering::SeqCst) {
         tauri::async_runtime::spawn(schedule.drive());
     }
+    record_handoff_timing("status-outbox-compaction", started);
 }
 
 /// Drain the durable launch backlog. A conflicting runtime is surfaced rather
@@ -73,13 +75,29 @@ pub async fn open_gate(
     compact(database).await;
     verify_status_surface(api).await?;
 
-    ticketry_runs::publish_readiness(data_directory, &Slice3Readiness::complete())
-        .map_err(|error| format!("could not publish Slice 3 readiness: {error}"))
+    publish_readiness(data_directory)
+}
+
+/// Publish the ready gate and retain the startup cost separately from the
+/// preceding status-schema verification.
+fn publish_readiness(data_directory: &Path) -> Result<(), String> {
+    let started = Instant::now();
+    let result = ticketry_runs::publish_readiness(data_directory, &Slice3Readiness::complete())
+        .map_err(|error| format!("could not publish Slice 3 readiness: {error}"));
+    record_handoff_timing("readiness-publication", started);
+    result
 }
 
 /// Prove the authoritative query and the status subscription are both
 /// registered on the installed schema before Studio is told status is live.
 async fn verify_status_surface(api: &tauri_graphql::TransportApiImpl) -> Result<(), String> {
+    let started = Instant::now();
+    let result = verify_status_surface_inner(api).await;
+    record_handoff_timing("status-schema-verification", started);
+    result
+}
+
+async fn verify_status_surface_inner(api: &tauri_graphql::TransportApiImpl) -> Result<(), String> {
     let response = api
         .clone()
         .graphql_execute(
@@ -111,4 +129,23 @@ async fn verify_status_surface(api: &tauri_graphql::TransportApiImpl) -> Result<
         return Err("the authoritative Runs query is not registered".to_owned());
     }
     Ok(())
+}
+
+/// Keep individual Runs handoff operations visible without adding their times
+/// to the shared startup timeline, whose adjacent-stage durations can overlap.
+fn record_handoff_timing(operation: &str, started: Instant) {
+    let log = ticketry_diagnostics::process_file_log();
+    if !log.is_enabled() {
+        return;
+    }
+    let _ = log.record(
+        "startup",
+        "info",
+        "handoff-timing",
+        serde_json::json!({
+            "handoff": "runs",
+            "operation": operation,
+            "duration_ms": started.elapsed().as_millis(),
+        }),
+    );
 }

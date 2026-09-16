@@ -8,16 +8,20 @@ use common::submitted_launch_authority::launch_service;
 use common::terminal_lifecycle_harness::{
     TerminalLifecycleHarness, MODULE_ID, PROJECT_ID, TASK_ID,
 };
-use sea_orm::{ConnectionTrait, EntityTrait};
+use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter};
 use ticketry_entities::{launch_material, session};
-use ticketry_launch::{CreateTerminalSession, TerminalLaunchError, TerminalLaunchKind};
+use ticketry_launch::{
+    CreateTerminalSession, LaunchAuthorityService, TerminalLaunchError, TerminalLaunchKind,
+};
 use ticketry_terminal::{
-    TerminalLaunchCheckpoint, TerminalLaunchRuntime, TerminalRuntimeObservation,
-    VerifiedTerminalRuntime,
+    TerminalLaunchCheckpoint, TerminalLaunchRuntime, TerminalLaunchService,
+    TerminalRuntimeObservation, VerifiedTerminalRuntime,
 };
 
+#[derive(Default)]
 struct ResumeRuntime {
     created: Mutex<BTreeSet<String>>,
+    materialized: Mutex<Vec<launch_material::Model>>,
 }
 
 #[async_trait]
@@ -38,6 +42,7 @@ impl TerminalLaunchRuntime for ResumeRuntime {
         material: &launch_material::Model,
         _checkpoint: &dyn TerminalLaunchCheckpoint,
     ) -> Result<(), TerminalLaunchError> {
+        self.materialized.lock().unwrap().push(material.clone());
         self.created
             .lock()
             .unwrap()
@@ -79,12 +84,7 @@ async fn resume_creates_new_history_and_retries_idempotently() {
         .await
         .unwrap()
         .unwrap();
-    let service = launch_service(
-        database.clone(),
-        Arc::new(ResumeRuntime {
-            created: Mutex::new(BTreeSet::new()),
-        }),
-    );
+    let service = launch_service(database.clone(), Arc::new(ResumeRuntime::default()));
     let request = resume_request("resume-request", "resume-source", TerminalLaunchKind::Task);
 
     let created = service.create(request.clone()).await.unwrap();
@@ -113,6 +113,63 @@ async fn resume_creates_new_history_and_retries_idempotently() {
         .unwrap();
     assert_eq!(successor.resumed_from.as_deref(), Some("resume-source"));
     assert!(created.terminated_at.is_none());
+}
+
+#[tokio::test]
+async fn recovery_and_resume_keep_the_profile_resolved_before_preparation() {
+    let harness = TerminalLifecycleHarness::start().await;
+    let database = harness.database().await;
+    set_global_profile(&database, Some("profile-a")).await;
+    let runtime = Arc::new(ResumeRuntime::default());
+    let service = TerminalLaunchService::new(database.clone(), runtime.clone())
+        .with_authority(Arc::new(LaunchAuthorityService::new(database.clone())));
+    let mut original = resume_request("profile-original", "", TerminalLaunchKind::Planning);
+    original.resume_from_agent_run_id = None;
+
+    let accepted = service.prepare(original).await.unwrap();
+    let original_run_id = accepted.agent_run_id.clone();
+    let persisted = launch_material::Entity::find()
+        .filter(launch_material::Column::AgentRunId.eq(&original_run_id))
+        .one(&database)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(persisted.profile.as_deref(), Some("profile-a"));
+
+    set_global_profile(&database, Some("profile-b")).await;
+    service.execute_accepted(accepted).await.unwrap();
+    database
+        .execute_unprepared(&format!(
+            "UPDATE agent_runs SET status='completed', ended_at=CURRENT_TIMESTAMP, \
+             provider_session_id='profile-session', lifecycle_state='exited' \
+             WHERE id='{original_run_id}'; \
+             UPDATE agent_terminal_sessions SET terminated_at=CURRENT_TIMESTAMP \
+             WHERE agent_run_id='{original_run_id}';"
+        ))
+        .await
+        .unwrap();
+
+    set_global_profile(&database, None).await;
+    service
+        .create(resume_request(
+            "profile-resume",
+            &original_run_id,
+            TerminalLaunchKind::Planning,
+        ))
+        .await
+        .unwrap();
+
+    let profiles = runtime
+        .materialized
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|material| material.profile.clone())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        profiles,
+        [Some("profile-a".to_owned()), Some("profile-a".to_owned())]
+    );
 }
 
 #[tokio::test]
@@ -146,12 +203,7 @@ async fn resume_rejections_have_stable_codes() {
     .await;
     insert_live_successor(&database, "already-resumed").await;
     insert_agentless_shell(&database, "agentless-shell").await;
-    let service = launch_service(
-        database,
-        Arc::new(ResumeRuntime {
-            created: Mutex::new(BTreeSet::new()),
-        }),
-    );
+    let service = launch_service(database, Arc::new(ResumeRuntime::default()));
 
     for (source, kind, code) in [
         ("missing", TerminalLaunchKind::Task, "resume_unknown"),
@@ -199,12 +251,7 @@ async fn scratch_resume_preserves_the_scratch_holding() {
     let harness = TerminalLifecycleHarness::start().await;
     let database = harness.database().await;
     insert_scratch_source(&database, "scratch-source").await;
-    let service = launch_service(
-        database,
-        Arc::new(ResumeRuntime {
-            created: Mutex::new(BTreeSet::new()),
-        }),
-    );
+    let service = launch_service(database, Arc::new(ResumeRuntime::default()));
 
     let created = service
         .create(resume_request(
@@ -244,6 +291,7 @@ fn resume_request(id: &str, source: &str, kind: TerminalLaunchKind) -> CreateTer
             }
             .to_owned(),
         ),
+        profile: None,
         model: Some("gpt-5".to_owned()),
         reasoning: Some("high".to_owned()),
         policy_reference: None,
@@ -332,4 +380,20 @@ async fn insert_scratch_source(database: &sea_orm::DatabaseConnection, run_id: &
 
 fn compact(value: &str) -> String {
     value.replace('-', "")
+}
+
+async fn set_global_profile(database: &sea_orm::DatabaseConnection, profile: Option<&str>) {
+    let value = match profile {
+        Some(profile) => {
+            format!(r#"{{"global_default":{{"provider":"codex","profile":"{profile}"}}}}"#)
+        }
+        None => r#"{"global_default":{"provider":"codex"}}"#.to_owned(),
+    };
+    database
+        .execute_unprepared(&format!(
+            "INSERT OR REPLACE INTO app_settings(scope, \"key\", value, updated_at) \
+             VALUES ('host', 'provider_catalog', '{value}', CURRENT_TIMESTAMP)"
+        ))
+        .await
+        .unwrap();
 }

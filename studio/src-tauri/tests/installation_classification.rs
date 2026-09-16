@@ -1,8 +1,7 @@
 //! Every supported installation is classified exactly, and nothing else is.
 //!
-//! The corpus these cases run against is built from Ticketry's real migrations,
-//! so a classification here is evidence about the databases users actually have
-//! rather than about a description of them.
+//! Current fixtures come from the checked shipping schema. Historical support
+//! is pinned by the manifest and bridge-catalog contract tests in the crate.
 
 mod common;
 
@@ -10,81 +9,6 @@ use common::installation_corpus as corpus;
 use ticketry_installation::{
     self as classification, manifest, ClassificationRefusal as Refusal, Installation,
 };
-
-#[tokio::test]
-async fn every_corpus_fixture_receives_its_recorded_classification() {
-    let manifest = manifest();
-    assert!(
-        manifest.corpus.len() >= manifest.generations.len(),
-        "the corpus must materialize at least one fixture per generation"
-    );
-    for fixture in &manifest.corpus {
-        let installation = corpus::install(&fixture.name);
-        let classified = classification::classify(installation.path())
-            .await
-            .unwrap_or_else(|error| panic!("{} must classify: {error}", fixture.name));
-        let generation = manifest
-            .generation(&fixture.generation)
-            .unwrap_or_else(|| panic!("{} names an unrecorded generation", fixture.name));
-        assert_eq!(
-            classified.generation(),
-            generation.name,
-            "{} classified as the wrong generation",
-            fixture.name
-        );
-        match (generation.expected.as_str(), &classified) {
-            ("adopt", Installation::SqliteCurrent(recorded))
-            | ("bridge", Installation::SqliteHistorical(recorded)) => {
-                assert_eq!(recorded.fingerprint, generation.fingerprint);
-                assert_eq!(recorded.applied_migrations, generation.applied.len());
-            }
-            (expected, other) => {
-                panic!(
-                    "{} expected {expected} but classified as {other:?}",
-                    fixture.name
-                )
-            }
-        }
-    }
-}
-
-#[test]
-fn the_manifest_records_every_migration_on_disk() {
-    // The manifest is Ticketry's support policy. A migration added without
-    // regenerating it would silently move the current leaf out from under
-    // classification, so the mismatch is named here rather than diagnosed from
-    // an unsupported-generation refusal elsewhere.
-    let manifest = manifest();
-    for (app, steps) in &manifest.migration_graph {
-        let directory = if app == "worktracker" {
-            corpus::repository_root().join("backend/worktracker/migrations")
-        } else {
-            corpus::repository_root().join(format!("backend/apps/{app}/migrations"))
-        };
-        let mut on_disk = std::fs::read_dir(&directory)
-            .unwrap_or_else(|error| panic!("read {}: {error}", directory.display()))
-            .filter_map(|entry| {
-                let name = entry.expect("read a migration entry").file_name();
-                let name = name.to_string_lossy().into_owned();
-                (name.ends_with(".rs") || name.ends_with(".py"))
-                    .then(|| name.trim_end_matches(".py").to_owned())
-            })
-            .filter(|name| name != "__init__")
-            .collect::<Vec<_>>();
-        on_disk.sort();
-        let mut recorded = steps
-            .iter()
-            .map(|step| step.name.clone())
-            .collect::<Vec<_>>();
-        recorded.sort();
-        assert_eq!(
-            recorded, on_disk,
-            "{app} migrations changed; regenerate the manifest with \
-             `backend/.venv/bin/python scripts/installation_corpus.py emit-manifest \
-             studio/src-tauri/crates/execution/ticketry-installation/src/classification/manifest.v1.json`"
-        );
-    }
-}
 
 #[tokio::test]
 async fn the_current_django_leaf_is_directly_adoptable() {

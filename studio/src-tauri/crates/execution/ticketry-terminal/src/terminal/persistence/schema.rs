@@ -62,6 +62,7 @@ pub const LAUNCH_MATERIAL_COLUMNS: &[&str] = &[
     "module_id",
     "task_id",
     "provider",
+    "profile",
     "model",
     "reasoning",
     "scope",
@@ -351,6 +352,22 @@ pub async fn columns(
         .collect()
 }
 
+pub(crate) async fn reconcile_launch_material_columns(
+    database: &impl ConnectionTrait,
+) -> Result<(), TerminalPersistenceError> {
+    let installed = columns(database, "terminal_launch_material").await?;
+    if installed.is_empty() || installed.contains("profile") {
+        return Ok(());
+    }
+    database
+        .execute_unprepared(
+            "ALTER TABLE terminal_launch_material ADD COLUMN profile varchar(255) NULL;",
+        )
+        .await
+        .map_err(storage)?;
+    Ok(())
+}
+
 const SESSION_SCHEMA: &str = r#"
 CREATE TABLE agent_terminal_sessions__rust (
     agent_run_id varchar NOT NULL PRIMARY KEY REFERENCES agent_runs(id) ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED,
@@ -415,6 +432,7 @@ CREATE TABLE terminal_launch_material (
     module_id char(32) NOT NULL,
     task_id char(32) NOT NULL,
     provider varchar(64) NULL,
+    profile varchar(255) NULL,
     model varchar(255) NULL,
     reasoning varchar(64) NULL,
     scope varchar(32) NOT NULL CHECK (scope IN ('task','plan','instant','docchat','shell')),

@@ -5,12 +5,26 @@ use std::fmt;
 use std::path::PathBuf;
 use ticketry_tool_discovery::SupportedTool;
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct ApprovedArgv {
     pub(super) executable: PathBuf,
     pub(super) arguments: Vec<OsString>,
     pub(super) working_directory: PathBuf,
     pub(super) environment: BTreeMap<String, String>,
+}
+
+impl fmt::Debug for ApprovedArgv {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ApprovedArgv")
+            .field("executable", &self.executable)
+            .field("argument_count", &self.arguments.len())
+            .field("working_directory", &self.working_directory)
+            .field(
+                "environment_names",
+                &self.environment.keys().collect::<Vec<_>>(),
+            )
+            .finish_non_exhaustive()
+    }
 }
 
 impl ApprovedArgv {
@@ -212,6 +226,7 @@ pub(super) fn valid_environment_name(name: &str) -> bool {
             | "COLORTERM"
             | "FORCE_COLOR"
             | "GEMINI_API_KEY"
+            | "GEMINI_CLI_SYSTEM_SETTINGS_PATH"
             | "HOME"
             | "LANG"
             | "LC_ALL"
@@ -230,6 +245,11 @@ pub(super) fn valid_environment_name(name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn gemini_settings_environment_is_accepted() {
+        assert!(valid_environment_name("GEMINI_CLI_SYSTEM_SETTINGS_PATH"));
+    }
 
     #[test]
     fn login_shell_uses_login_mode_and_removes_host_no_color() {

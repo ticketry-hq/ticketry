@@ -8,7 +8,7 @@ publish = false
 async-trait.workspace = true
 sea-orm.workspace = true
 serde.workspace = true
-serde_json.workspace = true
+serde_json = { workspace = true, features = ["preserve_order"] }
 sha2.workspace = true
 ticketry-diagnostics.workspace = true
 ticketry-documents.workspace = true

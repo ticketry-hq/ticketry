@@ -62,10 +62,12 @@ pub(super) async fn default_scratch_launch(
         )
     })?;
     let provider = activated_provider(database, Some(&default.provider)).await?;
+    // A profile owns its model and reasoning, mirroring launch policy.
+    let profiled = default.profile.is_some();
     Ok(DefaultScratchLaunch {
         provider,
-        model: default.model,
-        reasoning: default.reasoning,
+        model: (!profiled).then_some(default.model).flatten(),
+        reasoning: (!profiled).then_some(default.reasoning).flatten(),
     })
 }
 

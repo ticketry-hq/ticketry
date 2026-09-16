@@ -33,8 +33,10 @@ impl CustomOutputType for StatusEventPayload {
     }
 }
 
-/// The authoritative holdings at the captured high-water cursor. A client that
-/// installs this baseline has the same view as a fresh snapshot query.
+/// The authoritative *live* holdings at the captured high-water cursor: runs
+/// that have not reached a terminal outcome. A run absent from this baseline is
+/// not live; it is not exited. Its outcome arrives as its own `RunStatusEvent`,
+/// and an already-ended run is read through the WorkItem that owns it.
 #[derive(Clone, Debug, PartialEq, Serialize, CustomOutputType)]
 pub struct RunStatusSnapshot {
     pub project_id: String,

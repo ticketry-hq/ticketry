@@ -9,11 +9,13 @@ mod command;
 mod command_git;
 mod command_result;
 mod error;
+mod file_diff;
 mod git;
 mod github;
 mod graphql;
 mod lifecycle;
 mod merge_preparation;
+mod message_generation;
 mod module_baseline;
 mod module_service;
 mod module_view;
@@ -25,6 +27,7 @@ mod view;
 
 pub use command_result::RepositoryCommandResult;
 pub use error::WorktreeChangesError;
+pub use file_diff::FileDiffView;
 pub use merge_preparation::{
     LaunchedAgent, MergePreparationError, MergePreparationLauncher, MergePreparationResult,
     MergePreparationService,

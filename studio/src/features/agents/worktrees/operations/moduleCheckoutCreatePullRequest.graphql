@@ -2,6 +2,9 @@ mutation ModuleCheckoutCreatePullRequest($moduleId: String!, $operationId: Strin
   module_checkout_pull_request_create(module_id: $moduleId, operation_id: $operationId) {
     operation_id
     url
+    title
+    body
+    message_source
     branch
     base_branch
     pushed

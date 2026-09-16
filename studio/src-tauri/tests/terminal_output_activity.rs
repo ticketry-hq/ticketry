@@ -77,7 +77,9 @@ async fn fixture() -> (
                 model TEXT, reasoning TEXT, status TEXT NOT NULL, started_at TEXT NOT NULL,
                 ended_at TEXT, exit_code INTEGER, error TEXT, cwd TEXT, provider_session_id TEXT,
                 lifecycle_state TEXT, lifecycle_updated_at TEXT, design_dir TEXT, resumed_from TEXT,
-                scope TEXT NOT NULL, launch_state TEXT, launch_model TEXT
+                scope TEXT NOT NULL, launch_state TEXT, launch_model TEXT,
+                initial_prompt TEXT, launch_reasoning TEXT,
+                launch_unattended BOOL NOT NULL DEFAULT 0
             );
             CREATE TABLE agent_terminal_sessions (
                 agent_run_id TEXT PRIMARY KEY, tmux_session_name TEXT NOT NULL, task_id TEXT NOT NULL,
@@ -565,16 +567,18 @@ async fn terminal_outcome_wins_a_concurrent_output_race_and_stays_final() {
         .record_captured("run-a", b"late output", "2026-08-20T10:06:00Z")
         .await
         .unwrap();
-    let run = RunsServices::new(database)
+    let live = RunsServices::new(database.clone())
         .queries()
         .run_holdings_at(PUBLIC_PROJECT, None, "2026-08-20T11:00:00Z")
         .await
+        .unwrap();
+    let run = ticketry_runs::run_holding_in(&database, "run-a", "2026-08-20T11:00:00Z")
+        .await
         .unwrap()
-        .into_iter()
-        .find(|run| run.agent_run_id == "run-a")
         .unwrap();
 
     assert!(!late.advanced);
+    assert!(!live.iter().any(|run| run.agent_run_id == "run-a"));
     assert_eq!(run.state, "exited");
     assert_eq!(run.effective_state, "exited");
 }

@@ -15,7 +15,7 @@ use futures_util::StreamExt;
 use serde::Deserialize;
 use tauri_graphql::{TransportApi, TransportApiImpl};
 use ticketry_launch::LaunchPathsService;
-use ticketry_mcp::{McpRuntime, RunAuthority};
+use ticketry_mcp::RunAuthority;
 use ticketry_terminal::TerminalRuntimeAuthority;
 
 #[path = "ticketry_graphql_adapter/mcp.rs"]
@@ -34,10 +34,6 @@ mod viewer_session;
 struct AdapterState {
     api: TransportApiImpl,
     documents: ticketry_documents::DocumentsService,
-    /// In-process MCP is retained for the adapter's whole process lifetime;
-    /// dropping it would cancel the listener and its reconciler.
-    #[allow(dead_code)]
-    mcp: Arc<McpRuntime>,
     terminal: Arc<terminal_ws::TerminalBridge>,
 }
 
@@ -73,7 +69,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // from here, so the adapter opens the same process log directly.
     let log_path = std::env::var_os("MUXED_DEVELOPMENT_LOG_PATH").map(PathBuf::from);
     ticketry_diagnostics::configure_process_file_log(log_path.is_some(), &data_directory, log_path);
-    let _data_directory_guard =
+    let data_directory_guard =
         ticketry_data_directory::DataDirectoryGuard::acquire(&data_directory).map_err(|error| {
             format!(
                 "could not own browser development data directory {}: {error}",
@@ -107,20 +103,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             paths: LaunchPathsService::new(database.clone()),
             hook_runner,
             hook_spool_directory,
-            mcp_url: String::new(),
+            mcp_data_directory: None,
             run_authority: RunAuthority::new(database.clone()),
             granted_operations: ticketry_mcp::allowed_provider_operations(),
         });
 
-    let mcp_runtime = Arc::new(mcp::start(&data_directory).await?);
+    let mcp_runtime = mcp::start(&data_directory, &data_directory_guard).await?;
     eprintln!(
-        "Ticketry WorkTracker MCP listening at http://{}/mcp",
-        mcp_runtime.address()
+        "Ticketry WorkTracker MCP listening on {}",
+        mcp_runtime.socket_path().display()
     );
-    adopted.runtime.terminal_runtime().replace_mcp_authority(
-        format!("http://{}/mcp", mcp_runtime.address()),
-        mcp_runtime.authority(),
-    )?;
+    adopted
+        .runtime
+        .terminal_runtime()
+        .replace_mcp_authority(data_directory.clone(), mcp_runtime.authority())?;
 
     let port = std::env::var("TICKETRY_GRAPHQL_ADAPTER_PORT")
         .unwrap_or_else(|_| "8790".to_owned())
@@ -130,7 +126,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let state = AdapterState {
         api,
         documents: adopted.runtime.documents().clone(),
-        mcp: mcp_runtime,
         terminal: Arc::new(terminal_ws::TerminalBridge::new(
             adopted.runtime.viewer_ownership().clone(),
         )),
@@ -141,7 +136,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/documents/{document_id}/{*asset_path}", get(document))
         .route("/ws/terminal", get(terminal_socket))
         .with_state(state);
-    axum::serve(listener, app).await?;
+    let mut interrupt = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())?;
+    let mut terminate = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
+    mcp::serve(listener, app, mcp_runtime, async move {
+        tokio::select! {
+            _ = interrupt.recv() => {},
+            _ = terminate.recv() => {},
+        }
+    })
+    .await?;
     Ok(())
 }
 

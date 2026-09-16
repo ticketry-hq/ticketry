@@ -19,6 +19,8 @@ pub struct ModuleCheckoutChangesView {
     pub unpushed_count: Option<i32>,
     pub truncated: bool,
     pub files: Vec<ChangedFile>,
+    pub insertions: i32,
+    pub deletions: i32,
 }
 
 impl ModuleCheckoutChangesView {
@@ -37,6 +39,8 @@ impl ModuleCheckoutChangesView {
             unpushed_count: None,
             truncated: false,
             files: Vec::new(),
+            insertions: 0,
+            deletions: 0,
         }
     }
 }

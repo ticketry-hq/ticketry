@@ -22,14 +22,15 @@ impl HostedCommand {
         command: &ApprovedArgv,
     ) -> Result<Self, TmuxAdapterError> {
         let command_line = shell_join(command)?;
-        if command_line.len() <= DIRECT_COMMAND_MAX_BYTES {
+        let authorization = command.environment.get("TICKETRY_MCP_AUTHORIZATION");
+        if command_line.len() <= DIRECT_COMMAND_MAX_BYTES && authorization.is_none() {
             return Ok(Self {
                 tmux_command: command_line.into(),
                 wrapper: None,
             });
         }
 
-        let wrapper = LaunchWrapper::create(agent_run_id, &command_line)?;
+        let wrapper = LaunchWrapper::create(agent_run_id, &command_line, authorization)?;
         Ok(Self {
             tmux_command: shell_quote(path_text(&wrapper.path)?).into(),
             wrapper: Some(wrapper),
@@ -58,7 +59,11 @@ struct LaunchWrapper {
 }
 
 impl LaunchWrapper {
-    fn create(agent_run_id: &str, command_line: &str) -> Result<Self, TmuxAdapterError> {
+    fn create(
+        agent_run_id: &str,
+        command_line: &str,
+        authorization: Option<&String>,
+    ) -> Result<Self, TmuxAdapterError> {
         let parent = std::env::temp_dir().join(ARTIFACT_PARENT);
         ensure_private_directory(&parent)?;
         let run_root = parent.join(agent_run_id);
@@ -68,8 +73,11 @@ impl LaunchWrapper {
         ensure_private_directory(&invocation_root)?;
         let path = invocation_root.join("launch.sh");
 
+        let secret_environment = authorization.map_or_else(String::new, |value| {
+            format!("export TICKETRY_MCP_AUTHORIZATION={}\n", shell_quote(value))
+        });
         let script = format!(
-            "#!/bin/sh\n/bin/rm -f -- {script}\n/bin/rmdir -- {invocation} {run_root} {parent} 2>/dev/null || :\nexec {command_line}\n",
+            "#!/bin/sh\n/bin/rm -f -- {script}\n/bin/rmdir -- {invocation} {run_root} {parent} 2>/dev/null || :\n{secret_environment}exec {command_line}\n",
             script = shell_quote(path_text(&path)?),
             invocation = shell_quote(path_text(&invocation_root)?),
             run_root = shell_quote(path_text(&run_root)?),
@@ -171,6 +179,31 @@ mod tests {
     use std::collections::BTreeMap;
 
     use super::*;
+
+    #[test]
+    fn mcp_bearer_reaches_child_environment_without_command_or_debug_exposure() {
+        let secret = "Bearer test 'quoted' \"value\" $literal\\path";
+        let command = ApprovedArgv {
+            executable: PathBuf::from("/bin/sh"),
+            arguments: vec![
+                "-c".into(),
+                "printf '%s' \"$TICKETRY_MCP_AUTHORIZATION\"".into(),
+            ],
+            working_directory: PathBuf::from("/tmp"),
+            environment: BTreeMap::from([("TICKETRY_MCP_AUTHORIZATION".into(), secret.into())]),
+        };
+        let hosted = HostedCommand::prepare("mcp-secret-test", &command).unwrap();
+        assert!(!format!("{command:?}").contains("Bearer"));
+        assert!(!hosted.tmux_command().to_string_lossy().contains(secret));
+        let output = std::process::Command::new("/bin/sh")
+            .args([OsString::from("-c"), hosted.tmux_command().clone()])
+            .env_remove("TICKETRY_MCP_AUTHORIZATION")
+            .output()
+            .unwrap();
+        assert!(output.status.success());
+        assert_eq!(String::from_utf8(output.stdout).unwrap(), secret);
+        assert!(!wrapper_artifact_root("mcp-secret-test").exists());
+    }
 
     #[test]
     fn hosted_commands_remove_inherited_no_color() {

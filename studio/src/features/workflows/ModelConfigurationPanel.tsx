@@ -29,12 +29,14 @@ import type {
 } from "../../shared/api/types";
 import {
   SETTINGS_CHECKBOX_CLASS,
+  SETTINGS_FIELD_CLASS,
   SettingsSubsection,
 } from "../../shared/ui/SettingsPrimitives";
 import { describeModelConfigurationChanges } from "../settings/changeLedger";
 
 const EMPTY_DEFAULT: LaunchDefaultPickerValue = {
   provider: "",
+  profile: "",
   model: "",
   reasoning: "",
 };
@@ -44,6 +46,7 @@ function pickerValueFrom(catalog: ProviderCatalog): LaunchDefaultPickerValue {
   if (!globalDefault) return EMPTY_DEFAULT;
   return {
     provider: globalDefault.provider,
+    profile: globalDefault.profile ?? "",
     model: globalDefault.model ?? "",
     reasoning: globalDefault.reasoning ?? "",
   };
@@ -52,14 +55,17 @@ function pickerValueFrom(catalog: ProviderCatalog): LaunchDefaultPickerValue {
 function catalogFrom(
   activated: ConfigurableProvider[],
   launchDefault: LaunchDefaultPickerValue,
+  codexProfiles: string[],
 ): ProviderCatalog {
   const provider = launchDefault.provider.trim();
   return {
     activated_providers: CONFIGURABLE_PROVIDERS.filter((candidate) =>
       activated.includes(candidate)),
+    codex_profiles: codexProfiles,
     global_default: provider
       ? {
           provider: provider as ConfigurableProvider,
+          profile: launchDefault.profile.trim() || null,
           model: launchDefault.model.trim() || null,
           reasoning: launchDefault.reasoning.trim() || null,
         }
@@ -78,6 +84,7 @@ function outstandingChangeCount(
       draft.activated_providers.includes(provider),
   ).length;
   return providerChanges +
+    Number((saved.codex_profiles ?? []).join("\0") !== draft.codex_profiles.join("\0")) +
     Number(
       (saved.global_default?.provider ?? null) !==
       (draft.global_default?.provider ?? null),
@@ -85,6 +92,10 @@ function outstandingChangeCount(
     Number(
       (saved.global_default?.model ?? null) !==
       (draft.global_default?.model ?? null),
+    ) +
+    Number(
+      (saved.global_default?.profile ?? null) !==
+      (draft.global_default?.profile ?? null),
     ) +
     Number(
       (saved.global_default?.reasoning ?? null) !==
@@ -144,6 +155,8 @@ export const ModelConfigurationPanel = forwardRef<
     useState<ProviderCapabilities[]>([]);
   const [saved, setSaved] = useState<ProviderCatalog | null>(null);
   const [activated, setActivated] = useState<ConfigurableProvider[]>([]);
+  const [codexProfiles, setCodexProfiles] = useState<string[]>([]);
+  const [newProfile, setNewProfile] = useState("");
   const [launchDefault, setLaunchDefault] =
     useState<LaunchDefaultPickerValue>(EMPTY_DEFAULT);
   const [loading, setLoading] = useState(true);
@@ -166,6 +179,7 @@ export const ModelConfigurationPanel = forwardRef<
         setConfigurableCapabilities(configurationCapabilities);
         setSaved(value);
         setActivated(value.activated_providers);
+        setCodexProfiles(value.codex_profiles ?? []);
         setLaunchDefault(pickerValueFrom(value));
       } catch (loadError) {
         if (!cancelled) setError(errorMessage(loadError));
@@ -190,8 +204,8 @@ export const ModelConfigurationPanel = forwardRef<
   );
 
   const draft = useMemo(
-    () => catalogFrom(activated, launchDefault),
-    [activated, launchDefault],
+    () => catalogFrom(activated, launchDefault, codexProfiles),
+    [activated, codexProfiles, launchDefault],
   );
   const outstandingCount = outstandingChangeCount(saved, draft);
   const changes = useMemo(
@@ -247,6 +261,7 @@ export const ModelConfigurationPanel = forwardRef<
   const discard = () => {
     if (!saved) return;
     setActivated(saved.activated_providers);
+    setCodexProfiles(saved.codex_profiles ?? []);
     setLaunchDefault(pickerValueFrom(saved));
     setError(null);
     setNotice(null);
@@ -270,6 +285,7 @@ export const ModelConfigurationPanel = forwardRef<
       onChangesApplied?.(appliedChanges);
       setSaved(value);
       setActivated(value.activated_providers);
+      setCodexProfiles(value.codex_profiles ?? []);
       setLaunchDefault(pickerValueFrom(value));
       useWorkflowEditorStore.setState({
         providerCapabilities: getProviderCapabilitiesSnapshot() ?? [],
@@ -337,6 +353,48 @@ export const ModelConfigurationPanel = forwardRef<
       </SettingsSubsection>
 
       <SettingsSubsection
+        title="Codex profiles"
+        description="Ticketry stores profile names only. Codex owns their configuration."
+      >
+        <div className="mt-2 flex gap-2">
+          <input
+            aria-label="New Codex profile"
+            value={newProfile}
+            disabled={saving}
+            onChange={(event) => setNewProfile(event.target.value)}
+            className={SETTINGS_FIELD_CLASS}
+          />
+          <button
+            type="button"
+            disabled={!newProfile.trim() || saving}
+            onClick={() => {
+              const profile = newProfile.trim();
+              setCodexProfiles((current) => [...new Set([...current, profile])].sort());
+              setNewProfile("");
+            }}
+          >Add</button>
+        </div>
+        <ul>
+          {codexProfiles.map((profile) => (
+            <li key={profile} className="flex items-center justify-between py-1 text-sm">
+              <span>{profile}</span>
+              <button
+                type="button"
+                disabled={saving}
+                aria-label={`Remove Codex profile ${profile}`}
+                onClick={() => {
+                  setCodexProfiles((current) => current.filter((value) => value !== profile));
+                  if (launchDefault.profile === profile) {
+                    setLaunchDefault({ ...launchDefault, profile: "" });
+                  }
+                }}
+              >Remove</button>
+            </li>
+          ))}
+        </ul>
+      </SettingsSubsection>
+
+      <SettingsSubsection
         title="Global launch default"
         description={
           <>
@@ -348,6 +406,7 @@ export const ModelConfigurationPanel = forwardRef<
         <div className="mt-2 grid gap-3 sm:grid-cols-3">
           <LaunchDefaultPicker
             providerCapabilities={pickerCapabilities}
+            codexProfiles={codexProfiles}
             value={launchDefault}
             onChange={updateDefault}
           />

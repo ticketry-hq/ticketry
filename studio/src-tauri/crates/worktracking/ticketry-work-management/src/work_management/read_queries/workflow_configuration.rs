@@ -164,6 +164,7 @@ pub async fn launch_bindings(
                     .collect(),
             ),
             entry_skill: row.entry_skill,
+            profile: row.profile,
             model: row.model_id.as_deref().map(uuid),
             reasoning: row.reasoning_id.as_deref().map(uuid),
             auto_start: row.auto_start,

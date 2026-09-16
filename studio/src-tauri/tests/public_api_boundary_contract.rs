@@ -112,6 +112,9 @@ fn library_roots(manifest_dir: &Path) -> Vec<(String, PathBuf)> {
         .unwrap_or_else(|error| panic!("cannot read {}: {error}", crates_dir.display()))
     {
         let tier = tier_entry.expect("tier directory entry").path();
+        if !tier.is_dir() {
+            continue;
+        }
         for crate_entry in fs::read_dir(&tier)
             .unwrap_or_else(|error| panic!("cannot read {}: {error}", tier.display()))
         {
@@ -133,8 +136,8 @@ fn library_roots(manifest_dir: &Path) -> Vec<(String, PathBuf)> {
     roots.sort_by(|left, right| left.0.cmp(&right.0));
     assert_eq!(
         roots.len(),
-        19,
-        "public API audit must scan the root and 18 crates"
+        20,
+        "public API audit must scan the root and 19 crates"
     );
     roots
 }

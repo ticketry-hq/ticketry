@@ -20,6 +20,7 @@
 
 use chrono::{Duration, Utc};
 use sea_orm::{DatabaseConnection, TransactionTrait};
+use std::time::Instant;
 
 use super::{CompactionWatermarkRepository, RunsPersistenceError, StatusEventRepository};
 
@@ -94,10 +95,23 @@ impl StatusCompactionService {
     /// Compact every project that still holds history, one project at a time so
     /// a large project cannot starve a small one of its pass.
     pub async fn compact_all(&self) -> Result<Vec<CompactionOutcome>, RunsPersistenceError> {
+        let pass_started = Instant::now();
+        let enumeration_started = Instant::now();
+        let project_ids = self.events.projects_with_events().await?;
+        record_timing(
+            "projects-enumerated",
+            enumeration_started,
+            serde_json::json!({ "projectCount": project_ids.len() }),
+        );
         let mut outcomes = Vec::new();
-        for project_id in self.events.projects_with_events().await? {
+        for project_id in project_ids {
             outcomes.push(self.compact_project(&project_id).await?);
         }
+        record_timing(
+            "pass-completed",
+            pass_started,
+            serde_json::json!({ "projectCount": outcomes.len() }),
+        );
         Ok(outcomes)
     }
 
@@ -105,34 +119,98 @@ impl StatusCompactionService {
         &self,
         project_id: &str,
     ) -> Result<CompactionOutcome, RunsPersistenceError> {
+        let project_started = Instant::now();
+        let watermark_started = Instant::now();
         let retained = self.watermarks.get(project_id).await?;
+        record_timing(
+            "watermark-read",
+            watermark_started,
+            serde_json::json!({ "projectId": project_id, "retainedThrough": retained }),
+        );
+        let cutoff_started = Instant::now();
         let Some(floor) = self.deletable_floor(project_id).await? else {
+            record_timing(
+                "cutoff-determined",
+                cutoff_started,
+                serde_json::json!({ "projectId": project_id, "floor": null }),
+            );
             // Both protections still cover every row. Rows below an earlier
             // watermark are still swept, because a crash may have left them.
+            let deletion_started = Instant::now();
             let deleted = self.delete_incrementally(project_id, retained).await?;
-            return Ok(CompactionOutcome {
+            record_timing(
+                "events-deleted",
+                deletion_started,
+                serde_json::json!({
+                    "projectId": project_id,
+                    "through": retained,
+                    "deleted": deleted,
+                }),
+            );
+            let outcome = CompactionOutcome {
                 project_id: project_id.to_owned(),
                 compacted_through: retained,
                 deleted,
-            });
+            };
+            record_timing(
+                "project-completed",
+                project_started,
+                serde_json::json!({
+                    "projectId": project_id,
+                    "compactedThrough": outcome.compacted_through,
+                    "deleted": outcome.deleted,
+                }),
+            );
+            return Ok(outcome);
         };
+        record_timing(
+            "cutoff-determined",
+            cutoff_started,
+            serde_json::json!({ "projectId": project_id, "floor": floor }),
+        );
         let through = floor.max(retained);
         if through > retained {
             // Durable first: the watermark commits in its own transaction, so
             // the deletion below can only ever remove rows a reader is already
             // told to reset over.
+            let watermark_started = Instant::now();
             let transaction = self.database.begin().await?;
             self.watermarks
                 .advance(&transaction, project_id, through)
                 .await?;
             transaction.commit().await?;
+            record_timing(
+                "watermark-advanced",
+                watermark_started,
+                serde_json::json!({ "projectId": project_id, "through": through }),
+            );
         }
+        let deletion_started = Instant::now();
         let deleted = self.delete_incrementally(project_id, through).await?;
-        Ok(CompactionOutcome {
+        record_timing(
+            "events-deleted",
+            deletion_started,
+            serde_json::json!({
+                "projectId": project_id,
+                "through": through,
+                "deleted": deleted,
+            }),
+        );
+        let outcome = CompactionOutcome {
             project_id: project_id.to_owned(),
             compacted_through: through,
             deleted,
-        })
+        };
+        record_timing(
+            "project-completed",
+            project_started,
+            serde_json::json!({
+                "projectId": project_id,
+                "compactedThrough": outcome.compacted_through,
+                "deleted": outcome.deleted,
+            }),
+        );
+        Ok(outcome)
     }
 
     /// The newest cursor both protections allow to be deleted, or `None` when
@@ -174,4 +252,15 @@ impl StatusCompactionService {
             }
         }
     }
+}
+
+fn record_timing(stage: &str, started: Instant, details: serde_json::Value) {
+    let log = ticketry_diagnostics::process_file_log();
+    if !log.is_enabled() {
+        return;
+    }
+    let mut details = details;
+    details["stage"] = serde_json::json!(stage);
+    details["duration_ms"] = serde_json::json!(started.elapsed().as_millis());
+    let _ = log.record("startup", "info", "status-compaction", details);
 }

@@ -21,6 +21,7 @@ pub struct FileDiffView {
 pub(super) async fn bounded(
     git: &GitPort,
     checkout: &Path,
+    base_commit: &str,
     path: &str,
     previous_path: Option<&str>,
     status: &str,
@@ -40,7 +41,7 @@ pub(super) async fn bounded(
     } else if let Some(previous_path) = previous_path {
         vec![
             "diff",
-            "HEAD",
+            base_commit,
             "--patch",
             "--no-ext-diff",
             "--no-textconv",
@@ -51,7 +52,7 @@ pub(super) async fn bounded(
     } else {
         vec![
             "diff",
-            "HEAD",
+            base_commit,
             "--patch",
             "--no-ext-diff",
             "--no-textconv",

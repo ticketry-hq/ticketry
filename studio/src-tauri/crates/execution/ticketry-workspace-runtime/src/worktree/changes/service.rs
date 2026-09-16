@@ -258,6 +258,7 @@ impl WorktreeChangesService {
         super::file_diff::bounded(
             self.status.git(),
             &checkout,
+            &current.base_commit,
             &file.path,
             file.previous_path.as_deref(),
             &file.status,

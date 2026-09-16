@@ -30,6 +30,11 @@ const MODULE_FILE_DIFF: &str = r#"query($moduleId: String!, $path: String!) {
     path status binary patch truncated
   }
 }"#;
+const TASK_FILE_DIFF: &str = r#"query($taskId: String!, $path: String!) {
+  worktree_file_diff(task_id: $taskId, path: $path) {
+    path status binary patch truncated
+  }
+}"#;
 const TASK_COMMIT: &str = r#"mutation($taskId: String!, $operationId: String!) {
   worktree_commit(task_id: $taskId, operation_id: $operationId) {
     operation_id head_commit dirty unpushed_count uncommitted_work_excluded
@@ -139,6 +144,18 @@ async fn task_commit_keeps_the_cumulative_diff_and_clean_agent_commits_can_push(
         changes["data"]["worktree_changes"]["files"][0]["path"],
         "task.txt"
     );
+    let diff = fixture
+        .graphql(
+            TASK_FILE_DIFF,
+            serde_json::json!({"taskId": TASK, "path": "task.txt"}),
+        )
+        .await;
+    assert!(
+        diff["data"]["worktree_file_diff"]["patch"]
+            .as_str()
+            .is_some_and(|patch| patch.contains("+task work")),
+        "{diff:#}"
+    );
 
     let pushed = fixture
         .graphql(
@@ -231,6 +248,18 @@ async fn module_checkout_commit_and_push_use_the_same_independent_rules() {
     assert_eq!(
         committed["data"]["module_checkout_commit"]["unpushed_count"],
         1
+    );
+    let diff = fixture
+        .graphql(
+            MODULE_FILE_DIFF,
+            serde_json::json!({"moduleId": MODULE, "path": "module.txt"}),
+        )
+        .await;
+    assert!(
+        diff["data"]["module_file_diff"]["patch"]
+            .as_str()
+            .is_some_and(|patch| patch.contains("+module work")),
+        "{diff:#}"
     );
 
     let pushed = fixture

@@ -47,7 +47,7 @@ export function TaskWorktreeChanges({
     client: studioApolloClient(),
     variables: { moduleId: moduleId ?? "" },
     skip: !active || !moduleId,
-    fetchPolicy: "network-only",
+    fetchPolicy: "cache-and-network",
   });
   const [lastCommit, setLastCommit] = useState<{
     subject: string;
@@ -73,8 +73,44 @@ export function TaskWorktreeChanges({
       </div>
     );
   }
+
+  const checkouts = !moduleId ? (
+    <p className="p-3 text-sm text-text-muted">Worktree checkouts unavailable.</p>
+  ) : moduleQuery.error ? (
+    <p className="p-3 text-sm text-lifecycle-danger" role="alert">Unable to load worktree checkouts.</p>
+  ) : moduleQuery.data ? (
+    <CurrentWorktreesList
+      rows={moduleQuery.data.module_version_control.worktrees}
+      truncated={moduleQuery.data.module_version_control.worktrees_truncated}
+      selectedTaskId={taskId}
+      onOpenModule={onOpenModule}
+      onOpenTask={onOpenTask}
+    />
+  ) : (
+    <p className="p-3 text-sm text-text-muted">Loading worktree checkouts...</p>
+  );
+
   if (!changes) {
-    return <div className="p-4 text-sm text-text-muted">Loading changes...</div>;
+    return (
+      <div
+        aria-label="Task worktree changes"
+        className="h-full min-h-0 text-sm"
+        data-testid="task-worktree-changes"
+      >
+        <ChangesFileReview
+          checkoutKey={`task:${taskId}`}
+          checkouts={checkouts}
+          header={null}
+          taskId={taskId}
+          files={[]}
+          insertions={0}
+          deletions={0}
+          truncated={false}
+          label="Cumulative changed files"
+          emptyMessage="Loading changes..."
+        />
+      </div>
+    );
   }
 
   const runPullRequestThenRefresh = async (
@@ -117,21 +153,7 @@ export function TaskWorktreeChanges({
     >
       <ChangesFileReview
         checkoutKey={`task:${taskId}`}
-        checkouts={!moduleId ? (
-          <p className="p-3 text-sm text-text-muted">Worktree checkouts unavailable.</p>
-        ) : moduleQuery.error ? (
-          <p className="p-3 text-sm text-lifecycle-danger" role="alert">Unable to load worktree checkouts.</p>
-        ) : moduleQuery.data ? (
-          <CurrentWorktreesList
-            rows={moduleQuery.data.module_version_control.worktrees}
-            truncated={moduleQuery.data.module_version_control.worktrees_truncated}
-            selectedTaskId={taskId}
-            onOpenModule={onOpenModule}
-            onOpenTask={onOpenTask}
-          />
-        ) : (
-          <p className="p-3 text-sm text-text-muted" role="status">Loading worktree checkouts...</p>
-        )}
+        checkouts={checkouts}
         header={(
           <header className="mb-3 border-b border-pane-border pb-3">
             <div className="font-medium text-text-primary">{changes.files.length} cumulative changes</div>

@@ -42,6 +42,7 @@ export function WorkspaceTabBody({
   bucket,
   moduleId = null,
   owner,
+  workspaceActive = true,
   details,
   activeKind,
   activeDocument,
@@ -66,6 +67,8 @@ export function WorkspaceTabBody({
   bucket: string;
   moduleId?: string | null;
   owner: ForegroundOwner;
+  /** False while another main workspace is presented over this retained host. */
+  workspaceActive?: boolean;
   details: ReactNode;
   activeKind: TabKind;
   activeDocument: DesignDoc | null;
@@ -231,7 +234,9 @@ export function WorkspaceTabBody({
             <LazySelectedTicketTerminal
               bucket={bucket}
               owner={owner}
-              active={terminalIds.length > 0 && activeKind === "terminal"}
+              active={
+                workspaceActive && terminalIds.length > 0 && activeKind === "terminal"
+              }
               focusSignal={
                 requestedTerminalId === activeTerminalId
                   ? terminalFocusSignal

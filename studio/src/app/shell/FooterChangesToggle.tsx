@@ -1,22 +1,43 @@
 import { IconGitBranch } from "../../shared/ui/icons";
+import {
+  leaveChangesWorkspace,
+  openModuleChangesWorkspace,
+  useChangesWorkspace,
+} from "../../features/agents/worktrees";
 import { useClientStore } from "../../state/clientStore";
-import { openModuleChangesWorkspace } from "./ticket-workspace/selected-ticket/internal/openChangesWorkspace";
 
 export function FooterChangesToggle() {
   const moduleId = useClientStore((state) => state.selectedModuleId);
-  const label = moduleId ? "Open module Changes" : "Select a module to open Changes";
+  const changesActive = useChangesWorkspace((state) => state.active);
+  const label = changesActive
+    ? "Back to planning workspace"
+    : moduleId
+      ? "Open module Changes"
+      : "Select a module to open Changes";
+  const handleClick = () => {
+    if (changesActive) {
+      leaveChangesWorkspace();
+      requestAnimationFrame(() => {
+        document.querySelector<HTMLButtonElement>(
+          '[data-testid="footer-module-changes"]',
+        )?.focus();
+      });
+      return;
+    }
+    if (moduleId) openModuleChangesWorkspace(moduleId);
+  };
   return (
     <button
       type="button"
       data-testid="footer-module-changes"
       aria-label={label}
       title={label}
-      disabled={!moduleId}
-      onClick={() => moduleId && openModuleChangesWorkspace(moduleId)}
+      disabled={!changesActive && !moduleId}
+      onClick={handleClick}
       className="flex items-center gap-1 px-1.5 py-0.5 text-text-muted hover:bg-pane-bg hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
     >
       <IconGitBranch size={14} data-testid="version-control-icon" />
-      <span>Changes</span>
+      <span>{changesActive ? "Back" : "Changes"}</span>
     </button>
   );
 }

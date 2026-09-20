@@ -246,7 +246,12 @@ export function compareUsage() {
 }
 
 /** Desktop confirmation drives the subset of scenarios WebDriver can reach. */
-export const DESKTOP_SCENARIOS = ["idle", "module-picker", "module-navigation"];
+export const DESKTOP_SCENARIOS = [
+  "idle",
+  "module-picker",
+  "module-navigation",
+  "changes-loading",
+];
 
 export function parsePerformanceDesktopOptions(argv = []) {
   const normalized = argv[0] === "--" ? argv.slice(1) : argv;

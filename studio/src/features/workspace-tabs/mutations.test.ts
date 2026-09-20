@@ -91,6 +91,32 @@ function cachedOrder(): unknown {
 afterEach(async () => resetStudioApolloClient());
 
 describe("Apollo workspace tab saves", () => {
+  it("does not write the retired Changes identity", async () => {
+    const requests: Array<{ variables: Record<string, unknown> }> = [];
+    installTransport(async (request) => {
+      requests.push(JSON.parse(request));
+      return JSON.stringify({
+        data: {
+          update_work_item: issue([
+            { kind: "doc", id: "design" },
+            { kind: "details" },
+          ]),
+        },
+      });
+    });
+
+    await saveWorkspaceTabOrder(WORK_ITEM_ID, [
+      { kind: "changes" },
+      { kind: "doc", id: "design" },
+      { kind: "details" },
+    ]);
+
+    expect(requests[0].variables.workspaceTabOrder).toEqual([
+      { kind: "doc", id: "design" },
+      { kind: "details" },
+    ]);
+  });
+
   it("shows an optimistic order and rolls it back when the save fails", async () => {
     const response = deferred<string>();
     const requests: string[] = [];

@@ -27,6 +27,11 @@ npm run perf:run -- --engine chromium --scenario retention --capture heap-snapsh
 # The real macOS WKWebView, through the test-only embedded WebDriver
 npm run perf:desktop -- --scenario idle
 
+# Changes: open the workspace, switch checkout, and select a changed file.
+# This seeds a dirty module checkout and one indexed task worktree, records one
+# fresh-app observation, then records five repeated interactions per path.
+npm run perf:desktop -- --scenario changes-loading
+
 # Compare two completed runs
 npm run perf:compare -- --baseline <run-dir> --candidate <run-dir>
 
@@ -103,6 +108,14 @@ The whole tree is already git-ignored, as is `studio/dist-performance`.
 | `module-navigation` | Alternates between two populated modules 20 times |
 | `work-item-details` | Opens 20 known rows and verifies each selection |
 | `retention` | 5 batches of 20 open/close/switch cycles over a fixed working set |
+| `changes-loading` | Desktop only: opens Changes, switches from the module checkout to a task worktree, and selects a 64 KiB changed file; records first feedback and useful content separately |
+
+The Changes fixture has no pull-request URL, so it makes no GitHub request. Its
+report records the repository path, file size, worktree count, cache conditions,
+and raw samples. Desktop GraphQL uses Tauri IPC, so this scenario cannot split
+resolver time into repository-lock, Git, and provider stages without additional
+backend timing points. Treat that split as unknown rather than inferring it from
+the end-to-end number.
 
 ## What the numbers mean, and what they do not
 

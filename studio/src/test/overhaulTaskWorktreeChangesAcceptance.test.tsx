@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 
 import { SelectedTicketContent } from "../app/shell/ticket-workspace/selected-ticket/SelectedTicketContent";
 import { SelectedTicket } from "../app/shell/ticket-workspace/selected-ticket/SelectedTicket";
+import { FooterChangesToggle } from "../app/shell/FooterChangesToggle";
+import { ChangesWorkspace } from "../features/agents/worktrees";
 import {
   readStudioWorkspaceTarget,
   rememberStudioWorkspaceTarget,
@@ -13,10 +15,23 @@ import { FoundationGraphQlError } from "../shared/apollo/errorLink";
 import { useClientStore } from "../state/clientStore";
 import { WorktreeChangesDocument } from "../features/agents/worktrees/generated/worktreeChanges.documents";
 import { WorktreeStatusDocument } from "../features/agents/worktrees/generated/worktreeStatus.documents";
-import { fixture, mountStudio, workItem } from "./seam";
+import { fixture, mountStudio as mountStudioSeam, workItem } from "./seam";
 
 const OWNER_ID = "task-worktree-owner";
 const TASK_ID = "child-with-committed-work";
+
+function mountStudio(options: Parameters<typeof mountStudioSeam>[0]) {
+  return mountStudioSeam({
+    ...options,
+    children: (
+      <>
+        {options.children}
+        <ChangesWorkspace />
+        <FooterChangesToggle />
+      </>
+    ),
+  });
+}
 
 const activeCleanWorktree = {
   __typename: "WorktreeStatusView",
@@ -116,13 +131,15 @@ describe("overhaul acceptance - task worktree Changes", () => {
       http,
       selectedTaskId: TASK_ID,
       children: (
-        <SelectedTicketContent
-          bucket={TASK_ID}
-          projectId="project-1"
-          moduleId="module-1"
-          owner="studio"
-          details={<div>Issue details</div>}
-        />
+        <>
+          <SelectedTicketContent
+            bucket={TASK_ID}
+            projectId="project-1"
+            moduleId="module-1"
+            owner="studio"
+            details={<div>Issue details</div>}
+          />
+        </>
       ),
       graphQlExecute: async (document, variables) => {
         const operation = documentOperationName(document);
@@ -150,12 +167,16 @@ describe("overhaul acceptance - task worktree Changes", () => {
     await waitFor(() =>
       expect(savedTabOrders).toContainEqual([
         { kind: "details" },
-        { kind: "changes" },
       ]),
     );
 
     fireEvent.click(changesTab);
     await waitFor(() => expect(changesRequests).toBe(1));
+    expect(changesTab).toHaveAttribute("aria-selected", "false");
+    expect(within(tabs).getByRole("tab", { name: "Details" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
 
     const list = await screen.findByRole("list", {
       name: "Cumulative changed files",
@@ -181,7 +202,7 @@ describe("overhaul acceptance - task worktree Changes", () => {
     expect(screen.getByText("7 cumulative changes")).toBeVisible();
     expect(screen.getByText("Includes committed work from the recorded base.")).toBeVisible();
 
-    fireEvent.click(within(tabs).getByRole("tab", { name: "Details" }));
+    fireEvent.click(screen.getByRole("button", { name: "Back to planning workspace" }));
     expect(within(tabs).getByRole("tab", { name: "Changes" })).toBeVisible();
     fireEvent.click(within(tabs).getByRole("tab", { name: "Changes" }));
     await waitFor(() => expect(changesRequests).toBe(2));
@@ -240,7 +261,7 @@ describe("overhaul acceptance - task worktree Changes", () => {
     fireEvent.click(await within(tabs).findByRole("tab", { name: "Changes" }));
 
     const page = await screen.findByTestId("task-worktree-changes");
-    const pane = page.closest<HTMLElement>('[data-pane="details-or-terminal"]');
+    const pane = page.closest<HTMLElement>('[aria-label="Changes workspace"]');
     expect(pane).not.toBeNull();
     const list = within(page).getByRole("list", {
       name: "Cumulative changed files",
@@ -281,12 +302,8 @@ describe("overhaul acceptance - task worktree Changes", () => {
     expect(lastRow).toHaveAccessibleName(/file-80\.ts: Modified/);
     expect(list.lastElementChild).toBe(lastRow);
     expect(within(page).getByTestId("changes-workspace")).toBeVisible();
-    expect(pane).toContainElement(tabs);
-    expect(page).not.toContainElement(tabs);
-    expect(screen.getByTestId("workspace-changes-surface")).toHaveAttribute(
-      "tabindex",
-      "-1",
-    );
+    expect(pane).toContainElement(page);
+    expect(pane).not.toContainElement(tabs);
   });
 
   it("[overhaul-185] restores Details when a worktree disappears and explains non-list states", async () => {
@@ -352,7 +369,7 @@ describe("overhaul acceptance - task worktree Changes", () => {
       await screen.findByText("No cumulative changes from the recorded base."),
     ).toBeVisible();
 
-    fireEvent.click(within(tabs).getByRole("tab", { name: "Details" }));
+    fireEvent.click(screen.getByRole("button", { name: "Back to planning workspace" }));
     await waitFor(() =>
       expect(within(tabs).getByRole("tab", { name: "Details" })).toHaveAttribute(
         "aria-selected",
@@ -364,7 +381,7 @@ describe("overhaul acceptance - task worktree Changes", () => {
     const truncationNotice = await screen.findByRole("status");
     expect(truncationNotice).toHaveTextContent("The changed-file limit was reached.");
 
-    fireEvent.click(within(tabs).getByRole("tab", { name: "Details" }));
+    fireEvent.click(screen.getByRole("button", { name: "Back to planning workspace" }));
     await waitFor(() =>
       expect(within(tabs).getByRole("tab", { name: "Details" })).toHaveAttribute(
         "aria-selected",
@@ -397,7 +414,7 @@ describe("overhaul acceptance - task worktree Changes", () => {
       "true",
     );
     expect(useClientStore.getState().workspaces[TASK_ID]?.active).toBe("details");
-    expect(readStudioWorkspaceTarget(TASK_ID)).toEqual({ kind: "details" });
+    expect(readStudioWorkspaceTarget(TASK_ID)).toBeNull();
 
     worktreeStatus = activeCleanWorktree;
     changesResult = "empty";
@@ -828,7 +845,6 @@ describe("overhaul acceptance - task worktree Changes", () => {
     });
 
     const tabs = await screen.findByRole("tablist", { name: "Workspace tabs" });
-    const details = within(tabs).getByRole("tab", { name: "Details" });
     const changesTab = within(tabs).getByRole("tab", { name: "Changes" });
     fireEvent.click(changesTab);
 
@@ -857,7 +873,7 @@ describe("overhaul acceptance - task worktree Changes", () => {
           reason: state === "unavailable" ? "GitHub pull-request status is unavailable." : null,
         },
       };
-      fireEvent.click(details);
+      fireEvent.click(screen.getByRole("button", { name: "Back to planning workspace" }));
       fireEvent.click(changesTab);
       await waitFor(() =>
         expect(screen.getByLabelText("Pull request status")).toHaveTextContent(label),
@@ -888,7 +904,7 @@ describe("overhaul acceptance - task worktree Changes", () => {
         reason: null,
       },
     };
-    fireEvent.click(details);
+    fireEvent.click(screen.getByRole("button", { name: "Back to planning workspace" }));
     fireEvent.click(changesTab);
     expect(await screen.findByRole("button", { name: "Create follow-up PR" })).toBeEnabled();
   });
@@ -1008,7 +1024,7 @@ describe("overhaul acceptance - task worktree Changes", () => {
         follow_up_eligible: true,
       },
     };
-    fireEvent.click(within(tabs).getByRole("tab", { name: "Details" }));
+    fireEvent.click(screen.getByRole("button", { name: "Back to planning workspace" }));
     fireEvent.click(within(tabs).getByRole("tab", { name: "Changes" }));
     fireEvent.click(await screen.findByRole("button", { name: "Create follow-up PR" }));
     await waitFor(() =>

@@ -2,6 +2,8 @@ import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { SelectedTicketContent } from "../app/shell/ticket-workspace/selected-ticket/SelectedTicketContent";
+import { FooterChangesToggle } from "../app/shell/FooterChangesToggle";
+import { ChangesWorkspace } from "../features/agents/worktrees";
 import { documentOperationName } from "../graphql-foundation/typedDocument";
 import { FoundationGraphQlError } from "../shared/apollo/errorLink";
 import { fixture, mountStudio, workItem } from "./seam";
@@ -107,13 +109,17 @@ function mountMergeRecovery(
     http,
     selectedTaskId: TASK_ID,
     children: (
-      <SelectedTicketContent
-        bucket={TASK_ID}
-        projectId="project-1"
-        moduleId="module-1"
-        owner="studio"
-        details={<div>Issue details</div>}
-      />
+      <>
+        <SelectedTicketContent
+          bucket={TASK_ID}
+          projectId="project-1"
+          moduleId="module-1"
+          owner="studio"
+          details={<div>Issue details</div>}
+        />
+        <ChangesWorkspace />
+        <FooterChangesToggle />
+      </>
     ),
     graphQlExecute: async (document, variables) => {
       const operation = documentOperationName(document);

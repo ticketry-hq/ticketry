@@ -58,6 +58,7 @@ export function SelectedTicketContent({
   projectId,
   moduleId,
   owner,
+  workspaceActive = true,
   details,
   launchContext = null,
   entrySignal = 0,
@@ -70,6 +71,8 @@ export function SelectedTicketContent({
   projectId: string | null;
   moduleId: string | null;
   owner: ForegroundOwner;
+  /** Whether the selected-ticket workspace may present its native terminal. */
+  workspaceActive?: boolean;
   details: ReactNode;
   launchContext?: WorkspaceLauncherContext | null;
   entrySignal?: number;
@@ -402,6 +405,7 @@ export function SelectedTicketContent({
         bucket={bucket}
         moduleId={moduleId}
         owner={owner}
+        workspaceActive={workspaceActive}
         details={details}
         activeKind={effActive}
         activeDocument={activeDoc}

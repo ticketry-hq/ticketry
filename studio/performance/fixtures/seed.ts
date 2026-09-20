@@ -69,7 +69,13 @@ export interface SeedResult {
   pickerSearchTerm: string;
   pickerSearchExpectedModule: string;
   hiddenModuleIds: string[];
-  detailWorkItems: { name: string; id: string; hasLargeDescription: boolean }[];
+  detailWorkItems: {
+    name: string;
+    id: string;
+    key: string;
+    sequenceId: number;
+    hasLargeDescription: boolean;
+  }[];
   stateMix: { value: Record<string, number> | null; reason: string | null };
 }
 
@@ -295,6 +301,8 @@ export async function seedPerformanceWorkspace(
       return {
         name,
         id: row?.id ?? "",
+        key: row?.key ?? "",
+        sequenceId: row?.sequence_id ?? 0,
         hasLargeDescription: (index + 1) % spec.largeDescriptionEveryNth === 0,
       };
     })

@@ -9,6 +9,7 @@ import {
 } from "../work-items";
 import {
   workspaceTabOrderFromJson,
+  workspaceTabOrderForPersistence,
   type WorkspaceTabIdentity,
   type WorkspaceTabOrder,
 } from "./types";
@@ -65,7 +66,7 @@ async function executeSave(
   if (!current) {
     throw new Error(`Cannot save workspace tabs before ${workItemId} is loaded.`);
   }
-  const nextOrder = [...order];
+  const nextOrder = workspaceTabOrderForPersistence(order);
   const result = await client.mutate({
     mutation: UpdateWorkTrackerWorkspaceTabOrderDocument,
     variables: {

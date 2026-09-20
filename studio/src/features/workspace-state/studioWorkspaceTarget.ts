@@ -22,7 +22,9 @@ function parseStudioWorkspaceTarget(
   if (!value || typeof value !== "object") return null;
   const target = value as Record<string, unknown>;
   if (target.kind === "details") return { kind: "details" };
-  if (target.kind === "changes") return { kind: "changes" };
+  // Changes used to be a task-local tab. Its saved target has no origin
+  // snapshot, so it cannot safely restore the independent review workspace.
+  if (target.kind === "changes") return { kind: "details" };
   if (target.kind === "doc" && typeof target.relPath === "string") {
     return { kind: "doc", relPath: target.relPath };
   }
@@ -54,9 +56,19 @@ export function readStudioWorkspaceTarget(
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
       return null;
     }
-    return parseStudioWorkspaceTarget(
-      (parsed as Record<string, unknown>)[bucket],
-    );
+    const targets = parsed as Record<string, unknown>;
+    const saved = targets[bucket];
+    const target = parseStudioWorkspaceTarget(saved);
+    if (
+      saved &&
+      typeof saved === "object" &&
+      !Array.isArray(saved) &&
+      (saved as Record<string, unknown>).kind === "changes"
+    ) {
+      targets[bucket] = { kind: "details" };
+      localStorage.setItem(STUDIO_WORKSPACES_KEY, JSON.stringify(targets));
+    }
+    return target;
   } catch {
     return null;
   }
@@ -75,7 +87,13 @@ export function rememberStudioWorkspaceTarget(
     // Re-insert the touched bucket last (insertion order = recency), then
     // drop the oldest entries beyond the cap.
     delete current[bucket];
-    const entries = [...Object.entries(current), [bucket, target] as const];
+    const durableTarget = target.kind === "changes"
+      ? { kind: "details" as const }
+      : target;
+    const entries = [
+      ...Object.entries(current),
+      [bucket, durableTarget] as const,
+    ];
     localStorage.setItem(
       STUDIO_WORKSPACES_KEY,
       JSON.stringify(

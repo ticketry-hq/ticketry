@@ -314,6 +314,12 @@ named gate before the full Studio suite, typecheck, and build.
 | 321 | Finishing or aborting a conflicting merge retires its recovery state and gives the next merge a fresh operation identity. |
 | 322 | Committing dirty source work refreshes local merge eligibility and enables Merge without reopening Changes. |
 | 323 | Refreshing merge eligibility after an external destination fix enables Merge without reopening Changes. |
+| 324 | A saved Changes workspace target without a Back origin migrates to Details. |
+| 325 | Saved workspace-tab order drops the retired Changes tab on read and write. |
+| 326 | Changes opens independently, and Back restores the exact planning origin and active session. |
+| 327 | If the planning origin disappears, Back returns to the same module's conversation Details workspace. |
+| 328 | Back stays usable while Changes is loading or reports an error. |
+| 329 | Selecting a task checkout marks it selected and keeps Back usable while fresh task changes load. |
 
 Each executable case carries one stable `[overhaul-NN]` marker. The gate has a
 contract test that fails if a marker is missing or duplicated. A case whose

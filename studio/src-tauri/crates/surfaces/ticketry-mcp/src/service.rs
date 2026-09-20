@@ -31,6 +31,10 @@ pub struct WorktrackerMcpService {
     graph_runs: Option<ticketry_agent_execution::GraphRunService>,
     terminal_cleanup: TerminalCleanupService,
     terminal_launch: Option<ticketry_terminal::TerminalLaunchService>,
+    /// The one resident Codex app-server allocation startup already shares with
+    /// the GraphQL title resolver. MCP only renames through it; it never starts
+    /// an app-server of its own.
+    codex_titles: Option<ticketry_terminal::InstantRunTicketTitleService>,
     readiness_data_directory: PathBuf,
     tools: Arc<Vec<Tool>>,
 }
@@ -44,6 +48,7 @@ impl WorktrackerMcpService {
         graph_runs: Option<ticketry_agent_execution::GraphRunService>,
         terminal_cleanup: TerminalCleanupService,
         terminal_launch: Option<ticketry_terminal::TerminalLaunchService>,
+        codex_titles: Option<ticketry_terminal::InstantRunTicketTitleService>,
         readiness_data_directory: PathBuf,
     ) -> Self {
         Self {
@@ -55,6 +60,7 @@ impl WorktrackerMcpService {
             graph_runs,
             terminal_cleanup,
             terminal_launch,
+            codex_titles,
             readiness_data_directory,
             tools: Arc::new(registry::tools()),
         }
@@ -174,6 +180,7 @@ impl ServerHandler for WorktrackerMcpService {
             self.graph_runs.as_ref(),
             &self.terminal_cleanup,
             self.terminal_launch.as_ref(),
+            self.codex_titles.as_ref(),
             &principal,
             request.name.as_ref(),
             &arguments,

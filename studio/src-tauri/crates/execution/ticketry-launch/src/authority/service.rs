@@ -1,12 +1,13 @@
 use async_trait::async_trait;
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use ticketry_provider::{DirectoryTrustContext, DirectoryTrustInspection};
+use ticketry_tool_discovery::{discover_tool, SupportedTool};
 
 use crate::paths::LaunchPathsService;
 use crate::planning::{
-    build_document_chat_prompt, build_instant_prompt, build_planning_prompt, provider_contract,
-    DocumentChatPrompt, InstantPrompt, PlanningPrompt, Provider,
+    build_document_chat_prompt, build_instant_prompt, build_planning_prompt, DocumentChatPrompt,
+    InstantPrompt, PlanningPrompt, Provider,
 };
 use crate::terminal_session::{CreateTerminalSession, TerminalLaunchKind};
 use ticketry_entities::{agent_run, launch_material};
@@ -130,10 +131,14 @@ impl LaunchAuthorityService {
         if provider == Provider::Agy {
             return Ok(());
         }
+        let executable = (provider == Provider::Claude)
+            .then(|| discover_tool(SupportedTool::Claude))
+            .and_then(|diagnostic| diagnostic.path.map(PathBuf::from));
         let (code, message) = match ticketry_provider::provider_contract(provider)
             .inspect_directory_trust(DirectoryTrustContext {
                 directory: Path::new(directory),
                 trust_file: None,
+                executable: executable.as_deref(),
             }) {
             DirectoryTrustInspection::Trusted => return Ok(()),
             DirectoryTrustInspection::ApprovalRequired(_) => (
@@ -200,6 +205,7 @@ impl LaunchAuthorityService {
                 } else {
                     ""
                 },
+                stage_skills: &decision.stage_skills,
                 // The one thing the caller contributes to a task prompt: the
                 // free text typed into the launch box, kept as user input
                 // rather than as authority.
@@ -257,25 +263,17 @@ impl LaunchAuthorityService {
             None => activated_provider(&self.database, request.provider.as_deref()).await?,
         };
         let user_input = submitted(request.prompt.as_deref()).map(str::to_owned);
-        let paths = launch_paths(&self.paths, request).await?;
-        let module = facts::module_prompt_facts(
+        launch_paths(&self.paths, request).await?;
+        facts::module_prompt_facts(
             &self.database,
             &request.module_id,
             local_module_folder(&self.database, &request.module_id).await,
         )
         .await?;
-        let contract = provider_contract(
-            Provider::try_from(provider.as_str())
-                .map_err(|error| LaunchAuthorityError::unresolvable(error.to_string()))?,
-        );
         let settings = ticketry_settings::load_instant_launch_settings(&self.database).await?;
         let prompt = build_instant_prompt(&InstantPrompt {
-            module,
             user_input,
             initial_prompt: Some(settings.initial_prompt),
-            design_directory: paths.design_directory_relative.clone(),
-            allow_self_termination: contract.supports_worktracker_mcp,
-            auto_close: settings.auto_close,
         });
         let mut material = self.scratch_material(provider, prompt);
         if let Some(default) = default {
@@ -362,7 +360,7 @@ impl LaunchAuthorityService {
     fn scratch_material(&self, provider: String, prompt: String) -> ResolvedLaunchMaterial {
         ResolvedLaunchMaterial {
             provider: Some(provider),
-            prompt: Some(prompt),
+            prompt: (!prompt.is_empty()).then_some(prompt),
             ..ResolvedLaunchMaterial::default()
         }
     }

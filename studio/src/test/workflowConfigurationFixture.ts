@@ -50,7 +50,8 @@ export const workflowCatalog = {
     launch_bindings: { __typename: "WorktrackerLaunchbindingConnection", nodes: [{
       __typename: "WorktrackerLaunchbinding",
       id: 1, issue_type: ISSUE_TYPE_ID, state: STATE_ID,
-      prompt: "Implement it.", entry_skill: null, required_skills: ["tdd"],
+      prompt: "Implement it.", required_skills: ["tdd"],
+      stage_skills: [],
       model: MODEL_ID, reasoning: REASONING_ID,
       auto_start: false, subtree_run_enabled: false,
       created_at: "2026-01-01T00:00:00", updated_at: "2026-01-01T00:00:00",

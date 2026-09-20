@@ -151,8 +151,8 @@ export function WorkspaceTabStrip({
               active={activeKind === "details"}
               highlighted={showTabHighlight && highlightedTab.kind === "details"}
               allowHoverEmphasis={allowTabHoverEmphasis}
-              onClick={() => {
-                if (!reorderDrag.consumePostDropClick()) {
+              onClick={(event) => {
+                if (!reorderDrag.consumePostDropClick(event)) {
                   onSelectTab({ kind: "details" });
                 }
               }}
@@ -171,8 +171,8 @@ export function WorkspaceTabStrip({
               active={activeKind === "changes"}
               highlighted={showTabHighlight && highlightedTab.kind === "changes"}
               allowHoverEmphasis={allowTabHoverEmphasis}
-              onClick={() => {
-                if (!reorderDrag.consumePostDropClick()) {
+              onClick={(event) => {
+                if (!reorderDrag.consumePostDropClick(event)) {
                   onSelectTab({ kind: "changes" });
                 }
               }}
@@ -197,13 +197,13 @@ export function WorkspaceTabStrip({
                 highlightedTab.id === document.id
               }
               allowHoverEmphasis={allowTabHoverEmphasis}
-              onClick={() => {
-                if (!reorderDrag.consumePostDropClick()) {
+              onClick={(event) => {
+                if (!reorderDrag.consumePostDropClick(event)) {
                   onSelectTab({ kind: "doc", id: document.id });
                 }
               }}
-              onClose={() => {
-                if (!reorderDrag.consumePostDropClick()) {
+              onClose={(event) => {
+                if (!reorderDrag.consumePostDropClick(event)) {
                   onCloseDocument(document.id);
                 }
               }}
@@ -245,13 +245,13 @@ export function WorkspaceTabStrip({
             })}
             /* Attention axis — its own palette, independent of provider tone. */
             badge={<LifecycleBadge state={tab.lifecycle} />}
-            onClick={() => {
-              if (!reorderDrag.consumePostDropClick()) {
+            onClick={(event) => {
+              if (!reorderDrag.consumePostDropClick(event)) {
                 onActivateTerminal(tab.id);
               }
             }}
-            onClose={() => {
-              if (!reorderDrag.consumePostDropClick()) {
+            onClose={(event) => {
+              if (!reorderDrag.consumePostDropClick(event)) {
                 onCloseTerminal(tab.id);
               }
             }}

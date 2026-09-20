@@ -221,6 +221,8 @@ void ghostty_surface_mouse_scroll(ghostty_surface_t surface, double x, double y,
 @end
 
 @implementation MuxedTestWebView
+- (BOOL)acceptsFirstResponder { return YES; }
+
 - (void)setValue:(id)value forKey:(NSString *)key {
   if ([key isEqualToString:@"drawsBackground"]) {
     self.disabledBackgroundThroughKvc = ![value boolValue];
@@ -305,6 +307,12 @@ int main(void) {
     NSView *content = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 800, 600)];
     MuxedTestWebView *webview =
         [[MuxedTestWebView alloc] initWithFrame:content.bounds];
+    NSWindow *window = [[NSWindow alloc]
+        initWithContentRect:content.bounds
+                  styleMask:NSWindowStyleMaskBorderless
+                    backing:NSBackingStoreBuffered
+                      defer:NO];
+    window.contentView = content;
     NSView *ghostty = [[NSView alloc] initWithFrame:NSMakeRect(8, 10, 784, 580)];
     [content addSubview:webview];
 
@@ -364,6 +372,20 @@ int main(void) {
     [input_view keyDown:key_event(@"a")];
     require(key_press_count == 1 && strcmp(last_key_text, "a") == 0,
             "a presented Ghostty view did not route a key press directly");
+    [window makeFirstResponder:input_view];
+    NSEvent *disengage = [NSEvent keyEventWithType:NSEventTypeKeyDown
+                                          location:NSZeroPoint
+                                     modifierFlags:NSEventModifierFlagCommand
+                                         timestamp:0
+                                      windowNumber:window.windowNumber
+                                           context:nil
+                                        characters:@"\x1b"
+                       charactersIgnoringModifiers:@"\x1b"
+                                          isARepeat:NO
+                                            keyCode:0x35];
+    [input_view keyDown:disengage];
+    require(window.firstResponder == webview,
+            "body disengagement did not return arrow keys to the WebView");
 
     muxed_ghostty_view_set_scroll_callback(input_handle, record_tmux_scroll, NULL);
     MuxedTestScrollEvent *scroll = [MuxedTestScrollEvent new];
@@ -421,6 +443,7 @@ int main(void) {
     [ghostty release];
     [webview release];
     [content release];
+    [window release];
   }
   return 0;
 }

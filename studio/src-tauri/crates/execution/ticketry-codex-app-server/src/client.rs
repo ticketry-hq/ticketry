@@ -10,7 +10,7 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, ChildStdout, Command};
 use tokio::sync::{broadcast, Mutex};
 
-use crate::{CodexAppServerError, CodexThreadTitleReader};
+use crate::{CodexAppServerError, CodexThreadTitles};
 
 const RESPONSE_TIMEOUT: Duration = Duration::from_secs(5);
 const RESTART_POLL_INTERVAL: Duration = Duration::from_millis(100);
@@ -40,7 +40,7 @@ impl CodexAppServerClient {
 }
 
 #[async_trait]
-impl CodexThreadTitleReader for CodexAppServerClient {
+impl CodexThreadTitles for CodexAppServerClient {
     async fn read_thread_title(
         &self,
         thread_id: &str,
@@ -62,6 +62,22 @@ impl CodexThreadTitleReader for CodexAppServerClient {
             .name
             .map(|name| name.trim().to_owned())
             .filter(|name| !name.is_empty()))
+    }
+
+    async fn set_thread_title(
+        &self,
+        thread_id: &str,
+        name: &str,
+    ) -> Result<(), CodexAppServerError> {
+        self.resident
+            .lock()
+            .await
+            .request(
+                "thread/name/set",
+                json!({"threadId": thread_id, "name": name}),
+            )
+            .await
+            .map(|_| ())
     }
 }
 
@@ -300,7 +316,7 @@ impl Connection {
 
     fn log_failure(&mut self, error: &CodexAppServerError) {
         if !self.failure_logged {
-            eprintln!("Ticketry could not read a Codex thread title: {error}");
+            eprintln!("Ticketry could not complete a Codex thread request: {error}");
             self.failure_logged = true;
         }
     }
@@ -358,7 +374,7 @@ impl Connection {
             if let Some(error) = response.get("error") {
                 let error: RpcError = serde_json::from_value(error.clone())
                     .map_err(|error| CodexAppServerError::protocol(error.to_string()))?;
-                return Err(CodexAppServerError::protocol(error.message));
+                return Err(CodexAppServerError::provider(error.message));
             }
             return response
                 .get("result")

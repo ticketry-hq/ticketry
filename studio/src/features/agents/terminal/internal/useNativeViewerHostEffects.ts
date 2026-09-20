@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useEffect, useRef, type RefObject } from "react";
 
 import {
@@ -112,8 +113,29 @@ export function useNativeViewerFrameSync({
     observer.observe(host);
     window.addEventListener("resize", scheduleFrame);
     window.addEventListener("scroll", scheduleFrame, true);
+    let disposed = false;
+    const windowEventUnlisteners: Array<() => void> = [];
+    const retainUnlistener = (unlisten: () => void) => {
+      if (disposed) unlisten();
+      else windowEventUnlisteners.push(unlisten);
+    };
+    try {
+      const appWindow = getCurrentWindow();
+      void appWindow
+        .onMoved(scheduleFrame)
+        .then(retainUnlistener)
+        .catch(() => {});
+      void appWindow
+        .onScaleChanged(scheduleFrame)
+        .then(retainUnlistener)
+        .catch(() => {});
+    } catch {
+      // Browser development and test harnesses have no Tauri window metadata.
+    }
     scheduleFrame();
     return () => {
+      disposed = true;
+      windowEventUnlisteners.splice(0).forEach((unlisten) => unlisten());
       observer.disconnect();
       window.removeEventListener("resize", scheduleFrame);
       window.removeEventListener("scroll", scheduleFrame, true);

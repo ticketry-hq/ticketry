@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { launchFailureMessage } from "../../../../../features/agents/terminal";
+import {
+  launchDefaultAgent,
+  launchFailureMessage,
+} from "../../../../../features/agents/terminal";
 import { TEMP_TASK_ID } from "../../../../../features/agents/types";
 import {
   refreshSubtreeRunCapabilities,
@@ -27,16 +30,35 @@ export function NormalRunAction({
   task: WorkItem;
   moduleId: string | null;
 }) {
-  const isBranch = task.sub_issues_count > 0;
-  const subtreeEligible = useSubtreeRunEligibility(task, moduleId);
   const { data: launchBindingStates } = useLaunchBindingStatesQuery(
     task.project_id,
   );
-  const leafEligible =
+  const eligible =
     task.id !== TEMP_TASK_ID &&
     moduleId !== null &&
     task.state !== null &&
     launchBindingStates?.[task.issue_type]?.includes(task.state) === true;
+
+  if (!eligible) return null;
+
+  return (
+    <RunItemAction
+      task={task}
+      moduleId={moduleId}
+      registerShortcut={task.sub_issues_count === 0}
+    />
+  );
+}
+
+export function SubtreeRunAction({
+  task,
+  moduleId,
+}: {
+  task: WorkItem;
+  moduleId: string | null;
+}) {
+  const isBranch = task.sub_issues_count > 0;
+  const subtreeEligible = useSubtreeRunEligibility(task, moduleId);
   const branch = useSubtreeRunLaunch({
     item: task,
     actionName: "Run subtree",
@@ -74,17 +96,17 @@ export function NormalRunAction({
       />
     );
   }
-  if (!leafEligible) return null;
-
-  return <RunItemAction task={task} moduleId={moduleId} />;
+  return null;
 }
 
 export function RunItemAction({
   task,
   moduleId,
+  registerShortcut = true,
 }: {
   task: WorkItem;
   moduleId: string | null;
+  registerShortcut?: boolean;
 }) {
   const [pending, setPending] = useState(false);
   const inFlightRef = useRef(false);
@@ -110,8 +132,8 @@ export function RunItemAction({
       : null;
     runTabWatchRef.current = runTabWatch;
     try {
-      await runWorkItem(
-        task,
+      await launchDefaultAgent(
+        task.id,
         moduleId ? { projectId: task.project_id, moduleId } : undefined,
       );
       runTabWatch?.acknowledge();
@@ -127,10 +149,10 @@ export function RunItemAction({
     }
   }, [moduleId, task]);
 
-  useEffect(
-    () => registerNormalRunCommand(task.id, () => void runLeaf()),
-    [runLeaf, task.id],
-  );
+  useEffect(() => {
+    if (!registerShortcut) return;
+    return registerNormalRunCommand(task.id, () => void runLeaf());
+  }, [registerShortcut, runLeaf, task.id]);
 
   return (
     <button
@@ -139,7 +161,7 @@ export function RunItemAction({
       aria-busy={pending}
       title="Run item"
       disabled={pending}
-      onClick={() => startNormalRun(task.id)}
+      onClick={() => void runLeaf()}
       className="flex-none border border-pane-border p-1.5 text-text-muted hover:border-focus-accent hover:text-text-primary disabled:cursor-wait disabled:opacity-60"
     >
       <IconPlay size={14} />

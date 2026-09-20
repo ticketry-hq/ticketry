@@ -18,6 +18,11 @@ pub async fn install(database: &DatabaseConnection) -> Result<(), DbErr> {
         verify_ledger(&transaction).await?;
         if table_exists(&transaction, BINDING_TABLE).await?
             && !column_exists(&transaction, BINDING_TABLE, ENTRY_SKILL_COLUMN).await?
+            && !table_exists(
+                &transaction,
+                super::launch_binding_stage_skills_migration::LEDGER_TABLE,
+            )
+            .await?
         {
             return Err(DbErr::Custom(
                 "entry-skill migration ledger exists but the column is absent".to_owned(),
@@ -47,8 +52,7 @@ pub async fn install(database: &DatabaseConnection) -> Result<(), DbErr> {
 }
 
 async fn seed_reviewed_entries(database: &impl ConnectionTrait) -> Result<(), DbErr> {
-    let seeds = reviewed_defaults::entry_skill_seeds()
-        .map_err(|error| DbErr::Custom(format!("could not read reviewed defaults: {error}")))?;
+    let seeds = reviewed_defaults::stage_skill_seeds();
     for (state_name, skill) in seeds {
         let rows = database
             .query_all_raw(Statement::from_sql_and_values(

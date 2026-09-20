@@ -7,6 +7,9 @@ use sea_orm::{ConnectionTrait, Database, DatabaseConnection, DbBackend, Statemen
 use tauri_graphql::{TransportApi, TransportApiImpl};
 use ticketry_graphql_schema::initialize_with_worktracker_commands_and_install;
 
+#[path = "worktree_changes/destination_recency.rs"]
+mod destination_recency;
+
 #[path = "worktree_changes/merge_options.rs"]
 mod merge_options;
 
@@ -844,20 +847,57 @@ async fn merge_preserves_staged_unstaged_and_untracked_work_in_both_checkouts() 
 }
 
 #[tokio::test]
-async fn unverifiable_provenance_requires_an_explicit_existing_local_destination() {
+async fn recorded_origin_autopopulates_without_a_creation_journal() {
     let fixture = fixture().await;
     fixture.execute("DELETE FROM workspace_operations").await;
+    let repository = fixture._directory.path().join("repositories/ticketry");
+    let origin = fixture._directory.path().join("checkouts/origin");
+    git(
+        &[
+            "worktree",
+            "add",
+            "-b",
+            "release/origin",
+            &origin.display().to_string(),
+            "main",
+        ],
+        &repository,
+    );
+    fixture
+        .execute("UPDATE worktrees SET base_branch = 'release/origin'")
+        .await;
 
-    let selection = fixture.merge_preview(None).await;
-    assert_eq!(selection["destination_branch"], serde_json::Value::Null);
-    assert_eq!(selection["requires_destination_selection"], true);
-    assert_eq!(selection["blocker"], "destination_selection_required");
-    assert_eq!(selection["destinations"][0]["branch"], "main");
+    let preview = fixture.merge_preview(None).await;
+    assert_eq!(preview["destination_branch"], "release/origin");
+    assert_eq!(
+        preview["destination_checkout"],
+        origin.canonicalize().unwrap().display().to_string()
+    );
+    assert_eq!(preview["ready"], true);
+    assert_eq!(preview["requires_destination_selection"], false);
 
-    let selected = fixture.merge_preview(Some("main")).await;
-    assert_eq!(selected["destination_branch"], "main");
-    assert_eq!(selected["ready"], true);
-    assert_eq!(selected["requires_destination_selection"], false);
+    write(&fixture.checkout.join("uncommitted.txt"), "source dirt\n");
+    let dirty = fixture.merge_preview(None).await;
+    assert_eq!(dirty["blocker"], "source_dirty");
+    assert_eq!(dirty["destination_branch"], "release/origin");
+    assert_eq!(
+        dirty["destination_checkout"],
+        preview["destination_checkout"]
+    );
+}
+
+#[tokio::test]
+async fn an_invalid_recorded_origin_does_not_offer_a_merge() {
+    let fixture = fixture().await;
+    fixture.execute("DELETE FROM workspace_operations").await;
+    fixture
+        .execute("UPDATE worktrees SET base_commit = '0000000000000000000000000000000000000000'")
+        .await;
+    let preview = fixture.merge_preview(None).await;
+    assert_eq!(preview["destination_branch"], "main");
+    assert_eq!(preview["ready"], false);
+    assert_eq!(preview["requires_destination_selection"], false);
+    assert_eq!(preview["blocker"], "destination_selection_required");
 }
 
 #[tokio::test]
@@ -1505,5 +1545,36 @@ async fn module_list_is_read_only_current_and_ordered_from_the_checkout() {
             .unwrap()
             .len(),
         1
+    );
+}
+
+#[tokio::test]
+async fn generated_worktree_list_and_module_files_load_independently() {
+    let fixture = fixture().await;
+    let primary = fixture._directory.path().join("repositories/ticketry");
+    let moved = fixture._directory.path().join("offline-repository");
+    std::fs::rename(&primary, &moved).unwrap();
+    let response = fixture.api.clone().graphql_execute(serde_json::json!({
+        "query": include_str!("../../src/features/agents/worktrees/operations/currentWorktrees.graphql"),
+        "variables": { "moduleId": MODULE },
+    }).to_string()).await;
+    let response: serde_json::Value = serde_json::from_str(&response).unwrap();
+    assert_eq!(response["errors"], serde_json::Value::Null, "{response}");
+    let nodes = response["data"]["worktrees"]["nodes"].as_array().unwrap();
+    assert_eq!(nodes.len(), 1);
+    assert_eq!(nodes[0]["issue"]["name"], "Task");
+    assert_eq!(nodes[0]["project"]["slug"], "CODIN");
+    std::fs::rename(&moved, &primary).unwrap();
+
+    fixture.execute("DROP TABLE worktrees").await;
+    let response = fixture.api.clone().graphql_execute(serde_json::json!({
+        "query": include_str!("../../src/features/agents/worktrees/operations/moduleVersionControl.graphql"),
+        "variables": { "moduleId": MODULE_PUBLIC },
+    }).to_string()).await;
+    let response: serde_json::Value = serde_json::from_str(&response).unwrap();
+    assert_eq!(response["errors"], serde_json::Value::Null, "{response}");
+    assert_eq!(
+        response["data"]["module_version_control"]["checkout"]["available"],
+        true
     );
 }

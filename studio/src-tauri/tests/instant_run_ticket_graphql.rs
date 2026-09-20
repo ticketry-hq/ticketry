@@ -10,7 +10,7 @@ use futures_util::{poll, StreamExt};
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection};
 use seaography::{Builder, BuilderContext};
 use tauri_graphql::GraphQlEndpoint;
-use ticketry_codex_app_server::{CodexAppServerError, CodexThreadTitleReader};
+use ticketry_codex_app_server::{CodexAppServerError, CodexThreadTitles};
 
 const PROJECT_ID: &str = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 const MODULE_ID: &str = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
@@ -95,7 +95,7 @@ struct ScriptedTitleReader {
 }
 
 #[async_trait]
-impl CodexThreadTitleReader for ScriptedTitleReader {
+impl CodexThreadTitles for ScriptedTitleReader {
     async fn read_thread_title(
         &self,
         thread_id: &str,
@@ -109,7 +109,7 @@ impl CodexThreadTitleReader for ScriptedTitleReader {
 struct UnavailableTitleReader(&'static str);
 
 #[async_trait]
-impl CodexThreadTitleReader for UnavailableTitleReader {
+impl CodexThreadTitles for UnavailableTitleReader {
     async fn read_thread_title(
         &self,
         _thread_id: &str,

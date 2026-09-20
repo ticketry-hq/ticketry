@@ -15,6 +15,7 @@ fn prepare_trust(directory: &Path, trust_file: &Path) {
     let context = DirectoryTrustContext {
         directory,
         trust_file: Some(trust_file),
+        executable: None,
     };
     let DirectoryTrustInspection::ApprovalRequired(approval) =
         provider.inspect_directory_trust(context)

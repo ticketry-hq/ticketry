@@ -74,7 +74,7 @@ function catalog() {
       launch_bindings: { __typename: "WorktrackerLaunchbindingConnection", nodes: [{
         __typename: "WorktrackerLaunchbinding",
         id: 1, issue_type: "story", state: "build", prompt: "Implement it.",
-        required_skills: [], entry_skill: null,
+        required_skills: [], stage_skills: [],
         profile: row.profile, model: row.model, reasoning: row.reasoning,
         auto_start: false, subtree_run_enabled: false,
         created_at: "2026-01-01T00:00:00", updated_at: "2026-01-01T00:00:00",

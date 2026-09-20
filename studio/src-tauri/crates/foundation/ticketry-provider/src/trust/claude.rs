@@ -13,11 +13,11 @@ use super::{
 };
 use crate::Provider;
 
-const SUPPORTED_VERSION: &str = "2.1.270";
+const SUPPORTED_VERSIONS: &[&str] = &["2.1.270", "2.1.276", "2.1.278"];
 
 pub(super) fn inspect(context: DirectoryTrustContext<'_>) -> DirectoryTrustInspection {
     if context.trust_file.is_none() {
-        if let Err(error) = validate_version() {
+        if let Err(error) = validate_version(context.executable) {
             return DirectoryTrustInspection::Failed(ProviderFailure {
                 message: error.to_string(),
             });
@@ -35,7 +35,7 @@ pub(super) fn prepare(
     approval: Option<&DirectoryTrustApproval>,
 ) -> DirectoryTrustPreparation {
     if context.trust_file.is_none() {
-        if let Err(error) = validate_version() {
+        if let Err(error) = validate_version(context.executable) {
             return DirectoryTrustPreparation::Failed(ProviderFailure {
                 message: error.to_string(),
             });
@@ -48,8 +48,8 @@ pub(super) fn prepare(
     })
 }
 
-fn validate_version() -> io::Result<()> {
-    let output = Command::new("claude")
+fn validate_version(executable: Option<&Path>) -> io::Result<()> {
+    let output = Command::new(executable.unwrap_or_else(|| Path::new("claude")))
         .arg("--version")
         .output()
         .map_err(|error| {
@@ -63,11 +63,12 @@ fn validate_version() -> io::Result<()> {
         .next()
         .unwrap_or("unknown")
         .to_owned();
-    if !output.status.success() || version != SUPPORTED_VERSION {
+    if !output.status.success() || !SUPPORTED_VERSIONS.contains(&version.as_str()) {
         return Err(io::Error::new(
             io::ErrorKind::Unsupported,
             format!(
-                "Claude Code {version} does not have a verified durable trust adapter; expected {SUPPORTED_VERSION}."
+                "Claude Code {version} does not have a verified durable trust adapter; expected one of {}.",
+                SUPPORTED_VERSIONS.join(", ")
             ),
         ));
     }

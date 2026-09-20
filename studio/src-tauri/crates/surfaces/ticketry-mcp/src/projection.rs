@@ -287,7 +287,7 @@ pub async fn workflow_settings(database: &DatabaseConnection, type_id: &str) -> 
                 "state_id": binding.state,
                 "prompt": binding.prompt,
                 "required_skills": binding.required_skills.0,
-                "entry_skill": binding.entry_skill,
+                "stage_skills": binding.stage_skills.0,
                 "profile": binding.profile,
                 "agent": provider.map(|row| row.slug.as_str()),
                 "model": model.map(|row| row.name.as_str()),

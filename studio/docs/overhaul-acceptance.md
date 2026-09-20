@@ -154,7 +154,7 @@ named gate before the full Studio suite, typecheck, and build.
 | 169 | A native terminal viewer reports terminal output through the shared backend activity operation exactly once when it takes the run, and then never polls. |
 | 170 | Onboarding belongs to the installation project: the welcome appears while no project exists or while the installation project still requires it, an acknowledgement names the project the tour ran for, and a restart reads the acknowledged state back. |
 | 171 | A WorkItem's Apollo-owned workspace tab order interleaves Details, documents, and terminals across reload, close and reopen, dormant periods, and newly visible tabs. |
-| 172 | Workspace tabs stay locked until their saved order loads, then show horizontal drag placement, suppress the drop click, serialize saves, retain the active tab in view, commit desktop drags that end without a drop event, and roll back a failed optimistic save. |
+| 172 | Workspace tabs stay locked until their saved order loads, then show horizontal drag placement, suppress only the drag's own trailing click while a deliberate Changes click or keyboard activation still lands at once, serialize saves, retain the active tab in view, commit desktop drags that end without a drop event, and roll back a failed optimistic save. |
 | 173 | Live-terminal cycling reads each candidate WorkItem's Apollo-owned saved order, including workspaces that have not been opened, before selecting the next terminal. |
 | 174 | When this data directory’s MCP socket cannot start, Studio remains usable with a visible agent-launch warning. Local shells remain available, restart retries listener startup, and acknowledgement does not claim to continue without MCP. |
 | 175 | A hidden Module tab stays hidden after the Apollo cache is rebuilt from the authoritative project read. |
@@ -166,11 +166,11 @@ named gate before the full Studio suite, typecheck, and build.
 | 181 | Root tasks reorder through the GraphQL write path. |
 | 182 | Imported root tasks with equal ranks still send deterministic reorder neighbors. |
 | 183 | A Module tab wraps its label and lifecycle chicklets, reserves constant space for the close button, and keeps its close hover background compact. |
-| 184 | A task worktree keeps cumulative committed changes in one labeled, accessible Changes tab. |
+| 184 | Story Changes stays inside the story pane, shows only its files and selected diff in two resizable columns, and never loads other worktrees; module Changes reuses the review with all three columns. |
 | 185 | A task workspace restores Details and explains the state when its worktree disappears. |
 | 186 | One caught-up project feed selects one guarded launch's terminal from its authoritative update, defers viewer attachment until runtime acknowledgement, and never needs a second click, subscription, or reconnect. |
-| 187 | A clean module opens Changes beside Terminal and presents the empty task list. |
-| 188 | Module Changes orders the required facts and navigates module and task rows without a write. |
+| 187 | Worktree identities appear before module files finish loading, stay cached on file refresh, and converge after worktree creation/deletion. |
+| 188 | Module Changes lists checkout identities and branches and reuses the list when navigating module and task rows without a write. |
 | 189 | Module Changes distinguishes an unavailable module checkout. |
 | 190 | Task Commit and Push remain independent, and Push excludes dirty work. |
 | 191 | Module Push is offered for a clean ahead branch while Commit requires dirty work. |
@@ -185,7 +185,7 @@ named gate before the full Studio suite, typecheck, and build.
 | 200 | Cleanup blockers explain why removal is unavailable. |
 | 201 | Cleanup confirmation keeps a partial failure retryable. |
 | 202 | Conversations replaces Scratch, gives each conversation row its own Agent Run lifecycle badge, and selects its exact terminal. |
-| 203 | Conversations settings persist edits and clearing of the starter prompt, while retaining the auto-close default. |
+| 203 | Conversations settings persist edits and clearing of the starter prompt without exposing the retired auto-close control. |
 | 204 | Past Agent Runs remain independently resumable. |
 | 205 | A cold Changes restoration clears when the resolved worktree has no checkout. |
 | 206 | Browser update checks defer quietly to the desktop application. |
@@ -225,9 +225,9 @@ named gate before the full Studio suite, typecheck, and build.
 | 240 | A newly captured Story appears first in its issue type's initial workflow state while creation is pending and remains first after the authoritative persisted result replaces it. |
 | 241 | Normal desktop development and packaged builds select embedded native libghostty by default and link and ship the pinned library; browser development selects xterm; development-only renderer overrides remain, and packaged builds ignore them. |
 | 242 | Development builds can compare three Conversations designs in the real Stories pane; each makes New chat obvious, caps the initial list at ten, and expands or hides the remaining chats. |
-| 243 | A workflow launch binding can set, reload, and clear one required skill as its entry skill, and each change uses the existing binding upsert. |
+| 243 | A workflow launch binding accepts free-form Stage skill tags on Enter or blur, ignores blank and duplicate normalized names without splitting spaces or commas, reloads saved tags, and uses accessible removal to persist each resulting list, including empty after the final tag is removed, through the existing binding upsert and save-error handling. |
 | 244 | Incoming and outgoing workflow transition rows show and save each edge's handoff setting. |
-| 245 | A fresh bound launch keeps the composed prompt in provider argv, waits only when an entry skill exists, types only that skill with the provider-owned prefix, and tears down a pane when delivery fails. |
+| 245 | A fresh bound launch passes one composed prompt, including any Stage skills, in provider argv and submits no follow-on skill command; a handoff submits the same composed destination prompt once to the live agent. |
 | 246 | An untouched launch-configuration form follows canonical binding changes instead of retaining a stale mounted snapshot. |
 | 247 | A transitioned Story stays first in its destination state while the update is pending and after the authoritative result replaces it. |
 | 248 | Changing the selected Story discards its unsaved description draft, opens the new Story's saved description in view mode, and keeps later description updates bound to the new Story. |
@@ -304,7 +304,7 @@ named gate before the full Studio suite, typecheck, and build.
 | 311 | Instant conversation rows react to their own Agent Run lifecycle changes without leaking activity across runs or modules. `starting`, `working`, `permission_required`, `reconnecting`, `needs_input`, `turn_complete`, `error`, `stalled`, and `quiet` show the eligible badge with count-one semantics; absent, `unknown`, `exited`, and `lost` states show none. The Conversations heading and New conversation show no lifecycle badge. |
 | 312 | The Conversations heading configures host-wide conversation defaults in the retained right workspace, including with zero chats. Close and repeated activation restore the prior workspace without launching a run, opening a modal, writing settings, or replacing terminal identities. |
 | 313 | Conversation settings report load and save failures without false success. A failed save keeps its draft for retry, and Discard restores the last loaded or saved prompt and auto-close values. |
-| 314 | Task Changes previews the source and an explicit existing local merge destination without offering a Git write. |
+| 314 | Task Changes defaults to the origin branch and checkout, offers searchable branches in latest-commit order, and previews a selected destination without a Git write. |
 | 315 | Task Changes binds and runs a confirmed local fast-forward, keeps one operation identity across retry, and refreshes affected Apollo views on failure and success. |
 | 316 | Task Changes reports a completed divergent merge and refreshes affected checkout summaries. |
 | 317 | A conflicting local merge lists its unmerged files and destination checkout and remains recoverable after restart even when subsequent source edits block a new merge. |
@@ -314,6 +314,12 @@ named gate before the full Studio suite, typecheck, and build.
 | 321 | Finishing or aborting a conflicting merge retires its recovery state and gives the next merge a fresh operation identity. |
 | 322 | Committing dirty source work refreshes local merge eligibility and enables Merge without reopening Changes. |
 | 323 | Refreshing merge eligibility after an external destination fix enables Merge without reopening Changes. |
+| 324 | A rejected cross-module Work Item move shows the backend worktree instruction, keeps the module picker open, and rolls the optimistic parent change back to the original module. |
+| 325 | A completed instant run whose tmux session is already gone presents a calm Conversation ended state instead of a Session lost error. |
+| 326 | Moving Ticketry between displays republishes each presented native terminal frame on window movement and display-scale changes, so the native view cannot drift over the module tabs and intercept their drag gestures. |
+| 327 | Recovery from a Claude version-inspection failure reuses the existing Worktree, still requires provider approval, and does not create another checkout. |
+| 328 | Rapid Stage skill additions wait for the prior save and workflow refresh, then persist the latest tag list with the refreshed revision. |
+| 329 | Removing a Stage skill while its addition is saving waits for the workflow refresh, then persists the empty selection with the refreshed revision. |
 
 Each executable case carries one stable `[overhaul-NN]` marker. The gate has a
 contract test that fails if a marker is missing or duplicated. A case whose

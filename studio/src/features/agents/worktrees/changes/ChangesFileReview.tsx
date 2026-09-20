@@ -29,6 +29,7 @@ const reviewSelection = createApolloStore<ReviewSelection>(
 export function ChangesFileReview({
   checkoutKey,
   checkouts,
+  showAllWorktrees = true,
   header,
   taskId,
   moduleId,
@@ -38,9 +39,11 @@ export function ChangesFileReview({
   truncated,
   label,
   emptyMessage,
+  loading = false,
 }: {
   checkoutKey: string;
   checkouts: ReactNode;
+  showAllWorktrees?: boolean;
   header: ReactNode;
   taskId?: string;
   moduleId?: string;
@@ -50,6 +53,7 @@ export function ChangesFileReview({
   truncated: boolean;
   label: string;
   emptyMessage: string;
+  loading?: boolean;
 }) {
   const selectedPath = reviewSelection((state) => state.selectedByCheckout[checkoutKey] ?? null);
   const file = files.find(({ path }) => path === selectedPath);
@@ -63,45 +67,49 @@ export function ChangesFileReview({
   });
 
   useEffect(() => {
-    if (selectedPath && !file) {
+    if (!loading && selectedPath && !file) {
       reviewSelection.setState((state) => ({
         selectedByCheckout: { ...state.selectedByCheckout, [checkoutKey]: null },
       }));
     }
-  }, [checkoutKey, file, selectedPath]);
+  }, [checkoutKey, file, loading, selectedPath]);
 
   const diff = (diffQuery.data as { worktree_file_diff?: Diff; module_file_diff?: Diff } | undefined)?.worktree_file_diff
     ?? (diffQuery.data as { module_file_diff?: Diff } | undefined)?.module_file_diff;
 
   return (
     <div className="h-full min-h-0 overflow-x-auto" data-testid="changes-workspace-scroll">
-      <div className="h-full min-w-[56rem]" data-testid="changes-workspace">
-        <PanelGroup direction="horizontal" className="h-full w-full">
-          <Panel defaultSize={22} minSize={18} order={1}>
-            <section
-              aria-label="Worktree checkouts"
-              className="h-full min-w-0 overflow-hidden"
-              data-testid="changes-checkouts-column"
-            >
-              {checkouts}
-            </section>
-          </Panel>
-          <PaneResizeHandle
-            label="Resize checkouts and changed files"
-            testId="changes-checkouts-resize-handle"
-          />
-          <Panel defaultSize={28} minSize={24} order={2}>
+      <div className={`h-full ${showAllWorktrees ? "min-w-[56rem]" : "min-w-0"}`} data-testid="changes-workspace">
+        <PanelGroup key={showAllWorktrees ? "all-worktrees" : "story"} direction="horizontal" className="h-full w-full">
+          {showAllWorktrees && (
+            <>
+              <Panel defaultSize={22} minSize={18} order={1}>
+                <section
+                  aria-label="Worktree checkouts"
+                  className="h-full min-w-0 overflow-hidden"
+                  data-testid="changes-checkouts-column"
+                >
+                  {checkouts}
+                </section>
+              </Panel>
+              <PaneResizeHandle
+                label="Resize checkouts and changed files"
+                testId="changes-checkouts-resize-handle"
+              />
+            </>
+          )}
+          <Panel defaultSize={showAllWorktrees ? 28 : 35} minSize={24} order={2}>
             <section
               aria-label="Changed files"
               className="flex h-full min-w-0 flex-col overflow-hidden p-3"
               data-testid="changes-files-column"
             >
               <div className="shrink-0">{header}</div>
-              <div className="mb-2 flex items-baseline justify-between text-xs text-text-muted">
+              {!loading && <div className="mb-2 flex items-baseline justify-between text-xs text-text-muted">
                 <span>{files.length} files</span>
                 <span>+{insertions} -{deletions}</span>
-              </div>
-              {files.length === 0 ? (
+              </div>}
+              {loading ? null : files.length === 0 ? (
                 <p className="text-sm text-text-muted">{emptyMessage}</p>
               ) : (
                 <div className="min-h-0 flex-1 overflow-auto">
@@ -123,7 +131,7 @@ export function ChangesFileReview({
             label="Resize changed files and diff"
             testId="changes-diff-resize-handle"
           />
-          <Panel defaultSize={50} minSize={30} order={3}>
+          <Panel defaultSize={showAllWorktrees ? 50 : 65} minSize={30} order={3}>
             <section
               aria-label="Selected file diff"
               className="flex h-full min-w-0 flex-col overflow-hidden p-3"

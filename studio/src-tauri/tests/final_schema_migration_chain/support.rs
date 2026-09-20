@@ -4,8 +4,9 @@ use sea_orm::{ConnectionTrait, Database, DatabaseConnection, DbBackend, Statemen
 use ticketry_settings as provider_catalog_migrations;
 use ticketry_work_management::{
     launch_binding_entry_skill_migration, launch_binding_profile_migration,
-    module_presentation_migration, project_onboarding_migration, workflow_color_migration,
-    workflow_handoff_migration, workspace_tab_order_migration,
+    launch_binding_stage_skills_migration, module_presentation_migration,
+    project_onboarding_migration, workflow_color_migration, workflow_handoff_migration,
+    workspace_tab_order_migration,
 };
 use ticketry_workspace_runtime::persistence::pull_request_url_migration;
 use ticketry_workspace_runtime::persistence::ship_record_migration;
@@ -129,17 +130,21 @@ pub async fn assert_final(database: &DatabaseConnection) {
         .iter()
         .any(|name| name == "workspace_tab_order"));
 
+    let binding_columns = column_names(database, "worktracker_launchbinding").await;
+    assert!(!binding_columns.iter().any(|name| name == "entry_skill"));
     let binding = database
         .query_one_raw(Statement::from_string(
             DbBackend::Sqlite,
-            "SELECT entry_skill FROM worktracker_launchbinding".to_owned(),
+            "SELECT stage_skills FROM worktracker_launchbinding".to_owned(),
         ))
         .await
         .unwrap()
         .unwrap();
     assert_eq!(
-        binding.try_get::<String>("", "entry_skill").unwrap(),
-        "grill-with-docs"
+        binding
+            .try_get::<serde_json::Value>("", "stage_skills")
+            .unwrap(),
+        serde_json::json!(["grill-with-docs"])
     );
 
     let colors = database
@@ -314,6 +319,10 @@ pub async fn assert_final(database: &DatabaseConnection) {
         (
             ship_record_migration::LEDGER_TABLE,
             ship_record_migration::MIGRATION_ID,
+        ),
+        (
+            launch_binding_stage_skills_migration::LEDGER_TABLE,
+            launch_binding_stage_skills_migration::MIGRATION_ID,
         ),
     ] {
         let row = database

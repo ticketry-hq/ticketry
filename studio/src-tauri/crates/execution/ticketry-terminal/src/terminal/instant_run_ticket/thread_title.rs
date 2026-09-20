@@ -4,9 +4,7 @@ use std::{
 };
 
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
-use ticketry_codex_app_server::{
-    CodexAppServerClient, CodexAppServerError, CodexThreadTitleReader,
-};
+use ticketry_codex_app_server::{CodexAppServerClient, CodexAppServerError, CodexThreadTitles};
 use ticketry_entities::{agent_run, launch_material};
 use ticketry_launch::{provider_contract, Provider};
 use ticketry_tool_discovery::SupportedTool;
@@ -15,7 +13,7 @@ use tokio::sync::broadcast;
 #[derive(Clone)]
 pub struct InstantRunTicketTitleService {
     database: DatabaseConnection,
-    reader: Arc<OnceLock<Arc<dyn CodexThreadTitleReader>>>,
+    reader: Arc<OnceLock<Arc<dyn CodexThreadTitles>>>,
     restarts: Option<Arc<broadcast::Sender<()>>>,
 }
 
@@ -61,7 +59,7 @@ impl InstantRunTicketTitleService {
         service
     }
 
-    pub fn new(database: DatabaseConnection, reader: Arc<dyn CodexThreadTitleReader>) -> Self {
+    pub fn new(database: DatabaseConnection, reader: Arc<dyn CodexThreadTitles>) -> Self {
         let slot = OnceLock::new();
         assert!(slot.set(reader).is_ok(), "new title reader slot is empty");
         Self {
@@ -69,6 +67,22 @@ impl InstantRunTicketTitleService {
             reader: Arc::new(slot),
             restarts: None,
         }
+    }
+
+    /// Rename a Codex thread through the one resident app-server this service
+    /// already reads titles from. Callers validate their own arguments; this
+    /// only reports that the resident capability is missing.
+    pub async fn rename_thread(
+        &self,
+        thread_id: &str,
+        name: &str,
+    ) -> Result<(), CodexAppServerError> {
+        let Some(titles) = self.reader.get() else {
+            return Err(CodexAppServerError::unavailable(
+                "the codex app-server is not running",
+            ));
+        };
+        titles.set_thread_title(thread_id, name).await
     }
 
     pub(super) fn subscribe_restarts(&self) -> Option<tokio::sync::broadcast::Receiver<()>> {

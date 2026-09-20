@@ -76,6 +76,7 @@ async fn worktree_launch_trust_child() {
     let context = DirectoryTrustContext {
         directory: &checkout,
         trust_file: None,
+        executable: None,
     };
     let DirectoryTrustInspection::ApprovalRequired(approval) =
         provider.inspect_directory_trust(context)
@@ -159,7 +160,9 @@ async fn a_manual_task_launch_keeps_ticket_context_without_the_workflow_prompt()
     assert_eq!(resolved.design_directory_identity, None);
     assert_eq!(resolved.document_relative_path, None);
     let prompt = resolved.prompt.expect("a task launch carries a prompt");
-    assert!(prompt.starts_with("Work item context (factual):"));
+    assert!(prompt.starts_with(
+        "Stage skills:\nUse these skills for this stage: [\"tdd\",\"quote \\\"and\\\\slash\\\"\"]\n\nWork item context (factual):"
+    ));
     for expected in [
         "Source: WorkTracker (ticket #965)",
         "Task: Resolve launch policy",
@@ -191,7 +194,7 @@ async fn an_automation_launch_keeps_the_workflow_prompt_and_ticket_description()
         .prompt
         .expect("an automation launch carries a prompt");
     assert!(prompt.starts_with(
-        "Selected workflow prompt:\nOnly this child's agreed slice.\n\nWork item context (factual):"
+        "Selected workflow prompt:\nOnly this child's agreed slice.\n\nStage skills:\nUse these skills for this stage: [\"tdd\",\"quote \\\"and\\\\slash\\\"\"]\n\nWork item context (factual):"
     ));
     assert!(prompt.contains("Description:\nFirst\n\nSecond"));
 }
@@ -245,7 +248,7 @@ async fn a_planning_launch_builds_the_module_planning_prompt() {
 }
 
 #[tokio::test]
-async fn an_instant_launch_wraps_a_submitted_request_or_waits_for_terminal_input() {
+async fn an_instant_launch_uses_only_user_authored_prompt_text() {
     let fixture = fixture().await;
 
     let resolved = fixture
@@ -255,22 +258,7 @@ async fn an_instant_launch_wraps_a_submitted_request_or_waits_for_terminal_input
         .expect("resolve an interactive instant launch");
 
     let prompt = resolved.prompt.expect("an instant launch carries a prompt");
-    assert!(prompt.starts_with("Context:\n  Module: Terminal\n"));
-    for hidden in [
-        "small, instant change",
-        "Your job:",
-        "Do not refactor",
-        "Plan Feature",
-        "Do not create or update WorkTracker",
-        "Do not update any WorkTracker",
-    ] {
-        assert!(
-            !prompt.contains(hidden),
-            "unexpected hidden instruction: {hidden}"
-        );
-    }
-    assert!(prompt.contains("User's request:\n  caller text"));
-    assert!(prompt.contains("terminate_current_run"));
+    assert_eq!(prompt, "caller text");
 
     let mut silent = caller_request(TerminalLaunchKind::Instant);
     silent.prompt = None;
@@ -279,12 +267,8 @@ async fn an_instant_launch_wraps_a_submitted_request_or_waits_for_terminal_input
         .resolve(&silent)
         .await
         .expect("start an Instant conversation without a submitted request")
-        .prompt
-        .expect("launch authority supplies the conversation instructions");
-    assert!(prompt.contains("Wait for the user to type their first request in this terminal."));
-    assert!(!prompt.contains("User's request:"));
-    assert!(!prompt.contains("small, instant change"));
-    assert!(!prompt.contains("Plan Feature"));
+        .prompt;
+    assert_eq!(prompt, None);
 }
 
 #[tokio::test]
@@ -303,11 +287,11 @@ async fn an_unprompted_instant_launch_uses_the_global_default_model() {
     assert_eq!(resolved.provider.as_deref(), Some("codex"));
     assert_eq!(resolved.model.as_deref(), Some("gpt-5.6"));
     assert_eq!(resolved.reasoning.as_deref(), Some("high"));
-    assert!(!resolved.prompt.unwrap().contains("caller-chosen"));
+    assert_eq!(resolved.prompt, None);
 }
 
 #[tokio::test]
-async fn instant_settings_add_standing_instructions_and_auto_close_authority() {
+async fn instant_settings_add_only_the_saved_standing_instructions() {
     let fixture = fixture().await;
     fixture
         .database
@@ -328,11 +312,10 @@ async fn instant_settings_add_standing_instructions_and_auto_close_authority() {
         .unwrap();
     let prompt = resolved.prompt.unwrap();
 
-    assert!(
-        prompt.contains("Configured Instant instructions:\nNever edit generated files directly.")
+    assert_eq!(
+        prompt,
+        "Never edit generated files directly.\n\ncaller text"
     );
-    assert!(!prompt.contains("May I terminate this run"));
-    assert!(prompt.contains("then invoke terminate_current_run"));
 }
 
 #[tokio::test]

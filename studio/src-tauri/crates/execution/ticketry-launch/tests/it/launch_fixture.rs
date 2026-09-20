@@ -94,7 +94,8 @@ pub(crate) async fn fixture() -> Fixture {
                 id integer PRIMARY KEY AUTOINCREMENT,
                 issue_type_id char(32) NOT NULL, state_id char(32) NOT NULL,
                 prompt text NOT NULL, required_skills text NOT NULL,
-                entry_skill varchar(128), profile varchar(128),
+                stage_skills text NOT NULL DEFAULT '[]',
+                profile varchar(128),
                 model_id char(32), reasoning_id char(32),
                 auto_start bool NOT NULL, subtree_run_enabled bool NOT NULL,
                 created_at datetime NOT NULL, updated_at datetime NOT NULL
@@ -138,10 +139,11 @@ pub(crate) async fn fixture() -> Fixture {
             INSERT INTO worktracker_agentmodelreasoninglevel
                 (agent_model_id, reasoning_level_id) VALUES ('{GPT}', '{HIGH}');
             INSERT INTO worktracker_launchbinding
-                (issue_type_id, state_id, prompt, required_skills, profile, model_id,
+                (issue_type_id, state_id, prompt, required_skills, stage_skills, profile, model_id,
                  reasoning_id, auto_start, subtree_run_enabled, created_at, updated_at)
                 VALUES ('{TYPE}', '{STATE}', 'Only this child''s agreed slice.', '["tdd"]',
-                        NULL, NULL, NULL, 1, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+                        '["tdd","quote \"and\\slash\""]', NULL, NULL, NULL, 1, 1,
+                        CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
             INSERT INTO design_documents VALUES
                 ('{DOCUMENT}', '{MODULE}', '{TASK}', 'task', '{folder}', 'T965--launch/HLD.html',
                  NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, NULL);

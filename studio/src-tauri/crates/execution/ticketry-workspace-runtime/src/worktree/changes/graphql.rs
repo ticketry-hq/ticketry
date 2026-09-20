@@ -33,7 +33,11 @@ impl WorktreeChangesQueries {
         module_id: String,
     ) -> Result<ModuleVersionControlView> {
         service(ctx)?
-            .module_version_control(&module_id)
+            .module_version_control(
+                &module_id,
+                ctx.look_ahead().field("worktrees").exists()
+                    || ctx.look_ahead().field("worktrees_truncated").exists(),
+            )
             .await
             .map_err(changes_error)
     }

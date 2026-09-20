@@ -221,9 +221,8 @@ async fn initialize_with_worktracker_commands_and_install_inner(
     let viewer_ownership =
         ticketry_terminal::ViewerOwnershipService::new(worktracker_database.clone());
     let terminal_runtime = ticketry_terminal::InteractiveTerminalLaunchRuntime::new();
-    let instant_run_ticket_titles = Some(
-        ticketry_terminal::InstantRunTicketTitleService::production(worktracker_database.clone()),
-    );
+    let instant_run_ticket_titles =
+        ticketry_terminal::InstantRunTicketTitleService::production(worktracker_database.clone());
     let terminal_services = Some(crate::query_root::TerminalServices {
         launch: ticketry_terminal::TerminalLaunchService::new(
             worktracker_database.clone(),
@@ -236,7 +235,7 @@ async fn initialize_with_worktracker_commands_and_install_inner(
         output_activity: ticketry_terminal::TerminalOutputActivityService::production(
             worktracker_database.clone(),
         ),
-        instant_run_ticket_titles,
+        instant_run_ticket_titles: Some(instant_run_ticket_titles.clone()),
     });
     let schema = crate::query_root::foundation_schema_with_terminal_services(
         foundation_database,
@@ -271,6 +270,7 @@ async fn initialize_with_worktracker_commands_and_install_inner(
             .expect("terminal services were composed")
             .output_activity
             .clone(),
+        instant_run_ticket_titles,
     })
 }
 

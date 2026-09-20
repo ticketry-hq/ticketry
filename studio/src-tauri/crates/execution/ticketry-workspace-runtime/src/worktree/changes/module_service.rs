@@ -19,6 +19,7 @@ impl WorktreeChangesService {
     pub async fn module_version_control(
         &self,
         module_id: &str,
+        include_worktrees: bool,
     ) -> Result<ModuleVersionControlView, WorktreeChangesError> {
         let module_id = status::identity::compact_uuid(module_id);
         let (module, project) = issue::Entity::find_by_id(&module_id)
@@ -29,6 +30,14 @@ impl WorktreeChangesService {
             .ok_or_else(WorktreeChangesError::module_not_found)?;
         let project = project.ok_or_else(WorktreeChangesError::module_not_found)?;
         let checkout = self.module_checkout(&module.id).await?;
+        if !include_worktrees {
+            return Ok(ModuleVersionControlView {
+                module_id: status::identity::canonical_uuid(&module.id),
+                checkout,
+                worktrees: Vec::new(),
+                worktrees_truncated: false,
+            });
+        }
         let mut worktrees = vec![module_row(&checkout)];
 
         let mut rows = worktree::Entity::find()

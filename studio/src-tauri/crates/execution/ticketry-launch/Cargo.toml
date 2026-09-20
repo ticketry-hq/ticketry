@@ -16,6 +16,7 @@ ticketry-entities.workspace = true
 ticketry-provider.workspace = true
 ticketry-runs.workspace = true
 ticketry-settings.workspace = true
+ticketry-tool-discovery.workspace = true
 ticketry-work-management.workspace = true
 ticketry-workspace-runtime.workspace = true
 uuid.workspace = true

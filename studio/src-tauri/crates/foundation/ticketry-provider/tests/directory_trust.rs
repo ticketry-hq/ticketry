@@ -9,6 +9,7 @@ fn inspect<'a>(directory: &'a Path, trust_file: Option<&'a Path>) -> DirectoryTr
     provider_contract(Provider::Gemini).inspect_directory_trust(DirectoryTrustContext {
         directory,
         trust_file,
+        executable: None,
     })
 }
 
@@ -29,6 +30,7 @@ fn prepare(
         DirectoryTrustContext {
             directory,
             trust_file,
+            executable: None,
         },
         approval,
     )
@@ -44,6 +46,7 @@ fn every_inspection_outcome_is_read_only() {
     let context = DirectoryTrustContext {
         directory: root.path(),
         trust_file: Some(&trust_file),
+        executable: None,
     };
     assert!(matches!(
         provider_contract(Provider::Claude).inspect_directory_trust(context),

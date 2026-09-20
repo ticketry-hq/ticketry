@@ -18,9 +18,11 @@
 //! it sits above the slices it dispatches into, which is why the schema is
 //! assembled out of this crate rather than underneath it.
 
+mod codex_thread_rename;
 mod connection_handshake;
 mod dependency_tools;
 mod dispatch;
+mod operation_registry;
 mod projection;
 mod registry;
 mod run_termination;
@@ -125,20 +127,27 @@ impl McpRuntime {
             ownership,
             std::sync::Arc::new(ticketry_terminal::TmuxCleanupRuntime),
             None,
+            None,
         )
         .await
     }
 
+    /// Starts the listener with the services desktop startup already owns: the
+    /// terminal launch service and the one resident Codex thread capability the
+    /// GraphQL title resolver reads through. MCP never starts a second
+    /// app-server, so the capability is lent, never built here.
     pub async fn start_with_terminal_launch(
         configuration: McpConfiguration,
         ownership: &DataDirectoryGuard,
         terminal_launch: ticketry_terminal::TerminalLaunchService,
+        codex_titles: Option<ticketry_terminal::InstantRunTicketTitleService>,
     ) -> Result<Self, McpStartupError> {
         Self::start_with_services(
             configuration,
             ownership,
             std::sync::Arc::new(ticketry_terminal::TmuxCleanupRuntime),
             Some(terminal_launch),
+            codex_titles,
         )
         .await
     }
@@ -158,6 +167,7 @@ impl McpRuntime {
             ownership,
             cleanup_runtime,
             Some(terminal_launch),
+            None,
         )
         .await
     }
@@ -171,7 +181,27 @@ impl McpRuntime {
         ownership: &DataDirectoryGuard,
         cleanup_runtime: std::sync::Arc<dyn ticketry_terminal::TerminalCleanupRuntime>,
     ) -> Result<Self, McpStartupError> {
-        Self::start_with_services(configuration, ownership, cleanup_runtime, None).await
+        Self::start_with_services(configuration, ownership, cleanup_runtime, None, None).await
+    }
+
+    /// Starts the listener against a scripted Codex thread capability, so the
+    /// rename acceptance test exercises the real registry, handshake,
+    /// authorization, and dispatch without a live Codex.
+    #[cfg(any(test, feature = "test-support"))]
+    pub async fn start_for_test_with_codex_titles(
+        configuration: McpConfiguration,
+        ownership: &DataDirectoryGuard,
+        cleanup_runtime: std::sync::Arc<dyn ticketry_terminal::TerminalCleanupRuntime>,
+        codex_titles: ticketry_terminal::InstantRunTicketTitleService,
+    ) -> Result<Self, McpStartupError> {
+        Self::start_with_services(
+            configuration,
+            ownership,
+            cleanup_runtime,
+            None,
+            Some(codex_titles),
+        )
+        .await
     }
 
     async fn start_with_services(
@@ -179,6 +209,7 @@ impl McpRuntime {
         ownership: &DataDirectoryGuard,
         cleanup_runtime: std::sync::Arc<dyn ticketry_terminal::TerminalCleanupRuntime>,
         terminal_launch: Option<ticketry_terminal::TerminalLaunchService>,
+        codex_titles: Option<ticketry_terminal::InstantRunTicketTitleService>,
     ) -> Result<Self, McpStartupError> {
         let data_directory = configuration.data_directory();
         let owned_directory = ownership
@@ -227,6 +258,7 @@ impl McpRuntime {
             graph_runs,
             ticketry_terminal::TerminalCleanupService::new(database, cleanup_runtime),
             terminal_launch,
+            codex_titles,
             data_directory,
         );
         let cancellation = CancellationToken::new();
@@ -359,7 +391,7 @@ fn verify_registry() -> Result<(), String> {
     if unique.len() != tools.len() {
         return Err("WorkTracker MCP registry contains duplicate tool names.".to_owned());
     }
-    Ok(())
+    operation_registry::assert_complete(&tools)
 }
 
 impl Drop for McpRuntime {

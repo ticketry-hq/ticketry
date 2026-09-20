@@ -1,5 +1,8 @@
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { expect, it } from "vitest";
+import { ModalHost } from "../app/modal/ModalHost";
+import { useModalStore } from "../app/modal/modalStore";
+import ToastHost from "../app/shell/ToastHost";
 import { loadModuleTree } from "../features/work-items/queries";
 import { WorkTrackerModuleOpenDocument } from "../features/work-items/generated/workItems.documents";
 import { documentOperationName } from "../graphql-foundation/typedDocument";
@@ -76,4 +79,56 @@ it("[overhaul-285] moves a Story through the sidebar and refreshes both cached m
   act(() => useClientStore.setState({ selectedModuleId: "module-b" }));
   const stories = await screen.findByRole("region", { name: "Stories" });
   expect(await within(stories).findByRole("treeitem", { name: /Moving Story/ })).toBeVisible();
+});
+
+it("[overhaul-324] keeps a rejected cross-module move visible and rolls it back", async () => {
+  const http = fixture();
+  const empty = { rootIds: [], children: {}, order: [] };
+  const populated = {
+    rootIds: ["moving-story"],
+    children: { "moving-story": [] },
+    order: ["moving-story"],
+  };
+  http.tree("module-a", populated);
+  http.tree("module-b", empty);
+  http.workItems([
+    workItem({ id: "moving-story", name: "Moving Story", parent_id: "module-a" }),
+  ]);
+  mountStudio({
+    http,
+    selectedTaskId: "moving-story",
+    children: <><ModalHost /><ToastHost /></>,
+  });
+  await act(async () => { await loadModuleTree("project-1", "module-b"); });
+  act(() => useModalStore.getState().pushModal({
+    type: "parent-update",
+    payload: { mode: "epic" },
+  }));
+  const dialog = await screen.findByRole("dialog", { name: "Set Module" });
+  const destination = (await within(dialog).findByText("Module 2")).closest("li");
+  expect(destination).not.toBeNull();
+  http.failNext(409, {
+    detail: "Close or discard the task worktree before moving it to another module.",
+  });
+
+  fireEvent.click(destination!);
+
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "Close or discard the task worktree before moving it to another module.",
+  );
+  expect(screen.getByRole("dialog", { name: "Set Module" })).toBeVisible();
+  const members = (moduleId: string) => studioApolloClient().readQuery({
+    query: WorkTrackerModuleOpenDocument,
+    variables: { moduleId },
+  })?.work_items.nodes.map((row) => ({
+    id: row.id,
+    parentId: row.parent_id,
+    moduleId: row.module_id,
+  }));
+  expect(members("module-a")).toEqual([{
+    id: "moving-story",
+    parentId: "module-a",
+    moduleId: "module-a",
+  }]);
+  expect(members("module-b")).toEqual([]);
 });

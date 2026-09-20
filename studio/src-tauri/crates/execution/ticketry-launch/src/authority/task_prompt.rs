@@ -15,6 +15,7 @@ pub struct TaskPromptSource<'a> {
     pub local_module_folder: &'a str,
     pub state_name: Option<&'a str>,
     pub workflow_prompt: &'a str,
+    pub stage_skills: &'a [String],
     pub additional_user_input: Option<&'a str>,
     pub design_directory: Option<&'a str>,
     /// The same directory resolved absolutely, when the caller has it.
@@ -38,6 +39,7 @@ pub async fn compose_task_prompt(
     Ok(build_task_prompt(&TaskPromptInput {
         facts: prompt_facts,
         workflow_prompt: source.workflow_prompt.to_owned(),
+        stage_skills: source.stage_skills.to_owned(),
         additional_user_input: source.additional_user_input.map(str::to_owned),
         design_directory: source.design_directory.map(str::to_owned),
         design_directory_root: source.design_directory_root.map(str::to_owned),

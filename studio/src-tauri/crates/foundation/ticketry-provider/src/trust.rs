@@ -14,6 +14,7 @@ mod codex;
 pub struct DirectoryTrustContext<'a> {
     pub directory: &'a Path,
     pub trust_file: Option<&'a Path>,
+    pub executable: Option<&'a Path>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

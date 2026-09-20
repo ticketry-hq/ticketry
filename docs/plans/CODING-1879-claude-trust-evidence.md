@@ -39,3 +39,53 @@ $ CLAUDE_CONFIG_DIR=<tmp>/config claude --worktree evidence
 An interactive fresh-process workflow-prompt run was attempted with the disposable configuration. Claude reached first-run login selection, but no disposable `ANTHROPIC_API_KEY`, `CLAUDE_CODE_OAUTH_TOKEN`, or `ANTHROPIC_AUTH_TOKEN` is available. No live credentials or OAuth state were copied. Therefore authenticated prompt consumption and the second-process durability transcript remain unverified; a network/authentication failure is not counted as success.
 
 To finish that check without touching live state, provide a disposable credential and run two TTY sessions from the same prepared directory, with distinct exact reply markers and no `-p` flag. Both transcripts must contain the requested marker and no trust dialog.
+
+## Claude Code 2.1.278 verification, 2026-09-20
+
+The installed native executable reported `2.1.278 (Claude Code)`. Ticketry now
+accepts that exact version in addition to 2.1.270 and 2.1.276. No other versions
+were added. The regression first failed on 2.1.278 before the allowlist change;
+afterward all 25 provider tests passed. Both 2.1.271 and the unverified 2.1.279
+remain rejected by inspection and preparation without creating a state file.
+
+Live checks used a disposable Git repository with an empty commit, an external
+`git worktree add` checkout, and a fresh `CLAUDE_CONFIG_DIR`. No live Claude
+configuration or credentials were copied. Each Claude invocation had a PTY,
+used `--safe-mode --strict-mcp-config`, and omitted `--print`. Automatic updates
+were disabled. Safe mode did not bypass trust: the negative controls displayed
+the trust gate. Probe processes were terminated after collecting startup output.
+
+Observed results:
+
+- With no trust record, `claude --worktree missing` refused to create a worktree:
+  `Workspace trust not yet accepted. Run ... and accept the trust dialog ...`.
+- Direct interactive startup in the untrusted external checkout displayed
+  `Accessing workspace` and `Yes, I trust this folder`.
+- With `hasTrustDialogAccepted: false`, direct startup displayed that same trust
+  dialog in both the primary repository and external checkout.
+- The compiled `active_config_override_version_and_home_limit_are_enforced`
+  test's child-process path invoked the real provider adapter with
+  `TICKETRY_CLAUDE_TRUST_CASE=supported_latest`, the installed executable, the
+  disposable directory, and `CLAUDE_CONFIG_DIR`. Inspection returned an approval
+  and preparation persisted it using the production adapter.
+- Two fresh interactive processes in each approved directory skipped the trust
+  dialog, displayed their supplied prompt, and reached `Not logged in · Please
+  run /login`. The canonical directory key and
+  `projects[key].hasTrustDialogAccepted: true` therefore remain compatible and
+  durable across process restarts for both checkout types.
+- In the approved primary repository, `claude --worktree approved` created its
+  checkout and reached the same login requirement.
+
+Claude's own `--worktree` option, when invoked from the external checkout,
+resolved creation back to the primary repository. It was therefore not used as
+evidence for the external directory's trust. Those checks launched directly in
+the external checkout instead.
+
+This verifies local trust persistence and worktree startup for 2.1.278. It does
+**not** verify an authenticated model response or completion of a workflow
+prompt: the isolated configuration was not logged in. That broader launch
+acceptance requirement remains outstanding, as in the original evidence above.
+
+Studio acceptance case 327 covers recovery from the reported version error:
+retry keeps the existing checkout, requests Claude approval, and does not issue
+another worktree-create mutation.

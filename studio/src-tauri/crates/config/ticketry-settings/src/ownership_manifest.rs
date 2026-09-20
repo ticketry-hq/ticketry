@@ -16,6 +16,8 @@ pub const VERSION: i32 = 1;
 /// test there fails if the two ever drift.
 pub const LAUNCH_BINDING_ENTRY_SKILL_LEDGER: &str = "ticketry_launch_binding_entry_skill_migration";
 pub const LAUNCH_BINDING_PROFILE_LEDGER: &str = "ticketry_launch_binding_profile_migration";
+pub const LAUNCH_BINDING_STAGE_SKILLS_LEDGER: &str =
+    "ticketry_launch_binding_stage_skills_migration";
 
 pub const OWNED_TABLES: &[(&str, &[&str])] = &[
     ("app_settings", &["scope", "key", "value", "updated_at"]),

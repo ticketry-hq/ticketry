@@ -74,7 +74,7 @@ async fn a_failed_replacement_kill_reports_previous_agent_not_ended() {
     ticketry_work_management::project_onboarding_migration::install(&database)
         .await
         .unwrap();
-    ticketry_work_management::launch_binding_entry_skill_migration::install(&database)
+    ticketry_work_management::launch_binding_stage_skills_migration::install(&database)
         .await
         .unwrap();
     ticketry_work_management::launch_binding_profile_migration::install(&database)

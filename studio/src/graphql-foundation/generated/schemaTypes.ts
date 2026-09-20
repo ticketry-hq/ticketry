@@ -1062,13 +1062,13 @@ export type MutationUpdate_Work_ItemArgs = {
 
 export type MutationUpsert_Issue_Type_Launch_BindingArgs = {
   auto_start?: InputMaybe<Scalars['Boolean']['input']>;
-  entry_skill?: InputMaybe<Scalars['String']['input']>;
   issue_type_id: Scalars['String']['input'];
   model_id?: InputMaybe<Scalars['String']['input']>;
   profile?: InputMaybe<Scalars['String']['input']>;
   prompt?: InputMaybe<Scalars['String']['input']>;
   reasoning_id?: InputMaybe<Scalars['String']['input']>;
   required_skills?: InputMaybe<Array<Scalars['String']['input']>>;
+  stage_skills?: InputMaybe<Array<Scalars['String']['input']>>;
   state_id: Scalars['String']['input'];
   subtree_run_enabled?: InputMaybe<Scalars['Boolean']['input']>;
   workflow_revision: Scalars['Int']['input'];
@@ -2277,7 +2277,6 @@ export type WorktrackerLaunchbinding = {
   agentModel?: Maybe<WorktrackerAgentmodel>;
   autoStart: Scalars['Boolean']['output'];
   createdAt: Scalars['String']['output'];
-  entrySkill?: Maybe<Scalars['String']['output']>;
   id: Scalars['Int']['output'];
   issueType?: Maybe<WorktrackerIssuetype>;
   issueTypeId: Scalars['String']['output'];
@@ -2287,6 +2286,7 @@ export type WorktrackerLaunchbinding = {
   reasoningId?: Maybe<Scalars['String']['output']>;
   reasoningLevel?: Maybe<WorktrackerReasoninglevel>;
   requiredSkills: Scalars['Json']['output'];
+  stageSkills: Array<Scalars['String']['output']>;
   state?: Maybe<WorktrackerState>;
   stateId: Scalars['String']['output'];
   subtreeRunEnabled: Scalars['Boolean']['output'];
@@ -2311,7 +2311,6 @@ export type WorktrackerLaunchbindingFilterInput = {
   and?: InputMaybe<Array<WorktrackerLaunchbindingFilterInput>>;
   autoStart?: InputMaybe<BooleanFilterInput>;
   createdAt?: InputMaybe<TextFilterInput>;
-  entrySkill?: InputMaybe<StringFilterInput>;
   id?: InputMaybe<IntegerFilterInput>;
   issueTypeId?: InputMaybe<StringFilterInput>;
   modelId?: InputMaybe<StringFilterInput>;
@@ -2321,6 +2320,7 @@ export type WorktrackerLaunchbindingFilterInput = {
   prompt?: InputMaybe<StringFilterInput>;
   reasoningId?: InputMaybe<StringFilterInput>;
   requiredSkills?: InputMaybe<JsonFilterInput>;
+  stageSkills?: InputMaybe<JsonFilterInput>;
   stateId?: InputMaybe<StringFilterInput>;
   subtreeRunEnabled?: InputMaybe<BooleanFilterInput>;
   updatedAt?: InputMaybe<TextFilterInput>;
@@ -2336,7 +2336,6 @@ export type WorktrackerLaunchbindingHavingInput = {
 export type WorktrackerLaunchbindingOrderInput = {
   autoStart?: InputMaybe<OrderByEnum>;
   createdAt?: InputMaybe<OrderByEnum>;
-  entrySkill?: InputMaybe<OrderByEnum>;
   id?: InputMaybe<OrderByEnum>;
   issueTypeId?: InputMaybe<OrderByEnum>;
   modelId?: InputMaybe<OrderByEnum>;
@@ -2344,6 +2343,7 @@ export type WorktrackerLaunchbindingOrderInput = {
   prompt?: InputMaybe<OrderByEnum>;
   reasoningId?: InputMaybe<OrderByEnum>;
   requiredSkills?: InputMaybe<OrderByEnum>;
+  stageSkills?: InputMaybe<OrderByEnum>;
   stateId?: InputMaybe<OrderByEnum>;
   subtreeRunEnabled?: InputMaybe<OrderByEnum>;
   updatedAt?: InputMaybe<OrderByEnum>;

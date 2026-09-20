@@ -11,7 +11,7 @@ use super::status_facts::{
     record_work_item, stamp, WorkFactRecorder, WorkItemChange, WorkItemIdentity,
 };
 use super::CommandError;
-use ticketry_entities::{issue, project};
+use ticketry_entities::{issue, project, worktree};
 
 #[derive(Debug, Clone)]
 pub struct ReparentWorkItem {
@@ -92,23 +92,48 @@ pub async fn reparent(
         return Ok(id);
     }
 
-    let revision = next_revision(&transaction, &current.project_id).await?;
     let mut moved = current.clone();
-    let mut active: issue::ActiveModel = current.into();
-    active.parent_id = Set(parent_id.clone());
-    active.module_id = Set(module_id.clone());
     if let Some(rank) = rank {
         moved.rank = rank.clone();
-        active.rank = Set(rank);
     }
     moved.parent_id = parent_id;
     moved.module_id = module_id;
+    let repaired = plan_descendant_modules(&transaction, moved.clone()).await?;
+    let mut module_change_ids = repaired
+        .iter()
+        .map(|row| row.id.clone())
+        .collect::<Vec<_>>();
+    if current.module_id != moved.module_id {
+        module_change_ids.push(moved.id.clone());
+    }
+    if !module_change_ids.is_empty()
+        && worktree::Entity::find()
+            .filter(worktree::Column::TaskId.is_in(module_change_ids))
+            .filter(worktree::Column::Status.is_in(["active", "conflict"]))
+            .one(&transaction)
+            .await?
+            .is_some()
+    {
+        return Err(CommandError::validation(
+            "Close or discard the task worktree before moving it to another module.",
+        ));
+    }
+
+    let revision = next_revision(&transaction, &current.project_id).await?;
+    let mut active: issue::ActiveModel = current.into();
+    active.parent_id = Set(moved.parent_id.clone());
+    active.module_id = Set(moved.module_id.clone());
+    active.rank = Set(moved.rank.clone());
     let now = super::timestamp::now();
     let occurred_at = stamp(now);
     active.state_revision = Set(revision);
     active.updated_at = Set(now.clone());
     active.update(&transaction).await?;
-    let repaired = repair_descendant_modules(&transaction, moved.clone()).await?;
+    for descendant in &repaired {
+        let mut active: issue::ActiveModel = descendant.clone().into();
+        active.module_id = Set(descendant.module_id.clone());
+        active.update(&transaction).await?;
+    }
     let identity = WorkItemIdentity::of(&moved);
     record_work_item(
         facts,
@@ -188,9 +213,9 @@ async fn derived_module<C: ConnectionTrait>(
     Ok(Some(module.id))
 }
 
-/// Repair derived module ancestry beneath a moved item, returning every row
-/// whose module actually changed so the caller can publish it.
-async fn repair_descendant_modules<C: ConnectionTrait>(
+/// Plan derived module ancestry beneath a moved item, returning every row
+/// whose module must change.
+async fn plan_descendant_modules<C: ConnectionTrait>(
     database: &C,
     root: issue::Model,
 ) -> Result<Vec<issue::Model>, CommandError> {
@@ -216,9 +241,6 @@ async fn repair_descendant_modules<C: ConnectionTrait>(
             let module_id =
                 parents[child.parent_id.as_ref().expect("queried child has parent")].clone();
             if child.module_id != module_id {
-                let mut active: issue::ActiveModel = child.clone().into();
-                active.module_id = Set(module_id.clone());
-                active.update(database).await?;
                 child.module_id = module_id;
                 repaired.push(child.clone());
             }

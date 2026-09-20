@@ -4,8 +4,9 @@ use ticketry_graphql_schema::{adopt_worktracker_and_install, InstallationOwnersh
 use ticketry_installation::install_final_schema_migrations;
 use ticketry_settings as provider_catalog_migrations;
 use ticketry_work_management::{
-    launch_binding_entry_skill_migration, module_presentation_migration, open_for_commands,
-    project_onboarding_migration, workflow_color_migration, workspace_tab_order_migration,
+    launch_binding_entry_skill_migration, launch_binding_stage_skills_migration,
+    module_presentation_migration, open_for_commands, project_onboarding_migration,
+    workflow_color_migration, workspace_tab_order_migration,
 };
 
 #[path = "final_schema_migration_chain/support.rs"]
@@ -29,6 +30,159 @@ async fn full_0044_through_0054_chain_is_lossless_and_reopens() {
         .await
         .expect("repeat the full chain");
     assert_final(&reopened).await;
+}
+
+#[tokio::test]
+async fn stage_skills_backfill_the_trimmed_legacy_entry_skill() {
+    let (_directory, database) = fixture().await;
+    launch_binding_entry_skill_migration::install(&database)
+        .await
+        .expect("install the legacy entry-skill column");
+    database
+        .execute_unprepared(
+            "UPDATE worktracker_launchbinding SET entry_skill = '  grill-with-docs  '",
+        )
+        .await
+        .expect("pad the legacy entry skill");
+
+    launch_binding_stage_skills_migration::install(&database)
+        .await
+        .expect("install stage skills");
+
+    let row = database
+        .query_one_raw(Statement::from_string(
+            DbBackend::Sqlite,
+            "SELECT stage_skills FROM worktracker_launchbinding".to_owned(),
+        ))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        row.try_get::<serde_json::Value>("", "stage_skills")
+            .unwrap(),
+        serde_json::json!(["grill-with-docs"])
+    );
+    let columns = database
+        .query_all_raw(Statement::from_string(
+            DbBackend::Sqlite,
+            "PRAGMA table_info('worktracker_launchbinding')".to_owned(),
+        ))
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|row| row.try_get::<String>("", "name").unwrap())
+        .collect::<Vec<_>>();
+    assert!(!columns.iter().any(|name| name == "entry_skill"));
+}
+
+#[tokio::test]
+async fn null_and_blank_entry_skills_backfill_empty_without_copying_required_skills() {
+    for legacy in ["NULL", "'   '"] {
+        let (_directory, database) = fixture().await;
+        launch_binding_entry_skill_migration::install(&database)
+            .await
+            .expect("install the legacy entry-skill column");
+        database
+            .execute_unprepared(&format!(
+                "UPDATE worktracker_launchbinding SET entry_skill = {legacy}, \
+                 required_skills = '[\"required-but-not-selected\"]'"
+            ))
+            .await
+            .expect("set the legacy selection");
+
+        launch_binding_stage_skills_migration::install(&database)
+            .await
+            .expect("install stage skills");
+        let row = database
+            .query_one_raw(Statement::from_string(
+                DbBackend::Sqlite,
+                "SELECT stage_skills FROM worktracker_launchbinding".to_owned(),
+            ))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            row.try_get::<serde_json::Value>("", "stage_skills")
+                .unwrap(),
+            serde_json::json!([])
+        );
+    }
+}
+
+#[tokio::test]
+async fn repeating_stage_skills_migration_preserves_explicit_clearing() {
+    let (directory, database) = fixture().await;
+    install_final_schema_migrations(&database)
+        .await
+        .expect("install the final schema");
+    database
+        .execute_unprepared("UPDATE worktracker_launchbinding SET stage_skills = '[]'")
+        .await
+        .expect("clear the selected stage skills");
+
+    database.close().await.unwrap();
+    let reopened = open_for_commands(&directory.path().join("state.db"))
+        .await
+        .expect("reopen the edited installation");
+    install_final_schema_migrations(&reopened)
+        .await
+        .expect("repeat the final schema migration after restart");
+
+    let row = reopened
+        .query_one_raw(Statement::from_string(
+            DbBackend::Sqlite,
+            "SELECT stage_skills FROM worktracker_launchbinding".to_owned(),
+        ))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        row.try_get::<serde_json::Value>("", "stage_skills")
+            .unwrap(),
+        serde_json::json!([])
+    );
+}
+
+#[tokio::test]
+async fn editing_an_upgraded_selection_survives_restart_without_legacy_rebackfill() {
+    let (directory, database) = fixture().await;
+    launch_binding_entry_skill_migration::install(&database)
+        .await
+        .expect("install the legacy scalar");
+    database
+        .execute_unprepared("UPDATE worktracker_launchbinding SET entry_skill = 'to-spec'")
+        .await
+        .expect("seed the legacy selection");
+    launch_binding_stage_skills_migration::install(&database)
+        .await
+        .expect("upgrade to the list contract");
+    database
+        .execute_unprepared(
+            "UPDATE worktracker_launchbinding SET stage_skills = '[\"edited skill\",\"tdd\"]'",
+        )
+        .await
+        .expect("edit the upgraded selection");
+    database.close().await.unwrap();
+
+    let reopened = open_for_commands(&directory.path().join("state.db"))
+        .await
+        .expect("reopen the edited installation");
+    install_final_schema_migrations(&reopened)
+        .await
+        .expect("repeat migrations after restart");
+    let row = reopened
+        .query_one_raw(Statement::from_string(
+            DbBackend::Sqlite,
+            "SELECT stage_skills FROM worktracker_launchbinding".to_owned(),
+        ))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        row.try_get::<serde_json::Value>("", "stage_skills")
+            .unwrap(),
+        serde_json::json!(["edited skill", "tdd"])
+    );
 }
 
 #[tokio::test]

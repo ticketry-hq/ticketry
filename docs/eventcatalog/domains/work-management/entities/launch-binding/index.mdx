@@ -29,6 +29,12 @@ properties:
     type: array
     items:
       type: string
+    description: Skills the runtime must have available before launch. This list neither supplies nor limits Stage skills.
+  - name: stageSkills
+    type: array
+    items:
+      type: string
+    description: Ordered free-form skill names added to the task prompt for this workflow stage.
   - name: agent
     type: string
   - name: model

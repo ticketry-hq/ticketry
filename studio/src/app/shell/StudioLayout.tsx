@@ -6,14 +6,20 @@ import { TicketWorkspace } from "./ticket-workspace/TicketWorkspace";
 import { TEMP_TASK_ID } from "../../features/agents/types";
 import { scratchBucketId } from "../../features/agents/terminal";
 import { useClientStore } from "../../state/clientStore";
+import { useChangesCheckoutSelection } from "./ticket-workspace/selected-ticket/internal/openChangesWorkspace";
 
 export function StudioLayout() {
-  const changesActive = useClientStore((state) => {
+  const moduleId = useClientStore((state) => state.selectedModuleId);
+  const hasSelectedCheckout = useChangesCheckoutSelection(
+    (state) => moduleId ? state.taskIdByModule[moduleId] !== undefined : false,
+  );
+  const changesTabActive = useClientStore((state) => {
     const bucket = state.selectedTaskId === TEMP_TASK_ID
       ? scratchBucketId(state.selectedModuleId ?? "")
       : state.selectedTaskId;
     return bucket ? state.workspaces[bucket]?.active === "changes" : false;
   });
+  const changesActive = changesTabActive && hasSelectedCheckout;
   const {
     layout,
     sidebarVisible,

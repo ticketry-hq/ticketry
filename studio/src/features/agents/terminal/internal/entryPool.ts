@@ -20,6 +20,7 @@ import {
   recordBytes,
   recordFirstPaint,
 } from "./rendererMeasurement";
+import { readAgentStatusHolding, selectRunState } from "../../status";
 
 // CODIN-749 — shared terminal entry pool.
 //
@@ -321,8 +322,16 @@ export function ensureConnected(sessionId: string, meta: SessionMeta): void {
         event.type === "reattachment_required" &&
         event.reason === "session_not_found"
       ) {
-        entry.term.write("\r\n[session lost]\r\n");
-        store().setSessionLost(liveId);
+        const runState = entry.agentRunId
+          ? selectRunState(readAgentStatusHolding(), entry.agentRunId)
+          : null;
+        if (runState === "exited") {
+          entry.term.write("\r\n[session ended]\r\n");
+          store().setExited(liveId);
+        } else {
+          entry.term.write("\r\n[session lost]\r\n");
+          store().setSessionLost(liveId);
+        }
         return;
       }
       if (event.type === "reattachment_required") {

@@ -163,7 +163,14 @@ pub async fn launch_bindings(
                     .filter_map(|value| value.as_str().map(str::to_owned))
                     .collect(),
             ),
-            entry_skill: row.entry_skill,
+            stage_skills: StringList(
+                row.stage_skills
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|value| value.as_str().map(str::to_owned))
+                    .collect(),
+            ),
             profile: row.profile,
             model: row.model_id.as_deref().map(uuid),
             reasoning: row.reasoning_id.as_deref().map(uuid),

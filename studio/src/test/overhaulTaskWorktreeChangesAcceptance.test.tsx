@@ -1,6 +1,7 @@
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
+import { StudioLayout } from "../app/shell/StudioLayout";
 import { SelectedTicketContent } from "../app/shell/ticket-workspace/selected-ticket/SelectedTicketContent";
 import { SelectedTicket } from "../app/shell/ticket-workspace/selected-ticket/SelectedTicket";
 import {
@@ -14,6 +15,18 @@ import { useClientStore } from "../state/clientStore";
 import { WorktreeChangesDocument } from "../features/agents/worktrees/generated/worktreeChanges.documents";
 import { WorktreeStatusDocument } from "../features/agents/worktrees/generated/worktreeStatus.documents";
 import { fixture, mountStudio, workItem } from "./seam";
+
+// JSDOM has no panel measurements; exercise the real shell without imperative sizing.
+vi.mock("../app/shell/layout/useStudioPanelLayout", () => ({
+  useStudioPanelLayout: () => ({
+    layout: [18, 32, 50],
+    sidebarVisible: true,
+    outerGroupRef: { current: null },
+    workAreaGroupRef: { current: null },
+    handleOuterLayout: () => {},
+    handleWorkAreaLayout: () => {},
+  }),
+}));
 
 const OWNER_ID = "task-worktree-owner";
 const TASK_ID = "child-with-committed-work";
@@ -95,9 +108,12 @@ const cumulativeChanges = {
 
 describe("overhaul acceptance - task worktree Changes", () => {
   it("[overhaul-184] keeps cumulative committed work in a labeled, accessible Changes tab", async () => {
+    Element.prototype.scrollIntoView = vi.fn();
     const http = fixture();
     let changesRequests = 0;
     const savedTabOrders: unknown[] = [];
+    const diffRequests: unknown[] = [];
+    let checkoutRequests = 0;
     http.tree("module-1", {
       rootIds: [TASK_ID],
       children: { [TASK_ID]: [] },
@@ -115,17 +131,18 @@ describe("overhaul acceptance - task worktree Changes", () => {
     mountStudio({
       http,
       selectedTaskId: TASK_ID,
-      children: (
-        <SelectedTicketContent
-          bucket={TASK_ID}
-          projectId="project-1"
-          moduleId="module-1"
-          owner="studio"
-          details={<div>Issue details</div>}
-        />
-      ),
+      children: <StudioLayout />,
       graphQlExecute: async (document, variables) => {
         const operation = documentOperationName(document);
+        if (operation === "CurrentWorktrees") checkoutRequests += 1;
+        if (operation === "WorktreeFileDiff") {
+          diffRequests.push(variables);
+          return { worktree_file_diff: {
+            __typename: "FileDiffView",
+            path: "src/added.ts", status: "added", binary: false,
+            patch: "", truncated: false,
+          } } as never;
+        }
         if (operation === "WorktreeStatus") {
           return { worktree_status: activeCleanWorktree } as never;
         }
@@ -162,6 +179,18 @@ describe("overhaul acceptance - task worktree Changes", () => {
     });
     const rows = within(list).getAllByRole("listitem");
     expect(rows).toHaveLength(7);
+    expect(screen.getByTestId("module-workspace-region").querySelector('[data-pane="tasks"]')).not.toBeNull();
+    expect(screen.queryByRole("region", { name: "Worktree checkouts" })).not.toBeInTheDocument();
+    expect(screen.queryByTestId("changes-checkouts-resize-handle")).not.toBeInTheDocument();
+    expect(screen.getByTestId("changes-workspace")).toHaveClass("min-w-0");
+    expect(screen.getByTestId("changes-workspace")).not.toHaveClass("min-w-[56rem]");
+    expect(screen.getByRole("region", { name: "Selected file diff" })).toBeVisible();
+    expect(screen.getByRole("separator", { name: "Resize changed files and diff" })).toBeVisible();
+    expect(checkoutRequests).toBe(0);
+    fireEvent.click(within(list).getByRole("button", { name: "src/added.ts" }));
+    await waitFor(() => expect(diffRequests).toEqual([{ taskId: TASK_ID, path: "src/added.ts" }]));
+    expect(await screen.findByText("No textual changes to display.")).toBeVisible();
+
 
     const expected = [
       ["src/added.ts", "Added", "text-lifecycle-success"],
@@ -361,7 +390,7 @@ describe("overhaul acceptance - task worktree Changes", () => {
     );
     changesResult = "truncated";
     fireEvent.click(within(tabs).getByRole("tab", { name: "Changes" }));
-    const truncationNotice = await screen.findByRole("status");
+    const truncationNotice = await screen.findByText("The changed-file limit was reached.");
     expect(truncationNotice).toHaveTextContent("The changed-file limit was reached.");
 
     fireEvent.click(within(tabs).getByRole("tab", { name: "Details" }));
@@ -1121,7 +1150,7 @@ describe("overhaul acceptance - task worktree Changes", () => {
     expect(operations).toHaveLength(2);
   });
 
-  it("[overhaul-314] previews the source and explicit existing local merge destination without changing Git", async () => {
+  it("[overhaul-314] defaults to the origin and searches recent destinations without a Git write", async () => {
     const http = fixture();
     const previews: Array<{ taskId: string; destinationBranch?: string | null }> = [];
     http.tree("module-1", { rootIds: [TASK_ID], children: { [TASK_ID]: [] }, order: [TASK_ID] });
@@ -1150,27 +1179,26 @@ describe("overhaul acceptance - task worktree Changes", () => {
         if (operation === "WorktreeMergePreview") {
           const input = variables as { taskId: string; destinationBranch?: string | null };
           previews.push(input);
-          const selected = input.destinationBranch === "release/2.1";
           return {
             worktree_merge_preview: {
               __typename: "WorktreeMergePreviewView",
               source_branch: "wt/CODING-1892-merge-preview",
               source_commit: "1111111111111111111111111111111111111111",
-              destination_branch: selected ? "release/2.1" : null,
-              destination_commit: selected ? "2222222222222222222222222222222222222222" : null,
-              destination_checkout: selected ? "/repos/ticketry-release" : null,
-              destination_checkout_identity: selected ? "release-checkout" : null,
-              confirmation_token: selected ? "selected-confirmation" : null,
-              ready: selected,
-              blocker: selected ? null : "destination_required",
-              reason: selected
-                ? null
-                : "Recorded provenance cannot be verified. Select an existing local destination.",
-              requires_destination_selection: !selected,
+              destination_branch: input.destinationBranch ?? "release/2.1",
+              destination_commit: "2222222222222222222222222222222222222222",
+              destination_checkout: input.destinationBranch === "main" ? "/repos/ticketry" : "/repos/ticketry-release",
+              destination_checkout_identity: "release-checkout",
+              confirmation_token: "selected-confirmation",
+              ready: true,
+              blocker: null,
+              reason: null,
+              requires_destination_selection: false,
               recovery: null,
               destinations: [
                 { __typename: "WorktreeMergeDestinationView", branch: "main", checkout: "/repos/ticketry" },
                 { __typename: "WorktreeMergeDestinationView", branch: "release/2.1", checkout: "/repos/ticketry-release" },
+                { __typename: "WorktreeMergeDestinationView", branch: "backup/old", checkout: null },
+                { __typename: "WorktreeMergeDestinationView", branch: "wt/CODING-1892-merge-preview", checkout: "/repos/task-worktree" },
               ],
             },
           } as never;
@@ -1184,24 +1212,36 @@ describe("overhaul acceptance - task worktree Changes", () => {
 
     const preview = await screen.findByRole("region", { name: "Local merge preview" });
     expect(preview).toHaveTextContent("wt/CODING-1892-merge-preview");
-    expect(within(preview).getByRole("alert")).toHaveTextContent(
-      "Recorded provenance cannot be verified. Select an existing local destination.",
-    );
-
-    fireEvent.change(within(preview).getByRole("combobox", { name: "Local merge destination" }), {
-      target: { value: "release/2.1" },
-    });
-    fireEvent.click(within(preview).getByRole("button", { name: "Preview destination" }));
-
-    await waitFor(() => expect(previews).toContainEqual({
-      taskId: TASK_ID,
-      destinationBranch: "release/2.1",
-    }));
+    const picker = within(preview).getByRole("combobox", { name: "Local merge destination" });
+    expect(picker).toHaveValue("release/2.1");
+    expect(within(preview).queryByRole("button", { name: "Preview destination" })).not.toBeInTheDocument();
+    expect(previews).toEqual([{ taskId: TASK_ID, destinationBranch: null }]);
     expect(await screen.findByText("Ready to merge locally")).toBeVisible();
     const selectedPreview = screen.getByRole("region", { name: "Local merge preview" });
     expect(selectedPreview).toHaveTextContent("release/2.1");
     expect(selectedPreview).toHaveTextContent("/repos/ticketry-release");
-    expect(within(selectedPreview).queryByRole("button", { name: /merge$/i })).not.toBeInTheDocument();
+    fireEvent.focus(picker);
+    expect(within(preview).getAllByRole("option").map((option) => option.textContent)).toEqual([
+      "main/repos/ticketry",
+      "release/2.1/repos/ticketry-release",
+      "backup/oldNot checked out",
+    ]);
+    expect(screen.getByRole("option", { name: /release\/2.1/ })).toHaveAttribute("aria-selected", "true");
+    fireEvent.change(picker, { target: { value: "no-such-branch" } });
+    expect(screen.getByText("No matching branches")).toBeVisible();
+    fireEvent.keyDown(picker, { key: "Escape" });
+    expect(picker).toHaveValue("release/2.1");
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+    fireEvent.click(picker);
+    fireEvent.change(picker, { target: { value: "MAIN" } });
+    expect(within(preview).getAllByRole("option")).toHaveLength(1);
+    fireEvent.keyDown(picker, { key: "ArrowDown" });
+    fireEvent.keyDown(picker, { key: "Enter" });
+    await waitFor(() => expect(previews.at(-1)).toEqual({ taskId: TASK_ID, destinationBranch: "main" }));
+    expect(await screen.findByRole("button", { name: "Merge into main" })).toBeEnabled();
+    expect(picker).toHaveValue("main");
+    expect(selectedPreview).toHaveTextContent("/repos/ticketry");
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
   });
 
   it("[overhaul-315] binds, runs, and refreshes a confirmed local fast-forward", async () => {
@@ -1290,7 +1330,7 @@ describe("overhaul acceptance - task worktree Changes", () => {
       operationId: expect.any(String),
     });
     await waitFor(() => {
-      for (const operation of ["WorktreeStatus", "WorktreeChanges", "ModuleVersionControl", "WorktreeMergePreview"]) {
+      for (const operation of ["WorktreeStatus", "WorktreeChanges", "WorktreeMergePreview"]) {
         expect(reads.filter((read) => read === operation).length).toBeGreaterThan(1);
       }
     });

@@ -8,9 +8,11 @@ import { rememberStudioWorkspaceTarget } from "../../../../../features/workspace
 export function useTaskWorktreeChangesTabLifecycle({
   taskId,
   owner,
+  hasSelectedChangesCheckout = false,
 }: {
   taskId: string | null;
   owner: ForegroundOwner;
+  hasSelectedChangesCheckout?: boolean;
 }): boolean {
   const availability = useTaskWorktreeAvailability(taskId);
   const setActive = useClientStore((state) => state.setActive);
@@ -18,6 +20,7 @@ export function useTaskWorktreeChangesTabLifecycle({
   useEffect(() => {
     if (
       !taskId ||
+      hasSelectedChangesCheckout ||
       availability !== "none" ||
       useClientStore.getState().workspaces[taskId]?.active !== "changes"
     ) {
@@ -28,7 +31,7 @@ export function useTaskWorktreeChangesTabLifecycle({
     if (owner === "studio") {
       rememberStudioWorkspaceTarget(taskId, { kind: "details" });
     }
-  }, [availability, owner, setActive, taskId]);
+  }, [availability, hasSelectedChangesCheckout, owner, setActive, taskId]);
 
-  return availability === "worktree";
+  return hasSelectedChangesCheckout || availability === "worktree";
 }

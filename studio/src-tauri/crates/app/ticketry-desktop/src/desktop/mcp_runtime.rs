@@ -10,6 +10,7 @@ pub async fn start_in_process_mcp(
     data_directory: &Path,
     ownership: &DataDirectoryGuard,
     terminal_launch: Option<ticketry_terminal::TerminalLaunchService>,
+    codex_titles: Option<ticketry_terminal::InstantRunTicketTitleService>,
 ) -> Result<ticketry_mcp::McpRuntime, ticketry_mcp::McpStartupError> {
     let configuration = ticketry_mcp::McpConfiguration {
         database_path: data_directory.join("state.db"),
@@ -17,8 +18,13 @@ pub async fn start_in_process_mcp(
     };
     match terminal_launch {
         Some(service) => {
-            ticketry_mcp::McpRuntime::start_with_terminal_launch(configuration, ownership, service)
-                .await
+            ticketry_mcp::McpRuntime::start_with_terminal_launch(
+                configuration,
+                ownership,
+                service,
+                codex_titles,
+            )
+            .await
         }
         None => ticketry_mcp::McpRuntime::start(configuration, ownership).await,
     }
@@ -44,7 +50,7 @@ mod tests {
         std::fs::File::create(directory.path().join("state.db")).unwrap();
         let ownership = DataDirectoryGuard::acquire(directory.path()).unwrap();
 
-        let runtime = start_in_process_mcp(directory.path(), &ownership, None)
+        let runtime = start_in_process_mcp(directory.path(), &ownership, None, None)
             .await
             .unwrap();
 

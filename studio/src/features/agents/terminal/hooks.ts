@@ -6,7 +6,6 @@ import {
 import type { SessionId, TaskId } from "../types";
 import type { TerminalPresentationState } from "./lifecycle";
 import {
-  isLiveAgentRunState,
   selectRunState,
   useAgentStatusRuns,
 } from "../status";
@@ -78,7 +77,7 @@ export function deriveTaskSessions(
       const lifecycle: TerminalPresentationState =
         meta.status === "reconnecting"
           ? "reconnecting"
-          : meta.status === "session_lost" && !isLiveAgentRunState(runState)
+          : meta.status === "session_lost" && !runState
             ? "lost"
             : (runState ?? "unknown");
       return {

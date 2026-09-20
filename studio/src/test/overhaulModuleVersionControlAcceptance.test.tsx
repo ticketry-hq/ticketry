@@ -12,6 +12,7 @@ import { TEMP_TASK_ID } from "../features/agents/types";
 import { documentOperationName } from "../graphql-foundation/typedDocument";
 import { studioApolloClient } from "../shared/apollo/client";
 import { ModuleVersionControlDocument } from "../features/agents/worktrees/generated/moduleVersionControl.documents";
+import { createWorktreeInvalidator } from "../features/agents/status/stream/worktreeInvalidation";
 import { useClientStore } from "../state/clientStore";
 import { fixture, mountStudio, workItem } from "./seam";
 
@@ -151,9 +152,12 @@ describe("overhaul acceptance - module Changes and current worktrees", () => {
     expect(changes).toHaveAttribute("title", "Select a module to open Changes");
   });
 
-  it("[overhaul-187] opens clean module Changes and presents the empty task list", async () => {
+  it("[overhaul-187] shows cached worktrees before module files finish loading", async () => {
     const http = fixture();
     const operations: string[] = [];
+    let releaseFiles!: () => void;
+    const filesReady = new Promise<void>((resolve) => { releaseFiles = resolve; });
+    let worktreeExists = false;
     http.tree("module-1", { rootIds: [], children: {}, order: [] });
 
     mountStudio({
@@ -162,8 +166,18 @@ describe("overhaul acceptance - module Changes and current worktrees", () => {
       graphQlExecute: async (document, variables) => {
         const operation = documentOperationName(document);
         operations.push(operation);
+        if (operation === "CurrentWorktrees") {
+          return { worktrees: {
+            __typename: "WorktreesConnection",
+            nodes: worktreeExists ? [{
+              __typename: "Worktrees", id: "wt-new", taskId: TASK_ID, branch: "wt/new",
+              issue: null, project: null,
+            }] : [],
+          } } as never;
+        }
         if (operation === "ModuleVersionControl") {
           expect(variables).toEqual({ moduleId: "module-1" });
+          await filesReady;
           return {
             module_version_control: {
               __typename: "ModuleVersionControlView",
@@ -187,11 +201,27 @@ describe("overhaul acceptance - module Changes and current worktrees", () => {
       "true",
     );
     expect(await screen.findByTestId("module-version-control")).toBeVisible();
-    expect(screen.getByText("Clean")).toBeVisible();
-    expect(screen.getAllByText("0 unpushed").length).toBeGreaterThan(0);
+    expect(await screen.findByText("No current task worktrees.")).toBeVisible();
+    expect(screen.getByText("Loading module changes...")).toBeVisible();
+    const checkoutButton = screen.getByRole("button", { name: "Open Module checkout Changes" });
+    await act(async () => releaseFiles());
+    expect(await screen.findByText("Clean · 0 unpushed")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Open Module checkout Changes" })).toBe(checkoutButton);
     expect(screen.getByText("No module changes from the selected baseline.")).toBeVisible();
     expect(screen.getByText("No current task worktrees.")).toBeVisible();
     expect(operations).toContain("ModuleVersionControl");
+    await act(async () => {
+      await studioApolloClient().refetchQueries({ include: [ModuleVersionControlDocument] });
+    });
+    expect(operations.filter((operation) => operation === "CurrentWorktrees")).toHaveLength(1);
+    const invalidator = createWorktreeInvalidator();
+    worktreeExists = true;
+    act(() => { invalidator.record(TASK_ID); invalidator.flush(); });
+    expect(await screen.findByRole("button", { name: "Open wt/new Changes" })).toBeVisible();
+    worktreeExists = false;
+    act(() => { invalidator.record(TASK_ID); invalidator.flush(); });
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Open wt/new Changes" })).toBeNull());
+    expect(operations.filter((operation) => operation === "CurrentWorktrees")).toHaveLength(3);
   });
 
   it("[overhaul-188] [overhaul-272] [overhaul-273] uses one full-window, resizable Changes workspace for module and task checkouts", async () => {
@@ -228,6 +258,19 @@ describe("overhaul acceptance - module Changes and current worktrees", () => {
       graphQlExecute: async (document, variables) => {
         const operation = documentOperationName(document);
         operations.push(operation);
+        if (operation === "CurrentWorktrees") {
+          return {
+            worktrees: {
+              __typename: "WorktreesConnection",
+              nodes: [{
+                __typename: "Worktrees", id: "wt-active", taskId: TASK_ID,
+                branch: "wt/CODING-1322-module-changes",
+                issue: { __typename: "WorktrackerIssue", id: TASK_ID, sequenceId: 1322, name: "Add module checkout Changes" },
+                project: { __typename: "WorktrackerProject", id: "project-1", slug: "CODING" },
+              }],
+            },
+          } as never;
+        }
         if (operation === "ModuleVersionControl") {
           return {
             module_version_control: {
@@ -285,23 +328,24 @@ describe("overhaul acceptance - module Changes and current worktrees", () => {
           } as never;
         }
         if (operation === "WorktreeStatus") {
+          const taskId = (variables as { taskId: string }).taskId;
           return {
             worktree_status: {
               __typename: "WorktreeStatusView",
-              kind: "worktree",
-              task_id: TASK_ID,
-              top_level_task_id: TASK_ID,
+              kind: taskId === PLANNING_TASK_ID ? "none" : "worktree",
+              task_id: taskId,
+              top_level_task_id: taskId,
               is_shared: false,
-              branch: "wt/CODING-1322-module-changes",
-              base_branch: "main",
-              path: "/worktrees/CODING-1322",
-              state: "active",
+              branch: taskId === PLANNING_TASK_ID ? null : "wt/CODING-1322-module-changes",
+              base_branch: taskId === PLANNING_TASK_ID ? null : "main",
+              path: taskId === PLANNING_TASK_ID ? null : "/worktrees/CODING-1322",
+              state: taskId === PLANNING_TASK_ID ? "none" : "active",
               clean: false,
               dirty: true,
               ahead: 3,
               behind: 0,
               conflict: false,
-              checkout_present: true,
+              checkout_present: taskId !== PLANNING_TASK_ID,
               ephemeral: false,
               reason: null,
             },
@@ -401,9 +445,8 @@ describe("overhaul acceptance - module Changes and current worktrees", () => {
     expect(rows[1]).toHaveAccessibleName(
       "Open CODING-1322 Add module checkout Changes Changes",
     );
-    expect(within(rows[1]).getByText("Dirty")).toBeVisible();
-    expect(within(rows[1]).getByText("3 unpushed")).toBeVisible();
-    expect(within(rows[1]).getByText("Ready to merge")).toBeVisible();
+    expect(within(rows[1]).getByText("wt/CODING-1322-module-changes")).toBeVisible();
+    expect(within(rows[1]).queryByText("Dirty")).toBeNull();
     expect(screen.getByText("Compared from the merge base with main")).toBeVisible();
 
     fireEvent.click(within(files).getByRole("button", { name: modulePath }));
@@ -429,7 +472,7 @@ describe("overhaul acceptance - module Changes and current worktrees", () => {
     expect(useClientStore.getState().selectedTaskId).toBe(PLANNING_TASK_ID);
     expect(await within(moduleWorkspace).findByTestId("changes-workspace")).toBeVisible();
     const taskFiles = within(moduleWorkspace).getByRole("region", { name: "Changed files" });
-    fireEvent.click(within(taskFiles).getByRole("button", { name: taskPath }));
+    fireEvent.click(await within(taskFiles).findByRole("button", { name: taskPath }));
     expect(
       await within(within(moduleWorkspace).getByRole("region", { name: "Selected file diff" })).findByTestId("patch-viewer"),
     ).toHaveTextContent("+task workspace");
@@ -447,6 +490,7 @@ describe("overhaul acceptance - module Changes and current worktrees", () => {
     );
     fireEvent.click(within(tabs).getByRole("tab", { name: "Changes" }));
     expect(worktreeChangesTaskIds).toContain(TASK_ID);
+    expect(operations.filter((operation) => operation === "CurrentWorktrees")).toHaveLength(1);
     expect(useClientStore.getState().selectedTaskId).toBe(PLANNING_TASK_ID);
 
     expect(operations).not.toContain("UpdateWorkItem");
@@ -558,7 +602,7 @@ describe("overhaul acceptance - module Changes and current worktrees", () => {
     });
 
     fireEvent.click(screen.getByRole("button", { name: "Open module Changes" }));
-    expect((await screen.findAllByText("Unavailable")).length).toBeGreaterThan(0);
+    expect(await screen.findByText(reason)).toBeVisible();
     expect(screen.getAllByText(reason).length).toBeGreaterThan(0);
     expect(screen.getByText("Comparison unavailable")).toBeVisible();
   });

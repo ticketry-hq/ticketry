@@ -19,7 +19,7 @@ pub const CUSTOM_QUERIES: &[CustomReadRegistration] = &[
     CustomReadRegistration {
         field: "instant_run_ticket_title",
         reason: "The accepted Codex thread name lives behind the resident, read-only Codex app-server and cannot be represented by generated database entity reads.",
-        implementation: "One SeaORM Launch Material and Agent Run join followed by CodexThreadTitleReader",
+        implementation: "One SeaORM Launch Material and Agent Run join followed by CodexThreadTitles",
         parity_test: "instant_run_ticket_graphql::accepted_codex_thread_name_is_returned_for_eligible_agent_run",
         safety_test: "instant_run_ticket_graphql::thread_title_query_never_exposes_launch_material",
         bounded_test: "instant_run_ticket_graphql::thread_title_query_reads_one_run_with_private_material_and_one_codex_thread",

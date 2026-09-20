@@ -5,7 +5,6 @@ import { studioApolloClient } from "../../../../shared/apollo/client";
 import { WorktreeChangesDocument } from "../generated/worktreeChanges.documents";
 import { WorktreeMergePreviewDocument } from "../generated/worktreeMergePreview.documents";
 import { WorktreeStatusDocument } from "../generated/worktreeStatus.documents";
-import { ModuleVersionControlDocument } from "../generated/moduleVersionControl.documents";
 import {
   commitTaskChanges,
   commitPushTaskChanges,
@@ -27,12 +26,14 @@ export function TaskWorktreeChanges({
   taskId,
   moduleId = null,
   active,
+  showAllWorktrees = false,
   onOpenModule = () => undefined,
   onOpenTask = () => undefined,
 }: {
   taskId: string;
   moduleId?: string | null;
   active: boolean;
+  showAllWorktrees?: boolean;
   onOpenModule?: () => void;
   onOpenTask?: (taskId: string) => void;
 }) {
@@ -40,15 +41,9 @@ export function TaskWorktreeChanges({
     client: studioApolloClient(),
     variables: { taskId },
     skip: !active,
-    fetchPolicy: "network-only",
+    fetchPolicy: "cache-and-network",
   });
   const changes = query.data?.worktree_changes;
-  const moduleQuery = useQuery(ModuleVersionControlDocument, {
-    client: studioApolloClient(),
-    variables: { moduleId: moduleId ?? "" },
-    skip: !active || !moduleId,
-    fetchPolicy: "network-only",
-  });
   const [lastCommit, setLastCommit] = useState<{
     subject: string;
     messageSource: string;
@@ -66,21 +61,11 @@ export function TaskWorktreeChanges({
 
   if (!active) return null;
 
-  if (query.error) {
-    return (
-      <div className="p-4 text-sm text-lifecycle-danger" role="alert">
-        {query.error.message}
-      </div>
-    );
-  }
-  if (!changes) {
-    return <div className="p-4 text-sm text-text-muted">Loading changes...</div>;
-  }
-
   const runPullRequestThenRefresh = async (
     action: () => Promise<{ url: string }>,
   ): Promise<{ url: string }> => {
     const created = await action();
+    if (!changes) return created;
     studioApolloClient().writeQuery({
       query: WorktreeChangesDocument,
       variables: { taskId },
@@ -116,23 +101,21 @@ export function TaskWorktreeChanges({
       data-testid="task-worktree-changes"
     >
       <ChangesFileReview
+        showAllWorktrees={showAllWorktrees}
         checkoutKey={`task:${taskId}`}
-        checkouts={!moduleId ? (
-          <p className="p-3 text-sm text-text-muted">Worktree checkouts unavailable.</p>
-        ) : moduleQuery.error ? (
-          <p className="p-3 text-sm text-lifecycle-danger" role="alert">Unable to load worktree checkouts.</p>
-        ) : moduleQuery.data ? (
+        checkouts={(
           <CurrentWorktreesList
-            rows={moduleQuery.data.module_version_control.worktrees}
-            truncated={moduleQuery.data.module_version_control.worktrees_truncated}
+            key={moduleId}
+            moduleId={moduleId}
             selectedTaskId={taskId}
             onOpenModule={onOpenModule}
             onOpenTask={onOpenTask}
           />
-        ) : (
-          <p className="p-3 text-sm text-text-muted" role="status">Loading worktree checkouts...</p>
         )}
-        header={(
+        loading={!changes}
+        header={query.error ? <p role="alert" className="text-lifecycle-danger">{query.error.message}</p> : !changes ? (
+          <p role="status" className="text-text-muted">Loading changes...</p>
+        ) : (
           <header className="mb-3 border-b border-pane-border pb-3">
             <div className="font-medium text-text-primary">{changes.files.length} cumulative changes</div>
             <div className="text-xs text-text-muted">Includes committed work from the recorded base.</div>
@@ -182,10 +165,10 @@ export function TaskWorktreeChanges({
           </header>
         )}
         taskId={taskId}
-        files={changes.files}
-        insertions={changes.insertions}
-        deletions={changes.deletions}
-        truncated={changes.truncated}
+        files={changes?.files ?? []}
+        insertions={changes?.insertions ?? 0}
+        deletions={changes?.deletions ?? 0}
+        truncated={changes?.truncated ?? false}
         label="Cumulative changed files"
         emptyMessage="No cumulative changes from the recorded base."
       />

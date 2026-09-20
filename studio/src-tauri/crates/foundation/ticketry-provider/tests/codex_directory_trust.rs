@@ -9,6 +9,7 @@ fn inspect<'a>(directory: &'a Path, config: &'a Path) -> DirectoryTrustInspectio
     provider_contract(Provider::Codex).inspect_directory_trust(DirectoryTrustContext {
         directory,
         trust_file: Some(config),
+        executable: None,
     })
 }
 
@@ -28,6 +29,7 @@ fn prepare(
         DirectoryTrustContext {
             directory,
             trust_file: Some(config),
+            executable: None,
         },
         approval,
     )
@@ -219,6 +221,7 @@ fn environment_resolution_uses_codex_home() {
         let context = DirectoryTrustContext {
             directory,
             trust_file: None,
+            executable: None,
         };
         let provider = provider_contract(Provider::Codex);
         let DirectoryTrustInspection::ApprovalRequired(approval) =

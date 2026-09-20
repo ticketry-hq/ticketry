@@ -18,7 +18,7 @@ use ticketry_work_management::launch_policy::{
 };
 
 use super::{
-    dependency_tools, projection, run_termination, scope,
+    codex_thread_rename, dependency_tools, projection, run_termination, scope,
     workflow_tools::{self, optional_string, string},
     RunPrincipal,
 };
@@ -67,6 +67,7 @@ pub async fn dispatch(
     graph_runs: Option<&GraphRunService>,
     terminal_cleanup: &TerminalCleanupService,
     terminal_launch: Option<&TerminalLaunchService>,
+    codex_titles: Option<&ticketry_terminal::InstantRunTicketTitleService>,
     principal: &RunPrincipal,
     name: &str,
     arguments: &Map<String, Value>,
@@ -78,6 +79,7 @@ pub async fn dispatch(
         graph_runs,
         terminal_cleanup,
         terminal_launch,
+        codex_titles,
         principal,
         name,
         arguments,
@@ -96,6 +98,7 @@ async fn dispatch_checked(
     graph_runs: Option<&GraphRunService>,
     terminal_cleanup: &TerminalCleanupService,
     terminal_launch: Option<&TerminalLaunchService>,
+    codex_titles: Option<&ticketry_terminal::InstantRunTicketTitleService>,
     principal: &RunPrincipal,
     name: &str,
     arguments: &Map<String, Value>,
@@ -313,6 +316,12 @@ async fn dispatch_checked(
                 }))),
             }
         }
+        // Codex owns thread names outside every Ticketry table, so this write
+        // has no database scope to resolve; the authenticated tool grant is the
+        // whole authorization boundary.
+        "rename_codex_thread" => Ok(DispatchOutput::direct(
+            codex_thread_rename::rename(codex_titles, arguments).await,
+        )),
         _ => Err(CommandError::validation("Unknown WorkTracker MCP tool.")),
     }
 }

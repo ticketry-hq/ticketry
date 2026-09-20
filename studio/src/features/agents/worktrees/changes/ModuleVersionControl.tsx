@@ -39,7 +39,7 @@ export function ModuleVersionControl({
     client: studioApolloClient(),
     variables: { moduleId },
     skip: !active,
-    fetchPolicy: "network-only",
+    fetchPolicy: "cache-and-network",
   });
   const modulePullRequestUrls = useModulePullRequestState((state) => state.urls);
   const [lastCommit, setLastCommit] = useState<{
@@ -48,14 +48,8 @@ export function ModuleVersionControl({
   } | null>(null);
   const result = query.data?.module_version_control;
   if (!active) return null;
-  if (query.error) {
-    return <div className="p-4 text-sm text-lifecycle-danger" role="alert">{query.error.message}</div>;
-  }
-  if (!result) {
-    return <div className="p-4 text-sm text-text-muted">Loading module changes...</div>;
-  }
-  const checkout = result.checkout;
-  const pullRequestKey = modulePullRequestKey(moduleId, checkout.branch);
+  const checkout = result?.checkout;
+  const pullRequestKey = modulePullRequestKey(moduleId, checkout?.branch);
   const modulePullRequestUrl = modulePullRequestUrls[pullRequestKey];
 
   return (
@@ -67,14 +61,17 @@ export function ModuleVersionControl({
         checkoutKey={`module:${moduleId}`}
         checkouts={(
           <CurrentWorktreesList
-            rows={result.worktrees}
-            truncated={result.worktrees_truncated}
+            key={moduleId}
+            moduleId={moduleId}
             selectedTaskId={null}
             onOpenModule={onOpenModule}
             onOpenTask={onOpenTask}
           />
         )}
-        header={(
+        loading={!checkout}
+        header={query.error ? <p role="alert" className="text-lifecycle-danger">{query.error.message}</p> : !checkout ? (
+          <p role="status" className="text-text-muted">Loading module changes...</p>
+        ) : (
           <header className="mb-3 border-b border-pane-border pb-3">
             <div className="flex items-baseline gap-3">
               <h2 className="font-medium text-text-primary">Module checkout Changes</h2>
@@ -123,12 +120,12 @@ export function ModuleVersionControl({
           </header>
         )}
         moduleId={moduleId}
-        files={checkout.available ? checkout.files : []}
-        insertions={checkout.insertions}
-        deletions={checkout.deletions}
-        truncated={checkout.truncated}
+        files={checkout?.available ? checkout.files : []}
+        insertions={checkout?.insertions ?? 0}
+        deletions={checkout?.deletions ?? 0}
+        truncated={checkout?.truncated ?? false}
         label="Module changed files"
-        emptyMessage={checkout.available
+        emptyMessage={checkout?.available
           ? "No module changes from the selected baseline."
           : "Module checkout unavailable."}
       />

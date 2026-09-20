@@ -8,19 +8,23 @@ the durable planning database.
 **Launch binding**:
 The per-(issue type, workflow state) policy that governs how an agent is
 launched when a work item of that type sits in or enters that state: prompt,
-required skills, entry skill, model, reasoning, auto-start.
+required skills, Stage skills, model, reasoning, auto-start.
 
-**Entry skill**:
-The one required skill a launched agent must begin with, delivered by typing
-its invocation command (`/skill` or `$skill`) into the agent's terminal as if
-a user entered it. Exists because user-invoke-only skills cannot be invoked by
-the model from prompt text. Always one of the binding's required skills.
-_Avoid_: launch skill, initial skill
+**Required skills**:
+Skills the runtime must have available before it may launch the stage. They are
+an availability guard. They do not populate or restrict Stage skills.
+
+**Stage skills**:
+The ordered, free-form skill names a user selects for a workflow stage.
+Ticketry adds them to the composed task prompt for fresh launches and handoffs.
+It does not submit a separate skill command. An empty list adds no Stage skills
+section.
 
 **Handoff**:
 A per-workflow-edge flag. When a transition takes a handoff edge, the
-destination state's prompt and entry skill are delivered as typed input into
-the work item's still-live agent session instead of spawning a fresh agent.
+destination state's composed prompt, including its Stage skills, is submitted
+once to the work item's still-live agent session instead of spawning a fresh
+agent.
 Configured beside the edge's origin permission in the workflow editor. A
 handoff edge requests destination delivery even when ordinary auto-start is
 off; without a live, input-capable session, it falls back to a fresh launch.

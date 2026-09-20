@@ -375,7 +375,7 @@ async fn global_connections_read_everything_while_run_connections_stay_scoped() 
     let listed = global
         .request(json!({"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}))
         .await;
-    assert_eq!(listed["result"]["tools"].as_array().unwrap().len(), 31);
+    assert_eq!(listed["result"]["tools"].as_array().unwrap().len(), 32);
     assert_eq!(listed["result"]["ttlMs"], 0, "{listed:#}");
     assert_eq!(listed["result"]["cacheScope"], "private", "{listed:#}");
     let projects = global.structured(2, "list_projects", json!({})).await;

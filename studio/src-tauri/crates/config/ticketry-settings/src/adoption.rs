@@ -13,8 +13,8 @@ use sha2::{Digest, Sha256};
 
 use super::atomic_json::{write_json, RealAtomicFileOperations};
 use super::ownership_manifest::{
-    LAUNCH_BINDING_ENTRY_SKILL_LEDGER, LAUNCH_BINDING_PROFILE_LEDGER, OWNED_ASSETS, OWNED_TABLES,
-    VERSION,
+    LAUNCH_BINDING_ENTRY_SKILL_LEDGER, LAUNCH_BINDING_PROFILE_LEDGER,
+    LAUNCH_BINDING_STAGE_SKILLS_LEDGER, OWNED_ASSETS, OWNED_TABLES, VERSION,
 };
 use super::SettingsPersistenceError;
 use ticketry_provider::Provider;
@@ -419,22 +419,29 @@ async fn settings_digest(
 }
 
 /// The settings handoff precedes the final Work Management migration chain on
-/// first launch. On every later launch, that chain's ledger is the durable
-/// proof that LaunchBinding.entry_skill is part of the owned schema.
+/// first launch. The entry-skill ledger identifies the temporary scalar shape;
+/// the stage-skills ledger identifies the final list-only shape.
 async fn effective_owned_tables(
     database: &impl ConnectionTrait,
 ) -> Result<Vec<(&'static str, Vec<&'static str>)>, SettingsPersistenceError> {
     let entry_skill_installed = table_exists(database, LAUNCH_BINDING_ENTRY_SKILL_LEDGER).await?;
     let profile_installed = table_exists(database, LAUNCH_BINDING_PROFILE_LEDGER).await?;
+    let stage_skills_installed = table_exists(database, LAUNCH_BINDING_STAGE_SKILLS_LEDGER).await?;
     Ok(OWNED_TABLES
         .iter()
         .map(|(table, columns)| {
             let mut columns = columns.to_vec();
-            if *table == "worktracker_launchbinding" && entry_skill_installed {
+            if *table == "worktracker_launchbinding"
+                && entry_skill_installed
+                && !stage_skills_installed
+            {
                 columns.push("entry_skill");
             }
             if *table == "worktracker_launchbinding" && profile_installed {
                 columns.push("profile");
+            }
+            if *table == "worktracker_launchbinding" && stage_skills_installed {
+                columns.push("stage_skills");
             }
             (*table, columns)
         })

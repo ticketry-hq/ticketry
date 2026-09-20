@@ -10,7 +10,7 @@ pub struct Model {
     pub state_id: String,
     pub prompt: String,
     pub required_skills: Json,
-    pub entry_skill: Option<String>,
+    pub stage_skills: Json,
     pub profile: Option<String>,
     pub model_id: Option<String>,
     pub reasoning_id: Option<String>,

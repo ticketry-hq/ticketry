@@ -256,6 +256,7 @@ impl ExecutionHarness {
             },
             &ownership,
             launch.clone(),
+            None,
         )
         .await
         .expect("start the in-process MCP listener");

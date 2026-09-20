@@ -228,6 +228,7 @@ fn every_provider_has_explicit_launch_and_trust_behavior() {
         provider_contract(Provider::Agy).inspect_directory_trust(DirectoryTrustContext {
             directory: workspace.path(),
             trust_file: None,
+            executable: None,
         }),
         DirectoryTrustInspection::Unsupported
     );
@@ -235,6 +236,7 @@ fn every_provider_has_explicit_launch_and_trust_behavior() {
         provider_contract(Provider::Claude).inspect_directory_trust(DirectoryTrustContext {
             directory: workspace.path(),
             trust_file: Some(&workspace.path().join("claude.json")),
+            executable: None,
         }),
         DirectoryTrustInspection::ApprovalRequired(_)
     ));
@@ -244,6 +246,7 @@ fn every_provider_has_explicit_launch_and_trust_behavior() {
     let context = DirectoryTrustContext {
         directory: workspace.path(),
         trust_file: Some(&trust_file),
+        executable: None,
     };
     let DirectoryTrustInspection::ApprovalRequired(approval) =
         gemini.inspect_directory_trust(context)
@@ -275,6 +278,7 @@ fn every_provider_has_explicit_launch_and_trust_behavior() {
         gemini.inspect_directory_trust(DirectoryTrustContext {
             directory: &denied_directory,
             trust_file: Some(&trust_file),
+            executable: None,
         }),
         DirectoryTrustInspection::Denied
     );

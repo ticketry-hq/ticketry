@@ -225,6 +225,20 @@ pub(crate) fn invariants() -> Vec<Invariant> {
                 .to_owned(),
         },
         Invariant {
+            code: "launch-binding-stage-skills-malformed",
+            area: Area::WorkManagement,
+            rule: "a launch binding's stage skills are a JSON array of strings",
+            requires: &["worktracker_launchbinding.stage_skills"],
+            query: "SELECT CAST(binding.id AS TEXT) AS identity
+                    FROM worktracker_launchbinding binding
+                    WHERE NOT (json_valid(binding.stage_skills)
+                           AND json_type(binding.stage_skills) = 'array')
+                       OR EXISTS (
+                           SELECT 1 FROM json_each(binding.stage_skills)
+                           WHERE json_each.type != 'text')"
+                .to_owned(),
+        },
+        Invariant {
             code: "launch-binding-model-missing",
             area: Area::WorkManagement,
             rule: "a launch binding's pinned model and reasoning level exist",

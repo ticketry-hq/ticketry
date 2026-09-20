@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use ticketry_provider::{
     provider_contract, DirectoryTrustApproval, DirectoryTrustContext, DirectoryTrustInspection,
@@ -9,6 +9,7 @@ fn inspect<'a>(directory: &'a Path, config: &'a Path) -> DirectoryTrustInspectio
     provider_contract(Provider::Claude).inspect_directory_trust(DirectoryTrustContext {
         directory,
         trust_file: Some(config),
+        executable: None,
     })
 }
 
@@ -28,6 +29,7 @@ fn prepare(
         DirectoryTrustContext {
             directory,
             trust_file: Some(config),
+            executable: None,
         },
         approval,
     )
@@ -255,13 +257,15 @@ fn active_config_override_version_and_home_limit_are_enforced() {
 
     if let Ok(case) = std::env::var("TICKETRY_CLAUDE_TRUST_CASE") {
         let directory = std::env::var_os("TICKETRY_CLAUDE_TRUST_DIRECTORY").unwrap();
+        let executable = std::env::var_os("TICKETRY_CLAUDE_EXECUTABLE").map(PathBuf::from);
         let context = DirectoryTrustContext {
             directory: Path::new(&directory),
             trust_file: None,
+            executable: executable.as_deref(),
         };
         let provider = provider_contract(Provider::Claude);
         match case.as_str() {
-            "supported" => {
+            "supported" | "supported_current" | "supported_latest" => {
                 let DirectoryTrustInspection::ApprovalRequired(approval) =
                     provider.inspect_directory_trust(context)
                 else {
@@ -272,13 +276,21 @@ fn active_config_override_version_and_home_limit_are_enforced() {
                     DirectoryTrustPreparation::Prepared
                 );
             }
-            "unsupported" => {
+            "unsupported" | "unsupported_next" => {
                 let DirectoryTrustInspection::Failed(failure) =
                     provider.inspect_directory_trust(context)
                 else {
                     panic!("unsupported Claude should fail with its version")
                 };
-                assert!(failure.message.contains("2.1.271"));
+                assert!(failure.message.contains(if case == "unsupported_next" {
+                    "2.1.279"
+                } else {
+                    "2.1.271"
+                }));
+                assert!(matches!(
+                    provider.prepare_directory_trust(context, None),
+                    DirectoryTrustPreparation::Failed(_)
+                ));
             }
             "home" => {
                 let DirectoryTrustInspection::Failed(failure) =
@@ -304,7 +316,10 @@ fn active_config_override_version_and_home_limit_are_enforced() {
     let executable = bin.join("claude");
     for (case, version, directory, process_home) in [
         ("unsupported", "2.1.271", &module, &home),
+        ("unsupported_next", "2.1.279", &module, &home),
         ("supported", "2.1.270", &module, &home),
+        ("supported_current", "2.1.276", &module, &home),
+        ("supported_latest", "2.1.278", &module, &home),
         ("home", "2.1.270", &home, &home),
     ] {
         std::fs::write(
@@ -320,12 +335,17 @@ fn active_config_override_version_and_home_limit_are_enforced() {
             ])
             .env("TICKETRY_CLAUDE_TRUST_CASE", case)
             .env("TICKETRY_CLAUDE_TRUST_DIRECTORY", directory)
-            .env("CLAUDE_CONFIG_DIR", &config)
+            .env("TICKETRY_CLAUDE_EXECUTABLE", &executable)
+            .env("CLAUDE_CONFIG_DIR", config.join(case))
             .env("HOME", process_home)
-            .env("PATH", &bin)
+            .env("PATH", "/usr/bin:/bin")
             .status()
             .unwrap()
             .success());
     }
-    assert!(config.join(".claude.json").exists());
+    assert!(config.join("supported/.claude.json").exists());
+    assert!(config.join("supported_current/.claude.json").exists());
+    assert!(config.join("supported_latest/.claude.json").exists());
+    assert!(!config.join("unsupported/.claude.json").exists());
+    assert!(!config.join("unsupported_next/.claude.json").exists());
 }

@@ -18,6 +18,8 @@ import { documentOperationName } from "../graphql-foundation/typedDocument";
 const tauri = vi.hoisted(() => ({
   invoke: vi.fn(),
   listen: vi.fn(),
+  movedHandlers: [] as Array<() => void>,
+  scaleChangedHandlers: [] as Array<() => void>,
 }));
 
 vi.mock("@tauri-apps/api/core", () => ({
@@ -27,6 +29,19 @@ vi.mock("@tauri-apps/api/core", () => ({
 
 vi.mock("@tauri-apps/api/event", () => ({
   listen: tauri.listen,
+}));
+
+vi.mock("@tauri-apps/api/window", () => ({
+  getCurrentWindow: () => ({
+    onMoved: async (handler: () => void) => {
+      tauri.movedHandlers.push(handler);
+      return () => {};
+    },
+    onScaleChanged: async (handler: () => void) => {
+      tauri.scaleChangedHandlers.push(handler);
+      return () => {};
+    },
+  }),
 }));
 
 vi.mock("../features/agents/terminal/internal/entryPool", () => ({
@@ -49,6 +64,8 @@ describe("native viewer attachment acceptance", () => {
   beforeEach(() => {
     window.history.replaceState({}, "", "/?terminalRenderer=native");
     vi.resetAllMocks();
+    tauri.movedHandlers.length = 0;
+    tauri.scaleChangedHandlers.length = 0;
     localStorage.setItem("ticketry:terminal-renderer", "native");
     installDesktopGraphQlRuntime();
     vi.stubGlobal("ResizeObserver", ResizeObserverStub);
@@ -312,6 +329,36 @@ describe("native viewer attachment acceptance", () => {
       command === "native_terminal_attach"
     )).toHaveLength(1);
     expect(claimed("CreateViewerLease")).toHaveLength(1);
+    view.unmount();
+  });
+
+  it("[overhaul-326] realigns a native viewer when the window moves between displays", async () => {
+    const ready = vi.fn();
+    const view = render(
+      <NativeGhosttyTerminal
+        sessionId="session-1"
+        owner="studio"
+        active
+        onReady={ready}
+      />,
+    );
+    await waitFor(() => expect(ready).toHaveBeenCalledOnce());
+    await waitFor(() => {
+      expect(tauri.movedHandlers).toHaveLength(1);
+      expect(tauri.scaleChangedHandlers).toHaveLength(1);
+    });
+
+    const frameWrites = () => tauri.invoke.mock.calls.filter(
+      ([command]) => command === "native_terminal_set_frame",
+    );
+    await waitFor(() => expect(frameWrites().length).toBeGreaterThan(0));
+    const initialWrites = frameWrites().length;
+
+    act(() => tauri.movedHandlers[0]?.());
+    await waitFor(() => expect(frameWrites()).toHaveLength(initialWrites + 1));
+
+    act(() => tauri.scaleChangedHandlers[0]?.());
+    await waitFor(() => expect(frameWrites()).toHaveLength(initialWrites + 2));
     view.unmount();
   });
 

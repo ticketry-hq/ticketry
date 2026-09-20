@@ -213,7 +213,7 @@ describe("overhaul acceptance - divergent local merge recovery", () => {
     expect(await screen.findByText("Merged wt/CODING-1894-divergent into main.")).toBeVisible();
     expect(merged).toBe(true);
     await waitFor(() => {
-      for (const operation of ["WorktreeStatus", "WorktreeChanges", "ModuleVersionControl", "WorktreeMergePreview", "WorktreeMergeRecovery"]) {
+      for (const operation of ["WorktreeStatus", "WorktreeChanges", "WorktreeMergePreview", "WorktreeMergeRecovery"]) {
         expect(reads.filter((read) => read === operation).length).toBeGreaterThan(1);
       }
     });

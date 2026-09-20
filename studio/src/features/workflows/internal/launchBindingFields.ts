@@ -4,7 +4,7 @@ import type { ScopedWorkflowLaunchBinding } from "../../../shared/api/types";
 /** The editable fields of one state's launch configuration. */
 export interface LaunchBindingFields {
   prompt: string;
-  entrySkill: string;
+  stageSkills: string[];
   agent: string;
   profile: string;
   model: string;
@@ -17,7 +17,7 @@ export function storedLaunchBindingFields(
 ): LaunchBindingFields {
   return {
     prompt: binding?.prompt ?? "",
-    entrySkill: binding?.entry_skill ?? "",
+    stageSkills: binding?.stage_skills ?? [],
     agent: binding?.agent ?? "",
     profile: binding?.profile ?? "",
     model: binding?.model ?? "",

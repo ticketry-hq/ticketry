@@ -7,7 +7,7 @@ use sea_orm::{
 use tauri_graphql::{TransportApi, TransportApiImpl};
 use ticketry_entities::{
     attachment, design_document, issue, issue_type, issue_type_transition, launch_binding,
-    module_presentation, project, state,
+    module_presentation, project, state, worktree,
 };
 use ticketry_graphql_schema::initialize_with_worktracker_commands_and_install;
 use ticketry_work_management::commands::{
@@ -148,7 +148,8 @@ async fn fixture() -> (tempfile::TempDir, sea_orm::DatabaseConnection) {
             CREATE TABLE worktracker_launchbinding (
                 id integer PRIMARY KEY AUTOINCREMENT, issue_type_id char(32) NOT NULL,
                 state_id char(32) NOT NULL, prompt text NOT NULL,
-                required_skills text NOT NULL, entry_skill varchar(128), profile varchar(255),
+                required_skills text NOT NULL, profile varchar(255),
+                stage_skills text NOT NULL DEFAULT '[]',
                 model_id char(32), reasoning_id char(32),
                 auto_start bool NOT NULL, subtree_run_enabled bool NOT NULL,
                 created_at datetime NOT NULL, updated_at datetime NOT NULL,
@@ -210,6 +211,25 @@ fn create_input(name: impl Into<String>) -> work_items::CreateWorkItem {
         state_id: None,
         parent_id: None,
     }
+}
+
+async fn install_worktrees(database: &sea_orm::DatabaseConnection) {
+    database
+        .execute_unprepared(
+            r#"
+            CREATE TABLE worktrees (
+                id char(32) PRIMARY KEY, task_id char(32) NOT NULL,
+                workspace_slug char(32), project_id char(32), module_id char(32),
+                ticket_seq integer, repo_root text NOT NULL, path text NOT NULL,
+                branch text NOT NULL, base_branch text NOT NULL, base_commit text NOT NULL,
+                status varchar(32) NOT NULL, ephemeral bool NOT NULL,
+                created_at varchar(64) NOT NULL, updated_at varchar(64) NOT NULL,
+                pull_request_url text
+            );
+            "#,
+        )
+        .await
+        .unwrap();
 }
 
 const TARGET_DOCUMENT: &str = "document-target";
@@ -674,6 +694,7 @@ async fn create_work_item_accepts_a_top_level_module_type() {
 #[tokio::test]
 async fn hierarchy_create_reparent_detach_repairs_deep_module_ancestry_across_restart() {
     let (directory, database) = fixture().await;
+    install_worktrees(&database).await;
     database
         .execute_unprepared(&format!(
             r#"
@@ -819,6 +840,158 @@ async fn hierarchy_create_reparent_detach_repairs_deep_module_ancestry_across_re
             .module_id
             .as_deref(),
         Some("60000000000000000000000000000001")
+    );
+}
+
+#[tokio::test]
+async fn live_worktrees_block_cross_module_reparent_and_detach_atomically() {
+    for status in ["active", "conflict"] {
+        for destination in [Some("20000000000000000000000000000002".to_owned()), None] {
+            let (_directory, database) = fixture().await;
+            install_worktrees(&database).await;
+            database
+                .execute_unprepared(&format!(
+                    r#"
+                    INSERT INTO worktracker_issue VALUES
+                        ('20000000000000000000000000000001','{PROJECT}','module','{MODULE_TYPE}',NULL,NULL,NULL,1,'Module A',1,0,'a','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'[]'),
+                        ('20000000000000000000000000000002','{PROJECT}','module','{MODULE_TYPE}',NULL,NULL,NULL,2,'Module B',2,0,'b','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'[]'),
+                        ('50000000000000000000000000000001','{PROJECT}','task','{TASK_TYPE}','20000000000000000000000000000001','20000000000000000000000000000001','{BACKLOG}',3,'Task',3,0,'a','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'[]');
+                    INSERT INTO worktrees VALUES
+                        ('70000000000000000000000000000001','50000000000000000000000000000001','mem','{PROJECT}','20000000000000000000000000000001',3,'/repo','/worktree','branch','main','abc','{status}',0,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,NULL);
+                    "#
+                ))
+                .await
+                .unwrap();
+            let issue_before = issue::Entity::find_by_id("50000000000000000000000000000001")
+                .one(&database)
+                .await
+                .unwrap()
+                .unwrap();
+            let revision_before = project::Entity::find_by_id(PROJECT)
+                .one(&database)
+                .await
+                .unwrap()
+                .unwrap()
+                .state_revision;
+            let worktree_before = worktree::Entity::find_by_id("70000000000000000000000000000001")
+                .one(&database)
+                .await
+                .unwrap()
+                .unwrap();
+
+            let error = hierarchy::reparent(
+                &database,
+                hierarchy::ReparentWorkItem {
+                    id: issue_before.id.clone(),
+                    parent_id: destination,
+                    before_id: None,
+                    after_id: None,
+                },
+                None,
+            )
+            .await
+            .unwrap_err();
+
+            assert_eq!(
+                error.to_string(),
+                "Close or discard the task worktree before moving it to another module."
+            );
+            assert_eq!(
+                issue::Entity::find_by_id(&issue_before.id)
+                    .one(&database)
+                    .await
+                    .unwrap()
+                    .unwrap(),
+                issue_before
+            );
+            assert_eq!(
+                project::Entity::find_by_id(PROJECT)
+                    .one(&database)
+                    .await
+                    .unwrap()
+                    .unwrap()
+                    .state_revision,
+                revision_before
+            );
+            assert_eq!(
+                worktree::Entity::find_by_id(&worktree_before.id)
+                    .one(&database)
+                    .await
+                    .unwrap()
+                    .unwrap(),
+                worktree_before
+            );
+        }
+    }
+}
+
+#[tokio::test]
+async fn a_live_worktree_allows_same_module_reparenting() {
+    let (_directory, database) = fixture().await;
+    install_worktrees(&database).await;
+    database
+        .execute_unprepared(&format!(
+            r#"
+            INSERT INTO worktracker_issue VALUES
+                ('20000000000000000000000000000001','{PROJECT}','module','{MODULE_TYPE}',NULL,NULL,NULL,1,'Module A',1,0,'a','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'[]'),
+                ('50000000000000000000000000000001','{PROJECT}','task','{TASK_TYPE}','20000000000000000000000000000001','20000000000000000000000000000001','{BACKLOG}',2,'Parent A',2,0,'a','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'[]'),
+                ('50000000000000000000000000000002','{PROJECT}','task','{TASK_TYPE}','20000000000000000000000000000001','20000000000000000000000000000001','{BACKLOG}',3,'Parent B',3,0,'b','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'[]'),
+                ('50000000000000000000000000000003','{PROJECT}','task','{TASK_TYPE}','50000000000000000000000000000001','20000000000000000000000000000001','{BACKLOG}',4,'Task',4,0,'a','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'[]'),
+                ('50000000000000000000000000000004','{PROJECT}','task','{TASK_TYPE}','50000000000000000000000000000002','20000000000000000000000000000001','{BACKLOG}',5,'Sibling',5,0,'b','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'[]');
+            INSERT INTO worktrees VALUES
+                ('70000000000000000000000000000001','50000000000000000000000000000003','mem','{PROJECT}','20000000000000000000000000000001',4,'/repo','/worktree','branch','main','abc','active',0,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,NULL);
+            "#
+        ))
+        .await
+        .unwrap();
+
+    hierarchy::reparent(
+        &database,
+        hierarchy::ReparentWorkItem {
+            id: "50000000000000000000000000000003".to_owned(),
+            parent_id: Some("50000000000000000000000000000002".to_owned()),
+            before_id: None,
+            after_id: None,
+        },
+        None,
+    )
+    .await
+    .unwrap();
+
+    let moved = issue::Entity::find_by_id("50000000000000000000000000000003")
+        .one(&database)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        moved.parent_id.as_deref(),
+        Some("50000000000000000000000000000002")
+    );
+    assert_eq!(
+        moved.module_id.as_deref(),
+        Some("20000000000000000000000000000001")
+    );
+
+    hierarchy::reparent(
+        &database,
+        hierarchy::ReparentWorkItem {
+            id: moved.id.clone(),
+            parent_id: moved.parent_id.clone(),
+            before_id: Some("50000000000000000000000000000004".to_owned()),
+            after_id: None,
+        },
+        None,
+    )
+    .await
+    .unwrap();
+    assert_ne!(
+        issue::Entity::find_by_id(moved.id)
+            .one(&database)
+            .await
+            .unwrap()
+            .unwrap()
+            .rank,
+        moved.rank
     );
 }
 
@@ -1594,7 +1767,7 @@ async fn graphql_exposes_only_authored_mutations_and_structured_errors() {
     );
     let binding_write: serde_json::Value = serde_json::from_str(
         &api.clone().graphql_execute(serde_json::json!({
-            "query": format!("mutation {{ upsert_issue_type_launch_binding(issue_type_id: \"{TASK_TYPE}\", state_id: \"{BACKLOG}\", workflow_revision: 2, prompt: \"Implement it.\", required_skills: [\"tdd\"], entry_skill: \"tdd\", profile: \"careful\") {{ id prompt required_skills: requiredSkills entry_skill: entrySkill profile }} }}")
+            "query": format!("mutation {{ upsert_issue_type_launch_binding(issue_type_id: \"{TASK_TYPE}\", state_id: \"{BACKLOG}\", workflow_revision: 2, prompt: \"Implement it.\", required_skills: [\"tdd\"], stage_skills: [\"  future  \", \"Future\", \"future\", \"\"] ) {{ id prompt required_skills: requiredSkills stage_skills: stageSkills }} }}")
         }).to_string()).await,
     ).unwrap();
     assert!(binding_write.get("errors").is_none(), "{binding_write:#}");
@@ -1603,12 +1776,8 @@ async fn graphql_exposes_only_authored_mutations_and_structured_errors() {
         serde_json::json!(["tdd"])
     );
     assert_eq!(
-        binding_write["data"]["upsert_issue_type_launch_binding"]["entry_skill"],
-        "tdd"
-    );
-    assert_eq!(
-        binding_write["data"]["upsert_issue_type_launch_binding"]["profile"],
-        "careful"
+        binding_write["data"]["upsert_issue_type_launch_binding"]["stage_skills"],
+        serde_json::json!(["future", "Future"])
     );
     let stale_binding_write: serde_json::Value = serde_json::from_str(
         &api.clone().graphql_execute(serde_json::json!({
@@ -2077,7 +2246,7 @@ async fn workflow_configuration_compare_and_set_is_atomic_and_prunes_unreachable
             workflow_revision: 2,
             prompt: workflow::PatchValue::Value("Implement the work item.".to_owned()),
             required_skills: workflow::PatchValue::Unset,
-            entry_skill: workflow::PatchValue::Unset,
+            stage_skills: workflow::PatchValue::Unset,
             profile: workflow::PatchValue::Unset,
             model_id: workflow::PatchValue::Unset,
             reasoning_id: workflow::PatchValue::Unset,
@@ -2335,7 +2504,7 @@ async fn description_appends_serialize_without_losing_content() {
 }
 
 #[tokio::test]
-async fn review_finding_creation_owns_parent_policy_and_evidence_format() {
+async fn review_finding_creation_owns_parent_policy_evidence_and_serial_relationship() {
     let (_directory, database) = fixture().await;
     database
         .execute_unprepared(&format!(
@@ -2373,7 +2542,7 @@ async fn review_finding_creation_owns_parent_policy_and_evidence_format() {
     )
     .await
     .unwrap();
-    let row = issue::Entity::find_by_id(finding)
+    let row = issue::Entity::find_by_id(&finding)
         .one(&database)
         .await
         .unwrap()
@@ -2384,6 +2553,29 @@ async fn review_finding_creation_owns_parent_policy_and_evidence_format() {
     assert_eq!(
         row.description,
         "Path: studio/src-tauri/src/work_management/mcp/dispatch.rs\nLines: 10-12\nNote: Policy belongs in the transaction."
+    );
+    let next_finding = work_items::create_review_finding(
+        &database,
+        work_items::CreateReviewFinding {
+            project_id: PROJECT.to_owned(),
+            parent_id: parent.clone(),
+            name: "Second finding".to_owned(),
+            path: "studio/src-tauri/src/work_management/mcp/dispatch.rs".to_owned(),
+            line_start: 20,
+            line_end: 21,
+            note: None,
+        },
+        None,
+    )
+    .await
+    .unwrap();
+    assert!(blockers::list(&database, &finding)
+        .await
+        .unwrap()
+        .is_empty());
+    assert_eq!(
+        blockers::list(&database, &next_finding).await.unwrap(),
+        [finding]
     );
 
     let error = work_items::create_review_finding(
@@ -2415,7 +2607,7 @@ async fn launch_binding_patch_preserves_omitted_fields_and_skips_noop_revision()
             workflow_revision: 1,
             prompt: workflow::PatchValue::Value("Initial prompt".to_owned()),
             required_skills: workflow::PatchValue::Value(vec!["tdd".to_owned()]),
-            entry_skill: workflow::PatchValue::Unset,
+            stage_skills: workflow::PatchValue::Unset,
             profile: workflow::PatchValue::Unset,
             model_id: workflow::PatchValue::Unset,
             reasoning_id: workflow::PatchValue::Unset,
@@ -2441,7 +2633,7 @@ async fn launch_binding_patch_preserves_omitted_fields_and_skips_noop_revision()
             workflow_revision: 2,
             prompt: workflow::PatchValue::Unset,
             required_skills: workflow::PatchValue::Unset,
-            entry_skill: workflow::PatchValue::Unset,
+            stage_skills: workflow::PatchValue::Unset,
             profile: workflow::PatchValue::Unset,
             model_id: workflow::PatchValue::Unset,
             reasoning_id: workflow::PatchValue::Unset,
@@ -2482,7 +2674,7 @@ async fn automation_flags_ride_the_launch_binding_patch_and_need_a_configured_bi
             workflow_revision: 1,
             prompt: workflow::PatchValue::Unset,
             required_skills: workflow::PatchValue::Unset,
-            entry_skill: workflow::PatchValue::Unset,
+            stage_skills: workflow::PatchValue::Unset,
             profile: workflow::PatchValue::Unset,
             model_id: workflow::PatchValue::Unset,
             reasoning_id: workflow::PatchValue::Unset,
@@ -2518,7 +2710,7 @@ async fn automation_flags_ride_the_launch_binding_patch_and_need_a_configured_bi
             workflow_revision: 1,
             prompt: workflow::PatchValue::Value("Implement it.".to_owned()),
             required_skills: workflow::PatchValue::Unset,
-            entry_skill: workflow::PatchValue::Unset,
+            stage_skills: workflow::PatchValue::Unset,
             profile: workflow::PatchValue::Unset,
             model_id: workflow::PatchValue::Unset,
             reasoning_id: workflow::PatchValue::Unset,
@@ -2549,7 +2741,7 @@ async fn automation_flags_ride_the_launch_binding_patch_and_need_a_configured_bi
                     workflow_revision: revision,
                     prompt: workflow::PatchValue::Unset,
                     required_skills: workflow::PatchValue::Unset,
-                    entry_skill: workflow::PatchValue::Unset,
+                    stage_skills: workflow::PatchValue::Unset,
                     profile: workflow::PatchValue::Unset,
                     model_id: workflow::PatchValue::Unset,
                     reasoning_id: workflow::PatchValue::Unset,

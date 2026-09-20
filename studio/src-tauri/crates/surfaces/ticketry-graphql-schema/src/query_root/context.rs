@@ -154,6 +154,7 @@ pub(super) fn builder_context() -> BuilderContext {
         ],
     );
     add_app_setting_value_column(&mut context);
+    add_launch_binding_stage_skills_column(&mut context);
     // Derived, Git-owned, and server-owned Worktree columns are never part of
     // a generated input, whatever the entity's mutation registration is.
     ticketry_workspace_runtime::persistence::column_policy::apply(&mut context);
@@ -172,6 +173,44 @@ pub(super) fn builder_context() -> BuilderContext {
     );
 
     context
+}
+
+fn add_launch_binding_stage_skills_column(context: &mut BuilderContext) {
+    use ticketry_entities::launch_binding;
+
+    let mut options = ColumnOptions::default();
+    options.output_type = Some(
+        seaography::async_graphql::dynamic::TypeRef::named_nn_list_nn(
+            seaography::async_graphql::dynamic::TypeRef::STRING,
+        ),
+    );
+    options.output_conversion = Some(Arc::new(|value| match value {
+        sea_orm::Value::Json(Some(value)) => {
+            let values = value
+                .as_array()
+                .ok_or_else(|| seaography::async_graphql::Error::new("expected a JSON array"))?
+                .iter()
+                .map(|item| {
+                    item.as_str().map(str::to_owned).ok_or_else(|| {
+                        seaography::async_graphql::Error::new(
+                            "expected stage_skills to contain strings",
+                        )
+                    })
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            Ok(Some(FieldValue::list(
+                values.into_iter().map(FieldValue::value),
+            )))
+        }
+        sea_orm::Value::Json(None) => Ok(None),
+        value => Err(seaography::async_graphql::Error::new(format!(
+            "expected a JSON stage-skills column, received {value:?}"
+        ))),
+    }));
+    context.types.column_options.insert(
+        EntityColumnId::of::<launch_binding::Entity>(&launch_binding::Column::StageSkills),
+        options,
+    );
 }
 
 fn add_app_setting_value_column(context: &mut BuilderContext) {

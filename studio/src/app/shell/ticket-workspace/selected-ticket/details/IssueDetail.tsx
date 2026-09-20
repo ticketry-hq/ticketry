@@ -39,7 +39,7 @@ import FindingsPanel from "./FindingsPanel";
 import { hasFindingsPanel } from "./internal/findings";
 import IssueSidebar from "./IssueSidebar";
 import IssueActionsMenu from "./IssueActionsMenu";
-import { NormalRunAction } from "./NormalRunAction";
+import { NormalRunAction, SubtreeRunAction } from "./NormalRunAction";
 import { SerialRunAction } from "./SerialRunAction";
 import { RunNowAction } from "./RunNowAction";
 import { readVersionedItem } from "../../../../../shared/storage/versioned";
@@ -284,11 +284,6 @@ function IssueDetailContent({ issueId, detailsVisible }: { issueId: string; deta
         />
 
         <div className="mt-4 flex items-center gap-3" data-testid="status-row">
-          <NormalRunAction
-            key={`normal-run-${task.id}`}
-            task={task}
-            moduleId={epic?.id ?? selectedModuleId ?? null}
-          />
           <StatePicker
             projectId={task.project_id}
             value={task.state}
@@ -306,8 +301,18 @@ function IssueDetailContent({ issueId, detailsVisible }: { issueId: string; deta
             states={states}
             issueTypes={issueTypes}
           />
+          <SubtreeRunAction
+            key={`subtree-run-${task.id}`}
+            task={task}
+            moduleId={epic?.id ?? selectedModuleId ?? null}
+          />
           <SerialRunAction
             key={`serial-run-${task.id}`}
+            task={task}
+            moduleId={epic?.id ?? selectedModuleId ?? null}
+          />
+          <NormalRunAction
+            key={`normal-run-${task.id}`}
             task={task}
             moduleId={epic?.id ?? selectedModuleId ?? null}
           />

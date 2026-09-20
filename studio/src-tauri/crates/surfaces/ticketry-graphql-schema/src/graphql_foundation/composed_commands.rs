@@ -34,6 +34,10 @@ pub struct ComposedWorktracker {
     pub viewer_ownership: ticketry_terminal::ViewerOwnershipService,
     pub terminal_runtime: ticketry_terminal::InteractiveTerminalLaunchRuntime,
     pub output_activity: ticketry_terminal::TerminalOutputActivityService,
+    /// The one resident Codex app-server allocation. Codex discovery is
+    /// delayed, so the handle exists from startup and only reports the
+    /// capability unavailable until Codex is found.
+    pub instant_run_ticket_titles: ticketry_terminal::InstantRunTicketTitleService,
 }
 
 /// The live command connection and workspace services held by the installed
@@ -47,6 +51,7 @@ pub struct ComposedCommandRuntime {
     viewer_ownership: ticketry_terminal::ViewerOwnershipService,
     terminal_runtime: ticketry_terminal::InteractiveTerminalLaunchRuntime,
     output_activity: ticketry_terminal::TerminalOutputActivityService,
+    instant_run_ticket_titles: ticketry_terminal::InstantRunTicketTitleService,
 }
 
 impl ComposedCommandRuntime {
@@ -59,6 +64,7 @@ impl ComposedCommandRuntime {
             viewer_ownership: composed.viewer_ownership,
             terminal_runtime: composed.terminal_runtime,
             output_activity: composed.output_activity,
+            instant_run_ticket_titles: composed.instant_run_ticket_titles,
         }
     }
 
@@ -94,5 +100,12 @@ impl ComposedCommandRuntime {
 
     pub fn output_activity(&self) -> &ticketry_terminal::TerminalOutputActivityService {
         &self.output_activity
+    }
+
+    /// The same Codex thread capability the GraphQL title resolver reads
+    /// through, so a caller renaming a thread reuses the one resident
+    /// app-server rather than starting a second one.
+    pub fn instant_run_ticket_titles(&self) -> &ticketry_terminal::InstantRunTicketTitleService {
+        &self.instant_run_ticket_titles
     }
 }

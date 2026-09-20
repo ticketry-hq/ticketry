@@ -93,7 +93,10 @@ async fn assert_persisted_catalog(database: &sea_orm::DatabaseConnection, projec
             "Tickets" => Some("to-tickets"),
             _ => None,
         };
-        assert_eq!(binding.entry_skill.as_deref(), expected);
+        assert_eq!(
+            binding.stage_skills,
+            serde_json::json!(expected.into_iter().collect::<Vec<_>>())
+        );
     }
 }
 

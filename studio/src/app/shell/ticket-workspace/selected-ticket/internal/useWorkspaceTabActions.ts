@@ -5,6 +5,7 @@ import type {
   TabKind,
 } from "../../../../../features/agents/types";
 import {
+  isScratchBucket,
   useTerminalStore,
   type ForegroundOwner,
   type SessionMeta,
@@ -16,6 +17,7 @@ import {
   useClientStore,
   useClientStore as useTicketWorkspaceStore,
 } from "../../../../../state/clientStore";
+import { clearChangesCheckout } from "./openChangesWorkspace";
 import { closeTerminalTab } from "./closeTerminalTab";
 import { rememberStudioWorkspaceTarget } from "../../../../../features/workspace-state/studioWorkspaceTarget";
 import type { TaskWorkspaceTabIdentity } from "./useTaskWorkspaceTabNavigation";
@@ -95,6 +97,10 @@ export function useWorkspaceTabActions({
     if (!bucket) return;
     cancelRestoration();
     rememberPendingTerminalRef.current = false;
+    if ((tab.kind === "details" || tab.kind === "changes") && !isScratchBucket(bucket)) {
+      const moduleId = useClientStore.getState().selectedModuleId;
+      if (moduleId) clearChangesCheckout(moduleId);
+    }
     if (tab.kind === "details") {
       setActive(bucket, "details");
       if (owner === "studio") {

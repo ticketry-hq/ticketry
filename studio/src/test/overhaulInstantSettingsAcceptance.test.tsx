@@ -68,19 +68,19 @@ describe("overhaul acceptance — Conversations settings", () => {
       name: "Conversation starter prompt",
     });
     expect(prompt).toHaveValue("Keep changes local.");
+    expect(screen.queryByRole("checkbox", {
+      name: /Auto-close successful runs/,
+    })).toBeNull();
     fireEvent.change(prompt, {
       target: { value: "Keep changes local and run focused tests." },
     });
-    fireEvent.click(screen.getByRole("checkbox", {
-      name: /Auto-close successful runs/,
-    }));
     fireEvent.click(
       screen.getByRole("button", { name: "Save conversation settings" }),
     );
 
     await waitFor(() => expect(saves).toEqual([{
       initialPrompt: "Keep changes local and run focused tests.",
-      autoClose: true,
+      autoClose: false,
     }]));
     expect(await screen.findByText("Conversation settings saved.")).toBeVisible();
 
@@ -92,9 +92,9 @@ describe("overhaul acceptance — Conversations settings", () => {
     await waitFor(() => expect(saves).toEqual([
       {
         initialPrompt: "Keep changes local and run focused tests.",
-        autoClose: true,
+        autoClose: false,
       },
-      { initialPrompt: "", autoClose: true },
+      { initialPrompt: "", autoClose: false },
     ]));
     expect(await screen.findByText("Conversation settings saved.")).toBeVisible();
     expect(prompt).toHaveValue("");

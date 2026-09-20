@@ -14,10 +14,7 @@ use ticketry_entities::{issue_type, issue_type_transition, launch_binding, state
 pub async fn seed(database: &impl ConnectionTrait, project_id: &str) -> Result<(), CommandError> {
     let defaults = reviewed_defaults::load()
         .map_err(|_| CommandError::Storage("Reviewed project defaults are invalid.".to_owned()))?;
-    let entry_skills = reviewed_defaults::entry_skill_seeds()
-        .map_err(|_| {
-            CommandError::Storage("Reviewed entry-skill defaults are invalid.".to_owned())
-        })?
+    let stage_skills = reviewed_defaults::stage_skill_seeds()
         .into_iter()
         .collect::<HashMap<_, _>>();
     let now = super::timestamp::now();
@@ -118,7 +115,11 @@ pub async fn seed(database: &impl ConnectionTrait, project_id: &str) -> Result<(
                 state_id: Set(state_ids[&state_seed.name].clone()),
                 prompt: Set(prompt),
                 required_skills: Set(serde_json::json!(required_skills)),
-                entry_skill: Set(entry_skills.get(&state_seed.name).cloned()),
+                stage_skills: Set(serde_json::json!(stage_skills
+                    .get(&state_seed.name)
+                    .into_iter()
+                    .cloned()
+                    .collect::<Vec<_>>())),
                 profile: Set(None),
                 model_id: Set(None),
                 reasoning_id: Set(None),

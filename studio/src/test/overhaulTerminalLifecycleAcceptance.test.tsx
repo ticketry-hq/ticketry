@@ -159,6 +159,19 @@ describe("overhaul acceptance — terminals", () => {
     expect(tabs[0]).toMatchObject({ id: "session-1", lifecycle: "working" });
   });
 
+  it("presents a missing terminal as exited when its run completed", () => {
+    const meta = session("session-1", "story-1", "run-1", "session_lost");
+    const tabs = deriveTaskSessions(
+      "story-1",
+      { "session-1": meta },
+      { "run-1": run("run-1", "story-1", "exited") },
+      new Set(),
+    );
+
+    expect(tabs).toHaveLength(1);
+    expect(tabs[0]).toMatchObject({ id: "session-1", lifecycle: "exited" });
+  });
+
   it("[overhaul-10] keeps a closed terminal dismissed across a server refetch", () => {
     const meta = session("session-1", "story-1", "run-1");
     const liveRun = run("run-1", "story-1");

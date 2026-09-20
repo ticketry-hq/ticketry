@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import type {
   IssueType,
   LaunchBindingInput,
@@ -11,11 +11,10 @@ import {
   type LaunchDefaultPickerValue,
 } from "./LaunchDefaultPicker";
 import { useLaunchBindingFields } from "./internal/launchBindingFields";
-import {
-  entrySkillWarning,
-  validateLaunchBindingOptions,
-} from "./launchBindingValidation";
+import { useLaunchBindingSaveQueue } from "./internal/launchBindingSaveQueue";
+import { validateLaunchBindingOptions } from "./launchBindingValidation";
 import { getCodexProfilesSnapshot } from "./providerQueries";
+import { StageSkillsField } from "./StageSkillsField";
 import {
   SETTINGS_FIELD_CLASS,
   SettingsStatusLine,
@@ -42,27 +41,23 @@ export function LaunchConfigurationForm({
   save,
   state,
 }: LaunchConfigurationFormProps) {
+  const identity = `${issueType.id}:${state.id}`;
   const [fields, setFields, markSaved] = useLaunchBindingFields(
-    `${issueType.id}:${state.id}`,
+    identity,
     binding,
   );
-  const { prompt, entrySkill, agent, profile, model, reasoning } = fields;
+  const { prompt, stageSkills, agent, profile, model, reasoning } = fields;
   const setPrompt = (next: string) => setFields({ ...fields, prompt: next });
-  const [applying, setApplying] = useState(false);
 
   const input = useMemo<LaunchBindingInput>(() => ({
     prompt,
-    entry_skill: optional(entrySkill),
+    stage_skills: stageSkills,
     agent: optional(agent),
     profile: optional(profile),
     model: optional(model),
     reasoning: optional(reasoning),
-  }), [agent, entrySkill, model, profile, prompt, reasoning]);
+  }), [agent, model, profile, prompt, reasoning, stageSkills]);
   const validationError = validateLaunchBindingOptions(input, providerCapabilities);
-  const skillWarning = entrySkillWarning(
-    binding?.required_skills ?? [],
-    entrySkill,
-  );
   const pickerValue = useMemo<LaunchDefaultPickerValue>(() => ({
     provider: agent,
     profile,
@@ -70,22 +65,16 @@ export function LaunchConfigurationForm({
     reasoning,
   }), [agent, model, profile, reasoning]);
 
-  const apply = async (next: LaunchBindingInput) => {
-    setApplying(true);
-    try {
-      await save(next);
-      markSaved({
-        prompt: next.prompt ?? "",
-        entrySkill: next.entry_skill ?? "",
-        agent: next.agent ?? "",
-        profile: next.profile ?? "",
-        model: next.model ?? "",
-        reasoning: next.reasoning ?? "",
-      });
-    } finally {
-      setApplying(false);
-    }
-  };
+  const [apply, applying] = useLaunchBindingSaveQueue(identity, save, (next) => {
+    markSaved({
+      prompt: next.prompt ?? "",
+      stageSkills: next.stage_skills ?? stageSkills,
+      agent: next.agent ?? "",
+      profile: next.profile ?? "",
+      model: next.model ?? "",
+      reasoning: next.reasoning ?? "",
+    });
+  });
 
   const updatePicker = (next: LaunchDefaultPickerValue) => {
     setFields({
@@ -103,7 +92,7 @@ export function LaunchConfigurationForm({
     // old reasoning alongside the new provider, a pair the server 422s.
     void apply({
       prompt,
-      entry_skill: optional(entrySkill),
+      stage_skills: stageSkills,
       agent: optional(next.provider),
       profile: optional(next.profile),
       model: optional(next.model),
@@ -130,27 +119,16 @@ export function LaunchConfigurationForm({
         />
       </label>
 
-      <label className="grid gap-1 text-sm text-text-muted">
-        Entry skill
-        <select
-          aria-label="Entry skill"
-          value={entrySkill}
-          onChange={(event) => {
-            const nextEntrySkill = event.target.value;
-            setFields({ ...fields, entrySkill: nextEntrySkill });
-            void apply({
-              ...input,
-              entry_skill: optional(nextEntrySkill),
-            });
-          }}
-          className={SETTINGS_FIELD_CLASS}
-        >
-          <option value="">No entry skill</option>
-          {(binding?.required_skills ?? []).map((skill) => (
-            <option key={skill} value={skill}>{skill}</option>
-          ))}
-        </select>
-      </label>
+      <StageSkillsField
+        skills={stageSkills}
+        onChange={(nextStageSkills) => {
+          setFields({ ...fields, stageSkills: nextStageSkills });
+          void apply({
+            ...input,
+            stage_skills: nextStageSkills,
+          });
+        }}
+      />
 
       <LaunchDefaultPicker
         providerCapabilities={providerCapabilities}
@@ -164,9 +142,6 @@ export function LaunchConfigurationForm({
         <SettingsStatusLine tone="danger">
           {validationError?.message ?? error}
         </SettingsStatusLine>
-      ) : null}
-      {skillWarning ? (
-        <SettingsStatusLine tone="attention">{skillWarning}</SettingsStatusLine>
       ) : null}
       {applying ? <p className="text-sm text-text-muted">Applying…</p> : null}
       <p className="text-sm text-text-muted">

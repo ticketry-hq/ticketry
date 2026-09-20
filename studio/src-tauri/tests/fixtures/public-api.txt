@@ -27,7 +27,7 @@ ticketry-agent-execution|reconciliation
 ticketry-agent-execution|run_now
 ticketry-codex-app-server|CodexAppServerClient
 ticketry-codex-app-server|CodexAppServerError
-ticketry-codex-app-server|CodexThreadTitleReader
+ticketry-codex-app-server|CodexThreadTitles
 ticketry-data-directory|DataDirectoryGuard
 ticketry-data-directory|OwnerIdentity
 ticketry-data-directory|OwnershipError
@@ -510,6 +510,7 @@ ticketry-settings|InstantLaunchSettings
 ticketry-settings|JsonSourceClassification
 ticketry-settings|LAUNCH_BINDING_ENTRY_SKILL_LEDGER
 ticketry-settings|LAUNCH_BINDING_PROFILE_LEDGER
+ticketry-settings|LAUNCH_BINDING_STAGE_SKILLS_LEDGER
 ticketry-settings|MAX_INITIAL_PROMPT_CHARACTERS
 ticketry-settings|ModuleLink
 ticketry-settings|OWNED_ASSETS
@@ -710,7 +711,6 @@ ticketry-terminal|approved_tool_path
 ticketry-terminal|configured_sweep_interval
 ticketry-terminal|current_runtime_namespace
 ticketry-terminal|ensure_terminal_persistence_adopted
-ticketry-terminal|entry_skill_invocation
 ticketry-terminal|journal_profile_teardown
 ticketry-terminal|journal_terminal_cleanup
 ticketry-terminal|observe_live_sessions
@@ -771,6 +771,7 @@ ticketry-work-management|identity
 ticketry-work-management|import
 ticketry-work-management|launch_binding_entry_skill_migration
 ticketry-work-management|launch_binding_profile_migration
+ticketry-work-management|launch_binding_stage_skills_migration
 ticketry-work-management|launch_policy
 ticketry-work-management|legacy_source
 ticketry-work-management|module_links_ownership_manifest

@@ -393,7 +393,7 @@ mod prompt_delivery_failure_tests {
     use super::delivery_failure_retryable;
 
     #[test]
-    fn entry_skill_delivery_allows_only_one_user_retry() {
+    fn prompt_delivery_failure_allows_only_one_user_retry() {
         assert!(delivery_failure_retryable(None));
         assert!(!delivery_failure_retryable(Some("root-attempt")));
     }

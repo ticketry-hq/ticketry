@@ -21,7 +21,7 @@ const capabilities: ProviderCapabilities[] = [
     agent: "gemini",
     accepts_model: true,
     accepts_any_model: false,
-    model_aliases: [],
+    model_aliases: ["gemini-2.5-pro"],
     model_prefixes: ["gemini-"],
     // Gemini declares no reasoning levels at all, so any value is invalid.
     reasoning_levels: [],
@@ -35,7 +35,7 @@ const binding: ScopedWorkflowLaunchBinding = {
   state_id: "ready",
   prompt: "do the thing",
   required_skills: [],
-  entry_skill: null,
+  stage_skills: [],
   agent: "claude",
   profile: null,
   model: "opus",
@@ -72,10 +72,10 @@ describe("LaunchConfigurationForm", () => {
     await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
     expect(save).toHaveBeenCalledWith({
       prompt: "do the thing",
-      entry_skill: null,
+      stage_skills: [],
       agent: "gemini",
       profile: null,
-      model: null,
+      model: "gemini-2.5-pro",
       reasoning: null,
     });
   });
@@ -91,7 +91,7 @@ describe("LaunchConfigurationForm", () => {
     await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
     expect(save).toHaveBeenCalledWith({
       prompt: "do the thing",
-      entry_skill: null,
+      stage_skills: [],
       agent: "claude",
       profile: null,
       model: "opus",
@@ -133,7 +133,7 @@ describe("LaunchConfigurationForm", () => {
     await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
     expect(save).toHaveBeenCalledWith({
       prompt: "do the thing",
-      entry_skill: null,
+      stage_skills: [],
       agent: "claude",
       profile: null,
       model: "opus",
@@ -141,7 +141,7 @@ describe("LaunchConfigurationForm", () => {
     });
   });
 
-  it("saves the newly selected state's prompt, not the previous state's", async () => {
+  it("saves the newly selected state's prompt and skills", async () => {
     const save = vi.fn().mockResolvedValue(undefined);
     const other = { id: "implement", name: "Implement" } as State;
     const view = render(
@@ -156,7 +156,12 @@ describe("LaunchConfigurationForm", () => {
 
     view.rerender(
       <LaunchConfigurationForm
-        binding={{ ...binding, state_id: "implement", prompt: "implement the slice" }}
+        binding={{
+          ...binding,
+          state_id: "implement",
+          prompt: "implement the slice",
+          stage_skills: ["tdd", "frontend-design"],
+        }}
         issueType={issueType}
         providerCapabilities={capabilities}
         save={save}
@@ -171,7 +176,7 @@ describe("LaunchConfigurationForm", () => {
     await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
     expect(save).toHaveBeenCalledWith({
       prompt: "implement the slice",
-      entry_skill: null,
+      stage_skills: ["tdd", "frontend-design"],
       agent: "claude",
       profile: null,
       model: "opus",

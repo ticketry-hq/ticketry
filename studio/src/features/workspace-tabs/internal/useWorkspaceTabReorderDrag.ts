@@ -1,4 +1,4 @@
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import {
   useAxisDragAndDrop,
   type DragSourceProps,
@@ -15,14 +15,17 @@ import type { WorkspaceTabOrderQuery } from "../queries";
 import type { WorkspaceTabIdentity } from "../types";
 import { workspaceTabDragCodec } from "./workspaceTabDrag";
 
-const POST_DROP_CLICK_WINDOW_MS = 300;
-
 export interface WorkspaceTabReorderDrag {
   readonly isPending: boolean;
   readonly dropIntentFor: (identity: WorkspaceTabIdentity) => DropIntent | null;
   readonly dragSourcePropsFor: (identity: WorkspaceTabIdentity) => DragSourceProps;
   readonly dropTargetPropsFor: (identity: WorkspaceTabIdentity) => DropTargetProps;
-  readonly consumePostDropClick: () => boolean;
+  /**
+   * True when this activation is the browser's click at the end of a drag
+   * rather than a new user gesture. Pass the activating event so keyboard
+   * activation, which carries no pointer detail, is never suppressed.
+   */
+  readonly consumePostDropClick: (event?: { detail: number }) => boolean;
 }
 
 export function useWorkspaceTabReorderDrag({
@@ -39,14 +42,24 @@ export function useWorkspaceTabReorderDrag({
   toPersistentIdentity: (identity: WorkspaceTabIdentity) => WorkspaceTabIdentity;
 }): WorkspaceTabReorderDrag {
   const { reorder, isPending } = useReorderWorkspaceTabs(workItemId);
-  const droppedAt = useRef(0);
+  /* Set at the drop, cleared by the next pointer gesture — the drag's own
+     trailing click lands in between, and nothing else does. */
+  const dropEcho = useRef(false);
+
+  useEffect(() => {
+    const clearEcho = () => {
+      dropEcho.current = false;
+    };
+    document.addEventListener("pointerdown", clearEcho, true);
+    return () => document.removeEventListener("pointerdown", clearEcho, true);
+  }, []);
 
   const handleDrop = useCallback(
     (
       source: WorkspaceTabIdentity,
       resolved: { targetId: string; intent: DropIntent },
     ) => {
-      droppedAt.current = Date.now();
+      dropEcho.current = true;
       if (!savedOrder.isReady) return;
       const target = visibleOrder.find(
         (identity) => workspaceTabIdentityKey(identity) === resolved.targetId,
@@ -95,9 +108,9 @@ export function useWorkspaceTabReorderDrag({
       dragDrop.getDropTargetProps(workspaceTabIdentityKey(identity)),
     [dragDrop.getDropTargetProps],
   );
-  const consumePostDropClick = useCallback(() => {
-    if (Date.now() - droppedAt.current >= POST_DROP_CLICK_WINDOW_MS) return false;
-    droppedAt.current = 0;
+  const consumePostDropClick = useCallback((event?: { detail: number }) => {
+    if (!dropEcho.current || (event?.detail ?? 0) === 0) return false;
+    dropEcho.current = false;
     return true;
   }, []);
 

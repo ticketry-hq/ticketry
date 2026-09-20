@@ -2,8 +2,8 @@
 //!
 //! A handoff edge never changes *whether* the destination launches — it
 //! changes *how*. When the work item still owns a live, input-capable agent
-//! session, the composed destination prompt and the destination entry skill
-//! are typed into that session instead of a fresh agent being spawned. When it
+//! session, the composed destination prompt is typed into that session instead
+//! of a fresh agent being spawned. When it
 //! does not, the caller falls back to the fresh launch an unchecked edge would
 //! have produced.
 
@@ -13,8 +13,7 @@ use ticketry_entities::session;
 use ticketry_launch::{provider_contract, Provider};
 use ticketry_terminal::TmuxAdapter;
 use ticketry_terminal::{
-    entry_skill_invocation, DeliveryTimings, PromptDelivery, PromptDeliveryError,
-    PromptDeliveryTmux, TmuxPromptDelivery,
+    DeliveryTimings, PromptDelivery, PromptDeliveryError, PromptDeliveryTmux, TmuxPromptDelivery,
 };
 
 const HANDOFF_READINESS_TIMEOUT_SECONDS_ENV: &str = "TICKETRY_HANDOFF_READINESS_TIMEOUT_SECONDS";
@@ -60,17 +59,8 @@ pub(super) async fn live_agent_session(
     )
 }
 
-/// Type the destination prompt, then the destination entry skill, into a live
-/// session.
-///
-/// They are always two submissions. A provider treats one paste as one
-/// message, so combining them would hand the agent a prompt with a literal
-/// skill invocation inside it rather than invoking the skill.
-pub(super) async fn deliver(
-    live: &LiveAgentSession,
-    prompt: String,
-    entry_skill: Option<String>,
-) -> Result<(), String> {
+/// Type the composed destination prompt into a live session.
+pub(super) async fn deliver(live: &LiveAgentSession, prompt: String) -> Result<(), String> {
     let provider = live.provider;
     let run_id = live.agent_run_id.clone();
     tokio::task::spawn_blocking(move || {
@@ -78,13 +68,7 @@ pub(super) async fn deliver(
             TmuxPromptDelivery::discover()?,
             DeliveryTimings::handoff(configured_readiness_timeout()),
         );
-        submit_destination(
-            &mut delivery,
-            provider,
-            &run_id,
-            &prompt,
-            entry_skill.as_deref(),
-        )
+        submit_destination(&mut delivery, provider, &run_id, &prompt)
     })
     .await
     .map_err(|error| error.to_string())?
@@ -99,21 +83,13 @@ fn configured_readiness_timeout() -> Option<std::time::Duration> {
         .map(std::time::Duration::from_secs)
 }
 
-/// The destination arrives as prompt first, entry skill second, each submitted
-/// on its own. After the prompt's readiness wait, the skill is typed
-/// immediately so the provider queues it while handling the prompt.
 fn submit_destination<T: PromptDeliveryTmux>(
     delivery: &mut PromptDelivery<T>,
     provider: Provider,
     run_id: &str,
     prompt: &str,
-    entry_skill: Option<&str>,
 ) -> Result<(), PromptDeliveryError> {
-    delivery.submit(provider, run_id, prompt)?;
-    let Some(skill) = entry_skill else {
-        return Ok(());
-    };
-    delivery.submit_follow_on(provider, run_id, &entry_skill_invocation(provider, skill))
+    delivery.submit(provider, run_id, prompt)
 }
 
 /// Open handoff candidates for the work item, newest first.
@@ -193,7 +169,6 @@ mod tests {
         buffers: HashMap<String, String>,
         pasted: String,
         calls: Vec<String>,
-        hide_ready_after_submission: bool,
         collapse_multiline_pastes: bool,
         verifications: usize,
     }
@@ -205,13 +180,7 @@ mod tests {
         }
 
         fn capture_screen(&mut self, _: &str) -> Result<Vec<u8>, String> {
-            let submitted = self.calls.iter().filter(|call| *call == "enter").count() >= 2;
-            let composer = if self.hide_ready_after_submission && submitted {
-                ""
-            } else {
-                "\u{276f} "
-            };
-            Ok(format!("{composer}{}", self.pasted).into_bytes())
+            Ok(format!("\u{276f} {}", self.pasted).into_bytes())
         }
 
         fn set_buffer(&mut self, _: &str, buffer: &str, text: &str) -> Result<(), String> {
@@ -256,62 +225,20 @@ mod tests {
         }
     }
 
-    /// The destination prompt and the entry skill must reach the continued
-    /// session as two submissions. One combined paste would deliver the skill
-    /// as prose inside the prompt instead of invoking it.
+    /// The shared composer places stage skills in the destination prompt, so
+    /// handoff submits that prompt once and does not type a second command.
     #[test]
-    fn the_prompt_and_the_entry_skill_are_submitted_separately_in_that_order() {
+    fn the_composed_prompt_is_submitted_once_without_a_follow_on_skill_command() {
         let mut delivery = PromptDelivery::with_timings(FakePane::default(), instant());
+        let prompt = "Destination prompt.\n\nStage skills: [\"tdd\"]";
 
-        submit_destination(
-            &mut delivery,
-            Provider::Claude,
-            "run",
-            "Destination prompt.",
-            Some("tdd"),
-        )
-        .expect("both submissions land");
+        submit_destination(&mut delivery, Provider::Claude, "run", prompt)
+            .expect("the composed prompt lands");
 
         assert_eq!(
             delivery.tmux().calls,
             vec![
-                "paste:Destination prompt.".to_owned(),
-                "enter".to_owned(),
-                "enter".to_owned(),
-                "paste:/tdd".to_owned(),
-                "enter".to_owned(),
-                "enter".to_owned(),
-            ]
-        );
-        assert_eq!(delivery.tmux().verifications, 1);
-    }
-
-    /// Providers queue input typed while they are handling the destination
-    /// prompt, so the follow-on skill must not wait for another ready composer.
-    #[test]
-    fn the_entry_skill_is_queued_without_a_second_readiness_wait() {
-        let pane = FakePane {
-            hide_ready_after_submission: true,
-            ..Default::default()
-        };
-        let mut delivery = PromptDelivery::with_timings(pane, instant());
-
-        submit_destination(
-            &mut delivery,
-            Provider::Claude,
-            "run",
-            "Destination prompt.",
-            Some("tdd"),
-        )
-        .expect("the skill queues while the agent handles the prompt");
-
-        assert_eq!(
-            delivery.tmux().calls,
-            vec![
-                "paste:Destination prompt.".to_owned(),
-                "enter".to_owned(),
-                "enter".to_owned(),
-                "paste:/tdd".to_owned(),
+                format!("paste:{prompt}"),
                 "enter".to_owned(),
                 "enter".to_owned(),
             ]
@@ -332,41 +259,13 @@ mod tests {
         let mut delivery = PromptDelivery::with_timings(pane, instant());
         let prompt = "Destination prompt.\n\nWork item context (factual):\nState: Review";
 
-        submit_destination(&mut delivery, Provider::Claude, "run", prompt, Some("tdd"))
+        submit_destination(&mut delivery, Provider::Claude, "run", prompt)
             .expect("a collapsed paste is still a delivered paste");
 
         assert_eq!(
             delivery.tmux().calls,
             vec![
                 format!("paste:{prompt}"),
-                "enter".to_owned(),
-                "enter".to_owned(),
-                "paste:/tdd".to_owned(),
-                "enter".to_owned(),
-                "enter".to_owned(),
-            ]
-        );
-    }
-
-    /// A destination with no entry skill still delivers its prompt, and types
-    /// nothing after it.
-    #[test]
-    fn a_destination_without_an_entry_skill_submits_only_the_prompt() {
-        let mut delivery = PromptDelivery::with_timings(FakePane::default(), instant());
-
-        submit_destination(
-            &mut delivery,
-            Provider::Claude,
-            "run",
-            "Only a prompt.",
-            None,
-        )
-        .expect("the prompt lands");
-
-        assert_eq!(
-            delivery.tmux().calls,
-            vec![
-                "paste:Only a prompt.".to_owned(),
                 "enter".to_owned(),
                 "enter".to_owned(),
             ]

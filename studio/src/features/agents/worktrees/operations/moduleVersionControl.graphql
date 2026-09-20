@@ -1,7 +1,6 @@
 query ModuleVersionControl($moduleId: String!) {
   module_version_control(module_id: $moduleId) {
     module_id
-    worktrees_truncated
     checkout {
       available
       reason
@@ -25,31 +24,6 @@ query ModuleVersionControl($moduleId: String!) {
       }
       insertions
       deletions
-    }
-    worktrees {
-      kind
-      task_id
-      task_key
-      task_name
-      branch
-      available
-      clean
-      dirty
-      unpushed_count
-      pull_request_state
-      pull_request {
-        url
-        state
-        target_branch
-        head_commit
-        integrated
-        post_merge_work
-        replacement_eligible
-        follow_up_eligible
-        merge_preparation_eligible
-        reason
-      }
-      reason
     }
   }
 }

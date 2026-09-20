@@ -78,8 +78,8 @@ pub use terminal::persistence::{
     VERSION as TERMINAL_PERSISTENCE_VERSION,
 };
 pub use terminal::prompt_delivery::{
-    entry_skill_invocation, stage_text, submit_text, DeliveryTimings, PromptDelivery,
-    PromptDeliveryError, PromptDeliveryFailureReason, PromptDeliveryTmux, TmuxPromptDelivery,
+    stage_text, submit_text, DeliveryTimings, PromptDelivery, PromptDeliveryError,
+    PromptDeliveryFailureReason, PromptDeliveryTmux, TmuxPromptDelivery,
 };
 /* Keep the persistence version and ownership table names distinct at this
  * facade: the Runs crate has its own migration owner with the same symbols. */

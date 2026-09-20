@@ -342,6 +342,7 @@ describe("native viewer attachment acceptance", () => {
     const keyDownMethod = viewSource.match(
       /- \(void\)keyDown:\(NSEvent \*\)event \{[\s\S]*?\n\}/,
     )?.[0];
+    expect(keyDownMethod).toContain("[self.window makeFirstResponder:_webview]");
     expect(keyDownMethod).toContain("ghostty_surface_key(_surface, key)");
     expect(keyDownMethod).not.toContain("interpretKeyEvents");
   });

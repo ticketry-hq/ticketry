@@ -406,17 +406,28 @@ async fn effective_owned_tables(
         super::launch_binding_profile_migration::LEDGER_TABLE,
     )
     .await?;
+    let stage_skills_installed = table_exists(
+        database,
+        super::launch_binding_stage_skills_migration::LEDGER_TABLE,
+    )
+    .await?;
     let workflow_handoff_installed =
         table_exists(database, super::workflow_handoff_migration::LEDGER_TABLE).await?;
     Ok(owned_tables(generation)
         .into_iter()
         .map(|(table, columns)| {
             let mut columns = columns.to_vec();
-            if table == "worktracker_launchbinding" && entry_skill_installed {
+            if table == "worktracker_launchbinding"
+                && entry_skill_installed
+                && !stage_skills_installed
+            {
                 columns.push("entry_skill");
             }
             if table == "worktracker_launchbinding" && profile_installed {
                 columns.push("profile");
+            }
+            if table == "worktracker_launchbinding" && stage_skills_installed {
+                columns.push("stage_skills");
             }
             if table == "worktracker_issuetypetransition" && workflow_handoff_installed {
                 columns.push("handoff");

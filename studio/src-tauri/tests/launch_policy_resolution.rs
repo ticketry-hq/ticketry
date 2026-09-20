@@ -87,7 +87,7 @@ async fn fixture() -> (tempfile::TempDir, DatabaseConnection, LaunchPolicyResolv
                 id integer PRIMARY KEY AUTOINCREMENT,
                 issue_type_id char(32) NOT NULL, state_id char(32) NOT NULL,
                 prompt text NOT NULL, required_skills text NOT NULL,
-                entry_skill varchar(128),
+                stage_skills text NOT NULL DEFAULT '[]',
                 profile varchar(255),
                 model_id char(32), reasoning_id char(32),
                 auto_start bool NOT NULL, subtree_run_enabled bool NOT NULL,
@@ -152,9 +152,9 @@ async fn fixture() -> (tempfile::TempDir, DatabaseConnection, LaunchPolicyResolv
                 (agent_model_id, reasoning_level_id) VALUES
                 ('{GPT}', '{HIGH}'), ('{OPUS}', '{LOW}');
             INSERT INTO worktracker_launchbinding
-                (issue_type_id, state_id, prompt, required_skills, entry_skill, model_id, reasoning_id,
+                (issue_type_id, state_id, prompt, required_skills, stage_skills, model_id, reasoning_id,
                  auto_start, subtree_run_enabled, created_at, updated_at)
-                VALUES ('{TYPE}', '{STATE}', 'Implement it.', '["tdd"]', 'tdd', NULL, NULL, 1, 1,
+                VALUES ('{TYPE}', '{STATE}', 'Implement it.', '["tdd"]', '[" tdd ", "grilling", "tdd", ""]', NULL, NULL, 1, 1,
                         CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
             INSERT INTO app_settings VALUES
                 ('host', 'provider_catalog',
@@ -217,7 +217,7 @@ async fn all_doors_share_one_complete_versioned_snapshot() {
             .resolve(request(scope, scope.as_str()))
             .await
             .unwrap();
-        assert_eq!(decision.version, 2);
+        assert_eq!(decision.version, 3);
         assert_eq!(decision.policy_identity, "launch-binding:1");
         assert_eq!(decision.policy_version, 17);
         assert_eq!(decision.state_name.as_deref(), Some("Implement"));
@@ -227,7 +227,7 @@ async fn all_doors_share_one_complete_versioned_snapshot() {
         );
         assert_eq!(decision.prompt, "Implement it.");
         assert_eq!(decision.required_skills, ["tdd"]);
-        assert_eq!(decision.entry_skill.as_deref(), Some("tdd"));
+        assert_eq!(decision.stage_skills, ["tdd", "grilling"]);
         assert_eq!(
             (
                 decision.provider.as_str(),
@@ -327,7 +327,7 @@ async fn workflow_profile_overrides_and_empty_selection_inherits_the_global_prof
 async fn resolution_rejects_every_established_policy_failure_code() {
     let mutations = [
         ("UPDATE worktracker_issue SET state_id = NULL", "launch_context_incomplete"),
-        ("UPDATE worktracker_launchbinding SET prompt = '', required_skills = '[]', entry_skill = NULL, model_id = NULL, reasoning_id = NULL", "binding_not_configured"),
+        ("UPDATE worktracker_launchbinding SET prompt = '', required_skills = '[]', stage_skills = '[]', model_id = NULL, reasoning_id = NULL", "binding_not_configured"),
         (&format!("UPDATE worktracker_launchbinding SET prompt = '', model_id = '{GPT}'"), "prompt_not_configured"),
         ("UPDATE worktracker_launchbinding SET required_skills = '[\"future\"]'", "invalid_required_skills"),
         (&format!("UPDATE worktracker_launchbinding SET model_id = '{DISABLED_MODEL}'"), "provider_not_activated"),
@@ -1002,7 +1002,7 @@ async fn a_handoff_request_changes_only_the_delivery_flag() {
     assert!(!fresh.handoff);
     assert!(continued.handoff);
     assert_eq!(continued.prompt, fresh.prompt);
-    assert_eq!(continued.entry_skill, fresh.entry_skill);
+    assert_eq!(continued.stage_skills, fresh.stage_skills);
     assert_eq!(continued.required_skills, fresh.required_skills);
     assert_eq!(continued.provider, fresh.provider);
     assert_eq!(continued.model, fresh.model);

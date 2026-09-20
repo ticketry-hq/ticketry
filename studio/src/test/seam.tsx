@@ -424,6 +424,9 @@ class BoundaryFixture implements StudioFixture {
         },
       };
     };
+    if (documentOperationName(document) === "CurrentWorktrees") {
+      return { worktrees: { __typename: "WorktreesConnection", nodes: [] } } as TResult;
+    }
     const createdAt = "2026-08-06T12:00:00Z";
     const stateRows = () => [...this.states.values()].map((state) => ({
       __typename: "WorktrackerState",
@@ -458,7 +461,7 @@ class BoundaryFixture implements StudioFixture {
           state: item.state,
           prompt: null,
           required_skills: [],
-          entry_skill: null,
+          stage_skills: [],
           model: null,
           reasoning: null,
           auto_start: false,

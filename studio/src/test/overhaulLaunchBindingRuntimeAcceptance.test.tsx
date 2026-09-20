@@ -52,8 +52,7 @@ function catalog(subtreeRunEnabled: boolean, workflowRevision: number) {
       launch_bindings: { __typename: "WorktrackerLaunchbindingConnection", nodes: [{
         __typename: "WorktrackerLaunchbinding",
         id: 1, issue_type: "story", state: "build", prompt: "Implement it.",
-        required_skills: ["tdd"], model: model.id, reasoning: reasoning.id,
-        entry_skill: "tdd",
+        required_skills: ["tdd"], stage_skills: ["tdd"], model: model.id, reasoning: reasoning.id,
         profile: null,
         auto_start: false, subtree_run_enabled: subtreeRunEnabled,
         created_at: "", updated_at: "", state_record: { __typename: "WorktrackerState", id: "build", sort_order: 0 },
@@ -89,7 +88,7 @@ describe("launch-binding desktop runtime acceptance", () => {
       }
       if (request.operationName === "UpsertWorkTrackerLaunchBinding") {
         expect(request.variables.requiredSkills).toEqual(["tdd"]);
-        expect(request.variables.entrySkill).toBe("tdd");
+        expect(request.variables.stageSkills).toEqual(["tdd"]);
         expect(request.variables.workflowRevision).toBe(8);
         return JSON.stringify({
           data: null,
@@ -130,7 +129,7 @@ describe("launch-binding desktop runtime acceptance", () => {
     const current = useWorkflowEditorStore.getState();
     expect(current.workflows.story.workflow_revision).toBe(9);
     expect(current.workflows.story.launch_bindings[0].required_skills).toEqual(["tdd"]);
-    expect(current.workflows.story.launch_bindings[0].entry_skill).toBe("tdd");
+    expect(current.workflows.story.launch_bindings[0].stage_skills).toEqual(["tdd"]);
     expect(current.notice).toBe("Workflow changed elsewhere. Latest settings loaded.");
     expect(getCapabilitiesSnapshot("project-1")).toEqual({ story: ["build"] });
     expect(operations).toEqual([
@@ -179,11 +178,10 @@ describe("launch-binding desktop runtime acceptance", () => {
     expect(variables).not.toBeNull();
     expect(variables!).not.toHaveProperty("prompt");
     expect(variables!).not.toHaveProperty("requiredSkills");
-    expect(variables!).not.toHaveProperty("entrySkill");
     expect(variables!.modelId).toBe(model.id);
   });
 
-  it("persists and clears entry skill through the existing binding upsert", async () => {
+  it("persists and clears stage skills without sending the legacy scalar", async () => {
     const writes: Record<string, unknown>[] = [];
     const graphqlExecute = vi.fn(async (encoded: string) => {
       const request = JSON.parse(encoded) as {
@@ -205,7 +203,7 @@ describe("launch-binding desktop runtime acceptance", () => {
       }),
     }));
 
-    for (const entrySkill of ["to-spec", null]) {
+    for (const stageSkills of [["future skill, one", "tdd"], []]) {
       await upsertIssueTypeWorkflowLaunchBinding(
         "project-1",
         "story",
@@ -213,7 +211,7 @@ describe("launch-binding desktop runtime acceptance", () => {
         {
           prompt: "Implement it.",
           required_skills: ["to-spec", "tdd"],
-          entry_skill: entrySkill,
+          stage_skills: stageSkills,
           agent: "codex",
           model: model.name,
           reasoning: "medium",
@@ -224,7 +222,7 @@ describe("launch-binding desktop runtime acceptance", () => {
       );
     }
 
-    expect(writes.map((variables) => variables.entrySkill))
-      .toEqual(["to-spec", null]);
+    expect(writes.map((variables) => variables.stageSkills))
+      .toEqual([["future skill, one", "tdd"], []]);
   });
 });

@@ -109,6 +109,7 @@ async fn execute_traced(
             local_module_folder: decision.module_link.path.as_deref().unwrap_or_default(),
             state_name: decision.state_name.as_deref(),
             workflow_prompt: &decision.prompt,
+            stage_skills: &decision.stage_skills,
             additional_user_input: None,
             design_directory: paths.design_directory_relative.as_deref(),
             design_directory_root: paths.design_directory.as_deref(),
@@ -127,7 +128,7 @@ async fn execute_traced(
             mark_delivered(database, &decision.decision_id)
                 .await
                 .map_err(|error| error.code().to_owned())?;
-            let delivered = handoff::deliver(&live, prompt, decision.entry_skill.clone()).await;
+            let delivered = handoff::deliver(&live, prompt).await;
             if delivered.is_ok() {
                 record_delivery_mode(
                     database,
@@ -305,7 +306,7 @@ mod tests {
 
     fn decision(decision_id: &str) -> LaunchPolicyDecision {
         LaunchPolicyDecision {
-            version: 2,
+            version: 3,
             decision_id: decision_id.to_owned(),
             policy_identity: "binding:1".to_owned(),
             policy_version: 7,
@@ -319,7 +320,7 @@ mod tests {
             state_name: Some("Implement".to_owned()),
             prompt: "Implement this Story.".to_owned(),
             required_skills: Vec::new(),
-            entry_skill: Some("tdd".to_owned()),
+            stage_skills: vec!["tdd".to_owned()],
             provider: "codex".to_owned(),
             profile: None,
             model: Some("gpt-test".to_owned()),

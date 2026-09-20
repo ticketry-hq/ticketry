@@ -77,6 +77,7 @@ impl LaunchPolicyResolver {
             ));
         }
         let required_skills = validate_skills(&binding.required_skills)?;
+        let stage_skills = normalize_stage_skills(&binding.stage_skills)?;
         enforce_door_gate(
             request.caller_scope,
             binding.auto_start,
@@ -114,7 +115,7 @@ impl LaunchPolicyResolver {
             state_name: Some(state_name),
             prompt,
             required_skills,
-            entry_skill: binding.entry_skill,
+            stage_skills,
             provider: selection.provider,
             profile: selection.profile,
             model: selection.model,
@@ -122,6 +123,22 @@ impl LaunchPolicyResolver {
             module_link,
         })
     }
+}
+
+fn normalize_stage_skills(encoded: &str) -> Result<Vec<String>, LaunchPolicyError> {
+    let values: Vec<String> = serde_json::from_str(encoded).map_err(|_| {
+        rejected(
+            "invalid_stage_skills",
+            "The stored stage-skill selection is invalid.",
+        )
+    })?;
+    let mut seen = std::collections::HashSet::new();
+    Ok(values
+        .into_iter()
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+        .filter(|value| seen.insert(value.clone()))
+        .collect())
 }
 
 fn enforce_door_gate(

@@ -88,7 +88,7 @@ pub struct LaunchBinding {
     pub state: String,
     pub prompt: String,
     pub required_skills: StringList,
-    pub entry_skill: Option<String>,
+    pub stage_skills: StringList,
     pub profile: Option<String>,
     pub model: Option<String>,
     pub reasoning: Option<String>,

@@ -110,6 +110,12 @@ export function WorkspaceTabBody({
   const changesTaskId = selectedChangesTaskId === undefined
     ? isScratchBucket(bucket) ? null : bucket
     : selectedChangesTaskId;
+  const openModuleChanges = useCallback(() => {
+    if (moduleId) openModuleChangesWorkspace(moduleId);
+  }, [moduleId]);
+  const openTaskChanges = useCallback((taskId: string) => {
+    if (moduleId) openTaskChangesWorkspace(moduleId, taskId);
+  }, [moduleId]);
 
   return (
     <div
@@ -174,20 +180,17 @@ export function WorkspaceTabBody({
           <ModuleVersionControl
             moduleId={moduleId}
             active={activeKind === "changes"}
-            onOpenModule={() => openModuleChangesWorkspace(moduleId)}
-            onOpenTask={(taskId) => openTaskChangesWorkspace(moduleId, taskId)}
+            onOpenModule={openModuleChanges}
+            onOpenTask={openTaskChanges}
           />
         ) : (
           <TaskWorktreeChanges
+            showAllWorktrees={selectedChangesTaskId !== undefined || isScratchBucket(bucket)}
             taskId={changesTaskId ?? bucket}
             moduleId={moduleId}
             active={activeKind === "changes"}
-            onOpenModule={() => {
-              if (moduleId) openModuleChangesWorkspace(moduleId);
-            }}
-            onOpenTask={(taskId) => {
-              if (moduleId) openTaskChangesWorkspace(moduleId, taskId);
-            }}
+            onOpenModule={openModuleChanges}
+            onOpenTask={openTaskChanges}
           />
         )}
       </div>

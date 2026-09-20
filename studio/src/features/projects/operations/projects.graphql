@@ -52,7 +52,7 @@ fragment GeneratedWorkTrackerIssueTypeFields on WorktrackerIssuetype {
       state: stateId
       prompt
       required_skills: requiredSkills
-      entry_skill: entrySkill
+      stage_skills: stageSkills
       profile
       model: modelId
       reasoning: reasoningId

@@ -262,6 +262,30 @@ describe("worktree creation desktop runtime acceptance", () => {
     expect(await screen.findByText("Worktree trust was not approved. Retry to continue.")).toBeTruthy();
   });
 
+  it("[overhaul-327] retries Claude version inspection after compatibility is restored without recreating the checkout", async () => {
+    const requests: Request[] = [];
+    let supported = false;
+    const trust = vi.fn<Trust>(async (provider, _directory, approval) => {
+      if (provider !== "claude") return { status: "already_trusted", approval: null, directory: created.path };
+      if (!supported) throw new Error("Claude Code 2.1.278 does not have a verified durable trust adapter; expected one of 2.1.270, 2.1.276.");
+      return { status: approval ? "prepared" : "approval_required", approval: approval ? null : "claude-approval", directory: created.path };
+    });
+    await installDesktopRuntime(requests, trust);
+    render(<><WorktreeBlock taskId={TASK} moduleId="m1" /><DialogHost /></>);
+    fireEvent.click(await screen.findByRole("button", { name: "+ Create worktree" }));
+    expect(await screen.findByText(/Could not inspect Claude folder trust:.*2\.1\.278/)).toBeTruthy();
+    expect(screen.queryByRole("dialog", { name: "Trust worktree?" })).toBeNull();
+
+    supported = true;
+    fireEvent.click(screen.getByRole("button", { name: "Retry trust" }));
+    const retry = await screen.findByRole("dialog", { name: "Trust worktree?" });
+    expect(retry).toHaveTextContent("Claude");
+    fireEvent.click(within(retry).getByRole("button", { name: "Trust worktree" }));
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Retry trust" })).toBeNull());
+    expect(trust.mock.calls.every(([, directory]) => directory === created.path)).toBe(true);
+    expect(requests.filter(({ operationName }) => operationName === "WorktreeCreate")).toHaveLength(1);
+  });
+
   it("[overhaul-310] retains partial trust and retries the same checkout without creating again", async () => {
     const requests: Request[] = [];
     let codexTrusted = false;

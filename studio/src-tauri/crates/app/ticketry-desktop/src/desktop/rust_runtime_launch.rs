@@ -65,6 +65,7 @@ pub fn launch_rust_runtime(
                 &data_directory,
                 guard,
                 Some(terminal_launch.clone()),
+                Some(composed.instant_run_ticket_titles().clone()),
             )),
             None => Err(ticketry_mcp::McpStartupError::Other {
                 diagnostic: "this process does not own the data directory".to_owned(),

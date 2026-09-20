@@ -5,10 +5,6 @@ use sha2::{Digest, Sha256};
 use ticketry_entities::worktree;
 
 use crate::worktree::status::{self, GitPort};
-use crate::{
-    workspace::operations::{WorkspaceOperationJournal, WorkspaceOperationKind},
-    worktree::create,
-};
 
 use super::{
     repository, view::blocked, LocalMergeDestinationView, WorktreeChangesError,
@@ -46,33 +42,6 @@ impl WorktreeChangesService {
                 destinations,
             ));
         }
-        if in_progress(self.status().git(), &source_checkout).await? {
-            return Ok(blocked(
-                row.branch,
-                None,
-                None,
-                "source_operation_in_progress",
-                "Finish or abort the Git operation in the task worktree, then retry.",
-                false,
-                destinations,
-            ));
-        }
-        if !super::command_git::status(self.status().git(), &source_checkout)
-            .await?
-            .stdout
-            .is_empty()
-        {
-            return Ok(blocked(
-                row.branch,
-                None,
-                None,
-                "source_dirty",
-                "Commit or discard the task worktree's uncommitted changes, then retry.",
-                false,
-                destinations,
-            ));
-        }
-
         let destination = match requested_destination {
             Some(branch) => {
                 if !valid_branch(self.status().git(), &repository, branch).await? {
@@ -102,12 +71,9 @@ impl WorktreeChangesService {
                 branch.to_owned()
             }
             None => {
-                if !trustworthy_provenance(
-                    self.status().work_items(),
+                if !verified_origin(
                     self.status().git(),
                     &repository,
-                    owner.top_level_row_id(),
-                    &row.id,
                     &row.branch,
                     &row.base_branch,
                     &row.base_commit,
@@ -116,11 +82,12 @@ impl WorktreeChangesService {
                 {
                     return Ok(blocked(
                         row.branch,
-                        None,
-                        None,
+                        Some(row.base_branch.clone()),
+                        destinations.iter().find(|candidate| candidate.branch == row.base_branch)
+                            .and_then(|candidate| candidate.checkout.clone()),
                         "destination_selection_required",
-                        "The recorded merge destination cannot be verified. Choose an existing local branch.",
-                        true,
+                        "The recorded origin branch cannot be verified. Restore that branch and refresh merge eligibility.",
+                        false,
                         destinations,
                     ));
                 }
@@ -155,6 +122,33 @@ impl WorktreeChangesService {
                 destinations,
             ));
         };
+        if in_progress(self.status().git(), &source_checkout).await? {
+            return Ok(blocked(
+                row.branch,
+                Some(destination.clone()),
+                Some(destination_checkout.clone()),
+                "source_operation_in_progress",
+                "Finish or abort the Git operation in the task worktree, then retry.",
+                false,
+                destinations,
+            ));
+        }
+        if !super::command_git::status(self.status().git(), &source_checkout)
+            .await?
+            .stdout
+            .is_empty()
+        {
+            return Ok(blocked(
+                row.branch,
+                Some(destination.clone()),
+                Some(destination_checkout.clone()),
+                "source_dirty",
+                "Commit or discard the task worktree's uncommitted changes, then retry.",
+                false,
+                destinations,
+            ));
+        }
+
         let destination_path = Path::new(&destination_checkout);
 
         if in_progress(self.status().git(), destination_path).await? {
@@ -281,67 +275,36 @@ async fn valid_branch(
         .succeeded)
 }
 
-async fn trustworthy_provenance(
-    database: &sea_orm::DatabaseConnection,
+// The worktree row retains its creation origin even when the operation journal
+// has been pruned or the worktree predates journalling. Verify that recorded
+// commit against both branches instead of requiring a second copy of the record.
+async fn verified_origin(
     git: &GitPort,
     repository: &Path,
-    task_id: String,
-    worktree_id: &str,
     source_branch: &str,
     branch: &str,
     base_commit: &str,
 ) -> Result<bool, WorktreeChangesError> {
     if !valid_branch(git, repository, branch).await?
         || !status::registry::branch_exists(git, repository, branch).await?
+        || !is_oid(base_commit)
     {
         return Ok(false);
     }
-    let Some(created) = WorkspaceOperationJournal::new(database.clone())
-        .find_latest_applied(
-            WorkspaceOperationKind::WorktreeCreate,
-            &create::identity::resource_key(&task_id),
-        )
-        .await
-        .map_err(|_| {
-            WorktreeChangesError::git_state_unavailable(
-                "The task worktree's creation provenance could not be read.",
+    for branch in [branch, source_branch] {
+        let branch_ref = format!("refs/heads/{branch}");
+        if !git
+            .run(
+                &["merge-base", "--is-ancestor", base_commit, &branch_ref],
+                repository,
             )
-        })?
-    else {
-        return Ok(false);
-    };
-    if created.intent_version != create::identity::INTENT_VERSION {
-        return Ok(false);
+            .await?
+            .succeeded
+        {
+            return Ok(false);
+        }
     }
-    let Some(payload) = created.intent_payload() else {
-        return Ok(false);
-    };
-    let Some(result) = created.result() else {
-        return Ok(false);
-    };
-    let Some(evidence) = created.evidence_value() else {
-        return Ok(false);
-    };
-    if payload["branch"] != source_branch
-        || payload["baseRef"] != branch
-        || payload["baseCommit"] != base_commit
-        || result["worktreeId"] != worktree_id
-        || result["baseRef"] != branch
-        || result["baseCommit"] != base_commit
-        || evidence["worktreeId"] != worktree_id
-        || evidence["baseRef"] != branch
-        || evidence["baseCommit"] != base_commit
-    {
-        return Ok(false);
-    }
-    let branch_ref = format!("refs/heads/{branch}");
-    Ok(git
-        .run(
-            &["merge-base", "--is-ancestor", base_commit, &branch_ref],
-            repository,
-        )
-        .await?
-        .succeeded)
+    Ok(true)
 }
 
 async fn local_destinations(
@@ -351,7 +314,13 @@ async fn local_destinations(
 ) -> Result<Vec<LocalMergeDestinationView>, WorktreeChangesError> {
     let branches = git
         .run(
-            &["for-each-ref", "--format=%(refname:short)", "refs/heads"],
+            &[
+                "for-each-ref",
+                "--sort=refname",
+                "--sort=-committerdate",
+                "--format=%(refname:short)",
+                "refs/heads",
+            ],
             repository,
         )
         .await?;

@@ -626,6 +626,7 @@ async fn retry_after_post_creation_setup_failure_reuses_the_checkout() {
         provider_contract(Provider::Gemini).inspect_directory_trust(DirectoryTrustContext {
             directory: Path::new(first["path"].as_str().expect("created checkout path")),
             trust_file: Some(&malformed_config),
+            executable: None,
         }),
         DirectoryTrustInspection::Failed(_)
     ));

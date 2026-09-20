@@ -33,11 +33,11 @@ pub use work_management::graphql;
 pub use work_management::workspace_tab_order::update as update_workspace_tab_order;
 pub use work_management::{
     adoption, begin_write, commands, launch_binding_entry_skill_migration,
-    launch_binding_profile_migration, launch_policy, module_presentation_migration, open,
-    open_established, open_for_commands, ownership_manifest as work_management_ownership_manifest,
-    project_onboarding_migration, read_queries, read_types, state_database_path,
-    workflow_color_migration, workflow_handoff_migration, workspace_tab_order_migration,
-    ReadDatabaseError,
+    launch_binding_profile_migration, launch_binding_stage_skills_migration, launch_policy,
+    module_presentation_migration, open, open_established, open_for_commands,
+    ownership_manifest as work_management_ownership_manifest, project_onboarding_migration,
+    read_queries, read_types, state_database_path, workflow_color_migration,
+    workflow_handoff_migration, workspace_tab_order_migration, ReadDatabaseError,
 };
 
 /// Validate and migrate persistence for desktop startup.

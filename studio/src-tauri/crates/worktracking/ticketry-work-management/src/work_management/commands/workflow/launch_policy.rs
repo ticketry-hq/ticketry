@@ -38,7 +38,7 @@ pub struct PatchLaunchBinding {
     pub workflow_revision: i32,
     pub prompt: PatchValue<String>,
     pub required_skills: PatchValue<Vec<String>>,
-    pub entry_skill: PatchValue<String>,
+    pub stage_skills: PatchValue<Vec<String>>,
     pub profile: PatchValue<String>,
     pub model_id: PatchValue<String>,
     pub reasoning_id: PatchValue<String>,
@@ -64,7 +64,7 @@ pub async fn patch_launch_binding(
     // rather than letting a toggle conjure an unconfigured row.
     let describes_a_binding = !matches!(input.prompt, PatchValue::Unset)
         || !matches!(input.required_skills, PatchValue::Unset)
-        || !matches!(input.entry_skill, PatchValue::Unset)
+        || !matches!(input.stage_skills, PatchValue::Unset)
         || !matches!(input.profile, PatchValue::Unset)
         || !matches!(model_patch, PatchValue::Unset)
         || !matches!(reasoning_patch, PatchValue::Unset);
@@ -120,10 +120,15 @@ pub async fn patch_launch_binding(
         Vec::new(),
         "required_skills",
     )?;
-    let entry_skill = nullable_value(
-        input.entry_skill,
-        current.as_ref().and_then(|row| row.entry_skill.clone()),
-    );
+    let current_stage_skills = current
+        .as_ref()
+        .map(|row| json_string_list(&row.stage_skills))
+        .unwrap_or_default();
+    let stage_skills = match input.stage_skills {
+        PatchValue::Value(values) => normalize_stage_skills(values),
+        PatchValue::Null => Vec::new(),
+        PatchValue::Unset => current_stage_skills,
+    };
     // A blank or padded profile is stored verbatim by every caller but the
     // Studio form, and then fails at launch planning. Normalize it here.
     let profile = nullable_value(
@@ -162,7 +167,6 @@ pub async fn patch_launch_binding(
         LaunchBindingCandidate {
             prompt: &prompt,
             required_skills: &required_skills,
-            entry_skill: entry_skill.as_deref(),
             profile: profile.as_deref(),
             model_id: model_id.as_deref(),
             reasoning_id: reasoning_id.as_deref(),
@@ -174,7 +178,7 @@ pub async fn patch_launch_binding(
     if let Some(row) = &current {
         if row.prompt == prompt
             && row.required_skills == serde_json::json!(required_skills)
-            && row.entry_skill == entry_skill
+            && row.stage_skills == serde_json::json!(stage_skills)
             && row.profile == profile
             && row.model_id == model_id
             && row.reasoning_id == reasoning_id
@@ -192,7 +196,7 @@ pub async fn patch_launch_binding(
             let mut active: launch_binding::ActiveModel = row.into();
             active.prompt = Set(prompt);
             active.required_skills = Set(serde_json::json!(required_skills));
-            active.entry_skill = Set(entry_skill);
+            active.stage_skills = Set(serde_json::json!(stage_skills));
             active.profile = Set(profile);
             active.model_id = Set(model_id);
             active.reasoning_id = Set(reasoning_id);
@@ -208,7 +212,7 @@ pub async fn patch_launch_binding(
                 state_id: Set(state_id),
                 prompt: Set(prompt),
                 required_skills: Set(serde_json::json!(required_skills)),
-                entry_skill: Set(entry_skill),
+                stage_skills: Set(serde_json::json!(stage_skills)),
                 profile: Set(profile),
                 model_id: Set(model_id),
                 reasoning_id: Set(reasoning_id),
@@ -235,6 +239,25 @@ pub async fn patch_launch_binding(
         .await?;
     transaction.commit().await?;
     Ok(row.id)
+}
+
+fn json_string_list(value: &serde_json::Value) -> Vec<String> {
+    value
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|value| value.as_str().map(str::to_owned))
+        .collect()
+}
+
+fn normalize_stage_skills(values: Vec<String>) -> Vec<String> {
+    let mut seen = std::collections::HashSet::new();
+    values
+        .into_iter()
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+        .filter(|value| seen.insert(value.clone()))
+        .collect()
 }
 
 fn map_nullable_id(

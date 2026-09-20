@@ -2,7 +2,8 @@
 //! ordered outbox — the same table and cursor sequence the Runs capability
 //! already writes, so one subscription carries every status family.
 
-use sea_orm::{ConnectionTrait, Database, DatabaseConnection, DbBackend, Statement};
+use sea_orm::{ConnectionTrait, Database, DatabaseConnection, DbBackend, EntityTrait, Statement};
+use ticketry_entities::{issue, project, worktree};
 use ticketry_runs::{outbox_adopted, RunsServices};
 use ticketry_work_management::commands::status_facts::WorkFactRecorder;
 use ticketry_work_management::commands::{catalog, hierarchy, reorder, work_items, workflow};
@@ -16,6 +17,7 @@ const MODULE_TYPE: &str = "30000000000000000000000000000003";
 const BACKLOG: &str = "40000000000000000000000000000001";
 const DONE: &str = "40000000000000000000000000000002";
 
+#[derive(Debug, PartialEq)]
 struct Fact {
     cursor: i64,
     kind: String,
@@ -108,7 +110,7 @@ async fn fixture() -> (tempfile::TempDir, DatabaseConnection, WorkFactRecorder) 
             CREATE TABLE worktracker_launchbinding (
                 id integer PRIMARY KEY AUTOINCREMENT, issue_type_id char(32) NOT NULL,
                 state_id char(32) NOT NULL, prompt text NOT NULL,
-                required_skills text NOT NULL, entry_skill varchar(128),
+                required_skills text NOT NULL, stage_skills text NOT NULL DEFAULT '[]',
                 model_id char(32), reasoning_id char(32), profile varchar,
                 auto_start bool NOT NULL, subtree_run_enabled bool NOT NULL,
                 created_at datetime NOT NULL, updated_at datetime NOT NULL,
@@ -404,6 +406,124 @@ async fn a_rejected_write_publishes_nothing() {
     assert!(cycle.is_err());
 
     assert_eq!(facts(&database).await.len(), before);
+}
+
+#[tokio::test]
+async fn a_descendant_live_worktree_makes_cross_module_reparent_atomic() {
+    let (_directory, database, recorder) = fixture().await;
+    database
+        .execute_unprepared(&format!(
+            r#"
+            CREATE TABLE worktrees (
+                id char(32) PRIMARY KEY, task_id char(32) NOT NULL,
+                workspace_slug char(32), project_id char(32), module_id char(32),
+                ticket_seq integer, repo_root text NOT NULL, path text NOT NULL,
+                branch text NOT NULL, base_branch text NOT NULL, base_commit text NOT NULL,
+                status varchar(32) NOT NULL, ephemeral bool NOT NULL,
+                created_at varchar(64) NOT NULL, updated_at varchar(64) NOT NULL,
+                pull_request_url text
+            );
+            INSERT INTO worktracker_issue VALUES
+                ('20000000000000000000000000000001','{PROJECT}','module','{MODULE_TYPE}',NULL,NULL,NULL,1,'Module A',1,0,'a','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'[]'),
+                ('20000000000000000000000000000002','{PROJECT}','module','{MODULE_TYPE}',NULL,NULL,NULL,2,'Module B',2,0,'b','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'[]');
+            "#
+        ))
+        .await
+        .unwrap();
+    let parent = work_items::create(
+        &database,
+        create_input("Parent", Some("20000000000000000000000000000001")),
+        Some(&recorder),
+    )
+    .await
+    .unwrap();
+    let child = work_items::create(
+        &database,
+        create_input("Child", Some(&parent)),
+        Some(&recorder),
+    )
+    .await
+    .unwrap();
+    database
+        .execute_unprepared(&format!(
+            "INSERT INTO worktrees VALUES ('70000000000000000000000000000001','{child}','mem','{PROJECT}','20000000000000000000000000000001',3,'/repo','/worktree','branch','main','abc','active',0,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,NULL)"
+        ))
+        .await
+        .unwrap();
+    let parent_before = issue::Entity::find_by_id(&parent)
+        .one(&database)
+        .await
+        .unwrap()
+        .unwrap();
+    let child_before = issue::Entity::find_by_id(&child)
+        .one(&database)
+        .await
+        .unwrap()
+        .unwrap();
+    let revision_before = project::Entity::find_by_id(PROJECT)
+        .one(&database)
+        .await
+        .unwrap()
+        .unwrap()
+        .state_revision;
+    let worktree_before = worktree::Entity::find_by_id("70000000000000000000000000000001")
+        .one(&database)
+        .await
+        .unwrap()
+        .unwrap();
+    let facts_before = facts(&database).await;
+
+    let error = hierarchy::reparent(
+        &database,
+        hierarchy::ReparentWorkItem {
+            id: parent.clone(),
+            parent_id: Some("20000000000000000000000000000002".to_owned()),
+            before_id: None,
+            after_id: None,
+        },
+        Some(&recorder),
+    )
+    .await
+    .unwrap_err();
+
+    assert_eq!(
+        error.to_string(),
+        "Close or discard the task worktree before moving it to another module."
+    );
+    assert_eq!(
+        issue::Entity::find_by_id(parent)
+            .one(&database)
+            .await
+            .unwrap()
+            .unwrap(),
+        parent_before
+    );
+    assert_eq!(
+        issue::Entity::find_by_id(child)
+            .one(&database)
+            .await
+            .unwrap()
+            .unwrap(),
+        child_before
+    );
+    assert_eq!(
+        project::Entity::find_by_id(PROJECT)
+            .one(&database)
+            .await
+            .unwrap()
+            .unwrap()
+            .state_revision,
+        revision_before
+    );
+    assert_eq!(
+        worktree::Entity::find_by_id(&worktree_before.id)
+            .one(&database)
+            .await
+            .unwrap()
+            .unwrap(),
+        worktree_before
+    );
+    assert_eq!(facts(&database).await, facts_before);
 }
 
 #[tokio::test]

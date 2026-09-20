@@ -10,6 +10,8 @@ use serde_json::{json, Value};
 use tauri_graphql::{TransportApi, TransportApiImpl};
 use tokio::time::{timeout, Duration};
 
+#[path = "mcp_acceptance/codex_rename.rs"]
+mod codex_rename;
 mod common;
 #[path = "mcp_acceptance/termination.rs"]
 mod termination;
@@ -25,9 +27,19 @@ use ticketry_terminal::{
 };
 
 const TASK_TYPE: &str = "30000000-0000-0000-0000-000000000001";
+const IMPLEMENTATION_TYPE: &str = "30000000-0000-0000-0000-000000000002";
 const BACKLOG: &str = "40000000-0000-0000-0000-000000000001";
 const REVIEW: &str = "40000000-0000-0000-0000-000000000002";
 const MODULE: &str = "20000000-0000-0000-0000-000000000001";
+
+fn launch_binding_for<'a>(settings: &'a Value, state_id: &str) -> &'a Value {
+    settings["launch_bindings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|binding| binding["state_id"] == state_id)
+        .unwrap_or_else(|| panic!("missing launch binding for {state_id}: {settings:#}"))
+}
 
 struct MissingTerminalRuntime;
 
@@ -104,6 +116,179 @@ async fn wait_for_terminal_record(directory: &tempfile::TempDir) -> (Option<Stri
     })
     .await
     .expect("background terminal cleanup did not settle")
+}
+
+#[tokio::test]
+async fn mcp_stage_skills_use_the_workflow_list_contract() {
+    let directory = tempfile::tempdir().unwrap();
+    prepare_command_database(&directory).await;
+    let database = Database::connect(format!(
+        "sqlite:{}",
+        directory.path().join("state.db").display()
+    ))
+    .await
+    .unwrap();
+    ticketry_work_management::launch_binding_stage_skills_migration::install(&database)
+        .await
+        .unwrap();
+    database.close().await.unwrap();
+    let ownership = DataDirectoryGuard::acquire(directory.path()).unwrap();
+    let runtime = McpRuntime::start_for_test(
+        McpConfiguration {
+            database_path: directory.path().join("state.db"),
+            media_root: directory.path().join("media"),
+        },
+        &ownership,
+        Arc::new(MissingTerminalRuntime),
+    )
+    .await
+    .unwrap();
+    runtime
+        .grant_for_test(
+            "run-valid",
+            "valid",
+            ticketry_mcp::allowed_provider_operations(),
+            false,
+        )
+        .await
+        .unwrap();
+    let mut run =
+        SocketClient::connect_run(runtime.socket_path(), "run-valid", "Bearer valid").await;
+
+    let saved = run
+        .structured(
+            1,
+            "upsert_issue_type_workflow_launch_binding",
+            json!({
+                "type_id": TASK_TYPE,
+                "state_id": BACKLOG,
+                "workflow_revision": 0,
+                "prompt": "Implement this item",
+                "required_skills": ["tdd"],
+                "stage_skills": [
+                    "  future skill, one  ",
+                    "",
+                    "Future-Skill",
+                    "future skill, one"
+                ]
+            }),
+        )
+        .await;
+
+    assert_eq!(saved["workflow_revision"], 1, "{saved:#}");
+    let backlog = launch_binding_for(&saved, BACKLOG);
+    assert_eq!(
+        backlog["stage_skills"],
+        json!(["future skill, one", "Future-Skill"])
+    );
+    assert_eq!(backlog["required_skills"], json!(["tdd"]));
+
+    let stale = run
+        .structured(
+            2,
+            "upsert_issue_type_workflow_launch_binding",
+            json!({
+                "type_id": TASK_TYPE,
+                "state_id": BACKLOG,
+                "workflow_revision": 0,
+                "stage_skills": ["must not persist"]
+            }),
+        )
+        .await;
+    assert_eq!(stale["code"], "stale_revision", "{stale:#}");
+
+    let second_state = run
+        .structured(
+            3,
+            "upsert_issue_type_workflow_launch_binding",
+            json!({
+                "type_id": TASK_TYPE,
+                "state_id": REVIEW,
+                "workflow_revision": 1,
+                "prompt": "Review this item",
+                "stage_skills": ["review-skill"]
+            }),
+        )
+        .await;
+    assert_eq!(second_state["workflow_revision"], 2, "{second_state:#}");
+    assert_eq!(
+        launch_binding_for(&second_state, BACKLOG)["stage_skills"],
+        json!(["future skill, one", "Future-Skill"])
+    );
+    assert_eq!(
+        launch_binding_for(&second_state, REVIEW)["stage_skills"],
+        json!(["review-skill"])
+    );
+
+    let other_type = run
+        .structured(
+            4,
+            "get_issue_type_workflow_settings",
+            json!({"type_id": IMPLEMENTATION_TYPE}),
+        )
+        .await;
+    assert!(other_type["launch_bindings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .all(|binding| binding["stage_skills"] == json!([])));
+
+    let cleared = run
+        .structured(
+            5,
+            "upsert_issue_type_workflow_launch_binding",
+            json!({
+                "type_id": TASK_TYPE,
+                "state_id": BACKLOG,
+                "workflow_revision": 2,
+                "stage_skills": null
+            }),
+        )
+        .await;
+    assert_eq!(cleared["workflow_revision"], 3, "{cleared:#}");
+    let cleared_backlog = launch_binding_for(&cleared, BACKLOG);
+    assert_eq!(cleared_backlog["stage_skills"], json!([]));
+    assert_eq!(cleared_backlog["required_skills"], json!(["tdd"]));
+    assert_eq!(
+        launch_binding_for(&cleared, REVIEW)["stage_skills"],
+        json!(["review-skill"])
+    );
+
+    let no_op = run
+        .structured(
+            6,
+            "upsert_issue_type_workflow_launch_binding",
+            json!({
+                "type_id": TASK_TYPE,
+                "state_id": BACKLOG,
+                "workflow_revision": 3,
+                "stage_skills": []
+            }),
+        )
+        .await;
+    assert_eq!(no_op["workflow_revision"], 3, "{no_op:#}");
+
+    drop(run);
+    let mut reopened =
+        SocketClient::connect_run(runtime.socket_path(), "run-valid", "Bearer valid").await;
+    let reopened = reopened
+        .structured(
+            7,
+            "get_issue_type_workflow_settings",
+            json!({"type_id": TASK_TYPE}),
+        )
+        .await;
+    assert_eq!(reopened["workflow_revision"], 3, "{reopened:#}");
+    assert_eq!(
+        launch_binding_for(&reopened, BACKLOG)["stage_skills"],
+        json!([])
+    );
+    assert_eq!(
+        launch_binding_for(&reopened, REVIEW)["stage_skills"],
+        json!(["review-skill"])
+    );
+
+    runtime.shutdown().await;
 }
 
 #[tokio::test]
@@ -283,7 +468,7 @@ async fn mcp_mutations_cover_crud_hierarchy_workflow_and_blockers_through_rust_c
             json!({
                 "type_id": TASK_TYPE, "state_id": BACKLOG, "workflow_revision": 1,
                 "prompt": "Implement this item", "required_skills": ["tdd"],
-                "entry_skill": "tdd"
+                "stage_skills": ["tdd"]
             }),
         )
         .await;
@@ -291,7 +476,7 @@ async fn mcp_mutations_cover_crud_hierarchy_workflow_and_blockers_through_rust_c
         launch["launch_bindings"][0]["prompt"],
         "Implement this item"
     );
-    assert_eq!(launch["launch_bindings"][0]["entry_skill"], "tdd");
+    assert_eq!(launch["launch_bindings"][0]["stage_skills"], json!(["tdd"]));
     let unknown_provider = run
         .structured(
             841,
@@ -326,7 +511,10 @@ async fn mcp_mutations_cover_crud_hierarchy_workflow_and_blockers_through_rust_c
         preserved["launch_bindings"][0]["prompt"],
         "Implement this item"
     );
-    assert_eq!(preserved["launch_bindings"][0]["entry_skill"], "tdd");
+    assert_eq!(
+        preserved["launch_bindings"][0]["stage_skills"],
+        json!(["tdd"])
+    );
     assert_eq!(preserved["workflow_revision"], 2);
 
     let mcp_null = run

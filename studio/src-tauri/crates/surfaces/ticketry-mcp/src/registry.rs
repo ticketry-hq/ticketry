@@ -54,7 +54,7 @@ pub fn tools() -> Vec<Tool> {
         tool("clear_issue_type_workflow_launch_binding", "Delete one state's launch binding and its auto-start setting.", json!({
             "type_id": {"type": "string"}, "state_id": {"type": "string"}, "workflow_revision": {"type": "integer"}
         }), &["type_id", "state_id", "workflow_revision"]),
-        tool("create_review_finding", "Create an Implementation finding under a Story in Review (#905).\n\nThe dedicated review-finding surface: one call creates a direct\nImplementation child, parented to a Story currently in ``Review``, born\ndirectly in the Implementation workflow's start stage, with a fixed\nevidence-block description — ``Path`` (repo-relative), inclusive\n``Lines`` (``line_start``..``line_end``), and an optional ``Note``.\n\nReturns ``{\"ok\": True, \"task_id\", \"key\"}`` on success. On rejection it\nreturns ``{\"ok\": False, ...}`` with a machine-readable reason instead of\nraising: malformed evidence locally (implausible path, or a\nnon-inclusive / non-positive line range), and — from the backend gate — a\nparent that is not a Story, a parent not in ``Review``, or a\nforeign-project parent (``detail``/``code``/``from``/``to``).\n\nInert by contract: it never launches an agent, moves the parent's state,\ntouches the scheduler, or draws a blocker/dependency edge.", json!({
+        tool("create_review_finding", "Create an Implementation finding under a Story in Review (#905).\n\nThe dedicated review-finding surface: one call creates a direct\nImplementation child, parented to a Story currently in ``Review``, born\ndirectly in the Implementation workflow's start stage, with a fixed\nevidence-block description — ``Path`` (repo-relative), inclusive\n``Lines`` (``line_start``..``line_end``), and an optional ``Note``. Findings\nunder one Story form a serial chain: each new finding is blocked by the\nlatest preceding Implementation child when one exists.\n\nReturns ``{\"ok\": True, \"task_id\", \"key\"}`` on success. On rejection it\nreturns ``{\"ok\": False, ...}`` with a machine-readable reason instead of\nraising: malformed evidence locally (implausible path, or a\nnon-inclusive / non-positive line range), and — from the backend gate — a\nparent that is not a Story, a parent not in ``Review``, or a\nforeign-project parent (``detail``/``code``/``from``/``to``).\n\nIt never launches an agent, moves the parent's state, or touches the scheduler.", json!({
             "project_id": {"type": "string"}, "parent_id": {"type": "string"}, "name": {"type": "string"},
             "path": {"type": "string"}, "line_start": {"type": "integer"}, "line_end": {"type": "integer"}, "note": nullable_string()
         }), &["project_id", "parent_id", "name", "path", "line_start", "line_end"]),
@@ -98,6 +98,9 @@ pub fn tools() -> Vec<Tool> {
         tool("remove_issue_type_workflow_transition", "Remove one transition from a type's workflow at the supplied revision.", json!({
             "type_id": {"type": "string"}, "from_state_id": {"type": "string"}, "to_state_id": {"type": "string"}, "workflow_revision": {"type": "integer"}
         }), &["type_id", "from_state_id", "to_state_id", "workflow_revision"]),
+        tool("rename_codex_thread", "Rename a Codex conversation by its Codex thread id.\n\nCodex owns thread names in its own on-disk state, so this writes through\nthe one resident ``codex app-server`` Ticketry already reads titles from.\nBoth arguments are trimmed and must be non-blank; whitespace inside the\nname is preserved and no Ticketry id or length rule applies.\n\nReturns ``{\"ok\": true, \"thread_id\", \"name\"}``. Failures return a\nstructured ``{\"ok\": false, \"error\": ..., \"detail\": ...}`` result:\n``invalid_input``, ``codex_thread_not_found``,\n``codex_app_server_unavailable``, or ``codex_app_server_error``.\n\nIt never starts, resumes, or forks a thread, and touches no Ticketry row.", json!({
+            "thread_id": {"type": "string"}, "name": {"type": "string"}
+        }), &["thread_id", "name"]),
         tool("reparent_tasks", "Reparent existing work items under a parent work item.\n\nBoth parent_task_id and each entry in task_ids may be a UUID or a\nworktracker key (e.g. \"VEEVI-68\"). If module_id is omitted, the\nreparented tasks inherit the parent's module. Returns a dict with keys:\nparent_task_id, reparented, skipped, failed.", json!({
             "project_id": {"type": "string"}, "parent_task_id": {"type": "string"}, "task_ids": {"type": "array", "items": {"type": "string"}}, "module_id": nullable_string()
         }), &["project_id", "parent_task_id", "task_ids"]),
@@ -125,7 +128,7 @@ pub fn tools() -> Vec<Tool> {
         }), &["project_id", "task_id", "status_name"]),
         tool("upsert_issue_type_workflow_launch_binding", "Create or replace one state's launch binding at the supplied revision.", json!({
             "type_id": {"type": "string"}, "state_id": {"type": "string"}, "workflow_revision": {"type": "integer"},
-            "prompt": nullable_string(), "agent": nullable_string(), "profile": nullable_string(), "model": nullable_string(), "reasoning": nullable_string(), "required_skills": nullable_strings(), "entry_skill": nullable_string()
+            "prompt": nullable_string(), "agent": nullable_string(), "profile": nullable_string(), "model": nullable_string(), "reasoning": nullable_string(), "required_skills": nullable_strings(), "stage_skills": nullable_strings()
         }), &["type_id", "state_id", "workflow_revision"]),
     ]
 }
@@ -146,7 +149,7 @@ mod tests {
     #[test]
     fn registry_adds_run_now_to_the_legacy_tool_contract() {
         let tools = tools();
-        assert_eq!(tools.len(), 31);
+        assert_eq!(tools.len(), 32);
         let names: Vec<&str> = tools.iter().map(|tool| tool.name.as_ref()).collect();
         assert_eq!(
             names,
@@ -173,6 +176,7 @@ mod tests {
                 "list_projects",
                 "list_tasks",
                 "remove_issue_type_workflow_transition",
+                "rename_codex_thread",
                 "reparent_tasks",
                 "run_now",
                 "set_issue_type_workflow_auto_start",
@@ -216,5 +220,16 @@ mod tests {
             transition.input_schema["properties"]["handoff"]["default"],
             false
         );
+        let launch_binding = tools
+            .iter()
+            .find(|tool| tool.name == "upsert_issue_type_workflow_launch_binding")
+            .unwrap();
+        assert_eq!(
+            launch_binding.input_schema["properties"]["stage_skills"],
+            nullable_strings()
+        );
+        assert!(launch_binding.input_schema["properties"]
+            .as_object()
+            .is_some_and(|properties| !properties.contains_key("entry_skill")));
     }
 }

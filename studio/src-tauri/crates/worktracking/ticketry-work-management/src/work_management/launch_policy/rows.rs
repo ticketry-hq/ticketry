@@ -58,7 +58,7 @@ impl<'a> PolicyReader<'a> {
                 id: row.id,
                 prompt: row.prompt,
                 required_skills: row.required_skills.to_string(),
-                entry_skill: row.entry_skill,
+                stage_skills: row.stage_skills.to_string(),
                 profile: row.profile,
                 model_id: row.model_id,
                 reasoning_id: row.reasoning_id,
@@ -110,7 +110,7 @@ pub(super) struct BindingRow {
     pub(super) id: i64,
     pub(super) prompt: String,
     pub(super) required_skills: String,
-    pub(super) entry_skill: Option<String>,
+    pub(super) stage_skills: String,
     pub(super) profile: Option<String>,
     pub(super) model_id: Option<String>,
     pub(super) reasoning_id: Option<String>,
@@ -125,6 +125,6 @@ impl BindingRow {
             || self.profile.is_some()
             || self.reasoning_id.is_some()
             || self.required_skills != "[]"
-            || self.entry_skill.is_some()
+            || self.stage_skills != "[]"
     }
 }

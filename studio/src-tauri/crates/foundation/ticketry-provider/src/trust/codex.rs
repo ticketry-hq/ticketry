@@ -367,6 +367,7 @@ mod tests {
         let context = DirectoryTrustContext {
             directory: &directory,
             trust_file: Some(&config),
+            executable: None,
         };
         let DirectoryTrustInspection::ApprovalRequired(approval) =
             provider_contract(Provider::Codex).inspect_directory_trust(context)

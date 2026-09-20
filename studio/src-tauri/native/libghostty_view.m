@@ -243,7 +243,7 @@ muxed_ghostty_scroll_mods(NSEvent *event) {
     muxed_focus_trace(self, "disengaged by studio chord", _acceptsInput);
     if (chord < MUXED_GHOSTTY_CHORD_ZOOM_IN ||
         chord > MUXED_GHOSTTY_CHORD_ZOOM_RESET)
-      [self.window makeFirstResponder:self.superview];
+      [self.window makeFirstResponder:_webview];
     if (_chordCallback != NULL) _chordCallback(_chordContext, chord);
     return;
   }

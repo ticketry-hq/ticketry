@@ -25,6 +25,7 @@
  * that answer.
  */
 import { studioApolloClient } from "../../../../shared/apollo/client";
+import { CurrentWorktreesDocument } from "../../worktrees/generated/currentWorktrees.documents";
 import {
   WorktreeStatusDocument,
   type WorktreeStatusQuery,
@@ -54,20 +55,24 @@ export function createWorktreeInvalidator(
     }
     const owners = [...pending];
     pending.clear();
-    for (const owner of owners) {
+    if (owners.length > 0) {
       void studioApolloClient().refetchQueries({
         include: "active",
+        updateCache(cache) {
+          cache.evict({ id: "ROOT_QUERY", fieldName: "worktrees" });
+        },
         onQueryUpdated(observableQuery) {
+          if (observableQuery.queryName === "CurrentWorktrees") return observableQuery.refetch();
           if (observableQuery.queryName !== "WorktreeStatus") return false;
           const variables = observableQuery.variables as { taskId?: unknown };
           const data = observableQuery.getCurrentResult().data as
             | WorktreeStatusQuery
             | undefined;
-          const matches = variables.taskId === owner
-            || data?.worktree_status.top_level_task_id === owner;
+          const matches = owners.some((owner) => variables.taskId === owner
+            || data?.worktree_status.top_level_task_id === owner);
           return matches ? observableQuery.refetch() : false;
         },
-      });
+      }).catch(() => undefined);
     }
   };
 
@@ -96,7 +101,10 @@ export function createWorktreeInvalidator(
  * fact this client received saying so.
  */
 export function refreshWorktreeHoldings(): Promise<void> {
-  return studioApolloClient()
-    .refetchQueries({ include: [WorktreeStatusDocument] })
-    .then(() => undefined);
+  return studioApolloClient().refetchQueries({
+    include: [WorktreeStatusDocument, CurrentWorktreesDocument],
+    updateCache(cache) {
+      cache.evict({ id: "ROOT_QUERY", fieldName: "worktrees" });
+    },
+  }).then(() => undefined);
 }

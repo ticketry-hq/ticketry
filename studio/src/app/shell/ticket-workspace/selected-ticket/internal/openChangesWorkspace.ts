@@ -19,6 +19,14 @@ export function selectChangesCheckout(moduleId: string, taskId: string | null): 
   }));
 }
 
+export function clearChangesCheckout(moduleId: string): void {
+  useChangesCheckoutSelection.setState((state) => {
+    const taskIdByModule = { ...state.taskIdByModule };
+    delete taskIdByModule[moduleId];
+    return { taskIdByModule };
+  });
+}
+
 function openChangesWorkspace(moduleId: string, taskId: string | null): void {
   const client = useClientStore.getState();
   const planningTaskId = client.selectedTaskId;

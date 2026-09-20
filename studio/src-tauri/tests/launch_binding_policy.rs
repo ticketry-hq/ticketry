@@ -75,7 +75,8 @@ async fn fixture() -> (tempfile::TempDir, sea_orm::DatabaseConnection) {
             CREATE TABLE worktracker_launchbinding (
                 id integer PRIMARY KEY AUTOINCREMENT, issue_type_id char(32) NOT NULL,
                 state_id char(32) NOT NULL, prompt text NOT NULL,
-                required_skills text NOT NULL, entry_skill varchar(128),
+                required_skills text NOT NULL,
+                stage_skills text NOT NULL DEFAULT '[]',
                 profile varchar(255),
                 model_id char(32), reasoning_id char(32),
                 auto_start bool NOT NULL, subtree_run_enabled bool NOT NULL,
@@ -123,7 +124,7 @@ fn patch(state_id: &str) -> workflow::PatchLaunchBinding {
         workflow_revision: 1,
         prompt: workflow::PatchValue::Value("Implement it.".to_owned()),
         required_skills: workflow::PatchValue::Value(vec!["tdd".to_owned()]),
-        entry_skill: workflow::PatchValue::Value("tdd".to_owned()),
+        stage_skills: workflow::PatchValue::Value(vec!["tdd".to_owned()]),
         profile: workflow::PatchValue::Unset,
         model_id: workflow::PatchValue::Value(GPT.to_owned()),
         reasoning_id: workflow::PatchValue::Value(HIGH.to_owned()),
@@ -163,7 +164,7 @@ async fn binding_create_normalizes_and_round_trips_the_complete_policy() {
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].id, id);
     assert_eq!(rows[0].required_skills.0, ["tdd"]);
-    assert_eq!(rows[0].entry_skill.as_deref(), Some("tdd"));
+    assert_eq!(rows[0].stage_skills.0, ["tdd"]);
     assert_eq!(
         rows[0].model.as_deref(),
         Some("60000000-0000-0000-0000-000000000001")
@@ -351,22 +352,7 @@ async fn automation_capability_comes_from_the_provider_contract() {
 }
 
 #[tokio::test]
-async fn binding_rejects_an_entry_skill_that_is_not_required() {
-    let (_directory, database) = fixture().await;
-    let mut input = patch(BUILD);
-    input.entry_skill = workflow::PatchValue::Value("to-spec".to_owned());
-
-    let error = workflow::patch_launch_binding(&database, input)
-        .await
-        .unwrap_err();
-
-    assert_eq!(error.code(), "entry_skill_not_required");
-    assert_eq!(error.field_name(), Some("entry_skill"));
-    assert_no_effect(&database).await;
-}
-
-#[tokio::test]
-async fn binding_clears_an_entry_skill_without_clearing_required_skills() {
+async fn binding_clears_stage_skills_without_clearing_required_skills() {
     let (_directory, database) = fixture().await;
     let id = workflow::patch_launch_binding(&database, patch(BUILD))
         .await
@@ -375,7 +361,7 @@ async fn binding_clears_an_entry_skill_without_clearing_required_skills() {
     clear.workflow_revision = 2;
     clear.prompt = workflow::PatchValue::Unset;
     clear.required_skills = workflow::PatchValue::Unset;
-    clear.entry_skill = workflow::PatchValue::Null;
+    clear.stage_skills = workflow::PatchValue::Null;
     clear.model_id = workflow::PatchValue::Unset;
     clear.reasoning_id = workflow::PatchValue::Unset;
     clear.auto_start = workflow::PatchValue::Unset;
@@ -393,7 +379,82 @@ async fn binding_clears_an_entry_skill_without_clearing_required_skills() {
         .unwrap()
         .unwrap();
     assert_eq!(row.required_skills, serde_json::json!(["tdd"]));
-    assert_eq!(row.entry_skill, None);
+    assert_eq!(row.stage_skills, serde_json::json!([]));
+}
+
+#[tokio::test]
+async fn stage_skills_normalize_round_trip_and_remain_separate_from_required_skills() {
+    let (_directory, database) = fixture().await;
+    let mut input = patch(BUILD);
+    input.required_skills = workflow::PatchValue::Value(vec!["tdd".to_owned()]);
+    input.stage_skills = workflow::PatchValue::Value(vec![
+        "  future-skill  ".to_owned(),
+        "".to_owned(),
+        "Future-Skill".to_owned(),
+        "future-skill".to_owned(),
+    ]);
+
+    let id = workflow::patch_launch_binding(&database, input)
+        .await
+        .unwrap();
+    let row = launch_binding::Entity::find_by_id(id)
+        .one(&database)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        row.stage_skills,
+        serde_json::json!(["future-skill", "Future-Skill"])
+    );
+    assert_eq!(row.required_skills, serde_json::json!(["tdd"]));
+
+    let projected = read_queries::launch_bindings(&database, PROJECT)
+        .await
+        .unwrap();
+    assert_eq!(
+        projected[0].stage_skills.0,
+        ["future-skill", "Future-Skill"]
+    );
+}
+
+#[tokio::test]
+async fn stage_skill_patch_preserves_omission_and_clears_null() {
+    let (_directory, database) = fixture().await;
+    let mut create = patch(BUILD);
+    create.stage_skills = workflow::PatchValue::Value(vec!["one".to_owned(), "two".to_owned()]);
+    let id = workflow::patch_launch_binding(&database, create)
+        .await
+        .unwrap();
+
+    let mut preserve = patch(BUILD);
+    preserve.workflow_revision = 2;
+    preserve.stage_skills = workflow::PatchValue::Unset;
+    preserve.prompt = workflow::PatchValue::Value("Changed.".to_owned());
+    workflow::patch_launch_binding(&database, preserve)
+        .await
+        .unwrap();
+    assert_eq!(
+        launch_binding::Entity::find_by_id(id)
+            .one(&database)
+            .await
+            .unwrap()
+            .unwrap()
+            .stage_skills,
+        serde_json::json!(["one", "two"])
+    );
+
+    let mut clear = patch(BUILD);
+    clear.workflow_revision = 3;
+    clear.stage_skills = workflow::PatchValue::Null;
+    workflow::patch_launch_binding(&database, clear)
+        .await
+        .unwrap();
+    let row = launch_binding::Entity::find_by_id(id)
+        .one(&database)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(row.stage_skills, serde_json::json!([]));
 }
 
 #[tokio::test]

@@ -18,6 +18,7 @@ import {
   TaskDocumentRegistryDocument,
 } from "../../../documents/generated/documentRegistry.documents";
 import { WorktreeStatusDocument } from "../../worktrees/generated/worktreeStatus.documents";
+import { CurrentWorktreesDocument } from "../../worktrees/generated/currentWorktrees.documents";
 import { WorkTrackerProjectOpenDocument } from "../../../projects/generated/projects.documents";
 import { recordLocalWorkItemConvergence } from "../../../work-items/workItemConvergence";
 
@@ -666,7 +667,8 @@ describe("connection lifecycle", () => {
       include: [TaskDocumentRegistryDocument, ScratchDocumentRegistryDocument],
     });
     expect(apolloRefetch).toHaveBeenCalledWith({
-      include: [WorktreeStatusDocument],
+      include: [WorktreeStatusDocument, CurrentWorktreesDocument],
+      updateCache: expect.any(Function),
     });
     // Only now is the server's high-water cursor trusted as a baseline.
     window.dispatchEvent(new Event("online"));
@@ -981,7 +983,8 @@ describe("worktree holdings", () => {
     transport.send(caughtUp(10));
 
     expect(refetch).toHaveBeenCalledWith({
-      include: [WorktreeStatusDocument],
+      include: [WorktreeStatusDocument, CurrentWorktreesDocument],
+      updateCache: expect.any(Function),
     });
   });
 

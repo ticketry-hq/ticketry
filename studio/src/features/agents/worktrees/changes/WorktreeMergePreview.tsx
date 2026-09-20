@@ -1,5 +1,5 @@
 import { useQuery } from "@apollo/client/react";
-import { type FormEvent, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { studioApolloClient } from "../../../../shared/apollo/client";
 import { ModuleVersionControlDocument } from "../generated/moduleVersionControl.documents";
@@ -13,10 +13,11 @@ import {
   mergeTaskWorktree,
 } from "../internal/changesTransport";
 import { newOperationId } from "../internal/operationId";
+import { MergeDestinationPicker } from "./MergeDestinationPicker";
 
 export function WorktreeMergePreview({ taskId, active }: { taskId: string; active: boolean }) {
-  const [destination, setDestination] = useState("");
-  const [requestedDestination, setRequestedDestination] = useState<string | null>(null);
+  const [selection, setSelection] = useState<{ taskId: string; branch: string } | null>(null);
+  const destinationBranch = selection?.taskId === taskId ? selection.branch : null;
   const [busy, setBusy] = useState<"merge" | "finish" | "abort" | "refresh" | null>(null);
   const [confirming, setConfirming] = useState<"finish" | "abort" | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -24,7 +25,7 @@ export function WorktreeMergePreview({ taskId, active }: { taskId: string; activ
   const intent = useRef<{ key: string; operationId: string } | null>(null);
   const query = useQuery(WorktreeMergePreviewDocument, {
     client: studioApolloClient(),
-    variables: { taskId, destinationBranch: requestedDestination },
+    variables: { taskId, destinationBranch },
     skip: !active,
     fetchPolicy: "network-only",
   });
@@ -52,18 +53,12 @@ export function WorktreeMergePreview({ taskId, active }: { taskId: string; activ
     }).catch(() => undefined);
   };
 
-  const refresh = (event: FormEvent) => {
-    event.preventDefault();
-    if (!destination) return;
-    setError(null);
-    setOutcome(null);
-    if (destination === requestedDestination) void query.refetch();
-    else setRequestedDestination(destination);
-  };
-
   const merge = async () => {
     if (
-      !preview?.source_commit
+      query.loading
+      || Boolean(query.error)
+      || !preview?.ready
+      || !preview?.source_commit
       || !preview.destination_branch
       || !preview.destination_commit
       || !preview.confirmation_token
@@ -136,7 +131,7 @@ export function WorktreeMergePreview({ taskId, active }: { taskId: string; activ
         <dt className="text-text-muted">Source</dt>
         <dd className="break-all text-text-primary">{preview.source_branch}</dd>
         <dt className="text-text-muted">Destination</dt>
-        <dd className="break-all text-text-primary">{preview.destination_branch ?? "Select a destination"}</dd>
+        <dd className="break-all text-text-primary">{preview.destination_branch ?? "Origin unavailable"}</dd>
         <dt className="text-text-muted">Checkout</dt>
         <dd className="break-all text-text-primary">{preview.destination_checkout ?? "Unavailable"}</dd>
       </dl>
@@ -220,30 +215,23 @@ export function WorktreeMergePreview({ taskId, active }: { taskId: string; activ
         </section>
       ) : null}
 
-      {!recovery && preview.requires_destination_selection ? (
-        <form className="mt-2 flex flex-wrap gap-2" onSubmit={refresh}>
-          <select
-            aria-label="Local merge destination"
-            className="min-w-0 border border-pane-border bg-pane-bg px-2 py-1 text-text-primary"
-            value={destination}
-            onChange={(event) => setDestination(event.target.value)}
-          >
-            <option value="">Select an existing local branch</option>
-            {preview.destinations.map((candidate) => (
-              <option key={candidate.branch} value={candidate.branch}>
-                {candidate.branch} - {candidate.checkout ?? "not checked out"}
-              </option>
-            ))}
-          </select>
-          <button
-            type="submit"
-            disabled={!destination || query.loading}
-            className="border border-pane-border px-2 py-1 text-text-primary disabled:opacity-50"
-          >
-            Preview destination
-          </button>
-        </form>
+      {!recovery ? (
+        <MergeDestinationPicker
+          key={taskId}
+          destinations={preview.destinations}
+          sourceBranch={preview.source_branch}
+          value={destinationBranch ?? preview.destination_branch ?? null}
+          disabled={busy !== null || query.loading}
+          onSelect={(branch) => {
+            setError(null);
+            setOutcome(null);
+            if (branch === destinationBranch) void query.refetch();
+            else setSelection({ taskId, branch });
+          }}
+        />
       ) : null}
+      {query.loading ? <p role="status" className="mt-2 text-xs text-text-muted">Loading destination preview...</p> : null}
+      {query.error ? <p role="alert" className="mt-2 text-xs text-lifecycle-danger">{query.error.message}</p> : null}
 
       {!recovery && !preview.ready ? (
         <button
@@ -256,12 +244,12 @@ export function WorktreeMergePreview({ taskId, active }: { taskId: string; activ
         </button>
       ) : null}
       {!recovery && preview.reason ? <p className="mt-2 text-xs text-lifecycle-danger" role="alert">{preview.reason}</p> : null}
-      {!recovery && preview.ready ? <p className="mt-2 text-xs text-lifecycle-success" role="status">Ready to merge locally</p> : null}
+      {!recovery && preview.ready && !query.loading && !query.error ? <p className="mt-2 text-xs text-lifecycle-success" role="status">Ready to merge locally</p> : null}
       {!recovery && preview.ready ? (
         <button
           type="button"
           aria-busy={busy === "merge"}
-          disabled={busy !== null}
+          disabled={busy !== null || query.loading || Boolean(query.error)}
           onClick={() => void merge()}
           className="mt-2 border border-pane-border px-2 py-1 text-text-primary disabled:opacity-50"
         >

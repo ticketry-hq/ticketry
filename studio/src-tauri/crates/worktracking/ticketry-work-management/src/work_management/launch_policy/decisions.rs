@@ -4,7 +4,7 @@ use sea_orm::{
     QueryOrder, QuerySelect, QueryTrait, Schema, Set,
 };
 
-use super::{LaunchPolicyDecision, LaunchPolicyError};
+use super::{types::DECISION_VERSION, LaunchPolicyDecision, LaunchPolicyError};
 use ticketry_entities::{launch_policy_decision, transition_occurrence};
 
 pub(super) async fn ensure_schema(database: &impl ConnectionTrait) -> Result<(), sea_orm::DbErr> {
@@ -117,10 +117,69 @@ pub async fn load_by_identity(
 }
 
 fn decode(row: launch_policy_decision::Model) -> Result<LaunchPolicyDecision, LaunchPolicyError> {
-    serde_json::from_str(&row.decision_json).map_err(|error| {
-        LaunchPolicyError::rejected(
-            "launch_policy_decision_invalid",
-            format!("Stored launch policy decision is invalid: {error}"),
-        )
-    })
+    let mut payload: serde_json::Value =
+        serde_json::from_str(&row.decision_json).map_err(invalid_decision)?;
+    let payload_version = payload
+        .get("version")
+        .and_then(serde_json::Value::as_i64)
+        .and_then(|version| i32::try_from(version).ok())
+        .ok_or_else(|| invalid_decision("the payload version is missing or invalid"))?;
+    if row.version != payload_version {
+        return Err(invalid_decision(format!(
+            "the row version {} does not match payload version {payload_version}",
+            row.version
+        )));
+    }
+
+    match payload_version {
+        1 => {}
+        2 => adapt_entry_skill(&mut payload)?,
+        DECISION_VERSION => {}
+        version => {
+            return Err(invalid_decision(format!(
+                "decision version {version} is not supported"
+            )));
+        }
+    }
+
+    serde_json::from_value(payload).map_err(invalid_decision)
+}
+
+fn adapt_entry_skill(payload: &mut serde_json::Value) -> Result<(), LaunchPolicyError> {
+    let object = payload
+        .as_object_mut()
+        .ok_or_else(|| invalid_decision("the payload is not a JSON object"))?;
+    if object.contains_key("stage_skills") {
+        return Err(invalid_decision(
+            "a version 2 payload unexpectedly contains stage_skills",
+        ));
+    }
+    let stage_skills = match object.remove("entry_skill") {
+        None | Some(serde_json::Value::Null) => Vec::new(),
+        Some(serde_json::Value::String(skill)) => {
+            let skill = skill.trim();
+            if skill.is_empty() {
+                Vec::new()
+            } else {
+                vec![serde_json::Value::String(skill.to_owned())]
+            }
+        }
+        Some(_) => {
+            return Err(invalid_decision(
+                "a version 2 entry_skill must be a string or null",
+            ));
+        }
+    };
+    object.insert(
+        "stage_skills".to_owned(),
+        serde_json::Value::Array(stage_skills),
+    );
+    Ok(())
+}
+
+fn invalid_decision(error: impl std::fmt::Display) -> LaunchPolicyError {
+    LaunchPolicyError::rejected(
+        "launch_policy_decision_invalid",
+        format!("Stored launch policy decision is invalid: {error}"),
+    )
 }

@@ -9,6 +9,8 @@ import { nativeGhosttyAvailable } from "./internal/nativeGhosttyAvailability";
 import { nativeViewerSessionIsLive } from "./internal/nativeViewerSessionLiveness";
 import { ensureTerminalRunCreated } from "./internal/terminalRunCreation";
 import { currentTerminalRenderer } from "./internal/rendererSelection";
+import { useRunState } from "../status";
+import { TerminalEndedState } from "./TerminalEndedState";
 
 type TerminalProps = {
   sessionId: string | null;
@@ -45,6 +47,7 @@ export function Terminal({
     reason: string;
   } | null>(null);
   const runId = session?.agentRunId ?? null;
+  const runState = useRunState(runId ?? "");
   const markNativeUnavailable = useCallback((reason: string) => {
     setNativeFailure({ runId, reason });
   }, [runId]);
@@ -66,6 +69,10 @@ export function Terminal({
     if (!sessionId || !session) return;
     ensureTerminalRunCreated(sessionId, session);
   }, [session, sessionId]);
+
+  if (session?.status === "session_lost" && runState === "exited") {
+    return <TerminalEndedState conversation={session.isInstant} />;
+  }
 
   if (session?.viewerAttachmentDeferred) {
     return (

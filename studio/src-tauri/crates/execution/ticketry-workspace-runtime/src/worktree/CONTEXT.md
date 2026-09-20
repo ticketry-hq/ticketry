@@ -12,7 +12,8 @@ tmux-backed terminal sessions agents run in.
 Backend-owned injection of text into a tmux session as if a user typed it:
 wait for the provider's ready composer, paste the text, verify visibility,
 then submit. Independent of any open frontend viewer, which merely observes
-the result. Used for entry-skill submission and handoff delivery.
+the result. Used to deliver one composed destination prompt to a continued
+agent.
 _Avoid_: viewer input, frontend typing, send-keys prompt
 
 ### Worktrees

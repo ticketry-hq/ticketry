@@ -9,6 +9,7 @@ pub(crate) mod issue_type_transition;
 pub(crate) mod launch_binding;
 pub mod launch_binding_entry_skill_migration;
 pub mod launch_binding_profile_migration;
+pub mod launch_binding_stage_skills_migration;
 pub mod launch_policy;
 pub(crate) mod module_presentation;
 pub mod module_presentation_migration;

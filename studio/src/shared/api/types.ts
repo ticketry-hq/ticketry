@@ -24,7 +24,7 @@ export interface LaunchBinding extends LaunchBindingInput {
 export interface LaunchBindingInput {
   prompt?: string | null;
   required_skills?: string[] | null;
-  entry_skill?: string | null;
+  stage_skills?: string[] | null;
   agent?: string | null;
   profile?: string | null;
   model?: string | null;
@@ -210,7 +210,7 @@ export interface ScopedWorkflowLaunchBinding extends LaunchBindingInput {
   state_id: string;
   prompt: string;
   required_skills: string[];
-  entry_skill: string | null;
+  stage_skills: string[];
   agent: string | null;
   profile: string | null;
   model: string | null;

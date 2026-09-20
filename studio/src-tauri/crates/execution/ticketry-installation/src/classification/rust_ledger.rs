@@ -44,6 +44,10 @@ pub fn owned_ledgers() -> Vec<(&'static str, i32)> {
             ticketry_work_management::launch_binding_profile_migration::VERSION,
         ),
         (
+            ticketry_work_management::launch_binding_stage_skills_migration::LEDGER_TABLE,
+            ticketry_work_management::launch_binding_stage_skills_migration::VERSION,
+        ),
+        (
             ticketry_work_management::workflow_color_migration::LEDGER_TABLE,
             ticketry_work_management::workflow_color_migration::VERSION,
         ),

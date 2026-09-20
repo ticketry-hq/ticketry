@@ -17,6 +17,7 @@ pub struct TaskPromptFacts {
 pub struct TaskPromptInput {
     pub facts: TaskPromptFacts,
     pub workflow_prompt: String,
+    pub stage_skills: Vec<String>,
     pub additional_user_input: Option<String>,
     pub design_directory: Option<String>,
     /// The same design directory resolved absolutely, when the caller has it.
@@ -54,12 +55,8 @@ pub struct PlanningPrompt {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InstantPrompt {
-    pub module: ModulePromptFacts,
     pub user_input: Option<String>,
     pub initial_prompt: Option<String>,
-    pub design_directory: Option<String>,
-    pub allow_self_termination: bool,
-    pub auto_close: bool,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -86,6 +83,14 @@ pub fn build_task_prompt(input: &TaskPromptInput) -> String {
     if !input.workflow_prompt.is_empty() {
         prompt.push_str("Selected workflow prompt:\n");
         prompt.push_str(&input.workflow_prompt);
+        prompt.push_str("\n\n");
+    }
+    if !input.stage_skills.is_empty() {
+        prompt.push_str("Stage skills:\nUse these skills for this stage: ");
+        prompt.push_str(
+            &serde_json::to_string(&input.stage_skills)
+                .expect("serializing stage skill names cannot fail"),
+        );
         prompt.push_str("\n\n");
     }
     prompt.push_str(&format!(
@@ -170,83 +175,13 @@ pub fn build_planning_prompt(input: &PlanningPrompt) -> String {
 }
 
 pub fn build_instant_prompt(input: &InstantPrompt) -> String {
-    let module = &input.module;
-    let user_input = input
-        .user_input
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty());
-    let mut steps: Vec<Vec<&str>> = Vec::new();
-    if user_input.is_none() {
-        steps.push(vec![
-            "Wait for the user to type their first request in this terminal.",
-            "Do not inspect files, make changes, or ask questions before that request arrives.",
-        ]);
-    }
-    if input.allow_self_termination && !input.auto_close {
-        steps.push(if user_input.is_some() {
-            vec![
-                "Before beginning any work, ask the user exactly once: 'May I terminate this run",
-                "after I successfully complete this requested change?' Wait for their response.",
-                "Only an explicit affirmative response authorizes self-termination. Refusal,",
-                "an ambiguous response, or no response means the run must stay open. Remember",
-                "that decision for this run and this request; do not ask again.",
-            ]
-        } else {
-            vec![
-                "After the user sends a request and before beginning work, ask exactly once:",
-                "'May I terminate this run after I successfully complete this requested change?'",
-                "Wait for their response. Only an explicit affirmative response authorizes",
-                "self-termination. Refusal, ambiguity, or no response means the run stays open.",
-            ]
-        });
-    }
-    if input.allow_self_termination && input.auto_close {
-        steps.extend([
-            vec!["After the work completes successfully and is validated, briefly report what changed,", "then invoke terminate_current_run with no arguments."],
-            vec!["Never invoke self-termination when the work is blocked, failed, ambiguous, or", "larger than expected."],
-        ]);
-    } else if input.allow_self_termination {
-        steps.extend([
-            vec!["After the work completes successfully and is validated, briefly report what changed.", "Only after that report, and only if the user explicitly authorized it, invoke", "terminate_current_run with no arguments."],
-            vec!["Never invoke self-termination when the work is blocked, failed, ambiguous, or", "larger than expected. Without explicit authorization, leave the run open."],
-        ]);
-    }
-    let jobs = steps
-        .iter()
-        .enumerate()
-        .map(|(index, lines)| {
-            format!(
-                "  {}. {}\n{}",
-                index + 1,
-                lines[0],
-                lines[1..]
-                    .iter()
-                    .map(|line| format!("     {line}\n"))
-                    .collect::<String>()
-            )
-        })
-        .collect::<String>();
-    let design = input
-        .design_directory
-        .as_deref()
-        .map(|value| format!("Design directory: {value}\n"))
-        .unwrap_or_default();
-    let configured = input
-        .initial_prompt
-        .as_deref()
+    [input.initial_prompt.as_deref(), input.user_input.as_deref()]
+        .into_iter()
+        .flatten()
         .map(str::trim)
         .filter(|value| !value.is_empty())
-        .map(|value| format!("Configured Instant instructions:\n{value}\n\n"))
-        .unwrap_or_default();
-    let request = user_input
-        .map(|value| format!("User's request:\n  {value}\n\n"))
-        .unwrap_or_default();
-    format!(
-        "Context:\n  Module: {}\n  Project: {}\n  Project ID:  {}\n  Module ID:   {}\n  Local Codebase: {}\n\n{}{}Run lifecycle:\n{}\n{}",
-        module.name, module.project_slug, module.project_id, module.module_id,
-        module.local_codebase.as_deref().unwrap_or("(not set)"), configured, request, jobs, design,
-    )
+        .collect::<Vec<_>>()
+        .join("\n\n")
 }
 
 pub fn build_document_chat_prompt(input: &DocumentChatPrompt) -> String {
@@ -334,13 +269,16 @@ mod tests {
                 description_html: "<p>First</p><ul><li>Second</li></ul>".into(),
             },
             workflow_prompt: "This text is opaque; keep \"all\" of it.".into(),
+            stage_skills: vec!["tdd".into(), "quote \"and\\slash\"".into()],
             additional_user_input: Some("Also preserve 🦀.".into()),
             design_directory: Some("spec/module/T867--launch".into()),
             design_directory_root: None,
             previous_state_name: None,
         });
 
-        assert!(prompt.starts_with("Selected workflow prompt:\nThis text is opaque; keep \"all\" of it.\n\nWork item context (factual):"));
+        assert!(prompt.starts_with(
+            "Selected workflow prompt:\nThis text is opaque; keep \"all\" of it.\n\nStage skills:\nUse these skills for this stage: [\"tdd\",\"quote \\\"and\\\\slash\\\"\"]\n\nWork item context (factual):"
+        ));
         for expected in [
             "Source: WorkTracker (ticket #867)",
             "Task: Quote-heavy 'task' 東京",
@@ -366,6 +304,7 @@ mod tests {
         let prompt = build_task_prompt(&TaskPromptInput {
             facts: facts(),
             workflow_prompt: String::new(),
+            stage_skills: Vec::new(),
             additional_user_input: None,
             design_directory: Some(design.to_string_lossy().into_owned()),
             design_directory_root: Some(design.to_string_lossy().into_owned()),
@@ -380,6 +319,30 @@ mod tests {
             prompt.lines().filter(|line| *line == expected).count() == 1,
             "expected exactly one handoff line naming the note, got: {prompt}"
         );
+        assert!(!prompt.contains("Stage skills:"));
+    }
+
+    #[test]
+    fn task_prompt_omits_empty_stage_skills_without_mutating_or_accumulating() {
+        let input = TaskPromptInput {
+            facts: facts(),
+            workflow_prompt: "Keep this stored text unchanged.".into(),
+            stage_skills: Vec::new(),
+            additional_user_input: None,
+            design_directory: None,
+            design_directory_root: None,
+            previous_state_name: None,
+        };
+
+        let first = build_task_prompt(&input);
+        let second = build_task_prompt(&input);
+
+        assert_eq!(first, second);
+        assert!(first.starts_with(
+            "Selected workflow prompt:\nKeep this stored text unchanged.\n\nWork item context (factual):"
+        ));
+        assert!(!first.contains("Stage skills:"));
+        assert_eq!(input.workflow_prompt, "Keep this stored text unchanged.");
     }
 
     #[test]
@@ -396,6 +359,7 @@ mod tests {
             let prompt = build_task_prompt(&TaskPromptInput {
                 facts: facts(),
                 workflow_prompt: String::new(),
+                stage_skills: Vec::new(),
                 additional_user_input: None,
                 design_directory: Some(design.to_string_lossy().into_owned()),
                 design_directory_root: Some(design.to_string_lossy().into_owned()),
@@ -438,30 +402,19 @@ mod tests {
         assert!(planning.contains("Design directory: spec/module/Scratch/run-1"));
 
         let instant = build_instant_prompt(&InstantPrompt {
-            module: module(),
             user_input: Some("Change only 'x' → \"λ\".".into()),
             initial_prompt: Some("Keep generated files untouched.".into()),
-            design_directory: Some("spec/module/Scratch/run-2".into()),
-            allow_self_termination: true,
-            auto_close: false,
         });
-        assert!(instant.contains("Change only 'x' → \"λ\"."));
-        assert!(
-            instant.contains("Configured Instant instructions:\nKeep generated files untouched.")
+        assert_eq!(
+            instant,
+            "Keep generated files untouched.\n\nChange only 'x' → \"λ\"."
         );
-        assert!(instant.contains("May I terminate this run"));
-        assert!(instant.contains("terminate_current_run"));
 
-        let auto_closing = build_instant_prompt(&InstantPrompt {
-            module: module(),
-            user_input: Some("Change x.".into()),
+        let empty = build_instant_prompt(&InstantPrompt {
+            user_input: None,
             initial_prompt: None,
-            design_directory: None,
-            allow_self_termination: true,
-            auto_close: true,
         });
-        assert!(!auto_closing.contains("May I terminate this run"));
-        assert!(auto_closing.contains("then invoke terminate_current_run"));
+        assert!(empty.is_empty());
 
         let document = build_document_chat_prompt(&DocumentChatPrompt {
             document_relative_path: "HLD 'final'.html".into(),

@@ -217,11 +217,11 @@ _Avoid_: Node modal, state drawer, launch form
 
 **Handoff edge**:
 A workflow transition edge marked so that the work item's live agent survives
-the move: the destination's prompt and entry skill are typed into that agent's
-own session and no new run begins. An unmarked edge is a replacing edge — the
-move ends the live agent, and the destination starts fresh if it launches at
-all. Either edge starts fresh when no agent is live. It is the only setting
-that decides survive versus replace.
+the move. Ticketry submits the destination's composed prompt, including its
+Stage skills, once to that agent's session and starts no new run. An unmarked
+edge is a replacing edge — the move ends the live agent, and the destination
+starts fresh if it launches at all. Either edge starts fresh when no agent is
+live. It is the only setting that decides survive versus replace.
 _Avoid_: Continue flag, keep-agent flag, session reuse toggle
 
 **Handoff note**:

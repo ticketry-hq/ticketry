@@ -1,6 +1,6 @@
 //! Explicit provider folder approval from the local main webview.
 use std::{
-    path::Path,
+    path::{Path, PathBuf},
     sync::{Mutex, OnceLock},
 };
 
@@ -9,6 +9,7 @@ use ticketry_provider::{
     provider_contract, DirectoryTrustApproval, DirectoryTrustContext, DirectoryTrustInspection,
     DirectoryTrustPreparation, Provider,
 };
+use ticketry_tool_discovery::{discover_tool, SupportedTool};
 
 use crate::desktop::lifecycle::MAIN_WINDOW_LABEL;
 
@@ -57,9 +58,13 @@ fn prepare_directory_trust(
         .ok_or_else(|| "Directory trust requires a UTF-8 folder path.".to_owned())?
         .to_owned();
     let contract = provider_contract(provider);
+    let executable = (provider == Provider::Claude)
+        .then(|| discover_tool(SupportedTool::Claude))
+        .and_then(|diagnostic| diagnostic.path.map(PathBuf::from));
     let context = DirectoryTrustContext {
         directory: &directory,
         trust_file,
+        executable: executable.as_deref(),
     };
     match contract.inspect_directory_trust(context) {
         DirectoryTrustInspection::Trusted => Ok(outcome("already_trusted", directory_text)),

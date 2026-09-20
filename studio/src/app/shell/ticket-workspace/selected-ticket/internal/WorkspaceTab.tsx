@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { MouseEvent, ReactNode } from "react";
 import type {
   DragSourceProps,
   DropIntent,
@@ -40,8 +40,8 @@ export function WorkspaceTab({
   /** Colour classes replacing the neutral chrome (background/border/text). */
   tone?: string;
   badge?: ReactNode;
-  onClick: () => void;
-  onClose?: () => void;
+  onClick: (event: MouseEvent<HTMLElement>) => void;
+  onClose?: (event: MouseEvent<HTMLElement>) => void;
   closeLabel?: string;
   dropIntent: DropIntent | null;
   registerRef: (node: HTMLDivElement | null) => void;
@@ -92,7 +92,7 @@ export function WorkspaceTab({
           type="button"
           onClick={(event) => {
             event.stopPropagation();
-            onClose();
+            onClose(event);
           }}
           className="opacity-70 hover:opacity-100"
           aria-label={closeLabel ?? `Close ${name}`}

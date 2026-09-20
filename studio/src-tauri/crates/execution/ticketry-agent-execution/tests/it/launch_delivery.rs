@@ -67,7 +67,7 @@ impl TerminalCleanupRuntime for SettlingCleanupRuntime {
 
 fn decision() -> LaunchPolicyDecision {
     LaunchPolicyDecision {
-        version: 2,
+        version: 3,
         decision_id: "decision-1843".to_owned(),
         policy_identity: "binding:1".to_owned(),
         policy_version: 7,
@@ -81,7 +81,7 @@ fn decision() -> LaunchPolicyDecision {
         state_name: Some("Todo".to_owned()),
         prompt: "Implement this Story.".to_owned(),
         required_skills: Vec::new(),
-        entry_skill: None,
+        stage_skills: Vec::new(),
         provider: "codex".to_owned(),
         profile: None,
         model: Some("slice6-model".to_owned()),

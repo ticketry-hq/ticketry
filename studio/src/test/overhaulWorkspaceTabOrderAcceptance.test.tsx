@@ -73,6 +73,68 @@ function run(agentRunId: string, agent = "codex") {
   };
 }
 
+/** Null until a case opts the Changes tab in; the tab needs a live worktree. */
+let worktreeStatus: unknown = null;
+
+const activeCleanWorktree = {
+  __typename: "WorktreeStatusView",
+  kind: "worktree",
+  task_id: WORK_ITEM_ID,
+  top_level_task_id: WORK_ITEM_ID,
+  is_shared: false,
+  branch: "wt/CODING-1952-gesture-aware-activation",
+  base_branch: "main",
+  path: "/worktrees/CODING-1952",
+  state: "active",
+  clean: true,
+  dirty: false,
+  ahead: 0,
+  behind: 0,
+  conflict: false,
+  checkout_present: true,
+  ephemeral: false,
+  reason: null,
+};
+
+const emptyChanges = {
+  __typename: "WorktreeChangesView",
+  task_id: WORK_ITEM_ID,
+  top_level_task_id: WORK_ITEM_ID,
+  is_shared: false,
+  base_commit: "0123456789abcdef0123456789abcdef01234567",
+  committed_count: 0,
+  pull_request_url: null,
+  pull_request_creation_eligible: false,
+  work_item_done: false,
+  closure_failure: null,
+  cleanup: {
+    __typename: "WorktreeCleanupStatusView",
+    eligible: false,
+    blocker: "pull_request_absent",
+    reason: "No pull request is mapped to this worktree.",
+  },
+  pull_request: {
+    __typename: "PullRequestStatusView",
+    url: null,
+    state: "none",
+    target_branch: null,
+    head_commit: null,
+    integrated: false,
+    post_merge_work: false,
+    replacement_eligible: false,
+    follow_up_eligible: false,
+    merge_preparation_eligible: false,
+    reason: null,
+  },
+  clean: true,
+  dirty: false,
+  unpushed_count: 0,
+  truncated: false,
+  files: [],
+  insertions: 0,
+  deletions: 0,
+};
+
 function deferred<T>() {
   let resolve!: (value: T) => void;
   let reject!: (reason?: unknown) => void;
@@ -99,7 +161,17 @@ function currentIssue(order: readonly WorkspaceTabIdentity[]) {
 function installRuntime(): void {
   const terminalExecutor = terminalSessionReadExecutor(terminalReads);
   installDesktopGraphQlRuntime(async (document, variables) => {
-    if (documentOperationName(document) === "UpdateWorkTrackerWorkspaceTabOrder") {
+    const operation = documentOperationName(document);
+    if (operation === "WorktreeStatus") {
+      return { worktree_status: worktreeStatus } as never;
+    }
+    if (operation === "WorktreeChanges") {
+      return { worktree_changes: emptyChanges } as never;
+    }
+    if (operation === "CurrentWorktrees") {
+      return { worktrees: { __typename: "WorktreeConnection", nodes: [] } } as never;
+    }
+    if (operation === "UpdateWorkTrackerWorkspaceTabOrder") {
       const order = (variables as { workspaceTabOrder: WorkspaceTabIdentity[] })
         .workspaceTabOrder;
       const saved = await saves(order);
@@ -210,6 +282,7 @@ function dropOn(targetName: string, transfer: DataTransfer): void {
 describe("overhaul acceptance, server-owned workspace tab order", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    worktreeStatus = null;
     installRuntime();
     Element.prototype.scrollIntoView = vi.fn();
     documentRegistry.listTaskDocuments.mockResolvedValue([
@@ -330,13 +403,22 @@ describe("overhaul acceptance, server-owned workspace tab order", () => {
   });
 
   it("[overhaul-172] drags with a seam, pending lock, click suppression, and rollback", async () => {
+    worktreeStatus = activeCleanWorktree;
     seedSavedOrder([
       { kind: "terminal", id: "run-1" },
       { kind: "details" },
+      { kind: "changes" },
       { kind: "doc", id: "design" },
       { kind: "doc", id: "notes" },
     ]);
     mountWorkspace();
+    await waitFor(() => expect(visibleTabNames()).toEqual([
+      "codex terminal",
+      "Details",
+      "Changes",
+      "DESIGN",
+      "NOTES",
+    ]));
     await waitFor(() => expect(workspaceTab("Details"))
       .toHaveAttribute("draggable", "true"));
 
@@ -351,23 +433,39 @@ describe("overhaul acceptance, server-owned workspace tab order", () => {
     saves.mockReturnValueOnce(pending.promise);
     const moved = beginDrag("NOTES", "codex terminal", "near");
     dropOn("codex terminal", moved);
-    fireEvent.click(workspaceTab("codex terminal"));
+    // The browser's trailing click at the end of the drag must not activate
+    // the tab under the drop.
+    fireEvent.click(workspaceTab("codex terminal"), { detail: 1 });
 
     await waitFor(() => expect(visibleTabNames()).toEqual([
       "NOTES",
       "codex terminal",
       "Details",
+      "Changes",
       "DESIGN",
     ]));
     expect(within(screen.getByTestId("workspace-tabs")).getAllByRole("tab")
+      .filter((tab) => tab.getAttribute("aria-label") !== "Changes")
       .every((tab) => tab.getAttribute("draggable") === "false")).toBe(true);
     expect(workspaceTab("Details")).toHaveAttribute("aria-selected", "true");
     expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
+
+    // A deliberate click right after the drop opens Changes at once — no
+    // waiting out a suppression window.
+    fireEvent.pointerDown(workspaceTab("Changes"));
+    fireEvent.click(workspaceTab("Changes"), { detail: 1 });
+    await waitFor(() => expect(workspaceTab("Changes"))
+      .toHaveAttribute("aria-selected", "true"));
+    fireEvent.pointerDown(workspaceTab("Details"));
+    fireEvent.click(workspaceTab("Details"), { detail: 1 });
+    await waitFor(() => expect(workspaceTab("Details"))
+      .toHaveAttribute("aria-selected", "true"));
 
     const committed = [
       { kind: "doc" as const, id: "notes" },
       { kind: "terminal" as const, id: "run-1" },
       { kind: "details" as const },
+      { kind: "changes" as const },
       { kind: "doc" as const, id: "design" },
     ];
     pending.resolve(committed);
@@ -378,12 +476,18 @@ describe("overhaul acceptance, server-owned workspace tab order", () => {
     saves.mockReturnValueOnce(rejected.promise);
     const failing = beginDrag("Details", "NOTES", "near");
     dropOn("NOTES", failing);
+    // Keyboard activation carries no pointer detail, so pointer-drag
+    // suppression must leave it alone even straight after a drop.
+    fireEvent.click(workspaceTab("Changes"), { detail: 0 });
+    await waitFor(() => expect(workspaceTab("Changes"))
+      .toHaveAttribute("aria-selected", "true"));
     await waitFor(() => expect(visibleTabNames()[0]).toBe("Details"));
     rejected.reject(new Error("save failed"));
     await waitFor(() => expect(visibleTabNames()).toEqual([
       "NOTES",
       "codex terminal",
       "Details",
+      "Changes",
       "DESIGN",
     ]));
     expect(useClientStore.getState().toasts.at(-1)?.message)
@@ -399,12 +503,22 @@ describe("overhaul acceptance, server-owned workspace tab order", () => {
       "NOTES",
       "codex terminal",
       "Details",
+      "Changes",
     ]));
     expect(saves).toHaveBeenCalledWith([
       { kind: "doc", id: "design" },
       { kind: "doc", id: "notes" },
       { kind: "terminal", id: "run-1" },
       { kind: "details" },
+      { kind: "changes" },
     ]);
+
+    // That drop finished without a trailing click. The suppression must expire
+    // with the gesture, not linger and eat the next deliberate click.
+    expect(workspaceTab("Changes")).toHaveAttribute("aria-selected", "true");
+    fireEvent.pointerDown(workspaceTab("Details"));
+    fireEvent.click(workspaceTab("Details"), { detail: 1 });
+    await waitFor(() => expect(workspaceTab("Details"))
+      .toHaveAttribute("aria-selected", "true"));
   });
 });

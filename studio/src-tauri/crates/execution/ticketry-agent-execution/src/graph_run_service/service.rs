@@ -61,6 +61,7 @@ struct GraphRunPolicySnapshot<'a> {
     model: Option<&'a str>,
     reasoning: Option<&'a str>,
     required_skills: &'a [String],
+    stage_skills: &'a [String],
     module_id: &'a str,
     module_link_path: Option<&'a str>,
 }
@@ -75,6 +76,8 @@ struct StoredGraphRunPolicy {
     model: Option<String>,
     reasoning: Option<String>,
     required_skills: Vec<String>,
+    #[serde(default)]
+    stage_skills: Vec<String>,
     module_id: String,
     #[serde(default)]
     module_link_path: Option<String>,
@@ -245,6 +248,7 @@ impl GraphRunService {
             model: decision.model.as_deref(),
             reasoning: decision.reasoning.as_deref(),
             required_skills: &decision.required_skills,
+            stage_skills: &decision.stage_skills,
             module_id: &decision.module_link.module_id,
             module_link_path: decision.module_link.path.as_deref(),
         })
@@ -283,6 +287,7 @@ impl GraphRunService {
                     local_module_folder: decision.module_link.path.as_deref().unwrap_or_default(),
                     state_name: None,
                     workflow_prompt: &decision.prompt,
+                    stage_skills: &decision.stage_skills,
                     additional_user_input: None,
                     design_directory: None,
                     design_directory_root: None,
@@ -402,6 +407,7 @@ impl GraphRunService {
                     local_module_folder: policy.module_link_path.as_deref().unwrap_or_default(),
                     state_name: None,
                     workflow_prompt: &policy.prompt,
+                    stage_skills: &policy.stage_skills,
                     additional_user_input: None,
                     design_directory: None,
                     design_directory_root: None,

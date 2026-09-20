@@ -9,7 +9,7 @@ use super::status_facts::{
     record_work_item, stamp, WorkFactRecorder, WorkItemChange, WorkItemFact,
 };
 use super::{work_items, CommandError};
-use ticketry_entities::{issue, issue_type, project, state};
+use ticketry_entities::{issue, issue_blocker, issue_type, project, state};
 
 #[derive(Debug, Clone)]
 pub struct CreateReviewFinding {
@@ -90,6 +90,12 @@ pub async fn create_review_finding(
         .one(&transaction)
         .await?
         .ok_or_else(|| CommandError::NotFound("Implementation issue type not found.".to_owned()))?;
+    let predecessor = issue::Entity::find()
+        .filter(issue::Column::ParentId.eq(&parent.id))
+        .filter(issue::Column::IssueTypeId.eq(&implementation.id))
+        .order_by_desc(issue::Column::SequenceId)
+        .one(&transaction)
+        .await?;
     let state_id = if let Some(start_id) = &implementation.start_state_id {
         state::Entity::find_by_id(start_id)
             .filter(state::Column::ProjectId.eq(&project_id))
@@ -164,6 +170,15 @@ pub async fn create_review_finding(
     }
     .insert(&transaction)
     .await?;
+    if let Some(predecessor) = predecessor {
+        issue_blocker::ActiveModel {
+            id: sea_orm::ActiveValue::NotSet,
+            from_issue_id: Set(id.clone()),
+            to_issue_id: Set(predecessor.id),
+        }
+        .insert(&transaction)
+        .await?;
+    }
     record_work_item(
         facts,
         &transaction,

@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  SETTINGS_CHECKBOX_CLASS,
   SETTINGS_FIELD_CLASS,
   SETTINGS_SECTION_HEADING_CLASS,
   SettingsStatusLine,
@@ -138,30 +137,6 @@ export function InstantSettingsPanel({
           {draft.initialPrompt.length.toLocaleString()} / {MAX_INITIAL_PROMPT_CHARACTERS.toLocaleString()}
         </p>
       </section>
-
-      <label className="flex items-start gap-3 border-t border-pane-border pt-4">
-        <input
-          type="checkbox"
-          checked={draft.autoClose}
-          disabled={loading || saving}
-          onChange={(event) => {
-            setMessage(null);
-            setDraft((current) => ({
-              ...current,
-              autoClose: event.target.checked,
-            }));
-          }}
-          className={`${SETTINGS_CHECKBOX_CLASS} mt-0.5`}
-        />
-        <span>
-          <span className="block text-sm font-semibold text-text-primary">
-            Auto-close successful runs
-          </span>
-          <span className="mt-0.5 block text-sm text-text-muted">
-            Close after a successful, validated change. When disabled, the agent asks before closing.
-          </span>
-        </span>
-      </label>
 
       <div className="flex justify-end gap-2 border-t border-pane-border pt-4">
         <button

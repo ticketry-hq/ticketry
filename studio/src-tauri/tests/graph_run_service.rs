@@ -481,7 +481,8 @@ async fn serial_advancement_treats_satisfaction_and_termination_as_symmetric_fac
     seed(&database, harness.data_directory()).await;
     database
         .execute_unprepared(&format!(
-            "UPDATE worktracker_issue SET is_archived=1 WHERE id IN ('{BLOCKED}','{READY}')"
+            "UPDATE worktracker_issue SET is_archived=1 WHERE id IN ('{BLOCKED}','{READY}'); \
+             UPDATE worktracker_launchbinding SET stage_skills='[\"tdd\",\"quote \\\"and\\\\slash\\\"\"]'"
         ))
         .await
         .unwrap();
@@ -494,11 +495,21 @@ async fn serial_advancement_treats_satisfaction_and_termination_as_symmetric_fac
     };
     let first = first_service.create_or_press(request).await.unwrap();
     assert_eq!(task_ids(&first), [CHILD_A]);
+    let stored_policy: serde_json::Value =
+        serde_json::from_str(first.graph_run.launch_configuration.as_deref().unwrap()).unwrap();
+    assert_eq!(
+        stored_policy["stage_skills"],
+        serde_json::json!(["tdd", "quote \"and\\slash\""])
+    );
+    assert!(launch_prompt(&database, CHILD_A).await.contains(
+        "Stage skills:\nUse these skills for this stage: [\"tdd\",\"quote \\\"and\\\\slash\\\"\"]"
+    ));
     let claim = claim_tuple(&database, CHILD_A).await;
 
     database
         .execute_unprepared(&format!(
-            "UPDATE worktracker_issue SET state_id='{REVIEW}' WHERE id='{CHILD_A}'"
+            "UPDATE worktracker_issue SET state_id='{REVIEW}' WHERE id='{CHILD_A}'; \
+             UPDATE worktracker_launchbinding SET stage_skills='[\"replacement\"]'"
         ))
         .await
         .unwrap();
@@ -524,8 +535,13 @@ async fn serial_advancement_treats_satisfaction_and_termination_as_symmetric_fac
         [CHILD_B]
     );
     let child_b_prompt = launch_prompt(&database, CHILD_B).await;
-    assert!(child_b_prompt
-        .starts_with("Selected workflow prompt:\nInitial policy.\n\nWork item context (factual):"));
+    assert!(child_b_prompt.starts_with(
+        "Selected workflow prompt:\nInitial policy.\n\nStage skills:\nUse these skills for this stage: [\"tdd\",\"quote \\\"and\\\\slash\\\"\"]\n\nWork item context (factual):"
+    ));
+    assert!(child_b_prompt.contains(
+        "Stage skills:\nUse these skills for this stage: [\"tdd\",\"quote \\\"and\\\\slash\\\"\"]"
+    ));
+    assert!(!child_b_prompt.contains("replacement"));
     assert!(child_b_prompt.contains("Description:\nChild B launch details."));
     drop(first_service);
     drop(database);

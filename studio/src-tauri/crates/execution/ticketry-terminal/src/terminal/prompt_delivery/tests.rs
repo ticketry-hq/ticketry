@@ -298,12 +298,6 @@ fn handoff_readiness_waits_longer_than_fresh_delivery_and_accepts_an_override() 
 }
 
 #[test]
-fn entry_skill_invocation_uses_the_provider_prefix_and_only_the_selected_skill() {
-    assert_eq!(entry_skill_invocation(Provider::Codex, "tdd"), "$tdd");
-    assert_eq!(entry_skill_invocation(Provider::Claude, "tdd"), "/tdd");
-}
-
-#[test]
 fn large_payload_uses_a_file_backed_buffer_intact() {
     let prompt = "large prompt line\n".repeat(1_000);
     let fake = FakeTmux {

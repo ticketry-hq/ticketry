@@ -153,9 +153,9 @@ export function upsertIssueTypeWorkflowLaunchBinding(
         ...(binding.required_skills === undefined
           ? {}
           : { requiredSkills: binding.required_skills }),
-        ...(binding.entry_skill === undefined
+        ...(binding.stage_skills === undefined
           ? {}
-          : { entrySkill: binding.entry_skill }),
+          : { stageSkills: binding.stage_skills }),
         ...(binding.profile === undefined ? {} : { profile: binding.profile }),
         modelId: model?.id ?? null, reasoningId: reasoning?.id ?? null,
         autoStart, subtreeRunEnabled,

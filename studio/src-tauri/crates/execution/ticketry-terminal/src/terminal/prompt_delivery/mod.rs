@@ -64,18 +64,6 @@ impl<T: PromptDeliveryTmux> PromptDelivery<T> {
         self.submit_from_baseline(contract, run_id, text, &baseline)
     }
 
-    pub fn submit_follow_on(
-        &mut self,
-        provider: Provider,
-        run_id: &str,
-        text: &str,
-    ) -> Result<(), PromptDeliveryError> {
-        let baseline = self.tmux.capture_screen(run_id).map_err(|detail| {
-            PromptDeliveryError::new(PromptDeliveryFailureReason::CaptureFailed, detail)
-        })?;
-        self.submit_from_baseline(provider_contract(provider), run_id, text, &baseline)
-    }
-
     fn submit_from_baseline(
         &mut self,
         contract: ProviderContract,
@@ -235,10 +223,6 @@ pub fn submit_text(
     text: &str,
 ) -> Result<(), PromptDeliveryError> {
     PromptDelivery::new(TmuxPromptDelivery::discover()?).submit(provider, run_id, text)
-}
-
-pub fn entry_skill_invocation(provider: Provider, skill: &str) -> String {
-    format!("{}{skill}", provider_contract(provider).invocation_prefix)
 }
 
 #[cfg(test)]

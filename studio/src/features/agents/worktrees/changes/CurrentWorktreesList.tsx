@@ -1,73 +1,39 @@
-interface CurrentWorktree {
-  kind: string;
-  task_id?: string | null;
-  task_key?: string | null;
-  task_name?: string | null;
-  branch?: string | null;
-  available: boolean;
-  clean?: boolean | null;
-  dirty?: boolean | null;
-  unpushed_count?: number | null;
-  pull_request_state: string;
-  pull_request?: {
-    state: string;
-    reason?: string | null;
-    post_merge_work: boolean;
-  } | null;
-  reason?: string | null;
-}
+import { useQuery } from "@apollo/client/react";
+import { memo } from "react";
 
-function checkoutState(row: CurrentWorktree): string {
-  if (!row.available) return "Unavailable";
-  return row.dirty ? "Dirty" : "Clean";
-}
+import { studioApolloClient } from "../../../../shared/apollo/client";
+import { compactWorktrackerId } from "../../../../shared/api/generatedWorktracker";
+import { CurrentWorktreesDocument } from "../generated/currentWorktrees.documents";
 
-function pullRequestState(state: string): string {
-  switch (state) {
-    case "none":
-      return "No pull request";
-    case "open":
-      return "Pull request open";
-    case "ready":
-      return "Ready to merge";
-    case "merge_conflict":
-      return "Merge conflicts";
-    case "checks_failed":
-      return "Required checks failed";
-    case "checks_pending":
-      return "Required checks pending";
-    case "approval_required":
-      return "Human approval required";
-    case "mergeability_pending":
-      return "Mergeability pending";
-    case "wrong_base":
-      return "Wrong target branch";
-    case "merged":
-      return "Pull request merged";
-    case "closed":
-    case "closed_unmerged":
-      return "Pull request closed";
-    case "unavailable":
-      return "Pull request unavailable";
-    default:
-      return "Pull request status unavailable";
-  }
-}
-
-export function CurrentWorktreesList({
-  rows,
-  truncated,
+export const CurrentWorktreesList = memo(function CurrentWorktreesList({
+  moduleId,
   selectedTaskId,
   onOpenModule,
   onOpenTask,
 }: {
-  rows: readonly CurrentWorktree[];
-  truncated: boolean;
-  selectedTaskId?: string | null;
+  moduleId?: string | null;
+  selectedTaskId: string | null;
   onOpenModule: () => void;
   onOpenTask: (taskId: string) => void;
 }) {
-  const taskCount = rows.filter((row) => row.kind === "task").length;
+  const query = useQuery(CurrentWorktreesDocument, {
+    client: studioApolloClient(),
+    variables: { moduleId: compactWorktrackerId(moduleId ?? "") },
+    skip: !moduleId,
+    fetchPolicy: "cache-first",
+  });
+  if (!moduleId) return <p className="p-3 text-text-muted">Worktree checkouts unavailable.</p>;
+  const nodes = (query.data ?? query.previousData)?.worktrees.nodes;
+  const rows = [
+    { taskId: null, label: "Module checkout", branch: null },
+    ...(nodes ?? []).slice(0, 100).map((row) => ({
+      taskId: row.taskId,
+      label: row.issue
+        ? `${row.project?.slug ?? "Work Item"}-${row.issue.sequenceId} ${row.issue.name}`
+        : row.branch,
+      branch: row.branch,
+    })),
+  ];
   return (
     <section aria-label="Current worktrees" className="h-full min-h-0 overflow-auto p-3">
       <header className="mb-2">
@@ -76,73 +42,29 @@ export function CurrentWorktreesList({
       </header>
       <ul className="space-y-1" aria-label="Current worktree checkouts">
         {rows.map((row) => {
-          const label = row.kind === "module"
-            ? "Module checkout"
-            : `${row.task_key ?? "Work Item"} ${row.task_name ?? ""}`.trim();
-          const state = checkoutState(row);
-          const unpushed = row.unpushed_count ?? 0;
-          const selected = row.kind === "module"
+          const selected = row.taskId === null
             ? selectedTaskId === null
-            : row.task_id === selectedTaskId;
+            : compactWorktrackerId(row.taskId) === compactWorktrackerId(selectedTaskId ?? "");
           return (
-            <li key={row.kind === "module" ? "module" : row.task_id ?? label}>
+            <li key={row.taskId ?? "module"}>
               <button
                 type="button"
-                onClick={() => row.kind === "module"
-                  ? onOpenModule()
-                  : row.task_id && onOpenTask(row.task_id)}
-                className={`w-full border px-2.5 py-2 text-left hover:bg-pane-title focus-visible:ring-1 focus-visible:ring-focus-accent ${
-                  selected
-                    ? "border-focus-accent bg-pane-title"
-                    : "border-pane-border"
-                }`}
-                aria-label={`Open ${label} Changes`}
+                onClick={() => row.taskId === null ? onOpenModule() : onOpenTask(row.taskId)}
+                className={`w-full border px-2.5 py-2 text-left hover:bg-pane-title focus-visible:ring-1 focus-visible:ring-focus-accent ${selected ? "border-focus-accent bg-pane-title" : "border-pane-border"}`}
+                aria-label={`Open ${row.label} Changes`}
                 aria-pressed={selected}
               >
-                <span className="flex items-center gap-2">
-                  <span className="min-w-0 flex-1 truncate font-medium text-text-primary">
-                    {label}
-                  </span>
-                  <span className={row.available && row.dirty
-                    ? "text-xs text-lifecycle-attention"
-                    : row.available
-                      ? "text-xs text-lifecycle-success"
-                      : "text-xs text-lifecycle-danger"}
-                  >
-                    {state}
-                  </span>
-                </span>
-                <span className="mt-1 flex min-w-0 items-center gap-2 text-xs text-text-muted">
-                  <span className="min-w-0 flex-1 truncate font-mono">
-                    {row.branch ?? "Branch unavailable"}
-                  </span>
-                  <span>{unpushed} unpushed</span>
-                  <span>
-                    {pullRequestState(row.pull_request_state)}
-                    {row.pull_request?.post_merge_work ? ", new branch work" : ""}
-                  </span>
-                </span>
-                {!row.available && row.reason ? (
-                  <span className="mt-1 block text-xs text-lifecycle-danger">{row.reason}</span>
-                ) : null}
-                {row.pull_request_state === "unavailable" && row.pull_request?.reason ? (
-                  <span className="mt-1 block text-xs text-lifecycle-danger">
-                    {row.pull_request.reason}
-                  </span>
-                ) : null}
+                <span className="block truncate font-medium text-text-primary">{row.label}</span>
+                {row.branch ? <span className="mt-1 block truncate font-mono text-xs text-text-muted">{row.branch}</span> : null}
               </button>
             </li>
           );
         })}
       </ul>
-      {taskCount === 0 ? (
-        <p className="mt-2 text-xs text-text-muted">No current task worktrees.</p>
-      ) : null}
-      {truncated ? (
-        <p className="mt-2 text-xs text-lifecycle-attention" role="status">
-          The current-worktree limit was reached.
-        </p>
-      ) : null}
+      {query.error ? <p role="alert" className="mt-2 text-lifecycle-danger">Unable to load worktree checkouts.</p>
+        : !nodes ? <p role="status" className="mt-2 text-text-muted">Loading worktree checkouts...</p>
+          : nodes.length === 0 ? <p className="mt-2 text-xs text-text-muted">No current task worktrees.</p> : null}
+      {nodes && nodes.length > 100 ? <p role="status" className="mt-2 text-xs text-lifecycle-attention">The current-worktree limit was reached.</p> : null}
     </section>
   );
-}
+});

@@ -376,3 +376,26 @@ mod module_presentation_migration {
         assert!(!sdl.contains("worktrackerModulepresentationDelete"));
     }
 }
+
+mod launch_binding_skills_contract {
+    #[tokio::test]
+    async fn graphql_exposes_only_the_stage_skills_list() {
+        let sdl = ticketry_graphql_schema::generated_schema_sdl()
+            .await
+            .expect("build generated schema");
+        let launch_binding = sdl
+            .split("type WorktrackerLaunchbinding {")
+            .nth(1)
+            .and_then(|value| value.split('}').next())
+            .expect("LaunchBinding output type");
+
+        assert!(launch_binding.contains("stageSkills: [String!]!"));
+        assert!(!launch_binding.contains("entrySkill"));
+        let upsert = sdl
+            .lines()
+            .find(|line| line.contains("upsert_issue_type_launch_binding("))
+            .expect("restricted LaunchBinding upsert");
+        assert!(upsert.contains("stage_skills: [String!]"));
+        assert!(!upsert.contains("entry_skill"));
+    }
+}

@@ -1,4 +1,4 @@
-import { act, render, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { loadXtermTerminal } from "../features/agents/terminal/xtermTerminalLoader";
 
@@ -20,6 +20,7 @@ import {
   installDesktopGraphQlRuntime,
 } from "./desktopGraphQlRuntime";
 import { documentOperationName } from "../graphql-foundation/typedDocument";
+import { useAgentStatusStore } from "../features/agents/status/testStore";
 
 const tauri = vi.hoisted(() => ({
   invoke: vi.fn(),
@@ -50,6 +51,7 @@ class ResizeObserverStub {
 describe("native viewer attachment acceptance", () => {
   afterEach(() => {
     useTerminalStore.setState({ sessions: {}, sessionByRun: {} });
+    useAgentStatusStore.setState({ runs: {} });
   });
 
   beforeEach(() => {
@@ -249,6 +251,45 @@ describe("native viewer attachment acceptance", () => {
     expect(tauri.invoke.mock.calls.filter(([command]) =>
       command === "native_terminal_detach"
     )).toHaveLength(1);
+  });
+
+  it("[overhaul-325] presents a completed instant run without a terminal error", () => {
+    useTerminalStore.setState({
+      sessions: {
+        "session-1": {
+          ...useTerminalStore.getState().sessions["session-1"],
+          status: "session_lost",
+          transport: "closed",
+          isInstant: true,
+        },
+      },
+      sessionByRun: { "run-1": "session-1" },
+    });
+    useAgentStatusStore.setState({
+      projectId: "project-1",
+      runs: {
+        "run-1": {
+          agent_run_id: "run-1",
+          project_id: "project-1",
+          task_id: null,
+          module_id: "module-1",
+          agent: "codex",
+          scope: "instant",
+          state: "exited",
+          started_at: "2026-09-20T10:00:00Z",
+          updated_at: "2026-09-20T10:01:00Z",
+        },
+      },
+      automationAttempts: {},
+      automationByTask: {},
+    });
+
+    render(<Terminal sessionId="session-1" active />);
+
+    expect(screen.getByTestId("terminal-ended-state")).toHaveTextContent(
+      "Conversation ended",
+    );
+    expect(screen.queryByText(/session lost/i)).not.toBeInTheDocument();
   });
 
   it("treats lease-renewal failures as terminal native failures", async () => {

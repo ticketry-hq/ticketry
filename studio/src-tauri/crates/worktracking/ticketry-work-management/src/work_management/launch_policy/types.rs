@@ -1,7 +1,7 @@
 use sea_orm::DbErr;
 use serde::{Deserialize, Serialize};
 
-pub const DECISION_VERSION: i32 = 2;
+pub const DECISION_VERSION: i32 = 3;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -71,7 +71,7 @@ pub struct LaunchPolicyDecision {
     pub prompt: String,
     pub required_skills: Vec<String>,
     #[serde(default)]
-    pub entry_skill: Option<String>,
+    pub stage_skills: Vec<String>,
     pub provider: String,
     #[serde(default)]
     pub profile: Option<String>,

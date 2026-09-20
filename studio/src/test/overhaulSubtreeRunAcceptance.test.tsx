@@ -197,7 +197,35 @@ describe("overhaul acceptance — subtree execution", () => {
 
   it("routes normal play by the selected work item's shape", async () => {
     const http = campaignFixture();
-    mountStudio({ http, selectedTaskId: "child-1", graphQlExecution: true });
+    const directLaunches: Array<Record<string, unknown>> = [];
+    mountStudio({
+      http,
+      selectedTaskId: "child-1",
+      graphQlExecution: true,
+      graphQlExecute: async (document, variables) => {
+        if (documentOperationName(document) === "CreateTerminalSession") {
+          directLaunches.push(variables as Record<string, unknown>);
+          return {
+            terminal_session: {
+              __typename: "AgentTerminalSessions",
+              agent_run_id: "branch-run-1",
+              module_id: "module-1",
+              scope: "task",
+              doc_rel_path: null,
+              created_at: "2026-09-16T00:00:00Z",
+              agent_run: {
+                __typename: "AgentRuns",
+                id: "branch-run-1",
+                agent: "codex",
+                launch_state: "state-1",
+                launch_model: null,
+              },
+            },
+          } as never;
+        }
+        return http.executeGraphQl(document, variables);
+      },
+    });
 
     const details = await screen.findByRole("region", { name: "Details" });
     await within(details).findByRole("button", { name: "Run item" });
@@ -220,16 +248,67 @@ describe("overhaul acceptance — subtree execution", () => {
     const runSerially = within(details).getByRole("button", {
       name: "Run subtree serially",
     });
+    const runItem = within(details).getByRole("button", { name: "Run item" });
     expect(runSubtree).toHaveAttribute("title", "Run subtree");
     expect(runSerially).toHaveAttribute("title", "Run subtree serially");
-    expect(within(details).queryByRole("button", { name: "Run item" })).toBeNull();
+    const statusRow = screen.getByTestId("status-row");
+    const statusButtons = within(statusRow).getAllByRole("button");
+    expect(statusButtons.indexOf(runSubtree)).toBeLessThan(
+      statusButtons.indexOf(runSerially),
+    );
+    expect(statusButtons.indexOf(runSerially)).toBeLessThan(
+      statusButtons.indexOf(runItem),
+    );
+    expect(statusRow.lastElementChild).toBe(runItem);
     expect(within(details).queryByRole("button", { name: "Run agent" })).toBeNull();
 
-    fireEvent.click(runSubtree);
-    await waitFor(() => expect(http.graphRunCount("branch-1")).toBe(1));
-    expect(http.graphRunModes("branch-1")).toEqual([null]);
+    fireEvent.click(runItem);
+    await waitFor(() => expect(directLaunches).toHaveLength(1));
+    expect(directLaunches[0]).toMatchObject({
+      issueId: "branch-1",
+      targetId: "branch-1",
+      moduleId: "module-1",
+      kind: "task",
+    });
+    expect(http.graphRunCount("branch-1")).toBe(0);
     expect(http.graphRunCount("story-1")).toBe(0);
+    expect(http.graphRunCount("child-1")).toBe(0);
     expect(http.runNowCount("branch-1")).toBe(0);
+  });
+
+  it("hides direct play on a branch without a launch binding", async () => {
+    const http = campaignFixture();
+    mountStudio({
+      http,
+      selectedTaskId: "branch-1",
+      graphQlExecution: true,
+      graphQlExecute: async (document, variables) => {
+        const result = await http.executeGraphQl(document, variables);
+        if (documentOperationName(document) !== "WorkTrackerProjectOpen") {
+          return result;
+        }
+        const projectOpen = result as {
+          issue_types: {
+            nodes: Array<{ launch_bindings: { nodes: unknown[] } }>;
+          };
+        };
+        return {
+          ...projectOpen,
+          issue_types: {
+            ...projectOpen.issue_types,
+            nodes: projectOpen.issue_types.nodes.map((issueType) => ({
+              ...issueType,
+              launch_bindings: { ...issueType.launch_bindings, nodes: [] },
+            })),
+          },
+        } as never;
+      },
+    });
+
+    const details = await screen.findByRole("region", { name: "Details" });
+    await within(details).findByRole("button", { name: "Run subtree" });
+    await within(details).findByRole("button", { name: "Ideas" });
+    expect(within(details).queryByRole("button", { name: "Run item" })).toBeNull();
   });
 
   it("[overhaul-21] repeats Run subtree to revive an inactive campaign", async () => {
@@ -332,7 +411,7 @@ describe("overhaul acceptance — subtree execution", () => {
       "title",
       "Subtree execution is not available in this item's current state.",
     );
-    expect(within(details).queryByRole("button", { name: "Run item" })).toBeNull();
+    expect(within(details).getByRole("button", { name: "Run item" })).toBeEnabled();
     expect(within(details).queryByRole("button", { name: "Run agent" })).toBeNull();
   });
 });

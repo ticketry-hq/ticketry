@@ -20,7 +20,7 @@ import { recordSelectionProfilePoint } from "../../../../shared/utilities/select
 import { selectedRunSession } from "../../../../features/agents/actions/selectedAgentRun";
 
 /** Adapts Studio selection state to the selected-ticket workspace. */
-export function SelectedTicket() {
+export function SelectedTicket({ active = true }: { active?: boolean }) {
   recordSelectionProfilePoint("selected-ticket-render");
   const selectedTaskId = useClientStore((s) => s.selectedTaskId);
   const selectedProjectId = useStudioStore((s) => s.selectedProjectId);
@@ -77,6 +77,7 @@ export function SelectedTicket() {
           projectId={selectedProjectId}
           moduleId={selectedModuleId}
           owner="studio"
+          workspaceActive={active}
           details={<SelectedTicketDetails />}
           launchContext={launchContext}
           conversationRunId={conversationRunId}

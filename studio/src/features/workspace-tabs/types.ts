@@ -11,8 +11,8 @@ export interface WorkspaceTabOrder {
 function parseIdentity(value: unknown): WorkspaceTabIdentity | null {
   if (!value || typeof value !== "object") return null;
   const candidate = value as { kind?: unknown; id?: unknown };
-  if (candidate.kind === "details" || candidate.kind === "changes") {
-    return candidate.id === undefined ? { kind: candidate.kind } : null;
+  if (candidate.kind === "details") {
+    return candidate.id === undefined ? { kind: "details" } : null;
   }
   if (
     (candidate.kind === "doc" || candidate.kind === "terminal") &&
@@ -30,6 +30,15 @@ export function workspaceTabOrderFromJson(value: unknown): WorkspaceTabOrder {
   const order: WorkspaceTabIdentity[] = [];
   const keys = new Set<string>();
   for (const valueIdentity of value) {
+    if (
+      valueIdentity &&
+      typeof valueIdentity === "object" &&
+      !Array.isArray(valueIdentity) &&
+      (valueIdentity as Record<string, unknown>).kind === "changes" &&
+      !("id" in valueIdentity)
+    ) {
+      continue;
+    }
     const identity = parseIdentity(valueIdentity);
     if (!identity) return { order: [] };
     const key = identity.kind === "details" || identity.kind === "changes"
@@ -40,4 +49,11 @@ export function workspaceTabOrderFromJson(value: unknown): WorkspaceTabOrder {
     order.push(identity);
   }
   return { order };
+}
+
+/** Strip identities retired from the durable workspace-tab contract. */
+export function workspaceTabOrderForPersistence(
+  order: readonly WorkspaceTabIdentity[],
+): WorkspaceTabIdentity[] {
+  return order.filter((identity) => identity.kind !== "changes");
 }

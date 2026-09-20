@@ -362,6 +362,91 @@ describe("native viewer attachment acceptance", () => {
     view.unmount();
   });
 
+  it("hides the retained workspace viewer during Changes and restores the same session on Back", async () => {
+    const operations = installDesktopGraphQlRuntime();
+    const bodyRef = createRef<HTMLDivElement>();
+    const detailsSurfaceRef = createRef<HTMLDivElement>();
+    const sharedProps = {
+      bodyRef,
+      detailsSurfaceRef,
+      bucket: "task-1",
+      owner: "studio" as const,
+      details: <div>Task details</div>,
+      activeKind: "terminal" as const,
+      activeDocument: null,
+      openDocuments: [],
+      terminalIds: ["session-1"],
+      activeTerminalId: "session-1",
+      requestedSurface: null,
+      surfaceFocusSignal: 0,
+      requestedTerminalId: null,
+      terminalFocusSignal: 0,
+      activeTab: { kind: "terminal" as const, id: "session-1" },
+      isEditView: false,
+      editViewZone: "active-tab-body" as const,
+      showZoneChrome: false,
+      bodyEngaged: false,
+      onClaimPointerZone: vi.fn(),
+      onEngageTab: vi.fn(),
+      onSetEditViewZone: vi.fn(),
+    };
+    useClientStore.setState({ activeByTask: { "task-1": "session-1" } });
+
+    const view = render(
+      <WorkspaceTabBody {...sharedProps} workspaceActive />,
+    );
+    await waitFor(() => {
+      expect(tauri.invoke).toHaveBeenCalledWith(
+        "native_terminal_attach",
+        expect.objectContaining({ runId: "run-1" }),
+      );
+    });
+    await waitFor(() => {
+      expect(tauri.invoke).toHaveBeenCalledWith(
+        "native_terminal_show",
+        expect.objectContaining({ handle: "native-1" }),
+      );
+    });
+
+    view.rerender(
+      <WorkspaceTabBody {...sharedProps} workspaceActive={false} />,
+    );
+    await waitFor(() => {
+      expect(tauri.invoke).toHaveBeenCalledWith("native_terminal_hide", {
+        handle: "native-1",
+      });
+    });
+
+    view.rerender(
+      <WorkspaceTabBody {...sharedProps} workspaceActive />,
+    );
+    await waitFor(() => {
+      expect(
+        tauri.invoke.mock.calls.filter(([command]) =>
+          command === "native_terminal_show"
+        ),
+      ).toHaveLength(2);
+    });
+
+    expect(
+      tauri.invoke.mock.calls.filter(([command]) =>
+        command === "native_terminal_attach"
+      ),
+    ).toHaveLength(1);
+    expect(tauri.invoke).not.toHaveBeenCalledWith(
+      "native_terminal_detach",
+      expect.anything(),
+    );
+    expect(useTerminalStore.getState().sessionByRun["run-1"]).toBe("session-1");
+    expect(
+      operations.filter(({ operationName }) => operationName === "CreateViewerLease"),
+    ).toHaveLength(1);
+    expect(
+      operations.filter(({ operationName }) => operationName === "DeleteViewerLease"),
+    ).toHaveLength(0);
+    view.unmount();
+  });
+
   it("[overhaul-72] shields destination content until a retained native viewer is hidden", async () => {
     vi.stubGlobal(
       "fetch",

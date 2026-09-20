@@ -13,11 +13,25 @@ import { documentOperationName } from "../graphql-foundation/typedDocument";
 import { studioApolloClient } from "../shared/apollo/client";
 import { ModuleVersionControlDocument } from "../features/agents/worktrees/generated/moduleVersionControl.documents";
 import { createWorktreeInvalidator } from "../features/agents/status/stream/worktreeInvalidation";
+import { ChangesWorkspace } from "../features/agents/worktrees";
 import { useClientStore } from "../state/clientStore";
 import { fixture, mountStudio, workItem } from "./seam";
 
 const TASK_ID = "active-task-worktree";
 const PLANNING_TASK_ID = "planning-task";
+
+type Deferred<T> = {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+};
+
+function deferred<T>(): Deferred<T> {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((settle) => {
+    resolve = settle;
+  });
+  return { promise, resolve };
+}
 
 vi.mock("../features/agents/worktrees/changes/PatchViewer", () => ({
   default: ({ patch }: { patch: string }) => <div data-testid="patch-viewer">{patch}</div>,
@@ -97,6 +111,7 @@ function ModuleWorkspaceHarness() {
         owner="studio"
         details={<div>Workspace details</div>}
       />
+      <ChangesWorkspace />
     </>
   );
 }
@@ -195,11 +210,7 @@ describe("overhaul acceptance - module Changes and current worktrees", () => {
     const control = screen.getByRole("button", { name: "Open module Changes" });
     fireEvent.click(control);
 
-    const tabs = await screen.findByRole("tablist", { name: "Workspace tabs" });
-    expect(within(tabs).getByRole("tab", { name: "Changes" })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
+    expect(screen.getByRole("button", { name: "Back to planning workspace" })).toBeVisible();
     expect(await screen.findByTestId("module-version-control")).toBeVisible();
     expect(await screen.findByText("No current task worktrees.")).toBeVisible();
     expect(screen.getByText("Loading module changes...")).toBeVisible();
@@ -426,7 +437,7 @@ describe("overhaul acceptance - module Changes and current worktrees", () => {
     fireEvent.click(screen.getByRole("button", { name: "Open module Changes" }));
     expect(useClientStore.getState().selectedTaskId).toBe(PLANNING_TASK_ID);
     const workspace = await within(moduleWorkspace).findByTestId("changes-workspace");
-    expect(moduleWorkspace.querySelector('[data-pane="tasks"]')).toBeNull();
+    expect(moduleWorkspace.querySelector('[data-pane="tasks"]')?.closest("[hidden]")).not.toBeNull();
     expect(screen.getByRole("button", { name: "Open terminal panel" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Open Settings" })).toBeVisible();
 
@@ -477,8 +488,7 @@ describe("overhaul acceptance - module Changes and current worktrees", () => {
       await within(within(moduleWorkspace).getByRole("region", { name: "Selected file diff" })).findByTestId("patch-viewer"),
     ).toHaveTextContent("+task workspace");
 
-    const tabs = within(moduleWorkspace).getByRole("tablist", { name: "Workspace tabs" });
-    fireEvent.click(within(tabs).getByRole("tab", { name: "Details" }));
+    fireEvent.click(screen.getByRole("button", { name: "Back to planning workspace" }));
     await waitFor(() => expect(within(moduleWorkspace).queryByTestId("changes-workspace")).toBeNull());
     expect(useClientStore.getState().selectedTaskId).toBe(PLANNING_TASK_ID);
     expect(moduleWorkspace.querySelector('[data-pane="tasks"]')).not.toBeNull();
@@ -488,7 +498,6 @@ describe("overhaul acceptance - module Changes and current worktrees", () => {
       "aria-selected",
       "true",
     );
-    fireEvent.click(within(tabs).getByRole("tab", { name: "Changes" }));
     expect(worktreeChangesTaskIds).toContain(TASK_ID);
     expect(operations.filter((operation) => operation === "CurrentWorktrees")).toHaveLength(1);
     expect(useClientStore.getState().selectedTaskId).toBe(PLANNING_TASK_ID);
@@ -496,6 +505,117 @@ describe("overhaul acceptance - module Changes and current worktrees", () => {
     expect(operations).not.toContain("UpdateWorkItem");
     expect(operations).not.toContain("WorktreeCreate");
     expect(operations).not.toContain("WorktreeDiscard");
+  });
+
+  it("[overhaul-335] keeps checkout feedback and Back usable while task changes load", async () => {
+    const http = fixture();
+    const taskChanges = deferred<Record<string, unknown>>();
+    http.tree("module-1", { rootIds: [], children: {}, order: [] });
+
+    mountStudio({
+      http,
+      children: <ModuleWorkspaceHarness />,
+      graphQlExecute: async (document, variables) => {
+        const operation = documentOperationName(document);
+        if (operation === "CurrentWorktrees") {
+          return { worktrees: { __typename: "WorktreesConnection", nodes: [{
+            __typename: "Worktrees", id: "wt-review", taskId: TASK_ID, branch: "wt/CODING-1322-measured-checkout",
+            issue: { __typename: "WorktrackerIssue", id: TASK_ID, sequenceId: 1322, name: "Measured checkout" },
+            project: { __typename: "WorktrackerProject", id: "checkout-project", slug: "CODING" },
+          }] } } as never;
+        }
+        if (operation === "ModuleVersionControl") {
+          return {
+            module_version_control: {
+              __typename: "ModuleVersionControlView",
+              module_id: "module-1",
+              worktrees_truncated: false,
+              checkout: moduleCheckout(),
+              worktrees: [
+                moduleRow(),
+                {
+                  __typename: "CurrentWorktreeView",
+                  kind: "task",
+                  task_id: TASK_ID,
+                  task_key: "CODING-1322",
+                  task_name: "Measured checkout",
+                  branch: "wt/CODING-1322-measured-checkout",
+                  available: true,
+                  clean: false,
+                  dirty: true,
+                  unpushed_count: 1,
+                  pull_request_state: "none",
+                  pull_request: pullRequest(),
+                  reason: null,
+                },
+              ],
+            },
+          } as never;
+        }
+        if (operation === "WorktreeChanges") {
+          expect(variables).toEqual({ taskId: TASK_ID });
+          return await taskChanges.promise as never;
+        }
+        return http.executeGraphQl(document, variables);
+      },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Open module Changes" }));
+    const taskCheckout = await screen.findByRole("button", {
+      name: "Open CODING-1322 Measured checkout Changes",
+    });
+    fireEvent.click(taskCheckout);
+
+    expect(await screen.findByRole("button", {
+      name: "Open CODING-1322 Measured checkout Changes",
+    })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByText("Loading changes...")).toBeVisible();
+    expect(screen.getByRole("button", {
+      name: "Back to planning workspace",
+    })).toBeEnabled();
+
+    act(() => {
+      taskChanges.resolve({
+        worktree_changes: {
+          __typename: "WorktreeChangesView",
+          task_id: TASK_ID,
+          top_level_task_id: TASK_ID,
+          is_shared: false,
+          base_commit: "0123456789abcdef0123456789abcdef01234567",
+          committed_count: 1,
+          pull_request_url: null,
+          pull_request_creation_eligible: false,
+          pull_request: pullRequest(),
+          clean: false,
+          dirty: true,
+          unpushed_count: 1,
+          truncated: false,
+          work_item_done: false,
+          closure_failure: null,
+          cleanup: {
+            __typename: "WorktreeCleanupStatusView",
+            eligible: false,
+            blocker: "pull_request_absent",
+            reason: "No pull request is mapped to this worktree.",
+          },
+          files: [{
+            __typename: "ChangedFile",
+            path: "studio/src/measured.ts",
+            previous_path: null,
+            status: "modified",
+            binary: false,
+            insertions: 1,
+            deletions: 0,
+          }],
+          insertions: 1,
+          deletions: 0,
+        },
+      });
+    });
+
+    expect(await screen.findByRole("button", {
+      name: "studio/src/measured.ts",
+    })).toBeVisible();
   });
 
   it("[overhaul-307] keeps long truncated patches readable below the file list", async () => {

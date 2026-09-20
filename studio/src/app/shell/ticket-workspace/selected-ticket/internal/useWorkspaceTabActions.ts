@@ -5,7 +5,6 @@ import type {
   TabKind,
 } from "../../../../../features/agents/types";
 import {
-  isScratchBucket,
   useTerminalStore,
   type ForegroundOwner,
   type SessionMeta,
@@ -17,11 +16,14 @@ import {
   useClientStore,
   useClientStore as useTicketWorkspaceStore,
 } from "../../../../../state/clientStore";
-import { clearChangesCheckout } from "./openChangesWorkspace";
 import { closeTerminalTab } from "./closeTerminalTab";
 import { rememberStudioWorkspaceTarget } from "../../../../../features/workspace-state/studioWorkspaceTarget";
 import type { TaskWorkspaceTabIdentity } from "./useTaskWorkspaceTabNavigation";
 import type { WorkspaceLauncherContext } from "./WorkspaceLauncher";
+import {
+  openModuleChangesWorkspace,
+  openTaskChangesWorkspace,
+} from "../../../../../features/agents/worktrees";
 
 function resumeErrorMessage(error: unknown): string {
   const body = error instanceof FoundationGraphQlError ? error.extensions : null;
@@ -97,16 +99,17 @@ export function useWorkspaceTabActions({
     if (!bucket) return;
     cancelRestoration();
     rememberPendingTerminalRef.current = false;
-    if ((tab.kind === "details" || tab.kind === "changes") && !isScratchBucket(bucket)) {
-      const moduleId = useClientStore.getState().selectedModuleId;
-      if (moduleId) clearChangesCheckout(moduleId);
-    }
     if (tab.kind === "details") {
       setActive(bucket, "details");
       if (owner === "studio") {
         rememberStudioWorkspaceTarget(bucket, { kind: "details" });
       }
     } else if (tab.kind === "changes") {
+      if (owner === "studio" && moduleId) {
+        if (scratch) openModuleChangesWorkspace(moduleId);
+        else openTaskChangesWorkspace(moduleId, bucket);
+        return;
+      }
       setActive(bucket, "changes");
       if (owner === "studio") {
         rememberStudioWorkspaceTarget(bucket, { kind: "changes" });

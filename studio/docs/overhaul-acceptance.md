@@ -320,6 +320,12 @@ named gate before the full Studio suite, typecheck, and build.
 | 327 | Recovery from a Claude version-inspection failure reuses the existing Worktree, still requires provider approval, and does not create another checkout. |
 | 328 | Rapid Stage skill additions wait for the prior save and workflow refresh, then persist the latest tag list with the refreshed revision. |
 | 329 | Removing a Stage skill while its addition is saving waits for the workflow refresh, then persists the empty selection with the refreshed revision. |
+| 330 | A saved Changes workspace target without a Back origin migrates to Details. |
+| 331 | Saved workspace-tab order drops the retired Changes tab on read and write. |
+| 332 | Changes opens independently, and Back restores the exact planning origin and active session. |
+| 333 | If the planning origin disappears, Back returns to the same module's conversation Details workspace. |
+| 334 | Back stays usable while Changes is loading or reports an error. |
+| 335 | Selecting a task checkout marks it selected and keeps Back usable while fresh task changes load. |
 
 Each executable case carries one stable `[overhaul-NN]` marker. The gate has a
 contract test that fails if a marker is missing or duplicated. A case whose

@@ -43,3 +43,6 @@ studio/src-tauri/binaries/
 .DS_Store
 
 .superdesign/tmp/
+
+# Local GitHub CLI state
+/.local/state/gh/

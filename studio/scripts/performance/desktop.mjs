@@ -17,6 +17,7 @@ import {
   resolveDevelopmentTmuxSocket,
   stopTemporaryTmuxServer,
 } from "../desktop-dev.mjs";
+import { prepareDesktopHookRunner } from "../desktop-hook-runner.mjs";
 import {
   availablePort,
   connectToStudio,
@@ -44,6 +45,7 @@ import {
 import { computeSourceFingerprint } from "./provenance.mjs";
 import { startProfilingAdapter } from "./server.mjs";
 import { desktopProbeSource, DESKTOP_SCENARIO_SCRIPTS } from "./desktop-scenarios.mjs";
+import { prepareChangesFixture, removeChangesFixture } from "./changes-fixture.mjs";
 
 /**
  * Desktop confirmation on the real macOS WKWebView.
@@ -85,6 +87,7 @@ export function buildDesktopArtifact() {
       + "npm run perf:prepare --workspace @worktracker/studio first.",
     );
   }
+  prepareDesktopHookRunner({ root: path.resolve(studioRoot, "..") });
   return run("npm", [
     "exec",
     "tauri",
@@ -159,12 +162,14 @@ export async function main(argv = process.argv.slice(2)) {
   let desktop = null;
   let browser = null;
   let sampler = null;
+  let changesFixture = null;
   const cleanup = async () => {
     if (browser) await browser.deleteSession().catch(() => {});
     await stopProcess(desktop);
     await adapter?.stop();
     sampler?.stop();
     stopTemporaryTmuxServer(tmuxSocket);
+    removeChangesFixture(changesFixture);
     try {
       removeTemporarySqliteProfile(dataDirectory);
     } catch (error) {
@@ -193,6 +198,14 @@ export async function main(argv = process.argv.slice(2)) {
     );
     await adapter.stop();
     adapter = null;
+    if (options.scenarios.includes("changes-loading")) {
+      changesFixture = prepareChangesFixture({ fixture, dataDirectory });
+      fixture.changes = changesFixture;
+      writeFileSync(
+        path.join(directory, RUN_FILES.fixture),
+        `${JSON.stringify(fixture, null, 2)}\n`,
+      );
+    }
 
     const binary = path.join(applicationDirectory, "ticketry");
     copyFileSync(defaultDesktopBinary(), binary);

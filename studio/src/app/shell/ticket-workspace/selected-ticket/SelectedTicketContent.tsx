@@ -39,7 +39,6 @@ import { useWorkspaceTabPresentation } from "./internal/useWorkspaceTabPresentat
 import { useWorkspaceTabOrdering } from "../../../../features/workspace-tabs/useWorkspaceTabOrdering";
 import { useWorkspaceTabOrder } from "../../../../features/workspace-tabs/queries";
 import { useTaskWorktreeChangesTabLifecycle } from "./internal/useTaskWorktreeChangesTabLifecycle";
-import { useChangesCheckoutSelection } from "./internal/openChangesWorkspace";
 
 export type {
   ScratchLaunchMode,
@@ -59,6 +58,7 @@ export function SelectedTicketContent({
   projectId,
   moduleId,
   owner,
+  workspaceActive = true,
   details,
   launchContext = null,
   entrySignal = 0,
@@ -71,6 +71,8 @@ export function SelectedTicketContent({
   projectId: string | null;
   moduleId: string | null;
   owner: ForegroundOwner;
+  /** Whether the selected-ticket workspace may present its native terminal. */
+  workspaceActive?: boolean;
   details: ReactNode;
   launchContext?: WorkspaceLauncherContext | null;
   entrySignal?: number;
@@ -212,13 +214,9 @@ export function SelectedTicketContent({
 
   const sessionByRun = useTerminalStore((s) => s.sessionByRun);
   const workspaceTabWorkItemId = bucket && !isScratchBucket(bucket) ? bucket : null;
-  const hasSelectedChangesCheckout = useChangesCheckoutSelection(
-    (state) => moduleId !== null && state.taskIdByModule[moduleId] !== undefined,
-  );
   const hasTaskChangesTab = useTaskWorktreeChangesTabLifecycle({
     taskId: workspaceTabWorkItemId,
     owner,
-    hasSelectedChangesCheckout,
   });
   const hasChangesTab = (scratch && moduleId !== null) || hasTaskChangesTab;
   const savedTabOrder = useWorkspaceTabOrder(workspaceTabWorkItemId);
@@ -410,6 +408,7 @@ export function SelectedTicketContent({
         bucket={bucket}
         moduleId={moduleId}
         owner={owner}
+        workspaceActive={workspaceActive}
         details={details}
         activeKind={effActive}
         activeDocument={activeDoc}

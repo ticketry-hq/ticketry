@@ -3,6 +3,16 @@
 export { WorktreeBlock } from "./WorktreeBlock";
 export { TaskWorktreeChanges } from "./changes/TaskWorktreeChanges";
 export { ModuleVersionControl } from "./changes/ModuleVersionControl";
+export { ChangesWorkspace } from "./changes/ChangesWorkspace";
+export {
+  dismissChangesWorkspace,
+  leaveChangesWorkspace,
+  openChangesWorkspace,
+  openModuleChangesWorkspace,
+  openTaskChangesWorkspace,
+  selectChangesCheckout,
+  useChangesWorkspace,
+} from "./changes/changesWorkspaceState";
 export {
   useHasTaskWorktree,
   useTaskWorktreeAvailability,

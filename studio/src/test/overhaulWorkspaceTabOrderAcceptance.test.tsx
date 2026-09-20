@@ -1,3 +1,4 @@
+import { useChangesWorkspace, dismissChangesWorkspace } from "../features/agents/worktrees";
 import {
   act,
   fireEvent,
@@ -407,7 +408,6 @@ describe("overhaul acceptance, server-owned workspace tab order", () => {
     seedSavedOrder([
       { kind: "terminal", id: "run-1" },
       { kind: "details" },
-      { kind: "changes" },
       { kind: "doc", id: "design" },
       { kind: "doc", id: "notes" },
     ]);
@@ -415,9 +415,9 @@ describe("overhaul acceptance, server-owned workspace tab order", () => {
     await waitFor(() => expect(visibleTabNames()).toEqual([
       "codex terminal",
       "Details",
-      "Changes",
       "DESIGN",
       "NOTES",
+      "Changes",
     ]));
     await waitFor(() => expect(workspaceTab("Details"))
       .toHaveAttribute("draggable", "true"));
@@ -441,8 +441,8 @@ describe("overhaul acceptance, server-owned workspace tab order", () => {
       "NOTES",
       "codex terminal",
       "Details",
-      "Changes",
       "DESIGN",
+      "Changes",
     ]));
     expect(within(screen.getByTestId("workspace-tabs")).getAllByRole("tab")
       .filter((tab) => tab.getAttribute("aria-label") !== "Changes")
@@ -454,8 +454,8 @@ describe("overhaul acceptance, server-owned workspace tab order", () => {
     // waiting out a suppression window.
     fireEvent.pointerDown(workspaceTab("Changes"));
     fireEvent.click(workspaceTab("Changes"), { detail: 1 });
-    await waitFor(() => expect(workspaceTab("Changes"))
-      .toHaveAttribute("aria-selected", "true"));
+    await waitFor(() => expect(useChangesWorkspace.getState().active).toBe(true));
+    act(() => dismissChangesWorkspace());
     fireEvent.pointerDown(workspaceTab("Details"));
     fireEvent.click(workspaceTab("Details"), { detail: 1 });
     await waitFor(() => expect(workspaceTab("Details"))
@@ -465,7 +465,6 @@ describe("overhaul acceptance, server-owned workspace tab order", () => {
       { kind: "doc" as const, id: "notes" },
       { kind: "terminal" as const, id: "run-1" },
       { kind: "details" as const },
-      { kind: "changes" as const },
       { kind: "doc" as const, id: "design" },
     ];
     pending.resolve(committed);
@@ -479,16 +478,16 @@ describe("overhaul acceptance, server-owned workspace tab order", () => {
     // Keyboard activation carries no pointer detail, so pointer-drag
     // suppression must leave it alone even straight after a drop.
     fireEvent.click(workspaceTab("Changes"), { detail: 0 });
-    await waitFor(() => expect(workspaceTab("Changes"))
-      .toHaveAttribute("aria-selected", "true"));
+    await waitFor(() => expect(useChangesWorkspace.getState().active).toBe(true));
+    act(() => dismissChangesWorkspace());
     await waitFor(() => expect(visibleTabNames()[0]).toBe("Details"));
     rejected.reject(new Error("save failed"));
     await waitFor(() => expect(visibleTabNames()).toEqual([
       "NOTES",
       "codex terminal",
       "Details",
-      "Changes",
       "DESIGN",
+      "Changes",
     ]));
     expect(useClientStore.getState().toasts.at(-1)?.message)
       .toContain("Workspace tabs could not be reordered");
@@ -510,12 +509,11 @@ describe("overhaul acceptance, server-owned workspace tab order", () => {
       { kind: "doc", id: "notes" },
       { kind: "terminal", id: "run-1" },
       { kind: "details" },
-      { kind: "changes" },
     ]);
 
     // That drop finished without a trailing click. The suppression must expire
     // with the gesture, not linger and eat the next deliberate click.
-    expect(workspaceTab("Changes")).toHaveAttribute("aria-selected", "true");
+    expect(workspaceTab("Changes")).toHaveAttribute("aria-selected", "false");
     fireEvent.pointerDown(workspaceTab("Details"));
     fireEvent.click(workspaceTab("Details"), { detail: 1 });
     await waitFor(() => expect(workspaceTab("Details"))

@@ -80,11 +80,18 @@ test("preparation accepts only an adapter profile", () => {
 test("desktop confirmation defaults to every scenario WebDriver can reach", () => {
   assert.deepEqual(
     parsePerformanceDesktopOptions([]).scenarios,
-    ["idle", "module-picker", "module-navigation"],
+    ["idle", "module-picker", "module-navigation", "changes-loading"],
   );
   assert.throws(
     () => parsePerformanceDesktopOptions(["--scenario", "retention"]),
     /Unknown desktop --scenario retention/,
+  );
+});
+
+test("desktop confirmation accepts the Changes loading baseline", () => {
+  assert.deepEqual(
+    parsePerformanceDesktopOptions(["--scenario", "changes-loading"]).scenarios,
+    ["changes-loading"],
   );
 });
 

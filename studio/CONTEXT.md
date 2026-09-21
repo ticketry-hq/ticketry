@@ -276,10 +276,12 @@ Model configuration section.
 _Avoid_: free-text model, code-owned reasoning list, unrelated dropdown trio
 
 **Keymap context**:
-One of Studio's fixed keyboard-resolution layers — the open modal,
-capture-phase chords, the focused pane, and global actions — consulted in that
-precedence order. The same chord may mean different things in different keymap
-contexts; the precedence order itself is not configurable.
+One of Studio's keyboard-resolution domains. The app-wide layers are the open
+modal, capture-phase chords, the focused pane, and global actions, consulted in
+that precedence order. Feature-local contexts such as Changes are resolved only
+by the focused control and never participate in the app-wide cascade. The same
+chord may mean different things in different keymap contexts; the app-wide
+precedence order itself is not configurable.
 _Avoid_: Keymap scope, shortcut group, key layer
 
 **Binding**:

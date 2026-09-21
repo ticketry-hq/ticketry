@@ -124,6 +124,11 @@ describe("overhaul acceptance, Changes workspace recovery", () => {
           "Changes could not be loaded.",
         );
       }
+      await waitFor(() =>
+        expect(
+          screen.getByRole("button", { name: "Choose checkout" }),
+        ).toHaveFocus(),
+      );
       const back = screen.getByRole("button", {
         name: "Back to planning workspace",
       });

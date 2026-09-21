@@ -8,6 +8,7 @@ import { createApolloStore } from "../../../../shared/apollo/localState";
 import { ModuleFileDiffDocument } from "../generated/moduleFileDiff.documents";
 import { WorktreeFileDiffDocument } from "../generated/worktreeFileDiff.documents";
 import { ChangedFilesList } from "./ChangedFilesList";
+import { DiffReadingRegion } from "./DiffReadingRegion";
 import { FileDiffSurface } from "./FileDiffSurface";
 
 type FileRow = {
@@ -28,8 +29,8 @@ const reviewSelection = createApolloStore<ReviewSelection>(
 
 export function ChangesFileReview({
   checkoutKey,
-  checkouts,
-  showAllWorktrees = true,
+  toolbar,
+  inspector,
   header,
   taskId,
   moduleId,
@@ -42,9 +43,9 @@ export function ChangesFileReview({
   loading = false,
 }: {
   checkoutKey: string;
-  checkouts: ReactNode;
-  showAllWorktrees?: boolean;
-  header: ReactNode;
+  toolbar?: ReactNode;
+  inspector?: ReactNode;
+  header?: ReactNode;
   taskId?: string;
   moduleId?: string;
   files: readonly FileRow[];
@@ -56,7 +57,8 @@ export function ChangesFileReview({
   loading?: boolean;
 }) {
   const selectedPath = reviewSelection((state) => state.selectedByCheckout[checkoutKey] ?? null);
-  const file = files.find(({ path }) => path === selectedPath);
+  const selectedIndex = files.findIndex(({ path }) => path === selectedPath);
+  const file = selectedIndex === -1 ? undefined : files[selectedIndex];
   const selectedDocument = taskId ? WorktreeFileDiffDocument : ModuleFileDiffDocument;
   const variables = taskId ? { taskId, path: selectedPath ?? "" } : { moduleId, path: selectedPath ?? "" };
   const diffQuery = useQuery(selectedDocument as never, {
@@ -76,51 +78,42 @@ export function ChangesFileReview({
 
   const diff = (diffQuery.data as { worktree_file_diff?: Diff; module_file_diff?: Diff } | undefined)?.worktree_file_diff
     ?? (diffQuery.data as { module_file_diff?: Diff } | undefined)?.module_file_diff;
+  const select = (path: string | null) => reviewSelection.setState((state) => ({
+    selectedByCheckout: { ...state.selectedByCheckout, [checkoutKey]: path },
+  }));
+  const step = (delta: number) => {
+    if (files.length === 0) return;
+    const nextIndex = (selectedIndex + delta + files.length) % files.length;
+    select(files[nextIndex].path);
+  };
 
   return (
-    <div className="h-full min-h-0 overflow-x-auto" data-testid="changes-workspace-scroll">
-      <div className={`h-full ${showAllWorktrees ? "min-w-[56rem]" : "min-w-0"}`} data-testid="changes-workspace">
-        <PanelGroup key={showAllWorktrees ? "all-worktrees" : "story"} direction="horizontal" className="h-full w-full">
-          {showAllWorktrees && (
-            <>
-              <Panel defaultSize={22} minSize={18} order={1}>
-                <section
-                  aria-label="Worktree checkouts"
-                  className="h-full min-w-0 overflow-hidden"
-                  data-testid="changes-checkouts-column"
-                >
-                  {checkouts}
-                </section>
-              </Panel>
-              <PaneResizeHandle
-                label="Resize checkouts and changed files"
-                testId="changes-checkouts-resize-handle"
-              />
-            </>
-          )}
-          <Panel defaultSize={showAllWorktrees ? 28 : 35} minSize={24} order={2}>
+    <div className="flex h-full min-h-0 flex-col" data-testid="changes-workspace-scroll">
+      {toolbar}
+      <div className="flex min-h-0 flex-1" data-testid="changes-workspace">
+        <PanelGroup direction="horizontal" className="h-full min-w-0 flex-1">
+          <Panel defaultSize={35} minSize={24} order={1}>
             <section
               aria-label="Changed files"
               className="flex h-full min-w-0 flex-col overflow-hidden p-3"
               data-testid="changes-files-column"
             >
               <div className="shrink-0">{header}</div>
+              {loading ? <p role="status" className="text-xs text-text-muted">Loading changes...</p> : null}
               {!loading && <div className="mb-2 flex items-baseline justify-between text-xs text-text-muted">
                 <span>{files.length} files</span>
                 <span>+{insertions} -{deletions}</span>
               </div>}
-              {loading ? null : files.length === 0 ? (
-                <p className="text-sm text-text-muted">{emptyMessage}</p>
-              ) : (
-                <div className="min-h-0 flex-1 overflow-auto">
+              {loading ? null : (
+                <div className="min-h-0 flex-1 overflow-auto" data-testid="changes-files-scroll">
                   <ChangedFilesList
+                    checkoutKey={checkoutKey}
                     files={files}
                     label={label}
                     descriptionPrefix={checkoutKey}
                     selectedPath={selectedPath}
-                    onSelect={(path) => reviewSelection.setState((state) => ({
-                      selectedByCheckout: { ...state.selectedByCheckout, [checkoutKey]: path },
-                    }))}
+                    emptyMessage={emptyMessage}
+                    onSelect={select}
                   />
                 </div>
               )}
@@ -131,28 +124,52 @@ export function ChangesFileReview({
             label="Resize changed files and diff"
             testId="changes-diff-resize-handle"
           />
-          <Panel defaultSize={showAllWorktrees ? 50 : 65} minSize={30} order={3}>
+          <Panel defaultSize={65} minSize={30} order={2}>
             <section
               aria-label="Selected file diff"
               className="flex h-full min-w-0 flex-col overflow-hidden p-3"
               data-testid="changes-diff-column"
             >
-              <h3 className="mb-2 h-4 shrink-0 truncate font-mono text-xs text-text-muted">
-                {file?.path ?? "No file selected"}
-              </h3>
-              {!file ? <p className="text-sm text-text-muted">Select a file to review its diff.</p>
-                : diffQuery.error ? <p className="text-sm text-lifecycle-danger" role="alert">Unable to load this file diff.</p>
-                  : diffQuery.loading ? <p className="text-sm text-text-muted" role="status">Loading diff...</p>
-                    : diff?.binary ? <p className="text-sm text-text-muted" role="status">Binary file; no text diff is available.</p>
-                      : <>
-                          {diff?.truncated ? <p className="mb-2 text-sm text-lifecycle-attention" role="status">This diff is truncated.</p> : null}
-                          {diff?.patch
-                            ? <FileDiffSurface patch={diff.patch} />
-                            : <p className="text-sm text-text-muted" role="status">No textual changes to display.</p>}
-                        </>}
+              <div className="mb-2 flex h-4 shrink-0 items-center gap-2 font-mono text-xs text-text-muted">
+                <h3 className="min-w-0 flex-1 truncate">{file?.path ?? "No file selected"}</h3>
+                {file ? (
+                  <>
+                    <span className="shrink-0">{selectedIndex + 1} / {files.length}</span>
+                    <button
+                      type="button"
+                      aria-label="Previous changed file"
+                      className="shrink-0 px-1 hover:text-text-primary focus-visible:ring-1 focus-visible:ring-focus-accent"
+                      onClick={() => step(-1)}
+                    >
+                      ‹
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="Next changed file"
+                      className="shrink-0 px-1 hover:text-text-primary focus-visible:ring-1 focus-visible:ring-focus-accent"
+                      onClick={() => step(1)}
+                    >
+                      ›
+                    </button>
+                  </>
+                ) : null}
+              </div>
+              <DiffReadingRegion>
+                {!file ? <p className="text-sm text-text-muted">Select a file to review its diff.</p>
+                  : diffQuery.error ? <p className="text-sm text-lifecycle-danger" role="alert">Unable to load this file diff.</p>
+                    : diffQuery.loading ? <p className="text-sm text-text-muted" role="status">Loading diff...</p>
+                      : diff?.binary ? <p className="text-sm text-text-muted" role="status">Binary file; no text diff is available.</p>
+                        : <>
+                            {diff?.truncated ? <p className="mb-2 text-sm text-lifecycle-attention" role="status">This diff is truncated.</p> : null}
+                            {diff?.patch
+                              ? <FileDiffSurface patch={diff.patch} />
+                              : <p className="text-sm text-text-muted" role="status">No textual changes to display.</p>}
+                          </>}
+              </DiffReadingRegion>
             </section>
           </Panel>
         </PanelGroup>
+        {inspector}
       </div>
     </div>
   );

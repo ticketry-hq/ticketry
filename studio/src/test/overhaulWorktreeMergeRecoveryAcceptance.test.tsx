@@ -185,6 +185,10 @@ function mountMergeRecovery(
 async function openChanges() {
   const tabs = await screen.findByRole("tablist", { name: "Workspace tabs" });
   fireEvent.click(within(tabs).getByRole("tab", { name: "Changes" }));
+  const branch = await screen.findByRole("button", { name: "Branch" });
+  if (branch.getAttribute("aria-pressed") !== "true") fireEvent.click(branch);
+  const localMerge = await screen.findByText("Local merge", { selector: "summary" });
+  if (!localMerge.closest("details")?.open) fireEvent.click(localMerge);
 }
 
 describe("overhaul acceptance - divergent local merge recovery", () => {
@@ -399,5 +403,56 @@ describe("overhaul acceptance - divergent local merge recovery", () => {
       expect(operationIds[1]).not.toBe(operationIds[0]);
       view.unmount();
     }
+  });
+
+  it("[overhaul-345] owns recovery confirmation focus, Escape, and one-shot keyboard activation", async () => {
+    let pending: Recovery | null = recovery({ unmerged_paths: [] });
+    let finishCalls = 0;
+    let releaseFinish: () => void = () => undefined;
+    const finishPending = new Promise<void>((resolve) => {
+      releaseFinish = resolve;
+    });
+    mountMergeRecovery(async (operation) => {
+      if (operation === "WorktreeMergePreview") return { worktree_merge_preview: preview() };
+      if (operation === "WorktreeMergeRecovery") return { worktree_merge_recovery: pending };
+      if (operation === "WorktreeMergeFinish") {
+        finishCalls += 1;
+        await finishPending;
+        pending = null;
+        return { worktree_merge_finish: recovery({ outcome: "merged", unmerged_paths: [] }) };
+      }
+    });
+
+    await openChanges();
+    const finish = await screen.findByRole("button", { name: "Finish merge" });
+    finish.focus();
+    fireEvent.keyDown(finish, { key: "Enter" });
+    fireEvent.click(finish);
+
+    const firstConfirmation = screen.getByRole("group", { name: "Confirm finish merge" });
+    await waitFor(() => {
+      expect(within(firstConfirmation).getByRole("button", { name: "Cancel" })).toHaveFocus();
+    });
+    fireEvent.keyDown(document.activeElement ?? firstConfirmation, { key: "Escape" });
+    expect(screen.queryByRole("group", { name: "Confirm finish merge" })).not.toBeInTheDocument();
+    await waitFor(() => expect(finish).toHaveFocus());
+    expect(finishCalls).toBe(0);
+
+    fireEvent.click(finish);
+    const confirmation = screen.getByRole("group", { name: "Confirm finish merge" });
+    const confirm = within(confirmation).getByRole("button", { name: "Confirm finish" });
+    await waitFor(() => expect(within(confirmation).getByRole("button", { name: "Cancel" })).toHaveFocus());
+    fireEvent.click(confirm);
+    fireEvent.click(confirm);
+
+    await waitFor(() => expect(finishCalls).toBe(1));
+    await waitFor(() => {
+      expect(screen.getByRole("region", { name: "Merge conflict recovery" })).toHaveFocus();
+    });
+    const elsewhere = screen.getByRole("button", { name: "Back to planning workspace" });
+    elsewhere.focus();
+    releaseFinish();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Merge into main" })).toBeVisible());
+    expect(elsewhere).toHaveFocus();
   });
 });

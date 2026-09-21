@@ -26,14 +26,27 @@ export function FooterChangesToggle() {
     }
     if (moduleId) openModuleChangesWorkspace(moduleId);
   };
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (
+      (event.key !== "Enter" && event.key !== " ") ||
+      event.altKey ||
+      event.ctrlKey ||
+      event.metaKey ||
+      event.shiftKey
+    ) return;
+    event.preventDefault();
+    handleClick();
+  };
   return (
     <button
       type="button"
+      data-changes-keyboard-entry
       data-testid="footer-module-changes"
       aria-label={label}
       title={label}
       disabled={!changesActive && !moduleId}
       onClick={handleClick}
+      onKeyDown={handleKeyDown}
       className="flex items-center gap-1 px-1.5 py-0.5 text-text-muted hover:bg-pane-bg hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
     >
       <IconGitBranch size={14} data-testid="version-control-icon" />

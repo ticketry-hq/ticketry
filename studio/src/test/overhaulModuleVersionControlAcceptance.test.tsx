@@ -1,7 +1,7 @@
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { createRef } from "react";
 import type { ImperativePanelGroupHandle } from "react-resizable-panels";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { FooterChangesToggle } from "../app/shell/FooterChangesToggle";
 import { StudioFooter } from "../app/shell/StudioFooter";
@@ -14,8 +14,10 @@ import { studioApolloClient } from "../shared/apollo/client";
 import { ModuleVersionControlDocument } from "../features/agents/worktrees/generated/moduleVersionControl.documents";
 import { createWorktreeInvalidator } from "../features/agents/status/stream/worktreeInvalidation";
 import { ChangesWorkspace } from "../features/agents/worktrees";
+import { useBranchInspector } from "../features/agents/worktrees/changes/branchInspectorState";
 import { useClientStore } from "../state/clientStore";
 import { fixture, mountStudio, workItem } from "./seam";
+import { openBranchInspector, openWorktreeCheckouts } from "./changesSurface";
 
 const TASK_ID = "active-task-worktree";
 const PLANNING_TASK_ID = "planning-task";
@@ -140,6 +142,7 @@ function FullWindowWorkspaceHarness() {
 }
 
 describe("overhaul acceptance - module Changes and current worktrees", () => {
+  beforeEach(() => useBranchInspector.setState({ open: false, sections: {} }));
   it("[overhaul-239] puts module Changes in the footer's left slot with a version-control symbol", () => {
     const http = fixture();
     http.tree("module-1", { rootIds: [], children: {}, order: [] });
@@ -212,12 +215,13 @@ describe("overhaul acceptance - module Changes and current worktrees", () => {
 
     expect(screen.getByRole("button", { name: "Back to planning workspace" })).toBeVisible();
     expect(await screen.findByTestId("module-version-control")).toBeVisible();
+    await openWorktreeCheckouts();
     expect(await screen.findByText("No current task worktrees.")).toBeVisible();
-    expect(screen.getByText("Loading module changes...")).toBeVisible();
-    const checkoutButton = screen.getByRole("button", { name: "Open Module checkout Changes" });
+    expect(screen.getByText("Loading changes...")).toBeVisible();
+    const checkoutButton = screen.getByRole("option", { name: "Open Module checkout Changes" });
     await act(async () => releaseFiles());
-    expect(await screen.findByText("Clean · 0 unpushed")).toBeVisible();
-    expect(screen.getByRole("button", { name: "Open Module checkout Changes" })).toBe(checkoutButton);
+    expect(await screen.findByLabelText("Working tree state")).toHaveTextContent("clean");
+    expect(screen.getByRole("option", { name: "Open Module checkout Changes" })).toBe(checkoutButton);
     expect(screen.getByText("No module changes from the selected baseline.")).toBeVisible();
     expect(screen.getByText("No current task worktrees.")).toBeVisible();
     expect(operations).toContain("ModuleVersionControl");
@@ -228,10 +232,17 @@ describe("overhaul acceptance - module Changes and current worktrees", () => {
     const invalidator = createWorktreeInvalidator();
     worktreeExists = true;
     act(() => { invalidator.record(TASK_ID); invalidator.flush(); });
-    expect(await screen.findByRole("button", { name: "Open wt/new Changes" })).toBeVisible();
+    await waitFor(() => expect(
+      operations.filter((operation) => operation === "CurrentWorktrees"),
+    ).toHaveLength(2));
+    await openWorktreeCheckouts();
+    expect(await screen.findByRole("option", { name: "Open wt/new Changes" })).toBeVisible();
     worktreeExists = false;
     act(() => { invalidator.record(TASK_ID); invalidator.flush(); });
-    await waitFor(() => expect(screen.queryByRole("button", { name: "Open wt/new Changes" })).toBeNull());
+    await waitFor(() => expect(
+      operations.filter((operation) => operation === "CurrentWorktrees"),
+    ).toHaveLength(3));
+    await waitFor(() => expect(screen.queryByRole("option", { name: "Open wt/new Changes" })).toBeNull());
     expect(operations.filter((operation) => operation === "CurrentWorktrees")).toHaveLength(3);
   });
 
@@ -441,43 +452,42 @@ describe("overhaul acceptance - module Changes and current worktrees", () => {
     expect(screen.getByRole("button", { name: "Open terminal panel" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Open Settings" })).toBeVisible();
 
-    const checkouts = within(workspace).getByRole("region", { name: "Worktree checkouts" });
+    await openWorktreeCheckouts();
+    const checkouts = screen.getByRole("region", { name: "Worktree checkouts" });
     const files = within(workspace).getByRole("region", { name: "Changed files" });
     const diff = within(workspace).getByRole("region", { name: "Selected file diff" });
     expect(checkouts).toBeVisible();
     expect(files).toBeVisible();
     expect(diff).toBeVisible();
 
-    const list = within(checkouts).getByRole("list", { name: "Current worktree checkouts" });
-    const rows = within(list).getAllByRole("button");
+    const list = within(checkouts).getByRole("listbox", { name: "Current worktree checkouts" });
+    const rows = within(list).getAllByRole("option");
     expect(rows).toHaveLength(2);
     expect(rows[0]).toHaveAccessibleName("Open Module checkout Changes");
-    expect(rows[0]).toHaveAttribute("aria-pressed", "true");
+    expect(rows[0]).toHaveAttribute("aria-selected", "true");
     expect(rows[1]).toHaveAccessibleName(
       "Open CODING-1322 Add module checkout Changes Changes",
     );
     expect(within(rows[1]).getByText("wt/CODING-1322-module-changes")).toBeVisible();
     expect(within(rows[1]).queryByText("Dirty")).toBeNull();
-    expect(screen.getByText("Compared from the merge base with main")).toBeVisible();
+    expect(screen.getAllByText("Compared from the merge base with main").length).toBeGreaterThan(0);
 
     fireEvent.click(within(files).getByRole("button", { name: modulePath }));
     expect(await within(diff).findByTestId("patch-viewer")).toHaveTextContent(
       "+module workspace",
     );
 
-    const firstHandle = within(workspace).getByRole("separator", {
-      name: "Resize checkouts and changed files",
-    });
-    const secondHandle = within(workspace).getByRole("separator", {
+    const handle = within(workspace).getByRole("separator", {
       name: "Resize changed files and diff",
     });
-    for (const [handle, key] of [[firstHandle, "ArrowRight"], [secondHandle, "ArrowLeft"]] as const) {
+    for (const key of ["ArrowRight", "ArrowLeft"] as const) {
       const before = handle.getAttribute("aria-valuenow");
       fireEvent.keyDown(handle, { key });
       await waitFor(() => expect(handle).not.toHaveAttribute("aria-valuenow", before));
     }
-    expect(within(moduleWorkspace).getByTestId("changes-workspace-scroll")).toHaveClass("overflow-x-auto");
-    expect(workspace).toHaveClass("min-w-[56rem]");
+    expect(screen.queryByTestId("changes-branch-inspector")).toBeNull();
+    await openBranchInspector();
+    fireEvent.click(screen.getByRole("button", { name: "Close branch inspector" }));
 
     fireEvent.click(rows[1]);
     expect(useClientStore.getState().selectedTaskId).toBe(PLANNING_TASK_ID);
@@ -561,14 +571,16 @@ describe("overhaul acceptance - module Changes and current worktrees", () => {
     });
 
     fireEvent.click(screen.getByRole("button", { name: "Open module Changes" }));
-    const taskCheckout = await screen.findByRole("button", {
+    await openWorktreeCheckouts();
+    const taskCheckout = await screen.findByRole("option", {
       name: "Open CODING-1322 Measured checkout Changes",
     });
     fireEvent.click(taskCheckout);
 
-    expect(await screen.findByRole("button", {
+    await openWorktreeCheckouts();
+    expect(await screen.findByRole("option", {
       name: "Open CODING-1322 Measured checkout Changes",
-    })).toHaveAttribute("aria-pressed", "true");
+    })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByText("Loading changes...")).toBeVisible();
     expect(screen.getByRole("button", {
       name: "Back to planning workspace",
@@ -678,7 +690,6 @@ describe("overhaul acceptance - module Changes and current worktrees", () => {
       expect(within(diff).getByRole("status")).toHaveTextContent("This diff is truncated."),
     );
     expect((await within(diff).findByTestId("patch-viewer")).textContent).toBe(patch);
-    expect(screen.getByTestId("changes-workspace-scroll")).toHaveClass("overflow-x-auto");
     expect(screen.getByTestId("changes-diff-column")).toHaveClass("overflow-hidden");
   });
 
@@ -724,7 +735,7 @@ describe("overhaul acceptance - module Changes and current worktrees", () => {
     fireEvent.click(screen.getByRole("button", { name: "Open module Changes" }));
     expect(await screen.findByText(reason)).toBeVisible();
     expect(screen.getAllByText(reason).length).toBeGreaterThan(0);
-    expect(screen.getByText("Comparison unavailable")).toBeVisible();
+    expect(screen.getAllByText("Comparison unavailable").length).toBeGreaterThan(0);
   });
 
   it("[overhaul-191] offers module Push for a clean ahead branch and Commit only for dirty work", async () => {
@@ -782,6 +793,7 @@ describe("overhaul acceptance - module Changes and current worktrees", () => {
     });
 
     fireEvent.click(screen.getByRole("button", { name: "Open module Changes" }));
+    await openBranchInspector();
     const commit = await screen.findByRole("button", { name: "Commit" });
     const push = screen.getByRole("button", { name: "Push" });
     expect(commit).toBeDisabled();
@@ -861,6 +873,7 @@ describe("overhaul acceptance - module Changes and current worktrees", () => {
     });
 
     fireEvent.click(screen.getByRole("button", { name: "Open module Changes" }));
+    await openBranchInspector();
     expect(await screen.findByRole("button", { name: "Create PR" })).toBeEnabled();
     expect(screen.getByRole("status")).toHaveTextContent(
       "Create PR follows the same rule.",

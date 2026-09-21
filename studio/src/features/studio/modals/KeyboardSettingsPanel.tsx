@@ -18,6 +18,19 @@ const ACTION_LABELS: Record<string, string> = {
   "edit-view.right": "Move right in edit view",
   "edit-view.commit": "Enter edit-view selection",
   "edit-view.body-disengage": "Disengage body",
+  "changes.checkout.previous": "Previous checkout",
+  "changes.checkout.next": "Next checkout",
+  "changes.checkout.first": "First checkout",
+  "changes.checkout.last": "Last checkout",
+  "changes.checkout.select": "Select checkout",
+  "changes.checkout.cancel": "Close checkout switcher",
+  "changes.file.previous": "Previous changed file",
+  "changes.file.next": "Next changed file",
+  "changes.file.first": "First changed file",
+  "changes.file.last": "Last changed file",
+  "changes.file.activate": "Open changed file",
+  "changes.file.expand": "Expand changed-file directory",
+  "changes.file.collapse": "Collapse changed-file directory",
   "cycle-terminal-forward": "Cycle terminal forward",
   "toggle-terminal-panel": "Toggle terminal panel",
   "cycle-terminal-backward": "Cycle terminal backward",
@@ -55,6 +68,7 @@ const ACTION_LABELS: Record<string, string> = {
 };
 
 const CONTEXT_LABELS: Record<EffectiveBinding["context"], string> = {
+  changes: "Changes",
   capture: "Capture",
   modal: "Modal",
   "focused-pane": "Focused pane",

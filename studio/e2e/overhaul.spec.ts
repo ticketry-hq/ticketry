@@ -256,3 +256,105 @@ test("[overhaul-web-14] reconnect replay closes an offline edit gap", async ({ p
   await expect(page.getByRole("treeitem", { name: /E2E replayed/ })).toBeVisible();
   await expect(page.getByRole("treeitem", { name: /E2E second/ })).toHaveCount(0);
 });
+
+test("[overhaul-web-15] traverses Changes controls in visible DOM order", async ({ page }) => {
+  await page.route("**/graphql", async (route) => {
+    const body = route.request().postDataJSON() as { operationName?: string };
+    if (body.operationName !== "ModuleVersionControl") {
+      await route.continue();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ data: {
+        module_version_control: {
+          __typename: "ModuleVersionControlView",
+          module_id: ids.module,
+          checkout: {
+            __typename: "ModuleCheckoutChangesView",
+            available: true,
+            reason: null,
+            branch: "keyboard-fixture",
+            default_branch: "main",
+            committed_count: 0,
+            pull_request_creation_eligible: false,
+            baseline: "origin/main",
+            baseline_kind: "upstream",
+            clean: false,
+            dirty: true,
+            unpushed_count: 0,
+            truncated: false,
+            files: [],
+            insertions: 0,
+            deletions: 0,
+          },
+        },
+      } }),
+    });
+  });
+  await page.reload();
+  await page.getByRole("tab", { name: "Overhaul Module" }).click();
+  const entry = page.getByRole("button", { name: "Open module Changes" });
+  await entry.focus();
+  await page.keyboard.press("Enter");
+
+  const workspace = page.getByRole("region", { name: "Changes workspace" });
+  await expect(workspace).toBeVisible();
+  const switcher = workspace.getByRole("button", {
+    name: "Choose checkout",
+  });
+  await expect(switcher).toBeFocused();
+
+  await page.keyboard.press("Enter");
+  const current = workspace.getByRole("option", {
+    name: "Open Module checkout Changes",
+  });
+  await expect(current).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(switcher).toBeFocused();
+
+  const branch = workspace.getByRole("button", { name: "Branch", exact: true });
+  for (let step = 0; step < 8; step += 1) {
+    if (await branch.evaluate((element) => element === document.activeElement)) break;
+    await page.keyboard.press("Tab");
+  }
+  await expect(branch).toBeFocused();
+  await page.keyboard.press("Enter");
+  const closeInspector = workspace.getByRole("button", {
+    name: "Close branch inspector",
+  });
+  await expect(closeInspector).toBeFocused();
+  await page.keyboard.press("Tab");
+  const statusSummary = workspace.locator("summary").filter({ hasText: "Status" });
+  await expect(statusSummary).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(statusSummary.locator("xpath=..")).not.toHaveAttribute("open", "");
+  await page.keyboard.press("Escape");
+  await expect(branch).toBeFocused();
+
+  const primary = workspace.locator('button[aria-label*=" on "]').first();
+  await primary.focus();
+  await page.keyboard.press("Enter");
+  const confirmation = workspace.getByRole("dialog", {
+    name: "Confirm Changes action",
+  });
+  await expect(confirmation.getByRole("button", { name: "Cancel" })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(primary).toBeFocused();
+
+  const back = page.getByRole("button", { name: "Back to planning workspace" });
+  for (let step = 0; step < 12; step += 1) {
+    if (await back.evaluate((element) => element === document.activeElement)) break;
+    await page.keyboard.press("Tab");
+  }
+  await expect(back).toBeFocused();
+  await page.keyboard.press("Space");
+  const reopenedEntry = page.getByRole("button", { name: "Open module Changes" });
+  await expect(reopenedEntry).toBeFocused();
+  await page.keyboard.press("Space");
+  await expect(workspace).toBeVisible();
+  await expect(workspace.getByRole("button", { name: "Choose checkout" }))
+    .toBeFocused();
+  await page.getByRole("button", { name: "Back to planning workspace" }).click();
+});

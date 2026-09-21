@@ -326,6 +326,22 @@ named gate before the full Studio suite, typecheck, and build.
 | 333 | If the planning origin disappears, Back returns to the same module's conversation Details workspace. |
 | 334 | Back stays usable while Changes is loading or reports an error. |
 | 335 | Selecting a task checkout marks it selected and keeps Back usable while fresh task changes load. |
+| 336 | The live Changes toolbar checkout switcher clamps arrow navigation, supports Home/End and Enter/Space, cancels to its trigger with Escape, and follows checkout identity across refresh and removal. |
+| 337 | The diff keeps one named keyboard reading region focused while rendered content replaces its fallback. |
+| 338 | Diff reading keys scroll real overflow without activating another control. |
+| 339 | The panel-library separator remains a visible keyboard resize stop. |
+| 340 | File selection stays explicit per checkout, and Previous and Next wrap without moving focus. |
+| 341 | Empty, binary, truncated, and rendered diff content keep the same named reading region. |
+| 342 | A failed diff load keeps the named reading region stable and usable. |
+| 343 | File-list arrows traverse visible rows, while activation alone changes selection or disclosure state. |
+| 344 | File focus follows path identity across refresh, removal, directory collapse, and an empty-list fallback. |
+| 345 | Local-merge recovery confirmation focuses Cancel, nests Escape correctly, and submits once by keyboard. |
+| 346 | Branch opens on Close, nested Escape returns to Branch, and collapsing a disclosure recovers focus to its summary. |
+| 347 | The primary Changes confirmation opens on Cancel, Escape cancels, and focus returns to its enabled opener. |
+| 348 | The primary Changes confirmation submits once, locks cancellation while pending, and never steals focus after departure. |
+| 349 | Cleanup confirmation focuses Cancel, nests Escape, respects pending restrictions, and submits once. |
+| 350 | Closing the Branch inspector after opening Changes from a task tab returns focus to the visible Branch button while the planning copy remains mounted. |
+| 351 | Changes-only checkout and file-list keys stay out of planning capture, and shortcut help labels every Changes action instead of showing raw action IDs. |
 
 Each executable case carries one stable `[overhaul-NN]` marker. The gate has a
 contract test that fails if a marker is missing or duplicated. A case whose

@@ -30,7 +30,8 @@ test("uses the provisioned model and completes first-run provider onboarding", a
   await expect(claude).toBeChecked();
   await page.getByRole("combobox", { name: "Agent/provider" })
     .selectOption("codex");
-  await page.getByLabel("Model").fill(CODEX_TEST_MODEL);
+  await page.getByRole("combobox", { name: "Model" })
+    .selectOption(CODEX_TEST_MODEL);
   await page.getByRole("combobox", { name: "Reasoning" })
     .selectOption(CODEX_TEST_REASONING);
   await page.getByRole("button", { name: /^(Continue|Get started)$/ }).click();

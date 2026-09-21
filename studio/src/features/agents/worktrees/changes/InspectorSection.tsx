@@ -38,10 +38,17 @@ export function InspectorSection({
   return (
     <details
       open={open}
-      onToggle={(event) => setBranchInspectorSection(section, event.currentTarget.open)}
+      onToggle={(event) => {
+        const nextOpen = event.currentTarget.open;
+        // Collapsing while a child control is focused would drop focus to body.
+        if (!nextOpen && event.currentTarget.contains(document.activeElement)) {
+          event.currentTarget.querySelector("summary")?.focus({ preventScroll: true });
+        }
+        setBranchInspectorSection(section, nextOpen);
+      }}
       className="border-b border-pane-border"
     >
-      <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 font-medium text-text-primary">
+      <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 font-medium text-text-primary focus-visible:ring-1 focus-visible:ring-focus-accent">
         <span aria-hidden="true" className="w-2 text-xs text-text-muted">{open ? "▾" : "▸"}</span>
         {title}
         {chip ? (

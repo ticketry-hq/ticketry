@@ -331,6 +331,22 @@ named gate before the full Studio suite, typecheck, and build.
 | 338 | Clicking the open module picker trigger closes its portalled dialog without reopening it during the focus transition. |
 | 339 | A persisted subtree campaign with a live descendant replaces both launch actions with lifecycle status and Open, blocks Cmd+Enter, keeps Run item, and restores launch actions after completion. |
 | 340 | A stale subtree launch refusal refreshes the persisted campaign into status/Open without retrying execution. |
+| 341 | The live Changes toolbar checkout switcher clamps arrow navigation, supports Home/End and Enter/Space, cancels to its trigger with Escape, and follows checkout identity across refresh and removal. |
+| 342 | The diff keeps one named keyboard reading region focused while rendered content replaces its fallback. |
+| 343 | Diff reading keys scroll real overflow without activating another control. |
+| 344 | The panel-library separator remains a visible keyboard resize stop. |
+| 345 | File selection stays explicit per checkout, and Previous and Next wrap without moving focus. |
+| 346 | Empty, binary, truncated, and rendered diff content keep the same named reading region. |
+| 347 | A failed diff load keeps the named reading region stable and usable. |
+| 348 | File-list arrows traverse visible rows, while activation alone changes selection or disclosure state. |
+| 349 | File focus follows path identity across refresh, removal, directory collapse, and an empty-list fallback. |
+| 350 | Local-merge recovery confirmation focuses Cancel, nests Escape correctly, and submits once by keyboard. |
+| 351 | Branch opens on Close, nested Escape returns to Branch, and collapsing a disclosure recovers focus to its summary. |
+| 352 | The primary Changes confirmation opens on Cancel, Escape cancels, and focus returns to its enabled opener. |
+| 353 | The primary Changes confirmation submits once, locks cancellation while pending, and never steals focus after departure. |
+| 354 | Cleanup confirmation focuses Cancel, nests Escape, respects pending restrictions, and submits once. |
+| 355 | Closing the Branch inspector after opening Changes from a task tab returns focus to the visible Branch button while the planning copy remains mounted. |
+| 356 | Changes-only checkout and file-list keys stay out of planning capture, and shortcut help labels every Changes action instead of showing raw action IDs. |
 
 Each executable case carries one stable `[overhaul-NN]` marker. The gate has a
 contract test that fails if a marker is missing or duplicated. A case whose

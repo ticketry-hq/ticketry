@@ -1,6 +1,6 @@
 import {
   DEFAULT_BINDINGS,
-  KEYMAP_CONTEXT_PRECEDENCE,
+  KEYMAP_CONTEXTS,
   type BindingOverride,
   type EffectiveBinding,
   type BindingDefinition,
@@ -12,11 +12,12 @@ import {
   AGENT_RUN_ACTIONS,
   type AgentRunActionId,
 } from "./actionIds";
+import { installCaptureKeymapResolver } from "../../shared/navigation/keymapResolver";
 
 type ActionHandler = (payload?: unknown) => boolean | Promise<boolean>;
 
 const DEFAULT_BINDINGS_IN_CONTEXT_PRECEDENCE =
-  KEYMAP_CONTEXT_PRECEDENCE.flatMap((context) =>
+  KEYMAP_CONTEXTS.flatMap((context) =>
     DEFAULT_BINDINGS.filter((binding) => binding.context === context),
   );
 const CONFIGURABLE_BINDINGS_IN_CONTEXT_PRECEDENCE =
@@ -298,13 +299,16 @@ function isBindingOverride(value: unknown): value is BindingOverride {
   if (!value || typeof value !== "object") return false;
   const candidate = value as Partial<BindingOverride>;
   return (
-    KEYMAP_CONTEXT_PRECEDENCE.includes(candidate.context as KeymapContext) &&
+    KEYMAP_CONTEXTS.includes(candidate.context as KeymapContext) &&
     typeof candidate.actionId === "string" &&
     isKeyChord(candidate.chord)
   );
 }
 
 export const studioKeymapRegistry = new KeymapRegistry();
+installCaptureKeymapResolver((event, actionIds) =>
+  studioKeymapRegistry.resolve("changes", event, actionIds)
+);
 for (const actionId of Object.values(AGENT_RUN_ACTIONS)) {
   studioKeymapRegistry.registerAction(actionId, async (payload) => {
     const { dispatchAgentRunAction } = await import(

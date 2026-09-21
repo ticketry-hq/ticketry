@@ -725,9 +725,7 @@ describe("overhaul acceptance - task worktree Changes", () => {
     const tabs = await screen.findByRole("tablist", { name: "Workspace tabs" });
     fireEvent.click(await within(tabs).findByRole("tab", { name: "Changes" }));
     await openBranchInspector();
-    fireEvent.click(await screen.findByRole("button", {
-      name: /^Commit, push & create PR/,
-    }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Commit, push & create PR/ }));
     fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
 
     const open = await screen.findByRole("link", { name: "Open PR" });
@@ -1264,15 +1262,23 @@ describe("overhaul acceptance - task worktree Changes", () => {
     expect(screen.getByRole("option", { name: /release\/2.1/ })).toHaveAttribute("aria-selected", "true");
     fireEvent.change(picker, { target: { value: "no-such-branch" } });
     expect(screen.getByText("No matching branches")).toBeVisible();
+    const readsBeforeNoMatch = previews.length;
+    fireEvent.keyDown(picker, { key: "Enter" });
+    fireEvent.keyDown(picker, { key: "Enter", repeat: true });
+    expect(previews).toHaveLength(readsBeforeNoMatch);
     fireEvent.keyDown(picker, { key: "Escape" });
     expect(picker).toHaveValue("release/2.1");
     expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Local merge preview" })).toBeVisible();
     fireEvent.click(picker);
     fireEvent.change(picker, { target: { value: "MAIN" } });
     expect(within(preview).getAllByRole("option")).toHaveLength(1);
+    const readsBeforeSelection = previews.length;
     fireEvent.keyDown(picker, { key: "ArrowDown" });
     fireEvent.keyDown(picker, { key: "Enter" });
+    fireEvent.keyDown(picker, { key: "Enter", repeat: true });
     await waitFor(() => expect(previews.at(-1)).toEqual({ taskId: TASK_ID, destinationBranch: "main" }));
+    expect(previews).toHaveLength(readsBeforeSelection + 1);
     expect(await screen.findByRole("button", { name: "Merge into main" })).toBeEnabled();
     expect(picker).toHaveValue("main");
     expect(selectedPreview).toHaveTextContent("/repos/ticketry");

@@ -1,5 +1,5 @@
 import { useQuery } from "@apollo/client/react";
-import { useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 
 import { useStudioStore } from "../../../projects";
 import { studioApolloClient } from "../../../../shared/apollo/client";
@@ -16,6 +16,11 @@ import {
 import { newOperationId } from "../internal/operationId";
 import { buildMergeConflictPrompt } from "./mergeConflictPrompt";
 import { MergeDestinationPicker } from "./MergeDestinationPicker";
+import {
+  confirmationOwnsFocus,
+  focusConfirmationCancel,
+  restoreChangesConfirmationFocus,
+} from "./confirmationFocus";
 
 export function WorktreeMergePreview({
   taskId,
@@ -40,6 +45,12 @@ export function WorktreeMergePreview({
   const [error, setError] = useState<string | null>(null);
   const [outcome, setOutcome] = useState<string | null>(null);
   const intent = useRef<{ key: string; operationId: string } | null>(null);
+  const recoverySectionRef = useRef<HTMLElement>(null);
+  const confirmationRef = useRef<HTMLDivElement>(null);
+  const confirmationCancelRef = useRef<HTMLButtonElement>(null);
+  const confirmationOpenerRef = useRef<HTMLButtonElement | null>(null);
+  const settlementInFlight = useRef(false);
+  const restoreFocusRef = useRef(false);
   const query = useQuery(WorktreeMergePreviewDocument, {
     client: studioApolloClient(),
     variables: { taskId, destinationBranch },
@@ -69,6 +80,23 @@ export function WorktreeMergePreview({
       ],
     }).catch(() => undefined);
   };
+
+  const closeConfirmation = () => {
+    restoreFocusRef.current = confirmationOwnsFocus(confirmationRef);
+    setConfirming(null);
+  };
+
+  useLayoutEffect(() => {
+    if (confirming) {
+      focusConfirmationCancel(confirmationCancelRef.current);
+    } else if (restoreFocusRef.current) {
+      restoreFocusRef.current = false;
+      restoreChangesConfirmationFocus(
+        confirmationOpenerRef.current,
+        recoverySectionRef.current,
+      );
+    }
+  }, [confirming]);
 
   const merge = async () => {
     if (
@@ -111,9 +139,10 @@ export function WorktreeMergePreview({
   };
 
   const settle = async (action: "finish" | "abort") => {
-    if (!recovery) return;
+    if (!recovery || settlementInFlight.current) return;
+    settlementInFlight.current = true;
     setBusy(action);
-    setConfirming(null);
+    closeConfirmation();
     setError(null);
     setOutcome(null);
     try {
@@ -126,6 +155,7 @@ export function WorktreeMergePreview({
       setError(cause instanceof Error ? cause.message : `Local merge ${action} failed.`);
     } finally {
       await refreshAffected();
+      settlementInFlight.current = false;
       setBusy(null);
     }
   };
@@ -173,8 +203,10 @@ export function WorktreeMergePreview({
 
       {recovery ? (
         <section
+          ref={recoverySectionRef}
           aria-label={recovery.outcome === "conflicted" ? "Merge conflict recovery" : "Local merge recovery"}
           className="mt-3 border border-lifecycle-attention/50 p-2"
+          tabIndex={-1}
         >
           <p className="text-xs text-text-primary">
             Merge {recovery.source_branch} into {recovery.destination_branch} in {recovery.destination_checkout}
@@ -200,7 +232,10 @@ export function WorktreeMergePreview({
               <button
                 type="button"
                 disabled={recovery.unmerged_paths.length > 0 || busy !== null || Boolean(recoveryQuery.error)}
-                onClick={() => setConfirming("finish")}
+                onClick={(event) => {
+                  confirmationOpenerRef.current = event.currentTarget;
+                  setConfirming("finish");
+                }}
                 className="border border-pane-border px-2 py-1 text-text-primary disabled:opacity-50"
               >
                 Finish merge
@@ -208,7 +243,10 @@ export function WorktreeMergePreview({
               <button
                 type="button"
                 disabled={busy !== null || Boolean(recoveryQuery.error)}
-                onClick={() => setConfirming("abort")}
+                onClick={(event) => {
+                  confirmationOpenerRef.current = event.currentTarget;
+                  setConfirming("abort");
+                }}
                 className="border border-lifecycle-danger/60 px-2 py-1 text-lifecycle-danger disabled:opacity-50"
               >
                 Abort merge
@@ -225,9 +263,16 @@ export function WorktreeMergePreview({
           ) : null}
           {confirming ? (
             <div
+              ref={confirmationRef}
               aria-label={`Confirm ${confirming} merge`}
               className="mt-2 border border-pane-border p-2 text-xs"
               role="group"
+              onKeyDown={(event) => {
+                if (event.key !== "Escape") return;
+                event.preventDefault();
+                event.stopPropagation();
+                closeConfirmation();
+              }}
             >
               <p className="text-text-primary">
                 {confirming === "finish"
@@ -237,14 +282,17 @@ export function WorktreeMergePreview({
               <div className="mt-2 flex gap-2">
                 <button
                   type="button"
+                  disabled={settlementInFlight.current}
                   onClick={() => void settle(confirming)}
                   className="border border-pane-border px-2 py-1 text-text-primary"
                 >
                   Confirm {confirming}
                 </button>
                 <button
+                  ref={confirmationCancelRef}
                   type="button"
-                  onClick={() => setConfirming(null)}
+                  disabled={settlementInFlight.current}
+                  onClick={closeConfirmation}
                   className="border border-pane-border px-2 py-1 text-text-primary"
                 >
                   Cancel

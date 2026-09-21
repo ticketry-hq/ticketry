@@ -26,10 +26,22 @@ export function FooterChangesToggle() {
     }
     if (moduleId) openModuleChangesWorkspace(moduleId);
   };
+  // The capture keymap steps aside for Enter/Space on this entry point, so the
+  // activation has to be handled here rather than left to native click synthesis.
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (
+      (event.key !== "Enter" && event.key !== " ") ||
+      event.altKey || event.ctrlKey || event.metaKey || event.shiftKey
+    ) return;
+    event.preventDefault();
+    handleClick();
+  };
   return (
     <button
       type="button"
       data-testid="footer-module-changes"
+      data-changes-keyboard-entry
+      onKeyDown={handleKeyDown}
       aria-label={label}
       title={label}
       disabled={!changesActive && !moduleId}

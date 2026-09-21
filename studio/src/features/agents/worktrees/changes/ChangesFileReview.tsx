@@ -8,6 +8,7 @@ import { createApolloStore } from "../../../../shared/apollo/localState";
 import { ModuleFileDiffDocument } from "../generated/moduleFileDiff.documents";
 import { WorktreeFileDiffDocument } from "../generated/worktreeFileDiff.documents";
 import { ChangedFilesList } from "./ChangedFilesList";
+import { DiffReadingRegion } from "./DiffReadingRegion";
 import { changedFileBadge } from "./changedFileBadge";
 import type { ChangedFileRow } from "./changedFileTree";
 import { FileDiffSurface } from "./FileDiffSurface";
@@ -108,15 +109,15 @@ export function ChangesFileReview({
                 )}
               </div>
               {header ? <div className="shrink-0">{header}</div> : null}
-              {loading ? null : files.length === 0 ? (
-                <p className="p-3 text-sm text-text-muted">{emptyMessage}</p>
-              ) : (
+              {loading ? null : (
                 <div className="min-h-0 flex-1 overflow-auto">
                   <ChangedFilesList
+                    checkoutKey={checkoutKey}
                     files={files}
                     label={label}
                     descriptionPrefix={checkoutKey}
                     selectedPath={selectedPath}
+                    emptyMessage={emptyMessage}
                     onSelect={select}
                   />
                 </div>
@@ -148,7 +149,7 @@ export function ChangesFileReview({
                       type="button"
                       aria-label="Previous changed file"
                       onClick={() => step(-1)}
-                      className="shrink-0 px-1 text-text-muted hover:text-text-primary"
+                      className="shrink-0 px-1 text-text-muted hover:text-text-primary focus-visible:ring-1 focus-visible:ring-focus-accent"
                     >
                       ‹
                     </button>
@@ -156,14 +157,14 @@ export function ChangesFileReview({
                       type="button"
                       aria-label="Next changed file"
                       onClick={() => step(1)}
-                      className="shrink-0 px-1 text-text-muted hover:text-text-primary"
+                      className="shrink-0 px-1 text-text-muted hover:text-text-primary focus-visible:ring-1 focus-visible:ring-focus-accent"
                     >
                       ›
                     </button>
                   </>
                 ) : null}
               </div>
-              <div className="min-h-0 flex-1 overflow-auto p-3">
+              <DiffReadingRegion>
                 {!file ? <p className="text-sm text-text-muted">Select a file to review its diff.</p>
                   : diffQuery.error ? <p className="text-sm text-lifecycle-danger" role="alert">Unable to load this file diff.</p>
                     : diffQuery.loading ? <p className="text-sm text-text-muted" role="status">Loading diff...</p>
@@ -174,7 +175,7 @@ export function ChangesFileReview({
                               ? <FileDiffSurface patch={diff.patch} />
                               : <p className="text-sm text-text-muted" role="status">No textual changes to display.</p>}
                           </>}
-              </div>
+              </DiffReadingRegion>
             </section>
           </Panel>
         </PanelGroup>

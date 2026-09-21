@@ -1,8 +1,9 @@
-import { type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 
 import { InspectorSection } from "./InspectorSection";
 import { PullRequestStatus } from "./PullRequestStatus";
 import { toggleBranchInspector, useBranchInspector } from "./branchInspectorState";
+import { canReceiveRestoredFocus } from "./confirmationFocus";
 import type { ChangesActionsController } from "./useChangesActions";
 
 /**
@@ -29,6 +30,30 @@ export function BranchInspector({
   worktree?: ReactNode;
 }) {
   const open = useBranchInspector((state) => state.open);
+  const rootRef = useRef<HTMLElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
+  const ownsFocusRef = useRef(false);
+  const mountedRef = useRef(false);
+  useEffect(() => {
+    // Only a deliberate open moves focus; a restored-open inspector on mount does not.
+    if (!mountedRef.current) {
+      mountedRef.current = true;
+      return;
+    }
+    if (!open) return;
+    const inspector = rootRef.current;
+    const workspace = inspector?.closest<HTMLElement>('[data-testid="changes-workspace-scroll"]') ?? null;
+    const frame = requestAnimationFrame(() => {
+      if (canReceiveRestoredFocus(closeRef.current)) closeRef.current.focus({ preventScroll: true });
+    });
+    return () => {
+      cancelAnimationFrame(frame);
+      if (ownsFocusRef.current || inspector?.contains(document.activeElement)) {
+        const branch = workspace?.querySelector<HTMLButtonElement>('[aria-controls="changes-branch-inspector"]') ?? null;
+        if (canReceiveRestoredFocus(branch)) branch.focus({ preventScroll: true });
+      }
+    };
+  }, [open]);
   if (!open) return null;
   const { commands, busy } = actions;
   const pending = busy !== null;
@@ -39,12 +64,20 @@ export function BranchInspector({
 
   return (
     <aside
+      ref={rootRef}
       id="changes-branch-inspector"
       aria-label="Branch inspector"
       data-testid="changes-branch-inspector"
       className="flex h-full w-80 shrink-0 flex-col overflow-hidden border-l border-pane-border bg-pane-panel"
+      onFocusCapture={() => { ownsFocusRef.current = true; }}
+      onBlurCapture={(event) => {
+        if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget as Node)) {
+          ownsFocusRef.current = false;
+        }
+      }}
       onKeyDown={(event) => {
-        if (event.key !== "Escape") return;
+        if (event.key !== "Escape" || event.defaultPrevented) return;
+        event.preventDefault();
         event.stopPropagation();
         toggleBranchInspector(false);
       }}
@@ -52,10 +85,11 @@ export function BranchInspector({
       <header className="flex h-8 shrink-0 items-center justify-between border-b border-pane-border px-3">
         <h2 className="text-xs uppercase tracking-wide text-text-secondary">Branch</h2>
         <button
+          ref={closeRef}
           type="button"
           aria-label="Close branch inspector"
           onClick={() => toggleBranchInspector(false)}
-          className="text-xs text-text-muted hover:text-text-primary"
+          className="text-xs text-text-muted hover:text-text-primary focus-visible:ring-1 focus-visible:ring-focus-accent"
         >
           Close
         </button>

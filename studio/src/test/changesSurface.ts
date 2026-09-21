@@ -16,7 +16,8 @@ export async function openBranchInspector(): Promise<void> {
 
 /** Open the worktree switcher that replaced the permanent checkouts column. */
 export async function openWorktreeCheckouts(): Promise<void> {
-  fireEvent.click(await screen.findByRole("button", { name: "Change worktree checkout" }));
+  const trigger = await screen.findByRole("button", { name: "Choose checkout" });
+  if (trigger.getAttribute("aria-expanded") !== "true") fireEvent.click(trigger);
   await screen.findByRole("region", { name: "Worktree checkouts" });
 }
 

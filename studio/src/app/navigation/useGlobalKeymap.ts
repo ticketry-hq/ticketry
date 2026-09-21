@@ -34,6 +34,18 @@ function isLaunchMenuTarget(target: EventTarget | null): boolean {
     target.closest('[role="menu"][aria-label="Launch agent"]') !== null;
 }
 
+function isChangesEntryActivation(event: KeyboardEvent): boolean {
+  return (
+    (event.key === "Enter" || event.key === " ") &&
+    !event.altKey &&
+    !event.ctrlKey &&
+    !event.metaKey &&
+    !event.shiftKey &&
+    event.target instanceof HTMLElement &&
+    event.target.closest("[data-changes-keyboard-entry]") !== null
+  );
+}
+
 /** Installs the application-wide keyboard precedence and delegates actions. */
 export function useGlobalKeymap(taskRows: TreeRow[] = EMPTY_TASK_ROWS): void {
   const taskRowsRef = useRef(taskRows);
@@ -59,13 +71,26 @@ export function useGlobalKeymap(taskRows: TreeRow[] = EMPTY_TASK_ROWS): void {
       }
       if (hasOpenModal()) return;
       if (isLaunchMenuTarget(event.target)) return;
+      if (isChangesEntryActivation(event)) return;
 
       // Ahead of body engagement: the panel toggle must reverse itself from any
       // focus position, including an agent terminal in typing mode (#667).
       if (routeTerminalPanelToggle(event, actionId)) return;
       if (routeModulePositionNavigation(event, actionId)) return;
-      // The Changes surface replaces the planning panes; routing Enter and the
-      // arrows to hidden panes would swallow every keyboard click in it.
+      if (
+        useChangesWorkspace.getState().active &&
+        (actionId === "cycle-terminal-forward" ||
+          actionId === "cycle-terminal-backward")
+      ) {
+        routeFullSidebarViewCaptureNavigation(
+          event,
+          taskRowsRef.current,
+          actionId,
+        );
+        return;
+      }
+      // Changes owns its local keys before either planning layout sees them.
+      // The focused control resolves its exact action through the same registry.
       if (useChangesWorkspace.getState().active) return;
       if (
         actionId === "workspace-tab-next" ||
@@ -89,6 +114,20 @@ export function useGlobalKeymap(taskRows: TreeRow[] = EMPTY_TASK_ROWS): void {
     function onKeyDown(event: KeyboardEvent): void {
       const ui = useClientStore.getState();
       const sidebarVisible = ui.sidebarVisible;
+      if (useChangesWorkspace.getState().active) {
+        if (
+          hasOpenModal() ||
+          isTypingTarget(event.target) ||
+          event.defaultPrevented
+        ) {
+          return;
+        }
+        const globalAction = studioKeymapRegistry.resolve("global", event);
+        if (globalAction === "settings") {
+          routeSharedNavigation(event, taskRowsRef.current, globalAction);
+        }
+        return;
+      }
       if (!sidebarVisible && routeThreeZoneBodyEngagement(event)) return;
       const captureAction = studioKeymapRegistry.resolve("capture", event);
       if (

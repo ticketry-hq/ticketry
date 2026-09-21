@@ -1,11 +1,11 @@
-import { fireEvent, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 
 import { TaskWorktreeChanges } from "../features/agents/worktrees";
 import { documentOperationName } from "../graphql-foundation/typedDocument";
 import { FoundationGraphQlError } from "../shared/apollo/errorLink";
-import { fixture, mountStudio, workItem } from "./seam";
 import { openInspectorSection } from "./changesSurface";
+import { fixture, mountStudio, workItem } from "./seam";
 
 const TASK_ID = "cleanup-task";
 const URL = "https://github.com/ticketry-hq/ticketry/pull/1326";
@@ -63,6 +63,10 @@ function cleanupFixture() {
   return http;
 }
 
+async function openWorktreeSection(): Promise<void> {
+  await openInspectorSection("Worktree");
+}
+
 describe("overhaul acceptance - merged worktree cleanup", () => {
   it.each([
     ["pull_request_absent", "No pull request is mapped to this worktree."],
@@ -111,7 +115,7 @@ describe("overhaul acceptance - merged worktree cleanup", () => {
       },
     });
 
-    await openInspectorSection("Worktree");
+    await openWorktreeSection();
     expect(await screen.findByLabelText("Worktree cleanup status")).toHaveTextContent(reason);
     expect(screen.queryByRole("button", { name: "Cleanup local worktree" })).toBeNull();
     if (blocker === "checkout_dirty") {
@@ -179,7 +183,7 @@ describe("overhaul acceptance - merged worktree cleanup", () => {
       },
     });
 
-    await openInspectorSection("Worktree");
+    await openWorktreeSection();
     fireEvent.click(await screen.findByRole("button", { name: "Cleanup local worktree" }));
     expect(screen.getByRole("group", { name: "Confirm local worktree cleanup" })).toBeVisible();
     expect(operations).toHaveLength(0);
@@ -193,5 +197,79 @@ describe("overhaul acceptance - merged worktree cleanup", () => {
     await waitFor(() => expect(operations).toHaveLength(2));
     expect(operations[1]?.operationId).toBe(operations[0]?.operationId);
     expect(await screen.findByRole("status")).toHaveTextContent("Local worktree cleanup completed.");
+  });
+
+  it("[overhaul-354] owns cleanup confirmation focus, Escape, and one-shot submission", async () => {
+    const http = cleanupFixture();
+    let finish!: () => void;
+    const pending = new Promise<void>((resolve) => { finish = resolve; });
+    const cleanupOperation = vi.fn(async () => {
+      await pending;
+      return {
+        worktree_cleanup: {
+          __typename: "WorktreeDiscardResult",
+          removed: true,
+          task_id: TASK_ID,
+          top_level_task_id: TASK_ID,
+          branch: "wt/CODING-1326-cleanup",
+          reason: null,
+          status: {
+            __typename: "WorktreeStatusView",
+            kind: "none",
+            task_id: TASK_ID,
+            top_level_task_id: TASK_ID,
+            is_shared: false,
+            branch: null,
+            base_branch: null,
+            path: null,
+            state: null,
+            clean: null,
+            dirty: null,
+            ahead: null,
+            behind: null,
+            conflict: null,
+            checkout_present: null,
+            ephemeral: false,
+            reason: "no worktree for this Work Item",
+          },
+        },
+      } as never;
+    });
+    mountStudio({
+      http,
+      children: <TaskWorktreeChanges taskId={TASK_ID} active />,
+      graphQlExecute: async (document, variables) => {
+        const operation = documentOperationName(document);
+        if (operation === "WorktreeChanges") {
+          return { worktree_changes: mergedChanges() } as never;
+        }
+        if (operation === "WorktreeCleanup") return cleanupOperation();
+        return http.executeGraphQl(document, variables);
+      },
+    });
+
+    await openWorktreeSection();
+    const opener = await screen.findByRole("button", { name: "Cleanup local worktree" });
+    opener.focus();
+    fireEvent.click(opener);
+    const confirmation = screen.getByRole("group", { name: "Confirm local worktree cleanup" });
+    expect(screen.getByRole("button", { name: "Cancel" })).toHaveFocus();
+    fireEvent.keyDown(confirmation, { key: "Escape" });
+    expect(screen.queryByRole("group", { name: "Confirm local worktree cleanup" })).toBeNull();
+    expect(opener).toHaveFocus();
+
+    fireEvent.click(opener);
+    const confirm = screen.getByRole("button", { name: "Confirm cleanup" });
+    fireEvent.click(confirm);
+    fireEvent.click(confirm);
+    expect(cleanupOperation).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeDisabled();
+    fireEvent.keyDown(screen.getByRole("group", { name: "Confirm local worktree cleanup" }), { key: "Escape" });
+    expect(screen.getByRole("group", { name: "Confirm local worktree cleanup" })).toBeVisible();
+
+    await act(async () => { finish(); await pending; });
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Local worktree cleanup completed."));
+    expect(document.activeElement).not.toBe(confirm);
+    expect(screen.getByLabelText("Worktree lifecycle")).toHaveFocus();
   });
 });

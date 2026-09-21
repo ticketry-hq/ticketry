@@ -31,7 +31,7 @@ export function PaneResizeHandle({
     <PanelResizeHandle
       aria-label={label}
       aria-orientation="vertical"
-      className="w-px bg-pane-border hover:bg-focus-accent"
+      className="w-px bg-pane-border outline-none hover:bg-focus-accent focus-visible:bg-focus-accent focus-visible:ring-1 focus-visible:ring-focus-accent"
       data-testid={testId}
       style={RESIZE_HANDLE_STYLE}
     >

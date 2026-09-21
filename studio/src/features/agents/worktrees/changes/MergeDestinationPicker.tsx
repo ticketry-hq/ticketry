@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 type Destination = { branch: string; checkout?: string | null };
 
@@ -10,6 +10,7 @@ export function MergeDestinationPicker({ destinations, sourceBranch, value, disa
   onSelect: (branch: string) => void;
 }) {
   const id = useId();
+  const openRef = useRef(false);
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [highlighted, setHighlighted] = useState(0);
@@ -18,18 +19,31 @@ export function MergeDestinationPicker({ destinations, sourceBranch, value, disa
   );
   const activeIndex = Math.min(highlighted, matches.length - 1);
   const show = () => {
+    if (disabled) return;
     setSearch("");
     setHighlighted(0);
+    openRef.current = true;
     setOpen(true);
   };
   const select = (branch: string) => {
+    if (!openRef.current || disabled) return;
+    openRef.current = false;
     setOpen(false);
     onSelect(branch);
   };
 
+  useEffect(() => {
+    if (!disabled) return;
+    openRef.current = false;
+    setOpen(false);
+  }, [disabled]);
+
   return (
     <div className="relative mt-2" onBlur={(event) => {
-      if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false);
+      if (!event.currentTarget.contains(event.relatedTarget)) {
+        openRef.current = false;
+        setOpen(false);
+      }
     }}>
       <input
         role="combobox"
@@ -46,18 +60,32 @@ export function MergeDestinationPicker({ destinations, sourceBranch, value, disa
         className="w-full min-w-0 border border-pane-border bg-pane-bg pl-2 pr-6 py-1 text-xs text-text-primary disabled:opacity-50"
         onFocus={show}
         onClick={() => { if (!open) show(); }}
-        onChange={(event) => { setSearch(event.target.value); setHighlighted(0); setOpen(true); }}
+        onChange={(event) => {
+          setSearch(event.target.value);
+          setHighlighted(0);
+          openRef.current = true;
+          setOpen(true);
+        }}
         onKeyDown={(event) => {
-          if (event.key === "Escape" && open) { event.stopPropagation(); setOpen(false); }
+          if (event.key === "Escape" && openRef.current) {
+            event.preventDefault();
+            event.stopPropagation();
+            openRef.current = false;
+            setOpen(false);
+            return;
+          }
           if (event.key === "ArrowDown" || event.key === "ArrowUp") {
             event.preventDefault();
-            if (!open) show();
+            event.stopPropagation();
+            if (!openRef.current) show();
             else setHighlighted(Math.max(0, Math.min(matches.length - 1,
               activeIndex + (event.key === "ArrowDown" ? 1 : -1))));
           }
-          if (event.key === "Enter" && open) {
+          if (event.key === "Enter" && openRef.current) {
             event.preventDefault();
-            if (matches[activeIndex]) select(matches[activeIndex].branch);
+            event.stopPropagation();
+            const match = matches[activeIndex];
+            if (match) select(match.branch);
           }
         }}
       />

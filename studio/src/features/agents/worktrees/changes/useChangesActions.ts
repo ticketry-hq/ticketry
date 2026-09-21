@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { changesPrimaryAction, type ChangesPrimaryAction } from "./changesPrimaryAction";
 import type { PullRequestStatusValue } from "./PullRequestStatus";
@@ -57,6 +57,8 @@ export function useChangesActions(commands: ChangesCommands): ChangesActionsCont
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [confirmingStack, setConfirmingStack] = useState(false);
+  // State updates lag a second click on the same frame; the ref does not.
+  const runningRef = useRef(false);
 
   const run = async (
     name: ChangesActionName,
@@ -64,6 +66,8 @@ export function useChangesActions(commands: ChangesCommands): ChangesActionsCont
     failure: string,
     success?: string,
   ) => {
+    if (runningRef.current) return;
+    runningRef.current = true;
     setBusy(name);
     setError(null);
     setNotice(null);
@@ -73,6 +77,7 @@ export function useChangesActions(commands: ChangesCommands): ChangesActionsCont
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : failure);
     } finally {
+      runningRef.current = false;
       setBusy(null);
     }
   };
@@ -91,8 +96,9 @@ export function useChangesActions(commands: ChangesCommands): ChangesActionsCont
     await run("pull-request", action, "Pull-request creation failed.");
   };
 
+  /** The confirmation stays open, with Cancel locked, until the stack settles. */
   const runStack = async () => {
-    setConfirmingStack(false);
+    if (runningRef.current) return;
     if (!commands.onStack) {
       setError("Stacked action is unavailable.");
       return;
@@ -118,6 +124,7 @@ export function useChangesActions(commands: ChangesCommands): ChangesActionsCont
     setConfirmingStack,
     runStack,
     runPrimary: () => {
+      if (busy || runningRef.current) return;
       if (primary.kind === "stack") setConfirmingStack(true);
       else if (primary.kind === "push") void run("push", commands.onPush, "Push failed.");
       else if (primary.kind === "create-pull-request") {

@@ -1900,6 +1900,164 @@ test.describe("complete browser application", () => {
     }
   });
 
+  test("reviews a long diff and resizes Changes panes entirely by keyboard", async ({
+    page,
+  }) => {
+    const readmePath = join(fixture.folder, "README.md");
+    const original = await readFile(readmePath, "utf8");
+    const extraPaths = Array.from({ length: 36 }, (_, index) =>
+      join(fixture.folder, `browser-review-${String(index).padStart(2, "0")}.txt`)
+    );
+    const longLine = `horizontal-${"0123456789".repeat(40)}`;
+    const longPatch = Array.from({ length: 120 }, (_, index) =>
+      `browser review line ${String(index).padStart(3, "0")} ${longLine}`
+    ).join("\n");
+    await writeFile(readmePath, `${original}${longPatch}\n`);
+    await Promise.all(extraPaths.map((path, index) =>
+      writeFile(path, `browser review fixture ${index}\n`)
+    ));
+
+    try {
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await openModule(page, names.module);
+      await page.getByRole("button", { name: "Open module Changes" }).click();
+
+      const files = page.getByRole("list", { name: "Module changed files" });
+      const firstFile = files.getByRole("button", {
+        name: "browser-review-00.txt",
+      });
+      await firstFile.focus();
+      await expect(firstFile).toBeFocused();
+      await page.keyboard.press("End");
+      const lastFile = files.getByRole("button", {
+        name: "browser-review-35.txt",
+      });
+      await expect(lastFile).toBeFocused();
+      expect(await lastFile.evaluate((element) => getComputedStyle(element).boxShadow))
+        .not.toBe("none");
+      const fileScroll = page.getByTestId("changes-files-scroll");
+      expect(await fileScroll.evaluate((element) => element.scrollTop))
+        .toBeGreaterThan(0);
+      const resize = page.getByRole("separator", {
+        name: "Resize changed files and diff",
+      });
+      await page.keyboard.press("Tab");
+      await expect(resize).toBeFocused();
+      await page.keyboard.press("Shift+Tab");
+      await expect(lastFile).toBeFocused();
+      const readme = files.getByRole("button", { name: "README.md" });
+      await readme.focus();
+      await page.keyboard.press("Enter");
+      await expect(readme).toHaveAttribute("aria-pressed", "true");
+      await expect(readme).toBeFocused();
+
+      const diff = page.getByRole("region", { name: "File diff content" });
+      await expect(diff).toBeVisible();
+      await expect(diff.getByTestId("raw-patch")).toHaveCount(0);
+      await expect(diff.getByTestId("patch-viewer")).toBeVisible();
+      await diff.focus();
+      await expect(diff).toBeFocused();
+      await page.keyboard.press("PageDown");
+      expect(await diff.evaluate((element) => getComputedStyle(element).boxShadow))
+        .not.toBe("none");
+      await expect.poll(() => diff.evaluate((element) => element.scrollTop))
+        .toBeGreaterThan(0);
+      await page.keyboard.press("ArrowRight");
+      await expect.poll(() => diff.evaluate((element) => element.scrollLeft))
+        .toBeGreaterThan(0);
+      await page.keyboard.press("Home");
+      await expect.poll(() => diff.evaluate((element) => element.scrollTop))
+        .toBe(0);
+      await page.keyboard.press("End");
+      await expect.poll(() => diff.evaluate((element) =>
+        element.scrollHeight - element.clientHeight - element.scrollTop
+      )).toBe(0);
+
+      await page.keyboard.press("Tab");
+      const back = page.getByRole("button", { name: "Back to planning workspace" });
+      await expect(back).toBeFocused();
+      await page.keyboard.press("Shift+Tab");
+      await expect(diff).toBeFocused();
+
+      await resize.focus();
+      await expect(resize).toBeFocused();
+      const before = Number(await resize.getAttribute("aria-valuenow"));
+      const filesColumn = page.getByTestId("changes-files-column");
+      const ordinaryWidthBefore = (await filesColumn.boundingBox())!.width;
+      const minimum = Number(await resize.getAttribute("aria-valuemin"));
+      const maximum = Number(await resize.getAttribute("aria-valuemax"));
+      await page.keyboard.press("ArrowRight");
+      expect(await resize.evaluate((element) => getComputedStyle(element).boxShadow))
+        .not.toBe("none");
+      await expect.poll(async () => Number(await resize.getAttribute("aria-valuenow")))
+        .not.toBe(before);
+      await expect.poll(async () => (await filesColumn.boundingBox())!.width)
+        .not.toBe(ordinaryWidthBefore);
+      for (let press = 0; press < 50; press += 1) {
+        await page.keyboard.press("ArrowRight");
+      }
+      const ordinaryBound = Number(await resize.getAttribute("aria-valuenow"));
+      expect(ordinaryBound).toBeGreaterThanOrEqual(minimum);
+      expect(ordinaryBound).toBeLessThanOrEqual(maximum);
+      await page.keyboard.press("Home");
+      const homeBound = Number(await resize.getAttribute("aria-valuenow"));
+      expect(homeBound).toBeGreaterThanOrEqual(minimum);
+      expect(homeBound).toBeLessThanOrEqual(ordinaryBound);
+      await page.keyboard.press("End");
+      const endBound = Number(await resize.getAttribute("aria-valuenow"));
+      expect(endBound).toBeGreaterThanOrEqual(homeBound);
+      expect(endBound).toBeLessThanOrEqual(maximum);
+
+      await page.setViewportSize({ width: 700, height: 700 });
+      await expect(resize).toBeVisible();
+      await resize.focus();
+      const narrowWidthBefore = (await filesColumn.boundingBox())!.width;
+      for (let press = 0; press < 50; press += 1) {
+        await page.keyboard.press("ArrowLeft");
+      }
+      const narrowBound = Number(await resize.getAttribute("aria-valuenow"));
+      expect(narrowBound).toBeGreaterThanOrEqual(minimum);
+      expect(narrowBound).toBeLessThanOrEqual(maximum);
+      expect((await filesColumn.boundingBox())!.width).not.toBe(narrowWidthBefore);
+      await expect(resize).toBeFocused();
+    } finally {
+      await writeFile(readmePath, original);
+      await Promise.all(extraPaths.map((path) => rm(path, { force: true })));
+    }
+  });
+
+  test("keeps keyboard scrolling on the raw diff fallback", async ({ page }) => {
+    const readmePath = join(fixture.folder, "README.md");
+    const original = await readFile(readmePath, "utf8");
+    const longLine = `raw-horizontal-${"abcdefghij".repeat(40)}`;
+    const longPatch = Array.from({ length: 100 }, (_, index) =>
+      `raw fallback line ${String(index).padStart(3, "0")} ${longLine}`
+    ).join("\n");
+    await writeFile(readmePath, `${original}${longPatch}\n`);
+
+    try {
+      await page.route("**/src/features/agents/worktrees/changes/PatchViewer.tsx*", (route) =>
+        route.abort()
+      );
+      await openModule(page, names.module);
+      await page.getByRole("button", { name: "Open module Changes" }).click();
+      await page.getByRole("button", { name: "README.md" }).click();
+
+      const diff = page.getByRole("region", { name: "File diff content" });
+      await expect(diff.getByTestId("raw-patch")).toBeVisible();
+      await diff.focus();
+      await page.keyboard.press("PageDown");
+      await page.keyboard.press("ArrowRight");
+      await expect.poll(() => diff.evaluate((element) => element.scrollLeft))
+        .toBeGreaterThan(0);
+      await expect.poll(() => diff.evaluate((element) => element.scrollTop))
+        .toBeGreaterThan(0);
+      await expect(diff).toBeFocused();
+    } finally {
+      await writeFile(readmePath, original);
+    }
+  });
+
   test("persists and restores Modules pane visibility", async ({
     page,
   }) => {

@@ -7,7 +7,12 @@ export const KEYMAP_CONTEXT_PRECEDENCE = [
   "global",
 ] as const;
 
-export type KeymapContext = (typeof KEYMAP_CONTEXT_PRECEDENCE)[number];
+export const KEYMAP_CONTEXTS = [
+  ...KEYMAP_CONTEXT_PRECEDENCE,
+  "changes",
+] as const;
+
+export type KeymapContext = (typeof KEYMAP_CONTEXTS)[number];
 
 export interface KeyChord {
   key: string;
@@ -108,6 +113,56 @@ export const DEFAULT_BINDINGS: readonly BindingDefinition[] = [
     chord: chord("Enter"),
     configurable: false,
   },
+  {
+    context: "changes",
+    actionId: "changes.checkout.previous",
+    chord: chord("ArrowUp"),
+    configurable: false,
+  },
+  {
+    context: "changes",
+    actionId: "changes.checkout.next",
+    chord: chord("ArrowDown"),
+    configurable: false,
+  },
+  {
+    context: "changes",
+    actionId: "changes.checkout.first",
+    chord: chord("Home"),
+    configurable: false,
+  },
+  {
+    context: "changes",
+    actionId: "changes.checkout.last",
+    chord: chord("End"),
+    configurable: false,
+  },
+  {
+    context: "changes",
+    actionId: "changes.checkout.select",
+    chord: chord("Enter"),
+    fixedAliases: [chord(" ")],
+    configurable: false,
+  },
+  {
+    context: "changes",
+    actionId: "changes.checkout.cancel",
+    chord: chord("Escape"),
+    configurable: false,
+  },
+  { context: "changes", actionId: "changes.file.previous", chord: chord("ArrowUp"), configurable: false },
+  { context: "changes", actionId: "changes.file.next", chord: chord("ArrowDown"), configurable: false },
+  { context: "changes", actionId: "changes.file.first", chord: chord("Home"), configurable: false },
+  { context: "changes", actionId: "changes.file.last", chord: chord("End"), configurable: false },
+  {
+    context: "changes",
+    actionId: "changes.file.activate",
+    chord: chord("Enter"),
+    fixedAliases: [chord(" ")],
+    configurable: false,
+  },
+  { context: "changes", actionId: "changes.file.expand", chord: chord("ArrowRight"), configurable: false },
+  { context: "changes", actionId: "changes.file.collapse", chord: chord("ArrowLeft"), configurable: false },
   { context: "capture", actionId: "cycle-terminal-forward", chord: chord("\\", { meta: true }) },
   {
     context: "capture",

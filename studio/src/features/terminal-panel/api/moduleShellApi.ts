@@ -16,6 +16,7 @@ import {
   CreateModuleShellDocument,
   ModuleShellSessionsDocument,
 } from "../../agents/terminal";
+import { SCRATCH_RUN_TASK_ID } from "../../agents/types";
 
 const DEFAULT_COLUMNS = 80;
 const DEFAULT_ROWS = 24;
@@ -75,8 +76,11 @@ export async function createModuleShell(moduleId: string): Promise<string> {
 export async function listModuleShells(moduleId: string): Promise<ModuleShell[]> {
   return studioRuntime().readWorkTracker({
     graphQl: async (execute) => {
+      // Work Item shells share this module and the "shell" scope, so the
+      // scratch task id is what keeps them out of the module's tab strip.
       const response = await execute(ModuleShellSessionsDocument, {
         moduleId,
+        scratchTaskId: SCRATCH_RUN_TASK_ID,
         limit: SHELL_LIST_LIMIT,
       });
       return response.terminal_sessions.sessions.map((session) => ({

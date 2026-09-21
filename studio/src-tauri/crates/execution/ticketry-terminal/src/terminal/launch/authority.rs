@@ -24,7 +24,7 @@ impl TerminalLaunchService {
         &self,
         mut request: CreateTerminalSession,
     ) -> Result<CreateTerminalSession, TerminalLaunchError> {
-        if request.kind == TerminalLaunchKind::Shell {
+        if request.kind.is_shell() {
             trace::admitted(trace::AUTHORITY_RESOLVED)
                 .with("authorityRequired", false)
                 .with("promptConstructed", false)

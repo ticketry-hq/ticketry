@@ -135,6 +135,7 @@ export {
 } from "./internal/terminalInputFocus";
 export { launchFailureMessage } from "./internal/launchFailure";
 export { launchDefaultAgent } from "./internal/launchDefaultAgent";
+export { createWorkItemShell } from "./workItemShell";
 export { refreshTerminalHoldings } from "./refresh";
 export {
   CreateModuleShellDocument,

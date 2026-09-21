@@ -115,6 +115,55 @@ impl TerminalLaunchService {
         .await
     }
 
+    /// A plain login shell for one Work Item, opened in that item's worktree.
+    /// Project and module ancestry come from the Work Item row, never the
+    /// caller, so the shell lands exactly where that item's agent runs do.
+    pub async fn create_task_shell(
+        &self,
+        client_request_id: String,
+        issue_id: String,
+        module_id: String,
+        columns: u16,
+        rows: u16,
+    ) -> Result<session::Model, TerminalLaunchError> {
+        let issue = issue::Entity::find_by_id(compact(&issue_id))
+            .one(&self.database)
+            .await
+            .map_err(storage)?
+            .filter(|row| !row.is_archived && row.r#type != "module")
+            .ok_or_else(|| {
+                TerminalLaunchError::new(
+                    TerminalLaunchErrorCode::InvalidRequest,
+                    "The shell Work Item is unavailable.",
+                )
+            })?;
+        // The caller's module is checked against the Work Item's own
+        // ancestry by the same invariant every task launch passes.
+        self.create(CreateTerminalSession {
+            client_request_id,
+            project_id: issue.project_id,
+            issue_id: issue.id.clone(),
+            module_id,
+            target_id: issue.id.clone(),
+            kind: ticketry_launch::TerminalLaunchKind::TaskShell,
+            provider: None,
+            profile: None,
+            model: None,
+            reasoning: None,
+            policy_reference: None,
+            prompt: None,
+            resume_from_agent_run_id: None,
+            automation_attempt_id: None,
+            required_skills: Vec::new(),
+            working_directory_identity: format!("task:{}", compact(&issue.id)),
+            design_directory_identity: None,
+            document_relative_path: None,
+            columns,
+            rows,
+        })
+        .await
+    }
+
     pub async fn prepare(
         &self,
         request: CreateTerminalSession,
@@ -339,7 +388,8 @@ impl TerminalLaunchService {
             }
             ticketry_launch::TerminalLaunchKind::Task
             | ticketry_launch::TerminalLaunchKind::DocumentChat
-            | ticketry_launch::TerminalLaunchKind::Automation => {
+            | ticketry_launch::TerminalLaunchKind::Automation
+            | ticketry_launch::TerminalLaunchKind::TaskShell => {
                 let owner = ticketry_workspace_runtime::status::owner::resolve(
                     &self.database,
                     &request.issue_id,
@@ -363,7 +413,8 @@ impl TerminalLaunchService {
         }
         let expected_target = match request.kind {
             ticketry_launch::TerminalLaunchKind::Task
-            | ticketry_launch::TerminalLaunchKind::Automation => compact(&request.issue_id),
+            | ticketry_launch::TerminalLaunchKind::Automation
+            | ticketry_launch::TerminalLaunchKind::TaskShell => compact(&request.issue_id),
             ticketry_launch::TerminalLaunchKind::Planning
             | ticketry_launch::TerminalLaunchKind::Instant
             | ticketry_launch::TerminalLaunchKind::Shell => compact(&request.module_id),
@@ -377,7 +428,8 @@ impl TerminalLaunchService {
         }
         let expected_workspace = match request.kind {
             ticketry_launch::TerminalLaunchKind::Task
-            | ticketry_launch::TerminalLaunchKind::Automation => {
+            | ticketry_launch::TerminalLaunchKind::Automation
+            | ticketry_launch::TerminalLaunchKind::TaskShell => {
                 format!("task:{}", compact(&request.issue_id))
             }
             ticketry_launch::TerminalLaunchKind::Planning
@@ -429,8 +481,7 @@ impl TerminalLaunchService {
 fn interactive_launch_surface(
     request: &CreateTerminalSession,
 ) -> Option<trace::LaunchRequestSurface> {
-    if request.kind == ticketry_launch::TerminalLaunchKind::Shell
-        || request.resume_from_agent_run_id.is_some()
+    if request.kind.is_shell() || request.resume_from_agent_run_id.is_some()
     {
         return None;
     }

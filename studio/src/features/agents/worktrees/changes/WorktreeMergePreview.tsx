@@ -1,6 +1,7 @@
 import { useQuery } from "@apollo/client/react";
 import { useRef, useState } from "react";
 
+import { useStudioStore } from "../../../projects";
 import { studioApolloClient } from "../../../../shared/apollo/client";
 import { ModuleVersionControlDocument } from "../generated/moduleVersionControl.documents";
 import { WorktreeChangesDocument } from "../generated/worktreeChanges.documents";
@@ -13,9 +14,25 @@ import {
   mergeTaskWorktree,
 } from "../internal/changesTransport";
 import { newOperationId } from "../internal/operationId";
+import { buildMergeConflictPrompt } from "./mergeConflictPrompt";
 import { MergeDestinationPicker } from "./MergeDestinationPicker";
 
-export function WorktreeMergePreview({ taskId, active }: { taskId: string; active: boolean }) {
+export function WorktreeMergePreview({
+  taskId,
+  moduleId = null,
+  active,
+  onResolveConflicts,
+}: {
+  taskId: string;
+  moduleId?: string | null;
+  active: boolean;
+  onResolveConflicts?: (request: {
+    projectId: string;
+    moduleId: string;
+    initialPrompt: string;
+  }) => void;
+}) {
+  const projectId = useStudioStore((state) => state.selectedProjectId);
   const [selection, setSelection] = useState<{ taskId: string; branch: string } | null>(null);
   const destinationBranch = selection?.taskId === taskId ? selection.branch : null;
   const [busy, setBusy] = useState<"merge" | "finish" | "abort" | "refresh" | null>(null);
@@ -113,6 +130,24 @@ export function WorktreeMergePreview({ taskId, active }: { taskId: string; activ
     }
   };
 
+  // The conflicts live in the destination checkout, not in the task worktree,
+  // so the agent is launched against the module folder (Instant scope) rather
+  // than as a task-bound run.
+  const resolveConflicts = () => {
+    if (!recovery || !projectId || !moduleId || !recovery.destination_checkout) return;
+    onResolveConflicts?.({
+      projectId,
+      moduleId,
+      initialPrompt: buildMergeConflictPrompt({
+        taskId,
+        sourceBranch: recovery.source_branch,
+        destinationBranch: recovery.destination_branch,
+        destinationCheckout: recovery.destination_checkout,
+        unmergedPaths: recovery.unmerged_paths.map(({ path }) => path),
+      }),
+    });
+  };
+
   const refreshMergeState = async () => {
     setBusy("refresh");
     setError(null);
@@ -152,6 +187,16 @@ export function WorktreeMergePreview({ taskId, active }: { taskId: string; activ
           {recovery.reason ? <p className="mt-2 text-xs text-text-muted">{recovery.reason}</p> : null}
           {recovery.outcome === "conflicted" ? (
             <div className="mt-2 flex flex-wrap gap-2">
+              {onResolveConflicts && projectId && moduleId && recovery.destination_checkout ? (
+                <button
+                  type="button"
+                  disabled={busy !== null}
+                  onClick={resolveConflicts}
+                  className="border border-pane-border px-2 py-1 text-text-primary disabled:opacity-50"
+                >
+                  Resolve merge conflicts
+                </button>
+              ) : null}
               <button
                 type="button"
                 disabled={recovery.unmerged_paths.length > 0 || busy !== null || Boolean(recoveryQuery.error)}

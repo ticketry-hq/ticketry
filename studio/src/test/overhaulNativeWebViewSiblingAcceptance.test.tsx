@@ -66,7 +66,12 @@ function NativeSpikeHarness() {
       }}>
         Open spike modal
       </button>
-      <IssueActionsMenu hasSubtasks={false} onDelete={async () => {}} />
+      <IssueActionsMenu
+        taskId="task-spike"
+        moduleId={null}
+        hasSubtasks={false}
+        onDelete={async () => {}}
+      />
       {modalOpen ? (
         <ModalShell title="Spike modal" onClose={() => {
           useModalStore.setState({ modalStack: [] });

@@ -285,7 +285,7 @@ impl TerminalLaunchRuntime for InteractiveTerminalLaunchRuntime {
                     "Stored shell launch material contains agent metadata.",
                 ));
             }
-            let working_directory = match authority
+            let module_folder = match authority
                 .paths
                 .preflight_module_folder(&material.module_id)
                 .await
@@ -305,6 +305,32 @@ impl TerminalLaunchRuntime for InteractiveTerminalLaunchRuntime {
                         refusal.message(),
                     ));
                 }
+            };
+            // A task shell opens where the Work Item's agent runs work: its
+            // worktree, resolved by the same authority a task launch uses.
+            let working_directory = if material
+                .working_directory_identity
+                .starts_with("task:")
+            {
+                let paths = authority
+                    .paths
+                    .resolve(ticketry_launch::LaunchPathsRequest {
+                        version: 1,
+                        scope: ticketry_launch::LaunchScope::Task,
+                        agent_run_id: material.agent_run_id.clone(),
+                        project_id: material.project_id.clone(),
+                        module_id: Some(material.module_id.clone()),
+                        task_id: Some(material.issue_id.clone()),
+                        document_id: None,
+                    })
+                    .await
+                    .map_err(|_| invalid_launch("The terminal launch directory is unavailable."))?;
+                paths
+                    .working_directory
+                    .map(PathBuf::from)
+                    .ok_or_else(|| invalid_launch("No local folder is configured for this launch."))?
+            } else {
+                module_folder
             };
             let command = crate::terminal::launch::approved_login_shell(working_directory)?;
             return create_tmux_runtime(material, checkpoint, command).await;
@@ -467,8 +493,7 @@ fn require_provider_control(
     kind: ticketry_launch::TerminalLaunchKind,
     mcp_data_directory: Option<&Path>,
 ) -> Result<(), TerminalLaunchError> {
-    if kind != ticketry_launch::TerminalLaunchKind::Shell
-        && !mcp_data_directory.is_some_and(Path::is_absolute)
+    if !kind.is_shell() && !mcp_data_directory.is_some_and(Path::is_absolute)
     {
         return Err(TerminalLaunchError::new(
             TerminalLaunchErrorCode::RuntimeUnavailable,
@@ -553,6 +578,7 @@ mod provider_control_tests {
     #[test]
     fn missing_listener_does_not_block_local_shells() {
         assert!(require_provider_control(TerminalLaunchKind::Shell, None).is_ok());
+        assert!(require_provider_control(TerminalLaunchKind::TaskShell, None).is_ok());
     }
 
     #[test]

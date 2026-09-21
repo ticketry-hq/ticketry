@@ -9,7 +9,7 @@ import { ModuleFileDiffDocument } from "../generated/moduleFileDiff.documents";
 import { WorktreeFileDiffDocument } from "../generated/worktreeFileDiff.documents";
 import { ChangedFilesList } from "./ChangedFilesList";
 import { changedFileBadge } from "./changedFileBadge";
-import type { ChangedFileRow } from "./changedFileGroups";
+import type { ChangedFileRow } from "./changedFileTree";
 import { FileDiffSurface } from "./FileDiffSurface";
 
 type ReviewSelection = { selectedByCheckout: Record<string, string | null> };

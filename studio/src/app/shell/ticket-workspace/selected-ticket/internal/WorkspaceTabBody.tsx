@@ -31,6 +31,7 @@ import {
   useChangesCheckoutSelection,
 } from "./openChangesWorkspace";
 import { DetailsSurfaceActiveContext } from "./detailsSurfaceContext";
+import { useModalStore } from "../../../../../app/modal/modalStore";
 
 const WorkspaceDocument = lazy(async () => ({
   default: (await import("../documents/WorkspaceDocument")).WorkspaceDocument,
@@ -88,6 +89,7 @@ export function WorkspaceTabBody({
   onEngageTab: (tab: TaskWorkspaceTabIdentity) => void;
   onSetEditViewZone: (zone: "active-tab-body") => void;
 }) {
+  const pushModal = useModalStore((state) => state.pushModal);
   const [pendingNativeHides, setPendingNativeHides] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
@@ -193,6 +195,10 @@ export function WorkspaceTabBody({
             active={activeKind === "changes"}
             onOpenModule={openModuleChanges}
             onOpenTask={openTaskChanges}
+            onResolveConflicts={(request) => pushModal({
+              type: "agent-picker",
+              payload: { mode: "instant", ...request },
+            })}
           />
         )}
       </div>

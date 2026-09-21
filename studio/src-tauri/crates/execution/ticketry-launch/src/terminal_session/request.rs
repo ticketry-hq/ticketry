@@ -10,6 +10,9 @@ pub enum TerminalLaunchKind {
     DocumentChat,
     Automation,
     Shell,
+    /// A plain login shell bound to one Work Item, opened in that item's
+    /// worktree. It is a durable Agent Run with no provider behind it.
+    TaskShell,
 }
 
 impl TerminalLaunchKind {
@@ -21,6 +24,7 @@ impl TerminalLaunchKind {
             "document_chat" => Ok(Self::DocumentChat),
             "automation" => Ok(Self::Automation),
             "shell" => Ok(Self::Shell),
+            "task_shell" => Ok(Self::TaskShell),
             _ => Err(invalid("The terminal launch kind is unsupported.")),
         }
     }
@@ -31,7 +35,10 @@ impl TerminalLaunchKind {
             Self::Planning => "plan",
             Self::Instant => "instant",
             Self::DocumentChat => "docchat",
-            Self::Shell => "shell",
+            // A task shell is durably the same agentless scope a module
+            // shell is. Only its workspace identity differs, so every
+            // provider-free rule already written for "shell" applies.
+            Self::Shell | Self::TaskShell => "shell",
         }
     }
 
@@ -43,7 +50,13 @@ impl TerminalLaunchKind {
             Self::DocumentChat => "document",
             Self::Automation => "automation",
             Self::Shell => "shell",
+            Self::TaskShell => "task_shell",
         }
+    }
+
+    /// Whether this kind runs a plain shell instead of a provider agent.
+    pub fn is_shell(self) -> bool {
+        matches!(self, Self::Shell | Self::TaskShell)
     }
 }
 
@@ -106,7 +119,7 @@ impl CreateTerminalSession {
         }) {
             return Err(invalid("A required skill identity is invalid."));
         }
-        if self.kind == TerminalLaunchKind::Shell {
+        if self.kind.is_shell() {
             if self.provider.is_some()
                 || self.model.is_some()
                 || self.reasoning.is_some()
@@ -140,7 +153,8 @@ impl CreateTerminalSession {
                 ticketry_documents::SCRATCH_TASK_ID.to_owned()
             }
             TerminalLaunchKind::Shell => ticketry_documents::SCRATCH_TASK_ID.to_owned(),
-            TerminalLaunchKind::Task
+            TerminalLaunchKind::TaskShell
+            | TerminalLaunchKind::Task
             | TerminalLaunchKind::DocumentChat
             | TerminalLaunchKind::Automation => self.issue_id.clone(),
         }
@@ -200,6 +214,46 @@ mod tests {
         let mut resume = shell();
         resume.resume_from_agent_run_id = Some("old-shell".to_owned());
         assert!(resume.validate().is_err());
+    }
+
+    fn task_shell() -> CreateTerminalSession {
+        let mut request = shell();
+        request.kind = TerminalLaunchKind::TaskShell;
+        request.issue_id = "task".to_owned();
+        request.target_id = "task".to_owned();
+        request.working_directory_identity = "task:task".to_owned();
+        request
+    }
+
+    #[test]
+    fn a_task_shell_is_a_shell_bound_to_its_work_item() {
+        let request = task_shell();
+        assert!(request.validate().is_ok());
+        assert!(request.kind.is_shell());
+        // The run belongs to the Work Item, not the scratch bucket a
+        // module shell lands in.
+        assert_eq!(request.terminal_task_id(), "task");
+        assert_eq!(shell().terminal_task_id(), ticketry_documents::SCRATCH_TASK_ID);
+        assert_eq!(
+            TerminalLaunchKind::parse("task_shell").expect("parse task_shell"),
+            TerminalLaunchKind::TaskShell
+        );
+        assert_eq!(request.kind.scope(), shell().kind.scope());
+    }
+
+    #[test]
+    fn a_task_shell_accepts_no_agent_metadata() {
+        for mutate in [
+            (|request: &mut CreateTerminalSession| request.provider = Some("codex".to_owned()))
+                as fn(&mut CreateTerminalSession),
+            |request| request.prompt = Some("pretend this is an agent".to_owned()),
+            |request| request.resume_from_agent_run_id = Some("old-run".to_owned()),
+            |request| request.required_skills = vec!["tdd".to_owned()],
+        ] {
+            let mut request = task_shell();
+            mutate(&mut request);
+            assert!(request.validate().is_err());
+        }
     }
 
     #[test]

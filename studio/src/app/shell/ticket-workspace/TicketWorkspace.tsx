@@ -92,7 +92,14 @@ export function TicketWorkspace({
                 </Panel>
               </PanelGroup>
             </div>
-            {changesActive ? <ChangesWorkspace /> : null}
+            {changesActive ? (
+              <ChangesWorkspace
+                onResolveConflicts={(request) => pushModal({
+                  type: "agent-picker",
+                  payload: { mode: "instant", ...request },
+                })}
+              />
+            ) : null}
           </>
         )}
       </div>

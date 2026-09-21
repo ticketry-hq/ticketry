@@ -92,7 +92,7 @@ pub(super) async fn launch_paths(
         TerminalLaunchKind::Planning => LaunchScope::Plan,
         TerminalLaunchKind::Instant => LaunchScope::Instant,
         TerminalLaunchKind::DocumentChat => LaunchScope::Docchat,
-        TerminalLaunchKind::Shell => {
+        TerminalLaunchKind::Shell | TerminalLaunchKind::TaskShell => {
             return Err(LaunchAuthorityError::unresolvable(
                 "A shell launch has no design directory.",
             ))

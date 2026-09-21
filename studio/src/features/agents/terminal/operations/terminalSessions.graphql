@@ -12,10 +12,18 @@ fragment TerminalSessionFields on AgentTerminalSessions {
   }
 }
 
-query ModuleShellSessions($moduleId: String!, $limit: Int!) {
+# A Work Item shell is also scope "shell" on the same module, so the scratch
+# task id is what separates a module shell from one. The caller binds it from
+# SCRATCH_RUN_TASK_ID.
+query ModuleShellSessions(
+  $moduleId: String!
+  $scratchTaskId: String!
+  $limit: Int!
+) {
   terminal_sessions: agentTerminalSessions(
     filters: {
       moduleId: { eq: $moduleId }
+      taskId: { eq: $scratchTaskId }
       scope: { eq: "shell" }
       terminatedAt: { is_null: true }
     }
@@ -154,6 +162,25 @@ mutation CreateModuleShell(
     client_request_id: $clientRequestId
     module_id: $moduleId
     kind: "shell"
+    columns: $columns
+    rows: $rows
+  ) {
+    ...TerminalSessionFields
+  }
+}
+
+mutation CreateWorkItemShell(
+  $clientRequestId: String!
+  $issueId: String!
+  $moduleId: String!
+  $columns: Int!
+  $rows: Int!
+) {
+  terminal_session: terminal_session_create(
+    client_request_id: $clientRequestId
+    issue_id: $issueId
+    module_id: $moduleId
+    kind: "task_shell"
     columns: $columns
     rows: $rows
   ) {

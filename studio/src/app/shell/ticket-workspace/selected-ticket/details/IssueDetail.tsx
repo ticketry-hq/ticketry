@@ -412,6 +412,8 @@ function IssueDetailContent({ issueId, detailsVisible }: { issueId: string; deta
           goEpic={goEpic}
           actions={
             <IssueActionsMenu
+              taskId={task.id}
+              moduleId={epic?.id ?? selectedModuleId}
               hasSubtasks={task.sub_issues_count > 0}
               onDelete={onDelete}
             />

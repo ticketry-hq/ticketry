@@ -58,7 +58,7 @@ impl InteractiveLaunchAuthority for LaunchAuthorityService {
         &self,
         request: &CreateTerminalSession,
     ) -> Result<ResolvedLaunchMaterial, LaunchAuthorityError> {
-        if request.kind == TerminalLaunchKind::Shell {
+        if request.kind.is_shell() {
             return Err(LaunchAuthorityError::unresolvable(
                 "A shell launch carries no agent material to resolve.",
             ));
@@ -73,7 +73,9 @@ impl InteractiveLaunchAuthority for LaunchAuthorityService {
                 TerminalLaunchKind::Planning => self.planning(request).await,
                 TerminalLaunchKind::Instant => self.instant(request).await,
                 TerminalLaunchKind::DocumentChat => self.document_chat(request).await,
-                TerminalLaunchKind::Shell => unreachable!("rejected above"),
+                TerminalLaunchKind::Shell | TerminalLaunchKind::TaskShell => {
+                    unreachable!("rejected above")
+                }
             }?
         };
         if material.provider.as_deref() == Some("codex") {

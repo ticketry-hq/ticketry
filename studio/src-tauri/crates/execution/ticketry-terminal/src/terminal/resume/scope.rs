@@ -41,7 +41,8 @@ impl ResumeScope {
             },
             TerminalLaunchKind::Planning
             | TerminalLaunchKind::Instant
-            | TerminalLaunchKind::Shell => Self::Scratch {
+            | TerminalLaunchKind::Shell
+            | TerminalLaunchKind::TaskShell => Self::Scratch {
                 project_id: compact(&request.project_id),
                 module_id: compact(&request.module_id),
             },

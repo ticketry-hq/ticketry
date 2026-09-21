@@ -30,12 +30,18 @@ export function TaskWorktreeChanges({
   active,
   onOpenModule = () => undefined,
   onOpenTask = () => undefined,
+  onResolveConflicts,
 }: {
   taskId: string;
   moduleId?: string | null;
   active: boolean;
   onOpenModule?: () => void;
   onOpenTask?: (taskId: string) => void;
+  onResolveConflicts?: (request: {
+    projectId: string;
+    moduleId: string;
+    initialPrompt: string;
+  }) => void;
 }) {
   const query = useQuery(WorktreeChangesDocument, {
     client: studioApolloClient(),
@@ -152,7 +158,14 @@ export function TaskWorktreeChanges({
             actions={actions}
             branch={changes.pull_request?.target_branch ?? null}
             lastCommit={lastCommit ? `${lastCommit.subject} (${lastCommit.messageSource})` : null}
-            localMerge={<WorktreeMergePreview taskId={taskId} active={active} />}
+            localMerge={(
+              <WorktreeMergePreview
+                taskId={taskId}
+                moduleId={moduleId}
+                active={active}
+                onResolveConflicts={onResolveConflicts}
+              />
+            )}
             worktree={(
               <WorktreeLifecycle
                 closureFailure={changes.closure_failure}

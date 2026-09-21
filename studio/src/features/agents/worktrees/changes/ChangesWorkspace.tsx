@@ -6,7 +6,15 @@ import {
   useChangesWorkspace,
 } from "./changesWorkspaceState";
 
-export function ChangesWorkspace() {
+export function ChangesWorkspace({
+  onResolveConflicts,
+}: {
+  onResolveConflicts?: (request: {
+    projectId: string;
+    moduleId: string;
+    initialPrompt: string;
+  }) => void;
+} = {}) {
   const active = useChangesWorkspace((state) => state.active);
   const moduleId = useChangesWorkspace((state) => state.moduleId);
   const taskId = useChangesWorkspace((state) => state.taskId);
@@ -37,6 +45,7 @@ export function ChangesWorkspace() {
           active
           onOpenModule={openModule}
           onOpenTask={openTask}
+          onResolveConflicts={onResolveConflicts}
         />
       )}
     </section>

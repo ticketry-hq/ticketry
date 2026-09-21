@@ -47,6 +47,39 @@ impl TerminalSessionMutations {
         let rows = u16::try_from(rows)
             .map_err(|_| typed("terminal_launch_invalid", "Terminal rows are invalid."))?;
         let service = service(ctx)?;
+        if kind == TerminalLaunchKind::TaskShell {
+            if project_id.is_some()
+                || target_id.is_some()
+                || provider.is_some()
+                || working_directory_identity.is_some()
+                || model.is_some()
+                || reasoning.is_some()
+                || policy_reference.is_some()
+                || prompt.is_some()
+                || resume_from_agent_run_id.is_some()
+                || automation_attempt_id.is_some()
+                || !required_skills.is_empty()
+                || design_directory_identity.is_some()
+                || document_relative_path.is_some()
+            {
+                return Err(typed(
+                    "terminal_launch_invalid",
+                    "Task shell creation accepts only request identity, Work Item identity, module identity, and geometry.",
+                ));
+            }
+            return ticketry_diagnostics::requested_by(
+                ticketry_diagnostics::LaunchSurface::LaunchPicker,
+                service.create_task_shell(
+                    client_request_id,
+                    required(issue_id, "Work Item")?,
+                    module_id,
+                    columns,
+                    rows,
+                ),
+            )
+            .await
+            .map_err(graphql_error);
+        }
         if kind == TerminalLaunchKind::Shell {
             if project_id.is_some()
                 || issue_id.is_some()

@@ -34,7 +34,16 @@ export function FooterChangesToggle() {
       title={label}
       disabled={!changesActive && !moduleId}
       onClick={handleClick}
-      className="flex items-center gap-1 px-1.5 py-0.5 text-text-muted hover:bg-pane-bg hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
+      aria-pressed={changesActive}
+      className={
+        // Full-height and flush with the pane above when active, so the
+        // Changes view reads as emerging from this button rather than
+        // floating over an unrelated status bar.
+        "flex h-full items-center gap-1 px-2 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent "
+        + (changesActive
+          ? "bg-pane-bg font-semibold text-text-primary shadow-[inset_0_-2px_0_0_#7aa2f7]"
+          : "text-text-muted hover:bg-pane-bg hover:text-text-primary")
+      }
     >
       <IconGitBranch size={14} data-testid="version-control-icon" />
       <span>{changesActive ? "Back" : "Changes"}</span>

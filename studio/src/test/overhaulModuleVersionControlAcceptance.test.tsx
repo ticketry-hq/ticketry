@@ -16,6 +16,7 @@ import { createWorktreeInvalidator } from "../features/agents/status/stream/work
 import { ChangesWorkspace } from "../features/agents/worktrees";
 import { useClientStore } from "../state/clientStore";
 import { fixture, mountStudio, workItem } from "./seam";
+import { openBranchInspector, openWorktreeCheckouts } from "./changesSurface";
 
 const TASK_ID = "active-task-worktree";
 const PLANNING_TASK_ID = "planning-task";
@@ -212,11 +213,12 @@ describe("overhaul acceptance - module Changes and current worktrees", () => {
 
     expect(screen.getByRole("button", { name: "Back to planning workspace" })).toBeVisible();
     expect(await screen.findByTestId("module-version-control")).toBeVisible();
+    await openWorktreeCheckouts();
     expect(await screen.findByText("No current task worktrees.")).toBeVisible();
-    expect(screen.getByText("Loading module changes...")).toBeVisible();
+    expect(screen.getByText("Loading changes...")).toBeVisible();
     const checkoutButton = screen.getByRole("button", { name: "Open Module checkout Changes" });
     await act(async () => releaseFiles());
-    expect(await screen.findByText("Clean · 0 unpushed")).toBeVisible();
+    expect(await screen.findByLabelText("Working tree state")).toHaveTextContent("clean");
     expect(screen.getByRole("button", { name: "Open Module checkout Changes" })).toBe(checkoutButton);
     expect(screen.getByText("No module changes from the selected baseline.")).toBeVisible();
     expect(screen.getByText("No current task worktrees.")).toBeVisible();
@@ -235,7 +237,7 @@ describe("overhaul acceptance - module Changes and current worktrees", () => {
     expect(operations.filter((operation) => operation === "CurrentWorktrees")).toHaveLength(3);
   });
 
-  it("[overhaul-188] [overhaul-272] [overhaul-273] uses one full-window, resizable Changes workspace for module and task checkouts", async () => {
+  it("[overhaul-188] [overhaul-272] [overhaul-273] [overhaul-336] uses one full-window, resizable Changes workspace for module and task checkouts", async () => {
     Element.prototype.scrollIntoView = vi.fn();
     const http = fixture();
     const operations: string[] = [];
@@ -441,7 +443,8 @@ describe("overhaul acceptance - module Changes and current worktrees", () => {
     expect(screen.getByRole("button", { name: "Open terminal panel" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Open Settings" })).toBeVisible();
 
-    const checkouts = within(workspace).getByRole("region", { name: "Worktree checkouts" });
+    await openWorktreeCheckouts();
+    const checkouts = screen.getByRole("region", { name: "Worktree checkouts" });
     const files = within(workspace).getByRole("region", { name: "Changed files" });
     const diff = within(workspace).getByRole("region", { name: "Selected file diff" });
     expect(checkouts).toBeVisible();
@@ -465,19 +468,22 @@ describe("overhaul acceptance - module Changes and current worktrees", () => {
       "+module workspace",
     );
 
-    const firstHandle = within(workspace).getByRole("separator", {
-      name: "Resize checkouts and changed files",
-    });
-    const secondHandle = within(workspace).getByRole("separator", {
+    const handle = within(workspace).getByRole("separator", {
       name: "Resize changed files and diff",
     });
-    for (const [handle, key] of [[firstHandle, "ArrowRight"], [secondHandle, "ArrowLeft"]] as const) {
+    for (const key of ["ArrowRight", "ArrowLeft"] as const) {
       const before = handle.getAttribute("aria-valuenow");
       fireEvent.keyDown(handle, { key });
       await waitFor(() => expect(handle).not.toHaveAttribute("aria-valuenow", before));
     }
-    expect(within(moduleWorkspace).getByTestId("changes-workspace-scroll")).toHaveClass("overflow-x-auto");
-    expect(workspace).toHaveClass("min-w-[56rem]");
+
+    expect(screen.queryByTestId("changes-branch-inspector")).toBeNull();
+    await openBranchInspector();
+    expect(screen.getByTestId("changes-branch-inspector")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Close branch inspector" }));
+    await waitFor(() =>
+      expect(screen.queryByTestId("changes-branch-inspector")).toBeNull(),
+    );
 
     fireEvent.click(rows[1]);
     expect(useClientStore.getState().selectedTaskId).toBe(PLANNING_TASK_ID);
@@ -561,11 +567,13 @@ describe("overhaul acceptance - module Changes and current worktrees", () => {
     });
 
     fireEvent.click(screen.getByRole("button", { name: "Open module Changes" }));
+    await openWorktreeCheckouts();
     const taskCheckout = await screen.findByRole("button", {
       name: "Open CODING-1322 Measured checkout Changes",
     });
     fireEvent.click(taskCheckout);
 
+    await openWorktreeCheckouts();
     expect(await screen.findByRole("button", {
       name: "Open CODING-1322 Measured checkout Changes",
     })).toHaveAttribute("aria-pressed", "true");
@@ -678,7 +686,6 @@ describe("overhaul acceptance - module Changes and current worktrees", () => {
       expect(within(diff).getByRole("status")).toHaveTextContent("This diff is truncated."),
     );
     expect((await within(diff).findByTestId("patch-viewer")).textContent).toBe(patch);
-    expect(screen.getByTestId("changes-workspace-scroll")).toHaveClass("overflow-x-auto");
     expect(screen.getByTestId("changes-diff-column")).toHaveClass("overflow-hidden");
   });
 
@@ -782,6 +789,7 @@ describe("overhaul acceptance - module Changes and current worktrees", () => {
     });
 
     fireEvent.click(screen.getByRole("button", { name: "Open module Changes" }));
+    await openBranchInspector();
     const commit = await screen.findByRole("button", { name: "Commit" });
     const push = screen.getByRole("button", { name: "Push" });
     expect(commit).toBeDisabled();
@@ -861,6 +869,7 @@ describe("overhaul acceptance - module Changes and current worktrees", () => {
     });
 
     fireEvent.click(screen.getByRole("button", { name: "Open module Changes" }));
+    await openBranchInspector();
     expect(await screen.findByRole("button", { name: "Create PR" })).toBeEnabled();
     expect(screen.getByRole("status")).toHaveTextContent(
       "Create PR follows the same rule.",

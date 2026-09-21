@@ -32,7 +32,6 @@ export function ChangesWorkspace() {
         />
       ) : (
         <TaskWorktreeChanges
-          showAllWorktrees
           taskId={taskId}
           moduleId={moduleId}
           active

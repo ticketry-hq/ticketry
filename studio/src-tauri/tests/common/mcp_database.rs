@@ -49,6 +49,18 @@ pub async fn prepare_command_database(directory: &tempfile::TempDir) {
                 id integer PRIMARY KEY, from_issue_id char(32) NOT NULL,
                 to_issue_id char(32) NOT NULL
             );
+            CREATE TABLE worktracker_label (
+                id char(32) PRIMARY KEY, project_id char(32) NOT NULL,
+                name varchar(255) NOT NULL, color varchar(32) NOT NULL DEFAULT '',
+                UNIQUE(project_id, name)
+            );
+            CREATE TABLE worktracker_issue_labels (
+                id integer PRIMARY KEY AUTOINCREMENT,
+                issue_id char(32) NOT NULL, label_id char(32) NOT NULL,
+                UNIQUE(issue_id, label_id),
+                FOREIGN KEY(issue_id) REFERENCES worktracker_issue(id) ON DELETE CASCADE,
+                FOREIGN KEY(label_id) REFERENCES worktracker_label(id) ON DELETE CASCADE
+            );
             CREATE TABLE worktracker_attachment (
                 id char(32) PRIMARY KEY, issue_id char(32) NOT NULL,
                 file varchar(100) NOT NULL, filename varchar(512) NOT NULL,

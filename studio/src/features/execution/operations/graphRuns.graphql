@@ -6,6 +6,7 @@ query ExecutionGraphRunHolding($rootId: String!) {
     nodes {
       root_id: rootId
       execution_mode: executionMode
+      updated_at: updatedAt
     }
   }
 }
@@ -18,6 +19,7 @@ mutation CreateExecutionGraphRun($rootId: String!, $executionMode: String) {
     graph_run {
       root_id: rootId
       execution_mode: executionMode
+      updated_at: updatedAt
     }
     launched: prepared_child_ids
   }
@@ -31,6 +33,7 @@ mutation UpdateExecutionGraphRun($rootId: String!, $executionMode: String) {
     graph_run {
       root_id: rootId
       execution_mode: executionMode
+      updated_at: updatedAt
     }
     launched: prepared_child_ids
   }

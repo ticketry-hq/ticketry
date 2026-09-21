@@ -33,7 +33,7 @@ fn nullable_strings() -> Value {
 pub fn tools() -> Vec<Tool> {
     vec![
         tool("mcp_ping", "Verify MCP transport and tool execution without touching a backend.", json!({}), &[]),
-        tool("terminate_current_run", "Terminate only the Studio run bound to this MCP request. A ticket run must first move its task out of the state it launched from, into one of that state's configured destinations. A refusal returns error \"ticket_transition_required\" and lists every acceptable state in \"allowed_states\": move the task there with update_task_status, then call this once more. A handoff transition keeps the run alive and returns \"continued_by_handoff\" so its queued destination prompt can run.", json!({}), &[]),
+        tool("terminate_current_run", "Terminate only the Studio run bound to this MCP request. This stops the run without changing or archiving its ticket. When blocked, record the blocker and leave the ticket in its current state; do not move it to Review or Cancelled just to stop. A committed handoff keeps the run alive and returns \"continued_by_handoff\" so its queued destination prompt can run.", json!({}), &[]),
         tool("add_issue_type_workflow_transition", "Add one transition to a type's workflow at the supplied revision.", json!({
             "type_id": {"type": "string"}, "from_state_id": {"type": "string"}, "to_state_id": {"type": "string"},
             "workflow_revision": {"type": "integer"}, "agent_allowed": {"type": "boolean", "default": true},
@@ -45,6 +45,9 @@ pub fn tools() -> Vec<Tool> {
         tool("add_task_dependent", "Add a reverse dependency edge: dependent_task_id depends on task_id.", json!({
             "task_id": {"type": "string"}, "dependent_task_id": {"type": "string"}
         }), &["task_id", "dependent_task_id"]),
+        tool("add_task_tags", "Add tags to a task. Existing tags are preserved and duplicate tags are returned once.", json!({
+            "id_or_key": {"type": "string"}, "tags": {"type": "array", "items": {"type": "string"}}
+        }), &["id_or_key", "tags"]),
         tool("append_task_description", "Append text to the existing description of a task.", json!({
             "project_id": {"type": "string"}, "task_id": {"type": "string"}, "new_content": {"type": "string"}
         }), &["project_id", "task_id", "new_content"]),
@@ -147,9 +150,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn registry_adds_run_now_to_the_legacy_tool_contract() {
+    fn registry_publishes_add_task_tags_with_the_required_array_contract() {
         let tools = tools();
-        assert_eq!(tools.len(), 32);
+        assert_eq!(tools.len(), 33);
         let names: Vec<&str> = tools.iter().map(|tool| tool.name.as_ref()).collect();
         assert_eq!(
             names,
@@ -159,6 +162,7 @@ mod tests {
                 "add_issue_type_workflow_transition",
                 "add_task_blocker",
                 "add_task_dependent",
+                "add_task_tags",
                 "append_task_description",
                 "attach_file",
                 "clear_issue_type_workflow_launch_binding",
@@ -195,6 +199,18 @@ mod tests {
                 .unwrap()
                 .input_schema["required"],
             json!(["project_id", "name", "issue_type"])
+        );
+        let add_task_tags = tools
+            .iter()
+            .find(|tool| tool.name == "add_task_tags")
+            .expect("add_task_tags tool");
+        assert_eq!(
+            add_task_tags.input_schema["required"],
+            json!(["id_or_key", "tags"])
+        );
+        assert_eq!(
+            add_task_tags.input_schema["properties"]["tags"],
+            json!({"type": "array", "items": {"type": "string"}})
         );
         let create_task = tools
             .iter()

@@ -98,34 +98,39 @@ export function ModuleTabStrip() {
     >
       <ModulesPaneToggle />
       <div
-        role="tablist"
-        aria-label="Project module tabs"
-        className="flex min-w-0 flex-initial overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        aria-label="Scrollable project module tabs"
+        className="flex min-w-0 flex-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
-        {!loading
-          ? shownModules.map((module, index) => (
-              <ModuleTab
-                key={module.id}
-                module={module}
-                isSelected={module.id === selectedModuleId}
-                dropIntent={dragDrop.dropIntentFor(module.id)}
-                onSelect={handleSelect}
-                onHide={handleHide}
-                jumpBadge={moduleJumpBadges.get(index + 1)}
-                registerRef={registerRef}
-                dragSourceProps={dragDrop.dragSourcePropsFor(module.id)}
-                dropTargetProps={dragDrop.dropTargetPropsFor(module.id)}
-              />
-            ))
-          : null}
+        <div
+          role="tablist"
+          aria-label="Project module tabs"
+          className="flex shrink-0"
+        >
+          {!loading
+            ? shownModules.map((module, index) => (
+                <ModuleTab
+                  key={module.id}
+                  module={module}
+                  isSelected={module.id === selectedModuleId}
+                  dropIntent={dragDrop.dropIntentFor(module.id)}
+                  onSelect={handleSelect}
+                  onHide={handleHide}
+                  jumpBadge={moduleJumpBadges.get(index + 1)}
+                  registerRef={registerRef}
+                  dragSourceProps={dragDrop.dragSourcePropsFor(module.id)}
+                  dropTargetProps={dragDrop.dropTargetPropsFor(module.id)}
+                />
+              ))
+            : null}
+        </div>
+        {!loading ? (
+          <ModulePicker
+            modules={modules}
+            presentations={presentations}
+            onCreate={() => pushModal({ type: "add-module" })}
+          />
+        ) : null}
       </div>
-      {!loading ? (
-        <ModulePicker
-          modules={modules}
-          presentations={presentations}
-          onCreate={() => pushModal({ type: "add-module" })}
-        />
-      ) : null}
     </div>
   );
 }

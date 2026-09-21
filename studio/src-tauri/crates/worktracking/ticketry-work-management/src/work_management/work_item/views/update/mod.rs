@@ -8,6 +8,7 @@ mod blockers;
 mod details;
 mod reparent;
 mod tab_order;
+mod tags;
 mod transition;
 
 use seaography::{
@@ -37,6 +38,7 @@ impl UpdateWorkItemMutation {
         state_id: GraphqlPatchStringNullAsUnset,
         parent_id: GraphqlPatchString,
         blocked_by_ids: GraphqlPatchStringListNullAsUnset,
+        tag_names: GraphqlPatchStringListNullAsUnset,
         is_archived: GraphqlPatchBoolNullAsUnset,
         workspace_tab_order: GraphqlPatchJsonNullAsUnset,
     ) -> Result<ticketry_entities::issue::Model> {
@@ -49,6 +51,7 @@ impl UpdateWorkItemMutation {
             state_id: state_id.0,
             parent_id: parent_id.0,
             blocked_by_ids: blocked_by_ids.0.map(|ids| ids.0),
+            tag_names: tag_names.0.map(|names| names.0),
             is_archived: is_archived.0,
             workspace_tab_order: workspace_tab_order.0,
         };
@@ -73,6 +76,7 @@ impl UpdateWorkItemMutation {
                 reparent::apply(database, input.id, input.parent_id, facts).await
             }
             UpdatePath::Blockers => blockers::apply(database, input.id, input.blocked_by_ids).await,
+            UpdatePath::Tags => tags::apply(database, input.id, input.tag_names, facts).await,
             UpdatePath::Archive => {
                 archive::apply(database, input.id, input.is_archived, facts).await
             }
@@ -93,6 +97,7 @@ struct UpdateInput {
     state_id: PatchValue<String>,
     parent_id: PatchValue<String>,
     blocked_by_ids: PatchValue<Vec<String>>,
+    tag_names: PatchValue<Vec<String>>,
     is_archived: PatchValue<bool>,
     workspace_tab_order: PatchValue<serde_json::Value>,
 }
@@ -103,6 +108,7 @@ enum UpdatePath {
     Transition,
     Reparent,
     Blockers,
+    Tags,
     Archive,
     TabOrder,
 }
@@ -114,6 +120,7 @@ impl UpdateInput {
         let domain_patch_count = usize::from(!self.state_id.is_unset())
             + usize::from(!self.parent_id.is_unset())
             + usize::from(!self.blocked_by_ids.is_unset())
+            + usize::from(!self.tag_names.is_unset())
             + usize::from(!self.is_archived.is_unset())
             + usize::from(!self.workspace_tab_order.is_unset());
         if domain_patch_count > 1 || (details && domain_patch_count != 0) {
@@ -128,6 +135,8 @@ impl UpdateInput {
             Ok(UpdatePath::Reparent)
         } else if !self.blocked_by_ids.is_unset() {
             Ok(UpdatePath::Blockers)
+        } else if !self.tag_names.is_unset() {
+            Ok(UpdatePath::Tags)
         } else if !self.is_archived.is_unset() {
             Ok(UpdatePath::Archive)
         } else if !self.workspace_tab_order.is_unset() {
@@ -156,6 +165,7 @@ mod tests {
             state_id: PatchValue::Unset,
             parent_id: PatchValue::Unset,
             blocked_by_ids: PatchValue::Unset,
+            tag_names: PatchValue::Unset,
             is_archived: PatchValue::Unset,
             workspace_tab_order: PatchValue::Unset,
         }
@@ -178,6 +188,10 @@ mod tests {
         let mut blockers = empty_input();
         blockers.blocked_by_ids = PatchValue::Value(vec![]);
         assert_eq!(blockers.path().unwrap(), UpdatePath::Blockers);
+
+        let mut tags = empty_input();
+        tags.tag_names = PatchValue::Value(vec!["backend".to_owned()]);
+        assert_eq!(tags.path().unwrap(), UpdatePath::Tags);
 
         let mut archive = empty_input();
         archive.is_archived = PatchValue::Value(true);

@@ -22,6 +22,7 @@ const startup = {
 const TASK = "60000000-0000-0000-0000-000000000001";
 
 const absent = {
+  __typename: "WorktreeStatusView",
   kind: "none",
   task_id: TASK,
   top_level_task_id: TASK,
@@ -320,4 +321,38 @@ describe("worktree creation desktop runtime acceptance", () => {
     expect(screen.getByText("wt/CODIN-881-parent-story → main")).toBeTruthy();
     expect(requests.filter(({ operationName }) => operationName === "WorktreeCreate")).toHaveLength(1);
   });
+
+  it.each([
+    ["denied", "Codex has denied trust for this folder"],
+    ["unsupported", "Codex does not support durable folder trust"],
+  ] as const)(
+    "keeps a newly created checkout after Codex reports %s",
+    async (status, message) => {
+      const requests: Request[] = [];
+      const trust = vi.fn<Trust>(async (provider) => ({
+        status: provider === "codex" ? status : "already_trusted",
+        approval: null,
+        directory: created.path,
+      }));
+      await installDesktopRuntime(requests, trust);
+
+      render(
+        <>
+          <WorktreeBlock taskId={TASK} moduleId="m1" />
+          <DialogHost />
+        </>,
+      );
+      fireEvent.click(
+        await screen.findByRole("button", { name: "+ Create worktree" }),
+      );
+
+      expect(await screen.findByText(new RegExp(message))).toBeTruthy();
+      expect(screen.getByText("wt/CODIN-881-parent-story → main")).toBeTruthy();
+      expect(screen.getByRole("button", { name: "Retry trust" })).toBeTruthy();
+      expect(screen.queryByRole("dialog", { name: "Trust worktree?" })).toBeNull();
+      expect(
+        requests.filter(({ operationName }) => operationName === "WorktreeCreate"),
+      ).toHaveLength(1);
+    },
+  );
 });

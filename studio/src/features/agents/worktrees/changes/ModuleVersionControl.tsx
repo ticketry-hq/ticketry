@@ -10,9 +10,11 @@ import {
   pushModuleChanges,
 } from "../internal/changesTransport";
 import { newOperationId } from "../internal/operationId";
-import { ChangesActions } from "./ChangesActions";
+import { BranchInspector } from "./BranchInspector";
+import { ChangesActionAlert } from "./ChangesActionAlert";
 import { ChangesFileReview } from "./ChangesFileReview";
-import { CurrentWorktreesList } from "./CurrentWorktreesList";
+import { ChangesToolbar } from "./ChangesToolbar";
+import { useChangesActions } from "./useChangesActions";
 import { modulePullRequestKey, useModulePullRequestState } from "./modulePullRequestState";
 
 function baselineLabel(kind?: string | null, baseline?: string | null): string {
@@ -47,84 +49,98 @@ export function ModuleVersionControl({
     messageSource: string;
   } | null>(null);
   const result = query.data?.module_version_control;
-  if (!active) return null;
   const checkout = result?.checkout;
   const pullRequestKey = modulePullRequestKey(moduleId, checkout?.branch);
   const modulePullRequestUrl = modulePullRequestUrls[pullRequestKey];
 
+  const actions = useChangesActions({
+    stackKind: "module",
+    branch: checkout?.branch,
+    dirty: checkout?.dirty === true,
+    unpushedCount: checkout?.unpushed_count ?? 0,
+    commitDescription: lastCommit
+      ? `Committed as ${lastCommit.subject} (${lastCommit.messageSource})`
+      : null,
+    pullRequestUrl: modulePullRequestUrl,
+    pullRequestCreationEligible: checkout?.pull_request_creation_eligible,
+    onCommit: async () => {
+      try {
+        const committed = await commitModuleChanges(moduleId, newOperationId());
+        setLastCommit({ subject: committed.subject, messageSource: committed.message_source });
+      } finally {
+        await query.refetch();
+      }
+    },
+    onPush: async () => {
+      try {
+        await pushModuleChanges(moduleId, newOperationId());
+      } finally {
+        await query.refetch();
+      }
+    },
+    onStack: async () => {
+      try {
+        await commitPushModuleChanges(moduleId, newOperationId());
+      } finally {
+        await query.refetch();
+      }
+    },
+    onCreatePullRequest: async () => {
+      const created = await createModulePullRequest(moduleId, newOperationId());
+      useModulePullRequestState.getState().remember(pullRequestKey, created.url);
+      await query.refetch().catch(() => undefined);
+      return created;
+    },
+  });
+
+  if (!active) return null;
+
+  const unavailable = checkout && !checkout.available;
+
   return (
-    <div
-      className="h-full min-h-0 text-sm"
-      data-testid="module-version-control"
-    >
+    <div className="h-full min-h-0 text-sm" data-testid="module-version-control">
       <ChangesFileReview
         checkoutKey={`module:${moduleId}`}
-        checkouts={(
-          <CurrentWorktreesList
-            key={moduleId}
-            moduleId={moduleId}
-            selectedTaskId={null}
-            onOpenModule={onOpenModule}
-            onOpenTask={onOpenTask}
+        toolbar={(
+          <>
+            <ChangesToolbar
+              actions={actions}
+              moduleId={moduleId}
+              selectedTaskId={null}
+              onOpenModule={onOpenModule}
+              onOpenTask={onOpenTask}
+            />
+            <ChangesActionAlert error={actions.error ?? query.error?.message} notice={actions.notice} />
+          </>
+        )}
+        inspector={checkout ? (
+          <BranchInspector
+            actions={actions}
+            branch={checkout.branch}
+            baseline={baselineLabel(checkout.baseline_kind, checkout.baseline)}
+            lastCommit={lastCommit ? `${lastCommit.subject} (${lastCommit.messageSource})` : null}
           />
-        )}
-        loading={!checkout}
-        header={query.error ? <p role="alert" className="text-lifecycle-danger">{query.error.message}</p> : !checkout ? (
-          <p role="status" className="text-text-muted">Loading module changes...</p>
-        ) : (
-          <header className="mb-3 border-b border-pane-border pb-3">
-            <div className="flex items-baseline gap-3">
-              <h2 className="font-medium text-text-primary">Module checkout Changes</h2>
-              {checkout.branch ? <span className="truncate font-mono text-xs text-text-muted">{checkout.branch}</span> : null}
-            </div>
-            <p className="text-xs text-text-muted">{baselineLabel(checkout.baseline_kind, checkout.baseline)}</p>
-            {checkout.available ? (
-              <>
-                <p className="text-xs text-text-muted">
-                  {checkout.dirty ? "Dirty" : "Clean"} · {checkout.unpushed_count ?? 0} unpushed
-                </p>
-                <ChangesActions
-                  stackKind="module"
-                  branch={checkout.branch}
-                  key={`${checkout.branch ?? "none"}:${checkout.default_branch ?? "none"}`}
-                  dirty={checkout.dirty === true}
-                  unpushedCount={checkout.unpushed_count ?? 0}
-                  commitDescription={lastCommit ? `Committed as ${lastCommit.subject} (${lastCommit.messageSource})` : null}
-                  pullRequestUrl={modulePullRequestUrl}
-                  pullRequestCreationEligible={checkout.pull_request_creation_eligible}
-                  onCommit={async () => {
-                    try {
-                      const committed = await commitModuleChanges(moduleId, newOperationId());
-                      setLastCommit({ subject: committed.subject, messageSource: committed.message_source });
-                    } finally {
-                      await query.refetch();
-                    }
-                  }}
-                  onPush={async () => {
-                    try {
-                      await pushModuleChanges(moduleId, newOperationId());
-                    } finally {
-                      await query.refetch();
-                    }
-                  }}
-                  onStack={async () => commitPushModuleChanges(moduleId, newOperationId())}
-                  onCreatePullRequest={async () => {
-                    const created = await createModulePullRequest(moduleId, newOperationId());
-                    useModulePullRequestState.getState().remember(pullRequestKey, created.url);
-                    await query.refetch().catch(() => undefined);
-                    return created;
-                  }}
-                />
-              </>
-            ) : <p className="text-lifecycle-danger" role="status">{checkout.reason ?? "Module checkout unavailable."}</p>}
-          </header>
-        )}
+        ) : null}
+        header={checkout ? (
+          <div className="px-3 pb-1">
+            <h2 className="sr-only">Module checkout Changes</h2>
+            <p className="text-xs text-text-muted">
+              {baselineLabel(checkout.baseline_kind, checkout.baseline)}
+            </p>
+            {unavailable ? (
+              <p className="text-lifecycle-danger" role="status">
+                {checkout.reason ?? "Module checkout unavailable."}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
         moduleId={moduleId}
         files={checkout?.available ? checkout.files : []}
         insertions={checkout?.insertions ?? 0}
         deletions={checkout?.deletions ?? 0}
         truncated={checkout?.truncated ?? false}
         label="Module changed files"
+        loading={!checkout}
         emptyMessage={checkout?.available
           ? "No module changes from the selected baseline."
           : "Module checkout unavailable."}

@@ -15,6 +15,11 @@ const providerApi = vi.hoisted(() => ({
   prefetchProviderCatalog: vi.fn(),
 }));
 
+const shellApi = vi.hoisted(() => ({
+  createModuleShell: vi.fn(),
+  listModuleShells: vi.fn(),
+}));
+
 vi.doMock("../features/agents/api/agentApi", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../features/agents/api/agentApi")>()),
   ...terminalApi,
@@ -22,6 +27,13 @@ vi.doMock("../features/agents/api/agentApi", async (importOriginal) => ({
 
 vi.doMock("../features/agents/terminal/internal/terminalClientRuntime", () => ({
   terminalClientTransport: terminalTransport,
+}));
+
+vi.doMock("../features/terminal-panel/api/moduleShellApi", async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import("../features/terminal-panel/api/moduleShellApi")
+  >()),
+  ...shellApi,
 }));
 
 vi.doMock("./legacyApiFixture", async (importOriginal) => ({
@@ -102,6 +114,14 @@ const { setProviderCapabilities } = await import(
   "../features/workflows/providerQueries"
 );
 const { useClientStore } = await import("../state/clientStore");
+const { useStudioStore } = await import("../features/projects/store");
+const { TerminalPanel } = await import("../features/terminal-panel/TerminalPanel");
+const { useModuleShellStore } = await import(
+  "../features/terminal-panel/moduleShellStore"
+);
+const { useTerminalPanelStore } = await import(
+  "../features/terminal-panel/panelStore"
+);
 const { studioApolloClient } = await import("../shared/apollo/client");
 
 /**
@@ -146,10 +166,15 @@ beforeEach(() => {
     sidebarVisible: true,
   });
   useTerminalStore.setState({ sessions: {}, sessionByRun: {} });
+  useModuleShellStore.setState({ byModule: {} });
+  useTerminalPanelStore.setState({ openModules: {}, focusSignal: 0 });
   useModalStore.setState({ modalStack: [] });
+  useStudioStore.setState({ selectedProjectId: null });
   terminalApi.getDocuments.mockResolvedValue({ documents: [] });
   terminalApi.createTerminalRun.mockResolvedValue({ agent_run_id: "run-570" });
-  terminalTransport.attach.mockImplementation((_params, onEvent) => {
+  shellApi.createModuleShell.mockResolvedValue("run-shell-570");
+  shellApi.listModuleShells.mockResolvedValue([]);
+  terminalTransport.attach.mockImplementation((params, onEvent) => {
     const handle = {
       input: vi.fn(),
       resize: vi.fn(),
@@ -162,8 +187,8 @@ beforeEach(() => {
     queueMicrotask(() =>
       onEvent({
         type: "ready",
-        sessionId: "terminal-570",
-        agentRunId: "run-570",
+        sessionId: params.agentRunId.replace(/^run/, "terminal"),
+        agentRunId: params.agentRunId,
       }),
     );
     return handle;
@@ -217,9 +242,13 @@ export {
   clearProviderHolding,
   providerApi,
   providerCapability,
+  shellApi,
   setProviderCapabilities,
   terminalApi,
   terminalTransport,
+  TerminalPanel,
+  useClientStore,
+  useStudioStore,
   useTerminalStore,
   workspaceView,
 };

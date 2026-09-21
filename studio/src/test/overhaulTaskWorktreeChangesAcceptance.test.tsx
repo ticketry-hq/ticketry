@@ -18,6 +18,11 @@ import { useClientStore } from "../state/clientStore";
 import { WorktreeChangesDocument } from "../features/agents/worktrees/generated/worktreeChanges.documents";
 import { WorktreeStatusDocument } from "../features/agents/worktrees/generated/worktreeStatus.documents";
 import { fixture, mountStudio as mountStudioSeam, workItem } from "./seam";
+import {
+  openBranchInspector,
+  openInspectorSection,
+  openWorktreeCheckouts,
+} from "./changesSurface";
 
 // JSDOM has no panel measurements; exercise the real shell without imperative sizing.
 vi.mock("../app/shell/layout/useStudioPanelLayout", () => ({
@@ -200,10 +205,8 @@ describe("overhaul acceptance - task worktree Changes", () => {
     const rows = within(list).getAllByRole("listitem");
     expect(rows).toHaveLength(7);
     expect(screen.getByTestId("module-workspace-region").querySelector('[data-pane="tasks"]')).not.toBeNull();
+    await openWorktreeCheckouts();
     expect(screen.getByRole("region", { name: "Worktree checkouts" })).toBeVisible();
-    expect(screen.getByTestId("changes-checkouts-resize-handle")).toBeVisible();
-
-    expect(screen.getByTestId("changes-workspace")).toHaveClass("min-w-[56rem]");
     expect(screen.getByRole("region", { name: "Selected file diff" })).toBeVisible();
     expect(screen.getByRole("separator", { name: "Resize changed files and diff" })).toBeVisible();
     expect(checkoutRequests).toBe(1);
@@ -213,13 +216,13 @@ describe("overhaul acceptance - task worktree Changes", () => {
 
 
     const expected = [
-      ["src/added.ts", "Added", "text-lifecycle-success"],
-      ["src/untracked.ts", "Untracked", "text-lifecycle-success"],
-      ["src/modified.ts", "Modified", "text-lifecycle-attention"],
-      ["src/deleted.ts", "Deleted", "text-lifecycle-danger"],
-      ["src/renamed.ts", "Renamed", "text-text-muted"],
-      ["src/copied.ts", "Copied", "text-text-muted"],
-      ["src/conflicted.ts", "Conflicted", "text-lifecycle-danger"],
+      ["src/added.ts", "A", "text-lifecycle-success"],
+      ["src/untracked.ts", "U", "text-lifecycle-success"],
+      ["src/modified.ts", "M", "text-lifecycle-attention"],
+      ["src/deleted.ts", "D", "text-lifecycle-danger"],
+      ["src/renamed.ts", "R", "text-text-muted"],
+      ["src/copied.ts", "C", "text-text-muted"],
+      ["src/conflicted.ts", "!", "text-lifecycle-danger"],
     ] as const;
     for (const [path, label, colorClass] of expected) {
       const row = within(list).getByRole("listitem", { name: new RegExp(path) });
@@ -233,6 +236,7 @@ describe("overhaul acceptance - task worktree Changes", () => {
     fireEvent.click(screen.getByRole("button", { name: "Back to planning workspace" }));
     expect(within(tabs).getByRole("tab", { name: "Changes" })).toBeVisible();
     fireEvent.click(within(tabs).getByRole("tab", { name: "Changes" }));
+    await openBranchInspector();
     await waitFor(() => expect(changesRequests).toBe(2));
 
     expect(
@@ -287,6 +291,7 @@ describe("overhaul acceptance - task worktree Changes", () => {
 
     const tabs = await screen.findByRole("tablist", { name: "Workspace tabs" });
     fireEvent.click(await within(tabs).findByRole("tab", { name: "Changes" }));
+    await openBranchInspector();
 
     const page = await screen.findByTestId("task-worktree-changes");
     const pane = page.closest<HTMLElement>('[aria-label="Changes workspace"]');
@@ -324,6 +329,7 @@ describe("overhaul acceptance - task worktree Changes", () => {
     expect(fileListOwner).toHaveClass("overflow-auto");
     expect(summary).toBeVisible();
     expect(within(page).getByLabelText("Changes commands")).toBeVisible();
+    await openInspectorSection("Worktree");
     expect(within(page).getByLabelText("Worktree cleanup status")).toBeVisible();
     expect(within(page).getByText(/changed-file limit was reached/)).toBeVisible();
     expect(rows).toHaveLength(80);
@@ -393,6 +399,7 @@ describe("overhaul acceptance - task worktree Changes", () => {
 
     const tabs = await screen.findByRole("tablist", { name: "Workspace tabs" });
     fireEvent.click(await within(tabs).findByRole("tab", { name: "Changes" }));
+    await openBranchInspector();
     expect(
       await screen.findByText("No cumulative changes from the recorded base."),
     ).toBeVisible();
@@ -406,6 +413,7 @@ describe("overhaul acceptance - task worktree Changes", () => {
     );
     changesResult = "truncated";
     fireEvent.click(within(tabs).getByRole("tab", { name: "Changes" }));
+    await openBranchInspector();
     const truncationNotice = await screen.findByText("The changed-file limit was reached.");
     expect(truncationNotice).toHaveTextContent("The changed-file limit was reached.");
 
@@ -418,6 +426,7 @@ describe("overhaul acceptance - task worktree Changes", () => {
     );
     changesResult = "error";
     fireEvent.click(within(tabs).getByRole("tab", { name: "Changes" }));
+    await openBranchInspector();
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Git changes are temporarily unavailable.",
     );
@@ -610,6 +619,7 @@ describe("overhaul acceptance - task worktree Changes", () => {
 
     const tabs = await screen.findByRole("tablist", { name: "Workspace tabs" });
     fireEvent.click(await within(tabs).findByRole("tab", { name: "Changes" }));
+    await openBranchInspector();
     const commit = await screen.findByRole("button", { name: "Commit" });
     const push = screen.getByRole("button", { name: "Push" });
     expect(commit).toBeEnabled();
@@ -714,7 +724,10 @@ describe("overhaul acceptance - task worktree Changes", () => {
 
     const tabs = await screen.findByRole("tablist", { name: "Workspace tabs" });
     fireEvent.click(await within(tabs).findByRole("tab", { name: "Changes" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Commit, push & create PR" }));
+    await openBranchInspector();
+    fireEvent.click(await screen.findByRole("button", {
+      name: /^Commit, push & create PR/,
+    }));
     fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
 
     const open = await screen.findByRole("link", { name: "Open PR" });
@@ -780,6 +793,7 @@ describe("overhaul acceptance - task worktree Changes", () => {
 
     const tabs = await screen.findByRole("tablist", { name: "Workspace tabs" });
     fireEvent.click(await within(tabs).findByRole("tab", { name: "Changes" }));
+    await openBranchInspector();
     fireEvent.click(await screen.findByRole("button", { name: "Create PR" }));
     expect(await screen.findByText("GitHub rejected the pull-request request.")).toHaveAttribute(
       "role",
@@ -826,6 +840,7 @@ describe("overhaul acceptance - task worktree Changes", () => {
 
     const tabs = await screen.findByRole("tablist", { name: "Workspace tabs" });
     fireEvent.click(await within(tabs).findByRole("tab", { name: "Changes" }));
+    await openBranchInspector();
     await screen.findByText("No cumulative changes from the recorded base.");
     expect(screen.queryByRole("button", { name: "Create PR" })).toBeNull();
     expect(screen.queryByRole("link", { name: "Open PR" })).toBeNull();
@@ -875,6 +890,7 @@ describe("overhaul acceptance - task worktree Changes", () => {
     const tabs = await screen.findByRole("tablist", { name: "Workspace tabs" });
     const changesTab = within(tabs).getByRole("tab", { name: "Changes" });
     fireEvent.click(changesTab);
+    await openBranchInspector();
 
     const cases = [
       ["ready", "Ready to merge", false, false, false],
@@ -1035,6 +1051,7 @@ describe("overhaul acceptance - task worktree Changes", () => {
 
     const tabs = await screen.findByRole("tablist", { name: "Workspace tabs" });
     fireEvent.click(within(tabs).getByRole("tab", { name: "Changes" }));
+    await openBranchInspector();
     fireEvent.click(await screen.findByRole("button", { name: "Replace PR" }));
     await waitFor(() =>
       expect(screen.getByRole("link", { name: "Open PR" })).toHaveAttribute(
@@ -1054,6 +1071,7 @@ describe("overhaul acceptance - task worktree Changes", () => {
     };
     fireEvent.click(screen.getByRole("button", { name: "Back to planning workspace" }));
     fireEvent.click(within(tabs).getByRole("tab", { name: "Changes" }));
+    await openBranchInspector();
     fireEvent.click(await screen.findByRole("button", { name: "Create follow-up PR" }));
     await waitFor(() =>
       expect(screen.getByRole("link", { name: "Open PR" })).toHaveAttribute(
@@ -1147,6 +1165,7 @@ describe("overhaul acceptance - task worktree Changes", () => {
 
     const tabs = await screen.findByRole("tablist", { name: "Workspace tabs" });
     fireEvent.click(within(tabs).getByRole("tab", { name: "Changes" }));
+    await openBranchInspector();
     const action = await screen.findByRole("button", { name: "Prepare merge" });
     expect(operations).toHaveLength(0);
 
@@ -1224,6 +1243,7 @@ describe("overhaul acceptance - task worktree Changes", () => {
 
     const tabs = await screen.findByRole("tablist", { name: "Workspace tabs" });
     fireEvent.click(within(tabs).getByRole("tab", { name: "Changes" }));
+    await openBranchInspector();
 
     const preview = await screen.findByRole("region", { name: "Local merge preview" });
     expect(preview).toHaveTextContent("wt/CODING-1892-merge-preview");
@@ -1334,6 +1354,7 @@ describe("overhaul acceptance - task worktree Changes", () => {
 
     const tabs = await screen.findByRole("tablist", { name: "Workspace tabs" });
     fireEvent.click(within(tabs).getByRole("tab", { name: "Changes" }));
+    await openBranchInspector();
     const action = await screen.findByRole("button", { name: "Merge into main" });
     fireEvent.click(action);
     await waitFor(() => expect(merges).toHaveLength(1));
@@ -1428,6 +1449,7 @@ describe("overhaul acceptance - task worktree Changes", () => {
 
     const tabs = await screen.findByRole("tablist", { name: "Workspace tabs" });
     fireEvent.click(within(tabs).getByRole("tab", { name: "Changes" }));
+    await openBranchInspector();
     expect(await screen.findByText("Commit or discard source work before merging.")).toHaveAttribute("role", "alert");
     expect(screen.queryByRole("button", { name: "Merge into main" })).not.toBeInTheDocument();
 
@@ -1496,6 +1518,7 @@ describe("overhaul acceptance - task worktree Changes", () => {
 
     const tabs = await screen.findByRole("tablist", { name: "Workspace tabs" });
     fireEvent.click(within(tabs).getByRole("tab", { name: "Changes" }));
+    await openBranchInspector();
     expect(await screen.findByText("Check out release/2.1, then refresh merge eligibility.")).toHaveAttribute("role", "alert");
 
     destinationBlocked = false;

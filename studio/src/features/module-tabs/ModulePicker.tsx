@@ -1,10 +1,13 @@
 import {
+  type CSSProperties,
   type FocusEvent,
   type KeyboardEvent,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
 } from "react";
+import { createPortal } from "react-dom";
 
 import type { Module, ModulePresentation } from "../../shared/api/types";
 import { hiddenModuleIds } from "./modulePresentation";
@@ -43,7 +46,9 @@ export function ModulePicker({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
+  const [dialogPosition, setDialogPosition] = useState<CSSProperties>({});
   const containerRef = useRef<HTMLDivElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const restoreAndSelectModule = useRestoreAndSelectModule();
@@ -64,10 +69,38 @@ export function ModulePicker({
   useEffect(() => {
     if (!open) return;
     function dismissOutside(event: PointerEvent) {
-      if (!containerRef.current?.contains(event.target as Node)) setOpen(false);
+      const target = event.target as Node;
+      if (
+        !containerRef.current?.contains(target)
+        && !dialogRef.current?.contains(target)
+      ) {
+        setOpen(false);
+      }
     }
     document.addEventListener("pointerdown", dismissOutside);
     return () => document.removeEventListener("pointerdown", dismissOutside);
+  }, [open]);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    const updatePosition = () => {
+      const triggerBounds = triggerRef.current?.getBoundingClientRect();
+      if (!triggerBounds) return;
+      setDialogPosition({
+        top: triggerBounds.bottom + 4,
+        right: window.innerWidth - triggerBounds.right,
+      });
+    };
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, {
+      capture: true,
+      passive: true,
+    });
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
   }, [open]);
 
   function togglePicker() {
@@ -91,9 +124,11 @@ export function ModulePicker({
   }
 
   function handleFocusLeave(event: FocusEvent<HTMLDivElement>) {
+    const nextFocus = event.relatedTarget as Node | null;
     if (
-      event.relatedTarget
-      && !event.currentTarget.contains(event.relatedTarget as Node)
+      nextFocus
+      && !containerRef.current?.contains(nextFocus)
+      && !dialogRef.current?.contains(nextFocus)
     ) {
       setOpen(false);
     }
@@ -151,13 +186,16 @@ export function ModulePicker({
       >
         +
       </button>
-      {open ? (
+      {open ? createPortal(
         <div
+          ref={dialogRef}
           id={DIALOG_ID}
           role="dialog"
           aria-label="Module picker"
           onKeyDown={handlePickerKeyDown}
-          className="absolute right-0 top-full z-30 mt-1 flex w-64 flex-col border border-pane-border bg-pane-panel p-1 shadow-lg"
+          onBlur={handleFocusLeave}
+          style={dialogPosition}
+          className="fixed z-50 flex w-64 flex-col border border-pane-border bg-pane-panel p-1 shadow-lg"
         >
           <input
             ref={searchRef}
@@ -213,7 +251,8 @@ export function ModulePicker({
               </button>
             ))}
           </div>
-        </div>
+        </div>,
+        document.body,
       ) : null}
     </div>
   );

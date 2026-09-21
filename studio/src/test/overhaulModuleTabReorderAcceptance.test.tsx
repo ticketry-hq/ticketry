@@ -186,10 +186,12 @@ describe("module tab strip reorder acceptance", () => {
     const modulesToggle = screen.getByRole("button", {
       name: /^(Open|Close) Modules pane$/,
     });
+    const tabScroller = screen.getByLabelText("Scrollable project module tabs");
 
     // The sidebar toggle stays before the project's Modules and the picker
     // stays after them. Neither control can be picked up or receive a tab.
-    expect(strip.parentElement?.firstElementChild).toBe(modulesToggle);
+    expect(tabScroller.parentElement?.firstElementChild).toBe(modulesToggle);
+    expect(tabScroller.firstElementChild).toBe(strip);
     expect(strip.nextElementSibling).toContainElement(pickerButton);
     expect(pickerButton.getAttribute("draggable")).toBeNull();
 
@@ -214,7 +216,8 @@ describe("module tab strip reorder acceptance", () => {
     expect(tabFor("module-c").getAttribute("aria-selected")).toBe("false");
     expect(tabBadges("module-c")).toHaveLength(1);
     expect(tabBadges("module-a")).toEqual([]);
-    expect(strip.parentElement?.firstElementChild).toBe(modulesToggle);
+    expect(tabScroller.parentElement?.firstElementChild).toBe(modulesToggle);
+    expect(tabScroller.firstElementChild).toBe(strip);
     expect(strip.nextElementSibling).toContainElement(pickerButton);
 
     // The selected tab kept its id but changed position, so it must be scrolled

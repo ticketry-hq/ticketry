@@ -188,7 +188,6 @@ export function WorkspaceTabBody({
           />
         ) : (
           <TaskWorktreeChanges
-            showAllWorktrees={selectedChangesTaskId !== undefined || isScratchBucket(bucket)}
             taskId={changesTaskId ?? bucket}
             moduleId={moduleId}
             active={activeKind === "changes"}

@@ -55,6 +55,8 @@ pub struct Model {
     pub agent_runs: HasMany<crate::runs::agent_run::Entity>,
     #[sea_orm(has_many)]
     pub attachments: HasMany<super::attachment::Entity>,
+    #[sea_orm(has_many)]
+    pub issue_labels: HasMany<super::issue_label::Entity>,
     #[sea_orm(has_one, relation_enum = "Presentation", relation_reverse = "Module")]
     pub presentation: HasOne<super::module_presentation::Entity>,
 }

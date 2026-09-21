@@ -150,6 +150,7 @@ pub fn run(context: tauri::Context, file_logging_requested: bool, app_version: &
         .plugin(trace_plugin("builder-started"))
         .plugin(startup_plugin(graphql_api.clone()))
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
         .plugin(trace_plugin("dialog-plugin-initialized"))
         .plugin(tauri_plugin_launchkey_adaptor::init())
         .plugin(trace_plugin("launchkey-plugin-initialized"))

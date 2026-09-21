@@ -182,8 +182,10 @@ ticketry-entities|design_document
 ticketry-entities|graph_run
 ticketry-entities|issue
 ticketry-entities|issue_blocker
+ticketry-entities|issue_label
 ticketry-entities|issue_type
 ticketry-entities|issue_type_transition
+ticketry-entities|label
 ticketry-entities|launch_binding
 ticketry-entities|launch_claim
 ticketry-entities|launch_effect
@@ -788,6 +790,7 @@ ticketry-work-management|resolution
 ticketry-work-management|rollback
 ticketry-work-management|schema
 ticketry-work-management|state_database_path
+ticketry-work-management|tag_migration
 ticketry-work-management|test_support
 ticketry-work-management|update_workspace_tab_order
 ticketry-work-management|work_management_ownership_manifest

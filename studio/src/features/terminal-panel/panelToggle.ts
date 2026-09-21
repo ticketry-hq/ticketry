@@ -16,6 +16,18 @@ import { isTerminalPanelOpenIn, useTerminalPanelStore } from "./panelStore";
 // away from where the person moved while the panel was open.
 let restoreActiveBodyEngagement = false;
 
+/** Shows the selected module's terminal panel and gives its shell focus. */
+export function openTerminalPanel(): void {
+  const ui = useClientStore.getState();
+  const moduleId = ui.selectedModuleId;
+  if (!moduleId) return;
+
+  const panel = useTerminalPanelStore.getState();
+  if (isTerminalPanelOpenIn(moduleId)) panel.focusShell();
+  else panel.openPanel(moduleId);
+  ui.setEditViewZone("terminal-panel");
+}
+
 export function toggleTerminalPanel(): void {
   const ui = useClientStore.getState();
   // The panel belongs to the module it opens onto, so the toggle acts on the

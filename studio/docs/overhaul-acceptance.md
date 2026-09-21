@@ -166,11 +166,11 @@ named gate before the full Studio suite, typecheck, and build.
 | 181 | Root tasks reorder through the GraphQL write path. |
 | 182 | Imported root tasks with equal ranks still send deterministic reorder neighbors. |
 | 183 | A Module tab wraps its label and lifecycle chicklets, reserves constant space for the close button, and keeps its close hover background compact. |
-| 184 | Story Changes stays inside the story pane, shows only its files and selected diff in two resizable columns, and never loads other worktrees; module Changes reuses the review with all three columns. |
+| 184 | Story Changes stays inside the story pane, shows only its files and selected diff in two resizable columns, and never loads other worktrees; module Changes reuses the same two-column review. |
 | 185 | A task workspace restores Details and explains the state when its worktree disappears. |
 | 186 | One caught-up project feed selects one guarded launch's terminal from its authoritative update, defers viewer attachment until runtime acknowledgement, and never needs a second click, subscription, or reconnect. |
 | 187 | Worktree identities appear before module files finish loading, stay cached on file refresh, and converge after worktree creation/deletion. |
-| 188 | Module Changes lists checkout identities and branches and reuses the list when navigating module and task rows without a write. |
+| 188 | The worktree switcher lists checkout identities and branches and reuses the list when navigating module and task rows without a write. |
 | 189 | Module Changes distinguishes an unavailable module checkout. |
 | 190 | Task Commit and Push remain independent, and Push excludes dirty work. |
 | 191 | Module Push is offered for a clean ahead branch while Commit requires dirty work. |
@@ -219,7 +219,7 @@ named gate before the full Studio suite, typecheck, and build.
 | 234 | The opt-in WebView-underlay comparison coordinates retained native Ghostty terminals through one generation-fenced window selection. |
 | 235 | Native Ghostty warm retention caps the total mounted set at the measured 20-view limit, keeps the selected run, refreshes recency on revisit, and evicts the least recently viewed inactive viewer. |
 | 236 | A bottom-left toast stays outside the selected native Ghostty host and above the Studio footer and safe areas; stacked notifications remain actionable without lowering, detaching, recreating, or focusing the terminal. |
-| 237 | The Modules pane toggle sits at the left edge of the workspace, while module creation sits immediately beside the last module tab without stretching the tab list into spare space. Overflowing tabs remain horizontally scrollable. |
+| 237 | The Modules pane toggle stays fixed at the workspace's left edge, while module creation sits after the last module tab and scrolls horizontally with the tabs. |
 | 238 | An authoritative snapshot that reports an agent run exited closes its mounted terminal tab and clears the local terminal session. |
 | 239 | Module Changes occupies the footer's left slot with a version-control symbol, stays disabled without a selected Module, and no longer appears beside Terminal and Settings. |
 | 240 | A newly captured Story appears first in its issue type's initial workflow state while creation is pending and remains first after the authoritative persisted result replaces it. |
@@ -255,7 +255,7 @@ named gate before the full Studio suite, typecheck, and build.
 | 270 | Queued native terminal commands are ignored after their view is detached. |
 | 271 | A long task Changes page scrolls through one workspace owner. |
 | 272 | Long module Changes columns remain bounded with one scroll owner per column. |
-| 273 | Module Changes horizontal overflow stays inside the workspace. |
+| 273 | Module Changes columns stay inside the workspace without horizontal overflow. |
 | 274 | Dormant chips remain in a bounded scroll owner above the active tab. |
 | 275 | Refresh restores run status through a unique subscription identity; refused subscriptions retry. |
 
@@ -326,6 +326,11 @@ named gate before the full Studio suite, typecheck, and build.
 | 333 | If the planning origin disappears, Back returns to the same module's conversation Details workspace. |
 | 334 | Back stays usable while Changes is loading or reports an error. |
 | 335 | Selecting a task checkout marks it selected and keeps Back usable while fresh task changes load. |
+| 336 | The branch inspector starts closed, opens from the toolbar, and closes again, leaving files and diff as the only review surface. |
+| 337 | The task Agent picker offers Terminal and opens a plain module shell in the terminal panel without launching an agent run. |
+| 338 | Clicking the open module picker trigger closes its portalled dialog without reopening it during the focus transition. |
+| 339 | A persisted subtree campaign with a live descendant replaces both launch actions with lifecycle status and Open, blocks Cmd+Enter, keeps Run item, and restores launch actions after completion. |
+| 340 | A stale subtree launch refusal refreshes the persisted campaign into status/Open without retrying execution. |
 
 Each executable case carries one stable `[overhaul-NN]` marker. The gate has a
 contract test that fails if a marker is missing or duplicated. A case whose

@@ -19,6 +19,7 @@ pub mod project_onboarding_migration;
 pub mod read_queries;
 pub mod read_types;
 pub(crate) mod state;
+pub mod tag_migration;
 mod transition_occurrences;
 pub(crate) mod work_item;
 pub mod workflow_color_migration;

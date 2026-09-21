@@ -8,6 +8,7 @@ import {
 import { createPortal } from "react-dom";
 import { useModalStore } from "../../../../../app/modal/modalStore";
 import { prefetchProviderCatalog } from "../../../../../features/workflows";
+import { openTerminalPanel } from "../../../../../features/terminal-panel";
 import { loadSelectedTicketTerminal } from "../terminals/selectedTicketTerminalLoader";
 
 /** Taskless scratch run intents offered by the scratch launcher menu. */
@@ -250,7 +251,10 @@ export function WorkspaceLauncher({
                 projectId: launchContext.projectId,
                 taskId: launchContext.taskId,
                 ...(launchContext.moduleId
-                  ? { moduleId: launchContext.moduleId }
+                  ? {
+                      moduleId: launchContext.moduleId,
+                      onTerminal: openTerminalPanel,
+                    }
                   : {}),
                 onLaunched: onTaskAgentLaunched,
               },

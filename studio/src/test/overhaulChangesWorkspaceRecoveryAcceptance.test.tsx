@@ -118,7 +118,7 @@ describe("overhaul acceptance, Changes workspace recovery", () => {
 
       fireEvent.click(screen.getByRole("button", { name: "Open module Changes" }));
       if (result === "loading") {
-        expect(await screen.findByText("Loading module changes...")).toBeVisible();
+        expect(await screen.findByText("Loading changes...")).toBeVisible();
       } else {
         expect(await screen.findByRole("alert")).toHaveTextContent(
           "Changes could not be loaded.",

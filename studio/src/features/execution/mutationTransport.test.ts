@@ -27,7 +27,12 @@ function installGraphQl(operations: string[], holding: boolean) {
               graph_run_holding: {
                 __typename: "GraphRunsConnection",
                 nodes: holding
-                  ? [{ __typename: "GraphRuns", root_id: "root-1", execution_mode: "serial" }]
+                  ? [{
+                      __typename: "GraphRuns",
+                      root_id: "root-1",
+                      execution_mode: "serial",
+                      updated_at: "2026-09-21T10:00:00Z",
+                    }]
                   : [],
               },
             },
@@ -41,6 +46,7 @@ function installGraphQl(operations: string[], holding: boolean) {
                 __typename: "GraphRuns",
                 root_id: "root-1",
                 execution_mode: request.variables.executionMode ?? "parallel",
+                updated_at: "2026-09-21T10:00:01Z",
               },
               launched: holding ? [] : ["child-1"],
             },

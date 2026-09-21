@@ -74,7 +74,7 @@ async fn move_run_ticket_to_validation(client: &mut SocketClient) {
 }
 
 #[tokio::test]
-async fn ticket_run_cannot_terminate_before_reaching_a_configured_destination_state() {
+async fn blocked_run_can_stop_without_changing_or_archiving_its_ticket() {
     let directory = tempfile::tempdir().unwrap();
     prepare_command_database(&directory).await;
     let ownership = DataDirectoryGuard::acquire(directory.path()).unwrap();
@@ -92,30 +92,9 @@ async fn ticket_run_cannot_terminate_before_reaching_a_configured_destination_st
         .unwrap();
     let mut client =
         SocketClient::connect_run(runtime.socket_path(), "run-valid", &authorization).await;
-    let rejected = client
-        .structured(1, "terminate_current_run", json!({}))
+    let before = client
+        .structured(1, "get_task_details", json!({"id_or_key": "AUTH-900"}))
         .await;
-    assert_eq!(rejected["ok"], false, "{rejected}");
-    assert_eq!(
-        rejected["error"], "ticket_transition_required",
-        "{rejected}"
-    );
-    assert_eq!(rejected["launch_state"], "Building", "{rejected}");
-    assert_eq!(rejected["current_state"], "Building", "{rejected}");
-    assert_eq!(
-        rejected["allowed_states"],
-        json!(["Validation"]),
-        "{rejected}"
-    );
-    assert!(
-        rejected["detail"]
-            .as_str()
-            .is_some_and(|detail| detail.contains("Validation")),
-        "{rejected}"
-    );
-    assert_eq!(terminal_record(&directory).await, (None, 0));
-
-    move_run_ticket_to_validation(&mut client).await;
     let accepted = client
         .structured(2, "terminate_current_run", json!({}))
         .await;
@@ -123,6 +102,19 @@ async fn ticket_run_cannot_terminate_before_reaching_a_configured_destination_st
     assert_eq!(accepted["termination_requested"], true, "{accepted}");
     assert_eq!(wait_for_terminal_record(&directory).await.1, 1);
 
+    // A stopped run is not a completed, cancelled, or archived work item.
+    let mut reader = SocketClient::connect_global(runtime.socket_path()).await;
+    let after = reader
+        .structured(3, "get_task_details", json!({"id_or_key": "AUTH-900"}))
+        .await;
+    assert!(before["result"]["state_id"].is_string(), "{before}");
+    for field in ["state_id", "is_archived", "blocked_by_ids", "blocks_ids"] {
+        assert_eq!(
+            after["result"][field], before["result"][field],
+            "{field}: {after}"
+        );
+    }
+    assert_eq!(after["result"]["is_archived"], false);
     runtime.shutdown().await;
 }
 

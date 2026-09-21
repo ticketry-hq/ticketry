@@ -5,6 +5,7 @@ import { TaskWorktreeChanges } from "../features/agents/worktrees";
 import { documentOperationName } from "../graphql-foundation/typedDocument";
 import { FoundationGraphQlError } from "../shared/apollo/errorLink";
 import { fixture, mountStudio, workItem } from "./seam";
+import { openInspectorSection } from "./changesSurface";
 
 const TASK_ID = "cleanup-task";
 const URL = "https://github.com/ticketry-hq/ticketry/pull/1326";
@@ -110,6 +111,7 @@ describe("overhaul acceptance - merged worktree cleanup", () => {
       },
     });
 
+    await openInspectorSection("Worktree");
     expect(await screen.findByLabelText("Worktree cleanup status")).toHaveTextContent(reason);
     expect(screen.queryByRole("button", { name: "Cleanup local worktree" })).toBeNull();
     if (blocker === "checkout_dirty") {
@@ -177,6 +179,7 @@ describe("overhaul acceptance - merged worktree cleanup", () => {
       },
     });
 
+    await openInspectorSection("Worktree");
     fireEvent.click(await screen.findByRole("button", { name: "Cleanup local worktree" }));
     expect(screen.getByRole("group", { name: "Confirm local worktree cleanup" })).toBeVisible();
     expect(operations).toHaveLength(0);

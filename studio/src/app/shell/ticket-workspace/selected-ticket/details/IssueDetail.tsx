@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useMemo, useState } from "react";
 import {
   deriveEpic,
   formatWorkItemDisplayIdentifier,
@@ -25,6 +25,7 @@ import { deleteWorkItem } from "../../../../../features/work-items";
 import { WorkItemNotFoundError } from "../../../../../shared/api/workItemBatcher";
 import { useCachedStates } from "../../../../../features/projects";
 import { useIssueTypesQuery } from "../../../../../features/settings";
+import { usePersistedSubtreeRun } from "../../../../../features/execution";
 
 const EMPTY_MODULES: Module[] = [];
 const EMPTY_PROJECTS: Project[] = [];
@@ -104,6 +105,23 @@ function IssueDetailContent({ issueId, detailsVisible }: { issueId: string; deta
   const projects = useProjectsQuery().data ?? EMPTY_PROJECTS;
   const states = useCachedStates(task?.project_id ?? null);
   const issueTypes = useIssueTypesQuery(task?.project_id ?? null).data ?? [];
+  const subtreeDescendantIds = useMemo(() => {
+    const ids: string[] = [];
+    const seen = new Set([issueId]);
+    const pending = [...(membership.children[issueId] ?? [])];
+    while (pending.length > 0) {
+      const id = pending.pop();
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      ids.push(id);
+      pending.push(...(membership.children[id] ?? []));
+    }
+    return ids;
+  }, [issueId, membership]);
+  const persistedSubtreeRun = usePersistedSubtreeRun(
+    task && task.sub_issues_count > 0 ? task.id : null,
+    subtreeDescendantIds,
+  );
   const epic = deriveEpic(task, modules, items);
   const moduleMembership =
     task && (epic?.id ?? selectedModuleId)
@@ -305,11 +323,17 @@ function IssueDetailContent({ issueId, detailsVisible }: { issueId: string; deta
             key={`subtree-run-${task.id}`}
             task={task}
             moduleId={epic?.id ?? selectedModuleId ?? null}
+            activeRun={persistedSubtreeRun.activeRun}
+            runStateLoading={persistedSubtreeRun.loading}
+            refreshRunState={persistedSubtreeRun.refresh}
           />
           <SerialRunAction
             key={`serial-run-${task.id}`}
             task={task}
             moduleId={epic?.id ?? selectedModuleId ?? null}
+            activeRun={persistedSubtreeRun.activeRun}
+            runStateLoading={persistedSubtreeRun.loading}
+            refreshRunState={persistedSubtreeRun.refresh}
           />
           <NormalRunAction
             key={`normal-run-${task.id}`}

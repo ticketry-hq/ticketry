@@ -20,6 +20,8 @@ pub struct Model {
     pub issue_types: HasMany<super::issue_type::Entity>,
     #[sea_orm(has_many)]
     pub issues: HasMany<super::issue::Entity>,
+    #[sea_orm(has_many)]
+    pub labels: HasMany<super::label::Entity>,
 }
 
 impl ActiveModelBehavior for ActiveModel {}

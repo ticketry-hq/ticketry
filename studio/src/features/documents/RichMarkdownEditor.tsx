@@ -81,7 +81,7 @@ export default function RichMarkdownEditor({
         markdown={markdown}
         onChange={onChange}
         onError={({ source }) => onParseError(source)}
-        contentEditableClassName={`prose prose-invert mx-auto max-w-none focus:outline-none ${
+        contentEditableClassName={`prose prose-invert mx-auto max-w-none text-base focus:outline-none ${
           compact
             ? "min-h-[10rem] px-3 py-3"
             : "min-h-[55vh] px-8 py-10"

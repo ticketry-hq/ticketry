@@ -327,7 +327,7 @@ async fn validate_manifest(
 }
 
 async fn validate_semantics(database: &DatabaseConnection) -> Result<(), AdoptionError> {
-    let checks = [
+    let mut checks = vec![
         ("project sequence counters", "SELECT COUNT(*) AS count FROM worktracker_project p WHERE p.seq_counter < COALESCE((SELECT MAX(i.sequence_id) FROM worktracker_issue i WHERE i.project_id = p.id), 0)"),
         ("cross-project issue catalogues", "SELECT COUNT(*) AS count FROM worktracker_issue i JOIN worktracker_issuetype t ON t.id=i.issue_type_id WHERE i.project_id<>t.project_id"),
         ("cross-project issue states", "SELECT COUNT(*) AS count FROM worktracker_issue i JOIN worktracker_state s ON s.id=i.state_id WHERE i.project_id<>s.project_id"),
@@ -335,6 +335,9 @@ async fn validate_semantics(database: &DatabaseConnection) -> Result<(), Adoptio
         ("cross-project modules", "SELECT COUNT(*) AS count FROM worktracker_issue i JOIN worktracker_issue m ON m.id=i.module_id WHERE i.project_id<>m.project_id OR m.type<>'module'"),
         ("invalid blocker endpoints", "SELECT COUNT(*) AS count FROM worktracker_issue_blocked_by b JOIN worktracker_issue a ON a.id=b.from_issue_id JOIN worktracker_issue z ON z.id=b.to_issue_id WHERE a.project_id<>z.project_id OR a.id=z.id"),
     ];
+    if table_exists(database, super::tag_migration::LEDGER_TABLE).await? {
+        checks.push(("cross-project issue tags", "SELECT COUNT(*) AS count FROM worktracker_issue_labels il JOIN worktracker_issue i ON i.id=il.issue_id JOIN worktracker_label l ON l.id=il.label_id WHERE i.project_id<>l.project_id"));
+    }
     for (label, query) in checks {
         let row = database
             .query_one_raw(Statement::from_string(DbBackend::Sqlite, query.to_owned()))
@@ -413,7 +416,8 @@ async fn effective_owned_tables(
     .await?;
     let workflow_handoff_installed =
         table_exists(database, super::workflow_handoff_migration::LEDGER_TABLE).await?;
-    Ok(owned_tables(generation)
+    let tags_installed = table_exists(database, super::tag_migration::LEDGER_TABLE).await?;
+    let mut tables = owned_tables(generation)
         .into_iter()
         .map(|(table, columns)| {
             let mut columns = columns.to_vec();
@@ -434,7 +438,16 @@ async fn effective_owned_tables(
             }
             (table, columns)
         })
-        .collect())
+        .collect::<Vec<_>>();
+    if tags_installed {
+        for (table, columns) in [
+            super::ownership_manifest::LABEL,
+            super::ownership_manifest::ISSUE_LABEL,
+        ] {
+            tables.push((table, columns.to_vec()));
+        }
+    }
+    Ok(tables)
 }
 
 async fn checkpoint(database: &DatabaseConnection) -> Result<(), AdoptionError> {
@@ -591,6 +604,7 @@ mod tests {
     use sea_orm::{ConnectionTrait, Database};
 
     use super::{effective_owned_tables, SchemaGeneration};
+    use crate::work_management::tag_migration::LEDGER_TABLE as TAG_LEDGER_TABLE;
     use crate::work_management::workflow_handoff_migration::LEDGER_TABLE as WORKFLOW_HANDOFF_LEDGER_TABLE;
 
     #[tokio::test]
@@ -612,6 +626,34 @@ mod tests {
             .await
             .unwrap();
         assert!(transition_columns(&after).contains(&"handoff"));
+    }
+
+    #[tokio::test]
+    async fn tag_tables_are_owned_only_after_the_tag_migration() {
+        let database = Database::connect("sqlite::memory:").await.unwrap();
+        let before = effective_owned_tables(&database, SchemaGeneration::ProjectOnly)
+            .await
+            .unwrap();
+        assert!(!before
+            .iter()
+            .any(|(table, _)| *table == "worktracker_label"));
+
+        database
+            .execute_unprepared(&format!(
+                "CREATE TABLE {TAG_LEDGER_TABLE} (singleton INTEGER PRIMARY KEY)"
+            ))
+            .await
+            .unwrap();
+
+        let after = effective_owned_tables(&database, SchemaGeneration::ProjectOnly)
+            .await
+            .unwrap();
+        assert!(after.iter().any(|(table, columns)| {
+            *table == "worktracker_label" && columns == &["id", "project_id", "name", "color"]
+        }));
+        assert!(after.iter().any(|(table, columns)| {
+            *table == "worktracker_issue_labels" && columns == &["id", "issue_id", "label_id"]
+        }));
     }
 
     fn transition_columns<'a>(

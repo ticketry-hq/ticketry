@@ -50,6 +50,7 @@ interface SubtreeRunLaunchOptions {
   inertMessage: string;
   failureMessage: string;
   execute?: () => Promise<{ launched: string[] }>;
+  refreshRunState?: () => Promise<void>;
 }
 
 /**
@@ -67,6 +68,7 @@ export function useSubtreeRunLaunch({
   inertMessage,
   failureMessage,
   execute,
+  refreshRunState,
 }: SubtreeRunLaunchOptions): SubtreeRunLaunch {
   const states = useCachedStates(item.project_id);
   const [pending, setPending] = useState(false);
@@ -87,6 +89,7 @@ export function useSubtreeRunLaunch({
         toast.error(inertMessage);
       }
     } catch (error) {
+      await refreshRunState?.().catch(() => undefined);
       if (
         error instanceof ApiError &&
         error.body &&

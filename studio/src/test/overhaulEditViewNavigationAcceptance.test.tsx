@@ -22,6 +22,10 @@ import {
 import { setStatesSorted } from "../features/projects";
 import { setProviderCapabilities } from "../features/workflows";
 import { useClientStore, type EditViewZone } from "../state/clientStore";
+import {
+  leaveChangesWorkspace,
+  openModuleChangesWorkspace,
+} from "../features/agents/worktrees";
 import { workItem } from "./seam";
 import { seedModuleOpenFixture } from "./projectOpenFixture";
 
@@ -464,6 +468,23 @@ describe("overhaul acceptance — Edit view navigation zones", () => {
     expect(useClientStore.getState().editViewZone).toBe("active-tab-body");
     press("Tab", { shiftKey: true });
     expect(useClientStore.getState().editViewZone).toBe("stories");
+  });
+
+  it("leaves Enter and the arrows to the Changes surface while it is open", async () => {
+    await renderEditViewWorkspace(EXPANDED_ROWS);
+    act(() => openModuleChangesWorkspace("module-1"));
+
+    for (const key of ["Enter", "ArrowDown", "ArrowRight"]) {
+      const event = new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true });
+      act(() => { window.dispatchEvent(event); });
+      expect(event.defaultPrevented).toBe(false);
+    }
+    press("Tab", { shiftKey: true });
+    expect(useClientStore.getState().editViewZone).toBe("stories");
+
+    act(() => leaveChangesWorkspace());
+    press("Tab", { shiftKey: true });
+    expect(useClientStore.getState().editViewZone).toBe("tab-strip");
   });
 
   it("cycles workspace tabs with Cmd+Arrow in edit view", async () => {

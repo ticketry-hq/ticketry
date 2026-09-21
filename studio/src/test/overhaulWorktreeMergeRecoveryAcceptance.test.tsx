@@ -7,6 +7,7 @@ import { ChangesWorkspace } from "../features/agents/worktrees";
 import { documentOperationName } from "../graphql-foundation/typedDocument";
 import { FoundationGraphQlError } from "../shared/apollo/errorLink";
 import { fixture, mountStudio, workItem } from "./seam";
+import { openBranchInspector } from "./changesSurface";
 
 const TASK_ID = "merge-recovery-task";
 const SOURCE_COMMIT = "1111111111111111111111111111111111111111";
@@ -185,6 +186,8 @@ function mountMergeRecovery(
 async function openChanges() {
   const tabs = await screen.findByRole("tablist", { name: "Workspace tabs" });
   fireEvent.click(within(tabs).getByRole("tab", { name: "Changes" }));
+  // Local merge lives in the branch inspector, which starts closed.
+  await openBranchInspector();
 }
 
 describe("overhaul acceptance - divergent local merge recovery", () => {

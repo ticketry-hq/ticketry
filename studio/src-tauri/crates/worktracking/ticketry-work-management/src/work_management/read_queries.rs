@@ -219,7 +219,11 @@ pub async fn work_item(
     database: &DatabaseConnection,
     id_or_key: &str,
 ) -> Result<Option<output::WorkItem>, DbErr> {
-    let row = if let Some((slug, sequence)) = id_or_key.rsplit_once('-') {
+    let row = if uuid::Uuid::parse_str(id_or_key).is_ok() {
+        issue::Entity::find_by_id(database_uuid(id_or_key))
+            .one(database)
+            .await?
+    } else if let Some((slug, sequence)) = id_or_key.rsplit_once('-') {
         if let Ok(sequence_id) = sequence.parse::<i32>() {
             let project = project::Entity::find()
                 .filter(project::Column::Slug.eq(slug.to_uppercase()))

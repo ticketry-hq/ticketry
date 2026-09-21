@@ -16,6 +16,7 @@ import {
   routeSharedNavigation,
 } from "./sharedNavigation";
 import { routeTerminalPanelToggle } from "../../features/terminal-panel";
+import { useChangesWorkspace } from "../../features/agents/worktrees";
 import { subscribeNativeTerminalChords } from "./nativeTerminalChords";
 import type { TreeRow } from "../shell/ticket-workspace/tasks/TasksPane";
 import { studioKeymapRegistry } from "./keymapRegistry";
@@ -63,6 +64,9 @@ export function useGlobalKeymap(taskRows: TreeRow[] = EMPTY_TASK_ROWS): void {
       // focus position, including an agent terminal in typing mode (#667).
       if (routeTerminalPanelToggle(event, actionId)) return;
       if (routeModulePositionNavigation(event, actionId)) return;
+      // The Changes surface replaces the planning panes; routing Enter and the
+      // arrows to hidden panes would swallow every keyboard click in it.
+      if (useChangesWorkspace.getState().active) return;
       if (
         actionId === "workspace-tab-next" ||
         actionId === "workspace-tab-previous"

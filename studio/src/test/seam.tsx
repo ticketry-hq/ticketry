@@ -53,6 +53,7 @@ export interface HttpFixture {
   reorderBodies(id: string): Array<{ before_id: string | null; after_id: string | null }>;
   graphRunCount(id: string): number;
   graphRunModes(id: string): Array<string | null>;
+  persistGraphRun(id: string, updatedAt?: string): void;
   runNowCount(id: string): number;
   /** Refuses the next Run Now mutation only, leaving other requests untouched. */
   failNextRunNow(status: number, body?: unknown): void;
@@ -133,6 +134,7 @@ class BoundaryFixture implements StudioFixture {
   private graphRunInertPresses = 0;
   private graphRunGate: Promise<void> | null = null;
   private readonly armedGraphRuns = new Set<string>();
+  private readonly graphRunUpdatedAt = new Map<string, string>();
   private runNowFailures: Array<{ status: number; body: unknown }> = [];
   private runNowGate: Promise<void> | null = null;
   private subtreeRunEnabled = true;
@@ -269,6 +271,14 @@ class BoundaryFixture implements StudioFixture {
     return this.graphRuns
       .filter((candidate) => candidate.id === id)
       .map((candidate) => candidate.mode);
+  }
+
+  persistGraphRun(
+    id: string,
+    updatedAt = "2026-09-21T10:00:00Z",
+  ): void {
+    this.armedGraphRuns.add(id);
+    this.graphRunUpdatedAt.set(id, updatedAt);
   }
 
   runNowCount(id: string): number {
@@ -724,8 +734,14 @@ class BoundaryFixture implements StudioFixture {
     if (documentOperationName(document) === "ExecutionGraphRunHolding") {
       return {
         graph_run_holding: {
+          __typename: "GraphRunsConnection",
           nodes: this.armedGraphRuns.has(id)
-            ? [{ root_id: id, execution_mode: "parallel" }]
+            ? [{
+                __typename: "GraphRuns",
+                root_id: id,
+                execution_mode: "parallel",
+                updated_at: this.graphRunUpdatedAt.get(id) ?? "2026-09-21T10:00:00Z",
+              }]
             : [],
         },
       } as TResult;
@@ -756,11 +772,16 @@ class BoundaryFixture implements StudioFixture {
       throw new FoundationGraphQlError(code as "conflict", message);
     }
     this.armedGraphRuns.add(id);
+    const updatedAt = "2026-09-21T10:00:00Z";
+    this.graphRunUpdatedAt.set(id, updatedAt);
     return {
       graph_run_result: {
+        __typename: "GraphRunMutationPayload",
         graph_run: {
+          __typename: "GraphRuns",
           root_id: id,
           execution_mode: input.executionMode ?? "parallel",
+          updated_at: updatedAt,
         },
         launched: inert ? [] : this.launchableChildren(id),
       },

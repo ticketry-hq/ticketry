@@ -2,6 +2,7 @@ export interface PullRequestStatusValue {
   url?: string | null;
   state: string;
   target_branch?: string | null;
+  integrated?: boolean;
   post_merge_work: boolean;
   replacement_eligible: boolean;
   follow_up_eligible: boolean;
@@ -22,9 +23,13 @@ const labels: Record<string, string> = {
   unavailable: "Pull request status unavailable",
 };
 
+export function pullRequestStateLabel(state: string): string {
+  return labels[state] ?? "Pull request status unavailable";
+}
+
 export function PullRequestStatus({ status }: { status?: PullRequestStatusValue | null }) {
   if (!status || status.state === "none") return null;
-  const label = labels[status.state] ?? "Pull request status unavailable";
+  const label = pullRequestStateLabel(status.state);
   const detail = status.state === "wrong_base" && status.target_branch
     ? `Targets ${status.target_branch}, not the recorded base.`
     : status.post_merge_work

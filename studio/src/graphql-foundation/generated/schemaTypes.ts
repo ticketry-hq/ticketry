@@ -1056,6 +1056,7 @@ export type MutationUpdate_Work_ItemArgs = {
   name?: InputMaybe<Scalars['String']['input']>;
   parent_id?: InputMaybe<Scalars['String']['input']>;
   state_id?: InputMaybe<Scalars['String']['input']>;
+  tag_names?: InputMaybe<Array<Scalars['String']['input']>>;
   workspace_tab_order?: InputMaybe<Scalars['Json']['input']>;
 };
 
@@ -1258,8 +1259,10 @@ export type Query = {
   worktrackerAttachment: WorktrackerAttachmentConnection;
   worktrackerIssue: WorktrackerIssueConnection;
   worktrackerIssueBlockedBy: WorktrackerIssueBlockedByConnection;
+  worktrackerIssueLabels: WorktrackerIssueLabelsConnection;
   worktrackerIssuetype: WorktrackerIssuetypeConnection;
   worktrackerIssuetypetransition: WorktrackerIssuetypetransitionConnection;
+  worktrackerLabel: WorktrackerLabelConnection;
   worktrackerLaunchbinding: WorktrackerLaunchbindingConnection;
   worktrackerModulepresentation: WorktrackerModulepresentationConnection;
   worktrackerProject: WorktrackerProjectConnection;
@@ -1426,6 +1429,14 @@ export type QueryWorktrackerIssueBlockedByArgs = {
 };
 
 
+export type QueryWorktrackerIssueLabelsArgs = {
+  filters?: InputMaybe<WorktrackerIssueLabelsFilterInput>;
+  having?: InputMaybe<WorktrackerIssueLabelsHavingInput>;
+  orderBy?: InputMaybe<WorktrackerIssueLabelsOrderInput>;
+  pagination?: InputMaybe<PaginationInput>;
+};
+
+
 export type QueryWorktrackerIssuetypeArgs = {
   filters?: InputMaybe<WorktrackerIssuetypeFilterInput>;
   having?: InputMaybe<WorktrackerIssuetypeHavingInput>;
@@ -1438,6 +1449,14 @@ export type QueryWorktrackerIssuetypetransitionArgs = {
   filters?: InputMaybe<WorktrackerIssuetypetransitionFilterInput>;
   having?: InputMaybe<WorktrackerIssuetypetransitionHavingInput>;
   orderBy?: InputMaybe<WorktrackerIssuetypetransitionOrderInput>;
+  pagination?: InputMaybe<PaginationInput>;
+};
+
+
+export type QueryWorktrackerLabelArgs = {
+  filters?: InputMaybe<WorktrackerLabelFilterInput>;
+  having?: InputMaybe<WorktrackerLabelHavingInput>;
+  orderBy?: InputMaybe<WorktrackerLabelOrderInput>;
   pagination?: InputMaybe<PaginationInput>;
 };
 
@@ -1919,6 +1938,7 @@ export type WorktrackerIssue = {
   description: Scalars['String']['output'];
   id: Scalars['String']['output'];
   isArchived: Scalars['Boolean']['output'];
+  issueLabel: WorktrackerIssueLabelsConnection;
   issueType?: Maybe<WorktrackerIssuetype>;
   issueTypeId: Scalars['String']['output'];
   module?: Maybe<WorktrackerIssue>;
@@ -1972,6 +1992,13 @@ export type WorktrackerIssueBlocksEdgesArgs = {
 export type WorktrackerIssueChildrenArgs = {
   filters?: InputMaybe<WorktrackerIssueFilterInput>;
   orderBy?: InputMaybe<WorktrackerIssueOrderInput>;
+  pagination?: InputMaybe<PaginationInput>;
+};
+
+
+export type WorktrackerIssueIssueLabelArgs = {
+  filters?: InputMaybe<WorktrackerIssueLabelsFilterInput>;
+  orderBy?: InputMaybe<WorktrackerIssueLabelsOrderInput>;
   pagination?: InputMaybe<PaginationInput>;
 };
 
@@ -2074,6 +2101,7 @@ export type WorktrackerIssueHavingInput = {
   blockedByEdges?: InputMaybe<WorktrackerIssueBlockedByFilterInput>;
   blocksEdges?: InputMaybe<WorktrackerIssueBlockedByFilterInput>;
   children?: InputMaybe<WorktrackerIssueFilterInput>;
+  issueLabel?: InputMaybe<WorktrackerIssueLabelsFilterInput>;
   issueType?: InputMaybe<WorktrackerIssuetypeFilterInput>;
   module?: InputMaybe<WorktrackerIssueFilterInput>;
   moduleMembers?: InputMaybe<WorktrackerIssueFilterInput>;
@@ -2081,6 +2109,49 @@ export type WorktrackerIssueHavingInput = {
   presentation?: InputMaybe<WorktrackerModulepresentationFilterInput>;
   project?: InputMaybe<WorktrackerProjectFilterInput>;
   state?: InputMaybe<WorktrackerStateFilterInput>;
+};
+
+export type WorktrackerIssueLabels = {
+  __typename?: 'WorktrackerIssueLabels';
+  id: Scalars['Int']['output'];
+  issue?: Maybe<WorktrackerIssue>;
+  issueId: Scalars['String']['output'];
+  label?: Maybe<WorktrackerLabel>;
+  labelId: Scalars['String']['output'];
+};
+
+export type WorktrackerIssueLabelsConnection = {
+  __typename?: 'WorktrackerIssueLabelsConnection';
+  edges: Array<WorktrackerIssueLabelsEdge>;
+  nodes: Array<WorktrackerIssueLabels>;
+  pageInfo: PageInfo;
+  paginationInfo?: Maybe<PaginationInfo>;
+};
+
+export type WorktrackerIssueLabelsEdge = {
+  __typename?: 'WorktrackerIssueLabelsEdge';
+  cursor: Scalars['String']['output'];
+  node: WorktrackerIssueLabels;
+};
+
+export type WorktrackerIssueLabelsFilterInput = {
+  and?: InputMaybe<Array<WorktrackerIssueLabelsFilterInput>>;
+  id?: InputMaybe<IntegerFilterInput>;
+  issueId?: InputMaybe<StringFilterInput>;
+  labelId?: InputMaybe<StringFilterInput>;
+  not?: InputMaybe<WorktrackerIssueLabelsFilterInput>;
+  or?: InputMaybe<Array<WorktrackerIssueLabelsFilterInput>>;
+};
+
+export type WorktrackerIssueLabelsHavingInput = {
+  issue?: InputMaybe<WorktrackerIssueFilterInput>;
+  label?: InputMaybe<WorktrackerLabelFilterInput>;
+};
+
+export type WorktrackerIssueLabelsOrderInput = {
+  id?: InputMaybe<OrderByEnum>;
+  issueId?: InputMaybe<OrderByEnum>;
+  labelId?: InputMaybe<OrderByEnum>;
 };
 
 export type WorktrackerIssueOrderInput = {
@@ -2272,6 +2343,59 @@ export type WorktrackerIssuetypetransitionOrderInput = {
   toStateId?: InputMaybe<OrderByEnum>;
 };
 
+export type WorktrackerLabel = {
+  __typename?: 'WorktrackerLabel';
+  color: Scalars['String']['output'];
+  id: Scalars['String']['output'];
+  issueLabel: WorktrackerIssueLabelsConnection;
+  name: Scalars['String']['output'];
+  project?: Maybe<WorktrackerProject>;
+  projectId: Scalars['String']['output'];
+};
+
+
+export type WorktrackerLabelIssueLabelArgs = {
+  filters?: InputMaybe<WorktrackerIssueLabelsFilterInput>;
+  orderBy?: InputMaybe<WorktrackerIssueLabelsOrderInput>;
+  pagination?: InputMaybe<PaginationInput>;
+};
+
+export type WorktrackerLabelConnection = {
+  __typename?: 'WorktrackerLabelConnection';
+  edges: Array<WorktrackerLabelEdge>;
+  nodes: Array<WorktrackerLabel>;
+  pageInfo: PageInfo;
+  paginationInfo?: Maybe<PaginationInfo>;
+};
+
+export type WorktrackerLabelEdge = {
+  __typename?: 'WorktrackerLabelEdge';
+  cursor: Scalars['String']['output'];
+  node: WorktrackerLabel;
+};
+
+export type WorktrackerLabelFilterInput = {
+  and?: InputMaybe<Array<WorktrackerLabelFilterInput>>;
+  color?: InputMaybe<StringFilterInput>;
+  id?: InputMaybe<StringFilterInput>;
+  name?: InputMaybe<StringFilterInput>;
+  not?: InputMaybe<WorktrackerLabelFilterInput>;
+  or?: InputMaybe<Array<WorktrackerLabelFilterInput>>;
+  projectId?: InputMaybe<StringFilterInput>;
+};
+
+export type WorktrackerLabelHavingInput = {
+  issueLabel?: InputMaybe<WorktrackerIssueLabelsFilterInput>;
+  project?: InputMaybe<WorktrackerProjectFilterInput>;
+};
+
+export type WorktrackerLabelOrderInput = {
+  color?: InputMaybe<OrderByEnum>;
+  id?: InputMaybe<OrderByEnum>;
+  name?: InputMaybe<OrderByEnum>;
+  projectId?: InputMaybe<OrderByEnum>;
+};
+
 export type WorktrackerLaunchbinding = {
   __typename?: 'WorktrackerLaunchbinding';
   agentModel?: Maybe<WorktrackerAgentmodel>;
@@ -2397,6 +2521,7 @@ export type WorktrackerProject = {
   id: Scalars['String']['output'];
   issue: WorktrackerIssueConnection;
   issueType: WorktrackerIssuetypeConnection;
+  label: WorktrackerLabelConnection;
   name: Scalars['String']['output'];
   onboardingRequired: Scalars['Boolean']['output'];
   seqCounter: Scalars['Int']['output'];
@@ -2417,6 +2542,13 @@ export type WorktrackerProjectIssueArgs = {
 export type WorktrackerProjectIssueTypeArgs = {
   filters?: InputMaybe<WorktrackerIssuetypeFilterInput>;
   orderBy?: InputMaybe<WorktrackerIssuetypeOrderInput>;
+  pagination?: InputMaybe<PaginationInput>;
+};
+
+
+export type WorktrackerProjectLabelArgs = {
+  filters?: InputMaybe<WorktrackerLabelFilterInput>;
+  orderBy?: InputMaybe<WorktrackerLabelOrderInput>;
   pagination?: InputMaybe<PaginationInput>;
 };
 
@@ -2459,6 +2591,7 @@ export type WorktrackerProjectFilterInput = {
 export type WorktrackerProjectHavingInput = {
   issue?: InputMaybe<WorktrackerIssueFilterInput>;
   issueType?: InputMaybe<WorktrackerIssuetypeFilterInput>;
+  label?: InputMaybe<WorktrackerLabelFilterInput>;
   state?: InputMaybe<WorktrackerStateFilterInput>;
 };
 

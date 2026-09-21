@@ -149,6 +149,11 @@ const MODULE_PRESENTATION: (&str, &[&str]) = (
     &["module_id", "rank", "tab_hidden"],
 );
 
+pub const LABEL: (&str, &[&str]) = ("worktracker_label", &["id", "project_id", "name", "color"]);
+
+pub const ISSUE_LABEL: (&str, &[&str]) =
+    ("worktracker_issue_labels", &["id", "issue_id", "label_id"]);
+
 const ISSUE_WITH_TAB_ORDER: (&str, &[&str]) = (
     "worktracker_issue",
     &[

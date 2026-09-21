@@ -2,10 +2,22 @@ import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 
 describe("overhaul acceptance - typography readability", () => {
-  it("[overhaul-160] preserves the established Studio face and native terminal readability", async () => {
-    const [surfaceSource, ghosttyTheme, xtermSource, launchMaterializer, hostedCommand] =
+  it("[overhaul-160] keeps story descriptions at the terminal's 14px size", async () => {
+    const [
+      surfaceSource,
+      tailwindConfig,
+      descriptionEditor,
+      richMarkdownEditor,
+      ghosttyTheme,
+      xtermSource,
+      launchMaterializer,
+      hostedCommand,
+    ] =
       await Promise.all([
         readFile(`${process.cwd()}/src/app/styles/studio-surface.css`, "utf8"),
+        readFile(`${process.cwd()}/tailwind.config.ts`, "utf8"),
+        readFile(`${process.cwd()}/src/features/documents/DescriptionEditor.tsx`, "utf8"),
+        readFile(`${process.cwd()}/src/features/documents/RichMarkdownEditor.tsx`, "utf8"),
         readFile(`${process.cwd()}/src-tauri/native/ticketry-ghostty.conf`, "utf8"),
         readFile(`${process.cwd()}/src/features/agents/terminal/internal/entryPool.ts`, "utf8"),
         readFile(
@@ -24,6 +36,11 @@ describe("overhaul acceptance - typography readability", () => {
     expect(surfaceSource).not.toMatch(
       /\.studio-surface\s*\{[^}]*font-sans[^}]*\}/s,
     );
+
+    expect(tailwindConfig).toMatch(/base:\s*\["14px"/);
+    expect(descriptionEditor).toContain("cursor-text px-2 py-1.5 text-base");
+    expect(descriptionEditor).toMatch(/aria-label="Ticket description source"[\s\S]*?text-base/);
+    expect(richMarkdownEditor).toMatch(/contentEditableClassName=\{`[^`]*text-base/);
 
     expect(ghosttyTheme).toContain("foreground = #d6deeb");
     expect(ghosttyTheme).toContain("font-family = Menlo");

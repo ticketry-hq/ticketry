@@ -15,6 +15,6 @@ export {
   routeTerminalPanelToggle,
   TOGGLE_TERMINAL_PANEL_ACTION,
 } from "./panelKeymap";
-export { toggleTerminalPanel } from "./panelToggle";
+export { openTerminalPanel, toggleTerminalPanel } from "./panelToggle";
 export { useModuleShellStore } from "./moduleShellStore";
 export { MAX_MODULE_SHELLS, type ModuleShellSet } from "./shellTabSet";

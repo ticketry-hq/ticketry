@@ -25,5 +25,19 @@ query ModuleVersionControl($moduleId: String!) {
       insertions
       deletions
     }
+    worktrees {
+      kind
+      task_id
+      task_key
+      task_name
+      branch
+      available
+      clean
+      dirty
+      unpushed_count
+      pull_request_state
+      reason
+    }
+    worktrees_truncated
   }
 }

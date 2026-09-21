@@ -638,7 +638,7 @@ type Mutation {
 	delete_issue_type(id: String!, reassign_to: String): Boolean!
 	reorder_module_presentation(module_id: String!, before_id: String, after_id: String, initial_order_ids: [String!]): WorktrackerModulepresentation!
 	create_work_item(project_id: String!, name: String!, issue_type_id: String!, description: String, state_id: String, parent_id: String): WorktrackerIssue!
-	update_work_item(id: String!, name: String, description: String, issue_type_id: String, state_id: String, parent_id: String, blocked_by_ids: [String!], is_archived: Boolean, workspace_tab_order: Json): WorktrackerIssue!
+	update_work_item(id: String!, name: String, description: String, issue_type_id: String, state_id: String, parent_id: String, blocked_by_ids: [String!], tag_names: [String!], is_archived: Boolean, workspace_tab_order: Json): WorktrackerIssue!
 	reorder_work_item(id: String!, before_id: String, after_id: String, initial_order_ids: [String!]): WorktrackerIssue!
 	delete_work_item(id: String!): Boolean!
 	create_issue_type_transition(issue_type_id: String!, from_state_id: String!, to_state_id: String!, agent_allowed: Boolean!, handoff: Boolean!, workflow_revision: Int!): WorktrackerIssuetypetransition!
@@ -744,6 +744,8 @@ type Query {
 	worktrackerIssue(filters: WorktrackerIssueFilterInput, having: WorktrackerIssueHavingInput, orderBy: WorktrackerIssueOrderInput, pagination: PaginationInput): WorktrackerIssueConnection!
 	worktrackerModulepresentation(filters: WorktrackerModulepresentationFilterInput, having: WorktrackerModulepresentationHavingInput, orderBy: WorktrackerModulepresentationOrderInput, pagination: PaginationInput): WorktrackerModulepresentationConnection!
 	worktrackerIssueBlockedBy(filters: WorktrackerIssueBlockedByFilterInput, having: WorktrackerIssueBlockedByHavingInput, orderBy: WorktrackerIssueBlockedByOrderInput, pagination: PaginationInput): WorktrackerIssueBlockedByConnection!
+	worktrackerIssueLabels(filters: WorktrackerIssueLabelsFilterInput, having: WorktrackerIssueLabelsHavingInput, orderBy: WorktrackerIssueLabelsOrderInput, pagination: PaginationInput): WorktrackerIssueLabelsConnection!
+	worktrackerLabel(filters: WorktrackerLabelFilterInput, having: WorktrackerLabelHavingInput, orderBy: WorktrackerLabelOrderInput, pagination: PaginationInput): WorktrackerLabelConnection!
 	worktrackerAttachment(filters: WorktrackerAttachmentFilterInput, having: WorktrackerAttachmentHavingInput, orderBy: WorktrackerAttachmentOrderInput, pagination: PaginationInput): WorktrackerAttachmentConnection!
 	worktrackerIssuetypetransition(filters: WorktrackerIssuetypetransitionFilterInput, having: WorktrackerIssuetypetransitionHavingInput, orderBy: WorktrackerIssuetypetransitionOrderInput, pagination: PaginationInput): WorktrackerIssuetypetransitionConnection!
 	worktrackerLaunchbinding(filters: WorktrackerLaunchbindingFilterInput, having: WorktrackerLaunchbindingHavingInput, orderBy: WorktrackerLaunchbindingOrderInput, pagination: PaginationInput): WorktrackerLaunchbindingConnection!
@@ -1138,6 +1140,7 @@ type WorktrackerIssue {
 	blocksEdges(filters: WorktrackerIssueBlockedByFilterInput, orderBy: WorktrackerIssueBlockedByOrderInput, pagination: PaginationInput): WorktrackerIssueBlockedByConnection!
 	agentRuns(filters: AgentRunsFilterInput, orderBy: AgentRunsOrderInput, pagination: PaginationInput): AgentRunsConnection!
 	attachment(filters: WorktrackerAttachmentFilterInput, orderBy: WorktrackerAttachmentOrderInput, pagination: PaginationInput): WorktrackerAttachmentConnection!
+	issueLabel(filters: WorktrackerIssueLabelsFilterInput, orderBy: WorktrackerIssueLabelsOrderInput, pagination: PaginationInput): WorktrackerIssueLabelsConnection!
 	presentation(filters: WorktrackerModulepresentationFilterInput, orderBy: WorktrackerModulepresentationOrderInput, pagination: PaginationInput): WorktrackerModulepresentationConnection!
 }
 
@@ -1227,7 +1230,48 @@ input WorktrackerIssueHavingInput {
 	blocksEdges: WorktrackerIssueBlockedByFilterInput
 	agentRuns: AgentRunsFilterInput
 	attachment: WorktrackerAttachmentFilterInput
+	issueLabel: WorktrackerIssueLabelsFilterInput
 	presentation: WorktrackerModulepresentationFilterInput
+}
+
+type WorktrackerIssueLabels {
+	id: Int!
+	issueId: String!
+	labelId: String!
+	issue: WorktrackerIssue
+	label: WorktrackerLabel
+}
+
+type WorktrackerIssueLabelsConnection {
+	pageInfo: PageInfo!
+	paginationInfo: PaginationInfo
+	nodes: [WorktrackerIssueLabels!]!
+	edges: [WorktrackerIssueLabelsEdge!]!
+}
+
+type WorktrackerIssueLabelsEdge {
+	cursor: String!
+	node: WorktrackerIssueLabels!
+}
+
+input WorktrackerIssueLabelsFilterInput {
+	id: IntegerFilterInput
+	issueId: StringFilterInput
+	labelId: StringFilterInput
+	and: [WorktrackerIssueLabelsFilterInput!]
+	or: [WorktrackerIssueLabelsFilterInput!]
+	not: WorktrackerIssueLabelsFilterInput
+}
+
+input WorktrackerIssueLabelsHavingInput {
+	issue: WorktrackerIssueFilterInput
+	label: WorktrackerLabelFilterInput
+}
+
+input WorktrackerIssueLabelsOrderInput {
+	id: OrderByEnum
+	issueId: OrderByEnum
+	labelId: OrderByEnum
 }
 
 input WorktrackerIssueOrderInput {
@@ -1391,6 +1435,49 @@ input WorktrackerIssuetypetransitionOrderInput {
 	handoff: OrderByEnum
 }
 
+type WorktrackerLabel {
+	id: String!
+	projectId: String!
+	name: String!
+	color: String!
+	project: WorktrackerProject
+	issueLabel(filters: WorktrackerIssueLabelsFilterInput, orderBy: WorktrackerIssueLabelsOrderInput, pagination: PaginationInput): WorktrackerIssueLabelsConnection!
+}
+
+type WorktrackerLabelConnection {
+	pageInfo: PageInfo!
+	paginationInfo: PaginationInfo
+	nodes: [WorktrackerLabel!]!
+	edges: [WorktrackerLabelEdge!]!
+}
+
+type WorktrackerLabelEdge {
+	cursor: String!
+	node: WorktrackerLabel!
+}
+
+input WorktrackerLabelFilterInput {
+	id: StringFilterInput
+	projectId: StringFilterInput
+	name: StringFilterInput
+	color: StringFilterInput
+	and: [WorktrackerLabelFilterInput!]
+	or: [WorktrackerLabelFilterInput!]
+	not: WorktrackerLabelFilterInput
+}
+
+input WorktrackerLabelHavingInput {
+	project: WorktrackerProjectFilterInput
+	issueLabel: WorktrackerIssueLabelsFilterInput
+}
+
+input WorktrackerLabelOrderInput {
+	id: OrderByEnum
+	projectId: OrderByEnum
+	name: OrderByEnum
+	color: OrderByEnum
+}
+
 type WorktrackerLaunchbinding {
 	id: Int!
 	issueTypeId: String!
@@ -1516,6 +1603,7 @@ type WorktrackerProject {
 	state(filters: WorktrackerStateFilterInput, orderBy: WorktrackerStateOrderInput, pagination: PaginationInput): WorktrackerStateConnection!
 	issueType(filters: WorktrackerIssuetypeFilterInput, orderBy: WorktrackerIssuetypeOrderInput, pagination: PaginationInput): WorktrackerIssuetypeConnection!
 	issue(filters: WorktrackerIssueFilterInput, orderBy: WorktrackerIssueOrderInput, pagination: PaginationInput): WorktrackerIssueConnection!
+	label(filters: WorktrackerLabelFilterInput, orderBy: WorktrackerLabelOrderInput, pagination: PaginationInput): WorktrackerLabelConnection!
 }
 
 type WorktrackerProjectConnection {
@@ -1549,6 +1637,7 @@ input WorktrackerProjectHavingInput {
 	state: WorktrackerStateFilterInput
 	issueType: WorktrackerIssuetypeFilterInput
 	issue: WorktrackerIssueFilterInput
+	label: WorktrackerLabelFilterInput
 }
 
 input WorktrackerProjectOrderInput {

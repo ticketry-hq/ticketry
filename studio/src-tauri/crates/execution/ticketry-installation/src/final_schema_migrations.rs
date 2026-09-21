@@ -1,4 +1,4 @@
-//! The 0044 through 0057 parity chain, in source order.
+//! The post-adoption final-schema chain, in source order.
 //!
 //! The chain spans work management, settings, and worktree schemas, so it is
 //! installation's to compose rather than any one of theirs to own.
@@ -13,8 +13,8 @@ use ticketry_settings::{
 use ticketry_work_management::{
     launch_binding_entry_skill_migration, launch_binding_profile_migration,
     launch_binding_stage_skills_migration, module_presentation_migration,
-    project_onboarding_migration, workflow_color_migration, workflow_handoff_migration,
-    workspace_tab_order_migration,
+    project_onboarding_migration, tag_migration, workflow_color_migration,
+    workflow_handoff_migration, workspace_tab_order_migration,
 };
 
 pub const ORDERED_MIGRATION_IDS: &[&str] = &[
@@ -33,6 +33,7 @@ pub const ORDERED_MIGRATION_IDS: &[&str] = &[
     CODEX_GLM_5_3_FLASH_MIGRATION_ID,
     ticketry_workspace_runtime::persistence::ship_record_migration::MIGRATION_ID,
     launch_binding_stage_skills_migration::MIGRATION_ID,
+    tag_migration::MIGRATION_ID,
 ];
 
 pub async fn install(database: &DatabaseConnection) -> Result<(), DbErr> {
@@ -80,7 +81,10 @@ pub async fn install(database: &DatabaseConnection) -> Result<(), DbErr> {
         .map_err(|error| step_error("0058", error))?;
     launch_binding_stage_skills_migration::install(database)
         .await
-        .map_err(|error| step_error("0059", error))
+        .map_err(|error| step_error("0059", error))?;
+    tag_migration::install(database)
+        .await
+        .map_err(|error| step_error("0060", error))
 }
 
 fn step_error(step: &str, error: DbErr) -> DbErr {

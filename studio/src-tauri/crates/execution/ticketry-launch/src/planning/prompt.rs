@@ -132,7 +132,7 @@ pub fn build_task_prompt(input: &TaskPromptInput) -> String {
     prompt.push_str("Available tools: WorkTracker MCP server; coding agent status tool.");
     if !facts.state.is_empty() {
         prompt.push_str(&format!(
-            "\n\nEnding this run: terminate_current_run only succeeds once this task has left '{}' for one of that state's configured destinations. Move it there with update_task_status first; a refusal lists the acceptable states.",
+            "\n\nEnding this run: terminate_current_run stops only the agent run, not the work item. If blocked, record the blocker, leave the task in '{}', and end the run without cancelling or advancing it. Change ticket state only when the actual stage outcome warrants it. A committed handoff keeps the run alive for its queued destination prompt.",
             facts.state
         ));
     }
@@ -285,6 +285,9 @@ mod tests {
             "Description:\nFirst\n\nSecond",
             "Additional user instructions:\nAlso preserve 🦀.",
             "Design directory: spec/module/T867--launch",
+            "terminate_current_run stops only the agent run, not the work item",
+            "leave the task in 'Implement'",
+            "without cancelling or advancing it",
         ] {
             assert!(prompt.contains(expected), "missing {expected:?}");
         }

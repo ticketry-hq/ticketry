@@ -10,6 +10,7 @@ import {
 } from "../navigation/keymapRegistry";
 import { EDIT_VIEW_BODY_DISENGAGE_CHORD } from "../navigation/three-zone/threeZoneNavigation";
 import { KeyChordHint } from "../../shared/ui/KeyChordHint";
+import { useChangesWorkspace } from "../../features/agents/worktrees";
 
 type FooterHint = {
   key: string;
@@ -54,7 +55,8 @@ export function StudioFooterHints() {
   const sidebarVisible = useClientStore((state) => state.sidebarVisible);
   const bodyEngaged = useClientStore((state) => state.editViewBodyEngaged);
   const zone = useClientStore((state) => state.editViewZone);
-  const hints = getFooterHints(sidebarVisible, zone, bodyEngaged);
+  const changesActive = useChangesWorkspace((state) => state.active);
+  const hints = changesActive ? [] : getFooterHints(sidebarVisible, zone, bodyEngaged);
 
   return hints.map((hint) => (
     <KeyChordHint

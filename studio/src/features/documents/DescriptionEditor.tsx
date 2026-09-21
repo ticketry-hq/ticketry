@@ -169,7 +169,7 @@ export default function DescriptionEditor({
           <textarea
             autoFocus
             aria-label="Ticket description source"
-            className="min-h-[12rem] w-full resize-y border border-pane-border bg-pane-panel p-3 font-mono text-sm text-text-primary focus:border-focus-accent focus:outline-none"
+            className="min-h-[12rem] w-full resize-y border border-pane-border bg-pane-panel p-3 font-mono text-base text-text-primary focus:border-focus-accent focus:outline-none"
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
             ref={(element) => {

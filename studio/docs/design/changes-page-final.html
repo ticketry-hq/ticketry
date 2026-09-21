@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Changes — final look (Option C)</title>
+<style>
+:root{--bg:#0a0a0a;--panel:#111317;--border:#2a2f3a;--title:#1f2530;--sel:#2d3a5a;--accent:#7aa2f7;--p:#d6deeb;--s:#9aa5b8;--m:#7a8599;--ok:#9ece6a;--warn:#e0af68;--bad:#f7768e;--info:#7dcfff;--mono:ui-monospace,"JetBrains Mono",Menlo,monospace;--sans:-apple-system,Inter,system-ui,sans-serif}
+*{box-sizing:border-box;border-radius:0}
+body{margin:0;background:#050505;color:var(--p);font:13px/1.45 var(--sans);padding:32px 40px 80px}
+h1{font-size:20px;margin:0 0 4px}.lead{color:var(--s);margin:0 0 18px;max-width:80ch}
+.legend{display:flex;gap:18px;flex-wrap:wrap;font-size:12px;color:var(--s);margin:14px 0 40px;max-width:1280px}
+.legend b{color:var(--p)}kbd{font:11px var(--mono);border:1px solid var(--border);padding:0 5px;color:var(--s)}
+.app{width:1280px;height:740px;background:var(--bg);border:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;font-size:12px}
+.bar{display:flex;align-items:center;gap:8px;padding:0 12px;height:40px;border-bottom:1px solid var(--border);flex-shrink:0}
+.grow{flex:1}
+.sw{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--border);padding:4px 10px;font-family:var(--mono);font-size:11.5px;max-width:420px;cursor:default}
+.sw .n{font-family:var(--sans);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sw .b{color:var(--m);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chip{display:inline-flex;align-items:center;gap:6px;font:11px var(--mono);color:var(--s);padding:3px 8px;border:1px solid var(--border)}
+.dot{width:7px;height:7px;display:inline-block;flex-shrink:0}.ok{background:var(--ok)}.warn{background:var(--warn)}.bad{background:var(--bad)}.info{background:var(--info)}.mut{background:var(--m)}
+.t-ok{color:var(--ok)}.t-warn{color:var(--warn)}.t-bad{color:var(--bad)}.t-info{color:var(--info)}.t-m{color:var(--m)}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border:1px solid var(--border);color:var(--p);background:transparent;font:12px var(--sans);cursor:pointer;white-space:nowrap}
+.btn.pri{background:var(--p);color:var(--bg);border-color:var(--p);font-weight:600}
+.btn.ghost{border-color:transparent;color:var(--s)}.btn.dis{opacity:.45;cursor:default}
+.btn.danger{border-color:rgba(247,118,142,.6);color:var(--bad)}
+.btn.toggle[aria-pressed=true]{border-color:var(--accent);color:var(--accent)}
+.btn kbd{border-color:transparent;padding:0;color:inherit;opacity:.6}
+.main{display:flex;flex:1;min-height:0}
+.foot{display:flex;align-items:center;gap:8px;padding:0 8px;height:30px;border-top:1px solid var(--border);flex-shrink:0;font-size:12px}
+.foot .btn{padding:2px 6px}
+.pane{min-width:0;display:flex;flex-direction:column;border-right:1px solid var(--border)}
+.pane:last-child{border-right:0}
+.hd{height:32px;padding:0 12px;border-bottom:1px solid var(--border);color:var(--s);font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
+.hd .r{text-transform:none;letter-spacing:0;font-family:var(--mono)}
+.files{width:380px;flex-shrink:0}
+.list{overflow:auto;flex:1}
+.grp{padding:8px 12px 2px;font:10.5px var(--mono);color:var(--m)}
+.f{display:flex;align-items:center;gap:8px;padding:4px 12px;font-family:var(--mono);font-size:11.5px;cursor:default}
+.f:hover{background:var(--title)}.f.sel{background:var(--sel)}
+.f .st{width:12px;text-align:center;font-weight:700;flex-shrink:0}
+.f .dir{color:var(--m);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;direction:rtl;min-width:0;flex:1;text-align:left}
+.f .base{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:60%;flex-shrink:0}
+.f .num{color:var(--m);flex-shrink:0;font-size:10.5px;width:66px;text-align:right}.f .num .a{color:var(--ok)}.f .num .d{color:var(--bad)}
+.diff{flex:1}
+.diffhd{display:flex;align-items:center;gap:8px;padding:0 12px;height:32px;border-bottom:1px solid var(--border);font-family:var(--mono);font-size:11.5px;flex-shrink:0}
+.code{overflow:auto;flex:1;font:11.5px/1.5 var(--mono)}
+.code div{padding:0 12px;white-space:pre}
+.code .hunk{color:var(--info);background:#0f1620}
+.code .add{background:rgba(158,206,106,.1);color:#c7e5a8}.code .del{background:rgba(247,118,142,.1);color:#f3b0be}.code .ctx{color:var(--s)}
+.ln{display:inline-block;width:36px;color:var(--m);opacity:.6}
+.insp{width:320px;flex-shrink:0;background:var(--panel);overflow:hidden}
+.insp[data-open=false]{width:0;border-right:0;opacity:0}
+.insp .inner{width:320px;display:flex;flex-direction:column;height:100%}
+.insp .scroll{overflow:auto;flex:1}
+details{border-bottom:1px solid var(--border)}
+summary{list-style:none;padding:9px 12px;cursor:pointer;display:flex;align-items:center;gap:8px;font-weight:600;user-select:none}
+summary::-webkit-details-marker{display:none}
+summary::before{content:"▸";color:var(--m);font-size:10px;width:8px}
+details[open] summary::before{content:"▾"}
+summary .chip{margin-left:auto;font-weight:normal}
+.sb{padding:0 12px 12px;display:flex;flex-direction:column;gap:8px}
+.kv{display:grid;grid-template-columns:76px 1fr;gap:3px 10px;font:11px var(--mono);margin:0}
+.kv dt{color:var(--m)}.kv dd{margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row{display:flex;gap:6px;flex-wrap:wrap}
+.hint{font-size:11px;color:var(--m)}
+.note{border:1px solid rgba(247,118,142,.5);padding:8px 10px;font-size:11.5px;display:flex;flex-direction:column;gap:6px}
+.note.warn{border-color:rgba(224,175,104,.5)}
+select{background:var(--bg);color:var(--p);border:1px solid var(--border);font:11px var(--mono);padding:4px 6px;width:100%}
+.menu{position:absolute;margin-top:4px;background:var(--panel);border:1px solid var(--border);width:420px;z-index:5;box-shadow:0 8px 24px rgba(0,0,0,.5);display:none}
+.sw:focus-within .menu{display:block}
+.menu .it{display:flex;gap:8px;align-items:flex-start;padding:7px 10px;border-bottom:1px solid #15181e}
+.menu .it .dot{margin-top:5px}
+.menu .it .n{font-family:var(--sans);font-weight:600}
+.menu .it .b{font-size:10.5px}
+.menu .it .m{margin-left:auto;font-size:10.5px;color:var(--s);white-space:nowrap}
+.menu .it.on{background:var(--title);box-shadow:inset 2px 0 var(--accent)}
+.pop{position:absolute;margin-top:6px;background:var(--panel);border:1px solid var(--border);padding:10px 12px;width:300px;z-index:6;font-size:11.5px;box-shadow:0 8px 24px rgba(0,0,0,.5)}
+.pop .row{margin-top:8px}
+h2{font-size:15px;margin:48px 0 10px}
+table{border-collapse:collapse;font-size:12px;max-width:1280px}td,th{border:1px solid var(--border);padding:6px 10px;text-align:left;vertical-align:top}th{background:var(--panel);color:var(--s);font-weight:600}td{color:var(--s)}td:first-child{color:var(--p);white-space:nowrap}
+</style></head><body>
+<h1>Changes — final look</h1>
+<p class="lead">Option C. Files and diff own the window. The branch inspector on the right is collapsible; it remembers its state per session and defaults to closed. Click <b>Branch</b>, press <kbd>⌘I</kbd>, or click the worktree switcher to try the mock.</p>
+
+<div class="app" id="app">
+  <div class="bar">
+    <span class="sw" tabindex="0">
+      <span class="dot bad"></span><span class="n">CODING-1656 Worktrees tracking and closing with link</span><span class="b">wt/CODING-1656-worktrees-tracking…</span><span class="t-m">▾</span>
+      <div class="menu">
+        <div class="it"><span class="dot mut"></span><div><div class="n">Module checkout</div><div class="b t-m">rust-migration</div></div><span class="m">3 uncommitted</span></div>
+        <div class="it on"><span class="dot bad"></span><div><div class="n">CODING-1656 Worktrees tracking and closing with link</div><div class="b t-m">wt/CODING-1656-worktrees-tracking-and-closing-with-link</div></div><span class="m t-bad">PR conflicts</span></div>
+        <div class="it"><span class="dot ok"></span><div><div class="n">CODING-1850 Port missing Changes</div><div class="b t-m">wt/CODING-1850-port-missing-changes</div></div><span class="m t-ok">PR ready</span></div>
+        <div class="it"><span class="dot info"></span><div><div class="n">CODING-1866 Require a shared parent</div><div class="b t-m">wt/CODING-1866-require-a-shared-parent</div></div><span class="m t-info">checks running</span></div>
+        <div class="it"><span class="dot mut"></span><div><div class="n">CODING-1885 The run mechanics</div><div class="b t-m">wt/CODING-1885-the-run-mechanics</div></div><span class="m">clean</span></div>
+        <div class="it"><span class="dot warn"></span><div><div class="n">CODING-1886 Make Changes a focused three-column work…</div><div class="b t-m">wt/CODING-1886-make-changes-a-focused…</div></div><span class="m t-warn">2 unpushed</span></div>
+      </div>
+    </span>
+    <span class="chip"><span class="dot warn"></span>4 uncommitted · 3 ahead</span>
+    <span class="chip"><span class="dot bad"></span>PR #412 conflicts</span>
+    <span class="grow"></span>
+    <span style="position:relative">
+      <button class="btn pri" id="primary">Commit &amp; push</button>
+      <div class="pop" id="confirm" style="display:none;right:0">
+        <b>Commit &amp; push to origin</b><br>
+        <span class="t-m">wt/CODING-1656-worktrees-tracking-and-closing-with-link · 4 files, then 4 commits go up. Message is generated.</span>
+        <div class="row"><button class="btn pri">Confirm</button><button class="btn" onclick="document.getElementById('confirm').style.display='none'">Cancel</button></div>
+      </div>
+    </span>
+    <button class="btn">Open PR ↗</button>
+    <button class="btn toggle" id="toggle" aria-pressed="false" aria-controls="insp">Branch <kbd>⌘I</kbd></button>
+  </div>
+  <div class="main">
+    <div class="pane files">
+      <div class="hd">34 files <span class="r"><span class="t-ok">+1577</span> <span class="t-bad">−163</span></span></div>
+      <div class="list">
+        <div class="grp">uncommitted · 4</div>
+        <div class="f"><span class="st t-warn">M</span><span class="dir"><bdi dir="ltr">studio/src/features/documents/</bdi></span><span class="base">DescriptionEditor.tsx</span><span class="num"><span class="a">+12</span> <span class="d">−3</span></span></div>
+        <div class="f"><span class="st t-warn">M</span><span class="dir"><bdi dir="ltr">studio/src/features/documents/</bdi></span><span class="base">RichMarkdownEditor.tsx</span><span class="num"><span class="a">+4</span> <span class="d">−1</span></span></div>
+        <div class="f"><span class="st t-warn">M</span><span class="dir"><bdi dir="ltr">studio/src/test/</bdi></span><span class="base">overhaulTypographyReadabilityAcceptance.test.tsx</span><span class="num"><span class="a">+20</span></span></div>
+        <div class="f"><span class="st t-ok">U</span><span class="dir"><bdi dir="ltr">.local/state/gh/</bdi></span><span class="base">device-id</span><span class="num"><span class="a">+1</span></span></div>
+        <div class="grp">committed since base · 30</div>
+        <div class="f sel"><span class="st t-warn">M</span><span class="dir"><bdi dir="ltr">studio/docs/</bdi></span><span class="base">overhaul-acceptance.md</span><span class="num"><span class="a">+6</span></span></div>
+        <div class="f"><span class="st t-warn">M</span><span class="dir"><bdi dir="ltr">studio/performance/</bdi></span><span class="base">README.md</span><span class="num"><span class="a">+13</span></span></div>
+        <div class="f"><span class="st t-warn">M</span><span class="dir"><bdi dir="ltr">studio/performance/fixtures/</bdi></span><span class="base">changes.json</span><span class="num"><span class="a">+9</span> <span class="d">−1</span></span></div>
+        <div class="f"><span class="st t-ok">A</span><span class="dir"><bdi dir="ltr">studio/scripts/performance/</bdi></span><span class="base">changesBench.ts</span><span class="num"><span class="a">+127</span></span></div>
+        <div class="f"><span class="st t-warn">M</span><span class="dir"><bdi dir="ltr">studio/scripts/performance/</bdi></span><span class="base">harness.ts</span><span class="num"><span class="a">+143</span></span></div>
+        <div class="f"><span class="st t-warn">M</span><span class="dir"><bdi dir="ltr">studio/scripts/performance/</bdi></span><span class="base">report.ts</span><span class="num"><span class="a">+13</span></span></div>
+        <div class="f"><span class="st t-warn">M</span><span class="dir"><bdi dir="ltr">studio/scripts/performance/</bdi></span><span class="base">runner.ts</span><span class="num"><span class="a">+6</span> <span class="d">−1</span></span></div>
+        <div class="f"><span class="st t-warn">M</span><span class="dir"><bdi dir="ltr">studio/scripts/performance/</bdi></span><span class="base">scenarios.ts</span><span class="num"><span class="a">+8</span> <span class="d">−1</span></span></div>
+        <div class="f"><span class="st t-bad">D</span><span class="dir"><bdi dir="ltr">studio/scripts/performance/</bdi></span><span class="base">legacy.ts</span><span class="num"><span class="d">−41</span></span></div>
+        <div class="f"><span class="st t-warn">M</span><span class="dir"><bdi dir="ltr">studio/src/features/agents/worktrees/changes/</bdi></span><span class="base">ChangesActions.tsx</span><span class="num"><span class="a">+88</span> <span class="d">−30</span></span></div>
+        <div class="f"><span class="st t-ok">A</span><span class="dir"><bdi dir="ltr">studio/src/features/agents/worktrees/changes/</bdi></span><span class="base">MergeDestinationPicker.tsx</span><span class="num"><span class="a">+86</span></span></div>
+        <div class="f"><span class="st t-m">R</span><span class="dir"><bdi dir="ltr">studio/src/features/agents/worktrees/changes/</bdi></span><span class="base">changesWorkspaceState.ts</span><span class="num"><span class="a">+4</span> <span class="d">−4</span></span></div>
+        <div class="f"><span class="st t-warn">M</span><span class="dir"><bdi dir="ltr">studio/src/features/agents/worktrees/changes/</bdi></span><span class="base">WorktreeMergePreview.tsx</span><span class="num"><span class="a">+61</span> <span class="d">−12</span></span></div>
+        <div class="f"><span class="st t-warn">M</span><span class="dir"><bdi dir="ltr">studio/src/features/agents/worktrees/changes/</bdi></span><span class="base">ChangesFileReview.tsx</span><span class="num"><span class="a">+40</span> <span class="d">−18</span></span></div>
+        <div class="f"><span class="st t-warn">M</span><span class="dir"><bdi dir="ltr">studio/src/features/agents/worktrees/changes/</bdi></span><span class="base">CurrentWorktreesList.tsx</span><span class="num"><span class="a">+22</span> <span class="d">−9</span></span></div>
+        <div class="f"><span class="st t-warn">M</span><span class="dir"><bdi dir="ltr">studio/src/test/</bdi></span><span class="base">overhaulTaskWorktreeChangesAcceptance.test.tsx</span><span class="num"><span class="a">+210</span> <span class="d">−14</span></span></div>
+      </div>
+    </div>
+    <div class="pane diff">
+      <div class="diffhd"><span class="st t-warn" style="font-weight:700">M</span><span>studio/docs/overhaul-acceptance.md</span><span class="chip"><span class="t-ok">+6</span></span><span class="grow"></span><span class="t-m">5 / 34</span><button class="btn ghost">‹</button><button class="btn ghost">›</button></div>
+      <div class="code">
+        <div class="hunk">@@ -313,6 +313,12 @@</div>
+        <div class="ctx"><span class="ln">321</span>| 321 | Finishing or aborting a conflicting merge retires its recovery state and gives the next merge a fresh operation.</div>
+        <div class="ctx"><span class="ln">322</span>| 322 | Committing dirty source work refreshes local merge eligibility and enables Merge without reopening.</div>
+        <div class="ctx"><span class="ln">323</span>| 323 | Refreshing merge eligibility after an external destination fix enables Merge without reopening.</div>
+        <div class="add"><span class="ln">324</span>| 324 | A saved Changes workspace target without a Back origin migrates to Details.</div>
+        <div class="add"><span class="ln">325</span>| 325 | Saved workspace-tab order drops the retired Changes tab on read and write.</div>
+        <div class="add"><span class="ln">326</span>| 326 | Changes opens independently, and Back restores the exact planning origin and active session.</div>
+        <div class="add"><span class="ln">327</span>| 327 | If the planning origin disappears, Back returns to the same module's conversation Details.</div>
+        <div class="add"><span class="ln">328</span>| 328 | Back stays usable while Changes is loading or reports an error.</div>
+        <div class="add"><span class="ln">329</span>| 329 | Selecting a task checkout marks it selected and keeps Back usable while fresh task changes load.</div>
+        <div class="ctx"><span class="ln">330</span></div>
+        <div class="ctx"><span class="ln">331</span>Each executable case carries one stable `[overhaul-NN]` marker. The gate has a</div>
+        <div class="ctx"><span class="ln">332</span>contract test that fails if a marker is missing or duplicated. A case whose</div>
+        <div class="ctx"><span class="ln">333</span>marker is removed from the document also fails the gate.</div>
+        <div class="hunk">@@ -340,4 +346,8 @@</div>
+        <div class="ctx"><span class="ln">346</span>## Runtime behaviour</div>
+        <div class="del"><span class="ln">347</span>The Changes tab lives inside the workspace tab strip.</div>
+        <div class="add"><span class="ln">347</span>Changes is an independent surface reached from the footer toggle.</div>
+        <div class="add"><span class="ln">348</span>Back returns to the exact planning origin.</div>
+      </div>
+    </div>
+    <aside class="pane insp" id="insp" data-open="false" aria-label="Branch inspector">
+      <div class="inner">
+        <div class="hd">Branch <span class="r t-m">esc closes</span></div>
+        <div class="scroll">
+          <details open><summary>Status <span class="chip"><span class="dot warn"></span>dirty</span></summary>
+            <div class="sb">
+              <dl class="kv"><dt>branch</dt><dd>wt/CODING-1656-worktrees-tracking-and-closing-with-link</dd><dt>ahead</dt><dd>3 commits</dd><dt>uncommitted</dt><dd>4 files</dd><dt>last commit</dt><dd>Update 190 files · generated</dd></dl>
+              <div class="row"><button class="btn">Commit</button><button class="btn dis" title="Nothing to push">Push</button></div>
+              <span class="hint">Push sends committed work only. Uncommitted changes stay local.</span>
+            </div>
+          </details>
+          <details open><summary>Pull request <span class="chip"><span class="dot bad"></span>conflicts</span></summary>
+            <div class="sb">
+              <dl class="kv"><dt>#412</dt><dd>→ rust-migration</dd><dt>state</dt><dd class="t-bad">merge conflicts</dd><dt>checks</dt><dd class="t-m">not run</dd></dl>
+              <div class="row"><button class="btn">Open ↗</button><button class="btn">Prepare merge</button></div>
+              <span class="hint">Prepare merge starts an agent that rebases onto rust-migration and resolves conflicts.</span>
+            </div>
+          </details>
+          <details open><summary>Local merge <span class="chip"><span class="dot bad"></span>blocked</span></summary>
+            <div class="sb">
+              <select><option>rust-migration</option><option>main</option></select>
+              <span class="hint">Most recent commits first</span>
+              <div class="note"><span>rust-migration has a merge in progress. Finish or abort it, then retry.</span><div class="row"><button class="btn">Finish merge</button><button class="btn danger">Abort merge</button><button class="btn ghost">Refresh</button></div></div>
+            </div>
+          </details>
+          <details><summary>Worktree <span class="chip">active</span></summary>
+            <div class="sb">
+              <dl class="kv"><dt>path</dt><dd>~/merge_conflicts/coding/wt/CODING-1656-…</dd><dt>cleanup</dt><dd class="t-m">after the pull request merges</dd></dl>
+              <div class="row"><button class="btn danger dis">Clean up worktree</button></div>
+            </div>
+          </details>
+        </div>
+      </div>
+    </aside>
+  </div>
+<div class="foot"><button class="btn ghost" style="gap:6px"><span style="font-size:14px;line-height:1">⑂</span> Back</button><span class="grow"></span><span class="t-m" style="font-family:var(--mono);font-size:11px">⌘Esc — Disengage</span><span class="grow"></span><button class="btn ghost">▣ Terminal</button><button class="btn ghost">⚙ Settings</button></div></div>
+<div class="legend">
+  <span><b>Inspector closed by default.</b> Toolbar still carries branch state and the primary action.</span>
+  <span><b>Toggle:</b> Branch button, <kbd>⌘I</kbd>, <kbd>esc</kbd> closes. Instant, no animation.</span><span><b>Footer:</b> the Changes toggle reads <b>Back</b> while this view is open and returns to the planning origin.</span>
+  <span><b>Sections</b> remember open/closed. Each has a state chip so a collapsed section still reads.</span>
+  <span><b>Confirm</b> is a popover on the button, not a box that reflows the page. Click the primary button.</span>
+</div>
+
+<h2>Behaviour spec</h2>
+<table>
+<tr><th>Element</th><th>Behaviour</th></tr>
+<tr><td>Worktree switcher</td><td>Replaces the left column. Dropdown lists module checkout then task worktrees, each with a status dot and one-phrase state. Typing filters. Selecting loads that checkout in place. Same width and dot semantics as the toolbar chip.</td></tr>
+<tr><td>Status chips</td><td>Two at most: working tree (uncommitted · ahead) and pull request. Hover shows the full reason text the backend returns. Chips are read-only; clicking one opens the inspector to that section.</td></tr>
+<tr><td>Primary button</td><td>One button, label derived from state: dirty → Commit &amp; push; clean and ahead → Push; pushed, no PR → Create PR; PR merged → Merge locally; merged locally → Clean up. Disabled with a tooltip reason when nothing applies. Confirmation is a popover anchored to the button that names the branch and what will be published.</td></tr>
+<tr><td>Branch toggle</td><td><code>aria-pressed</code>, <code>aria-controls</code> the inspector. <kbd>⌘I</kbd> toggles from anywhere in the workspace; <kbd>esc</kbd> inside the inspector closes it and returns focus to the toggle. Open state persists per session in the existing Apollo local-state store.</td></tr>
+<tr><td>Inspector</td><td>320px, appears instantly with no animation; the diff pane absorbs the width. Sections: Status, Pull request, Local merge, Worktree. Each is a native <code>details</code> with a state chip in its summary. Section open state persists with the inspector state.</td></tr>
+<tr><td>Errors</td><td>Every red message renders inside the section it belongs to with the resolving actions on the same card. Nothing red appears without a button next to it. Action failures from the toolbar show as a one-line alert under the toolbar with a Retry.</td></tr>
+<tr><td>Files</td><td>Grouped: uncommitted first, then committed since base. Rows: status letter, directory truncated from the left, filename never truncated, +/- fixed width. <kbd>j</kbd>/<kbd>k</kbd> move, <kbd>Enter</kbd> focuses diff, <kbd>[</kbd>/<kbd>]</kbd> step files from the diff.</td></tr>
+<tr><td>Diff header</td><td>Status letter, path, counts, position "5 / 34", prev/next. Empty state: "Select a file, or press j."</td></tr>
+<tr><td>Loading</td><td>Files pane shows skeleton rows in the same geometry; toolbar chips show a muted dot with "loading". Inspector sections show their chip as "…" until data arrives. No layout shift.</td></tr>
+</table>
+
+<script>
+const insp=document.getElementById('insp'),tg=document.getElementById('toggle');
+const set=o=>{insp.dataset.open=o;tg.setAttribute('aria-pressed',o)};
+tg.onclick=()=>set(insp.dataset.open!=='true');
+document.addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key==='i'){e.preventDefault();tg.click()}if(e.key==='Escape'&&insp.dataset.open==='true'){set(false);tg.focus()}});
+document.getElementById('primary').onclick=()=>{const c=document.getElementById('confirm');c.style.display=c.style.display==='none'?'block':'none'};
+if(location.hash==='#open')set(true);
+</script>
+</body></html>

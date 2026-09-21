@@ -11,7 +11,7 @@ use ticketry_agent_execution::{
 use ticketry_terminal::TerminalCleanupService;
 use ticketry_terminal::TerminalLaunchService;
 use ticketry_work_management::commands::{
-    attachments, status_facts::WorkFactRecorder, work_items, workflow, CommandError,
+    attachments, status_facts::WorkFactRecorder, tags, work_items, workflow, CommandError,
 };
 use ticketry_work_management::launch_policy::{
     self, CallerScope, LaunchPolicyRequest, LaunchPolicyResolver,
@@ -198,6 +198,7 @@ async fn dispatch_checked(
             create_task(database, principal, arguments, Some(parent)).await
         }
         "create_review_finding" => create_review_finding(database, principal, arguments).await,
+        "add_task_tags" => add_task_tags(database, principal, arguments).await,
         "update_task" => update_task(database, principal, arguments).await,
         "append_task_description" => append_description(database, principal, arguments).await,
         "update_task_status" => update_status(database, principal, arguments).await,
@@ -324,6 +325,40 @@ async fn dispatch_checked(
         )),
         _ => Err(CommandError::validation("Unknown WorkTracker MCP tool.")),
     }
+}
+
+async fn add_task_tags(
+    database: &DatabaseConnection,
+    principal: &RunPrincipal,
+    arguments: &Map<String, Value>,
+) -> Result<DispatchOutput, CommandError> {
+    let task = scope::task(database, principal, string(arguments, "id_or_key")?).await?;
+    let raw = arguments
+        .get("tags")
+        .and_then(Value::as_array)
+        .ok_or_else(|| CommandError::field("tags", "tags must be an array."))?;
+    let names = raw
+        .iter()
+        .map(|value| {
+            value
+                .as_str()
+                .map(str::to_owned)
+                .ok_or_else(|| CommandError::field("tags", "tags values must be strings."))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let current_tags = tags::add(
+        database,
+        &task.id,
+        names,
+        work_facts(database).await.as_ref(),
+    )
+    .await?;
+    Ok(DispatchOutput::direct(json!({
+        "ok": true,
+        "task_id": task.id,
+        "key": task.key,
+        "tags": current_tags,
+    })))
 }
 
 async fn list_tasks(

@@ -61,6 +61,28 @@ async fn prepare_projects(directory: &Path) {
                 workspace_tab_order json NOT NULL DEFAULT '[]',
                 created_at datetime NOT NULL, updated_at datetime NOT NULL
             );
+            CREATE TABLE worktracker_issuetype (
+                id char(32) PRIMARY KEY, project_id char(32) NOT NULL,
+                name varchar(255) NOT NULL, level varchar(16) NOT NULL,
+                color varchar(32) NOT NULL, sort_order integer NOT NULL,
+                start_state_id char(32), workflow_revision integer NOT NULL,
+                is_pathfind bool NOT NULL,
+                created_at datetime NOT NULL, updated_at datetime NOT NULL
+            );
+            CREATE TABLE worktracker_issue_blocked_by (
+                id integer PRIMARY KEY, from_issue_id char(32) NOT NULL,
+                to_issue_id char(32) NOT NULL
+            );
+            CREATE TABLE worktracker_label (
+                id char(32) PRIMARY KEY, project_id char(32) NOT NULL,
+                name varchar(255) NOT NULL, color varchar(32) NOT NULL DEFAULT '',
+                UNIQUE(project_id, name)
+            );
+            CREATE TABLE worktracker_issue_labels (
+                id integer PRIMARY KEY AUTOINCREMENT,
+                issue_id char(32) NOT NULL, label_id char(32) NOT NULL,
+                UNIQUE(issue_id, label_id)
+            );
             CREATE TABLE agent_runs (
                 id varchar PRIMARY KEY, issue_id char(32) NOT NULL, ticket_seq integer,
                 agent varchar, model varchar, reasoning varchar, status varchar NOT NULL,
@@ -81,6 +103,10 @@ async fn prepare_projects(directory: &Path) {
                  '10000000000000000000000000000000', 'task',
                  '40000000000000000000000000000000', NULL, NULL, NULL, 0,
                  'Authorized caller', 1, 0, 'A', '', '[]', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+            INSERT INTO worktracker_issuetype VALUES
+                ('40000000000000000000000000000000',
+                 '10000000000000000000000000000000', 'Story', 'task', '', 0,
+                 NULL, 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
             INSERT INTO agent_runs
                 (id, issue_id, status, started_at, scope)
                 VALUES ('run-valid', '30000000000000000000000000000000',
@@ -375,7 +401,7 @@ async fn global_connections_read_everything_while_run_connections_stay_scoped() 
     let listed = global
         .request(json!({"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}))
         .await;
-    assert_eq!(listed["result"]["tools"].as_array().unwrap().len(), 32);
+    assert_eq!(listed["result"]["tools"].as_array().unwrap().len(), 33);
     assert_eq!(listed["result"]["ttlMs"], 0, "{listed:#}");
     assert_eq!(listed["result"]["cacheScope"], "private", "{listed:#}");
     let projects = global.structured(2, "list_projects", json!({})).await;
@@ -408,6 +434,76 @@ async fn global_connections_read_everything_while_run_connections_stay_scoped() 
         .await;
     assert_eq!(disallowed["reason"], "authorization_tool_disallowed");
 
+    runtime.shutdown().await;
+}
+
+#[tokio::test]
+async fn add_task_tags_rejects_non_string_values_at_the_public_tool_boundary() {
+    let directory = tempfile::tempdir().unwrap();
+    prepare_projects(directory.path()).await;
+    let ownership = own(directory.path());
+    let runtime = start(directory.path(), &ownership).await;
+    runtime
+        .grant_for_test("run-valid", "valid", allowed_provider_operations(), false)
+        .await
+        .unwrap();
+    let mut run =
+        SocketClient::connect_run(runtime.socket_path(), "run-valid", "Bearer valid").await;
+
+    let rejected = run
+        .structured(
+            1,
+            "add_task_tags",
+            json!({
+                "id_or_key": "30000000-0000-0000-0000-000000000000",
+                "tags": ["backend", 7]
+            }),
+        )
+        .await;
+
+    assert_eq!(rejected["ok"], false, "{rejected:#}");
+    assert_eq!(rejected["code"], "field_validation", "{rejected:#}");
+    assert_eq!(rejected["field"], "tags", "{rejected:#}");
+    runtime.shutdown().await;
+}
+
+#[tokio::test]
+async fn add_task_tags_is_additive_and_idempotent_over_the_socket() {
+    let directory = tempfile::tempdir().unwrap();
+    prepare_projects(directory.path()).await;
+    let ownership = own(directory.path());
+    let runtime = start(directory.path(), &ownership).await;
+    runtime
+        .grant_for_test("run-valid", "valid", allowed_provider_operations(), false)
+        .await
+        .unwrap();
+    let mut run =
+        SocketClient::connect_run(runtime.socket_path(), "run-valid", "Bearer valid").await;
+
+    let added = run
+        .structured(
+            1,
+            "add_task_tags",
+            json!({
+                "id_or_key": "30000000-0000-0000-0000-000000000000",
+                "tags": [" backend ", "", "backend", "Needs Review"]
+            }),
+        )
+        .await;
+    assert_eq!(added["ok"], true, "{added:#}");
+    assert_eq!(added["tags"], json!(["Needs Review", "backend"]));
+
+    let repeated = run
+        .structured(
+            2,
+            "add_task_tags",
+            json!({
+                "id_or_key": "30000000-0000-0000-0000-000000000000",
+                "tags": ["backend"]
+            }),
+        )
+        .await;
+    assert_eq!(repeated["tags"], added["tags"]);
     runtime.shutdown().await;
 }
 

@@ -6,6 +6,7 @@ import { TEMP_TASK_ID } from "../features/agents/types";
 import { documentOperationName } from "../graphql-foundation/typedDocument";
 import { fixture, mountStudio, workItem } from "./seam";
 import { useClientStore } from "../state/clientStore";
+import { useAgentStatusStore } from "../features/agents/status/testStore";
 
 function NormalRunShortcutSurface() {
   useGlobalKeymap();
@@ -413,5 +414,98 @@ describe("overhaul acceptance — subtree execution", () => {
     );
     expect(within(details).getByRole("button", { name: "Run item" })).toBeEnabled();
     expect(within(details).queryByRole("button", { name: "Run agent" })).toBeNull();
+  });
+
+  it("[overhaul-339] gates subtree launches on a persisted active run and restores them after completion", async () => {
+    const http = campaignFixture();
+    http.persistGraphRun("story-1", "2026-09-21T10:00:00Z");
+    mountStudio({
+      http,
+      selectedTaskId: "story-1",
+      children: <NormalRunShortcutSurface />,
+      graphQlExecution: true,
+    });
+    useAgentStatusStore.getState().upsertRun({
+      agent_run_id: "campaign-child-run",
+      project_id: "project-1",
+      task_id: "branch-1",
+      module_id: "module-1",
+      agent: "codex",
+      scope: "task",
+      started_at: "2026-09-21T10:00:01Z",
+      state: "working",
+      effective_state: "working",
+      updated_at: "2026-09-21T10:00:02Z",
+    });
+
+    const details = await screen.findByRole("region", { name: "Details" });
+    const open = await within(details).findByRole("button", {
+      name: "Open subtree run",
+    });
+    expect(within(details).getByLabelText("Agent is actively working")).toBeVisible();
+    expect(within(details).queryByRole("button", { name: "Run subtree" })).toBeNull();
+    expect(
+      within(details).queryByRole("button", { name: "Run subtree serially" }),
+    ).toBeNull();
+    expect(within(details).getByRole("button", { name: "Run item" })).toBeEnabled();
+
+    fireEvent.click(open);
+    fireEvent.keyDown(window, { key: "Enter", metaKey: true });
+    expect(http.graphRunCount("story-1")).toBe(0);
+
+    useClientStore.getState().selectTask("story-1");
+    await within(details).findByRole("button", { name: "Open subtree run" });
+
+    useAgentStatusStore.getState().applyState(
+      "campaign-child-run",
+      "exited",
+      "2026-09-21T10:01:00Z",
+    );
+    expect(
+      await within(details).findByRole("button", { name: "Run subtree" }),
+    ).toBeEnabled();
+    expect(
+      within(details).getByRole("button", { name: "Run subtree serially" }),
+    ).toBeEnabled();
+    expect(
+      within(details).queryByRole("button", { name: "Open subtree run" }),
+    ).toBeNull();
+  });
+
+  it("[overhaul-340] refreshes a stale persisted run after refusal without retrying", async () => {
+    const http = campaignFixture();
+    mountStudio({
+      http,
+      selectedTaskId: "story-1",
+      children: <NormalRunShortcutSurface />,
+      graphQlExecution: true,
+    });
+
+    const details = await screen.findByRole("region", { name: "Details" });
+    const runSubtree = await within(details).findByRole("button", {
+      name: "Run subtree",
+    });
+    http.persistGraphRun("story-1", "2026-09-21T10:00:00Z");
+    useAgentStatusStore.getState().upsertRun({
+      agent_run_id: "already-running-child",
+      project_id: "project-1",
+      task_id: "branch-1",
+      module_id: "module-1",
+      agent: "codex",
+      scope: "task",
+      started_at: "2026-09-21T10:00:01Z",
+      state: "working",
+      effective_state: "working",
+      updated_at: "2026-09-21T10:00:02Z",
+    });
+    http.failNextGraphRun(409, { detail: "A campaign is already live." });
+
+    fireEvent.click(runSubtree);
+    expect(
+      await within(details).findByRole("button", { name: "Open subtree run" }),
+    ).toBeVisible();
+    expect(http.graphRunCount("story-1")).toBe(1);
+    fireEvent.keyDown(window, { key: "Enter", metaKey: true });
+    expect(http.graphRunCount("story-1")).toBe(1);
   });
 });

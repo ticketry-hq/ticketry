@@ -13,6 +13,8 @@ use tokio::time::{timeout, Duration};
 #[path = "mcp_acceptance/codex_rename.rs"]
 mod codex_rename;
 mod common;
+#[path = "mcp_acceptance/tags.rs"]
+mod tags;
 #[path = "mcp_acceptance/termination.rs"]
 mod termination;
 

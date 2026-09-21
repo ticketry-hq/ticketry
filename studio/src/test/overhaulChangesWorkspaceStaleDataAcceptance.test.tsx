@@ -44,7 +44,7 @@ function ReviewHarness() {
       </button>
       <ChangesFileReview
         checkoutKey={`task:${checkout}`}
-        checkouts={<p>{checkout}</p>}
+        toolbar={<p>{checkout}</p>}
         header={<h2>{checkout} changes</h2>}
         taskId={checkout}
         files={checkoutFiles[checkout]}

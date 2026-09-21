@@ -169,7 +169,7 @@ describe("restore-aware module picker acceptance", () => {
     });
   });
 
-  it("[overhaul-237] puts module creation immediately beside the last module tab", async () => {
+  it("[overhaul-237] scrolls module creation with the module tabs", async () => {
     render(
       <>
         <ModuleTabStrip />
@@ -184,6 +184,7 @@ describe("restore-aware module picker acceptance", () => {
     const tablist = screen.getByRole("tablist", {
       name: "Project module tabs",
     });
+    const tabScroller = screen.getByLabelText("Scrollable project module tabs");
     const modulePicker = await screen.findByRole("button", {
       name: "Open module picker",
     });
@@ -191,9 +192,14 @@ describe("restore-aware module picker acceptance", () => {
     expect(strip).toContainElement(modulesToggle);
     expect(strip.firstElementChild).toBe(modulesToggle);
     expect(tablist.nextElementSibling).toContainElement(modulePicker);
+    expect(tabScroller).toContainElement(tablist);
+    expect(tabScroller).toContainElement(modulePicker);
     expect(within(tablist).getAllByRole("tab").at(-1)).toHaveAccessibleName("Charlie");
-    expect(tablist).toHaveClass("flex-initial", "min-w-0", "overflow-x-auto");
-    expect(tablist).not.toHaveClass("flex-1", "grow");
+    expect(tabScroller).toHaveClass("min-w-0", "flex-1", "overflow-x-auto");
+
+    fireEvent.click(modulePicker);
+    expect(screen.getByRole("dialog", { name: "Module picker" }).parentElement)
+      .toBe(document.body);
   });
 
   it("opens creation as the first action and keeps the coach mark off the trigger", async () => {
@@ -325,6 +331,24 @@ describe("restore-aware module picker acceptance", () => {
 
     fireEvent.click(trigger);
     expect(screen.getByRole("combobox", { name: "Search modules" })).toHaveValue("");
+  });
+
+  it("[overhaul-338] closes when the open trigger is clicked again", async () => {
+    render(<ModuleTabStrip />);
+    const picker = await openPicker();
+    const trigger = screen.getByRole("button", { name: "Open module picker" });
+    const search = within(picker).getByRole("combobox", {
+      name: "Search modules",
+    });
+
+    fireEvent.pointerDown(trigger);
+    fireEvent.mouseDown(trigger);
+    fireEvent.blur(search, { relatedTarget: trigger });
+    trigger.focus();
+    fireEvent.mouseUp(trigger);
+    fireEvent.click(trigger);
+
+    expect(screen.queryByRole("dialog", { name: "Module picker" })).toBeNull();
   });
 
   it("restores the active hidden module with arrows and Enter", async () => {

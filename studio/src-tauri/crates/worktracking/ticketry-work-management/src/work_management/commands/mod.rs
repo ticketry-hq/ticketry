@@ -13,6 +13,7 @@ mod review_findings;
 pub mod reviewed_defaults;
 pub mod state_configuration;
 pub mod status_facts;
+pub mod tags;
 pub mod timestamp;
 pub mod work_items;
 pub mod workflow;

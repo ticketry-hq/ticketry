@@ -235,7 +235,10 @@ describe("overhaul acceptance - independent Changes workspace navigation", () =>
     expect(useClientStore.getState().activeByTask[ORIGIN_TASK_ID]).toBe("origin-session");
 
     fireEvent.click(
-      within(review).getByRole("button", {
+      await screen.findByRole("button", { name: "Change worktree checkout" }),
+    );
+    fireEvent.click(
+      await screen.findByRole("button", {
         name: "Open CODING-1971 Inspect this checkout Changes",
       }),
     );

@@ -37,9 +37,9 @@ pub use runs::{
 pub use settings::{app_settings, module_link, MODULE_LINK_OBJECT};
 pub use terminals::{cleanup_effect, launch_material, session, viewer_lease};
 pub use work_management::{
-    agent_model, agent_model_reasoning_level, attachment, issue, issue_blocker, issue_type,
-    issue_type_transition, launch_binding, launch_policy_decision, launch_policy_rejection,
-    module_presentation, project, provider, reasoning_level,
+    agent_model, agent_model_reasoning_level, attachment, issue, issue_blocker, issue_label,
+    issue_type, issue_type_transition, label, launch_binding, launch_policy_decision,
+    launch_policy_rejection, module_presentation, project, provider, reasoning_level,
     register_entity_modules as register_work_management_entities, state, transition_occurrence,
 };
 pub use workspace_runtime::{

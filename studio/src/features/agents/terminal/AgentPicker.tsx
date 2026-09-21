@@ -26,9 +26,15 @@ export interface AgentPickerPayload {
    * runs launched from Studio work-item surfaces.
    */
   taskId?: string;
+  /** Opens the task workspace's plain module terminal when that surface exists. */
+  onTerminal?: () => void;
   /** Optional surface callback after a launch has been placed in its workspace. */
   onLaunched?: () => void;
 }
+
+type PickerChoice =
+  | { kind: "agent"; agent: Agent; label: Agent }
+  | { kind: "terminal"; label: "Terminal" };
 
 export function AgentPicker({ payload }: { payload?: AgentPickerPayload }) {
   const popModal = useModalStore((s) => s.popModal);
@@ -40,11 +46,20 @@ export function AgentPicker({ payload }: { payload?: AgentPickerPayload }) {
     () => AGENTS.filter((agent) => activatedProviders.has(agent)),
     [activatedProviders],
   );
+  const choices = useMemo<PickerChoice[]>(
+    () => [
+      ...agents.map((agent) => ({ kind: "agent" as const, agent, label: agent })),
+      ...(payload?.onTerminal
+        ? [{ kind: "terminal" as const, label: "Terminal" as const }]
+        : []),
+    ],
+    [agents, payload?.onTerminal],
+  );
 
   const [cursor, setCursor] = useState(0);
   useEffect(() => {
-    setCursor((c) => Math.min(c, Math.max(0, agents.length - 1)));
-  }, [agents.length]);
+    setCursor((c) => Math.min(c, Math.max(0, choices.length - 1)));
+  }, [choices.length]);
 
   function commit(agent: Agent): void {
     const projectId = payload?.projectId;
@@ -111,14 +126,23 @@ export function AgentPicker({ payload }: { payload?: AgentPickerPayload }) {
     popModal();
   }
 
+  function commitChoice(choice: PickerChoice): void {
+    if (choice.kind === "agent") {
+      commit(choice.agent);
+      return;
+    }
+    payload?.onTerminal?.();
+    popModal();
+  }
+
   function onAction(actionId: string) {
     if (actionId === MODAL_ACTIONS.next) {
-      setCursor((c) => Math.min(agents.length - 1, c + 1));
+      setCursor((c) => Math.min(choices.length - 1, c + 1));
     } else if (actionId === MODAL_ACTIONS.previous) {
       setCursor((c) => Math.max(0, c - 1));
     } else if (actionId === MODAL_ACTIONS.confirm) {
-      const agent = agents[cursor];
-      if (agent) commit(agent);
+      const choice = choices[cursor];
+      if (choice) commitChoice(choice);
     }
   }
 
@@ -136,23 +160,24 @@ export function AgentPicker({ payload }: { payload?: AgentPickerPayload }) {
       onAction={onAction}
       width="w-[40ch]"
     >
-      {agents.length === 0 ? (
+      {agents.length === 0 && (
         <p className="px-2 py-1 text-sm text-text-muted">
           {providerListPlaceholder({ loaded, failed })}
         </p>
-      ) : (
+      )}
+      {choices.length > 0 && (
         <ul>
-          {agents.map((a, i) => (
+          {choices.map((choice, i) => (
             <li
-              key={a}
-              onClick={() => commit(a)}
+              key={choice.kind === "agent" ? choice.agent : choice.kind}
+              onClick={() => commitChoice(choice)}
               className={`cursor-pointer px-2 py-1 ${
                 i === cursor
                   ? "bg-selection-bg text-text-primary"
                   : "hover:bg-pane-title"
               }`}
             >
-              {a}
+              {choice.label}
             </li>
           ))}
         </ul>

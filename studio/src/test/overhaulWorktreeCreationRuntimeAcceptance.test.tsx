@@ -242,7 +242,7 @@ describe("worktree creation desktop runtime acceptance", () => {
       approval: `${provider}-approval`,
       directory: created.path,
     }));
-    render(
+    const refused = render(
       <StrictMode>
         <WorktreeBlock taskId={`${TASK}-refused`} moduleId="m1" />
         <DialogHost />
@@ -255,6 +255,18 @@ describe("worktree creation desktop runtime acceptance", () => {
     expect(await screen.findByText("Worktree trust was not approved. Retry to continue.")).toBeTruthy();
     expect(screen.getByText(`Shares the worktree owned by top-level task (${TASK}).`)).toBeTruthy();
     expect(requests.filter(({ operationName }) => operationName === "WorktreeCreate")).toHaveLength(0);
+
+    refused.unmount();
+    render(
+      <StrictMode>
+        <WorktreeBlock taskId={`${TASK}-refused`} moduleId="m1" />
+        <DialogHost />
+      </StrictMode>,
+    );
+    expect(await screen.findByText("Worktree trust was not approved. Retry to continue.")).toBeTruthy();
+    expect(screen.getByText(`Shares the worktree owned by top-level task (${TASK}).`)).toBeTruthy();
+    expect(screen.queryByRole("dialog", { name: "Trust worktree?" })).toBeNull();
+    expect(trust).toHaveBeenCalledTimes(6);
 
     fireEvent.click(screen.getByRole("button", { name: "Retry trust" }));
     const retry = await screen.findByRole("dialog", { name: "Trust worktree?" });

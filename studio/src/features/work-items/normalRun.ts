@@ -1,5 +1,6 @@
 import { TEMP_TASK_ID } from "../agents/types";
 import { launchDefaultAgent } from "../agents/terminal";
+import { clearWorktreeTrustDeferral } from "../agents/worktrees/worktreeTrustDeferrals";
 import { executeTaskSubtree } from "../execution";
 import type { WorkItem } from "../../shared/api/types";
 import { useClientStore } from "../../state/clientStore";
@@ -41,6 +42,7 @@ export async function runWorkItem(
   if (item.id === TEMP_TASK_ID) {
     throw new Error("Temporary work items cannot run.");
   }
+  clearWorktreeTrustDeferral(item.id);
   if (item.sub_issues_count > 0) {
     const { launched } = await executeTaskSubtree(item.id);
     return { kind: "subtree", launched: [...launched] };

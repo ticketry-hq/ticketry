@@ -299,7 +299,7 @@ named gate before the full Studio suite, typecheck, and build.
 | 306 | A canonical-directory or pending-provider change after consent requires a fresh confirmation before any provider preparation. |
 | 307 | Long truncated patches remain readable below the file list without wrapping their contents. |
 | 308 | Worktree creation finishes before Studio requests provider trust for the canonical external checkout and names every pending provider. |
-| 309 | An already-trusted recovered Worktree needs no confirmation; refusal keeps that checkout and exposes trust retry without another create. |
+| 309 | An already-trusted recovered Worktree needs no confirmation; refusal keeps that checkout and exposes trust retry without another create or another prompt when its details reopen. |
 | 310 | Partial Worktree trust survives provider failure, and retry prepares only the remaining provider against the same checkout. |
 | 311 | Instant conversation rows react to their own Agent Run lifecycle changes without leaking activity across runs or modules. `starting`, `working`, `permission_required`, `reconnecting`, `needs_input`, `turn_complete`, `error`, `stalled`, and `quiet` show the eligible badge with count-one semantics; absent, `unknown`, `exited`, and `lost` states show none. The Conversations heading and New conversation show no lifecycle badge. |
 | 312 | The Conversations heading configures host-wide conversation defaults in the retained right workspace, including with zero chats. Close and repeated activation restore the prior workspace without launching a run, opening a modal, writing settings, or replacing terminal identities. |

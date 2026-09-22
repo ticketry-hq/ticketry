@@ -1,7 +1,12 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { WorkItem } from "../../shared/api/types";
+import { resetStudioApolloClient } from "../../shared/apollo/client";
 import { TEMP_TASK_ID } from "../agents/types";
 import { launchDefaultAgent } from "../agents/terminal";
+import {
+  deferWorktreeTrust,
+  isWorktreeTrustDeferred,
+} from "../agents/worktrees/worktreeTrustDeferrals";
 import { executeTaskSubtree } from "../execution";
 import { runWorkItem } from "./normalRun";
 
@@ -13,6 +18,7 @@ const item = (id: string, subIssues = 0) =>
 
 describe("normal work-item run", () => {
   beforeEach(() => vi.clearAllMocks());
+  afterEach(async () => resetStudioApolloClient());
 
   it("rejects temporary items and routes branches and leaves to their existing launch commands", async () => {
     vi.mocked(executeTaskSubtree).mockResolvedValue({
@@ -24,10 +30,14 @@ describe("normal work-item run", () => {
     await expect(runWorkItem(item(TEMP_TASK_ID))).rejects.toThrow(
       "Temporary work items cannot run.",
     );
+    deferWorktreeTrust("branch-1", "/checkouts/branch-1");
     await expect(runWorkItem(item("branch-1", 1), context)).resolves.toEqual({
       kind: "subtree",
       launched: ["child-1"],
     });
+    expect(
+      isWorktreeTrustDeferred("branch-1", "/checkouts/branch-1"),
+    ).toBe(false);
     expect(executeTaskSubtree).toHaveBeenCalledWith("branch-1");
     expect(launchDefaultAgent).not.toHaveBeenCalled();
 

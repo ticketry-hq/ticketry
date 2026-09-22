@@ -1,5 +1,6 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 
+import { clearWorktreeTrustDeferral } from "../../worktrees/worktreeTrustDeferrals";
 import { createDefaultInteractiveTaskLaunch } from "./mutationTransport";
 
 /** The project/module context a browser launch needs to bind its identities. */
@@ -18,6 +19,7 @@ export async function launchDefaultAgent(
   issueId: string,
   context?: DefaultAgentLaunchContext,
 ): Promise<void> {
+  clearWorktreeTrustDeferral(issueId);
   if (isTauri()) {
     await invoke("desktop_launch_default_coding_agent", { issueId });
     return;

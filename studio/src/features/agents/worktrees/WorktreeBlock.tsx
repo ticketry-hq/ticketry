@@ -19,20 +19,39 @@ import {
   moduleFolderSaveError,
   prepareDirectoryTrust,
 } from "../../module-links";
+import {
+  clearWorktreeTrustDeferral,
+  deferWorktreeTrust,
+  isWorktreeTrustDeferred,
+} from "./worktreeTrustDeferrals";
 
-async function worktreeTrustFailure(path: string): Promise<string | null> {
+const DEFERRED_TRUST_ERROR =
+  "Worktree trust was not approved. Retry to continue.";
+
+interface WorktreeTrustOutcome {
+  failure: string | null;
+  deferred: boolean;
+}
+
+async function prepareWorktreeTrust(path: string): Promise<WorktreeTrustOutcome> {
   try {
     const approved = await prepareDirectoryTrust(path, undefined, {
       title: "Trust worktree?",
       subject: "worktree",
       confirmLabel: "Trust worktree",
     });
-    return approved ? null : "Worktree trust was not approved. Retry to continue.";
+    return {
+      failure: approved ? null : DEFERRED_TRUST_ERROR,
+      deferred: !approved,
+    };
   } catch (cause) {
-    return moduleFolderSaveError(
-      cause,
-      "Could not prepare worktree trust. Retry to continue.",
-    );
+    return {
+      failure: moduleFolderSaveError(
+        cause,
+        "Could not prepare worktree trust. Retry to continue.",
+      ),
+      deferred: false,
+    };
   }
 }
 
@@ -81,7 +100,7 @@ export function WorktreeBlock({
   const [confirming, setConfirming] = useState(false);
   const inspection = useRef<{
     key: string;
-    result: Promise<string | null>;
+    result: Promise<WorktreeTrustOutcome>;
   } | null>(null);
 
   const client = studioApolloClient();
@@ -107,39 +126,58 @@ export function WorktreeBlock({
   const worktreePath = status?.kind === "worktree"
     ? status.path
     : null;
+  const statusKind = status?.kind ?? null;
 
   useEffect(() => {
     if (!worktreePath) {
       inspection.current = null;
+      if (statusKind) clearWorktreeTrustDeferral(taskId);
+      return;
+    }
+    if (isWorktreeTrustDeferred(taskId, worktreePath)) {
+      inspection.current = null;
+      setTrustError(DEFERRED_TRUST_ERROR);
+      setTrustBusy(false);
       return;
     }
     const key = `${taskId}\0${worktreePath}`;
     if (inspection.current?.key !== key) {
       inspection.current = {
         key,
-        result: worktreeTrustFailure(worktreePath),
+        result: prepareWorktreeTrust(worktreePath),
       };
     }
     const current = inspection.current;
     let active = true;
     setTrustBusy(true);
-    void current.result.then((failure) => {
+    void current.result.then((outcome) => {
       if (!active) return;
-      setTrustError(failure);
+      if (outcome.deferred) {
+        deferWorktreeTrust(taskId, worktreePath);
+      } else {
+        clearWorktreeTrustDeferral(taskId, worktreePath);
+      }
+      setTrustError(outcome.failure);
       setTrustBusy(false);
     });
     return () => { active = false; };
-  }, [taskId, worktreePath]);
+  }, [statusKind, taskId, worktreePath]);
 
   const retryTrust = async () => {
     if (!worktreePath) return;
-    const result = worktreeTrustFailure(worktreePath);
+    clearWorktreeTrustDeferral(taskId, worktreePath);
+    const result = prepareWorktreeTrust(worktreePath);
     inspection.current = { key: `${taskId}\0${worktreePath}`, result };
     setTrustBusy(true);
     setTrustError(null);
-    const failure = await result;
+    const outcome = await result;
     if (inspection.current?.result !== result) return;
-    setTrustError(failure);
+    if (outcome.deferred) {
+      deferWorktreeTrust(taskId, worktreePath);
+    } else {
+      clearWorktreeTrustDeferral(taskId, worktreePath);
+    }
+    setTrustError(outcome.failure);
     setTrustBusy(false);
   };
 

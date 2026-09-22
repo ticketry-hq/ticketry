@@ -137,7 +137,7 @@ import { ModulesPane } from "../app/shell/sidebar/modules/ModulesPane";
 import { useStudioStore } from "../features/projects/store";
 import { AddModule } from "../features/studio/modals/AddModule";
 import { getModuleLinks, seedModuleLinks } from "../features/module-links";
-import { inertLaunchkeyRuntime, type StudioRuntime } from "../runtime";
+import { initializeStudioRuntime, inertLaunchkeyRuntime, type StudioRuntime } from "../runtime";
 import { useClientStore } from "../state/clientStore";
 import { quietAppUpdatesRuntime } from "./appUpdatesRuntimeFixture";
 
@@ -187,6 +187,7 @@ const acceptModuleLink = async (moduleId: string, path: string) => {
 };
 
 beforeEach(() => {
+  initializeStudioRuntime(createBrowserRuntime({ environment: {} }));
   nativeTrust.desktop = false;
   nativeTrust.invoke.mockReset().mockResolvedValue("already_trusted");
   useDialogStore.setState({ dialogs: [] });
@@ -376,7 +377,7 @@ describe("onboarding and module-folder acceptance", () => {
     ).toBeVisible();
   });
 
-  it("[overhaul-295] keeps onboarding incomplete after trust refusal and retries without a duplicate module", async () => {
+  it("[overhaul-295] cancels module creation after trust refusal and can retry without a duplicate module", async () => {
     const trust = vi.fn(async (provider: string, _directory: string, approval: string | null) => ({
       status: approval ? "prepared" : "approval_required",
       approval: approval ? null : `${provider}-approval`,
@@ -385,8 +386,13 @@ describe("onboarding and module-folder acceptance", () => {
     useStudioStore.setState({ selectedProjectId: "project-1" });
     useOnboardingTourStore.getState().start("project-1");
     api.createModule.mockResolvedValue({ id: "module-trust", name: "Runtime", project_id: "project-1" });
-    render(<><AddModule runtime={trustRuntime(trust)} /><DialogHost /></>);
-    fireEvent.change(screen.getByRole("textbox", { name: "Module name" }), { target: { value: "Runtime" } });
+    api.getProviderCatalog.mockResolvedValue({
+      value: { activated_providers: ["gemini"], global_default: null },
+    });
+    initializeStudioRuntime(trustRuntime(trust));
+    render(<><OnboardingTour onSelectStory={vi.fn()} /><ModalHost /><DialogHost /></>);
+    act(() => useModalStore.getState().pushModal({ type: "add-module" }));
+    fireEvent.change(await screen.findByRole("textbox", { name: "Module name" }), { target: { value: "Runtime" } });
     fireEvent.change(screen.getByRole("textbox", { name: "Module folder" }), { target: { value: "/repos/trust" } });
     fireEvent.click(screen.getByRole("button", { name: "Create module" }));
     expect(await screen.findByRole("dialog", { name: "Trust module folder?" })).toBeVisible();
@@ -394,8 +400,20 @@ describe("onboarding and module-folder acceptance", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "Cancel" }).at(-1)!);
     expect(useOnboardingTourStore.getState().step).toBe("module-create");
     expect(api.writeModuleLink).not.toHaveBeenCalled();
-    await waitFor(() => expect(screen.getByRole("button", { name: "Save folder" })).toBeEnabled());
-    fireEvent.click(screen.getByRole("button", { name: "Save folder" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Create module" })).toBeEnabled());
+    expect(screen.getByRole("textbox", { name: "Module name" })).toBeEnabled();
+    expect(api.createModule).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("dialog", { name: "Add Module" })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Add your first module" })).toBeVisible();
+    expect(useClientStore.getState().selectedModuleId).toBeNull();
+    expect(api.createModule).not.toHaveBeenCalled();
+    expect(api.writeModuleLink).not.toHaveBeenCalled();
+
+    act(() => useModalStore.getState().pushModal({ type: "add-module" }));
+    fireEvent.change(await screen.findByRole("textbox", { name: "Module name" }), { target: { value: "Runtime" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Module folder" }), { target: { value: "/repos/trust" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create module" }));
     await screen.findByRole("dialog", { name: "Trust module folder?" });
     fireEvent.click(screen.getByRole("button", { name: "Trust folder" }));
     await waitFor(() => expect(useOnboardingTourStore.getState().step).toBe("story-create"));
@@ -415,6 +433,9 @@ describe("onboarding and module-folder acceptance", () => {
     useStudioStore.setState({ selectedProjectId: "project-1" });
     useOnboardingTourStore.getState().start("project-1");
     api.createModule.mockResolvedValue({ id: "module-trusted", name: "Runtime", project_id: "project-1" });
+    api.getProviderCatalog.mockResolvedValue({
+      value: { activated_providers: ["gemini"], global_default: null },
+    });
     render(<><AddModule runtime={trustRuntime(trust)} /><DialogHost /></>);
     fireEvent.change(screen.getByRole("textbox", { name: "Module name" }), { target: { value: "Runtime" } });
     fireEvent.change(screen.getByRole("textbox", { name: "Module folder" }), { target: { value: "/repos/trusted" } });
@@ -422,7 +443,8 @@ describe("onboarding and module-folder acceptance", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(/permission denied.*Retry/);
     expect(api.writeModuleLink).not.toHaveBeenCalled();
     expect(useOnboardingTourStore.getState().step).toBe("module-create");
-    fireEvent.click(screen.getByRole("button", { name: "Save folder" }));
+    expect(api.createModule).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Create module" }));
     await waitFor(() => expect(useOnboardingTourStore.getState().step).toBe("story-create"));
     expect(screen.queryByRole("dialog", { name: "Trust module folder?" })).not.toBeInTheDocument();
     expect(api.createModule).toHaveBeenCalledOnce();

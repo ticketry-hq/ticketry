@@ -4,7 +4,11 @@ import { useModalStore } from "../../../app/modal/modalStore";
 import { useClientStore } from "../../../state/clientStore";
 import { useStudioStore } from "../../projects";
 import { MODAL_ACTIONS } from "../../../app/navigation/keymapRegistry";
-import { moduleFolderSaveError, setModuleFolder } from "../../module-links";
+import {
+  moduleFolderSaveError,
+  prepareDirectoryTrust,
+  writeModuleLink,
+} from "../../module-links";
 import {
   ModuleFolderSelection,
   useModuleFolderSelection,
@@ -87,6 +91,14 @@ export function AddModule({ runtime }: { runtime?: StudioRuntime } = {}) {
         return;
       }
 
+      // Refusing trust must leave creation untouched, including onboarding.
+      try {
+        if (!(await prepareDirectoryTrust(folder, runtime))) return;
+      } catch (cause) {
+        setError(moduleFolderSaveError(cause, "Could not prepare folder trust. Retry to continue."));
+        return;
+      }
+
       let moduleId = createdModuleIdRef.current;
       if (!moduleId) {
         const created = await useStudioStore
@@ -100,7 +112,7 @@ export function AddModule({ runtime }: { runtime?: StudioRuntime } = {}) {
 
       const resolvedModuleId = moduleId;
       try {
-        if (!(await setModuleFolder(resolvedModuleId, folder, runtime))) return;
+        await writeModuleLink(resolvedModuleId, folder);
       } catch (cause) {
         setError(moduleFolderSaveError(cause, "Module created, but its folder could not be saved. Retry to save the folder."));
         return;

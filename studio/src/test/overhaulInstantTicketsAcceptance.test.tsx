@@ -6,6 +6,8 @@ import { SelectedTicketContent } from "../app/shell/ticket-workspace/selected-ti
 import { SelectedTicket } from "../app/shell/ticket-workspace/selected-ticket/SelectedTicket";
 import { TasksPane } from "../app/shell/ticket-workspace/tasks/TasksPane";
 import { useAgentStatusStore } from "../features/agents/status/testStore";
+import { applyRunStatusFrame } from "../features/agents/status/stream/runStatusHolding";
+import { lifecycleStatusFrame } from "../features/agents/status/testing/durableStatusFrames";
 import { useSelectedInstantRunId } from "../app/shell/ticket-workspace/tasks/internal/instantRunTicketNavigation";
 import {
   refreshTerminalHoldings,
@@ -187,6 +189,7 @@ describe("overhaul acceptance — Conversations", () => {
     render(
       <StudioApolloProvider>
         <TasksPane />
+        <ConversationWorkspaceHarness />
       </StudioApolloProvider>,
     );
 
@@ -225,6 +228,39 @@ describe("overhaul acceptance — Conversations", () => {
     expect(useClientStore.getState().selectedTaskId).toBe(TEMP_TASK_ID);
     expect(useClientStore.getState().activeByTask[bucket]).toBe("session-2");
     expect(useClientStore.getState().workspaces[bucket]?.active).toBe("terminal");
+    await waitFor(() => expect(screen.getAllByRole("tab")).toHaveLength(1));
+    const idleTab = screen.getByRole("tab");
+    expect(idleTab).toHaveAccessibleName(/codex terminal/i);
+    expect(
+      within(needsInputRow).getByLabelText("Agent is waiting for your input"),
+    ).toBeVisible();
+    expect(
+      within(idleTab).getByLabelText("Agent is waiting for your input"),
+    ).toHaveTextContent("Needs input");
+    expect(
+      within(needsInputRow).queryByLabelText("Agent is actively working"),
+    ).toBeNull();
+
+    act(() => {
+      applyRunStatusFrame(lifecycleStatusFrame({
+        projectId: "project-1",
+        agentRunId: "instant-run-2",
+        state: "working",
+        at: "2026-08-30T11:01:00Z",
+      }));
+    });
+
+    await waitFor(() => {
+      expect(
+        within(needsInputRow).getByLabelText("Agent is actively working"),
+      ).toBeVisible();
+      expect(
+        within(idleTab).getByLabelText("Agent is actively working"),
+      ).toHaveTextContent("Working");
+    });
+    expect(
+      within(idleTab).queryByLabelText("Agent is waiting for your input"),
+    ).toBeNull();
   });
 
   it("[overhaul-311] isolates reactive lifecycle badges by run and module", async () => {

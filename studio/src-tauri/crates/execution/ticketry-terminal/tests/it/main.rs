@@ -6,4 +6,5 @@
 mod crash_safe_launch_reconciliation;
 #[path = "../../../../../tests/common/execution_legacy_fixture.rs"]
 mod execution_legacy_fixture;
+mod launch_initial_lifecycle;
 mod terminal_persistence_adoption;

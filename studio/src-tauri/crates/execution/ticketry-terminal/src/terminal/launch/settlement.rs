@@ -15,6 +15,14 @@ pub(super) struct SessionSettlement {
     pub(super) checkpoints: super::checkpoint::LaunchCheckpoints,
 }
 
+fn initial_lifecycle_kind(scope: &str, prompt: Option<&str>) -> &'static str {
+    match (scope, prompt) {
+        ("shell", _) => "session_start",
+        ("instant", None) => "awaiting_input",
+        _ => "turn_start",
+    }
+}
+
 #[async_trait]
 impl LaunchSettlementParticipant for SessionSettlement {
     async fn settle_applied_in(
@@ -68,11 +76,10 @@ impl LaunchSettlementParticipant for SessionSettlement {
                 transaction,
                 LifecycleFact {
                     agent_run_id: self.material.agent_run_id.clone(),
-                    kind: if self.material.scope == "shell" {
-                        "session_start"
-                    } else {
-                        "turn_start"
-                    }
+                    kind: initial_lifecycle_kind(
+                        &self.material.scope,
+                        self.material.prompt.as_deref(),
+                    )
                     .to_owned(),
                     occurred_at: Utc::now().to_rfc3339(),
                     provider_session_id: None,

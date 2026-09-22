@@ -53,6 +53,12 @@ describe("overhaul acceptance — transition landing", () => {
         state: grill,
       }),
     ]);
+    http.workflowTransitions("story", [{
+      from_state_id: "grill",
+      to_state_id: "implement",
+      agent_allowed: true,
+      handoff: false,
+    }]);
     http.transitionRank(sourceId, "A");
 
     let releaseTransition = (): void => {};
@@ -137,6 +143,12 @@ describe("overhaul acceptance — transition landing", () => {
       workItem({ id: "ideas-top", name: "Ideas top", key: "MEML-3", rank: "M" }),
       workItem({ id: "ideas-bottom", name: "Ideas bottom", key: "MEML-4", rank: "Z" }),
     ]);
+    http.workflowTransitions("story", [{
+      from_state_id: "grill",
+      to_state_id: "state-1",
+      agent_allowed: true,
+      handoff: false,
+    }]);
     // This seam supplies the authoritative transition response; rank
     // allocation itself is covered at the backend transition boundary.
     http.transitionRank("picker-move", "mV");

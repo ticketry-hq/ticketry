@@ -53,6 +53,7 @@ export {
   setWorkflowProviderCapabilities,
   setWorkflowStateCounts,
   setWorkflowStates,
+  useProjectWorkflowSettings,
 } from "./queries";
 export {
   createIssueType,

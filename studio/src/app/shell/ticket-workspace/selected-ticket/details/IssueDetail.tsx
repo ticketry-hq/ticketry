@@ -26,6 +26,7 @@ import { WorkItemNotFoundError } from "../../../../../shared/api/workItemBatcher
 import { useCachedStates } from "../../../../../features/projects";
 import { useIssueTypesQuery } from "../../../../../features/settings";
 import { usePersistedSubtreeRun } from "../../../../../features/execution";
+import { useProjectWorkflowSettings } from "../../../../../features/workflows";
 
 const EMPTY_MODULES: Module[] = [];
 const EMPTY_PROJECTS: Project[] = [];
@@ -105,6 +106,16 @@ function IssueDetailContent({ issueId, detailsVisible }: { issueId: string; deta
   const projects = useProjectsQuery().data ?? EMPTY_PROJECTS;
   const states = useCachedStates(task?.project_id ?? null);
   const issueTypes = useIssueTypesQuery(task?.project_id ?? null).data ?? [];
+  const projectWorkflows = useProjectWorkflowSettings(task?.project_id ?? null);
+  const permittedStateIds = useMemo(() => {
+    const ids = new Set<string>();
+    if (!task?.state) return ids;
+    const workflow = projectWorkflows[task.issue_type];
+    for (const transition of workflow?.transitions ?? []) {
+      if (transition.from_state_id === task.state) ids.add(transition.to_state_id);
+    }
+    return ids;
+  }, [projectWorkflows, task?.issue_type, task?.state]);
   const subtreeDescendantIds = useMemo(() => {
     const ids: string[] = [];
     const seen = new Set([issueId]);
@@ -305,6 +316,7 @@ function IssueDetailContent({ issueId, detailsVisible }: { issueId: string; deta
           <StatePicker
             projectId={task.project_id}
             value={task.state}
+            permittedStateIds={permittedStateIds}
             saving={Boolean(saving.state_id)}
             onChange={(state) =>
               setState.mutate(

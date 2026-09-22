@@ -53,7 +53,10 @@ export async function loadWorkflowSettings(
   return readWorkflowSettings(projectId, issueTypeId, fetchPolicy);
 }
 
-export { getProjectWorkflowSettingsSnapshot } from "./workflowSnapshots";
+export {
+  getProjectWorkflowSettingsSnapshot,
+  useProjectWorkflowSettings,
+} from "./workflowSnapshots";
 export { setIssueTypeMetadata as setWorkflowIssueTypes } from "./issueTypeMetadata";
 
 export function getWorkflowIssueTypesSnapshot(projectId: string): IssueType[] {

@@ -14,6 +14,7 @@ import type {
   Attachment,
   IssueType,
   ModuleTree,
+  ScopedWorkflowTransition,
   State,
   WorkItem,
 } from "../shared/api/types";
@@ -60,6 +61,10 @@ export interface HttpFixture {
   /** Holds Run Now responses until the returned release is called. */
   holdRunNow(): () => void;
   setRunNowTransitionEnabled(enabled: boolean): void;
+  workflowTransitions(
+    issueTypeId: string,
+    transitions: ScopedWorkflowTransition[],
+  ): void;
   refreshRunNowCapabilities(issueTypeId: string): Promise<void>;
   /** Fails the next graph-run POST only, leaving other requests untouched. */
   failNextGraphRun(status: number, body?: unknown): void;
@@ -139,6 +144,10 @@ class BoundaryFixture implements StudioFixture {
   private runNowGate: Promise<void> | null = null;
   private subtreeRunEnabled = true;
   private runNowTransitionEnabled = true;
+  private readonly workflowTransitionOverrides = new Map<
+    string,
+    ScopedWorkflowTransition[]
+  >();
   private readonly transitionRanks = new Map<string, string>();
   private nextFailure: { status: number; body: unknown } | null = null;
   private patchWaiters: Array<{
@@ -304,6 +313,28 @@ class BoundaryFixture implements StudioFixture {
     this.runNowTransitionEnabled = enabled;
   }
 
+  workflowTransitions(
+    issueTypeId: string,
+    transitions: ScopedWorkflowTransition[],
+  ): void {
+    this.workflowTransitionOverrides.set(issueTypeId, transitions);
+  }
+
+  private transitionsFor(issueTypeId: string): ScopedWorkflowTransition[] {
+    const configured = this.workflowTransitionOverrides.get(issueTypeId);
+    if (configured) return configured;
+    const ideas = [...this.states.values()].find((state) => state.name === "Ideas");
+    const implement = [...this.states.values()].find((state) => state.name === "Implement");
+    return this.runNowTransitionEnabled && ideas?.id && implement?.id
+      ? [{
+          from_state_id: ideas.id,
+          to_state_id: implement.id,
+          agent_allowed: true,
+          handoff: false,
+        }]
+      : [];
+  }
+
   async refreshRunNowCapabilities(issueTypeId: string): Promise<void> {
     void issueTypeId;
     await studioApolloClient().query({
@@ -448,21 +479,25 @@ class BoundaryFixture implements StudioFixture {
       updated_at: createdAt,
     }));
     const issueTypeRows = () => [...this.issueTypes.values()].map((type) => {
-      const ideas = [...this.states.values()].find((state) => state.name === "Ideas");
-      const implement = [...this.states.values()].find((state) => state.name === "Implement");
-      const transitions = this.runNowTransitionEnabled && ideas?.id && implement?.id
-        ? [{
-            __typename: "WorktrackerIssuetypetransition",
-            id: 1,
-            issue_type: type.id,
-            from_state: ideas.id,
-            to_state: implement.id,
-            agent_allowed: true,
-            handoff: false,
-            fromState: { __typename: "WorktrackerState", id: ideas.id, sort_order: ideas.sort_order ?? 0 },
-            toState: { __typename: "WorktrackerState", id: implement.id, sort_order: implement.sort_order ?? 0 },
-          }]
-        : [];
+      const transitions = this.transitionsFor(type.id).map((transition, index) => ({
+        __typename: "WorktrackerIssuetypetransition",
+        id: index + 1,
+        issue_type: type.id,
+        from_state: transition.from_state_id,
+        to_state: transition.to_state_id,
+        agent_allowed: transition.agent_allowed,
+        handoff: transition.handoff,
+        fromState: {
+          __typename: "WorktrackerState",
+          id: transition.from_state_id,
+          sort_order: this.states.get(transition.from_state_id)?.sort_order ?? 0,
+        },
+        toState: {
+          __typename: "WorktrackerState",
+          id: transition.to_state_id,
+          sort_order: this.states.get(transition.to_state_id)?.sort_order ?? 0,
+        },
+      }));
       const bindings = [...this.items.values()].flatMap((item, index) =>
         item.issue_type === type.id && item.state ? [{
           __typename: "WorktrackerLaunchbinding",
@@ -847,20 +882,16 @@ class BoundaryFixture implements StudioFixture {
     );
     if (method === "GET" && transitionCollectionMatch) {
       const issueTypeId = decodeURIComponent(transitionCollectionMatch[1]);
-      const ideas = [...this.states.values()].find((state) => state.name === "Ideas");
-      const implement = [...this.states.values()].find((state) => state.name === "Implement");
       return json(
-        this.runNowTransitionEnabled && ideas?.id && implement?.id
-          ? [{
-              id: 1,
-              issue_type: issueTypeId,
-              from_state: ideas.id,
-              to_state: implement.id,
-              agent_allowed: true,
-              handoff: false,
-              workflow_revision: 1,
-            }]
-          : [],
+        this.transitionsFor(issueTypeId).map((transition, index) => ({
+          id: index + 1,
+          issue_type: issueTypeId,
+          from_state: transition.from_state_id,
+          to_state: transition.to_state_id,
+          agent_allowed: transition.agent_allowed,
+          handoff: transition.handoff,
+          workflow_revision: 1,
+        })),
       );
     }
     if (

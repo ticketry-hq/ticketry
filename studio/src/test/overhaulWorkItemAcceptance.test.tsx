@@ -275,6 +275,12 @@ describe("overhaul acceptance — Stories and details", () => {
         rank: "A",
       }),
     ]);
+    http.workflowTransitions("story", [{
+      from_state_id: "grill",
+      to_state_id: "state-1",
+      agent_allowed: true,
+      handoff: false,
+    }]);
     const patched = http.expectPatch("story-1", {
       state_id: "state-1",
       origin: "human",
@@ -347,6 +353,55 @@ describe("overhaul acceptance — Stories and details", () => {
       expect(within(stories).getByRole("button", { name: "Collapse Implement" }))
         .toHaveTextContent("Implement2");
     });
+  });
+
+  it("[overhaul-360] offers only configured workflow destinations in the state picker", async () => {
+    const http = fixture();
+    const implement = {
+      id: "implement",
+      name: "Implement",
+      group: "started",
+      color: null,
+      sort_order: 4,
+    };
+    const done = {
+      id: "done",
+      name: "Done",
+      group: "completed",
+      color: null,
+      sort_order: 5,
+    };
+    http.tree("module-1", {
+      rootIds: ["story-1", "implement-seed", "done-seed"],
+      children: { "story-1": [], "implement-seed": [], "done-seed": [] },
+      order: ["story-1", "implement-seed", "done-seed"],
+    });
+    http.workItems([
+      workItem({ id: "story-1", name: "Choose a permitted state" }),
+      workItem({
+        id: "implement-seed",
+        name: "Already implementing",
+        key: "MEML-2",
+        state: implement,
+      }),
+      workItem({
+        id: "done-seed",
+        name: "Already done",
+        key: "MEML-3",
+        state: done,
+      }),
+    ]);
+    mountStudio({ http });
+
+    const stories = await screen.findByRole("region", { name: "Stories" });
+    fireEvent.click(
+      await within(stories).findByRole("treeitem", { name: /Choose a permitted state/ }),
+    );
+    const details = screen.getByRole("region", { name: "Details" });
+    fireEvent.click(await within(details).findByRole("button", { name: "Ideas" }));
+
+    expect(await screen.findByRole("button", { name: "Implement" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Done" })).toBeNull();
   });
 
   it("[overhaul-03] leaves a dragged row where dropped after the server reply", async () => {

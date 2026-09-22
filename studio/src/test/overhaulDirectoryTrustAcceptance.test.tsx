@@ -8,6 +8,8 @@ import { getModuleFolder, getModuleLinks, seedModuleLinks } from "../features/mo
 import * as moduleLinkTransport from "../features/module-links/moduleLinkTransport";
 import { createBrowserRuntime } from "../runtime/browserRuntime";
 import type { DirectoryTrustResult, StudioRuntime } from "../runtime";
+import type { ConfigurableProvider } from "../shared/api/types";
+import * as providerQueries from "../features/workflows/providerQueries";
 import { useClientStore } from "../state/clientStore";
 
 type Trust = NonNullable<StudioRuntime["prepareDirectoryTrust"]>;
@@ -22,6 +24,14 @@ function result(
   directory = "/canonical/repos/new",
 ): DirectoryTrustResult {
   return { status, approval, directory };
+}
+
+function activate(activated: ConfigurableProvider[]): void {
+  vi.spyOn(providerQueries, "loadProviderCatalog").mockResolvedValue({
+    activated_providers: activated,
+    codex_profiles: [],
+    global_default: null,
+  });
 }
 
 function renderFolder(trust?: Trust): void {
@@ -180,5 +190,28 @@ describe("provider directory trust acceptance", () => {
 
     fireEvent.click(within(renewed).getByRole("button", { name: "Trust folder" }));
     await waitFor(() => expect(getModuleFolder("module-1")).toBe("/repos/new"));
+  });
+  it("[overhaul-358] asks for trust only from the providers the user activated", async () => {
+    activate(["codex"]);
+    const trust = vi.fn(async (provider: string) =>
+      result("approval_required", `${provider}-approval`),
+    );
+    renderFolder(trust);
+
+    const confirmation = await screen.findByRole("dialog", { name: "Trust module folder?" });
+    expect(confirmation).toHaveTextContent("Codex");
+    expect(confirmation).not.toHaveTextContent("Gemini");
+    expect(confirmation).not.toHaveTextContent("Claude");
+    expect(trust.mock.calls.map(([provider]) => provider)).toEqual(["codex"]);
+  });
+
+  it("[overhaul-359] saves the folder without any trust prompt when no provider is activated", async () => {
+    activate([]);
+    const trust = vi.fn(async () => result("approval_required", "approval"));
+    renderFolder(trust);
+
+    await waitFor(() => expect(getModuleFolder("module-1")).toBe("/repos/new"));
+    expect(trust).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog", { name: "Trust module folder?" })).not.toBeInTheDocument();
   });
 });

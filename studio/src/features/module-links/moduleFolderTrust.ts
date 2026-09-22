@@ -1,5 +1,6 @@
 import type { StudioRuntime } from "../../runtime";
 import { studioRuntime } from "../../runtime";
+import { loadProviderCatalog } from "../workflows";
 
 class ModuleFolderTrustError extends Error {}
 
@@ -54,6 +55,20 @@ function providerNames(providers: Provider[]): string {
   return `${names.slice(0, -1).join(", ")}${names.length > 2 ? "," : ""} and ${names.at(-1)}`;
 }
 
+/**
+ * Only providers the user turned on are asked to trust the folder
+ * (CODING-2137). An unreadable catalog cannot prove a provider is off, so it
+ * falls back to every provider rather than silently skipping trust.
+ */
+async function intendedProviders(): Promise<readonly Provider[]> {
+  try {
+    const { activated_providers: activated } = await loadProviderCatalog();
+    return PROVIDERS.filter(({ slug }) => activated.includes(slug));
+  } catch {
+    return PROVIDERS;
+  }
+}
+
 interface Inspection {
   canonicalDirectory: string;
   pending: Provider[];
@@ -73,7 +88,7 @@ async function inspect(
   const pending: Provider[] = [];
   const approvals = new Map<string, string>();
   let canonicalDirectory = path;
-  for (const provider of PROVIDERS) {
+  for (const provider of await intendedProviders()) {
     let result;
     try {
       result = await trust(provider.slug, path, null);

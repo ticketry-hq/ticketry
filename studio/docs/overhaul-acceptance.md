@@ -285,8 +285,8 @@ named gate before the full Studio suite, typecheck, and build.
 | 292 | An already-trusted folder links and resumes module selection without another trust prompt. |
 | 293 | Changing a module folder preserves its existing cached link and blocks completion until native trust setup finishes. |
 | 294 | Terminal folder recovery shows a retryable trust failure, preserves the existing link, and reopens the shell only after trust succeeds. |
-| 295 | Guided module creation preserves the created module after trust refusal and retries folder setup without creating a duplicate. |
-| 296 | Ordinary module creation shows a retryable native trust failure and completes with the same module when its folder is already trusted. |
+| 295 | Cancelling folder trust and Add Module creates no module, preserves first-module guidance, and allows a later successful creation. |
+| 296 | Native trust failure leaves module creation retryable without saving a module; retry completes once the folder is trusted. |
 | 297 | Model configuration trims and deduplicates registered Codex profile names, persists add/remove changes, and makes a selected global profile clear and disable model and reasoning overrides. |
 | 298 | A workflow launch binding saves, reloads, replaces, and clears a Codex profile while preserving removed registry names as unregistered selections. |
 | 299 | Native terminal zoom uses the application window's zoom-in, zoom-out, and reset hotkeys without moving focus or selecting a module. Native font size follows the WebView viewport scale; xterm scales with the WebView without a second font adjustment. |
@@ -347,6 +347,7 @@ named gate before the full Studio suite, typecheck, and build.
 | 354 | Cleanup confirmation focuses Cancel, nests Escape, respects pending restrictions, and submits once. |
 | 355 | Closing the Branch inspector after opening Changes from a task tab returns focus to the visible Branch button while the planning copy remains mounted. |
 | 356 | Changes-only checkout and file-list keys stay out of planning capture, and shortcut help labels every Changes action instead of showing raw action IDs. |
+| 357 | Changes has a top command section and a bottom review section: Left/Right moves between enabled toolbar controls, Down enters the selected or first file, Right on a file focuses the diff, Left on an unscrolled diff returns to files, Up on the first row or at the top of the diff returns to commands, and directory rows keep their disclosure keys. |
 
 Each executable case carries one stable `[overhaul-NN]` marker. The gate has a
 contract test that fails if a marker is missing or duplicated. A case whose
@@ -372,3 +373,5 @@ outside Studio, or repository-backed documents remain explicitly skipped in
 the web suite. They must not be counted as automated until the harness has safe
 fixture support for those boundaries; their existing Vitest cases are not a
 substitute for running-application verification.
+| 358 | Module folder trust names and inspects only the providers the user activated. |
+| 359 | A module folder saves with no trust prompt when no provider is activated. |

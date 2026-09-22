@@ -128,11 +128,17 @@ describe("worktree status desktop runtime acceptance", () => {
 
     // The runtime derives ownership itself: only the identity is submitted,
     // and no legacy host route is consulted.
+    // The catalog read scopes worktree trust to the activated providers
+    // (CODING-2137); it is not a worktree route.
+    const worktreeRequests = requests.filter(
+      (request) => request.operationName === "WorktreeStatus",
+    );
     expect(requests.map((request) => request.operationName)).toEqual([
       "WorktreeStatus",
+      "LoadProviderCatalog",
       "WorktreeStatus",
     ]);
-    expect(requests.map((request) => request.variables)).toEqual([
+    expect(worktreeRequests.map((request) => request.variables)).toEqual([
       { taskId: PARENT },
       { taskId: CHILD },
     ]);

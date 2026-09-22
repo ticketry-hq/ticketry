@@ -76,7 +76,12 @@ describe("module link desktop runtime acceptance", () => {
 
     // No profile selection, no profile replacement, no feature-flag write: the
     // folder is the Module's own typed row and one restricted mutation owns it.
-    expect(operationNames).toEqual(["LoadModuleLinks", "SetModuleLink"]);
+    // The catalog read is the trust scope (CODING-2137), not a folder write.
+    expect(operationNames).toEqual([
+      "LoadModuleLinks",
+      "LoadProviderCatalog",
+      "SetModuleLink",
+    ]);
     expect(invoke).toHaveBeenCalledWith("desktop_prepare_directory_trust", {
       provider: "gemini",
       directory: "/repos/ticketry",

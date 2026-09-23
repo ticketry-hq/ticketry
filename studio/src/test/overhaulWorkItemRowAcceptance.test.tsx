@@ -178,4 +178,58 @@ describe("overhaul acceptance — work-item rows", () => {
     expect(search).toHaveFocus();
     expect(useClientStore.getState().focusedPane).toBe("tasks");
   });
+
+  it("[overhaul-369] explains an unmatched story search and clears it without losing selection", async () => {
+    const http = fixture();
+    http.tree("module-1", {
+      rootIds: ["story-1"],
+      children: { "story-1": [] },
+      order: ["story-1"],
+    });
+    http.workItems([
+      workItem({
+        id: "story-1",
+        name: "Keep this story selected",
+        key: "MEML-369",
+        sequence_id: 369,
+      }),
+    ]);
+    mountStudio({ http });
+
+    const stories = await screen.findByRole("region", { name: "Stories" });
+    const selectedStory = await within(stories).findByRole("treeitem", {
+      name: /Keep this story selected/,
+    });
+    fireEvent.click(selectedStory);
+    const details = await screen.findByRole("region", { name: "Details" });
+    expect(details).toHaveTextContent("Keep this story selected");
+
+    fireEvent.change(
+      within(stories).getByRole("textbox", { name: "Search stories" }),
+      { target: { value: "no-matching-story-ux" } },
+    );
+
+    expect(within(stories).queryByRole("treeitem", {
+      name: /Keep this story selected/,
+    })).toBeNull();
+    expect(within(stories).queryByRole("button", {
+      name: "Collapse Ideas",
+    })).toBeNull();
+    expect(await within(stories).findByRole("status")).toHaveTextContent(
+      'No stories match "no-matching-story-ux". The selected story remains open in Details but is outside the filtered results.',
+    );
+
+    fireEvent.click(within(stories).getByRole("button", {
+      name: "Clear story search",
+    }));
+
+    const restoredStory = await within(stories).findByRole("treeitem", {
+      name: /Keep this story selected/,
+    });
+    expect(within(stories).getByRole("button", {
+      name: "Collapse Ideas",
+    })).toBeVisible();
+    expect(restoredStory).toHaveAttribute("aria-selected", "true");
+    expect(details).toHaveTextContent("Keep this story selected");
+  });
 });

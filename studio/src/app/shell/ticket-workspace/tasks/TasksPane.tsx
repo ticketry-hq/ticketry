@@ -21,6 +21,7 @@ import { StateHeaderRow } from "./components/StateHeaderRow";
 import { LoadingPlaceholderRow } from "./components/LoadingPlaceholderRow";
 import { IdeaEntry } from "./components/IdeaEntry";
 import { StoriesSearchInput } from "./components/StoriesSearchInput";
+import { StoriesSearchEmptyState } from "./components/StoriesSearchEmptyState";
 import {
   useAxisDragAndDrop,
   type DragPayloadCodec,
@@ -130,6 +131,18 @@ function TasksPaneContent() {
     loadingTasks,
     isSearchActive,
   } = useStoriesTree();
+  const hasVisibleStory = rows.some(
+    (row) => isPlanningRow(row) && row.kind === "work-item",
+  );
+  const noStoryMatches =
+    isSearchActive &&
+    !loadingTasks &&
+    tree.rootIds.length > 0 &&
+    !hasVisibleStory;
+  const selectedStoryOutsideFilter =
+    noStoryMatches &&
+    selectedRowId !== null &&
+    itemsById[selectedRowId] !== undefined;
   const renderBlocks = useMemo(() => groupRootBlocks(rows), [rows]);
   const visibleBlocks = useMemo<VisibleRootBlock[]>(
     () =>
@@ -426,6 +439,11 @@ function TasksPaneContent() {
     <PaneShell pane="tasks">
       <StoriesSearchInput />
       <IdeaEntry />
+      {noStoryMatches ? (
+        <StoriesSearchEmptyState
+          selectedStoryOutsideFilter={selectedStoryOutsideFilter}
+        />
+      ) : null}
       {hasConversationDesignPrototype() ? (
         <ConversationDesignPrototype />
       ) : loadingTasks && tree.order.length === 0 ? (

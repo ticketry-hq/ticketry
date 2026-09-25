@@ -27,7 +27,8 @@ import {
   thematicBreakPlugin,
   toolbarPlugin,
 } from "@mdxeditor/editor";
-import { useLayoutEffect, useRef } from "react";
+import { type ReactNode, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import "@mdxeditor/editor/style.css";
 import "./richMarkdownEditor.css";
 import { codeMirrorDarkExtensions } from "./codeMirrorDarkTheme";
@@ -41,6 +42,7 @@ export default function RichMarkdownEditor({
   onTrustedFocus,
   onTrustedInput,
   layout = "document",
+  toolbarActions,
 }: {
   markdown: string;
   onChange: (markdown: string) => void;
@@ -51,9 +53,14 @@ export default function RichMarkdownEditor({
   onTrustedFocus?: () => void;
   onTrustedInput?: () => void;
   layout?: "document" | "compact";
+  /** Rendered at the trailing end of the toolbar, e.g. Save/Cancel. */
+  toolbarActions?: ReactNode;
 }) {
   const compact = layout === "compact";
   const shellRef = useRef<HTMLDivElement>(null);
+  // MDXEditor captures toolbarContents once, so actions are portaled into a
+  // slot it renders; they then re-render with this component's props.
+  const [actionsSlot, setActionsSlot] = useState<HTMLDivElement | null>(null);
 
   useLayoutEffect(() => {
     if (!import.meta.env.DEV || !onEditableReady || !shellRef.current) return;
@@ -116,6 +123,7 @@ export default function RichMarkdownEditor({
             toolbarClassName:
               "sticky top-0 z-10 border-b border-pane-border bg-pane-title",
             toolbarContents: () => (
+              <>
               <DiffSourceToggleWrapper options={["rich-text", "source"]}>
                 <UndoRedo />
                 <Separator />
@@ -131,10 +139,13 @@ export default function RichMarkdownEditor({
                 <InsertThematicBreak />
                 <InsertCodeBlock />
               </DiffSourceToggleWrapper>
+              <div ref={setActionsSlot} className="ml-2 flex items-center" />
+              </>
             ),
           }),
         ]}
       />
+      {actionsSlot && toolbarActions && createPortal(toolbarActions, actionsSlot)}
     </div>
   );
 }

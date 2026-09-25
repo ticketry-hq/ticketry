@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 /**
  * CODING-1527 — an agent or another client changes the selected Story's
  * description. The fact refetches the authoritative row: the read view
@@ -20,15 +21,20 @@ vi.mock("../features/documents/RichMarkdownEditor", () => ({
   default: ({
     markdown,
     onChange,
+    toolbarActions,
   }: {
     markdown: string;
     onChange: (markdown: string) => void;
+    toolbarActions?: ReactNode;
   }) => (
-    <textarea
-      aria-label="Story description"
-      value={markdown}
-      onChange={(event) => onChange(event.target.value)}
-    />
+    <>
+      <textarea
+        aria-label="Story description"
+        value={markdown}
+        onChange={(event) => onChange(event.target.value)}
+      />
+      {toolbarActions}
+    </>
   ),
 }));
 

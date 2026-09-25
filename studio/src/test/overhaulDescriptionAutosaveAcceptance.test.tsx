@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 /**
  * CODING-1525 — dirty description drafts are written at editor boundaries:
  * switching Stories and moving focus out of the editor. Cancel stays the
@@ -17,10 +18,12 @@ vi.mock("../features/documents/RichMarkdownEditor", () => ({
     markdown,
     onChange,
     onParseError,
+    toolbarActions,
   }: {
     markdown: string;
     onChange: (markdown: string) => void;
     onParseError: (markdown: string) => void;
+    toolbarActions?: ReactNode;
   }) => (
     <>
       <textarea
@@ -31,6 +34,7 @@ vi.mock("../features/documents/RichMarkdownEditor", () => ({
       <button type="button" onClick={() => onParseError(markdown)}>
         Use Markdown source
       </button>
+      {toolbarActions}
     </>
   ),
 }));

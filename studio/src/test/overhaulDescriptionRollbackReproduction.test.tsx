@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 /**
  * CODING-1524 — instrumented reproduction of the saved-description rollback.
  *
@@ -36,15 +37,20 @@ vi.mock("../features/documents/RichMarkdownEditor", () => ({
   default: ({
     markdown,
     onChange,
+    toolbarActions,
   }: {
     markdown: string;
     onChange: (markdown: string) => void;
+    toolbarActions?: ReactNode;
   }) => (
-    <textarea
-      aria-label="Story description"
-      value={markdown}
-      onChange={(event) => onChange(event.target.value)}
-    />
+    <>
+      <textarea
+        aria-label="Story description"
+        value={markdown}
+        onChange={(event) => onChange(event.target.value)}
+      />
+      {toolbarActions}
+    </>
   ),
 }));
 

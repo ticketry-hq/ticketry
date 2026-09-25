@@ -153,6 +153,30 @@ export default function DescriptionEditor({
     setServerMarkdown(null);
   };
 
+  // Pressing a button must not blur the editor first (WebKit leaves relatedTarget null).
+  const actions = (
+    <div
+      className={`flex items-center gap-2 ${sourceFallback ? "mt-1.5" : ""}`}
+      onMouseDown={(event) => event.preventDefault()}
+    >
+      <button
+        type="button"
+        onClick={commit}
+        className="bg-focus-accent px-2.5 py-1 text-xs font-semibold text-pane-bg"
+      >
+        Save
+      </button>
+      <button
+        type="button"
+        onClick={discard}
+        className="border border-pane-border px-2.5 py-1 text-xs text-text-muted hover:text-text-primary"
+      >
+        Cancel
+      </button>
+      {saving && <span className="text-xs text-text-muted">saving…</span>}
+    </div>
+  );
+
   return (
     <div
       data-testid="description-editor"
@@ -201,6 +225,7 @@ export default function DescriptionEditor({
             onTrustedFocus={() => taskDetailPoint(issueId)("description-editor-focus-observed")}
             onTrustedInput={() => taskDetailPoint(issueId)("description-editor-first-trusted-input")}
             layout="compact"
+            toolbarActions={actions}
           />
         </Suspense>
       )}
@@ -238,24 +263,7 @@ export default function DescriptionEditor({
         </p>
       )}
 
-      {/* Pressing a button must not blur the editor first (WebKit leaves relatedTarget null). */}
-      <div className="mt-1.5 flex items-center gap-2" onMouseDown={(event) => event.preventDefault()}>
-        <button
-          type="button"
-          onClick={commit}
-          className="bg-focus-accent px-2.5 py-1 text-xs font-semibold text-pane-bg"
-        >
-          Save
-        </button>
-        <button
-          type="button"
-          onClick={discard}
-          className="border border-pane-border px-2.5 py-1 text-xs text-text-muted hover:text-text-primary"
-        >
-          Cancel
-        </button>
-        {saving && <span className="text-xs text-text-muted">saving…</span>}
-      </div>
+      {sourceFallback && actions}
     </div>
   );
 }

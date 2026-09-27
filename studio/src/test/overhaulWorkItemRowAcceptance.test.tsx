@@ -74,7 +74,7 @@ describe("overhaul acceptance — work-item rows", () => {
       name: /New conversation/,
     });
     expect(scratch.querySelector("[data-task-id-token]")).toBeNull();
-    expect(scratch.lastElementChild).toHaveTextContent("New conversation");
+    expect(scratch.querySelector("[data-task-label]")).toHaveTextContent("New conversation");
     const unresolved = await within(stories).findByRole("treeitem", {
       name: /Unresolved work item/,
     });

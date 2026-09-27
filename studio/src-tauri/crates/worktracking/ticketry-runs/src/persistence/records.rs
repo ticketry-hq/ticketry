@@ -20,6 +20,7 @@ pub struct AgentRunRecord {
     pub scope: String,
     pub launch_state: Option<String>,
     pub launch_model: Option<String>,
+    pub attention_reason: Option<String>,
 }
 
 /// Scope-safe public projection. Persistence-only paths, prompts, errors, and
@@ -41,6 +42,7 @@ pub struct AgentRunHolding {
     pub provider_session_id: Option<String>,
     pub output_sequence: i64,
     pub last_output_at: Option<String>,
+    pub attention_reason: Option<String>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

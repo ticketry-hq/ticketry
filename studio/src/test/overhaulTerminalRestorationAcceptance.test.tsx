@@ -20,6 +20,10 @@ import {
   installDesktopGraphQlRuntime,
   terminalSessionReadExecutor,
 } from "./desktopGraphQlRuntime";
+import {
+  findDormantItem,
+  getDormantItem,
+} from "./dormantTabsFixture";
 
 const terminalApi = vi.hoisted(() => ({
   resumeTerminal: vi.fn(),
@@ -353,9 +357,7 @@ describe("overhaul acceptance — terminals", () => {
     );
 
     const tab = await screen.findByRole("tab", { name: "Grill codex terminal" });
-    const endedChip = await screen.findByLabelText(
-      "Terminated Grill codex terminal",
-    );
+    const endedChip = await findDormantItem("Terminated Grill codex terminal");
     // Chip and tab agree word for word on the run's identity, and neither
     // repeats the ticket the workspace already shows.
     expect(endedChip).toHaveTextContent("Grill");
@@ -367,9 +369,7 @@ describe("overhaul acceptance — terminals", () => {
     expect(endedChip).not.toHaveClass("text-provider-codex");
 
     // A resume chip names its phase too, and resuming stays addressed by run.
-    const resumeChip = await screen.findByRole("button", {
-      name: "Resume Grill codex terminal",
-    });
+    const resumeChip = await findDormantItem("Resume Grill codex terminal");
     expect(resumeChip).toHaveTextContent("Grill");
     expect(resumeChip).toHaveAttribute(
       "title",
@@ -379,15 +379,13 @@ describe("overhaul acceptance — terminals", () => {
     // The aged-out scratch run recorded no launch state and has no run record
     // left in the status store, so the listing's own scope is what keeps its
     // lowercase mode word instead of leaving a wordless chip (#708).
-    const scratchChip = screen.getByRole("button", {
-      name: /^Resume instant codex terminal/,
-    });
+    const scratchChip = getDormantItem(/^Resume instant codex terminal/);
     expect(scratchChip).toHaveTextContent("instant");
     expect(scratchChip).toHaveAttribute("title", "codex");
 
     // An unrecorded phase uses the provider rather than borrowing the Story's
     // current state or leaving a nameless control.
-    const providerChip = screen.getByLabelText("Terminated codex terminal");
+    const providerChip = getDormantItem("Terminated codex terminal");
     expect(providerChip).toHaveTextContent("codex");
     expect(providerChip).toHaveAttribute("title", "codex");
   });
@@ -461,7 +459,7 @@ describe("overhaul acceptance — terminals", () => {
       .toHaveClass("text-provider-codex");
     // The ended run comes back as history rather than a tab, and its captured
     // phase and neutral liveness treatment are reconstructed too.
-    const ended = screen.getByLabelText("Terminated Spec codex terminal");
+    const ended = getDormantItem("Terminated Spec codex terminal");
     expect(ended).toHaveTextContent("Spec");
     expect(ended).toHaveClass("text-provider-ended");
     expect(terminalReads.readTaskTerminalSessions).not.toHaveBeenCalled();

@@ -37,8 +37,9 @@ pub struct TerminalOutputObservation {
 pub struct TerminalOutputActivityService {
     pub(super) database: DatabaseConnection,
     events: StatusEventRepository,
-    capture: Arc<dyn TerminalScreenCapture>,
+    pub(super) capture: Arc<dyn TerminalScreenCapture>,
     last_capture: Arc<Mutex<HashMap<String, Instant>>>,
+    pub(super) last_startup_capture: Arc<Mutex<HashMap<String, Instant>>>,
 }
 
 impl TerminalOutputActivityService {
@@ -56,6 +57,7 @@ impl TerminalOutputActivityService {
             events,
             capture,
             last_capture: Arc::new(Mutex::new(HashMap::new())),
+            last_startup_capture: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -163,7 +165,10 @@ impl TerminalOutputActivityService {
         Ok(observation(true, &current))
     }
 
-    async fn authorize(&self, agent_run_id: &str) -> Result<(), TerminalOutputActivityError> {
+    pub(super) async fn authorize(
+        &self,
+        agent_run_id: &str,
+    ) -> Result<(), TerminalOutputActivityError> {
         let Some(row) = session::Entity::find_by_id(agent_run_id)
             .filter(session::Column::TerminatedAt.is_null())
             .one(&self.database)

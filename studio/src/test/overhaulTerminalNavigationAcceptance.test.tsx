@@ -23,6 +23,11 @@ import {
   getWorkItemSnapshot,
 } from "../features/work-items";
 import { studioApolloClient } from "../shared/apollo/client";
+import {
+  findDormantItem,
+  getDormantItem,
+  queryDormantItem,
+} from "./dormantTabsFixture";
 
 const terminalApi = vi.hoisted(() => ({
   resumeTerminal: vi.fn(),
@@ -359,19 +364,17 @@ describe("overhaul acceptance — terminals", () => {
     await waitFor(() => {
       expect(terminalReads.readTaskResumableTerminalSessions).toHaveBeenCalledTimes(1);
     });
-    expect(screen.queryByRole("button", { name: "Resume codex terminal" }))
+    expect(queryDormantItem("Resume codex terminal"))
       .not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", {
       name: "Close codex terminal",
     }));
 
-    const resume = await screen.findByRole("button", {
-      name: "Resume codex terminal",
-    });
+    const resume = await findDormantItem("Resume codex terminal");
     expect(screen.queryByRole("tab", { name: "codex terminal" }))
       .not.toBeInTheDocument();
-    expect(screen.getAllByRole("button", {
+    expect(screen.getAllByRole("menuitem", {
       name: "Resume codex terminal",
     })).toHaveLength(1);
     expect(terminalApi.terminateTerminal).toHaveBeenCalledWith("run-old");
@@ -406,7 +409,7 @@ describe("overhaul acceptance — terminals", () => {
     );
     expect(screen.getByRole("tab", { name: "codex terminal" }))
       .toHaveAttribute("aria-selected", "true");
-    expect(screen.queryByRole("button", { name: "Resume codex terminal" }))
+    expect(queryDormantItem("Resume codex terminal"))
       .not.toBeInTheDocument();
   });
 
@@ -459,12 +462,8 @@ describe("overhaul acceptance — terminals", () => {
       />,
     );
 
-    const grill = await screen.findByRole("button", {
-      name: "Resume Grill codex terminal",
-    });
-    const spec = screen.getByRole("button", {
-      name: "Resume Spec codex terminal",
-    });
+    const grill = await findDormantItem("Resume Grill codex terminal");
+    const spec = getDormantItem("Resume Spec codex terminal");
     fireEvent.click(grill);
 
     await waitFor(() => expect(grill).toBeDisabled());
@@ -558,10 +557,8 @@ describe("overhaul acceptance — terminals", () => {
       />,
     );
 
-    const grillResume = await screen.findByRole("button", {
-      name: "Resume Grill codex terminal",
-    });
-    expect(screen.getByRole("button", { name: "Resume Spec codex terminal" }))
+    const grillResume = await findDormantItem("Resume Grill codex terminal");
+    expect(getDormantItem("Resume Spec codex terminal"))
       .toBeEnabled();
     expect(Object.values(useTerminalStore.getState().sessions)).toHaveLength(0);
 
@@ -607,9 +604,9 @@ describe("overhaul acceptance — terminals", () => {
       .toBe(resumedTab?.sessionId);
 
     await refreshTerminalHoldings();
-    expect(screen.getByRole("button", { name: "Resume Spec codex terminal" }))
+    expect(getDormantItem("Resume Spec codex terminal"))
       .toBeEnabled();
-    expect(screen.queryByRole("button", { name: "Resume Grill codex terminal" }))
+    expect(queryDormantItem("Resume Grill codex terminal"))
       .not.toBeInTheDocument();
 
     view.unmount();
@@ -624,7 +621,7 @@ describe("overhaul acceptance — terminals", () => {
       />,
     );
 
-    await screen.findByRole("button", { name: "Resume Spec codex terminal" });
+    await findDormantItem("Resume Spec codex terminal");
     await waitFor(() => {
       expect(Object.values(useTerminalStore.getState().sessions).filter(
         (tab) => tab.agentRunId === "run-grill-successor",

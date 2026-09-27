@@ -13,7 +13,9 @@ use super::{
 };
 use crate::Provider;
 
-const SUPPORTED_VERSIONS: &[&str] = &["2.1.270", "2.1.276", "2.1.278"];
+// Oldest release verified to persist trust as `projects[key].hasTrustDialogAccepted`.
+// Later 2.x releases keep that format; a major bump must be re-verified.
+const MINIMUM_VERSION: (u64, u64, u64) = (2, 1, 270);
 
 pub(super) fn inspect(context: DirectoryTrustContext<'_>) -> DirectoryTrustInspection {
     if context.trust_file.is_none() {
@@ -63,16 +65,26 @@ fn validate_version(executable: Option<&Path>) -> io::Result<()> {
         .next()
         .unwrap_or("unknown")
         .to_owned();
-    if !output.status.success() || !SUPPORTED_VERSIONS.contains(&version.as_str()) {
+    if !output.status.success() || !is_supported(&version) {
+        let (major, minor, patch) = MINIMUM_VERSION;
         return Err(io::Error::new(
             io::ErrorKind::Unsupported,
             format!(
-                "Claude Code {version} does not have a verified durable trust adapter; expected one of {}.",
-                SUPPORTED_VERSIONS.join(", ")
+                "Claude Code {version} does not have a verified durable trust adapter; expected {major}.x at or above {major}.{minor}.{patch}."
             ),
         ));
     }
     Ok(())
+}
+
+fn is_supported(version: &str) -> bool {
+    let mut parts = version.split('.').map(str::parse::<u64>);
+    let (Some(Ok(major)), Some(Ok(minor)), Some(Ok(patch)), None) =
+        (parts.next(), parts.next(), parts.next(), parts.next())
+    else {
+        return false;
+    };
+    major == MINIMUM_VERSION.0 && (major, minor, patch) >= MINIMUM_VERSION
 }
 
 fn inspect_inner(context: DirectoryTrustContext<'_>) -> io::Result<DirectoryTrustInspection> {

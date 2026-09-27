@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { WorktreeBlock } from "../../features/agents/worktrees";
 import type { WorktreeStatus } from "../../features/agents/worktrees/internal/types";
 import { studioApolloClient } from "../../shared/apollo/client";
@@ -87,12 +87,12 @@ describe("WorktreeBlock (#589, shared CODIN-922)", () => {
     await studioApolloClient().clearStore();
   });
 
-  it("shows + Create worktree when none exists, and creates on click", async () => {
+  it("shows + Worktree when none exists, and creates on click", async () => {
     seed(none);
     const create = vi.mocked(requestWorktreeCreate).mockResolvedValue(active);
     renderBlock();
 
-    const btn = await screen.findByRole("button", { name: "+ Create worktree" });
+    const btn = await screen.findByRole("button", { name: "+ Worktree" });
     fireEvent.click(btn);
 
     await waitFor(() =>
@@ -106,13 +106,18 @@ describe("WorktreeBlock (#589, shared CODIN-922)", () => {
     renderBlock();
 
     expect(
-      await screen.findByText(/wt\/CODIN-589-worktree-ui → main/),
+      await screen.findByRole("button", {
+        name: "View changes on wt/CODIN-589-worktree-ui",
+      }),
     ).toBeTruthy();
-    expect(screen.getByText("clean")).toBeTruthy();
-    expect(screen.getByText("↑2")).toBeTruthy();
-    expect(
-      screen.getByText(/completion leaves this worktree unchanged/),
-    ).toBeTruthy();
+    expect(screen.getByText("↑2 ↓0")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Show worktree details" }));
+    const details = await screen.findByTestId("worktree-details");
+    expect(within(details).getByText("Clean")).toBeTruthy();
+    expect(within(details).getByText("↑2 ↓0 vs main")).toBeTruthy();
+    expect(within(details).getByText("Completion keeps the worktree")).toBeTruthy();
+    expect(within(details).getByText("/wt/path")).toBeTruthy();
     // No integrate / land control exists.
     expect(screen.queryByRole("button", { name: /land/i })).toBeNull();
   });
@@ -121,9 +126,13 @@ describe("WorktreeBlock (#589, shared CODIN-922)", () => {
     seed(conflict);
     renderBlock();
 
-    expect(await screen.findByText("Conflict")).toBeTruthy();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Show worktree details" }),
+    );
+    const details = await screen.findByTestId("worktree-details");
+    expect(within(details).getByText("Conflict, resolve before shipping")).toBeTruthy();
     expect(
-      screen.getByText(/primary checkout and Work Item workflow stay independent/),
+      within(details).getByText(/primary checkout and work item state stay unchanged/),
     ).toBeTruthy();
     expect(screen.queryByRole("button", { name: /land/i })).toBeNull();
   });
@@ -137,6 +146,9 @@ describe("WorktreeBlock (#589, shared CODIN-922)", () => {
     });
     renderBlock();
 
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Show worktree details" }),
+    );
     fireEvent.click(await screen.findByRole("button", { name: "Discard" }));
     // Confirm prompt shown; nothing discarded yet.
     expect(discard).not.toHaveBeenCalled();
@@ -151,17 +163,18 @@ describe("WorktreeBlock (#589, shared CODIN-922)", () => {
 
     await waitFor(() =>
       expect(
-        screen.getByRole("button", { name: "+ Create worktree" }),
+        screen.getByRole("button", { name: "+ Worktree" }),
       ).toBeTruthy(),
     );
     expect(discard).toHaveBeenCalledTimes(1);
   });
 
-  it("shows the not-isolated banner and no controls for a no-repo task", async () => {
+  it("renders nothing for a no-repo task", async () => {
     seed(noRepo);
-    renderBlock();
+    const { container } = renderBlock();
 
-    expect(await screen.findByText(/Changes are not isolated/)).toBeTruthy();
+    await waitFor(() => expect(container.firstChild).toBeNull());
+    expect(screen.queryByTestId("worktree-block")).toBeNull();
     expect(screen.queryByRole("button")).toBeNull();
   });
 });

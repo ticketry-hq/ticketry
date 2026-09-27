@@ -297,7 +297,7 @@ describe("overhaul acceptance — task agent launch", () => {
     }));
 
     fireEvent.click(
-      await screen.findByRole("button", { name: "+ Create worktree" }),
+      await screen.findByRole("button", { name: "+ Worktree" }),
     );
     const trustDialog = await screen.findByRole("dialog", {
       name: "Trust worktree?",

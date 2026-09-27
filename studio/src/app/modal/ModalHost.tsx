@@ -20,6 +20,7 @@ const MODAL_LABELS: Record<ModalDescriptor["type"], string> = {
   settings: "Settings",
   "keyboard-shortcuts": "Keyboard shortcuts",
   "status-update": "Status update",
+  "story-workflow-guide": "Story workflow guide",
   "parent-update": "Parent update",
   "add-module": "Add module",
   "add-project": "Add project",
@@ -75,6 +76,11 @@ function renderModal(
       return <modals.KeyboardShortcutsModal />;
     case "status-update":
       return <modals.StatusUpdate />;
+    case "story-workflow-guide":
+      return <modals.StoryWorkflowGuideDialog
+        storyId={String(top.payload?.storyId ?? "")}
+        source={top.payload?.source === "handoff" ? "handoff" : "toolbar"}
+      />;
     case "parent-update":
       return (
         <modals.ParentUpdate

@@ -13,6 +13,7 @@ import { SelectedTicketDetails } from "./details/SelectedTicketDetails";
 import { SelectedTicketContent } from "./SelectedTicketContent";
 import {
   useSelectedInstantRunId,
+  useSelectedPlanningRowId,
 } from "../tasks/internal/instantRunTicketNavigation";
 import { StateConfigurationPanel } from "../../../../features/workflows";
 import { ConversationConfigurationPanel } from "../../../../features/settings";
@@ -27,6 +28,10 @@ export function SelectedTicket({ active = true }: { active?: boolean }) {
   const selectedModuleId = useClientStore((s) => s.selectedModuleId);
   const workspaceSelection = useClientStore((s) => s.workspaceSelection);
   const conversationRunId = useSelectedInstantRunId();
+  // The New conversation row is an action, not a workspace: keep its scratch
+  // tabs mounted (terminals stay attached) but show nothing.
+  const newConversationRowSelected =
+    useSelectedPlanningRowId() === TEMP_TASK_ID;
   const conversationTitle = useInstantRunTicketTitle(
     selectedProjectId,
     selectedModuleId,
@@ -72,17 +77,19 @@ export function SelectedTicket({ active = true }: { active?: boolean }) {
       titleCasing="preserve"
     >
       <div className="relative h-full min-h-0">
-        <SelectedTicketContent
-          bucket={bucket}
-          projectId={selectedProjectId}
-          moduleId={selectedModuleId}
-          owner="studio"
-          workspaceActive={active}
-          details={<SelectedTicketDetails />}
-          launchContext={launchContext}
-          conversationRunId={conversationRunId}
-          conversationTitle={conversationTitle}
-        />
+        <div className="h-full" hidden={newConversationRowSelected}>
+          <SelectedTicketContent
+            bucket={bucket}
+            projectId={selectedProjectId}
+            moduleId={selectedModuleId}
+            owner="studio"
+            workspaceActive={active}
+            details={<SelectedTicketDetails />}
+            launchContext={launchContext}
+            conversationRunId={conversationRunId}
+            conversationTitle={conversationTitle}
+          />
+        </div>
         {configuredState ? (
           <StateConfigurationPanel
             state={configuredState}

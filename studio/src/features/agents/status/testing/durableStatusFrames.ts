@@ -39,12 +39,14 @@ export function lifecycleStatusFrame(
   options: EventOptions & {
     readonly state: RawLifecycleState;
     readonly effectiveState?: RunPresentationState;
+    readonly attentionReason?: string | null;
   },
 ): RunStatusEventFrame {
   return event(options, "agent_run.lifecycle", {
     agentRunId: options.agentRunId,
     state: options.state,
     effectiveState: options.effectiveState ?? options.state,
+    attentionReason: options.attentionReason ?? null,
     occurredAt: options.at,
     exitCode: options.exitCode ?? null,
   });
@@ -91,6 +93,7 @@ export function statusRunHolding(run: RunRecord): RunHoldingPayload {
     started_at: run.started_at,
     state: run.state,
     effective_state: run.effective_state ?? run.state,
+    attention_reason: run.attention_reason ?? null,
     updated_at: run.updated_at,
     provider_session_id: run.provider_session_id ?? null,
     output_sequence: run.output_sequence ?? 0,

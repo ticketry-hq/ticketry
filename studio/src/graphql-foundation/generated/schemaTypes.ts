@@ -14,6 +14,7 @@ export type AgentRunHolding = {
   __typename?: 'AgentRunHolding';
   agent?: Maybe<Scalars['String']['output']>;
   agent_run_id: Scalars['String']['output'];
+  attention_reason?: Maybe<Scalars['String']['output']>;
   effective_state: Scalars['String']['output'];
   last_output_at?: Maybe<Scalars['String']['output']>;
   launch_model?: Maybe<Scalars['String']['output']>;

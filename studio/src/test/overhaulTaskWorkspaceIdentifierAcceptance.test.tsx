@@ -152,11 +152,12 @@ describe("overhaul acceptance — Task workspace identifiers", () => {
     ).toBeVisible();
     fireEvent.keyDown(document, { key: "Escape" });
 
-    // Parent picker: the closed trigger and both option groups, plus the
-    // Module link, name a Module by the same convention as a task.
+    // Parent picker: the breadcrumb trigger names the parent and carries its
+    // identifier; both option groups name a Module like a task.
     const parentPicker = within(details).getByTestId("parent-picker");
-    expect(within(details).getByTestId("epic-link")).toHaveTextContent("T-1");
-    fireEvent.click(within(parentPicker).getByRole("button", { name: "T-1" }));
+    const parentCrumb = within(parentPicker).getByRole("button", { name: "Module 1" });
+    expect(parentCrumb).toHaveAttribute("title", expect.stringContaining("(now T-1)"));
+    fireEvent.click(parentCrumb);
     expect(
       within(parentPicker).getByRole("button", { name: "T-1 Module 1" }),
     ).toBeVisible();

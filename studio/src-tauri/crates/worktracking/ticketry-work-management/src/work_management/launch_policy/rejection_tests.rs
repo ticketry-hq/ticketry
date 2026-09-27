@@ -71,6 +71,7 @@ fn error(code: &'static str, message: &str) -> LaunchPolicyError {
 #[test]
 fn recoverable_codes_cover_repairable_configuration() {
     for code in [
+        "no_activated_providers",
         "provider_not_activated",
         "module_folder_unusable",
         "module_not_found",

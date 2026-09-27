@@ -29,6 +29,7 @@ const ActiveProjectRunStatusDocument = gql`
         launchState
         launchModel
         providerSessionId
+        attentionReason @client
         startedAt
         state @client
         effectiveState @client
@@ -67,6 +68,7 @@ const AgentRunStatusFragment = gql`
     launchState
     launchModel
     providerSessionId
+    attentionReason @client
     startedAt
     state @client
     effectiveState @client
@@ -88,6 +90,7 @@ interface CachedRun {
   launchState: string | null;
   launchModel: string | null;
   providerSessionId: string | null;
+  attentionReason: string | null;
   startedAt: string | null;
   state: string;
   effectiveState: string | null;
@@ -147,6 +150,7 @@ function cacheRun(run: RunRecord): CachedRun {
     launchState: run.launch_state ?? null,
     launchModel: run.launch_model ?? null,
     providerSessionId: run.provider_session_id ?? null,
+    attentionReason: run.attention_reason ?? null,
     startedAt: run.started_at ?? null,
     state: run.state,
     effectiveState: run.effective_state ?? null,
@@ -168,6 +172,7 @@ function runRecord(run: CachedRun): RunRecord {
     launch_state: run.launchState,
     launch_model: run.launchModel,
     provider_session_id: run.providerSessionId,
+    attention_reason: run.attentionReason,
     started_at: run.startedAt ?? undefined,
     state: run.state as RunRecord["state"],
     effective_state: run.effectiveState as RunRecord["effective_state"],
@@ -360,6 +365,7 @@ export function applyAgentRunState(
   at: string,
   exitCode?: number | null,
   effectiveState?: RunRecord["effective_state"],
+  attentionReason?: string | null,
 ): boolean {
   const run = readAgentStatusHolding().runs[runId];
   if (!run) return false;
@@ -368,6 +374,9 @@ export function applyAgentRunState(
     ...run,
     state,
     effective_state: effectiveState ?? state,
+    attention_reason: state === "needs_input"
+      ? attentionReason === undefined ? run.attention_reason ?? null : attentionReason
+      : null,
     updated_at: at,
     exit_code: exitCode ?? run.exit_code ?? null,
   });

@@ -33,7 +33,6 @@ export default function IssueTypePicker({
   return (
     <Popover
       data-testid="issue-type-picker"
-      align="right"
       disabled={saving}
       trigger={({ onClick, disabled }) => (
         <PickerTrigger

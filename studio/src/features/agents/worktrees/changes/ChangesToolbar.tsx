@@ -3,6 +3,7 @@ import { useLayoutEffect, useRef } from "react";
 import { WorktreeSwitcher } from "./WorktreeSwitcher";
 import { ChangesStateChips } from "./ChangesStateChips";
 import { toggleBranchInspector, useBranchInspector } from "./branchInspectorState";
+import { focusChangedFiles, isPlainKey } from "./changesZoneFocus";
 import {
   confirmationOwnsFocus,
   focusConfirmationCancel,
@@ -64,9 +65,30 @@ export function ChangesToolbar({
   return (
     <div
       ref={toolbarRef}
+      role="toolbar"
       tabIndex={-1}
       aria-label="Changes commands"
       className="flex h-10 shrink-0 items-center gap-2 border-b border-pane-border px-3"
+      onKeyDown={(event) => {
+        if (event.defaultPrevented) return;
+        const target = event.target as HTMLElement;
+        if (target.closest('[role="dialog"], [role="listbox"], [aria-expanded="true"]')) return;
+        if (isPlainKey(event, "ArrowDown")) {
+          if (focusChangedFiles(event.currentTarget)) event.preventDefault();
+          return;
+        }
+        const direction = isPlainKey(event, "ArrowRight") ? 1
+          : isPlainKey(event, "ArrowLeft") ? -1 : 0;
+        if (!direction) return;
+        const controls = Array.from(event.currentTarget.querySelectorAll<HTMLElement>(
+          'button:not(:disabled), a[href]',
+        )).filter((control) => !control.closest('[role="dialog"], [role="listbox"]'));
+        const index = controls.indexOf(target);
+        if (index === -1) return;
+        controls[Math.max(0, Math.min(controls.length - 1, index + direction))]?.focus();
+        event.preventDefault();
+        event.stopPropagation();
+      }}
     >
       <WorktreeSwitcher
         moduleId={moduleId}

@@ -9,6 +9,13 @@ import {
   SettingsStatusLine,
   settingsButtonClass,
 } from "../../../shared/ui/SettingsPrimitives";
+import { bindingControlAccessibleName } from "./keyboardBindingAccessibleName";
+
+type BindingIdentity = Pick<EffectiveBinding, "actionId" | "context">;
+
+export type KeyboardSettingsBinding = BindingIdentity & {
+  chord: KeyChord | null;
+};
 
 const ACTION_LABELS: Record<string, string> = {
   "edit-view.next-zone": "Next edit-view zone",
@@ -58,7 +65,8 @@ const ACTION_LABELS: Record<string, string> = {
   "normal-run-command": "Run selected item",
   "open-with-prompt-command": "Open Agent with Prompt (Command)",
   plan: "Plan",
-  "instant-change": "Instant Change",
+  "instant-change": "Start conversation",
+  "instant-change-with-prompt": "Start conversation with a prompt",
   "run-now": "Run now",
   status: "Status",
   settings: "Settings",
@@ -75,14 +83,14 @@ const CONTEXT_LABELS: Record<EffectiveBinding["context"], string> = {
   global: "Global",
 };
 
-export function bindingLabel(binding: EffectiveBinding): string {
+export function bindingLabel(binding: BindingIdentity): string {
   if (binding.actionId.startsWith("modules.select-position-")) {
     return `Select module ${binding.actionId.slice("modules.select-position-".length)}`;
   }
   return ACTION_LABELS[binding.actionId] ?? binding.actionId;
 }
 
-export function bindingContextLabel(binding: EffectiveBinding): string {
+export function bindingContextLabel(binding: BindingIdentity): string {
   return CONTEXT_LABELS[binding.context];
 }
 
@@ -126,7 +134,7 @@ function isSubsequence(needle: string, haystack: string): boolean {
 }
 
 export function bindingMatchesQuery(
-  binding: EffectiveBinding,
+  binding: BindingIdentity,
   query: string,
 ): boolean {
   const terms = normalizeSearchText(query).trim().split(/\s+/);
@@ -138,13 +146,13 @@ export function bindingMatchesQuery(
 }
 
 interface KeyboardSettingsPanelProps {
-  bindings: EffectiveBinding[];
+  bindings: KeyboardSettingsBinding[];
   overridden: ReadonlySet<string>;
   recordingKey: string | null;
   message: { kind: "error" | "warning"; text: string } | null;
   saving: boolean;
-  onRecord: (binding: EffectiveBinding) => void;
-  onReset: (binding: EffectiveBinding) => void;
+  onRecord: (binding: KeyboardSettingsBinding) => void;
+  onReset: (binding: KeyboardSettingsBinding) => void;
   onRestoreDefaults: () => void;
 }
 
@@ -217,6 +225,7 @@ export function KeyboardSettingsPanel({
             const key = `${binding.context}:${binding.actionId}`;
             const label = bindingLabel(binding);
             const locked = binding.actionId === "modal.close";
+            const recording = recordingKey === key;
             return (
               <div
                 key={key}
@@ -228,20 +237,27 @@ export function KeyboardSettingsPanel({
                 </span>
                 <button
                   type="button"
-                  aria-label={`Record ${label} binding`}
+                  aria-label={bindingControlAccessibleName(
+                    label,
+                    binding.chord,
+                    recording,
+                    locked,
+                  )}
                   onClick={() => onRecord(binding)}
                   disabled={locked || saving}
                   className={`${settingsButtonClass("secondary", "text-left font-mono")} ${
-                    recordingKey === key
+                    recording
                       ? "bg-pane-title"
                       : "bg-pane-bg"
                   }`}
                 >
                   {locked
-                    ? `${formatKeyChord(binding.chord)} · Locked`
-                    : recordingKey === key
+                    ? `${binding.chord ? formatKeyChord(binding.chord) : "Unassigned"} · Locked`
+                    : recording
                       ? "Press a chord…"
-                      : formatKeyChord(binding.chord)}
+                      : binding.chord
+                        ? formatKeyChord(binding.chord)
+                        : "Unassigned"}
                 </button>
                 <div className="text-right">
                   {overridden.has(key) ? (

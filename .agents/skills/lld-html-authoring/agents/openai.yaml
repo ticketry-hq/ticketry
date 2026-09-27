@@ -1,0 +1,4 @@
+interface:
+  display_name: "LLD HTML Authoring"
+  short_description: "Author file-first LLDs directly in HTML"
+  default_prompt: "Use $lld-html-authoring to author a decision-complete standalone LLD.html centered on exact file changes. When launched from Ticketry, store it in the app-provided design directory."

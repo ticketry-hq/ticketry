@@ -99,6 +99,23 @@ fn stage_waits_for_readiness_and_sends_no_keys() {
 }
 
 #[test]
+fn trust_dialog_blocks_prompt_delivery_without_paste_or_enter() {
+    let fake = FakeTmux {
+        screens: ["Accessing workspace:\n/tmp/work\nDo you trust this folder?\n❯ 1. Yes, I trust this folder\n  2. No, exit".as_bytes().to_vec()].into(),
+        ..Default::default()
+    };
+    let mut delivery = PromptDelivery::with_timings(fake, timings());
+    let error = delivery
+        .submit(Provider::Claude, "run", "continue")
+        .unwrap_err();
+    assert_eq!(
+        error.reason(),
+        PromptDeliveryFailureReason::TrustDialogBlocked
+    );
+    assert_eq!(delivery.tmux().calls, ["verify-session", "capture-pane"]);
+}
+
+#[test]
 fn submit_verifies_visibility_then_presses_enter_twice() {
     let fake = FakeTmux {
         screens: [

@@ -244,10 +244,8 @@ describe("overhaul acceptance — Stories and details", () => {
       ),
     ).toBeVisible();
     expect(
-      within(within(details).getByTestId("parent-picker")).getByRole("button", {
-        name: "T-1",
-      }),
-    ).toBeVisible();
+      within(within(details).getByTestId("parent-picker")).getByRole("button"),
+    ).toHaveAttribute("title", expect.stringContaining("(now T-1)"));
     expect(within(details).getByRole("button", { name: "Review" })).toBeVisible();
     expect(within(stories).queryByText("Before")).toBeNull();
   });

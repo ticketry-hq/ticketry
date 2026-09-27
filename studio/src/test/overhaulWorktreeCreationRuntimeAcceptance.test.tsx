@@ -128,19 +128,22 @@ describe("worktree creation desktop runtime acceptance", () => {
     );
 
     const create = await screen.findByRole("button", {
-      name: "+ Create worktree",
+      name: "+ Worktree",
     });
     fireEvent.click(create);
 
     // The mutation's own response is the authority for the window that asked:
     // the block renders the live checkout without a follow-up status read.
     expect(
-      await screen.findByText("wt/CODIN-881-parent-story → main"),
+      await screen.findByText("wt/CODIN-881-parent-story"),
     ).toBeTruthy();
-    expect(screen.getByText("clean")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Show worktree details" }));
+    expect(
+      within(await screen.findByTestId("worktree-details")).getByText("Clean"),
+    ).toBeTruthy();
     await waitFor(() =>
       expect(
-        screen.queryByRole("button", { name: "+ Create worktree" }),
+        screen.queryByRole("button", { name: "+ Worktree" }),
       ).toBeNull(),
     );
 
@@ -170,15 +173,15 @@ describe("worktree creation desktop runtime acceptance", () => {
       <WorktreeBlock taskId={TASK} moduleId="m1" />,
     );
     fireEvent.click(
-      await screen.findByRole("button", { name: "+ Create worktree" }),
+      await screen.findByRole("button", { name: "+ Worktree" }),
     );
-    await screen.findByText("wt/CODIN-881-parent-story → main");
+    await screen.findByText("wt/CODIN-881-parent-story");
     first.unmount();
 
     render(<WorktreeBlock taskId={TASK} moduleId="m1" />);
     await waitFor(() =>
       expect(
-        screen.queryByRole("button", { name: "+ Create worktree" }),
+        screen.queryByRole("button", { name: "+ Worktree" }),
       ).toBeNull(),
     );
 
@@ -201,12 +204,12 @@ describe("worktree creation desktop runtime acceptance", () => {
     await installDesktopRuntime(requests, trust);
 
     render(<><WorktreeBlock taskId={TASK} moduleId="m1" /><DialogHost /></>);
-    fireEvent.click(await screen.findByRole("button", { name: "+ Create worktree" }));
+    fireEvent.click(await screen.findByRole("button", { name: "+ Worktree" }));
 
     const dialog = await screen.findByRole("dialog", { name: "Trust worktree?" });
     expect(dialog).toHaveTextContent("/canonical/external/CODIN-881-parent-story");
     expect(dialog).toHaveTextContent("Codex, Gemini, and Claude");
-    expect(screen.getByText("wt/CODIN-881-parent-story → main")).toBeTruthy();
+    expect(screen.getByText("wt/CODIN-881-parent-story")).toBeTruthy();
     expect(trust.mock.calls.every(([, directory]) => directory === created.path)).toBe(true);
     expect(trust.mock.calls.every(([, , approval]) => approval === null)).toBe(true);
 
@@ -231,7 +234,9 @@ describe("worktree creation desktop runtime acceptance", () => {
     await installDesktopRuntime(requests, trust, shared);
 
     const first = render(<><WorktreeBlock taskId={`${TASK}-child`} moduleId="m1" /><DialogHost /></>);
-    expect(await screen.findByText(`Shares the worktree owned by top-level task (${TASK}).`)).toBeTruthy();
+    fireEvent.click(await screen.findByRole("button", { name: "Show worktree details" }));
+    expect(await screen.findByText("Shared with its parent work item")).toBeTruthy();
+    expect(screen.getByText(`Shares the worktree owned by top-level task (${TASK}).`)).toBeTruthy();
     await waitFor(() => expect(trust).toHaveBeenCalledTimes(3));
     expect(screen.queryByRole("dialog", { name: "Trust worktree?" })).toBeNull();
     expect(requests.filter(({ operationName }) => operationName === "WorktreeCreate")).toHaveLength(0);
@@ -253,7 +258,8 @@ describe("worktree creation desktop runtime acceptance", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
 
     expect(await screen.findByText("Worktree trust was not approved. Retry to continue.")).toBeTruthy();
-    expect(screen.getByText(`Shares the worktree owned by top-level task (${TASK}).`)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Show worktree details" }));
+    expect(await screen.findByText(`Shares the worktree owned by top-level task (${TASK}).`)).toBeTruthy();
     expect(requests.filter(({ operationName }) => operationName === "WorktreeCreate")).toHaveLength(0);
 
     refused.unmount();
@@ -264,7 +270,8 @@ describe("worktree creation desktop runtime acceptance", () => {
       </StrictMode>,
     );
     expect(await screen.findByText("Worktree trust was not approved. Retry to continue.")).toBeTruthy();
-    expect(screen.getByText(`Shares the worktree owned by top-level task (${TASK}).`)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Show worktree details" }));
+    expect(await screen.findByText(`Shares the worktree owned by top-level task (${TASK}).`)).toBeTruthy();
     expect(screen.queryByRole("dialog", { name: "Trust worktree?" })).toBeNull();
     expect(trust).toHaveBeenCalledTimes(6);
 
@@ -285,7 +292,7 @@ describe("worktree creation desktop runtime acceptance", () => {
     });
     await installDesktopRuntime(requests, trust);
     render(<><WorktreeBlock taskId={TASK} moduleId="m1" /><DialogHost /></>);
-    fireEvent.click(await screen.findByRole("button", { name: "+ Create worktree" }));
+    fireEvent.click(await screen.findByRole("button", { name: "+ Worktree" }));
     expect(await screen.findByText(/Could not inspect Claude folder trust:.*2\.1\.278/)).toBeTruthy();
     expect(screen.queryByRole("dialog", { name: "Trust worktree?" })).toBeNull();
 
@@ -319,7 +326,7 @@ describe("worktree creation desktop runtime acceptance", () => {
     await installDesktopRuntime(requests, trust);
 
     render(<><WorktreeBlock taskId={TASK} moduleId="m1" /><DialogHost /></>);
-    fireEvent.click(await screen.findByRole("button", { name: "+ Create worktree" }));
+    fireEvent.click(await screen.findByRole("button", { name: "+ Worktree" }));
     fireEvent.click(within(await screen.findByRole("dialog", { name: "Trust worktree?" })).getByRole("button", { name: "Trust worktree" }));
 
     expect(await screen.findByText(/Could not prepare Claude folder trust: config busy/)).toBeTruthy();
@@ -330,7 +337,7 @@ describe("worktree creation desktop runtime acceptance", () => {
     fireEvent.click(within(retry).getByRole("button", { name: "Trust worktree" }));
 
     await waitFor(() => expect(screen.queryByRole("button", { name: "Retry trust" })).toBeNull());
-    expect(screen.getByText("wt/CODIN-881-parent-story → main")).toBeTruthy();
+    expect(screen.getByText("wt/CODIN-881-parent-story")).toBeTruthy();
     expect(requests.filter(({ operationName }) => operationName === "WorktreeCreate")).toHaveLength(1);
   });
 
@@ -355,11 +362,11 @@ describe("worktree creation desktop runtime acceptance", () => {
         </>,
       );
       fireEvent.click(
-        await screen.findByRole("button", { name: "+ Create worktree" }),
+        await screen.findByRole("button", { name: "+ Worktree" }),
       );
 
       expect(await screen.findByText(new RegExp(message))).toBeTruthy();
-      expect(screen.getByText("wt/CODIN-881-parent-story → main")).toBeTruthy();
+      expect(screen.getByText("wt/CODIN-881-parent-story")).toBeTruthy();
       expect(screen.getByRole("button", { name: "Retry trust" })).toBeTruthy();
       expect(screen.queryByRole("dialog", { name: "Trust worktree?" })).toBeNull();
       expect(

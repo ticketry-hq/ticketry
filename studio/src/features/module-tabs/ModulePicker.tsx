@@ -211,7 +211,7 @@ export function ModulePicker({
               setActiveIndex(0);
             }}
             placeholder="Search modules"
-            className="mb-1 w-full border border-pane-border bg-pane-bg px-2 py-1 text-xs text-text-primary outline-none placeholder:text-text-muted focus:border-focus-accent"
+            className="mb-1 w-full border border-pane-border bg-pane-bg px-2 py-1 text-base text-text-primary outline-none placeholder:text-text-muted focus:border-focus-accent"
           />
           <div id={CHOICES_ID} role="listbox" aria-label="Module choices">
             <button
@@ -221,7 +221,7 @@ export function ModulePicker({
               aria-selected={validActiveIndex === 0}
               onClick={createModule}
               className={
-                "w-full px-2 py-1.5 text-left text-xs font-medium "
+                "w-full px-2 py-1.5 text-left text-base "
                 + "text-text-primary hover:bg-pane-title "
                 + (validActiveIndex === 0 ? "bg-pane-title" : "")
               }
@@ -238,7 +238,7 @@ export function ModulePicker({
                 aria-selected={validActiveIndex === index + 1}
                 onClick={() => restoreModule(module.id)}
                 className={
-                  "w-full truncate px-2 py-1.5 text-left text-xs "
+                  "w-full truncate px-2 py-1.5 text-left text-base "
                   + "text-text-muted hover:bg-pane-title hover:text-text-primary "
                   + (
                     validActiveIndex === index + 1

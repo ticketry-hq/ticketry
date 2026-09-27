@@ -291,6 +291,41 @@ async fn an_unprompted_instant_launch_uses_the_global_default_model() {
 }
 
 #[tokio::test]
+async fn instant_without_a_default_distinguishes_zero_providers_from_missing_default() {
+    let fixture = fixture().await;
+    fixture
+        .database
+        .execute_unprepared(
+            "UPDATE app_settings SET value = '{\"global_default\":null}' WHERE scope = 'host' AND \"key\" = 'provider_catalog'",
+        )
+        .await
+        .unwrap();
+    let mut request = caller_request(TerminalLaunchKind::Instant);
+    request.provider = None;
+
+    fixture
+        .database
+        .execute_unprepared("UPDATE worktracker_provider SET activated = 0")
+        .await
+        .unwrap();
+    let error = fixture.authority.resolve(&request).await.unwrap_err();
+    assert!(error
+        .to_string()
+        .starts_with("no_activated_providers: No activated providers"));
+
+    fixture
+        .database
+        .execute_unprepared("UPDATE worktracker_provider SET activated = 1 WHERE slug = 'codex'")
+        .await
+        .unwrap();
+    let error = fixture.authority.resolve(&request).await.unwrap_err();
+    assert_eq!(
+        error.to_string(),
+        "Choose a default model in Settings before starting a conversation."
+    );
+}
+
+#[tokio::test]
 async fn instant_settings_add_only_the_saved_standing_instructions() {
     let fixture = fixture().await;
     fixture

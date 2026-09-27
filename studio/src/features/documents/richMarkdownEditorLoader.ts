@@ -12,12 +12,12 @@ export function preloadRichMarkdownEditor() {
 
 export const LazyRichMarkdownEditor = lazy(preloadRichMarkdownEditor);
 
-export function warmRichMarkdownEditorAfterPaint(): () => void {
+export function warmRichMarkdownEditorAfterPaint(onLoaded?: () => void): () => void {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const frame = requestAnimationFrame(() => {
     // A task after rAF lets the read view paint before editor evaluation.
     timer = setTimeout(() => {
-      void preloadRichMarkdownEditor().catch(() => {
+      void preloadRichMarkdownEditor().then(onLoaded, () => {
         // Speculative loading may fail; clicking the description can retry.
       });
     }, 0);

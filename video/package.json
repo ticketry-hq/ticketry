@@ -1,0 +1,20 @@
+{
+  "name": "ticketry-video",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "capture": "./capture.sh",
+    "studio": "remotion studio src/index.ts",
+    "render": "remotion render src/index.ts Promo out/ticketry.mp4"
+  },
+  "dependencies": {
+    "@remotion/cli": "^4.0.529",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "remotion": "^4.0.529"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "typescript": "^7.0.2"
+  }
+}

@@ -77,11 +77,11 @@ describe("onboarding acceptance", () => {
     useStudioStore.setState({ selectedProjectId: null, selectProject });
   });
 
-  it("[overhaul-26] selects the installation project before its guided tour starts", async () => {
+  it("[overhaul-26] selects the installation project before its zero-provider tour starts", async () => {
     render(<OnboardingWelcome />);
 
     expect(screen.queryByRole("button", { name: "Skip" })).not.toBeInTheDocument();
-    fireEvent.click(await screen.findByRole("checkbox", { name: "I use codex" }));
+    await screen.findByRole("checkbox", { name: "I use codex" });
     // One installation project: nobody is asked to name or choose one.
     expect(screen.queryByRole("heading", { name: "Your first project" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Get started" }));

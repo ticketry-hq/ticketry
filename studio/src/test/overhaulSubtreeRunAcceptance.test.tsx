@@ -260,7 +260,11 @@ describe("overhaul acceptance — subtree execution", () => {
     expect(statusButtons.indexOf(runSerially)).toBeLessThan(
       statusButtons.indexOf(runItem),
     );
-    expect(statusRow.lastElementChild).toBe(runItem);
+    expect(statusButtons.indexOf(runItem)).toBeLessThan(
+      statusButtons.indexOf(
+        within(statusRow).getByRole("button", { name: "Issue actions" }),
+      ),
+    );
     expect(within(details).queryByRole("button", { name: "Run agent" })).toBeNull();
 
     fireEvent.click(runItem);
@@ -393,6 +397,19 @@ describe("overhaul acceptance — subtree execution", () => {
         hasToast("error", "Serial subtree execution could not be started"),
       ).toBe(true),
     );
+
+    http.failNextGraphRun(422, {
+      code: "no_activated_providers",
+      detail: "No activated providers are configured.",
+    });
+    fireEvent.click(runSubtree);
+    await waitFor(() => expect(hasToast(
+      "error",
+      "To run agent work, activate a provider in Settings > Model configuration. "
+        + "You can keep planning without one.",
+    )).toBe(true));
+    expect(within(details).getByRole("button", { name: "Run subtree" }))
+      .toBeEnabled();
 
     // A stale capability refresh removes both actions together.
     http.setSubtreeRunEnabled(false);

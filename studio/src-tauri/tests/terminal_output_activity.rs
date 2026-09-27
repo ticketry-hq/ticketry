@@ -28,6 +28,25 @@ impl TerminalScreenCapture for UnusedCapture {
 
 struct CountingCapture(AtomicUsize);
 
+struct FixedCapture(&'static [u8]);
+
+struct DelayedCapture(&'static [u8]);
+
+#[async_trait]
+impl TerminalScreenCapture for FixedCapture {
+    async fn capture(&self, _: &str) -> Result<Vec<u8>, TerminalOutputActivityError> {
+        Ok(self.0.to_vec())
+    }
+}
+
+#[async_trait]
+impl TerminalScreenCapture for DelayedCapture {
+    async fn capture(&self, _: &str) -> Result<Vec<u8>, TerminalOutputActivityError> {
+        tokio::time::sleep(Duration::from_millis(400)).await;
+        Ok(self.0.to_vec())
+    }
+}
+
 #[async_trait]
 impl TerminalScreenCapture for CountingCapture {
     async fn capture(&self, _: &str) -> Result<Vec<u8>, TerminalOutputActivityError> {
@@ -76,7 +95,8 @@ async fn fixture() -> (
                 id TEXT PRIMARY KEY, issue_id TEXT NOT NULL, ticket_seq INTEGER, agent TEXT,
                 model TEXT, reasoning TEXT, status TEXT NOT NULL, started_at TEXT NOT NULL,
                 ended_at TEXT, exit_code INTEGER, error TEXT, cwd TEXT, provider_session_id TEXT,
-                lifecycle_state TEXT, lifecycle_updated_at TEXT, design_dir TEXT, resumed_from TEXT,
+                lifecycle_state TEXT, lifecycle_updated_at TEXT, attention_reason TEXT,
+                design_dir TEXT, resumed_from TEXT,
                 scope TEXT NOT NULL, launch_state TEXT, launch_model TEXT,
                 initial_prompt TEXT, launch_reasoning TEXT,
                 launch_unattended BOOL NOT NULL DEFAULT 0
@@ -140,6 +160,248 @@ async fn event_count(database: &DatabaseConnection) -> i64 {
         .unwrap()
         .try_get("", "value")
         .unwrap()
+}
+
+async fn claude_startup_fixture(database: &DatabaseConnection, started_at: &str) {
+    let namespace = ticketry_terminal::current_runtime_namespace().unwrap();
+    database.execute_raw(Statement::from_sql_and_values(
+        DbBackend::Sqlite,
+        "INSERT INTO agent_runs (id, issue_id, agent, status, started_at, lifecycle_state, lifecycle_updated_at, scope) VALUES ('claude-startup', ?, 'claude', 'running', ?, 'starting', ?, 'task')",
+        [TASK.into(), started_at.into(), started_at.into()],
+    )).await.unwrap();
+    database.execute_raw(Statement::from_sql_and_values(
+        DbBackend::Sqlite,
+        "INSERT INTO agent_terminal_sessions (agent_run_id, tmux_session_name, task_id, module_id, project_id, created_at, scope, runtime_cleanup_pending, runtime_namespace, output_sequence, agent) VALUES ('claude-startup', 'pt-claude-startup', ?, ?, ?, ?, 'task', 0, ?, 0, 'claude')",
+        [TASK.into(), MODULE.into(), PROJECT.into(), started_at.into(), namespace.into()],
+    )).await.unwrap();
+}
+
+async fn claude_startup_state(database: &DatabaseConnection) -> String {
+    database
+        .query_one_raw(Statement::from_string(
+            DbBackend::Sqlite,
+            "SELECT lifecycle_state FROM agent_runs WHERE id='claude-startup'".to_owned(),
+        ))
+        .await
+        .unwrap()
+        .unwrap()
+        .try_get("", "lifecycle_state")
+        .unwrap()
+}
+
+async fn claude_attention_reason(database: &DatabaseConnection) -> Option<String> {
+    database
+        .query_one_raw(Statement::from_string(
+            DbBackend::Sqlite,
+            "SELECT attention_reason FROM agent_runs WHERE id='claude-startup'".to_owned(),
+        ))
+        .await
+        .unwrap()
+        .unwrap()
+        .try_get("", "attention_reason")
+        .unwrap()
+}
+
+#[tokio::test]
+async fn claude_trust_attention_is_deduplicated_and_ready_composer_clears_it() {
+    let (_directory, database, _) = fixture().await;
+    let started_at = chrono::Utc::now().to_rfc3339();
+    claude_startup_fixture(&database, &started_at).await;
+    let trust = TerminalOutputActivityService::new(database.clone(), Arc::new(FixedCapture(
+        "Accessing workspace:\n /tmp/work\n Do you trust this folder?\n ❯ 1. Yes, I trust this folder\n   2. No, exit".as_bytes(),
+    )));
+    trust
+        .observe_claude_startup("claude-startup")
+        .await
+        .unwrap();
+    assert_eq!(claude_startup_state(&database).await, "needs_input");
+    assert_eq!(
+        claude_attention_reason(&database).await.as_deref(),
+        Some("Claude is waiting for folder trust. Open its terminal to approve or decline.")
+    );
+    let count = event_count(&database).await;
+    trust
+        .observe_claude_startup("claude-startup")
+        .await
+        .unwrap();
+    assert_eq!(event_count(&database).await, count);
+
+    let ready = TerminalOutputActivityService::new(
+        database.clone(),
+        Arc::new(FixedCapture(b"Welcome back\n\xe2\x9d\xaf ")),
+    );
+    ready
+        .observe_claude_startup("claude-startup")
+        .await
+        .unwrap();
+    assert_eq!(claude_startup_state(&database).await, "quiet");
+    assert_eq!(claude_attention_reason(&database).await, None);
+}
+
+#[tokio::test]
+async fn expired_unknown_claude_startup_needs_generic_attention_without_capture() {
+    let (_directory, database, _) = fixture().await;
+    let started_at = (chrono::Utc::now() - chrono::Duration::minutes(3)).to_rfc3339();
+    claude_startup_fixture(&database, &started_at).await;
+    let capture = Arc::new(CountingCapture(AtomicUsize::new(0)));
+    let service = TerminalOutputActivityService::new(database.clone(), capture.clone());
+    service
+        .observe_claude_startup("claude-startup")
+        .await
+        .unwrap();
+    assert_eq!(claude_startup_state(&database).await, "needs_input");
+    assert_eq!(
+        claude_attention_reason(&database).await.as_deref(),
+        Some("Claude startup needs attention. Open its terminal to continue.")
+    );
+    assert_eq!(capture.0.load(Ordering::SeqCst), 0);
+    let count = event_count(&database).await;
+    service
+        .observe_claude_startup("claude-startup")
+        .await
+        .unwrap();
+    assert_eq!(event_count(&database).await, count);
+}
+
+#[tokio::test]
+async fn capture_completed_after_original_deadline_cannot_claim_trust() {
+    let (_directory, database, _) = fixture().await;
+    let started_at = (chrono::Utc::now() - chrono::Duration::milliseconds(119_750)).to_rfc3339();
+    claude_startup_fixture(&database, &started_at).await;
+    let capture = Arc::new(DelayedCapture(
+        "Accessing workspace:\n /tmp/work\n Do you trust this folder?\n ❯ 1. Yes, I trust this folder\n   2. No, exit".as_bytes(),
+    ));
+    let service = TerminalOutputActivityService::new(database.clone(), capture);
+    service
+        .observe_claude_startup("claude-startup")
+        .await
+        .unwrap();
+    assert_eq!(claude_startup_state(&database).await, "needs_input");
+    assert_eq!(
+        claude_attention_reason(&database).await.as_deref(),
+        Some("Claude startup needs attention. Open its terminal to continue.")
+    );
+}
+
+#[tokio::test]
+async fn failed_capture_stays_uncertain_until_original_deadline() {
+    let (_directory, database, _) = fixture().await;
+    let started_at = chrono::Utc::now().to_rfc3339();
+    claude_startup_fixture(&database, &started_at).await;
+    let capture = Arc::new(OrderedCapture {
+        calls: Mutex::new(Vec::new()),
+        sequence: AtomicUsize::new(0),
+        fail: Some("claude-startup".to_owned()),
+    });
+    let service = TerminalOutputActivityService::new(database.clone(), capture.clone());
+    service
+        .observe_claude_startup("claude-startup")
+        .await
+        .unwrap();
+    assert_eq!(claude_startup_state(&database).await, "starting");
+    assert_eq!(capture.calls.lock().unwrap().len(), 1);
+    database
+        .execute_raw(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
+            "UPDATE agent_runs SET started_at=? WHERE id='claude-startup'",
+            [(chrono::Utc::now() - chrono::Duration::minutes(3))
+                .to_rfc3339()
+                .into()],
+        ))
+        .await
+        .unwrap();
+    service
+        .observe_claude_startup("claude-startup")
+        .await
+        .unwrap();
+    assert_eq!(claude_startup_state(&database).await, "needs_input");
+    assert_eq!(capture.calls.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn startup_capture_is_limited_to_one_per_second_per_run() {
+    let (_directory, database, _) = fixture().await;
+    let started_at = chrono::Utc::now().to_rfc3339();
+    claude_startup_fixture(&database, &started_at).await;
+    let capture = Arc::new(CountingCapture(AtomicUsize::new(0)));
+    let service = TerminalOutputActivityService::new(database, capture.clone());
+    service
+        .observe_claude_startup("claude-startup")
+        .await
+        .unwrap();
+    service
+        .observe_claude_startup("claude-startup")
+        .await
+        .unwrap();
+    assert_eq!(capture.0.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn startup_observer_leaves_other_provider_input_requests_alone() {
+    let (_directory, database, _) = fixture().await;
+    let started_at = chrono::Utc::now().to_rfc3339();
+    claude_startup_fixture(&database, &started_at).await;
+    database
+        .execute_raw(Statement::from_string(
+            DbBackend::Sqlite,
+            "UPDATE agent_runs SET lifecycle_state='needs_input' WHERE id='claude-startup'"
+                .to_owned(),
+        ))
+        .await
+        .unwrap();
+    let capture = Arc::new(CountingCapture(AtomicUsize::new(0)));
+    let service = TerminalOutputActivityService::new(database.clone(), capture.clone());
+    service
+        .observe_claude_startup("claude-startup")
+        .await
+        .unwrap();
+    assert_eq!(claude_startup_state(&database).await, "needs_input");
+    assert_eq!(capture.0.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn ended_claude_run_is_never_captured_or_marked_for_attention() {
+    let (_directory, database, _) = fixture().await;
+    let started_at = (chrono::Utc::now() - chrono::Duration::minutes(3)).to_rfc3339();
+    claude_startup_fixture(&database, &started_at).await;
+    database
+        .execute_raw(Statement::from_string(
+            DbBackend::Sqlite,
+            "UPDATE agent_runs SET ended_at='2026-09-25T00:00:00Z' WHERE id='claude-startup'"
+                .to_owned(),
+        ))
+        .await
+        .unwrap();
+    let capture = Arc::new(CountingCapture(AtomicUsize::new(0)));
+    let service = TerminalOutputActivityService::new(database.clone(), capture.clone());
+    service
+        .observe_claude_startup("claude-startup")
+        .await
+        .unwrap();
+    assert_eq!(claude_startup_state(&database).await, "starting");
+    assert_eq!(capture.0.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn terminated_terminal_identity_stops_startup_attention() {
+    let (_directory, database, _) = fixture().await;
+    let started_at = (chrono::Utc::now() - chrono::Duration::minutes(3)).to_rfc3339();
+    claude_startup_fixture(&database, &started_at).await;
+    database
+        .execute_raw(Statement::from_string(
+            DbBackend::Sqlite,
+            "UPDATE agent_terminal_sessions SET terminated_at='2026-09-25T00:00:00Z' WHERE agent_run_id='claude-startup'".to_owned(),
+        ))
+        .await
+        .unwrap();
+    let capture = Arc::new(CountingCapture(AtomicUsize::new(0)));
+    let service = TerminalOutputActivityService::new(database.clone(), capture.clone());
+    service
+        .observe_claude_startup("claude-startup")
+        .await
+        .unwrap();
+    assert_eq!(claude_startup_state(&database).await, "starting");
+    assert_eq!(capture.0.load(Ordering::SeqCst), 0);
 }
 
 async fn event_work_item_id(database: &DatabaseConnection, run_id: &str) -> Option<String> {

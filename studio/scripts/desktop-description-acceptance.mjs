@@ -2,24 +2,21 @@
  * CODING-1528 — proving Story description editing inside the real macOS
  * WKWebView.
  *
- * The browser suite covers Save and Cancel in Chromium. WebKit is where the
+ * The browser suite covers autosave in Chromium. WebKit is where the
  * rich editor's own selection and focus behaviour differs, so this scenario
  * types through the editor's real input path (key events into the
- * contenteditable, not a scripted value), saves, switches Stories, reloads the
- * webview, and requires both Stories to show their authoritative descriptions
+ * contenteditable, not a scripted value), leaves the editor so it saves,
+ * switches Stories, reloads the webview, and requires both Stories to show their authoritative descriptions
  * — the text the server returned, not a surviving local draft.
  *
  * Runs inside the existing desktop acceptance session; it owns no process.
  */
-import { captureIdea, click, openExistingStory } from "./desktop-studio-ui.mjs";
+import { captureIdea, openExistingStory } from "./desktop-studio-ui.mjs";
 
 const EDITED = "WKWebView keeps this saved description authoritative.";
 const UNTOUCHED = "This second Story description must stay its own.";
 
 async function openEditor(browser) {
-  await click(await browser.$('[data-testid="issue-description"]'));
-  const editor = await browser.$('[data-testid="description-editor"]');
-  await editor.waitForDisplayed({ timeout: 20_000 });
   const surface = await browser.$(
     '[data-testid="rich-markdown-editor-shell"] [contenteditable="true"]',
   );
@@ -30,7 +27,7 @@ async function openEditor(browser) {
   return surface;
 }
 
-/** Types `text` through real key events and clicks the editor's own Save. */
+/** Types `text` through real key events, then moves focus out so autosave writes it. */
 async function typeAndSave(browser, text) {
   const surface = await openEditor(browser);
   const existing = (await surface.getText()).trim();
@@ -42,7 +39,7 @@ async function typeAndSave(browser, text) {
   if (!(await surface.getText()).includes(text)) {
     throw new Error("the rich editor did not receive typed keystrokes in WKWebView");
   }
-  await click(await (await browser.$('[data-testid="description-editor"]')).$("aria/Save"));
+  await browser.execute(() => document.activeElement?.blur());
 }
 
 async function expectDescription(browser, taskId, expected, forbidden) {

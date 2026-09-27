@@ -462,12 +462,15 @@ async fn a_first_launch_exposes_the_shipping_provider_catalog() {
             "haiku",
             "opus",
             "sonnet",
+            "glm-5.3-flash",
             "gpt-5.3-codex-spark",
             "gpt-5.4",
             "gpt-5.6-luna",
             "gpt-5.6-sol",
             "gpt-5.6-terra",
             "gpt-6-astra",
+            "gpt-6-luna",
+            "gpt-6-sol",
             "gemini-3.1-pro-preview",
         ]
     );
@@ -477,7 +480,7 @@ async fn a_first_launch_exposes_the_shipping_provider_catalog() {
             .iter()
             .map(|level| level.name.as_str())
             .collect::<Vec<_>>(),
-        ["high", "low", "max", "medium", "minimal", "ultra", "xhigh"]
+        ["high", "low", "max", "medium", "minimal", "none", "ultra", "xhigh"]
     );
 }
 

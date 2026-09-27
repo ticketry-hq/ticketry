@@ -42,7 +42,8 @@ pub use planning::{
     materialize, provider_contract, DocumentChatPrompt, DurableLaunchMaterial, ExecutionAuthority,
     InstantPrompt, LaunchKind, LaunchPlanningError, LaunchPlanningErrorCode, MaterializedLaunch,
     ModulePromptFacts, PlanningPrompt, Provider, ProviderContract, ProviderOptions,
-    RuntimeSettings, TaskPromptFacts, TaskPromptInput, TaskSummary, TimeoutUnit, WorkspaceIdentity,
+    RuntimeSettings, StartupScreen, TaskPromptFacts, TaskPromptInput, TaskSummary, TimeoutUnit,
+    WorkspaceIdentity,
 };
 pub use terminal_session::{
     CreateTerminalSession, TerminalLaunchError, TerminalLaunchErrorCode, TerminalLaunchKind,

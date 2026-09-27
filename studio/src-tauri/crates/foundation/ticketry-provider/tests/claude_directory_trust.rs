@@ -283,9 +283,9 @@ fn active_config_override_version_and_home_limit_are_enforced() {
                     panic!("unsupported Claude should fail with its version")
                 };
                 assert!(failure.message.contains(if case == "unsupported_next" {
-                    "2.1.279"
+                    "3.0.0"
                 } else {
-                    "2.1.271"
+                    "2.1.269"
                 }));
                 assert!(matches!(
                     provider.prepare_directory_trust(context, None),
@@ -315,11 +315,11 @@ fn active_config_override_version_and_home_limit_are_enforced() {
     }
     let executable = bin.join("claude");
     for (case, version, directory, process_home) in [
-        ("unsupported", "2.1.271", &module, &home),
-        ("unsupported_next", "2.1.279", &module, &home),
+        ("unsupported", "2.1.269", &module, &home),
+        ("unsupported_next", "3.0.0", &module, &home),
         ("supported", "2.1.270", &module, &home),
         ("supported_current", "2.1.276", &module, &home),
-        ("supported_latest", "2.1.278", &module, &home),
+        ("supported_latest", "2.1.283", &module, &home),
         ("home", "2.1.270", &home, &home),
     ] {
         std::fs::write(

@@ -54,9 +54,8 @@ const config: Config = {
         },
       },
       fontFamily: {
-        // F1: split roles. Proportional sans for everything you read; mono kept
-        // only for KEY-N identifiers and code. Both self-hosted (Fontsource), so
-        // no external request and the dark sibling palette is untouched.
+        // Mono (JetBrains) is the default reading face everywhere; sans is opt-in.
+        // Both self-hosted (Fontsource), so no external request.
         sans: [
           "Hanken Grotesk Variable",
           "IBM Plex Sans",

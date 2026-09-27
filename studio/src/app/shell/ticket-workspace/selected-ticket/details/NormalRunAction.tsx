@@ -19,6 +19,8 @@ import {
 } from "../../../../../features/work-items/taskRunTabActivation";
 import type { WorkItem } from "../../../../../shared/api/types";
 import { IconPlay } from "../../../../../shared/ui/icons";
+import { KeyBadge } from "../../../../../shared/ui/KeyChordHint";
+import { useGlobalShortcutLabel } from "../../../../navigation/useGlobalShortcutLabel";
 import { toast } from "../../../../../state/clientStore";
 import { dispatchAgentRunAction } from "../../../../../features/agents/actions/agentRunActions";
 import { LifecycleBadge } from "../../../../../features/agents/terminal";
@@ -69,6 +71,7 @@ export function SubtreeRunAction({
 }) {
   const isBranch = task.sub_issues_count > 0;
   const subtreeEligible = useSubtreeRunEligibility(task, moduleId);
+  const shortcut = useGlobalShortcutLabel("normal-run-command");
   const branch = useSubtreeRunLaunch({
     item: task,
     actionName: "Run subtree",
@@ -105,7 +108,7 @@ export function SubtreeRunAction({
             AGENT_RUN_ACTIONS.focusAgentRun,
             { runId: activeRun.runId },
           )}
-          className="border border-pane-border px-2 py-1 text-xs text-text-muted hover:border-focus-accent hover:text-text-primary"
+          className="h-7 border border-pane-border px-2.5 text-sm text-text-muted hover:border-focus-accent hover:text-text-primary"
         >
           Open
         </button>
@@ -124,6 +127,7 @@ export function SubtreeRunAction({
         onClick={() => startNormalRun(task.id)}
         disabled={!subtreeEligible}
         unavailableReason={unavailableReason}
+        shortcut={subtreeEligible ? shortcut : null}
       />
     );
   }
@@ -140,6 +144,7 @@ export function RunItemAction({
   registerShortcut?: boolean;
 }) {
   const [pending, setPending] = useState(false);
+  const shortcut = useGlobalShortcutLabel("normal-run-command");
   const inFlightRef = useRef(false);
   const runTabWatchRef = useRef<NewTaskRunTabWatch | null>(null);
 
@@ -193,9 +198,11 @@ export function RunItemAction({
       title="Run item"
       disabled={pending}
       onClick={() => void runLeaf()}
-      className="flex-none border border-pane-border p-1.5 text-text-muted hover:border-focus-accent hover:text-text-primary disabled:cursor-wait disabled:opacity-60"
+      className="inline-flex h-7 flex-none items-center gap-2 border border-focus-accent px-2.5 text-sm text-text-primary hover:bg-pane-title disabled:cursor-wait disabled:opacity-60"
     >
       <IconPlay size={14} />
+      Run
+      {registerShortcut && shortcut ? <KeyBadge>{shortcut}</KeyBadge> : null}
     </button>
   );
 }

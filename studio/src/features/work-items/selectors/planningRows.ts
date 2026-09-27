@@ -17,6 +17,8 @@ export type PlanningRow = WorkItemRow | ScratchRow | InstantRunRow;
 
 export const LOADING_PLACEHOLDER = Symbol("loading-placeholder");
 export const STATE_HEADER = Symbol("state-header");
+/** Collapse key for the Conversations section, which has no workflow state. */
+export const CONVERSATIONS_SECTION_ID = "conversations";
 
 export type PlanningTreeRow =
   | PlanningRow

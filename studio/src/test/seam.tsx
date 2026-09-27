@@ -546,6 +546,7 @@ class BoundaryFixture implements StudioFixture {
       providers: [],
       agent_models: [],
       reasoning_levels: [],
+      codex_profiles: [],
       global_default: null,
     };
     if (documentOperationName(document) === "WorkTrackerModuleOpen") {

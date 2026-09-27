@@ -10,6 +10,7 @@ export type {
 export { StateCatalog } from "./StateCatalog";
 export { StateConfigurationPanel } from "./StateConfigurationPanel";
 export { WorkflowSettingsPanel } from "./WorkflowSettingsPanel";
+export { StoryWorkflowGuideDialog } from "./StoryWorkflowGuideDialog";
 export {
   CONFIGURABLE_PROVIDERS,
   canAutoLaunchTo,

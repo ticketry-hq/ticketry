@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { buildSchema, parse, validate } from "graphql";
+import { buildSchema, extendSchema, parse, validate } from "graphql";
 
 import { typedDocumentTargets } from "./typed-document-generation.mjs";
 
@@ -176,9 +176,14 @@ export async function assertGraphqlProductContract({ schemaPath, sourceRoot }) {
   );
 
   const failures = [];
+  // Apollo handles this cache directive locally; the server SDL does not own it.
+  const validationSchema = extendSchema(
+    schema,
+    parse("directive @nonreactive on FRAGMENT_SPREAD"),
+  );
   for (const target of await typedDocumentTargets(sourceRoot)) {
     const document = parse(await readFile(target.sourcePath, "utf8"));
-    for (const error of validate(schema, document)) {
+    for (const error of validate(validationSchema, document)) {
       failures.push(`${target.sourcePath}: ${error.message}`);
     }
   }

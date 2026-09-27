@@ -24,6 +24,8 @@ import {
   deferWorktreeTrust,
   isWorktreeTrustDeferred,
 } from "./worktreeTrustDeferrals";
+import { IconGitBranch } from "../../../shared/ui/icons";
+import Popover from "../../../shared/ui/Popover";
 
 const DEFERRED_TRUST_ERROR =
   "Worktree trust was not approved. Retry to continue.";
@@ -59,6 +61,7 @@ interface WorktreeBlockProps {
   taskId: string;
   parentId?: string | null;
   moduleId?: string | null;
+  onViewChanges?: () => void;
 }
 
 function worktreeQueryData(status: WorktreeStatus): WorktreeStatusQuery {
@@ -71,14 +74,15 @@ function worktreeQueryData(status: WorktreeStatus): WorktreeStatusQuery {
 }
 
 /**
- * Opt-in worktree surface (ticket #589). The shared issue Details panel owns
- * its placement for every Task workspace host.
+ * Opt-in worktree surface (ticket #589). The selected issue document owns its
+ * placement for every task workspace host.
  *
- * Renders one of four states from the server's discriminated WorktreeStatus:
- *   - none      → a "+ Create worktree" button (the opt-in),
- *   - worktree  → read-only branch/base/clean·dirty/ahead·behind + Discard,
- *   - conflict  → a display-only resolve-in-worktree line (primary untouched),
- *   - no_repo   → a "changes not isolated" note with no controls.
+ * A compact toolbar control over the server's discriminated WorktreeStatus:
+ *   - none      → a "+ Worktree" button (the opt-in),
+ *   - worktree  → a branch chip that opens Changes, with a details popover
+ *                 holding base/clean·dirty/ahead·behind, the path and Discard,
+ *   - conflict  → the same chip in the danger tone (primary untouched),
+ *   - no_repo   → nothing; runs use the module path.
  *
  * Work Item completion does not mutate this checkout. Query owns status reads;
  * Create and Discard each write their own authoritative response through the
@@ -92,6 +96,7 @@ export function WorktreeBlock({
   taskId,
   parentId,
   moduleId,
+  onViewChanges,
 }: WorktreeBlockProps) {
   const [busy, setBusy] = useState(false);
   const [mutationError, setMutationError] = useState<string | null>(null);
@@ -228,76 +233,35 @@ export function WorktreeBlock({
     }
   };
 
-  const labelCls = "text-text-muted";
-  const monoCls = "font-mono text-text-primary";
+  const isWorktree = status?.kind === "worktree";
+  const canManage = isWorktree && !status.is_shared;
+  const tone = !isWorktree
+    ? "bg-text-muted"
+    : status.conflict
+      ? "bg-lifecycle-danger"
+      : status.dirty
+        ? "bg-lifecycle-attention"
+        : "bg-lifecycle-success";
 
-  let body: React.ReactNode;
-
-  if (!status) {
-    body = <span className="text-text-muted">…</span>;
-  } else if (status.kind === "no_repo") {
-    body = (
-      <div className="text-text-muted">
-        Changes are not isolated — no git repo encloses this task's path, so
-        there's nothing to create. Runs work directly in the path.
-      </div>
-    );
-  } else if (status.is_shared) {
-    body = (
-      <div className="text-text-muted">
-        Shares the worktree owned by top-level task ({status.top_level_task_id}).
-      </div>
-    );
-  } else if (status.kind === "none") {
-    body = (
-      <div className="flex items-center gap-2">
-        <span className="text-text-muted">Runs in the primary checkout.</span>
-        <button
-          type="button"
-          disabled={busy}
-          onClick={onCreate}
-          className="border border-focus-accent px-2 py-0.5 text-text-primary hover:bg-pane-bg disabled:opacity-50"
-        >
-          + Create worktree
-        </button>
-      </div>
-    );
-  } else if (status.conflict) {
-    // kind=worktree, with unresolved Git conflicts.
-    body = (
-      <div className="space-y-1">
-        <div className="text-lifecycle-danger">Conflict</div>
-        <div className="text-text-muted">
-          Resolve and commit the conflict{" "}
-          <span className="text-text-primary">in the worktree</span>. Your
-          primary checkout and Work Item workflow stay independent.
-        </div>
-        <div className={monoCls}>{status.path}</div>
-        {renderDiscard()}
-      </div>
-    );
-  } else {
-    // kind=worktree, active.
-    body = (
-      <div className="space-y-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className={monoCls}>
-            {status.branch} → {status.base_branch}
-          </span>
-        </div>
-        <div className="flex flex-wrap items-center gap-2 text-xs">
+  let summary: React.ReactNode = null;
+  if (status?.kind === "worktree") {
+    if (status.is_shared) {
+      summary = "Shared with its parent work item";
+    } else if (status.conflict) {
+      summary = <span className="text-lifecycle-danger">Conflict, resolve before shipping</span>;
+    } else {
+      summary = (
+        <>
           <span className={status.dirty ? "text-lifecycle-attention" : "text-lifecycle-success"}>
-            {status.dirty ? "dirty" : "clean"}
+            {status.dirty ? "Dirty" : "Clean"}
           </span>
-          <span className="text-text-muted">↑{status.ahead ?? 0}</span>
-          <span className="text-text-muted">↓{status.behind ?? 0}</span>
-          <span className="text-text-muted">
-            · completion leaves this worktree unchanged
+          <span>
+            ↑{status.ahead ?? 0} ↓{status.behind ?? 0} vs {status.base_branch ?? "base"}
           </span>
-        </div>
-        {renderDiscard()}
-      </div>
-    );
+          <span>Completion keeps the worktree</span>
+        </>
+      );
+    }
   }
 
   function renderDiscard(): React.ReactNode {
@@ -336,20 +300,90 @@ export function WorktreeBlock({
     );
   }
 
+  // Nothing to offer until status loads, or when the module has no repository.
+  if (!error && status?.kind !== "none" && !isWorktree) return null;
+
   return (
     <div
-      className="mt-3 border border-pane-border bg-pane-bg/40 p-2 text-xs"
+      className="inline-flex items-center gap-2 text-sm"
       data-testid="worktree-block"
     >
-      <div className={`mb-1 ${labelCls}`}>Worktree</div>
-      {body}
-      {error ? <div className="mt-1 text-lifecycle-danger">{error}</div> : null}
+      {status?.kind === "none" && (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={onCreate}
+          title="Create an isolated worktree for this item"
+          className="inline-flex h-7 items-center gap-1.5 border border-pane-border px-2.5 text-sm text-text-primary hover:border-focus-accent disabled:opacity-50"
+        >
+          <IconGitBranch size={14} className="text-text-muted" />
+          {busy ? "Creating…" : "+ Worktree"}
+        </button>
+      )}
+      {isWorktree && (
+        <span className="inline-flex h-7 items-stretch border border-pane-border">
+          <button
+            type="button"
+            onClick={onViewChanges}
+            disabled={!onViewChanges}
+            aria-label={`View changes on ${status.branch ?? "worktree"}`}
+            title="View changes"
+            className="inline-flex min-w-0 items-center gap-2 px-2.5 hover:bg-pane-title"
+          >
+            <span className={`h-2 w-2 flex-none ${tone}`} aria-hidden="true" />
+            <IconGitBranch size={14} className="flex-none text-text-muted" />
+            <span className="max-w-[14rem] truncate font-mono text-sm text-text-primary">
+              {status.branch ?? "Worktree"}
+            </span>
+            {!status.is_shared && !status.conflict && (
+              <span className="font-mono text-xs text-text-muted">
+                ↑{status.ahead ?? 0} ↓{status.behind ?? 0}
+              </span>
+            )}
+          </button>
+          <Popover
+            align="right"
+            trigger={({ open, onClick }) => (
+              <button
+                type="button"
+                aria-label={open ? "Hide worktree details" : "Show worktree details"}
+                aria-expanded={open}
+                onClick={onClick}
+                className="h-full border-l border-pane-border px-2 text-base leading-none text-text-secondary hover:bg-pane-title hover:text-text-primary"
+              >
+                ⋯
+              </button>
+            )}
+          >
+            {() => (
+              <div className="w-80 space-y-2 px-3 py-2 text-xs" data-testid="worktree-details">
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-text-muted">{summary}</div>
+                {status.is_shared && (
+                  <div className="text-text-muted">
+                    Shares the worktree owned by top-level task ({status.top_level_task_id}).
+                  </div>
+                )}
+                {status.path && (
+                  <div className="break-all font-mono text-text-primary">{status.path}</div>
+                )}
+                {status.conflict && (
+                  <div className="text-text-muted">
+                    Resolve and commit the conflict in this worktree. The primary checkout and work item state stay unchanged.
+                  </div>
+                )}
+                {canManage && renderDiscard()}
+              </div>
+            )}
+          </Popover>
+        </span>
+      )}
+      {error ? <span className="text-xs text-lifecycle-danger">{error}</span> : null}
       {trustError ? (
         <button
           type="button"
           disabled={trustBusy}
           onClick={retryTrust}
-          className="mt-1 border border-pane-border px-2 py-0.5 text-text-primary disabled:opacity-50"
+          className="border border-pane-border px-2 py-0.5 text-xs text-text-primary disabled:opacity-50"
         >
           Retry trust
         </button>

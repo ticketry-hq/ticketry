@@ -96,12 +96,21 @@ impl<'a> CatalogReader<'a> {
             }
         }
 
-        let provider = provider.ok_or_else(|| {
-            rejected(
-                "agent_not_configured",
-                "This launch binding has no resolved agent/provider.",
-            )
-        })?;
+        let provider = match provider {
+            Some(provider) => provider,
+            None if !self.has_activated_provider().await? => {
+                return Err(rejected(
+                    "no_activated_providers",
+                    "No activated providers are available. Activate one in Settings > Model configuration.",
+                ));
+            }
+            None => {
+                return Err(rejected(
+                    "agent_not_configured",
+                    "This launch binding has no resolved agent/provider.",
+                ));
+            }
+        };
         let provider_row = self.provider(&provider).await?;
         require_activated(&provider_row)?;
         if let Some(selected) = &model {
@@ -150,6 +159,14 @@ impl<'a> CatalogReader<'a> {
                     format!("Agent/provider '{slug}' is not supported."),
                 )
             })
+    }
+
+    async fn has_activated_provider(&self) -> Result<bool, LaunchPolicyError> {
+        Ok(provider::Entity::find()
+            .filter(provider::Column::Activated.eq(true))
+            .one(self.database)
+            .await?
+            .is_some())
     }
 
     async fn model_by_id(&self, id: &str) -> Result<ModelRow, LaunchPolicyError> {

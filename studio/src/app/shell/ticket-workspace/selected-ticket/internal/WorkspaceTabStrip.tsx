@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, type RefObject } from "react";
+import { useCallback, useEffect, useRef, type ReactNode, type RefObject } from "react";
 import type { DesignDoc, TabKind } from "../../../../../features/agents/types";
 import {
   isLiveTerminalState,
@@ -51,6 +51,7 @@ export function WorkspaceTabStrip({
   onCloseDocument,
   onCloseTerminal,
   onTaskAgentLaunched,
+  trailing,
 }: {
   tabStripRef: RefObject<HTMLDivElement>;
   launcherTriggerRef: RefObject<HTMLButtonElement>;
@@ -78,6 +79,8 @@ export function WorkspaceTabStrip({
   onCloseDocument: (docId: string) => void;
   onCloseTerminal: (sessionId: string) => void;
   onTaskAgentLaunched: () => void;
+  /** Pinned to the strip's right end, outside the scrolling tabs. */
+  trailing?: ReactNode;
 }) {
   const tabRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const registerTabRef = useCallback(
@@ -276,6 +279,7 @@ export function WorkspaceTabStrip({
           />
         )}
       </div>
+      {trailing}
     </div>
   );
 }

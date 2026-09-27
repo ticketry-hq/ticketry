@@ -294,18 +294,16 @@ async function openSettings(page: Page): Promise<Locator> {
 }
 
 async function editDescription(page: Page, description: string): Promise<void> {
-  await page.getByTestId("issue-description").click();
   const source = page.getByRole("textbox", {
     name: "Ticket description source",
   });
-  if (await source.isVisible().catch(() => false)) {
-    await source.fill(description);
-  } else {
-    await page.getByTestId("rich-markdown-editor-shell")
-      .locator('[contenteditable="true"]')
-      .fill(description);
-  }
-  await page.getByRole("button", { name: "Save", exact: true }).click();
+  const input = (await source.isVisible().catch(() => false))
+    ? source
+    : page.getByTestId("rich-markdown-editor-shell").locator('[contenteditable="true"]');
+  await input.fill(description);
+  // Leaving the editor writes the draft.
+  await input.blur();
+  await expect(page.getByText("Saving…")).toHaveCount(0);
   await expect(page.getByTestId("issue-description")).toContainText(description);
 }
 
@@ -709,7 +707,7 @@ test.describe("complete browser application", () => {
     await openModule(page, names.module);
     await openWorkItem(page, names.parent);
     const worktree = page.getByTestId("worktree-block");
-    const create = worktree.getByRole("button", { name: "+ Create worktree" });
+    const create = worktree.getByRole("button", { name: "+ Worktree" });
     await expect(create).toBeVisible();
 
     const created = page.waitForResponse((response) =>
@@ -718,8 +716,12 @@ test.describe("complete browser application", () => {
     );
     await create.click();
     await created;
-    await expect(worktree).toContainText(/wt\/CODIN-\d+-complete-parent → main/);
-    await expect(worktree).toContainText("clean");
+    await expect(worktree).toContainText(/wt\/CODIN-\d+-complete-parent/);
+    // Status and Discard live in the details popover (position:fixed, but a
+    // DOM descendant of the worktree block).
+    await worktree.getByRole("button", { name: "Show worktree details" }).click();
+    await expect(worktree.getByTestId("worktree-details")).toContainText("Clean");
+    await expect(worktree.getByTestId("worktree-details")).toContainText("vs main");
     await expect(worktree.getByRole("button", { name: "Discard" })).toBeVisible();
 
     const status = (await graphql(request, WorktreeStatusDocument, {
@@ -730,8 +732,9 @@ test.describe("complete browser application", () => {
     await writeFile(join(status.path!, "e2e-uncommitted-change.txt"), "dirty\n");
 
     await page.reload();
-    await expect(worktree).toContainText(/wt\/CODIN-\d+-complete-parent → main/);
-    await expect(worktree).toContainText("dirty");
+    await expect(worktree).toContainText(/wt\/CODIN-\d+-complete-parent/);
+    await worktree.getByRole("button", { name: "Show worktree details" }).click();
+    await expect(worktree.getByTestId("worktree-details")).toContainText("Dirty");
     await worktree.getByRole("button", { name: "Discard" }).click();
     await expect(worktree).toContainText("Discard — work is thrown away?");
     await worktree.getByRole("button", { name: "Cancel" }).click();
@@ -746,7 +749,6 @@ test.describe("complete browser application", () => {
     await worktree.getByRole("button", { name: "Yes, discard" }).click();
     await discarded;
     await expect(create).toBeVisible();
-    await expect(worktree).toContainText("Runs in the primary checkout.");
 
     await page.reload();
     await expect(create).toBeVisible();
@@ -765,7 +767,7 @@ test.describe("complete browser application", () => {
       response.url().endsWith("/graphql") &&
       response.request().postDataJSON()?.operationName === "WorktreeCreate"
     );
-    await worktree.getByRole("button", { name: "+ Create worktree" }).click();
+    await worktree.getByRole("button", { name: "+ Worktree" }).click();
     await created;
     await expect(worktree).toContainText(/wt\/CODIN-\d+-complete-hierarchy-parent/);
 
@@ -773,10 +775,11 @@ test.describe("complete browser application", () => {
       name: new RegExp(names.hierarchyChild),
     }).click();
     worktree = page.getByTestId("worktree-block");
+    await worktree.getByRole("button", { name: "Show worktree details" }).click();
     await expect(worktree).toContainText(
       "Shares the worktree owned by top-level task",
     );
-    await expect(worktree.getByRole("button", { name: "+ Create worktree" }))
+    await expect(worktree.getByRole("button", { name: "+ Worktree" }))
       .toHaveCount(0);
     await expect(worktree.getByRole("button", { name: "Discard" }))
       .toHaveCount(0);
@@ -785,6 +788,7 @@ test.describe("complete browser application", () => {
     await expect(page.getByTestId("issue-name")).toContainText(
       names.hierarchyChild,
     );
+    await worktree.getByRole("button", { name: "Show worktree details" }).click();
     await expect(page.getByTestId("worktree-block")).toContainText(
       "Shares the worktree owned by top-level task",
     );
@@ -795,15 +799,18 @@ test.describe("complete browser application", () => {
         taskId: fixture.hierarchyParent.id,
       })
     ).worktree_status.kind).toBe("worktree");
+    // Choosing a state clicked outside, which closed the details popover.
+    await worktree.getByRole("button", { name: "Show worktree details" }).click();
     await expect(page.getByTestId("worktree-block")).toContainText(
       "Shares the worktree owned by top-level task",
     );
 
     await openWorkItem(page, names.hierarchyParent);
     worktree = page.getByTestId("worktree-block");
+    await worktree.getByRole("button", { name: "Show worktree details" }).click();
     await worktree.getByRole("button", { name: "Discard" }).click();
     await worktree.getByRole("button", { name: "Yes, discard" }).click();
-    await expect(worktree.getByRole("button", { name: "+ Create worktree" }))
+    await expect(worktree.getByRole("button", { name: "+ Worktree" }))
       .toBeVisible();
   });
 
@@ -819,10 +826,10 @@ test.describe("complete browser application", () => {
       response.url().endsWith("/graphql") &&
       response.request().postDataJSON()?.operationName === "WorktreeCreate"
     );
-    await worktree.getByRole("button", { name: "+ Create worktree" }).click();
+    await worktree.getByRole("button", { name: "+ Worktree" }).click();
     await created;
     await expect(worktree).toContainText(
-      /wt\/CODIN-\d+-retain-committed-worktree-on-completion → main/,
+      /wt\/CODIN-\d+-retain-committed-worktree-on-completion/,
     );
 
     const status = (await graphql(request, WorktreeStatusDocument, {
@@ -854,8 +861,9 @@ test.describe("complete browser application", () => {
     );
 
     await page.reload();
-    await expect(worktree).toContainText("clean");
     await expect(worktree).toContainText("↑1");
+    await worktree.getByRole("button", { name: "Show worktree details" }).click();
+    await expect(worktree.getByTestId("worktree-details")).toContainText("Clean");
     await selectState(page, "Implement");
     await selectState(page, "Review");
     await selectState(page, "Done");
@@ -872,8 +880,9 @@ test.describe("complete browser application", () => {
         return null;
       }
     }).toBe(evidence);
-    await expect(worktree).toContainText(
-      "completion leaves this worktree unchanged",
+    await worktree.getByRole("button", { name: "Show worktree details" }).click();
+    await expect(worktree.getByTestId("worktree-details")).toContainText(
+      "Completion keeps the worktree",
     );
     await expect(worktree.getByRole("button", { name: "Discard" })).toBeVisible();
     await expect.poll(async () => {
@@ -888,9 +897,11 @@ test.describe("complete browser application", () => {
     await expect(page.getByTestId("status-row")).toContainText("Done");
     const retained = page.getByTestId("worktree-block");
     await expect(retained).toContainText(status.branch!);
+    await retained.getByRole("button", { name: "Show worktree details" }).click();
     await retained.getByRole("button", { name: "Discard" }).click();
     await retained.getByRole("button", { name: "Yes, discard" }).click();
-    await expect(retained).toContainText("Runs in the primary checkout.");
+    await expect(retained.getByRole("button", { name: "+ Worktree" }))
+      .toBeVisible();
     await expect.poll(async () => {
       try {
         await access(status.path!);
@@ -913,7 +924,7 @@ test.describe("complete browser application", () => {
       response.url().endsWith("/graphql") &&
       response.request().postDataJSON()?.operationName === "WorktreeCreate"
     );
-    await worktree.getByRole("button", { name: "+ Create worktree" }).click();
+    await worktree.getByRole("button", { name: "+ Worktree" }).click();
     await created;
     await expect(worktree).toContainText(
       /wt\/CODIN-\d+-retain-diverged-worktree-on-completion/,
@@ -959,8 +970,9 @@ test.describe("complete browser application", () => {
         taskId: fixture.landingConflict.id,
       })
     ).worktree_status.kind, { timeout: 20_000 }).toBe("worktree");
-    await expect(worktree).toContainText(
-      "completion leaves this worktree unchanged",
+    await worktree.getByRole("button", { name: "Show worktree details" }).click();
+    await expect(worktree.getByTestId("worktree-details")).toContainText(
+      "Completion keeps the worktree",
     );
     expect(await readFile(join(status.path!, "README.md"), "utf8"))
       .toBe("task-side conflict\n");
@@ -989,7 +1001,7 @@ test.describe("complete browser application", () => {
       response.url().endsWith("/graphql") &&
       response.request().postDataJSON()?.operationName === "WorktreeCreate"
     );
-    await worktree.getByRole("button", { name: "+ Create worktree" }).click();
+    await worktree.getByRole("button", { name: "+ Worktree" }).click();
     await created;
     const status = (await graphql(request, WorktreeStatusDocument, {
       taskId: fixture.landingDirty.id,
@@ -1000,7 +1012,8 @@ test.describe("complete browser application", () => {
     await writeFile(join(status.path!, protectedName), protectedContents);
 
     await page.reload();
-    await expect(worktree).toContainText("dirty");
+    await worktree.getByRole("button", { name: "Show worktree details" }).click();
+    await expect(worktree.getByTestId("worktree-details")).toContainText("Dirty");
     await selectState(page, "Implement");
     await selectState(page, "Review");
     await selectState(page, "Done");
@@ -1022,12 +1035,14 @@ test.describe("complete browser application", () => {
         return false;
       }
     }).toBe(false);
-    await expect(worktree).toContainText("dirty");
+    await worktree.getByRole("button", { name: "Show worktree details" }).click();
+    await expect(worktree.getByTestId("worktree-details")).toContainText("Dirty");
     await expect(worktree.getByRole("button", { name: "Discard" })).toBeVisible();
 
     await worktree.getByRole("button", { name: "Discard" }).click();
     await worktree.getByRole("button", { name: "Yes, discard" }).click();
-    await expect(worktree).toContainText("Runs in the primary checkout.");
+    await expect(worktree.getByRole("button", { name: "+ Worktree" }))
+      .toBeVisible();
     await expect.poll(async () => {
       try {
         await access(status.path!);
@@ -1043,21 +1058,16 @@ test.describe("complete browser application", () => {
   }) => {
     await openModule(page, names.nonRepoModule);
     await openWorkItem(page, names.nonRepoItem);
-    const worktree = page.getByTestId("worktree-block");
-    await expect(worktree).toContainText(
-      "Changes are not isolated — no git repo encloses this task's path",
-    );
-    await expect(worktree).toContainText("Runs work directly in the path.");
-    await expect(worktree.getByRole("button", { name: "+ Create worktree" }))
+    // A module without a repository offers no worktree control at all.
+    await expect(page.getByTestId("worktree-block")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "+ Worktree" }))
       .toHaveCount(0);
-    await expect(worktree.getByRole("button", { name: "Discard" }))
+    await expect(page.getByRole("button", { name: "Show worktree details" }))
       .toHaveCount(0);
 
     await page.reload();
     await expect(page.getByTestId("issue-name")).toContainText(names.nonRepoItem);
-    await expect(page.getByTestId("worktree-block")).toContainText(
-      "Changes are not isolated",
-    );
+    await expect(page.getByTestId("worktree-block")).toHaveCount(0);
   });
 
   test("renders an attachment created through the Rust MCP", async ({
@@ -1327,7 +1337,7 @@ test.describe("complete browser application", () => {
     await expect(page.getByTestId("issue-description"))
       .toContainText(childDescription);
     await expect(page.getByTestId("parent-picker").getByRole("button"))
-      .toHaveText(fixture.hierarchyParent.key);
+      .toHaveText(names.hierarchyParent);
 
     const refusedCycle = await callMcpTool<{
       reparented?: unknown[];
@@ -1347,7 +1357,7 @@ test.describe("complete browser application", () => {
       }],
     });
     await expect(page.getByTestId("parent-picker").getByRole("button"))
-      .toHaveText(fixture.hierarchyParent.key);
+      .toHaveText(names.hierarchyParent);
 
     await openWorkItem(page, names.hierarchyParent);
     const missingKey = "CDN-999999";
@@ -1382,7 +1392,7 @@ test.describe("complete browser application", () => {
       name: new RegExp(childName),
     }).click();
     await expect(page.getByTestId("parent-picker").getByRole("button"))
-      .toHaveText(fixture.blocker.key);
+      .toHaveText(names.blocker);
 
     await page.getByRole("button", { name: "Issue actions" }).click();
     await page.getByRole("menuitem", { name: "Delete issue…" }).click();
@@ -1615,27 +1625,9 @@ test.describe("complete browser application", () => {
     })).toBeVisible();
     await editDescription(page, "Description saved through the real editor");
 
-    await page.getByTestId("issue-description").click();
-    const descriptionEditor = page.getByTestId("description-editor");
-    const source = page.getByRole("textbox", {
-      name: "Ticket description source",
-    });
-    if (await source.isVisible().catch(() => false)) {
-      await source.fill("Description that must be discarded");
-    } else {
-      await descriptionEditor.locator('[contenteditable="true"]')
-        .fill("Description that must be discarded");
-    }
-    await descriptionEditor.getByRole("button", { name: "Cancel" }).click();
-    await expect(page.getByTestId("issue-description")).toContainText(
-      "Description saved through the real editor",
-    );
     await page.reload();
     await expect(page.getByTestId("issue-description")).toContainText(
       "Description saved through the real editor",
-    );
-    await expect(page.getByTestId("issue-description")).not.toContainText(
-      "Description that must be discarded",
     );
 
     const typePicker = page.getByTestId("issue-type-picker");
@@ -1705,6 +1697,7 @@ test.describe("complete browser application", () => {
       response.request().postDataJSON()?.operationName ===
         "SetWorkTrackerBlockers"
     );
+    await page.getByTestId("blocker-chip").first().hover();
     await page.getByRole("button", { name: "Remove blocker" }).click();
     await blockerRemoved;
     await expect(page.getByTestId("blocked-by-row")).not.toContainText(
@@ -1752,12 +1745,12 @@ test.describe("complete browser application", () => {
 
     await chooseParent(names.blocker);
     await expect(page.getByTestId("parent-picker").getByRole("button"))
-      .toHaveText(fixture.blocker.key);
+      .toHaveText(names.blocker);
 
     await page.reload();
     await expect(page.getByTestId("issue-name")).toContainText(names.moving);
     await expect(page.getByTestId("parent-picker").getByRole("button"))
-      .toHaveText(fixture.blocker.key);
+      .toHaveText(names.blocker);
     await openWorkItem(page, names.blocker);
     await expect(page.getByTestId("child-issues")).toContainText(names.moving);
 
@@ -1766,12 +1759,12 @@ test.describe("complete browser application", () => {
     }).click();
     await chooseParent(names.module);
     await expect(page.getByTestId("parent-picker").getByRole("button"))
-      .toHaveText(`T-${fixture.module.sequence_id}`);
+      .toHaveText(names.module);
 
     await page.reload();
     await expect(page.getByTestId("issue-name")).toContainText(names.moving);
     await expect(page.getByTestId("parent-picker").getByRole("button"))
-      .toHaveText(`T-${fixture.module.sequence_id}`);
+      .toHaveText(names.module);
     await openWorkItem(page, names.blocker);
     await expect(page.getByTestId("child-issues")).not.toContainText(names.moving);
   });
@@ -3433,7 +3426,7 @@ test.describe("complete browser application", () => {
     await expect(filter).toBeFocused();
     await filter.fill("Search");
     await expect(dialog.getByRole("button", {
-      name: "Record Search binding",
+      name: "Search, current shortcut Slash, change binding",
     })).toHaveText("/");
     await filter.fill("definitely-no-such-shortcut");
     await expect(dialog.getByText("No bindings match", { exact: false }))
@@ -3456,19 +3449,26 @@ test.describe("complete browser application", () => {
       await dialog.getByRole("tab", { name: "Keyboard shortcuts" }).click();
       await dialog.getByRole("searchbox", { name: "Search bindings" })
         .fill("Search");
-      const binding = dialog.getByRole("button", {
-        name: "Record Search binding",
-      });
+      const binding = dialog.locator('button[aria-label^="Search,"]');
       await expect(binding).toBeVisible();
       return { binding, dialog };
     };
 
     let { binding, dialog } = await openSearchBinding();
     await expect(binding).toHaveText("/");
+    await expect(binding).toHaveAccessibleName(
+      "Search, current shortcut Slash, change binding",
+    );
     await binding.click();
     await expect(binding).toHaveText("Press a chord…");
+    await expect(binding).toHaveAccessibleName(
+      "Search, current shortcut Slash, recording, press a new shortcut",
+    );
     await page.keyboard.press("Alt+k");
     await expect(binding).toHaveText("Alt+K");
+    await expect(binding).toHaveAccessibleName(
+      "Search, current shortcut Alt+K, change binding",
+    );
     await expect(dialog.getByRole("button", { name: "Reset Search binding" }))
       .toBeVisible();
     await dialog.getByRole("button", { name: "Close dialog" }).click();
@@ -3484,6 +3484,9 @@ test.describe("complete browser application", () => {
     ({ binding, dialog } = await openSearchBinding());
     await dialog.getByRole("button", { name: "Reset Search binding" }).click();
     await expect(binding).toHaveText("/");
+    await expect(binding).toHaveAccessibleName(
+      "Search, current shortcut Slash, change binding",
+    );
     await expect(dialog.getByRole("button", { name: "Reset Search binding" }))
       .toHaveCount(0);
     await dialog.getByRole("button", { name: "Close dialog" }).click();

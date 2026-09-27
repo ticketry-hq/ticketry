@@ -1,4 +1,4 @@
-import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { fixture, mountStudio, workItem } from "./seam";
 
@@ -15,7 +15,7 @@ vi.mock("../features/documents/RichMarkdownEditor", () => {
 
 afterEach(() => vi.restoreAllMocks());
 
-it("[overhaul-287] shows Details before warming shared editor code and mounts it only on description click", async () => {
+it("[overhaul-287] shows Details before warming shared editor code and mounts the editor once it loads", async () => {
   const frames: FrameRequestCallback[] = [];
   vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
     frames.push(callback);
@@ -35,8 +35,6 @@ it("[overhaul-287] shows Details before warming shared editor code and mounts it
 
   act(() => frames.splice(0).forEach((callback) => callback(performance.now())));
   await waitFor(() => expect(editor.loaded).toHaveBeenCalledTimes(1));
-  expect(editor.mounted).not.toHaveBeenCalled();
-  fireEvent.click(within(details).getByTestId("issue-description"));
   expect(await within(details).findByLabelText("Preloaded description editor")).toHaveValue("Read this immediately");
   expect(editor.loaded).toHaveBeenCalledTimes(1);
 });

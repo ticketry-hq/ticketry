@@ -16,11 +16,14 @@ import { SETTINGS_SECTION_HEADING_CLASS } from "../../../shared/ui/SettingsPrimi
 import {
   bindingLabel,
   KeyboardSettingsPanel,
+  type KeyboardSettingsBinding,
 } from "./KeyboardSettingsPanel";
 
 const MODIFIER_KEYS = new Set(["Alt", "Control", "Meta", "Shift"]);
 
-function bindingKey(binding: EffectiveBinding): string {
+function bindingKey(
+  binding: Pick<EffectiveBinding, "actionId" | "context">,
+): string {
   return `${binding.context}:${binding.actionId}`;
 }
 
@@ -62,7 +65,8 @@ export function KeybindingSettings() {
     () => new Set(studioKeymapRegistry.getOverrides().map(bindingKey)),
     [revision],
   );
-  const [recording, setRecording] = useState<EffectiveBinding | null>(null);
+  const [recording, setRecording] =
+    useState<KeyboardSettingsBinding | null>(null);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{
     kind: "error" | "warning";
@@ -82,7 +86,7 @@ export function KeybindingSettings() {
   }, []);
 
   const replaceBinding = useCallback((
-    binding: EffectiveBinding,
+    binding: KeyboardSettingsBinding,
     chord: KeyChord | null,
   ) => {
     const key = bindingKey(binding);

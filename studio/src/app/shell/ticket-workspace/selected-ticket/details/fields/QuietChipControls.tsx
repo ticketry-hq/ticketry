@@ -1,5 +1,5 @@
 export const quietChipRemoveClassName =
-  "text-text-muted opacity-0 transition-opacity hover:text-lifecycle-danger focus:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100";
+  "hidden text-text-muted hover:text-lifecycle-danger group-hover:inline-flex group-focus-within:inline-flex";
 
 export function GhostChipAdd({
   label,

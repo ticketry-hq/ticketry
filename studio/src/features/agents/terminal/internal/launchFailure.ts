@@ -23,6 +23,17 @@ const LAUNCH_FAILURE_REASONS: Record<string, string> = {
     + "try again.",
 };
 
+const ZERO_PROVIDER_GUIDANCE =
+  "To run agent work, activate a provider in Settings > Model configuration. "
+  + "You can keep planning without one.";
+
+function isZeroProviderRefusal(value: unknown): boolean {
+  return typeof value === "string" && (
+    (value === "no_activated_providers" || value.startsWith("no_activated_providers:")) ||
+    /^No activated providers\b/i.test(value)
+  );
+}
+
 /** Translate one control-plane launch code into what the user should read. */
 export function launchFailureReason(code: string): string {
   return LAUNCH_FAILURE_REASONS[code] ?? code;
@@ -84,6 +95,15 @@ export function launchFailureMessage(error: unknown): string {
     return `Required skill '${requiredSkill.skill}' is unavailable for ${requiredSkill.provider} (${requiredSkill.reason}): ${requiredSkill.detail} Next action: ${requiredSkill.remediation}`;
   }
   const { code, message } = errorDetailFrom(body);
+  const detail = body && typeof body === "object"
+    ? (body as { detail?: unknown }).detail
+    : null;
+  if (
+    isZeroProviderRefusal(code) ||
+    isZeroProviderRefusal(message) ||
+    isZeroProviderRefusal(detail) ||
+    isZeroProviderRefusal(error instanceof Error ? error.message : null)
+  ) return ZERO_PROVIDER_GUIDANCE;
   if (code === "launch_unavailable" && message) {
     return `Launch unavailable: ${message}`;
   }

@@ -324,6 +324,7 @@ ticketry-launch|ProviderContract
 ticketry-launch|ProviderOptions
 ticketry-launch|ResolvedLaunchMaterial
 ticketry-launch|RuntimeSettings
+ticketry-launch|StartupScreen
 ticketry-launch|TaskPromptFacts
 ticketry-launch|TaskPromptInput
 ticketry-launch|TaskPromptSource
@@ -373,6 +374,7 @@ ticketry-provider|ProviderLaunchMetadata
 ticketry-provider|ProviderMetadata
 ticketry-provider|ProviderOptions
 ticketry-provider|RuntimeSettings
+ticketry-provider|StartupScreen
 ticketry-provider|TimeoutUnit
 ticketry-provider|provider_contract
 ticketry-runs|ADOPTED_TABLES
@@ -500,6 +502,8 @@ ticketry-settings|CODEX_5_6_LEDGER
 ticketry-settings|CODEX_5_6_MIGRATION_ID
 ticketry-settings|CODEX_6_ASTRA_LEDGER
 ticketry-settings|CODEX_6_ASTRA_MIGRATION_ID
+ticketry-settings|CODEX_6_SOL_LUNA_LEDGER
+ticketry-settings|CODEX_6_SOL_LUNA_MIGRATION_ID
 ticketry-settings|CODEX_ASTRA_LEDGER
 ticketry-settings|CODEX_ASTRA_MIGRATION_ID
 ticketry-settings|CODEX_GLM_5_3_FLASH_LEDGER
@@ -533,6 +537,7 @@ ticketry-settings|SourceClassification
 ticketry-settings|adopt
 ticketry-settings|install_codex_5_6
 ticketry-settings|install_codex_6_astra
+ticketry-settings|install_codex_6_sol_luna
 ticketry-settings|install_codex_astra
 ticketry-settings|install_codex_glm_5_3_flash
 ticketry-settings|install_codex_spark

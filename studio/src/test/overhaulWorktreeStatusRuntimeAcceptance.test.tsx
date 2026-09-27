@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 import { WorktreeBlock } from "../features/agents/worktrees";
 import { createDesktopRuntime } from "../runtime/desktopRuntime";
@@ -104,11 +104,13 @@ describe("worktree status desktop runtime acceptance", () => {
     );
 
     expect(
-      await screen.findByText("wt/CODIN-881-parent-story → main"),
+      await screen.findByText("wt/CODIN-881-parent-story"),
     ).toBeTruthy();
-    expect(screen.getByText("dirty")).toBeTruthy();
-    expect(screen.getByText("↑2")).toBeTruthy();
-    expect(screen.getByText("↓1")).toBeTruthy();
+    expect(screen.getByText("↑2 ↓1")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Show worktree details" }));
+    await screen.findByTestId("worktree-details");
+    expect(screen.getByText("Dirty")).toBeTruthy();
+    expect(screen.getByText("↑2 ↓1 vs main")).toBeTruthy();
     live.unmount();
 
     render(
@@ -119,11 +121,17 @@ describe("worktree status desktop runtime acceptance", () => {
       />,
     );
 
+    // Once the typed absence is cached, the block renders nothing at all.
     await waitFor(() =>
-      expect(screen.getByText(/Changes are not isolated/)).toBeTruthy(),
+      expect(studioApolloClient().readQuery({
+        query: WorktreeStatusDocument,
+        variables: { taskId: CHILD },
+      })?.worktree_status).toMatchObject({ kind: "no_repo" }),
     );
+    expect(screen.queryByTestId("worktree-block")).toBeNull();
+    expect(screen.queryByRole("button")).toBeNull();
     expect(
-      screen.queryByRole("button", { name: "+ Create worktree" }),
+      screen.queryByRole("button", { name: "+ Worktree" }),
     ).toBeNull();
 
     // The runtime derives ownership itself: only the identity is submitted,

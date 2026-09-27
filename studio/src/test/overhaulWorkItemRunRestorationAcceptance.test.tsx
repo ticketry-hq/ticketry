@@ -17,6 +17,9 @@ import {
   installDesktopGraphQlRuntime,
   terminalSessionReadExecutor,
 } from "./desktopGraphQlRuntime";
+import {
+  openDormantTabs,
+} from "./dormantTabsFixture";
 
 const documentRegistry = vi.hoisted(() => ({
   listTaskDocuments: vi.fn(),
@@ -71,6 +74,7 @@ function workspace() {
 }
 
 function terminatedChips() {
+  openDormantTabs();
   return screen.queryAllByLabelText(/^Terminated /);
 }
 

@@ -43,6 +43,7 @@ export default function RichMarkdownEditor({
   onTrustedInput,
   layout = "document",
   toolbarActions,
+  quietUntilFocused = false,
 }: {
   markdown: string;
   onChange: (markdown: string) => void;
@@ -55,6 +56,8 @@ export default function RichMarkdownEditor({
   layout?: "document" | "compact";
   /** Rendered at the trailing end of the toolbar, e.g. Save/Cancel. */
   toolbarActions?: ReactNode;
+  /** Hide the frame and toolbar until focus enters, so it reads like rendered text. */
+  quietUntilFocused?: boolean;
 }) {
   const compact = layout === "compact";
   const shellRef = useRef<HTMLDivElement>(null);
@@ -70,7 +73,11 @@ export default function RichMarkdownEditor({
   return (
     <div
       ref={shellRef}
-      className={`${compact ? "min-h-[12rem]" : "min-h-[60vh]"} border border-pane-border bg-pane-panel`}
+      className={`${compact ? "min-h-[12rem]" : "min-h-[60vh]"} border ${
+        quietUntilFocused
+          ? "group border-transparent focus-within:border-pane-border focus-within:bg-pane-panel"
+          : "border-pane-border bg-pane-panel"
+      }`}
       data-testid="rich-markdown-editor-shell"
       onFocusCapture={(event) => {
         if (event.nativeEvent.isTrusted && event.target instanceof HTMLElement && event.target.isContentEditable) {
@@ -86,7 +93,11 @@ export default function RichMarkdownEditor({
       <MDXEditor
         className="dark-theme"
         markdown={markdown}
-        onChange={onChange}
+        // MDXEditor reports its own normalization of the initial Markdown as a
+        // change; only edits count.
+        onChange={(value, initialMarkdownNormalize) => {
+          if (!initialMarkdownNormalize) onChange(value);
+        }}
         onError={({ source }) => onParseError(source)}
         contentEditableClassName={`prose prose-invert mx-auto max-w-none text-base focus:outline-none ${
           compact
@@ -120,8 +131,11 @@ export default function RichMarkdownEditor({
           }),
           diffSourcePlugin({ viewMode: "rich-text", diffMarkdown: markdown }),
           toolbarPlugin({
-            toolbarClassName:
-              "sticky top-0 z-10 border-b border-pane-border bg-pane-title",
+            toolbarClassName: `sticky top-0 z-10 border-b border-pane-border bg-pane-title ${
+              quietUntilFocused
+                ? "pointer-events-none opacity-0 group-focus-within:pointer-events-auto group-focus-within:opacity-100"
+                : ""
+            }`,
             toolbarContents: () => (
               <>
               <DiffSourceToggleWrapper options={["rich-text", "source"]}>

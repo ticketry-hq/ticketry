@@ -21,6 +21,7 @@ import { seedModuleLinks } from "../features/module-links";
 import { useStudioStore } from "../features/projects/store";
 import { StudioApolloProvider } from "../shared/apollo/StudioApolloProvider";
 import { documentOperationName } from "../graphql-foundation/typedDocument";
+import { FoundationGraphQlError } from "../shared/apollo/errorLink";
 import { useClientStore } from "../state/clientStore";
 import {
   installDesktopGraphQlRuntime,
@@ -213,9 +214,9 @@ describe("overhaul acceptance — Conversations", () => {
     expect(newConversation).toBeVisible();
 
     expect(within(needsInputRow).getByLabelText("Agent is waiting for your input"))
-      .toHaveTextContent("1");
+      .toBeInTheDocument();
     expect(within(workingRow).getByLabelText("Agent is actively working"))
-      .toHaveTextContent("1");
+      .toBeInTheDocument();
 
     fireEvent.click(workingRow);
     const bucket = scratchBucketId("module-1");
@@ -305,9 +306,9 @@ describe("overhaul acceptance — Conversations", () => {
     expectNoLifecycleBadge(conversationsHeader);
     expectNoLifecycleBadge(newConversation);
     expect(within(needsInputRow).getByLabelText("Agent is waiting for your input"))
-      .toHaveTextContent("1");
+      .toBeInTheDocument();
     expect(within(workingRow).getByLabelText("Agent is actively working"))
-      .toHaveTextContent("1");
+      .toBeInTheDocument();
 
     act(() => useAgentStatusStore.getState().upsertRun({
       agent_run_id: "other-module-run",
@@ -335,9 +336,9 @@ describe("overhaul acceptance — Conversations", () => {
         });
       });
       await waitFor(() => {
-        expect(within(needsInputRow).getByLabelText(description)).toHaveTextContent("1");
+        expect(within(needsInputRow).getByLabelText(description)).toBeInTheDocument();
         expect(within(workingRow).getByLabelText("Agent is actively working"))
-          .toHaveTextContent("1");
+          .toBeInTheDocument();
       });
     }
 
@@ -452,6 +453,63 @@ describe("overhaul acceptance — Conversations", () => {
     })).toBeNull());
     await waitFor(() => expect(restoredFocus).toHaveBeenCalledTimes(2));
     releaseFocus();
+  });
+
+  it("[overhaul-367] explains a zero-provider conversation refusal without opening a tab", async () => {
+    const operations: string[] = [];
+    const terminalExecutor = terminalSessionReadExecutor(emptyTerminalReads);
+    installDesktopGraphQlRuntime(async (document, variables) => {
+      const operation = documentOperationName(document);
+      operations.push(operation);
+      if (operation === "CreateTerminalSession") {
+        throw new FoundationGraphQlError(
+          "terminal_launch_invalid",
+          "no_activated_providers: No activated providers are configured.",
+        );
+      }
+      if (operation === "InstantRunTickets") return { tickets: [] } as never;
+      if (operation === "WorkTrackerModuleOpen") {
+        return {
+          module: { __typename: "WorktrackerIssueConnection", nodes: [] },
+          work_items: { __typename: "WorktrackerIssueConnection", nodes: [] },
+        } as never;
+      }
+      if (operation === "LoadModuleLinks") {
+        return {
+          moduleLinks: { __typename: "ModuleLinksConnection", nodes: [{
+            __typename: "ModuleLinks",
+            id: "link-1",
+            moduleId: "module-1",
+            path: "/repos/ticketry",
+          }] },
+        } as never;
+      }
+      return terminalExecutor(document, variables);
+    });
+    seedModuleLinks([
+      { id: "link-1", moduleId: "module-1", path: "/repos/ticketry" },
+    ]);
+    useTerminalStore.setState({ sessions: {}, sessionByRun: {} });
+    render(
+      <StudioApolloProvider>
+        <TasksPane />
+        <ModalHost />
+      </StudioApolloProvider>,
+    );
+
+    fireEvent.click(await screen.findByRole("treeitem", {
+      name: /New conversation/,
+    }));
+    expect(await screen.findByText(
+      "To run agent work, activate a provider in Settings > Model configuration. "
+        + "You can keep planning without one.",
+    )).toBeVisible();
+    expect(operations.filter((operation) => operation === "CreateTerminalSession"))
+      .toHaveLength(1);
+    expect(useTerminalStore.getState().sessions).toEqual({});
+    expect(useClientStore.getState().selectedTaskId).toBe(TEMP_TASK_ID);
+    expect(screen.queryByRole("treeitem", { name: /Untitled instant chat/ }))
+      .toBeNull();
   });
 
   it("creates and selects a conversation when Enter activates New conversation", async () => {

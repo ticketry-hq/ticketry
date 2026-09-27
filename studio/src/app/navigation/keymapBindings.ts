@@ -235,7 +235,20 @@ export const DEFAULT_BINDINGS: readonly BindingDefinition[] = [
     chord: chord("Enter", { meta: true }),
   },
   globalBinding("plan", "n"),
-  globalBinding("instant-change", "i"),
+  {
+    context: "global",
+    actionId: "instant-change-with-prompt",
+    chord: chord("I", { meta: true, shift: true }),
+    // WebKit reports the shifted letter; other engines keep it lowercase.
+    fixedAliases: [chord("i", { meta: true, shift: true })],
+  },
+  {
+    context: "global",
+    actionId: "instant-change",
+    chord: chord("i", { meta: true }),
+    // The bare key started a conversation before Cmd+I became the chord.
+    defaultAliases: [chord("i")],
+  },
   globalBinding("run-now", "r"),
   globalBinding("status", "s"),
   // Settings must also open from an engaged native terminal, where the WebView

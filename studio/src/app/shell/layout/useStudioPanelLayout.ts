@@ -30,13 +30,23 @@ export function useStudioPanelLayout(suspended = false) {
   function applyLayout(sizes: number[], isSidebarVisible: boolean) {
     skipNextOuterLayout.current = true;
     skipNextWorkAreaLayout.current = true;
-    outerGroupRef.current?.setLayout(outerPanelLayout(sizes, isSidebarVisible));
-    workAreaGroupRef.current?.setLayout(splitWorkArea(sizes));
+    const outer = outerPanelLayout(sizes, isSidebarVisible);
+    if (outerGroupRef.current?.getLayout().length === outer.length) {
+      outerGroupRef.current.setLayout(outer);
+    }
+    const workArea = splitWorkArea(sizes);
+    if (workAreaGroupRef.current?.getLayout().length === workArea.length) {
+      workAreaGroupRef.current.setLayout(workArea);
+    }
   }
 
   useEffect(() => {
     previousSidebarVisible.current = sidebarVisible;
     if (suspended) return;
+    // A stable PanelGroup keeps the workspace mounted while the sidebar is
+    // shown or hidden. Its imperative handle is available before conditional
+    // Panels finish registering, so applyLayout checks the registered shape;
+    // default sizes cover a commit whose shape is still changing.
     applyLayout(panelLayout ?? DEFAULT_PANEL_LAYOUT, sidebarVisible);
   }, [sidebarVisible, panelLayout, suspended]);
 

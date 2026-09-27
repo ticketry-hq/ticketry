@@ -390,16 +390,17 @@ export function SelectedTicketContent({
         onCloseDocument={closeWorkspaceDocument}
         onCloseTerminal={closeWorkspaceTerminal}
         onTaskAgentLaunched={rememberLaunchedTaskAgent}
-      />
-
-      <DormantWorkspaceTabs
-        closedDocuments={closedDocs}
-        resumableSessions={resumable}
-        resumableChips={dormantChips.resumable}
-        historyChips={dormantChips.history}
-        resumingRunIds={resumingRunIds}
-        onReopenDocument={reopenWorkspaceDocument}
-        onResumeTerminal={(session) => void resumeWorkspaceTerminal(session)}
+        trailing={
+          <DormantWorkspaceTabs
+            closedDocuments={closedDocs}
+            resumableSessions={resumable}
+            resumableChips={dormantChips.resumable}
+            historyChips={dormantChips.history}
+            resumingRunIds={resumingRunIds}
+            onReopenDocument={reopenWorkspaceDocument}
+            onResumeTerminal={(session) => void resumeWorkspaceTerminal(session)}
+          />
+        }
       />
 
       <WorkspaceTabBody

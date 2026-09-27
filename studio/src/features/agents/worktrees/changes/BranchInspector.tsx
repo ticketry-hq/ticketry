@@ -44,7 +44,12 @@ export function BranchInspector({
     const inspector = rootRef.current;
     const workspace = inspector?.closest<HTMLElement>('[data-testid="changes-workspace-scroll"]') ?? null;
     const frame = requestAnimationFrame(() => {
-      if (canReceiveRestoredFocus(closeRef.current)) closeRef.current.focus({ preventScroll: true });
+      if (
+        !inspector?.contains(document.activeElement)
+        && canReceiveRestoredFocus(closeRef.current)
+      ) {
+        closeRef.current.focus({ preventScroll: true });
+      }
     });
     return () => {
       cancelAnimationFrame(frame);

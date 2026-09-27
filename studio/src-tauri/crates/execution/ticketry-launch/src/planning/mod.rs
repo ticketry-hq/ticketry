@@ -21,7 +21,7 @@ pub use prompt::{
     DocumentChatPrompt, InstantPrompt, ModulePromptFacts, PlanningPrompt, TaskPromptFacts,
     TaskPromptInput, TaskSummary,
 };
-pub use provider::{provider_contract, Provider, ProviderContract, TimeoutUnit};
+pub use provider::{provider_contract, Provider, ProviderContract, StartupScreen, TimeoutUnit};
 pub use types::{
     DurableLaunchMaterial, LaunchKind, MaterializedLaunch, ProviderOptions, RuntimeSettings,
     WorkspaceIdentity,

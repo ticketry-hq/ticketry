@@ -15,6 +15,8 @@ interface Props {
   items: WorkItem[];
   onChange: (parentId: string | null) => void;
   saving?: boolean;
+  /** Breadcrumb segment naming the parent, instead of an identifier chip. */
+  variant?: "crumb";
 }
 
 // Collect an item's descendant ids so a reparent can never point into its own
@@ -36,7 +38,7 @@ function descendantIds(rootId: string, items: WorkItem[]): Set<string> {
 }
 
 // Parent picker: an Epic (module) or a task. Reparents the tree.
-export default function ParentPicker({ value, currentId, items, onChange, saving }: Props) {
+export default function ParentPicker({ value, currentId, items, onChange, saving, variant }: Props) {
   const selectedProjectId = useStudioStore((s) => s.selectedProjectId);
   const modules = useModulesQuery(selectedProjectId).data ?? EMPTY_MODULES;
   const blocked = currentId
@@ -48,8 +50,11 @@ export default function ParentPicker({ value, currentId, items, onChange, saving
   const currentTask = items.find((i) => i.id === value);
   // A resolved parent with no sequence identifier falls back to the same
   // neutral trigger text rather than showing a malformed identifier.
-  const label =
-    formatWorkItemDisplayIdentifier((currentModule ?? currentTask)?.sequence_id) || "No parent";
+  const parent = currentModule ?? currentTask;
+  const identifier = formatWorkItemDisplayIdentifier(parent?.sequence_id);
+  const label = variant === "crumb"
+    ? parent?.name || identifier || "No parent"
+    : identifier || "No parent";
 
   return (
     <Popover
@@ -61,7 +66,11 @@ export default function ParentPicker({ value, currentId, items, onChange, saving
           onClick={onClick}
           disabled={disabled}
           label={label}
-          icon={<IconCornerDownRight size={14} className="text-text-muted" />}
+          title={variant === "crumb" ? `Move under another parent (now ${identifier || "none"})` : undefined}
+          variant={variant}
+          icon={variant === "crumb"
+            ? undefined
+            : <IconCornerDownRight size={14} className="text-text-muted" />}
         />
       )}
     >

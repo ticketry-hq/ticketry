@@ -481,8 +481,7 @@ impl TerminalLaunchService {
 fn interactive_launch_surface(
     request: &CreateTerminalSession,
 ) -> Option<trace::LaunchRequestSurface> {
-    if request.kind.is_shell() || request.resume_from_agent_run_id.is_some()
-    {
+    if request.kind.is_shell() || request.resume_from_agent_run_id.is_some() {
         return None;
     }
     if request.provider.is_some() {

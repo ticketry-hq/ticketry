@@ -26,6 +26,7 @@ export function applyRunStatusFact(fact: StatusFact | null): RunStatusApplyResul
     fact.occurredAt,
     fact.exitCode,
     fact.effectiveState,
+    fact.attentionReason,
   )) return "unknown_run";
   if (fact.terminalOutcome) settleTerminalHolding(fact.agentRunId);
   return "applied";

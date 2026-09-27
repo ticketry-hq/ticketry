@@ -58,6 +58,10 @@ export function toAutomationAttemptRecord(
 }
 
 export function toRunRecord(payload: RunHoldingPayload): RunRecord {
+  // The field is optional while older status publishers are still in flight.
+  const attentionReason = (
+    payload as RunHoldingPayload & { attention_reason?: string | null }
+  ).attention_reason ?? null;
   return {
     agent_run_id: payload.agent_run_id,
     project_id: payload.project_id,
@@ -71,6 +75,7 @@ export function toRunRecord(payload: RunHoldingPayload): RunRecord {
     started_at: payload.started_at,
     state: payload.state as RawLifecycleState,
     effective_state: payload.effective_state as RunRecord["effective_state"],
+    attention_reason: attentionReason,
     updated_at: payload.updated_at,
     output_sequence: payload.output_sequence,
     last_output_at: payload.last_output_at,

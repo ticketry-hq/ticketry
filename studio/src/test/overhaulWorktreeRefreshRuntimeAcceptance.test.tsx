@@ -224,15 +224,15 @@ describe("worktree holding refresh acceptance", () => {
     statusStreamFeed.start(PROJECT, { createProxy: feed.createProxy });
     renderViews();
 
-    await screen.findAllByRole("button", { name: "+ Create worktree" });
+    await screen.findAllByRole("button", { name: "+ Worktree" });
     await waitFor(() => expect(feed.started()).toBe(1));
     fireEvent.click(
-      screen.getAllByRole("button", { name: "+ Create worktree" })[0],
+      screen.getAllByRole("button", { name: "+ Worktree" })[0],
     );
 
     // The mutation response is immediate authority for the window that asked.
     expect(
-      await screen.findByText("wt/CODIN-881-parent-story → main"),
+      await screen.findByText("wt/CODIN-881-parent-story"),
     ).toBeTruthy();
     const unrelatedReads = host.readsOf(UNRELATED);
     const ownerReads = host.readsOf(OWNER);
@@ -240,9 +240,18 @@ describe("worktree holding refresh acceptance", () => {
     // …and the durable fact still reaches every other window on that checkout.
     feed.send(worktreeFact(11, "created"));
 
+    // The child's view now holds the shared checkout: owner and child chips.
+    await waitFor(() =>
+      expect(
+        screen.getAllByRole("button", { name: "Show worktree details" }),
+      ).toHaveLength(2),
+    );
+    fireEvent.click(
+      screen.getAllByRole("button", { name: "Show worktree details" })[1],
+    );
     expect(
       await screen.findByText(
-        `Shares the worktree owned by top-level task (${OWNER}).`,
+        "Shared with its parent work item",
       ),
     ).toBeTruthy();
     // The window that already had the answer re-reads too: an immediate
@@ -259,13 +268,20 @@ describe("worktree holding refresh acceptance", () => {
     statusStreamFeed.start(PROJECT, { createProxy: feed.createProxy });
     renderViews();
 
-    await screen.findAllByText("wt/CODIN-881-parent-story → main");
+    await screen.findAllByText("wt/CODIN-881-parent-story");
     await waitFor(() => expect(feed.started()).toBe(1));
+    // Open the owner's and the child's details; they stay open across refreshes.
+    const [ownerDetails, childDetails] = screen.getAllByRole("button", {
+      name: "Show worktree details",
+    });
+    fireEvent.click(ownerDetails);
+    fireEvent.click(childDetails);
+    expect(await screen.findAllByTestId("worktree-details")).toHaveLength(2);
 
     // An integration attempt stopped inside the checkout.
     host.hold("conflict");
     feed.send(worktreeFact(11, "conflicted"));
-    expect(await screen.findAllByText("Conflict")).toHaveLength(1);
+    expect(await screen.findAllByText(/Conflict/)).toHaveLength(1);
 
     // Discard and integration both end with the checkout gone, and the block
     // returns to the answer Git actually gives — not a blanked panel.
@@ -273,13 +289,13 @@ describe("worktree holding refresh acceptance", () => {
     feed.send(worktreeFact(12, "discarded"));
     await waitFor(() =>
       expect(
-        screen.getAllByRole("button", { name: "+ Create worktree" }),
+        screen.getAllByRole("button", { name: "+ Worktree" }),
       ).toHaveLength(2),
     );
     // Exactly the owner's view and the child sharing it moved. The unrelated
     // task's checkout was never named by the fact and was never re-read.
     expect(host.readsOf(UNRELATED)).toBe(1);
-    expect(screen.getAllByText("wt/CODIN-881-parent-story → main")).toHaveLength(
+    expect(screen.getAllByText("wt/CODIN-881-parent-story")).toHaveLength(
       1,
     );
   });
@@ -292,7 +308,7 @@ describe("worktree holding refresh acceptance", () => {
     statusStreamFeed.start(PROJECT, { createProxy: feed.createProxy });
     renderViews();
 
-    await screen.findAllByText("wt/CODIN-881-parent-story → main");
+    await screen.findAllByText("wt/CODIN-881-parent-story");
     await waitFor(() => expect(feed.started()).toBe(1));
     feed.send(snapshot(40));
     const afterFirstRead = host.readsOf(OWNER);
@@ -321,7 +337,7 @@ describe("worktree holding refresh acceptance", () => {
     statusStreamFeed.start(PROJECT, { createProxy: feed.createProxy });
     renderViews();
 
-    await screen.findAllByText("wt/CODIN-881-parent-story → main");
+    await screen.findAllByText("wt/CODIN-881-parent-story");
     await waitFor(() => expect(feed.started()).toBe(1));
 
     statusStreamFeed.start(OTHER_PROJECT, { createProxy: feed.createProxy });

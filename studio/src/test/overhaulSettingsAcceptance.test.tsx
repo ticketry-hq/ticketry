@@ -12,6 +12,7 @@ import { useGlobalKeymap } from "../app/navigation/useGlobalKeymap";
 import { studioKeymapRegistry } from "../app/navigation/keymapRegistry";
 import { StudioFooter } from "../app/shell/StudioFooter";
 import { useStudioStore } from "../features/projects/store";
+import { KeyboardSettingsPanel } from "../features/studio/modals/KeyboardSettingsPanel";
 import { useWorkflowEditorStore } from "../features/workflows/workflowEditorStore";
 
 const settingsApi = vi.hoisted(() => ({
@@ -187,10 +188,13 @@ describe("overhaul acceptance — settings", () => {
       within(dialog).getByRole("heading", { name: "Keyboard shortcuts" }),
     ).toBeInTheDocument();
     const runNow = within(dialog).getByRole("button", {
-      name: "Record Run now binding",
+      name: "Run now, current shortcut R, change binding",
     });
     fireEvent.click(runNow);
     expect(runNow).toHaveTextContent("Press a chord…");
+    expect(runNow).toHaveAccessibleName(
+      "Run now, current shortcut R, recording, press a new shortcut",
+    );
     fireEvent.keyDown(window, { key: "x" });
 
     await waitFor(() => {
@@ -207,6 +211,9 @@ describe("overhaul acceptance — settings", () => {
       }]);
     });
     expect(runNow).toHaveTextContent("X");
+    expect(runNow).toHaveAccessibleName(
+      "Run now, current shortcut X, change binding",
+    );
 
     fireEvent.click(within(dialog).getByRole("button", {
       name: "Reset Run now binding",
@@ -215,6 +222,9 @@ describe("overhaul acceptance — settings", () => {
       expect(keybindingApi.saveKeybindingOverrides).toHaveBeenLastCalledWith([]);
     });
     expect(runNow).toHaveTextContent("R");
+    expect(runNow).toHaveAccessibleName(
+      "Run now, current shortcut R, change binding",
+    );
 
     fireEvent.click(within(dialog).getByRole("tab", { name: "Models" }));
     expect(
@@ -227,6 +237,72 @@ describe("overhaul acceptance — settings", () => {
     expect(
       within(dialog).getByRole("heading", { name: "Keyboard shortcuts" }),
     ).toBeInTheDocument();
+  });
+
+  it("[overhaul-368] names keyboard binding controls with their current shortcut and recording state", () => {
+    const searchBinding = {
+      context: "global" as const,
+      actionId: "search",
+      chord: {
+        key: "/",
+        alt: false,
+        control: false,
+        meta: false,
+        shift: false,
+      },
+    };
+    const props = {
+      overridden: new Set<string>(),
+      recordingKey: null,
+      message: null,
+      saving: false,
+      onRecord: vi.fn(),
+      onReset: vi.fn(),
+      onRestoreDefaults: vi.fn(),
+    };
+    const { rerender } = render(
+      <KeyboardSettingsPanel bindings={[searchBinding]} {...props} />,
+    );
+
+    expect(screen.getByRole("button", {
+      name: "Search, current shortcut Slash, change binding",
+    })).toBeInTheDocument();
+
+    const customizedBinding = {
+      ...searchBinding,
+      chord: { ...searchBinding.chord, key: "x" },
+    };
+    rerender(
+      <KeyboardSettingsPanel
+        bindings={[customizedBinding]}
+        {...props}
+        overridden={new Set(["global:search"])}
+      />,
+    );
+    expect(screen.getByRole("button", {
+      name: "Search, current shortcut X, change binding",
+    })).toBeInTheDocument();
+
+    rerender(
+      <KeyboardSettingsPanel
+        bindings={[customizedBinding]}
+        {...props}
+        recordingKey="global:search"
+      />,
+    );
+    expect(screen.getByRole("button", {
+      name: "Search, current shortcut X, recording, press a new shortcut",
+    })).toBeInTheDocument();
+
+    rerender(
+      <KeyboardSettingsPanel
+        bindings={[{ ...searchBinding, chord: null }]}
+        {...props}
+      />,
+    );
+    expect(screen.getByRole("button", {
+      name: "Search, no shortcut assigned, set binding",
+    })).toBeInTheDocument();
   });
 
   it("keeps validation, discard, save, failure, and model-only status behavior", async () => {

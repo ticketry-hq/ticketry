@@ -63,6 +63,13 @@ function payload(activated: readonly string[]) {
         name: "gpt-6-astra",
         reasoning_levels: { __typename: "WorktrackerAgentmodelreasoninglevelConnection", nodes: [{ __typename: "WorktrackerAgentmodelreasoninglevel", id: 4, reasoning_level_id: "r-high" }] },
       },
+      ...["gpt-6-sol", "gpt-6-luna"].map((name, index) => ({
+        __typename: "WorktrackerAgentmodel",
+        id: `m-gpt-6-${index}`,
+        provider: "p-codex",
+        name,
+        reasoning_levels: { __typename: "WorktrackerAgentmodelreasoninglevelConnection", nodes: [{ __typename: "WorktrackerAgentmodelreasoninglevel", id: 5 + index, reasoning_level_id: "r-high" }] },
+      })),
       {
         __typename: "WorktrackerAgentmodel",
         id: "m-glm-flash",
@@ -160,7 +167,13 @@ describe("provider catalogue desktop runtime acceptance", () => {
 
     const region = await screen.findByRole("region", { name: "Model configuration" });
     expect(region.querySelector('option[value="gpt-6-astra"]')).toBeInTheDocument();
+    expect(region.querySelector('option[value="gpt-6-sol"]')).toBeInTheDocument();
+    expect(region.querySelector('option[value="gpt-6-luna"]')).toBeInTheDocument();
     expect(region.querySelector('option[value="glm-5.3-flash"]')).toBeInTheDocument();
+    for (const model of ["gpt-6-sol", "gpt-6-luna"]) {
+      fireEvent.change(within(region).getByLabelText("Model"), { target: { value: model } });
+      expect(within(region).getByLabelText("Model")).toHaveValue(model);
+    }
     await waitFor(() => {
       expect(screen.getByRole("status", { name: "Launch picker providers" }))
         .toHaveTextContent("claude,codex");
@@ -183,5 +196,49 @@ describe("provider catalogue desktop runtime acceptance", () => {
     });
     expect(operations).toEqual(["LoadProviderCatalog", "UpdateProviderCatalog"]);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("[overhaul-391] offers GPT-6 Sol and Luna as Codex launch defaults", async () => {
+    const graphqlExecute = vi.fn(async (encoded: string) => {
+      const request = JSON.parse(encoded) as { operationName: string; variables: { defaultModel?: string } };
+      if (request.operationName === "LoadProviderCatalog") {
+        return JSON.stringify({ data: { provider_catalog: payload(["claude", "codex"]) } });
+      }
+      expect(request.operationName).toBe("UpdateProviderCatalog");
+      expect(request.variables.defaultModel).toBe("gpt-6-luna");
+      return JSON.stringify({
+        data: {
+          update_provider_catalog: {
+            ...payload(["claude", "codex"]),
+            global_default: {
+              __typename: "GlobalLaunchDefault",
+              provider: "codex",
+              profile: null,
+              model: "gpt-6-luna",
+              reasoning: "high",
+            },
+          },
+        },
+      });
+    });
+    initializeStudioRuntime(await createDesktopRuntime({
+      invoke: vi.fn().mockResolvedValue(startup),
+      createGraphQlProxy: () => ({
+        graphql_execute: graphqlExecute,
+        graphql_subscribe: vi.fn(),
+        graphql_unsubscribe: vi.fn(),
+      }),
+    }));
+
+    const panel = createRef<ModelConfigurationPanelHandle>();
+    render(<><ModelConfigurationPanel ref={panel} /><button type="button" onClick={() => panel.current?.save()}>Save</button></>);
+    const region = await screen.findByRole("region", { name: "Model configuration" });
+    for (const model of ["gpt-6-sol", "gpt-6-luna"]) {
+      expect(region.querySelector(`option[value="${model}"]`)).toBeInTheDocument();
+      fireEvent.change(within(region).getByLabelText("Model"), { target: { value: model } });
+      expect(within(region).getByLabelText("Model")).toHaveValue(model);
+    }
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(graphqlExecute).toHaveBeenCalledTimes(2));
   });
 });

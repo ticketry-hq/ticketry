@@ -347,9 +347,10 @@ fn policy_remedy(code: &str) -> Option<&'static str> {
             Some("Configure the Story's Implement launch binding.")
         }
         "module_folder_unusable" => Some("Configure an existing writable module folder."),
-        "provider_not_activated" | "unknown_agent" | "agent_not_configured" => {
-            Some("Activate and select a supported provider.")
-        }
+        "no_activated_providers"
+        | "provider_not_activated"
+        | "unknown_agent"
+        | "agent_not_configured" => Some("Activate and select a supported provider."),
         "unsupported_model" | "model_required" | "unsupported_reasoning" => {
             Some("Choose a supported model and reasoning level.")
         }

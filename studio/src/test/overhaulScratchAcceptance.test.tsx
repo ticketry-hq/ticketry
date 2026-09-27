@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SelectedTicketContent } from "../app/shell/ticket-workspace/selected-ticket/SelectedTicketContent";
 import { SelectedTicketDetails } from "../app/shell/ticket-workspace/selected-ticket/details/SelectedTicketDetails";
+import { ScratchStateBadge } from "../features/agents/lifecycle";
 import { useAgentStatusStore } from "../features/agents/status/testStore";
 import { scratchBucketId, useTerminalStore } from "../features/agents/terminal";
 import { TEMP_TASK_ID } from "../features/agents/types";
@@ -41,7 +42,7 @@ describe("overhaul acceptance — module scratch workspace", () => {
     });
   });
 
-  it("[overhaul-13] opens a module scratch workspace, launches, and shows its run summary", async () => {
+  it("[overhaul-13] launches from the module scratch workspace, whose Details stays empty", async () => {
     const launch = vi.fn((mode: "plan" | "instant") => {
       useAgentStatusStore.getState().upsertRun({
         agent_run_id: "scratch-run-1",
@@ -72,17 +73,12 @@ describe("overhaul acceptance — module scratch workspace", () => {
       "aria-selected",
       "true",
     );
-    expect(screen.getByText(
-      "Choose New conversation, then type directly in its terminal.",
-    )).toBeVisible();
+    expect(screen.getByTestId("workspace-details-surface")).toBeEmptyDOMElement();
 
     fireEvent.click(screen.getByRole("button", { name: "＋ Agent" }));
     fireEvent.click(await screen.findByRole("menuitem", { name: "Plan" }));
 
     expect(launch).toHaveBeenCalledWith("plan");
-    expect(await screen.findByTestId("scratch-run-chicklets")).toHaveTextContent(
-      "▶1",
-    );
   });
 
   it("[overhaul-127] clears a ghost scratch badge when the authoritative snapshot omits its foreign or orphaned run", () => {
@@ -98,7 +94,7 @@ describe("overhaul acceptance — module scratch workspace", () => {
       updated_at: "2026-08-10T12:00:00Z",
     });
 
-    render(<SelectedTicketDetails />);
+    render(<ScratchStateBadge projectId="project-1" moduleId="module-1" />);
     expect(screen.getByTestId("scratch-run-chicklets")).toHaveTextContent("▶1");
 
     act(() => {
@@ -109,8 +105,6 @@ describe("overhaul acceptance — module scratch workspace", () => {
       );
     });
 
-    expect(screen.getByText(
-      "Choose New conversation, then type directly in its terminal.",
-    )).toBeVisible();
+    expect(screen.queryByTestId("scratch-run-chicklets")).toBeNull();
   });
 });

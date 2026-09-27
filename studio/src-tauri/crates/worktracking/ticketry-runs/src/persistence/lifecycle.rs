@@ -22,7 +22,13 @@ struct RunState {
     lifecycle_updated_at: Option<String>,
     launch_state: Option<String>,
     launch_model: Option<String>,
+    attention_reason: Option<String>,
 }
+
+const STARTUP_TRUST_REASON: &str =
+    "Claude is waiting for folder trust. Open its terminal to approve or decline.";
+const STARTUP_ATTENTION_REASON: &str =
+    "Claude startup needs attention. Open its terminal to continue.";
 
 impl LifecycleService {
     /// Apply one provider lifecycle fact and acknowledge it only after the
@@ -52,6 +58,11 @@ impl LifecycleService {
                 "The lifecycle fact kind is not supported.",
             )
         })?;
+        let attention_reason = match fact.kind.as_str() {
+            "startup_trust" => Some(STARTUP_TRUST_REASON),
+            "startup_attention" => Some(STARTUP_ATTENTION_REASON),
+            _ => None,
+        };
         let provider_session_id = fact
             .provider_session_id
             .as_deref()
@@ -73,7 +84,17 @@ impl LifecycleService {
                 .provider_session_id
                 .as_deref()
                 .is_none_or(|value| value.trim().is_empty());
-        let lifecycle_changed = if run.ended_at.is_some() {
+        let startup_fact = attention_reason.is_some();
+        let lifecycle_changed = if run.ended_at.is_some()
+            || (startup_fact
+                && (!matches!(
+                    run.lifecycle_state.as_deref(),
+                    Some("starting" | "needs_input")
+                ) || (attention_reason == Some(STARTUP_ATTENTION_REASON)
+                    && run.attention_reason.as_deref() == Some(STARTUP_TRUST_REASON))
+                    || (run.lifecycle_state.as_deref() == Some("needs_input")
+                        && run.attention_reason.as_deref() == attention_reason)))
+        {
             false
         } else {
             should_apply_lifecycle(
@@ -112,6 +133,10 @@ impl LifecycleService {
                     agent_run::Column::LifecycleUpdatedAt,
                     Expr::value(occurred_at.clone()),
                 )
+                .col_expr(
+                    agent_run::Column::AttentionReason,
+                    Expr::value(attention_reason),
+                )
                 .filter(agent_run::Column::Id.eq(&fact.agent_run_id))
                 .filter(agent_run::Column::EndedAt.is_null())
                 .exec(transaction)
@@ -121,6 +146,11 @@ impl LifecycleService {
             state.to_owned()
         } else {
             run.lifecycle_state.unwrap_or_else(|| "unknown".to_owned())
+        };
+        let resulting_attention_reason = if lifecycle_changed {
+            attention_reason.map(str::to_owned)
+        } else {
+            run.attention_reason
         };
         let effective_state = run_holding_in(transaction, &fact.agent_run_id, &occurred_at)
             .await?
@@ -135,6 +165,7 @@ impl LifecycleService {
             "providerSessionCaptured": provider_changed,
             "launchState": run.launch_state,
             "launchModel": run.launch_model,
+            "attentionReason": resulting_attention_reason,
         });
         let cursor = self
             .events()
@@ -271,6 +302,10 @@ impl LifecycleService {
                 agent_run::Column::ExitCode,
                 Expr::value(fact.exit_code.or(run.exit_code)),
             )
+            .col_expr(
+                agent_run::Column::AttentionReason,
+                Expr::value(None::<String>),
+            )
             .filter(agent_run::Column::Id.eq(&fact.agent_run_id))
             .exec(transaction)
             .await?;
@@ -332,6 +367,7 @@ fn reduce_kind(kind: &str) -> Option<&'static str> {
         "session_start" => Some("starting"),
         "turn_start" | "tool_use" => Some("working"),
         "awaiting_input" => Some("needs_input"),
+        "startup_trust" | "startup_attention" => Some("needs_input"),
         "permission_required" => Some("permission_required"),
         "turn_complete" => Some("turn_complete"),
         "idle" => Some("quiet"),
@@ -422,5 +458,6 @@ async fn load_run(
         lifecycle_updated_at: run.lifecycle_updated_at,
         launch_state: run.launch_state,
         launch_model: run.launch_model,
+        attention_reason: run.attention_reason,
     }))
 }

@@ -16,6 +16,7 @@ export async function generateTerminalEntities({ rawDirectory, outputRoot }) {
   }
   agentRun = replace(agentRun, "    pub cwd: Option<String>,", "    #[seaography(ignore)]\n    pub cwd: Option<String>,", "Agent Run cwd protection");
   agentRun = replace(agentRun, "    pub design_dir: Option<String>,", "    #[seaography(ignore)]\n    pub design_dir: Option<String>,", "Agent Run design directory protection");
+  agentRun = replace(agentRun, "    pub attention_reason: Option<String>,", "    #[seaography(ignore)]\n    pub attention_reason: Option<String>,", "Agent Run attention reason protection");
   // The Work Item owns an Agent Run, and the Terminal Session record is what
   // says whether an ended run still has a durable terminal to reattach. Both
   // relations stay so a WorkItem read can answer resumability without a
@@ -23,7 +24,7 @@ export async function generateTerminalEntities({ rawDirectory, outputRoot }) {
   agentRun = replace(
     agentRun,
     "    #[sea_orm(has_one)]\n    pub agent_terminal_sessions: HasOne<super::agent_terminal_sessions::Entity>,",
-    "    #[sea_orm(belongs_to, from = \"issue_id\", to = \"id\")]\n    pub issue: BelongsTo<crate::work_management::issue::Entity>,\n    #[sea_orm(has_one, relation_enum = \"TerminalSession\", relation_reverse = \"AgentRun\")]\n    pub terminal_session: HasOne<crate::terminals::session::Entity>,",
+    "    #[sea_orm(belongs_to, from = \"issue_id\", to = \"id\")]\n    pub issue: BelongsTo<crate::work_management::issue::Entity>,\n    #[sea_orm(\n        has_one,\n        relation_enum = \"TerminalSession\",\n        relation_reverse = \"AgentRun\"\n    )]\n    pub terminal_session: HasOne<crate::terminals::session::Entity>,",
     "Agent Run relation policy",
   );
 

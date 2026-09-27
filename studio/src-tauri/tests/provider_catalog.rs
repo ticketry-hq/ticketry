@@ -525,3 +525,110 @@ async fn generated_graphql_query_and_restricted_mutation_use_the_catalog_service
         "30000000-0000-0000-0000-000000000001"
     );
 }
+
+#[tokio::test]
+async fn generated_graphql_persists_no_active_providers_without_deleting_profiles() {
+    let (directory, database) = fixture(Some(
+        r#"{"codex_profiles":["careful","fast"],"global_default":{"provider":"codex","profile":"careful","model":null,"reasoning":null}}"#,
+    ))
+    .await;
+    database.close().await.unwrap();
+
+    let api = TransportApiImpl::new();
+    ticketry_graphql_schema::initialize_with_worktracker_commands_and_install(
+        &directory.path().join("rust-core.sqlite3"),
+        &directory.path().join("state.db"),
+        &directory.path().join("media"),
+        &api,
+    )
+    .await
+    .expect("install provider catalog GraphQL");
+
+    let response: serde_json::Value = serde_json::from_str(
+        &api.graphql_execute(
+            serde_json::json!({
+                "query": r#"
+                    mutation SavePlanningOnlyCatalog(
+                      $activatedProviders: [String!]!,
+                      $codexProfiles: [String!]!,
+                      $defaultProvider: String
+                    ) {
+                      update_provider_catalog(
+                        activated_providers: $activatedProviders,
+                        codex_profiles: $codexProfiles,
+                        default_provider: $defaultProvider
+                      ) {
+                        providers { slug }
+                        codex_profiles
+                        global_default { provider }
+                      }
+                    }
+                "#,
+                "variables": {
+                    "activatedProviders": [],
+                    "codexProfiles": ["careful", "fast"],
+                    "defaultProvider": null
+                }
+            })
+            .to_string(),
+        )
+        .await,
+    )
+    .expect("decode provider catalog mutation response");
+
+    assert!(response.get("errors").is_none(), "{response:#}");
+    assert_eq!(
+        response["data"]["update_provider_catalog"],
+        serde_json::json!({
+            "providers": [],
+            "codex_profiles": ["careful", "fast"],
+            "global_default": null
+        })
+    );
+
+    let reloaded_api = TransportApiImpl::new();
+    ticketry_graphql_schema::initialize_with_worktracker_commands_and_install(
+        &directory.path().join("rust-core.sqlite3"),
+        &directory.path().join("state.db"),
+        &directory.path().join("media"),
+        &reloaded_api,
+    )
+    .await
+    .expect("reload provider catalog GraphQL");
+
+    let reloaded: serde_json::Value = serde_json::from_str(
+        &reloaded_api
+            .graphql_execute(
+                serde_json::json!({
+                    "query": r#"
+                        query ReloadPlanningOnlyCatalog {
+                          provider_catalog {
+                            configurable_providers { slug activated }
+                            providers { slug }
+                            codex_profiles
+                            global_default { provider }
+                          }
+                        }
+                    "#
+                })
+                .to_string(),
+            )
+            .await,
+    )
+    .expect("decode reloaded provider catalog response");
+
+    assert!(reloaded.get("errors").is_none(), "{reloaded:#}");
+    assert_eq!(
+        reloaded["data"]["provider_catalog"],
+        serde_json::json!({
+            "configurable_providers": [
+                {"slug": "claude", "activated": false},
+                {"slug": "codex", "activated": false},
+                {"slug": "gemini", "activated": false}
+            ],
+            "providers": [],
+            "codex_profiles": ["careful", "fast"],
+            "global_default": null
+        })
+    );
+}

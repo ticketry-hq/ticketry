@@ -71,7 +71,10 @@ describe("overhaul acceptance — selected Story description", () => {
     const stories = await screen.findByRole("region", { name: "Stories" });
     const details = screen.getByRole("region", { name: "Details" });
     await act(() => vi.dynamicImportSettled());
-    fireEvent.click(await within(details).findByTestId("issue-description"));
+    const description = await within(details).findByTestId("issue-description");
+    const storyRow = await within(stories).findByRole("treeitem", { name: /Story A/ });
+    expect(storyRow.querySelector("[data-task-name]")).toHaveClass("font-mono", "font-normal");
+    expect(description.closest(".font-mono")).toHaveClass("font-normal");
     fireEvent.change(await within(details).findByLabelText("Story description"), {
       target: { value: "Story A unsaved draft" },
     });
@@ -80,15 +83,10 @@ describe("overhaul acceptance — selected Story description", () => {
       await within(stories).findByRole("treeitem", { name: /Story B/ }),
     );
 
-    expect(
-      await within(details).findByText("Story B saved description"),
-    ).toBeVisible();
-    expect(within(details).queryByTestId("description-editor")).toBeNull();
-    expect(within(details).queryByText("Story A unsaved draft")).toBeNull();
-
-    fireEvent.click(within(details).getByTestId("issue-description"));
-    expect(await within(details).findByLabelText("Story description")).toHaveValue(
-      "Story B saved description",
+    await waitFor(() =>
+      expect(within(details).getByLabelText("Story description")).toHaveValue(
+        "Story B saved description",
+      ),
     );
     expect(within(details).queryByDisplayValue("Story A unsaved draft")).toBeNull();
 
@@ -98,20 +96,11 @@ describe("overhaul acceptance — selected Story description", () => {
     expect(within(details).queryByDisplayValue("Story A unsaved draft")).toBeNull();
 
     fireEvent.change(source, { target: { value: "  Story B draft  \n" } });
-    fireEvent.click(within(details).getByRole("button", { name: "Save" }));
+    fireEvent.blur(source, { relatedTarget: stories });
     await http.expectPatch("story-b", { description: "Story B draft" });
-    expect(await within(details).findByText("Story B draft")).toBeVisible();
-
-    fireEvent.click(within(details).getByTestId("issue-description"));
-    fireEvent.click(await within(details).findByRole("button", { name: "Save" }));
-    fireEvent.click(within(details).getByTestId("issue-description"));
-    fireEvent.change(await within(details).findByLabelText("Story description"), {
-      target: { value: "Cancelled Story B draft" },
-    });
-    fireEvent.click(within(details).getByRole("button", { name: "Cancel" }));
 
     // Switching Stories wrote Story A's dirty draft (CODING-1525); Story B's
-    // explicit Save is the only other write. Cancel wrote nothing.
+    // blur is the only other write.
     await waitFor(() => {
       expect(updates).toHaveLength(2);
       expect(updates[0]).toMatchObject({
@@ -123,7 +112,5 @@ describe("overhaul acceptance — selected Story description", () => {
         description: "Story B draft",
       });
     });
-    expect(within(details).getByText("Story B draft")).toBeVisible();
-    expect(within(details).queryByText("Cancelled Story B draft")).toBeNull();
   });
 });

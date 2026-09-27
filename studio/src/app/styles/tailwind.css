@@ -36,9 +36,9 @@
   }
 
   body {
-    /* F1/F2: proportional sans is the default reading face; mono is opt-in
-       (font-mono) for KEY-N and code. Base lifts off the 11px floor to 14px. */
-    @apply bg-pane-bg text-text-primary font-sans text-base;
+    /* JetBrains Mono is the one reading face everywhere, matching the Stories
+       list; sans stays available as an opt-in. Base is 14px. */
+    @apply bg-pane-bg text-text-primary font-mono text-base;
     margin: 0;
     -webkit-font-smoothing: antialiased;
   }
@@ -231,3 +231,4 @@
     @apply border-l-2 border-pane-border pl-3 text-text-secondary;
   }
 }
+

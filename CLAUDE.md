@@ -129,3 +129,19 @@ npm run build --workspace @worktracker/studio
 ```
 
 Keep the runtime facts here and in [`AGENTS.md`](AGENTS.md) consistent.
+
+## LLD authoring
+
+Use the repository's [lld-html-authoring skill](.agents/skills/lld-html-authoring/SKILL.md)
+for all new or revised standalone HTML LLDs. Start from its
+[dark template](.agents/skills/lld-html-authoring/assets/lld-template.html).
+Keep the compact file-change browser, search, action filters, file inspector,
+keyboard navigation, and deep links. Dark mode is the default for every LLD,
+including on systems that prefer light mode; set it before the first paint.
+
+Author `LLD.html` directly unless the task explicitly requires Markdown as the
+source of truth. For a required Markdown LLD, provide a matching dark HTML
+review artifact using the same layout, with authority labeled accurately.
+Use Ticketry's supplied design directory exactly and keep supporting assets
+inside it. Run the skill's HTML and applicable Ticketry location checks and
+inspect both desktop and narrow layouts before handing off.

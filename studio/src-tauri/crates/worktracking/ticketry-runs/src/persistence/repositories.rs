@@ -352,6 +352,7 @@ fn agent_run(row: agent_run_entity::Model) -> Option<AgentRunRecord> {
         scope: row.scope,
         launch_state: row.launch_state,
         launch_model: row.launch_model,
+        attention_reason: row.attention_reason,
     })
 }
 

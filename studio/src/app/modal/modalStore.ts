@@ -15,6 +15,7 @@ export type StandardModalType =
     | "keyboard-shortcuts"
     | "settings"
     | "status-update"
+    | "story-workflow-guide"
     | "parent-update"
     | "add-project"
     | "add-module";

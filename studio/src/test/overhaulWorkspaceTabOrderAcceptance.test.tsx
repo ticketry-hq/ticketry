@@ -24,6 +24,9 @@ import {
 import { seedModuleOpenFixture } from "./projectOpenFixture";
 import { workItem } from "./seam";
 import type { WorkspaceTabIdentity } from "../features/workspace-tabs/types";
+import {
+  getDormantItem,
+} from "./dormantTabsFixture";
 
 const WORK_ITEM_ID = "8f6aee39-ade4-41ff-9d4c-26f8a504f8de";
 
@@ -336,7 +339,7 @@ describe("overhaul acceptance, server-owned workspace tab order", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Close DESIGN" }));
     expect(visibleTabNames()).toEqual(["codex terminal", "Details", "NOTES"]);
-    fireEvent.click(screen.getByRole("button", { name: "Reopen DESIGN" }));
+    fireEvent.click(getDormantItem("Reopen DESIGN"));
     expect(visibleTabNames()).toEqual([
       "codex terminal",
       "Details",

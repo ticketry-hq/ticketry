@@ -16,7 +16,10 @@ import {
   routeSharedNavigation,
 } from "./sharedNavigation";
 import { routeTerminalPanelToggle } from "../../features/terminal-panel";
-import { useChangesWorkspace } from "../../features/agents/worktrees";
+import {
+  leaveChangesWorkspace,
+  useChangesWorkspace,
+} from "../../features/agents/worktrees";
 import { subscribeNativeTerminalChords } from "./nativeTerminalChords";
 import type { TreeRow } from "../shell/ticket-workspace/tasks/TasksPane";
 import { studioKeymapRegistry } from "./keymapRegistry";
@@ -32,6 +35,10 @@ function hasOpenModal(): boolean {
 function isLaunchMenuTarget(target: EventTarget | null): boolean {
   return target instanceof HTMLElement &&
     target.closest('[role="menu"][aria-label="Launch agent"]') !== null;
+}
+
+function hasModifier(event: KeyboardEvent): boolean {
+  return event.altKey || event.ctrlKey || event.metaKey || event.shiftKey;
 }
 
 function isChangesEntryActivation(event: KeyboardEvent): boolean {
@@ -120,6 +127,19 @@ export function useGlobalKeymap(taskRows: TreeRow[] = EMPTY_TASK_ROWS): void {
           isTypingTarget(event.target) ||
           event.defaultPrevented
         ) {
+          return;
+        }
+        // Every popup inside Changes (switcher, inspector, confirmations)
+        // stops Escape itself, so an Escape that reaches here has nothing
+        // left to close but the workspace.
+        if (event.key === "Escape" && !hasModifier(event)) {
+          event.preventDefault();
+          leaveChangesWorkspace();
+          requestAnimationFrame(() => {
+            document.querySelector<HTMLButtonElement>(
+              '[data-testid="footer-module-changes"]',
+            )?.focus();
+          });
           return;
         }
         const globalAction = studioKeymapRegistry.resolve("global", event);

@@ -100,6 +100,8 @@ async function submitSelectedRunTerminal(): Promise<boolean> {
   return true;
 }
 
+export { AGENT_RUN_ACTIONS };
+
 export {
   readSelectedAgentRunId,
   subscribeSelectedAgentRun,

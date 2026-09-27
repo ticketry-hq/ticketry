@@ -2,6 +2,7 @@ import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { documentOperationName } from "../graphql-foundation/typedDocument";
+import { useClientStore } from "../state/clientStore";
 import { fixture, mountStudio, workItem } from "./seam";
 
 const TASK_ID = "selected-task";
@@ -50,7 +51,7 @@ const sharedChildWorktree = {
 };
 
 describe("overhaul acceptance — selected-task Details worktree", () => {
-  it("[overhaul-165] keeps one selected Work Item worktree block inside the hideable Details panel", async () => {
+  it("[overhaul-165] gives Details a small side inset with compact properties and one toolbar worktree control", async () => {
     const http = fixture();
     const worktreeRequests: Record<string, unknown>[] = [];
     http.tree("module-1", {
@@ -79,33 +80,28 @@ describe("overhaul acceptance — selected-task Details worktree", () => {
       },
     });
 
-    const detailsPanel = await screen.findByTestId("details-panel");
-    const worktreeBlock = await within(detailsPanel).findByTestId("worktree-block");
-    expect(within(detailsPanel).getAllByTestId("worktree-block")).toHaveLength(1);
-    expect(detailsPanel).toHaveClass("overflow-y-auto");
+    const details = await screen.findByRole("region", { name: "Details" });
+    const document = within(details).getByTestId("details-document");
+    const fields = within(document).getByTestId("details-fields");
+    expect(document).toHaveClass("w-full", "min-w-0", "px-4", "py-2");
+    expect(document.className).not.toMatch(/max-w-|mx-auto/);
+    expect(within(details).getByTestId("status-row")).toHaveClass("px-4");
+    expect(fields).toHaveClass("mt-2", "py-2");
+    // The worktree control sits in the toolbar with the run actions.
+    const actions = within(details).getByTestId("details-actions");
+    const worktreeBlock = await within(actions).findByTestId("worktree-block");
+    expect(within(details).getAllByTestId("worktree-block")).toHaveLength(1);
+    expect(within(document).queryByTestId("worktree-block")).toBeNull();
+    expect(within(details).queryByText("Primary checkout")).toBeNull();
     expect(
-      within(detailsPanel)
-        .getByTestId("details-fields")
-        .compareDocumentPosition(worktreeBlock),
-    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
-    expect(within(worktreeBlock).getByText("Runs in the primary checkout.")).toBeVisible();
-    expect(
-      within(worktreeBlock).getByRole("button", { name: "+ Create worktree" }),
+      within(worktreeBlock).getByRole("button", { name: "+ Worktree" }),
     ).toBeVisible();
+    expect(within(details).getByTestId("status-row")).toBeVisible();
+    expect(screen.queryByTestId("details-panel")).toBeNull();
+    expect(screen.queryByTestId("issue-sidebar-toggle")).toBeNull();
     await waitFor(() =>
       expect(worktreeRequests).toEqual([{ taskId: TASK_ID }]),
     );
-
-    fireEvent.click(screen.getByRole("button", { name: "Hide details panel" }));
-    expect(screen.queryByTestId("details-panel")).toBeNull();
-    expect(screen.queryByTestId("worktree-block")).toBeNull();
-
-    fireEvent.click(screen.getByRole("button", { name: "Show details panel" }));
-    const restoredPanel = await screen.findByTestId("details-panel");
-    expect(within(restoredPanel).getAllByTestId("worktree-block")).toHaveLength(1);
-    expect(
-      within(restoredPanel).getByRole("button", { name: "+ Create worktree" }),
-    ).toBeVisible();
   });
 
   it("[overhaul-166] follows task selection without leaking worktree confirmation or mutation errors", async () => {
@@ -153,9 +149,11 @@ describe("overhaul acceptance — selected-task Details worktree", () => {
     });
 
     expect(
-      await screen.findByText(/completion leaves this worktree unchanged/),
+      await screen.findByRole("button", { name: `View changes on ${activeWorktree.branch}` }),
     ).toBeVisible();
-    fireEvent.click(await screen.findByRole("button", { name: "Discard" }));
+    fireEvent.click(screen.getByRole("button", { name: "Show worktree details" }));
+    expect(await screen.findByText(/Completion keeps the worktree/)).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Discard" }));
     fireEvent.click(screen.getByRole("button", { name: "Yes, discard" }));
     expect(await screen.findByText("Discard failed")).toBeVisible();
     expect(screen.getByText("Discard — work is thrown away?")).toBeVisible();
@@ -170,7 +168,14 @@ describe("overhaul acceptance — selected-task Details worktree", () => {
       }),
     );
 
-    const details = await screen.findByTestId("details-panel");
+    const details = await screen.findByRole("region", { name: "Details" });
+    await waitFor(() => expect(worktreeRequests).toContain(CHILD_ID));
+    fireEvent.click(
+      await within(details).findByRole("button", { name: "Show worktree details" }),
+    );
+    expect(
+      await within(details).findByText("Shared with its parent work item"),
+    ).toBeVisible();
     expect(
       await within(details).findByText(
         `Shares the worktree owned by top-level task (${TASK_ID}).`,
@@ -181,10 +186,19 @@ describe("overhaul acceptance — selected-task Details worktree", () => {
       within(details).queryByText("Discard — work is thrown away?"),
     ).toBeNull();
     expect(
-      within(details).queryByRole("button", { name: "+ Create worktree" }),
+      within(details).queryByRole("button", { name: "+ Worktree" }),
     ).toBeNull();
     await waitFor(() =>
       expect(worktreeRequests).toEqual([TASK_ID, CHILD_ID]),
+    );
+
+    fireEvent.click(
+      within(details).getByRole("button", {
+        name: `View changes on ${sharedChildWorktree.branch}`,
+      }),
+    );
+    await waitFor(() =>
+      expect(useClientStore.getState().workspaces[CHILD_ID]?.active).toBe("changes"),
     );
   });
 });

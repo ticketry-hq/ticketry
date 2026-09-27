@@ -1,4 +1,4 @@
-pub use ticketry_provider::{Provider, TimeoutUnit};
+pub use ticketry_provider::{Provider, StartupScreen, TimeoutUnit};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ProviderContract {
@@ -17,8 +17,11 @@ pub struct ProviderContract {
 }
 
 impl ProviderContract {
+    pub fn classify_startup_screen(self, screen: &[u8]) -> StartupScreen {
+        self.launch_metadata().classify_startup_screen(screen)
+    }
     pub fn is_ready_composer(self, screen: &[u8]) -> bool {
-        self.launch_metadata().is_ready_composer(screen)
+        self.classify_startup_screen(screen) == StartupScreen::ReadyComposer
     }
 
     /// The composer line and everything the provider renders below it, with
@@ -75,6 +78,55 @@ pub fn provider_contract(provider: Provider) -> ProviderContract {
 #[cfg(test)]
 mod prompt_delivery_contract_tests {
     use super::*;
+
+    #[test]
+    fn claude_trust_dialog_requires_heading_and_choices_even_with_composer_glyph() {
+        let contract = provider_contract(Provider::Claude);
+        let dialog = "Accessing workspace:\n /tmp/work\n Do you trust this folder?\n ❯ 1. Yes, I trust this folder\n   2. No, exit";
+        assert_eq!(
+            contract.classify_startup_screen(dialog.as_bytes()),
+            StartupScreen::TrustDialog
+        );
+        assert!(!contract.is_ready_composer(dialog.as_bytes()));
+        assert!(contract.composer_region(dialog.as_bytes()).is_none());
+        let declined_choice = dialog
+            .replace("❯ 1. Yes", "  1. Yes")
+            .replace("2. No, exit", "❯ 2. No, exit");
+        assert_eq!(
+            contract.classify_startup_screen(declined_choice.as_bytes()),
+            StartupScreen::TrustDialog
+        );
+        let after_acceptance = format!("{dialog}\nWelcome back\n❯ ");
+        assert_eq!(
+            contract.classify_startup_screen(after_acceptance.as_bytes()),
+            StartupScreen::ReadyComposer
+        );
+        assert_eq!(
+            contract.composer_region(after_acceptance.as_bytes()),
+            Some("❯ ".into())
+        );
+        for false_positive in [
+            "❯ 1. Yes, I trust this folder\n  2. No, exit",
+            "Accessing workspace:\n❯",
+            "❯ 1. Yes, I trust this folder",
+            "Earlier output: Accessing workspace: Yes, I trust this folder No, exit\n❯ ",
+        ] {
+            assert_ne!(
+                contract.classify_startup_screen(false_positive.as_bytes()),
+                StartupScreen::TrustDialog
+            );
+        }
+    }
+
+    #[test]
+    fn stale_claude_composer_above_current_setup_is_not_ready() {
+        let contract = provider_contract(Provider::Claude);
+        let screen = "Previous screen\n❯ \nWelcome to Claude Code\nSelect login method\n1. Claude account\n2. Console account";
+        assert_eq!(
+            contract.classify_startup_screen(screen.as_bytes()),
+            StartupScreen::Unknown
+        );
+    }
 
     #[test]
     fn provider_contracts_own_invocation_prefixes_and_ready_composer_markers() {

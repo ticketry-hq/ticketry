@@ -2,7 +2,7 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import { IconPencil } from "../../shared/ui/icons";
 import { htmlToMarkdown, renderMarkdown, sanitizeHtml } from "./markdown";
 import {
-  acceptDescriptionVersion, discardDescriptionDraft, editDescriptionDraft,
+  acceptDescriptionVersion, editDescriptionDraft,
   openDescriptionDraft, saveDescriptionDraft, useDescriptionDrafts,
 } from "./descriptionDrafts";
 
@@ -22,14 +22,17 @@ function looksLikeHtml(value: string): boolean {
 // Ticket descriptions are Markdown-backed. Legacy HTML remains readable and
 // is normalized to Markdown the first time it is edited and saved.
 //
-// A dirty draft is written at every editor boundary (CODING-1525): Save,
-// focus leaving the editor, and unmount (the parent keys this editor by
-// Story id, so switching Stories unmounts it). Cancel is the only discard.
+// The editor is always live; there is no separate read view. A dirty draft is
+// written shortly after typing pauses, when focus leaves the editor, and on
+// unmount (the parent keys this editor by Story id, so switching Stories
+// unmounts it) (CODING-1525).
 //
-// `value` is the authoritative server row. While editing, a server value that
-// differs from the draft's baseline is an external change (CODING-1527): the
-// draft stays put behind a notice offering to keep it or load the server
-// version. The two are never merged.
+// `value` is the authoritative server row. A clean draft follows it. A dirty
+// draft whose baseline differs from it is an external change (CODING-1527):
+// the draft stays put behind a notice offering to keep it or load the server
+// version, and autosave waits for that choice. The two are never merged.
+const AUTOSAVE_DELAY_MS = 800;
+
 export default function DescriptionEditor({
   issueId,
   value,
@@ -44,15 +47,18 @@ export default function DescriptionEditor({
 }) {
   const moduleId = useClientStore((state) => state.selectedModuleId);
   useTaskDetailCommit(issueId, moduleId, "description", detailsVisible);
-  useEffect(warmRichMarkdownEditorAfterPaint, []);
+  // The rich editor mounts once its code has loaded after the first paint.
+  const [editorReady, setEditorReady] = useState(false);
+  useEffect(() => warmRichMarkdownEditorAfterPaint(() => setEditorReady(true)), []);
   const stored = useDescriptionDrafts((state) => state.drafts[issueId]);
-  const { editing = false, text: draft = "", error = null } = stored ?? {};
+  const { text: draft = "", error = null } = stored ?? {};
   const saving = Boolean(stored?.requestId);
+  const dirty = stored ? stored.text !== stored.savedText : false;
   const baseline = stored?.savingText ?? stored?.savedText ?? "";
   const setDraft = (text: string) => editDescriptionDraft(issueId, text);
   const [sourceFallback, setSourceFallback] = useState(false);
-  // Markdown form of the latest server row seen while editing; null once the
-  // person has chosen what to do about it.
+  // Markdown form of a server row that differs from a dirty draft's baseline;
+  // null once the person has chosen what to do about it.
   const [serverMarkdown, setServerMarkdown] = useState<string | null>(null);
   // Bumped when the draft is replaced wholesale so the rich editor remounts.
   const [generation, setGeneration] = useState(0);
@@ -71,15 +77,23 @@ export default function DescriptionEditor({
   };
 
   useEffect(() => {
-    if (!editing) return;
     let cancelled = false;
     void storedAsMarkdown(value ?? "").then((markdown) => {
-      if (!cancelled) setServerMarkdown(markdown);
+      if (cancelled) return;
+      openDescriptionDraft(issueId, markdown);
+      const current = useDescriptionDrafts.getState().drafts[issueId];
+      if (!current || markdown.trim() === (current.savingText ?? current.savedText).trim()) return;
+      if (!current.requestId && current.text === current.savedText) {
+        acceptDescriptionVersion(issueId, markdown, true);
+        setGeneration((count) => count + 1);
+      } else {
+        setServerMarkdown(markdown);
+      }
     });
     return () => {
       cancelled = true;
     };
-  }, [editing, value]);
+  }, [issueId, value]);
 
   useEffect(
     () => () => {
@@ -88,58 +102,39 @@ export default function DescriptionEditor({
     [issueId],
   );
 
-  if (!editing) {
-    const startEditing = async () => {
-      const markdown = value ? await storedAsMarkdown(value) : "";
-      openDescriptionDraft(issueId, markdown);
-      setSourceFallback(false);
-    };
-
-    return (
-      <div
-        className={`min-h-[48px] cursor-text px-2 py-1.5 text-base leading-relaxed text-text-primary transition-colors ${
-          value
-            ? "border border-transparent hover:border-pane-border"
-            : "border border-dashed border-pane-border hover:border-focus-accent"
-        }`}
-        onClick={() => {
-          taskDetailPoint(issueId)("description-edit-click");
-          void startEditing();
-        }}
-        data-testid="issue-description"
-        ref={(element) => {
-          if (element && detailsVisible) taskDetailPoint(issueId)("description-view-click-surface-mounted");
-        }}
-      >
-        {saving && <span className="float-right text-xs text-text-muted">saving…</span>}
-        {value ? (
-          <div
-            className="md-body"
-            dangerouslySetInnerHTML={{ __html: storedAsHtml(value) }}
-          />
-        ) : (
-          <span className="inline-flex items-center gap-1.5 text-text-muted">
-            <IconPencil size={13} />
-            Add a description…
-          </span>
-        )}
-      </div>
-    );
-  }
-
-  const write = () => saveDescriptionDraft(issueId, onSave);
-
-  // Save closes the editor at once; the write settles behind the view.
-  const commit = () => {
-    void saveDescriptionDraft(issueId, onSave, true);
-  };
-
-  const discard = () => {
-    discardDescriptionDraft(issueId);
-  };
-
   const externalChange =
     serverMarkdown !== null && serverMarkdown.trim() !== baseline.trim();
+
+  useEffect(() => {
+    if (!dirty || externalChange) return;
+    const timer = setTimeout(() => {
+      void saveDescriptionDraft(issueId, latestSave.current);
+    }, AUTOSAVE_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [issueId, draft, dirty, externalChange]);
+
+  // Shown until the draft opens and while the rich editor loads, so the text never flashes.
+  const rendered = (
+    <div
+      className="min-h-[48px] cursor-text px-2 py-1.5 text-base leading-relaxed text-text-primary"
+      onClick={() => setEditorReady(true)}
+    >
+      {value ? (
+        <div className="md-body" dangerouslySetInnerHTML={{ __html: storedAsHtml(value) }} />
+      ) : (
+        <span className="inline-flex items-center gap-1.5 text-text-muted">
+          <IconPencil size={13} />
+          Add a description…
+        </span>
+      )}
+    </div>
+  );
+
+  if (!stored || !editorReady) return <div data-testid="issue-description">{rendered}</div>;
+
+  const write = () => {
+    if (!externalChange) void saveDescriptionDraft(issueId, onSave);
+  };
 
   const keepDraft = () => {
     acceptDescriptionVersion(issueId, serverMarkdown ?? baseline, false);
@@ -153,33 +148,15 @@ export default function DescriptionEditor({
     setServerMarkdown(null);
   };
 
-  // Pressing a button must not blur the editor first (WebKit leaves relatedTarget null).
-  const actions = (
-    <div
-      className={`flex items-center gap-2 ${sourceFallback ? "mt-1.5" : ""}`}
-      onMouseDown={(event) => event.preventDefault()}
-    >
-      <button
-        type="button"
-        onClick={commit}
-        className="bg-focus-accent px-2.5 py-1 text-xs font-semibold text-pane-bg"
-      >
-        Save
-      </button>
-      <button
-        type="button"
-        onClick={discard}
-        className="border border-pane-border px-2.5 py-1 text-xs text-text-muted hover:text-text-primary"
-      >
-        Cancel
-      </button>
-      {saving && <span className="text-xs text-text-muted">saving…</span>}
-    </div>
+  const statusLabel = saving && (
+    <span className={`text-xs text-text-muted ${sourceFallback ? "mt-1.5 block" : ""}`} aria-live="polite">
+      Saving…
+    </span>
   );
 
   return (
     <div
-      data-testid="description-editor"
+      data-testid="issue-description"
       onBlur={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget as Node | null)) void write();
       }}
@@ -204,13 +181,7 @@ export default function DescriptionEditor({
           />
         </div>
       ) : (
-        <Suspense
-          fallback={
-            <div className="p-3 text-sm text-text-muted" role="status">
-              Loading editor…
-            </div>
-          }
-        >
+        <Suspense fallback={rendered}>
           <RichMarkdownEditor
             key={generation}
             markdown={draft}
@@ -225,7 +196,8 @@ export default function DescriptionEditor({
             onTrustedFocus={() => taskDetailPoint(issueId)("description-editor-focus-observed")}
             onTrustedInput={() => taskDetailPoint(issueId)("description-editor-first-trusted-input")}
             layout="compact"
-            toolbarActions={actions}
+            quietUntilFocused
+            toolbarActions={statusLabel}
           />
         </Suspense>
       )}
@@ -263,7 +235,7 @@ export default function DescriptionEditor({
         </p>
       )}
 
-      {sourceFallback && actions}
+      {sourceFallback && statusLabel}
     </div>
   );
 }

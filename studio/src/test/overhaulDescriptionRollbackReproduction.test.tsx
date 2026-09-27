@@ -129,7 +129,7 @@ async function mountWithFeed() {
   statusStreamFeed.start(PROJECT, { createProxy: feed.createProxy });
   await waitFor(() => expect(feed.ready()).toBe(true));
   const details = screen.getByRole("region", { name: "Details" });
-  expect(await within(details).findByText(ORIGINAL)).toBeVisible();
+  await expectDescription(details, ORIGINAL);
   wire.journal.length = 0;
   return { wire, feed, details };
 }
@@ -137,20 +137,23 @@ async function mountWithFeed() {
 const fact = (workItemId: string, payload: Record<string, unknown> = {}) =>
   workItemChangedFact(PROJECT, workItemId, payload);
 
+async function expectDescription(details: HTMLElement, text: string) {
+  await waitFor(() => expect(within(details).getByLabelText("Story description")).toHaveValue(text));
+}
+
 async function saveDescription(details: HTMLElement, wire: ReturnType<typeof instrument>) {
-  fireEvent.change(await within(details).findByLabelText("Story description"), {
-    target: { value: SAVED },
-  });
-  fireEvent.click(within(details).getByRole("button", { name: "Save" }));
+  const editor = await within(details).findByLabelText("Story description");
+  fireEvent.change(editor, { target: { value: SAVED } });
+  fireEvent.blur(editor, { relatedTarget: document.body });
   await waitFor(() => expect(wire.journal).toContain(
     `response UpdateWorkTrackerWorkItemDetails story-a.description=${JSON.stringify(SAVED)}`,
   ));
-  expect(await within(details).findByText(SAVED)).toBeVisible();
+  await expectDescription(details, SAVED);
 }
 
 /**
  * Scenario A — just-saved description. An agent fact for the selected Story
- * arrives; its per-item refetch is in flight while the user saves.
+ * arrives; its per-item refetch is in flight while the draft is written.
  */
 async function justSavedThenStaleItemRead() {
   const { wire, feed, details } = await mountWithFeed();
@@ -158,7 +161,6 @@ async function justSavedThenStaleItemRead() {
   feed.send(fact("story-a", { occurredAt: "2026-09-05T10:00:00+00:00" }));
   await waitFor(() => expect(wire.heldCount()).toBe(1));
 
-  fireEvent.click(within(details).getByTestId("issue-description"));
   await saveDescription(details, wire);
 
   // The mutation's own fact names the adopted server version: consumed, no refetch.
@@ -178,7 +180,6 @@ async function justSavedThenStaleItemRead() {
  */
 async function dirtyEditorThenStaleModuleRead() {
   const { wire, feed, details } = await mountWithFeed();
-  fireEvent.click(within(details).getByTestId("issue-description"));
   fireEvent.change(await within(details).findByLabelText("Story description"), {
     target: { value: "Dirty draft" },
   });
@@ -205,13 +206,12 @@ afterEach(() => {
 });
 
 describe("CODING-1524 reproduction — description rollback under live fact traffic", () => {
-  it("[evidence A] a stale per-item read landing after Save leaves the saved description in place", async () => {
+  it("[evidence A] a stale per-item read landing after a save leaves the saved description in place", async () => {
     const { wire, details } = await justSavedThenStaleItemRead();
 
     await waitFor(() => expect(wire.journal).toHaveLength(4));
     await new Promise((resolve) => setTimeout(resolve, 100));
-    expect(within(details).getByText(SAVED)).toBeVisible();
-    expect(within(details).queryByText(ORIGINAL)).toBeNull();
+    expect(within(details).getByLabelText("Story description")).toHaveValue(SAVED);
     expect(wire.journal).toEqual([
       'request  WorkTrackerWorkItem {"id":"story-a"}',
       'request  UpdateWorkTrackerWorkItemDetails {"id":"story-a","description":"Saved description"}',
@@ -220,13 +220,12 @@ describe("CODING-1524 reproduction — description rollback under live fact traf
     ]);
   });
 
-  it("[evidence B] a stale module-open read landing after Save leaves the saved description in place", async () => {
+  it("[evidence B] a stale module-open read landing after a save leaves the saved description in place", async () => {
     const { wire, details } = await dirtyEditorThenStaleModuleRead();
 
     await waitFor(() => expect(wire.journal).toHaveLength(6));
     await new Promise((resolve) => setTimeout(resolve, 100));
-    expect(within(details).getByText(SAVED)).toBeVisible();
-    expect(within(details).queryByText(ORIGINAL)).toBeNull();
+    expect(within(details).getByLabelText("Story description")).toHaveValue(SAVED);
     expect(wire.journal).toEqual([
       'request  WorkTrackerWorkItem {"id":"story-b"}',
       'request  WorkTrackerModuleOpen {"moduleId":"module-1"}',
@@ -240,12 +239,12 @@ describe("CODING-1524 reproduction — description rollback under live fact traf
   it("[convergence A] a just-saved description survives a late per-item read", async () => {
     const { details } = await justSavedThenStaleItemRead();
     await new Promise((resolve) => setTimeout(resolve, 100));
-    expect(within(details).getByText(SAVED)).toBeVisible();
+    expect(within(details).getByLabelText("Story description")).toHaveValue(SAVED);
   });
 
   it("[convergence B] a description saved from a dirty editor survives a late module-open read", async () => {
     const { details } = await dirtyEditorThenStaleModuleRead();
     await new Promise((resolve) => setTimeout(resolve, 100));
-    expect(within(details).getByText(SAVED)).toBeVisible();
+    expect(within(details).getByLabelText("Story description")).toHaveValue(SAVED);
   });
 });

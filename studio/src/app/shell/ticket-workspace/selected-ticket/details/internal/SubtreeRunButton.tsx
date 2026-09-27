@@ -1,3 +1,5 @@
+import { KeyBadge } from "../../../../../../shared/ui/KeyChordHint";
+
 interface SubtreeRunButtonProps {
   /** Distinct accessible name for this campaign mode. */
   name: string;
@@ -6,6 +8,8 @@ interface SubtreeRunButtonProps {
   onClick: () => void;
   disabled?: boolean;
   unavailableReason?: string;
+  /** Chord label when this button owns the normal-run shortcut. */
+  shortcut?: string | null;
 }
 
 /** One subtree-run control, sharing the details surface's action styling. */
@@ -16,6 +20,7 @@ export function SubtreeRunButton({
   onClick,
   disabled = false,
   unavailableReason,
+  shortcut,
 }: SubtreeRunButtonProps) {
   return (
     <button
@@ -25,9 +30,10 @@ export function SubtreeRunButton({
       title={unavailableReason ?? name}
       disabled={pending || disabled}
       onClick={onClick}
-      className="border border-pane-border px-2 py-1 text-xs text-text-muted hover:border-focus-accent hover:text-text-primary disabled:cursor-wait disabled:opacity-60"
+      className="inline-flex h-7 items-center gap-2 border border-pane-border px-2.5 text-sm text-text-muted hover:border-focus-accent hover:text-text-primary disabled:cursor-wait disabled:opacity-60"
     >
       {pending ? pendingLabel : name}
+      {shortcut && !pending ? <KeyBadge>{shortcut}</KeyBadge> : null}
     </button>
   );
 }

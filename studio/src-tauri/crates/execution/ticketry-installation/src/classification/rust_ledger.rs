@@ -80,6 +80,10 @@ pub fn owned_ledgers() -> Vec<(&'static str, i32)> {
             ticketry_settings::PROVIDER_CATALOG_MIGRATIONS_VERSION,
         ),
         (
+            ticketry_settings::CODEX_6_SOL_LUNA_LEDGER,
+            ticketry_settings::PROVIDER_CATALOG_MIGRATIONS_VERSION,
+        ),
+        (
             "ticketry_settings_adoption",
             ticketry_settings::OWNERSHIP_MANIFEST_VERSION,
         ),

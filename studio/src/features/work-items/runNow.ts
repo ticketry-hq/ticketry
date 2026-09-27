@@ -149,6 +149,7 @@ function refusalMessage(error: unknown): string {
     if (code === "run_now_not_eligible") {
       return "This Story is no longer eligible to Run now. Refresh its workflow and try again.";
     }
+    if (code === "no_activated_providers") return launchFailureMessage(error);
     if (remedy) return `${detail} Next action: ${remedy}`;
   }
   return launchFailureMessage(error);

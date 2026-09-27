@@ -46,6 +46,7 @@ export interface AgentRunFact {
   readonly run: RunRecord | null;
   readonly state: RawLifecycleState;
   readonly effectiveState: RunPresentationState;
+  readonly attentionReason: string | null | undefined;
   readonly occurredAt: string;
   readonly exitCode: number | null;
   readonly terminalOutcome: boolean;
@@ -200,6 +201,10 @@ export function readStatusFact(frame: RunStatusEventFrame): StatusFact | null {
       const occurredAt = text(payload.occurredAt) ?? frame.committed_at;
       if (agentRunId === null || state === null) return null;
       const effectiveState = text(payload.effectiveState) ?? state;
+      const attentionReason = typeof payload.attentionReason === "string" ||
+        payload.attentionReason === null
+        ? payload.attentionReason
+        : undefined;
       const exitCode = typeof payload.exitCode === "number" ? payload.exitCode : null;
       const candidate = readRun(payload.run);
       const run = candidate?.agent_run_id === agentRunId &&
@@ -212,6 +217,7 @@ export function readStatusFact(frame: RunStatusEventFrame): StatusFact | null {
         run,
         state: state as RawLifecycleState,
         effectiveState: effectiveState as RunPresentationState,
+        attentionReason,
         occurredAt,
         exitCode,
         terminalOutcome: frame.event_kind === AGENT_RUN_TERMINAL,

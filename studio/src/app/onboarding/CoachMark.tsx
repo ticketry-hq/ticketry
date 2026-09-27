@@ -6,6 +6,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 
 interface Props {
   anchor: string;
@@ -13,6 +14,7 @@ interface Props {
   description: string;
   children?: ReactNode;
   focusDialog?: boolean;
+  portal?: boolean;
 }
 
 interface Placement {
@@ -131,6 +133,7 @@ export default function CoachMark({
   description,
   children,
   focusDialog = true,
+  portal = false,
 }: Props) {
   const titleId = useId();
   const descriptionId = useId();
@@ -185,7 +188,7 @@ export default function CoachMark({
     };
   }, [highlightAnchor, place]);
 
-  return (
+  const card = (
     <aside
       ref={dialogRef}
       tabIndex={-1}
@@ -202,7 +205,7 @@ export default function CoachMark({
       }}
       style={placement ? { position: "fixed", top: placement.top, left: placement.left } : undefined}
       className={`${
-        placement ? "z-[70]" : "relative z-10 mx-4 my-3"
+        placement ? "z-[72]" : "relative z-10 mx-4 my-3"
       } w-[min(22rem,calc(100vw-2rem))] border border-focus-accent bg-pane-panel p-4 text-left shadow-2xl outline-none focus:ring-2 focus:ring-focus-accent`}
     >
       <h2 id={titleId} className="text-base font-semibold text-text-primary">
@@ -214,4 +217,5 @@ export default function CoachMark({
       {children != null ? <div className="mt-4">{children}</div> : null}
     </aside>
   );
+  return portal ? createPortal(card, document.body) : card;
 }

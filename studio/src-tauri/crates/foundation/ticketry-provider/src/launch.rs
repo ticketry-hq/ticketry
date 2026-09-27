@@ -13,6 +13,13 @@ pub enum TimeoutUnit {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum StartupScreen {
+    TrustDialog,
+    ReadyComposer,
+    Unknown,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ProviderLaunchMetadata {
     pub invocation_prefix: &'static str,
     pub ready_composer_marker: Option<&'static str>,
@@ -28,29 +35,81 @@ pub struct ProviderLaunchMetadata {
 }
 
 impl ProviderLaunchMetadata {
+    pub fn classify_startup_screen(self, screen: &[u8]) -> StartupScreen {
+        let rendered = strip_terminal_controls(&String::from_utf8_lossy(screen));
+        let lines = rendered.lines().map(str::trim).collect::<Vec<_>>();
+        // A current composer following old dialog text means the user already
+        // answered. Keep this check tied to the end of the captured pane.
+        if self.ready_composer_marker == Some("\u{276f}") {
+            let choice = lines.iter().rposition(|line| {
+                line.strip_prefix('❯').is_some_and(|line| {
+                    line.trim_start().starts_with("1. Yes, I trust this folder")
+                }) || line.starts_with("1. Yes, I trust this folder")
+            });
+            if let Some(choice) = choice {
+                let heading = lines[..choice]
+                    .iter()
+                    .rposition(|line| line.starts_with("Accessing workspace"));
+                let decline = lines[choice + 1..].iter().position(|line| {
+                    let line = line.trim_start_matches(['❯', '>', ' ']).trim_start();
+                    line.starts_with("2. No, exit")
+                });
+                let selected_choice = lines[choice].starts_with('❯')
+                    || lines[choice + 1..]
+                        .iter()
+                        .any(|line| line.starts_with("❯ 2. No, exit"));
+                let later_composer = lines[choice + 1..]
+                    .iter()
+                    .any(|line| is_claude_composer_line(line));
+                if heading.is_some() && decline.is_some() && selected_choice && !later_composer {
+                    return StartupScreen::TrustDialog;
+                }
+            }
+        }
+        if self.is_ready_composer(screen) {
+            StartupScreen::ReadyComposer
+        } else {
+            StartupScreen::Unknown
+        }
+    }
+
     pub fn is_ready_composer(self, screen: &[u8]) -> bool {
         let Some(marker) = self.ready_composer_marker else {
             return false;
         };
-        strip_terminal_controls(&String::from_utf8_lossy(screen))
-            .lines()
-            .any(|line| line.trim_start().starts_with(marker))
+        let rendered = strip_terminal_controls(&String::from_utf8_lossy(screen));
+        let lines = rendered.lines().map(str::trim).collect::<Vec<_>>();
+        if marker == "\u{276f}" {
+            return lines
+                .iter()
+                .rposition(|line| is_claude_composer_line(line))
+                .is_some_and(|composer| {
+                    lines[composer + 1..]
+                        .iter()
+                        .all(|line| line.is_empty() || line.starts_with("? for shortcuts"))
+                });
+        }
+        lines.iter().any(|line| line.starts_with(marker))
     }
 
     pub fn composer_region(self, screen: &[u8]) -> Option<String> {
         let marker = self.ready_composer_marker?;
         let rendered = strip_terminal_controls(&String::from_utf8_lossy(screen));
-        let composer = rendered
-            .lines()
-            .position(|line| line.trim_start().starts_with(marker))?;
-        Some(
-            rendered
-                .lines()
-                .skip(composer)
-                .collect::<Vec<_>>()
-                .join("\n"),
-        )
+        let lines = rendered.lines().collect::<Vec<_>>();
+        let composer = lines.iter().rposition(|line| {
+            let line = line.trim_start();
+            line.starts_with(marker) && (marker != "\u{276f}" || is_claude_composer_line(line))
+        })?;
+        Some(lines[composer..].join("\n"))
     }
+}
+
+fn is_claude_composer_line(line: &str) -> bool {
+    line.strip_prefix('❯').is_some_and(|rest| {
+        (rest.is_empty() || rest.starts_with(' '))
+            && !rest.trim_start().starts_with("1. Yes, I trust this folder")
+            && !rest.trim_start().starts_with("2. No, exit")
+    })
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

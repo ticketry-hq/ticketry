@@ -1,46 +1,16 @@
 import React, { useMemo } from "react";
 import { formatWorkItemDisplayIdentifier } from "../../../../../features/work-items";
-import {
-  type InstantRunRow,
-  type Row,
-  type ScratchRow,
-  type WorkItemRow,
-} from "../TasksPane";
-import {
-  AgentStateBadge,
-  AutomationDeliveryChicklet,
-  AutomationFailureChicklet,
-} from "../../../../../features/agents/lifecycle";
-import {
-  isLiveAgentRunState,
-  useRunState,
-  type RunPresentationState,
-} from "../../../../../features/agents/status";
-import { LifecycleBadge } from "../../../../../features/agents/terminal";
-import { TEMP_TASK_ID } from "../../../../../features/agents/types";
+import { type Row, type WorkItemRow } from "../TasksPane";
+import { InstantRunPlanningRow, ScratchPlanningRow } from "./ConversationRows";
+import { PlanningRowView } from "./PlanningRowView";
 import { useStudioStore } from "../../../../../features/projects";
-import { WorkItemRowLabel } from "./WorkItemRowLabel";
 import {
   useStoriesTree,
   useWorkItem,
 } from "../../../../../features/work-items";
 import { stateById, useCachedStates } from "../../../../../features/projects";
 import type { DragSourceProps } from "../../../../../shared/dragDrop/useAxisDragAndDrop";
-import { instantRunPlanningRowId } from "../internal/instantRunTicketNavigation";
 import { recordSelectionProfilePoint } from "../../../../../shared/utilities/selectionProfile";
-import {
-  beginTaskDetailFromClick,
-  recordTaskDetailClick,
-} from "../../../../../shared/utilities/taskDetailProbe";
-
-// Warm the description-editor chunk on first row hover so it is already
-// cached when a selected issue's details render. Fired at most once.
-let editorWarmed = false;
-const preloadDescriptionEditor = () => {
-  if (editorWarmed) return;
-  editorWarmed = true;
-  void import("../../../../../features/documents/DescriptionEditor");
-};
 
 interface TaskRowProps {
   row: Row;
@@ -127,178 +97,5 @@ function WorkItemPlanningRow({
       dragSourceProps={dragSourceProps}
       descendantIds={row.expanded ? [] : descendantIds}
     />
-  );
-}
-
-function InstantRunPlanningRow({
-  row,
-  isSelected,
-  onClick,
-  dragSourceProps,
-}: Pick<TaskRowProps, "isSelected" | "onClick" | "dragSourceProps"> & {
-  row: InstantRunRow;
-}) {
-  const id = instantRunPlanningRowId(row.runId);
-  const runState = useRunState(row.runId);
-  return (
-    <PlanningRowView
-      id={id}
-      depth={0}
-      expandable={false}
-      expanded={false}
-      identifier=""
-      stateColor={null}
-      name={row.name}
-      isSelected={isSelected}
-      onClick={onClick}
-      onToggleExpand={() => undefined}
-      dragSourceProps={dragSourceProps}
-      descendantIds={[]}
-      showAgentBadges={false}
-      runState={isLiveAgentRunState(runState) ? runState : null}
-    />
-  );
-}
-
-function ScratchPlanningRow({
-  isSelected,
-  onClick,
-  dragSourceProps,
-}: Pick<TaskRowProps, "isSelected" | "onClick" | "dragSourceProps"> & {
-  row: ScratchRow;
-}) {
-  return (
-    <PlanningRowView
-      id={TEMP_TASK_ID}
-      depth={0}
-      expandable={false}
-      expanded={false}
-      identifier=""
-      stateColor={null}
-      name="New conversation"
-      isSelected={isSelected}
-      onClick={onClick}
-      onToggleExpand={() => undefined}
-      dragSourceProps={dragSourceProps}
-      descendantIds={[]}
-      showAgentBadges={false}
-    />
-  );
-}
-
-interface PlanningRowViewProps {
-  id: string;
-  depth: number;
-  expandable: boolean;
-  expanded: boolean;
-  identifier: string;
-  stateColor: string | null;
-  name: string;
-  isSelected: boolean;
-  onClick: (taskId: string) => void;
-  onToggleExpand: (taskId: string) => void;
-  dragSourceProps?: DragSourceProps;
-  descendantIds: string[];
-  showAgentBadges?: boolean;
-  runState?: RunPresentationState | null;
-}
-
-function PlanningRowView({
-  id,
-  depth,
-  expandable,
-  expanded,
-  identifier,
-  stateColor,
-  name,
-  isSelected,
-  onClick,
-  onToggleExpand,
-  dragSourceProps,
-  descendantIds,
-  showAgentBadges = true,
-  runState,
-}: PlanningRowViewProps) {
-  const caret = expandable ? (expanded ? "▾" : "▸") : " ";
-
-  return (
-    <li
-      role="treeitem"
-      aria-expanded={expandable ? expanded : undefined}
-      aria-selected={isSelected}
-      data-task-id={id}
-      tabIndex={-1}
-      {...dragSourceProps}
-      onPointerDownCapture={(event) => {
-        if (event.button !== 0) return;
-        if ((event.target as Element).closest("[data-task-expand-toggle]")) return;
-        beginTaskDetailFromClick(id, event.timeStamp);
-      }}
-      onClick={(event) => {
-        recordTaskDetailClick(id, event.timeStamp);
-        onClick(id);
-      }}
-      onPointerEnter={preloadDescriptionEditor}
-      className={`flex min-w-0 cursor-pointer items-center px-1 py-0.5 outline-none ${
-        isSelected
-          ? "bg-selection-bg text-text-primary"
-          : "text-text-primary hover:bg-pane-title"
-      }`}
-      style={{ paddingLeft: `${depth * 2}ch` }}
-    >
-      {/* Expand / Collapse Indicator Caret — clickable hit area when the
-          row has children, so users can toggle subtasks without the keyboard. */}
-      {expandable ? (
-        <span
-          role="button"
-          data-task-expand-toggle
-          aria-label={expanded ? "Collapse subtasks" : "Expand subtasks"}
-          onClick={(e) => {
-            // Don't let the toggle also fire the row's select handler.
-            e.stopPropagation();
-            onToggleExpand(id);
-          }}
-          className="mr-1 -my-0.5 inline-block w-4 shrink-0 cursor-pointer self-stretch text-center text-text-muted hover:text-text-primary"
-        >
-          {caret}
-        </span>
-      ) : (
-        <span className="mr-1 inline-block w-4 shrink-0 text-center text-text-muted">
-          {caret}
-        </span>
-      )}
-
-      <WorkItemRowLabel
-        identifier={identifier}
-        stateColor={stateColor}
-        name={name}
-      />
-
-      {runState ? (
-        <span className="ml-2">
-          <LifecycleBadge state={runState} showLabel={false} alwaysShowCount />
-        </span>
-      ) : null}
-
-      {showAgentBadges ? (
-        <>
-          <AutomationDeliveryChicklet
-            issueId={id}
-            descendantIds={descendantIds}
-            className="ml-2"
-          />
-          <AutomationFailureChicklet
-            issueId={id}
-            descendantIds={descendantIds}
-            className="ml-2"
-          />
-          <AgentStateBadge
-            issueId={id}
-            descendantIds={descendantIds}
-            className="ml-2"
-          />
-        </>
-      ) : null}
-    </li>
   );
 }

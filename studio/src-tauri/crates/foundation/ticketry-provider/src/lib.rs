@@ -15,7 +15,7 @@ pub use contract::{provider_contract, Provider, ProviderContract, ProviderMetada
 pub use error::{ProviderError, ProviderErrorCode};
 pub use launch::{
     LaunchConstructionRequest, ProviderLaunch, ProviderLaunchKind, ProviderLaunchMetadata,
-    ProviderOptions, RuntimeSettings, TimeoutUnit,
+    ProviderOptions, RuntimeSettings, StartupScreen, TimeoutUnit,
 };
 pub use profile::ProfileSelection;
 pub use trust::{

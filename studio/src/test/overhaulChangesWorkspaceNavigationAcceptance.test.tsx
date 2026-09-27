@@ -266,7 +266,12 @@ describe("overhaul acceptance - independent Changes workspace navigation", () =>
       focusedPane: "tasks",
     }));
     fireEvent.keyDown(switcher, { key: "ArrowDown" });
-    fireEvent.keyDown(switcher, { key: "Escape" });
+    // Down enters review; Enter opens the checkout popup whose Escape stays local.
+    fireEvent.keyDown(switcher, { key: "Enter" });
+    const checkoutToCancel = screen.getByRole("option", { name: "Open Module checkout Changes" });
+    await waitFor(() => expect(checkoutToCancel).toHaveFocus());
+    fireEvent.keyDown(checkoutToCancel, { key: "Escape" });
+    await waitFor(() => expect(switcher).toHaveFocus());
     expect(useClientStore.getState().selectedTaskId).toBe(ORIGIN_TASK_ID);
     expect(screen.getByTestId("independent-changes-workspace")).toBeVisible();
 

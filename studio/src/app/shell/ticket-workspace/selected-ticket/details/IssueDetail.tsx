@@ -1,4 +1,4 @@
-import { lazy, Suspense, useMemo, useState } from "react";
+import { lazy, Suspense, useMemo } from "react";
 import {
   deriveEpic,
   formatWorkItemDisplayIdentifier,
@@ -27,24 +27,25 @@ import { useCachedStates } from "../../../../../features/projects";
 import { useIssueTypesQuery } from "../../../../../features/settings";
 import { usePersistedSubtreeRun } from "../../../../../features/execution";
 import { useProjectWorkflowSettings } from "../../../../../features/workflows";
+import { openStoryWorkflowGuide } from "../../../../modal/openStoryWorkflowGuide";
+import { WorktreeBlock } from "../../../../../features/agents/worktrees";
 
 const EMPTY_MODULES: Module[] = [];
 const EMPTY_PROJECTS: Project[] = [];
-import StatePicker from "./fields/StatePicker";
-import { IconPanelLeft } from "../../../../../shared/ui/icons";
-
 import NameEditor from "./NameEditor";
 import Breadcrumb from "./Breadcrumb";
 import Attachments from "./Attachments";
 import ChildIssues from "./ChildIssues";
 import FindingsPanel from "./FindingsPanel";
 import { hasFindingsPanel } from "./internal/findings";
-import IssueSidebar from "./IssueSidebar";
+import IssueProperties from "./IssueProperties";
+import { IssueToolbar } from "./IssueToolbar";
+import IssueTypePicker from "./fields/IssueTypePicker";
+import { WorkflowStatePicker } from "./WorkflowStatePicker";
 import IssueActionsMenu from "./IssueActionsMenu";
 import { NormalRunAction, SubtreeRunAction } from "./NormalRunAction";
 import { SerialRunAction } from "./SerialRunAction";
 import { RunNowAction } from "./RunNowAction";
-import { readVersionedItem } from "../../../../../shared/storage/versioned";
 import { recordSelectionProfilePoint } from "../../../../../shared/utilities/selectionProfile";
 
 import { taskDetailPoint } from "../../../../../shared/utilities/taskDetailProbe";
@@ -59,14 +60,7 @@ const DescriptionEditor = lazy(async () => {
   return loaded;
 });
 
-// The Details sidebar's visibility persists globally (#837).
-const SIDEBAR_KEY = "studio.issueDetail.sidebarVisible:v1";
-const LEGACY_SIDEBAR_KEYS = ["studio.issueDetail.sidebarVisible"];
 const NO_CHILD_IDS: string[] = [];
-
-function readSidebarVisible(): boolean {
-  return readVersionedItem(SIDEBAR_KEY, LEGACY_SIDEBAR_KEYS) !== "0";
-}
 
 // Details subscribe to the selected normalized record and share list membership.
 export default function IssueDetail({
@@ -160,17 +154,6 @@ function IssueDetailContent({ issueId, detailsVisible }: { issueId: string; deta
     parent_id: setParent.isPending,
     blocked_by_ids: setBlockers.isPending,
   };
-
-  const [sidebarVisible, setSidebarVisible] = useState(readSidebarVisible);
-  const toggleSidebar = () =>
-    setSidebarVisible((v) => {
-      try {
-        localStorage.setItem(SIDEBAR_KEY, v ? "0" : "1");
-      } catch {
-        /* ignore unavailable storage */
-      }
-      return !v;
-    });
 
   if (!task && taskQuery.isPending) {
     return <div className="grid h-full place-items-center text-base text-text-muted">Loading issue…</div>;
@@ -266,172 +249,188 @@ function IssueDetailContent({ issueId, detailsVisible }: { issueId: string; deta
   };
 
   return (
-    <section role="region" aria-label="Details" className="h-full overflow-hidden">
-      <div
-        className={`grid h-full overflow-hidden ${
-          sidebarVisible ? "grid-cols-[1fr_260px]" : "grid-cols-[1fr]"
-        }`}
-      >
-      {/* Left content column */}
-      <div className="overflow-y-auto p-6">
-        <div className="flex items-start justify-between gap-3">
-          <Breadcrumb
-            project={project}
-            epic={epic}
-            onProjectClick={goProject}
-            onEpicClick={goEpic}
-          />
-          <button
-            type="button"
-            onClick={toggleSidebar}
-            aria-expanded={sidebarVisible}
-            aria-label={sidebarVisible ? "Hide details panel" : "Show details panel"}
-            title={sidebarVisible ? "Hide details panel" : "Show details panel"}
-            data-testid="issue-sidebar-toggle"
-            ref={(element) => {
-              if (element && detailsVisible && !element.disabled) {
-                taskDetailPoint(task.id)("details-sidebar-toggle-enabled");
-              }
-            }}
-            className={`flex-none p-1 transition-colors hover:bg-pane-title hover:text-text-primary ${
-              sidebarVisible ? "text-text-secondary" : "text-focus-accent"
-            }`}
-          >
-            <IconPanelLeft size={15} style={{ transform: "scaleX(-1)" }} />
-          </button>
-        </div>
-
-        <NameEditor
-          name={task.name}
-          saving={Boolean(saving.name)}
-          onSave={(name) =>
-            rename.mutate(
-              { id: task.id, name },
-              { onError: reportMutationError },
-            )
-          }
-        />
-
-        <div className="mt-4 flex items-center gap-3" data-testid="status-row">
-          <StatePicker
-            projectId={task.project_id}
-            value={task.state}
-            permittedStateIds={permittedStateIds}
-            saving={Boolean(saving.state_id)}
-            onChange={(state) =>
-              setState.mutate(
-                { id: task.id, state },
-                { onError: reportMutationError },
-              )
-            }
-          />
-          <RunNowAction
-            item={task}
-            moduleId={epic?.id ?? null}
-            states={states}
-            issueTypes={issueTypes}
-          />
-          <SubtreeRunAction
-            key={`subtree-run-${task.id}`}
-            task={task}
-            moduleId={epic?.id ?? selectedModuleId ?? null}
-            activeRun={persistedSubtreeRun.activeRun}
-            runStateLoading={persistedSubtreeRun.loading}
-            refreshRunState={persistedSubtreeRun.refresh}
-          />
-          <SerialRunAction
-            key={`serial-run-${task.id}`}
-            task={task}
-            moduleId={epic?.id ?? selectedModuleId ?? null}
-            activeRun={persistedSubtreeRun.activeRun}
-            runStateLoading={persistedSubtreeRun.loading}
-            refreshRunState={persistedSubtreeRun.refresh}
-          />
-          <NormalRunAction
-            key={`normal-run-${task.id}`}
-            task={task}
-            moduleId={epic?.id ?? selectedModuleId ?? null}
-          />
-        </div>
-
-        <div className="mt-6">
-          <div className="mb-1 text-xs uppercase tracking-wider text-text-secondary">Description</div>
-          <Suspense fallback={null}>
-            <DescriptionEditor
-              key={task.id}
-              issueId={task.id}
-              value={descriptionValue}
-              detailsVisible={detailsVisible}
-              onSave={(description) =>
-                editDescription.mutateAsync(
-                  { id: task.id, description },
+    <section
+      role="region"
+      aria-label="Details"
+      className="flex h-full flex-col overflow-hidden"
+    >
+      <IssueToolbar
+        actions={
+          <>
+            <RunNowAction
+              item={task}
+              moduleId={epic?.id ?? null}
+              states={states}
+              issueTypes={issueTypes}
+            />
+            <SubtreeRunAction
+              key={`subtree-run-${task.id}`}
+              task={task}
+              moduleId={epic?.id ?? selectedModuleId ?? null}
+              activeRun={persistedSubtreeRun.activeRun}
+              runStateLoading={persistedSubtreeRun.loading}
+              refreshRunState={persistedSubtreeRun.refresh}
+            />
+            <SerialRunAction
+              key={`serial-run-${task.id}`}
+              task={task}
+              moduleId={epic?.id ?? selectedModuleId ?? null}
+              activeRun={persistedSubtreeRun.activeRun}
+              runStateLoading={persistedSubtreeRun.loading}
+              refreshRunState={persistedSubtreeRun.refresh}
+            />
+            <NormalRunAction
+              key={`normal-run-${task.id}`}
+              task={task}
+              moduleId={epic?.id ?? selectedModuleId ?? null}
+            />
+            <WorktreeBlock
+              taskId={task.id}
+              parentId={task.parent_id}
+              moduleId={epic?.id ?? selectedModuleId}
+              onViewChanges={() => {
+                const workspace = useClientStore.getState();
+                workspace.ensureWorkspace(task.id);
+                workspace.setActive(task.id, "changes");
+              }}
+            />
+            <IssueTypePicker
+              projectId={task.project_id}
+              value={task.issue_type}
+              saving={Boolean(saving.issue_type_id)}
+              onChange={(issueType) =>
+                changeType.mutate(
+                  { id: task.id, issueType },
                   { onError: reportMutationError },
                 )
               }
             />
-          </Suspense>
-        </div>
+            <WorkflowStatePicker
+              task={task}
+              states={states}
+              workflow={projectWorkflows[task.issue_type]}
+              permittedStateIds={permittedStateIds}
+              saving={Boolean(saving.state_id)}
+              onStateChange={(state) =>
+                setState.mutate(
+                  { id: task.id, state },
+                  { onError: reportMutationError },
+                )
+              }
+              onOpenGuide={
+                issueTypes.find((type) => type.id === task.issue_type)?.name === "Story"
+                  ? () => openStoryWorkflowGuide(task.id)
+                  : undefined
+              }
+            />
+          </>
+        }
+        location={
+          <Breadcrumb
+            project={project}
+            epic={epic}
+            task={task}
+            items={items}
+            savingParent={Boolean(saving.parent_id)}
+            setParent={(parentId) =>
+              setParent.mutate(
+                {
+                  id: task.id,
+                  parentId,
+                  moduleId: epic?.id ?? selectedModuleId ?? undefined,
+                },
+                { onError: reportMutationError },
+              )
+            }
+            onProjectClick={goProject}
+            onEpicClick={goEpic}
+          />
+        }
+        menu={
+          <IssueActionsMenu
+            taskId={task.id}
+            moduleId={epic?.id ?? selectedModuleId}
+            hasSubtasks={task.sub_issues_count > 0}
+            onDelete={onDelete}
+          />
+        }
+      />
 
-        <Attachments attachments={attachments} />
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <div
+          className="w-full min-w-0 px-4 py-2"
+          data-testid="details-document"
+          ref={(element) => {
+            if (element && detailsVisible) {
+              taskDetailPoint(task.id)("details-document-ready");
+            }
+          }}
+        >
+          <NameEditor
+            name={task.name}
+            saving={Boolean(saving.name)}
+            onSave={(name) =>
+              rename.mutate(
+                { id: task.id, name },
+                { onError: reportMutationError },
+              )
+            }
+          />
 
-        {hasFindingsPanel(task, states, issueTypes) && (
-          <FindingsPanel
+          <IssueProperties
+            task={task}
+            saving={saving}
+            blockedByChips={blockedByChips}
+            blocksChips={blocksChips}
+            items={items}
+            addBlocker={addBlocker}
+            removeBlocker={removeBlocker}
+          />
+
+          <div className="pt-2">
+            <div className="font-mono font-normal">
+              <Suspense fallback={null}>
+                <DescriptionEditor
+                  key={task.id}
+                  issueId={task.id}
+                  value={descriptionValue}
+                  detailsVisible={detailsVisible}
+                  onSave={(description) =>
+                    editDescription.mutateAsync(
+                      { id: task.id, description },
+                      { onError: reportMutationError },
+                    )
+                  }
+                />
+              </Suspense>
+            </div>
+          </div>
+
+          <Attachments attachments={attachments} />
+
+          {hasFindingsPanel(task, states, issueTypes) && (
+            <FindingsPanel
+              children={displayedChildren}
+              projectId={task.project_id}
+              onCancel={cancelChild}
+            />
+          )}
+
+          <ChildIssues
             children={displayedChildren}
             projectId={task.project_id}
-            onCancel={cancelChild}
+            onAddSubtask={(name, issueTypeId) =>
+              createChild.mutate(
+                {
+                  name,
+                  parent_id: task.id,
+                  issue_type_id: issueTypeId,
+                },
+                { onError: reportMutationError },
+              )
+            }
           />
-        )}
-
-        <ChildIssues
-          children={displayedChildren}
-          projectId={task.project_id}
-          onAddSubtask={(name, issueTypeId) =>
-            createChild.mutate(
-              {
-                name,
-                parent_id: task.id,
-                issue_type_id: issueTypeId,
-              },
-              { onError: reportMutationError },
-            )
-          }
-        />
-      </div>
-
-      {sidebarVisible && (
-        <IssueSidebar
-          task={task}
-          epic={epic}
-          moduleId={epic?.id ?? selectedModuleId}
-          saving={saving}
-          blockedByChips={blockedByChips}
-          blocksChips={blocksChips}
-          items={items}
-          setIssueType={(issueType) =>
-            changeType.mutate(
-              { id: task.id, issueType },
-              { onError: reportMutationError },
-            )
-          }
-          setParent={(parentId) =>
-            setParent.mutate(
-              { id: task.id, parentId, moduleId: epic?.id ?? selectedModuleId ?? undefined },
-              { onError: reportMutationError },
-            )
-          }
-          addBlocker={addBlocker}
-          removeBlocker={removeBlocker}
-          goEpic={goEpic}
-          actions={
-            <IssueActionsMenu
-              taskId={task.id}
-              moduleId={epic?.id ?? selectedModuleId}
-              hasSubtasks={task.sub_issues_count > 0}
-              onDelete={onDelete}
-            />
-          }
-        />
-      )}
+        </div>
       </div>
     </section>
   );

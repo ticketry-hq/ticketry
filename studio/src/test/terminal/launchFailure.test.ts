@@ -4,6 +4,31 @@ import { launchFailureMessage } from "../../features/agents/terminal/internal/la
 
 
 describe("launchFailureMessage", () => {
+  const guidance = "To run agent work, activate a provider in Settings > Model configuration. "
+    + "You can keep planning without one.";
+
+  it("shows planning guidance for known zero-provider refusals", () => {
+    expect(launchFailureMessage({ body: { code: "no_activated_providers" } }))
+      .toBe(guidance);
+    expect(launchFailureMessage({ body: { detail: "No activated providers." } }))
+      .toBe(guidance);
+    expect(launchFailureMessage(new Error("No activated providers are configured.")))
+      .toBe(guidance);
+    expect(launchFailureMessage(new Error(
+      "no_activated_providers: No activated providers are configured.",
+    ))).toBe(guidance);
+  });
+
+  it("keeps inactive binding and missing default refusals specific", () => {
+    expect(launchFailureMessage({ body: { code: "provider_not_activated" } }))
+      .toContain("this launch configuration names a provider that is deactivated");
+    expect(launchFailureMessage(new Error(
+      "Choose a default model in Settings before starting a conversation.",
+    ))).toBe("Choose a default model in Settings before starting a conversation.");
+    expect(launchFailureMessage(new Error("module_folder_unusable")))
+      .toBe("module_folder_unusable");
+  });
+
   it("shows the backend launch message when the control plane supplies one", () => {
     expect(
       launchFailureMessage({

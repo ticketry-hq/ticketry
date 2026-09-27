@@ -308,10 +308,7 @@ impl TerminalLaunchRuntime for InteractiveTerminalLaunchRuntime {
             };
             // A task shell opens where the Work Item's agent runs work: its
             // worktree, resolved by the same authority a task launch uses.
-            let working_directory = if material
-                .working_directory_identity
-                .starts_with("task:")
-            {
+            let working_directory = if material.working_directory_identity.starts_with("task:") {
                 let paths = authority
                     .paths
                     .resolve(ticketry_launch::LaunchPathsRequest {
@@ -325,10 +322,9 @@ impl TerminalLaunchRuntime for InteractiveTerminalLaunchRuntime {
                     })
                     .await
                     .map_err(|_| invalid_launch("The terminal launch directory is unavailable."))?;
-                paths
-                    .working_directory
-                    .map(PathBuf::from)
-                    .ok_or_else(|| invalid_launch("No local folder is configured for this launch."))?
+                paths.working_directory.map(PathBuf::from).ok_or_else(|| {
+                    invalid_launch("No local folder is configured for this launch.")
+                })?
             } else {
                 module_folder
             };
@@ -493,8 +489,7 @@ fn require_provider_control(
     kind: ticketry_launch::TerminalLaunchKind,
     mcp_data_directory: Option<&Path>,
 ) -> Result<(), TerminalLaunchError> {
-    if !kind.is_shell() && !mcp_data_directory.is_some_and(Path::is_absolute)
-    {
+    if !kind.is_shell() && !mcp_data_directory.is_some_and(Path::is_absolute) {
         return Err(TerminalLaunchError::new(
             TerminalLaunchErrorCode::RuntimeUnavailable,
             "WorkTracker MCP is unavailable. Provider launch is blocked.",

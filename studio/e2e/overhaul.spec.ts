@@ -131,16 +131,14 @@ test("[overhaul-web-01] edits every Story field through visible controls", async
   await page.getByRole("textbox", { name: "Name" }).press("Enter");
   await expect(page.getByRole("treeitem", { name: /E2E parent renamed/ })).toBeVisible();
 
-  await page.getByTestId("issue-description").click();
   const source = page.getByRole("textbox", { name: "Ticket description source" });
-  if (await source.isVisible().catch(() => false)) {
-    await source.fill("Fresh description");
-  } else {
-    await page.getByTestId("rich-markdown-editor-shell")
-      .locator('[contenteditable="true"]')
-      .fill("Fresh description");
-  }
-  await page.getByRole("button", { name: "Save", exact: true }).click();
+  const descriptionInput = (await source.isVisible().catch(() => false))
+    ? source
+    : page.getByTestId("rich-markdown-editor-shell").locator('[contenteditable="true"]');
+  await descriptionInput.fill("Fresh description");
+  // Leaving the editor writes the draft.
+  await descriptionInput.blur();
+  await expect(page.getByText("Saving…")).toHaveCount(0);
   await expect(page.getByTestId("issue-description")).toContainText("Fresh description");
 
   const parentPicker = page.getByTestId("parent-picker");

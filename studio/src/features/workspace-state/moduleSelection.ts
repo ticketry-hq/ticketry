@@ -46,7 +46,9 @@ export function moduleSelectionActions(set: SetWorkspaceState, get: GetWorkspace
       // last working in. Nothing about the Module itself is written here.
       writeRecentModule(id);
       probe("selection-published");
-      const { loadModuleTree } = await import("../work-items");
+      // The feature barrel re-exports this store. Import only the queries so
+      // Rollup cannot eagerly capture the store before it is initialized.
+      const { loadModuleTree } = await import("../work-items/queries");
       probe("work-items-import-ready");
       const tree = await loadModuleTree(projectId, id);
       probe("selection-tree-ready", { task_count: tree.order.length });

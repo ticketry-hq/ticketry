@@ -10,7 +10,7 @@ pub use types::{DeliveryTimings, PromptDeliveryError, PromptDeliveryFailureReaso
 use std::io::Write;
 use std::thread;
 use std::time::Instant;
-use ticketry_launch::{provider_contract, Provider, ProviderContract};
+use ticketry_launch::{provider_contract, Provider, ProviderContract, StartupScreen};
 use uuid::Uuid;
 use visibility::PasteEvidence;
 
@@ -107,6 +107,12 @@ impl<T: PromptDeliveryTmux> PromptDelivery<T> {
             let screen = self.tmux.capture_screen(run_id).map_err(|detail| {
                 PromptDeliveryError::new(PromptDeliveryFailureReason::CaptureFailed, detail)
             })?;
+            if contract.classify_startup_screen(&screen) == StartupScreen::TrustDialog {
+                return Err(PromptDeliveryError::new(
+                    PromptDeliveryFailureReason::TrustDialogBlocked,
+                    "Claude is waiting for directory trust in its terminal",
+                ));
+            }
             if Instant::now() >= deadline {
                 return Err(PromptDeliveryError::new(
                     PromptDeliveryFailureReason::ReadinessTimeout,

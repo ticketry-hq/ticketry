@@ -116,6 +116,7 @@ async fn adopt_inner(
         database.close().await.map_err(storage)?;
         let writable = connect(&path, false).await?;
         schema::reconcile_attempt_columns(&writable).await?;
+        schema::reconcile_agent_run_columns(&writable).await?;
         writable.close().await.map_err(storage)?;
         return Ok(None);
     }
@@ -129,6 +130,7 @@ async fn adopt_inner(
         // stable digest is the one computed above.
         let writable = connect(&path, false).await?;
         schema::reconcile_attempt_columns(&writable).await?;
+        schema::reconcile_agent_run_columns(&writable).await?;
         writable.close().await.map_err(storage)?;
         return Ok(Some(AdoptionEvidence {
             version: schema::VERSION,
@@ -266,6 +268,11 @@ async fn validate_manifest(
         .iter()
         .map(|value| (*value).to_owned())
         .collect::<BTreeSet<_>>();
+    for (column, _) in schema::AGENT_RUN_RECONCILED_COLUMNS {
+        if !agent.contains(*column) {
+            expected_agent.remove(*column);
+        }
+    }
     if source == SourceClassification::RustOwnedV1 {
         expected_agent.remove("initial_prompt");
         expected_agent.remove("launch_reasoning");
@@ -396,6 +403,7 @@ async fn validate_adopted_column_shapes(
         ("initial_prompt", "text"),
         ("launch_reasoning", "varchar"),
         ("launch_unattended", "bool"),
+        ("attention_reason", "text"),
     ] {
         let Some((observed_type, not_null, default)) = facts.get(column) else {
             continue;

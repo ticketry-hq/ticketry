@@ -1,0 +1,546 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="color-scheme" content="dark">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="lld-authority" content="html">
+  <title>LLD · File change plan</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --surface: #202b3b;
+      --rail: #121c29;
+      --group: #263448;
+      --on-accent: #0e1520;
+      --focus: #a7ceff;
+      --paper: #0e1520;
+      --sheet: #172130;
+      --ink: #e6edf6;
+      --muted: #a6b5c9;
+      --line: #34445b;
+      --line-strong: #657a96;
+      --navy: #91c4ff;
+      --navy-soft: #203852;
+      --orange: #ffb180;
+      --orange-soft: #422d24;
+      --green: #7bdbb1;
+      --green-soft: #183b32;
+      --red: #ff9eaa;
+      --red-soft: #432731;
+      --violet: #c4b2ff;
+      --violet-soft: #332e4c;
+      --shadow: 0 18px 45px rgba(0, 0, 0, .24);
+      --radius: 14px;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      --sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; background: var(--paper); }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        linear-gradient(rgba(145, 196, 255, .025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(145, 196, 255, .025) 1px, transparent 1px),
+        var(--paper);
+      background-size: 24px 24px;
+      font-family: var(--sans);
+      line-height: 1.55;
+    }
+
+    button, input { font: inherit; }
+    a { color: var(--navy); }
+    ::selection { background: var(--navy-soft); color: var(--ink); }
+    input::placeholder { color: var(--muted); opacity: 1; }
+    .token, .info-block, .step { overflow-wrap: anywhere; }
+    button:focus-visible, input:focus-visible, a:focus-visible {
+      outline: 3px solid var(--focus);
+      outline-offset: 2px;
+    }
+
+    .shell { width: min(1480px, calc(100% - 40px)); margin: 0 auto; }
+    .masthead {
+      margin-top: 12px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 20px;
+      align-items: start;
+      padding: 12px 18px 14px;
+      border: 1px solid var(--line-strong);
+      background: var(--sheet);
+      box-shadow: var(--shadow);
+    }
+    .crumb {
+      margin: 0 0 4px;
+      color: var(--orange);
+      font: 700 10px/1.2 var(--mono);
+      letter-spacing: .14em;
+      text-transform: uppercase;
+    }
+    h1 { margin: 0; font-size: 22px; line-height: 1.2; letter-spacing: -.02em; }
+    .summary { max-width: 860px; margin: 4px 0 0; color: var(--muted); font-size: 13px; line-height: 1.45; }
+    .masthead-side { display: grid; gap: 8px; justify-items: end; }
+    .status-pill { display: inline-flex; gap: 8px; align-items: baseline; padding: 5px 10px; background: var(--navy); color: var(--on-accent); font: 700 11px/1 var(--mono); letter-spacing: .06em; }
+    .status-pill small { font-size: 11px; font-weight: 500; opacity: .8; text-transform: lowercase; }
+    .metrics { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+    .metric { display: inline-flex; gap: 6px; align-items: center; padding: 4px 8px; border: 1px solid var(--line); background: var(--surface); }
+    .metric b { font: 700 12px/1 var(--mono); }
+    .metric span { color: var(--muted); font: 700 9px/1 var(--mono); letter-spacing: .06em; text-transform: uppercase; }
+
+    .sticky-nav {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin: 10px 0 18px;
+      padding: 4px;
+      border: 1px solid var(--line);
+      background: rgba(23, 33, 48, .96);
+      backdrop-filter: blur(14px);
+    }
+    .sticky-nav a { padding: 6px 11px; color: var(--muted); font: 700 11px/1 var(--mono); text-decoration: none; text-transform: uppercase; }
+    .sticky-nav a:hover { color: var(--navy); background: var(--navy-soft); }
+
+    section { margin: 0 0 36px; scroll-margin-top: 56px; }
+    .primary-section { margin-bottom: 44px; }
+    .section-heading { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 20px; align-items: end; margin-bottom: 8px; }
+    .workspace-note { margin: 0; color: var(--muted); font-size: 12px; }
+    .workspace-note kbd { padding: 1px 5px; border: 1px solid var(--line-strong); border-radius: 3px; background: var(--surface); font: 600 10px/1 var(--mono); color: var(--ink); }
+    .section-kicker { margin: 0 0 3px; color: var(--orange); font: 700 10px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; }
+    h2 { margin: 0; font-size: 20px; letter-spacing: -.02em; }
+    .lede { max-width: 820px; margin: 6px 0 14px; color: var(--muted); font-size: 14px; }
+
+    .overview-grid { display: grid; grid-template-columns: 1.25fr .75fr; gap: 16px; }
+    .card { border: 1px solid var(--line); background: var(--sheet); padding: 16px 18px; font-size: 14px; }
+    .card h3 { margin: 0 0 10px; font-size: 14px; }
+    .plain-list { margin: 0; padding-left: 18px; }
+    .plain-list li + li { margin-top: 8px; }
+    .boundary { border-left: 4px solid var(--orange); }
+
+    .change-view { border: 1px solid var(--line-strong); background: var(--sheet); box-shadow: var(--shadow); }
+    .change-toolbar {
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) auto;
+      gap: 12px;
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--line);
+      background: var(--surface);
+    }
+    .search-wrap { position: relative; }
+    .search-wrap span { position: absolute; left: 10px; top: 6px; font-size: 12px; color: var(--muted); font-family: var(--mono); }
+    #file-search {
+      width: 100%;
+      height: 30px;
+      padding: 0 10px 0 28px;
+      font-size: 13px;
+      border: 1px solid var(--line-strong);
+      background: var(--surface);
+      color: var(--ink);
+    }
+    .filters { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+    .filter {
+      border: 1px solid var(--line);
+      background: var(--sheet);
+      color: var(--muted);
+      padding: 6px 8px;
+      cursor: pointer;
+      font: 700 10px/1 var(--mono);
+      letter-spacing: .04em;
+      text-transform: uppercase;
+    }
+    .filter small { margin-left: 4px; opacity: .7; }
+    .filter[aria-pressed="true"] { color: var(--on-accent); border-color: var(--navy); background: var(--navy); }
+    .change-workspace { display: grid; grid-template-columns: minmax(260px, 300px) minmax(0, 1fr); height: max(480px, calc(100vh - 230px)); }
+    .file-rail { border-right: 1px solid var(--line); background: var(--rail); overflow: auto; }
+    .rail-empty { padding: 30px; color: var(--muted); text-align: center; }
+    .dir-group + .dir-group { border-top: 1px solid var(--line); }
+    .dir-label { position: sticky; top: 0; z-index: 2; display: flex; justify-content: space-between; gap: 8px; padding: 4px 10px; color: var(--muted); background: var(--group); font: 700 10px/1.4 var(--mono); }
+    .dir-label span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .file-button {
+      width: 100%;
+      display: grid;
+      grid-template-columns: 18px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 10px 4px 8px;
+      border: 0;
+      background: transparent;
+      color: var(--ink);
+      text-align: left;
+      cursor: pointer;
+    }
+    .file-button:hover { background: var(--surface); }
+    .file-button[aria-selected="true"] { background: var(--surface); box-shadow: inset 3px 0 0 var(--orange); }
+    .file-button[aria-selected="true"] .file-name { font-weight: 700; }
+    .file-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 500 12px/1.5 var(--mono); }
+    .file-meta { color: var(--muted); font: 600 9px/1 var(--mono); letter-spacing: .04em; text-transform: uppercase; }
+    .action-dot { display: grid; place-items: center; width: 18px; height: 16px; border-radius: 2px; background: var(--line-strong); color: var(--on-accent); font: 800 9px/1 var(--mono); }
+    .action-dot.create { background: var(--green); }
+    .action-dot.modify { background: var(--orange); }
+    .action-dot.delete { background: var(--red); }
+    .action-dot.move { background: var(--violet); }
+    .action-dot.untouched { background: var(--navy); }
+
+    .file-inspector { min-width: 0; padding: 16px 20px 20px; overflow: auto; font-size: 13px; }
+    .inspector-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+    .path { margin: 0; overflow-wrap: anywhere; font: 700 15px/1.4 var(--mono); }
+    .purpose { margin: 4px 0 0; color: var(--muted); }
+    .action-badge { flex: 0 0 auto; padding: 6px 9px; border: 1px solid currentColor; font: 800 10px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+    .action-badge.create { color: var(--green); background: var(--green-soft); }
+    .action-badge.modify { color: var(--orange); background: var(--orange-soft); }
+    .action-badge.delete { color: var(--red); background: var(--red-soft); }
+    .action-badge.move { color: var(--violet); background: var(--violet-soft); }
+    .action-badge.untouched { color: var(--navy); background: var(--navy-soft); }
+    .inspector-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; margin-top: 14px; }
+    .info-block { border-top: 3px solid var(--navy); padding: 10px 12px 12px; background: var(--surface); }
+    .info-block.no { border-top-color: var(--red); }
+    .info-block h4 { margin: 0 0 8px; font: 800 10px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+    .info-block ul { margin: 0; padding-left: 16px; font-size: 12.5px; }
+    .info-block li + li { margin-top: 4px; }
+    .symbol-row, .trace-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+    .token { padding: 5px 8px; border: 1px solid var(--line); background: var(--surface); font: 600 11px/1 var(--mono); }
+    .trace-token { color: var(--navy); border-color: var(--line-strong); background: var(--navy-soft); }
+    .dependency-strip { margin-top: 14px; padding: 10px 12px; border: 1px dashed var(--line-strong); }
+    .dependency-strip b { display: block; margin-bottom: 7px; font: 800 10px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+    .dependency-strip p { margin: 0; color: var(--muted); font-size: 12.5px; }
+
+    .timeline { display: grid; gap: 6px; counter-reset: step; }
+    .step { counter-increment: step; display: grid; grid-template-columns: 36px 1fr auto; gap: 12px; align-items: start; padding: 10px 14px; font-size: 14px; border: 1px solid var(--line); background: var(--sheet); }
+    .step::before { content: counter(step, decimal-leading-zero); color: var(--orange); font: 800 14px/1.4 var(--mono); }
+    .step b { display: block; margin-bottom: 4px; }
+    .step p { margin: 0; color: var(--muted); }
+    .step code { color: var(--navy); font: 700 11px/1.4 var(--mono); }
+    .acceptance { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+    .acceptance-item { display: grid; grid-template-columns: auto 1fr; gap: 10px; padding: 10px 14px; font-size: 14px; border: 1px solid #426e60; background: var(--green-soft); }
+    .acceptance-item strong { color: var(--green); font-family: var(--mono); }
+    .acceptance-item p { margin: 0; }
+    footer { margin: 36px 0 20px; padding: 18px 0; border-top: 1px solid var(--line-strong); color: var(--muted); font-size: 12px; }
+    footer code { color: var(--navy); }
+
+    @media (max-width: 880px) {
+      .shell { width: min(100% - 22px, 1480px); }
+      .masthead, .overview-grid, .section-heading { grid-template-columns: 1fr; }
+      .masthead { gap: 10px; padding: 12px 14px; }
+      .masthead-side { justify-items: start; }
+      .metrics { justify-content: flex-start; }
+      .change-toolbar { grid-template-columns: 1fr; }
+      .filters { justify-content: flex-start; }
+      .change-workspace { grid-template-columns: 1fr; height: auto; }
+      .file-rail { border-right: 0; border-bottom: 1px solid var(--line); max-height: 260px; }
+      .inspector-grid, .acceptance { grid-template-columns: minmax(0, 1fr); }
+      .inspector-head { flex-wrap: wrap; }
+      .file-inspector { padding: 14px; }
+      .step { grid-template-columns: 42px 1fr; }
+      .step code { grid-column: 2; }
+    }
+
+    @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  </style>
+</head>
+<body data-template="true">
+  <div class="shell">
+    <header class="masthead" id="overview">
+      <div>
+        <p class="crumb" id="doc-crumb">Module · Work item · LLD</p>
+        <h1 id="doc-title">File change plan</h1>
+        <p class="summary" id="doc-summary"></p>
+      </div>
+      <div class="masthead-side">
+        <span class="status-pill">LLD <small id="doc-status">candidate</small></span>
+        <div class="metrics" id="metrics" aria-label="File change totals"></div>
+      </div>
+    </header>
+
+    <nav class="sticky-nav" aria-label="Document sections">
+      <a href="#file-changes">File changes</a>
+      <a href="#context">Context</a>
+      <a href="#execution">Build order</a>
+      <a href="#acceptance">Acceptance</a>
+    </nav>
+
+    <main>
+      <section class="primary-section" id="file-changes" aria-labelledby="changes-title">
+        <div class="section-heading">
+          <div>
+            <p class="section-kicker">Primary implementation plan</p>
+            <h2 id="changes-title">File changes</h2>
+          </div>
+          <p class="workspace-note"><kbd>/</kbd> search paths, symbols, IDs · <kbd>↑</kbd><kbd>↓</kbd> move between files</p>
+        </div>
+        <div class="change-view">
+          <div class="change-toolbar">
+            <label class="search-wrap">
+              <span aria-hidden="true">/</span>
+              <input id="file-search" type="search" aria-label="Find a path, symbol, or requirement" placeholder="Find a path, symbol, or requirement" autocomplete="off">
+            </label>
+            <div class="filters" id="filters" aria-label="Filter files by action"></div>
+          </div>
+          <div class="change-workspace">
+            <div class="file-rail" id="file-rail" role="listbox" aria-label="Planned file changes"></div>
+            <article class="file-inspector" id="file-inspector" aria-live="polite"></article>
+          </div>
+        </div>
+      </section>
+
+      <section id="context" aria-labelledby="scope-title">
+        <p class="section-kicker">Supporting context</p>
+        <h2 id="scope-title">Scope and preserved boundaries</h2>
+        <p class="lede" id="scope-lede"></p>
+        <div class="overview-grid">
+          <article class="card">
+            <h3>In scope</h3>
+            <ul class="plain-list" id="scope-list"></ul>
+          </article>
+          <article class="card boundary">
+            <h3>Preserved boundaries</h3>
+            <ul class="plain-list" id="boundary-list"></ul>
+          </article>
+        </div>
+      </section>
+
+      <section id="execution" aria-labelledby="execution-title">
+        <p class="section-kicker">Dependency order</p>
+        <h2 id="execution-title">Build order</h2>
+        <p class="lede">Each step should leave a locally verifiable result and unblock the next dependency.</p>
+        <div class="timeline" id="timeline"></div>
+      </section>
+
+      <section id="acceptance" aria-labelledby="acceptance-title">
+        <p class="section-kicker">Completion signals</p>
+        <h2 id="acceptance-title">Acceptance</h2>
+        <p class="lede">Every signal traces back to the canonical LLD and names an observable result.</p>
+        <div class="acceptance" id="acceptance-list"></div>
+      </section>
+    </main>
+
+    <footer>This HTML document is authoritative. Review and implementation should use this file as the LLD.</footer>
+  </div>
+
+  <script>
+    const LLD_DOCUMENT = {
+      meta: {
+        crumb: "Example module · T000 · LLD",
+        title: "Replace this example with the implementation title",
+        summary: "Replace this summary with the behavior and boundary defined by this LLD.",
+        status: "draft · unstamped"
+      },
+      scope: {
+        lede: "Replace this text with the implementation boundary.",
+        in: ["One concrete behavior owned by this LLD", "A second required behavior"],
+        boundaries: ["An adjacent subsystem that remains unchanged", "A deferred capability"]
+      },
+      files: [
+        {
+          id: "contract",
+          path: "src/example/contracts.ts",
+          action: "create",
+          layer: "contract",
+          purpose: "Defines the new boundary consumed by the runtime and its tests.",
+          symbols: ["ExampleRequest", "ExampleResult"],
+          responsibilities: ["Own the stable input and output shapes", "Reject structurally invalid data before runtime work starts"],
+          nonResponsibilities: ["Does not perform persistence", "Does not select runtime policy"],
+          implementation: ["Add the request and result types at the existing contract seam", "Export the validation entry point used by runtime and tests"],
+          verification: ["Reject malformed requests in the focused contract suite", "Type-check all consumers against the exported result"],
+          dependencies: "No implementation dependency. This contract lands first.",
+          tests: ["contract.test.ts"],
+          trace: ["D-1", "AC-1"]
+        },
+        {
+          id: "service",
+          path: "src/example/service.ts",
+          action: "modify",
+          layer: "runtime",
+          purpose: "Coordinates the happy path and preserves the existing failure boundary.",
+          symbols: ["ExampleService.run"],
+          responsibilities: ["Validate the request through the new contract", "Call the existing adapter once", "Return the stable result"],
+          nonResponsibilities: ["Does not retry provider failures", "Does not write UI state"],
+          implementation: ["Replace the legacy translation call with the new contract", "Keep provider errors on the existing failure path"],
+          verification: ["Exercise the successful orchestration", "Assert that provider failure remains observable"],
+          dependencies: "Depends on contracts.ts and the existing provider adapter.",
+          tests: ["service.test.ts", "example.acceptance.test.ts"],
+          trace: ["D-2", "AC-1", "AC-2"]
+        },
+        {
+          id: "legacy",
+          path: "src/example/legacy-helper.ts",
+          action: "delete",
+          layer: "runtime",
+          purpose: "Removes the superseded translation path after all callers move to the contract.",
+          symbols: ["translateLegacyExample"],
+          responsibilities: ["Deletion occurs only after the service migration"],
+          nonResponsibilities: ["No compatibility shim remains"],
+          implementation: ["Remove the helper and its exports after all callers migrate"],
+          verification: ["Search for remaining imports", "Run the acceptance suite after deletion"],
+          dependencies: "Blocked by service.ts migration and acceptance coverage.",
+          tests: ["example.acceptance.test.ts"],
+          trace: ["D-3", "AC-3"]
+        },
+        {
+          id: "acceptance",
+          path: "tests/example.acceptance.test.ts",
+          action: "modify",
+          layer: "test",
+          purpose: "Proves the observable behavior at the highest existing seam.",
+          symbols: ["example workflow acceptance"],
+          responsibilities: ["Prove the contract through the public entry point", "Prove provider failure remains visible"],
+          nonResponsibilities: ["Does not assert private helper calls"],
+          implementation: ["Update fixtures to the stable request and result shapes", "Cover success, validation failure, and provider failure"],
+          verification: ["Run this test at the repository's public workflow seam"],
+          dependencies: "Runs after the runtime path is complete.",
+          tests: ["self"],
+          trace: ["AC-1", "AC-2", "AC-3"]
+        },
+        {
+          id: "provider",
+          path: "src/provider/adapter.ts",
+          action: "untouched",
+          layer: "boundary",
+          purpose: "Documents the provider boundary that this LLD deliberately preserves.",
+          symbols: ["ProviderAdapter.execute"],
+          responsibilities: ["Continue exposing the existing provider contract"],
+          nonResponsibilities: ["No retry or response-shape changes in this work"],
+          implementation: ["No code change; confirm the existing adapter contract before implementation"],
+          verification: ["Existing provider suite remains green without fixture changes"],
+          dependencies: "Consumed by service.ts without modification.",
+          tests: ["existing provider suite"],
+          trace: ["INV-1"]
+        }
+      ],
+      execution: [
+        { title: "Land the contract", detail: "Add the stable shapes and focused contract tests.", gate: "contract tests" },
+        { title: "Move the runtime path", detail: "Adopt the contract at the existing service seam.", gate: "service tests" },
+        { title: "Remove the old path", detail: "Delete the helper after every caller and acceptance case has moved.", gate: "acceptance suite" }
+      ],
+      acceptance: [
+        { id: "AC-1", text: "The public workflow returns the new stable result shape." },
+        { id: "AC-2", text: "Provider failures remain observable and do not leave partial state." },
+        { id: "AC-3", text: "No production caller uses the deleted legacy translation path." }
+      ]
+    };
+
+    const actionLabels = { all: "All", create: "Create", modify: "Modify", delete: "Delete", move: "Move", untouched: "Untouched" };
+    const state = { action: "all", query: "", selected: null };
+
+    const esc = (value) => String(value ?? "").replace(/[&<>'"]/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[char]));
+    const directory = path => path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : ".";
+    const basename = path => path.slice(path.lastIndexOf("/") + 1);
+    const list = items => `<ul>${(items || []).map(item => `<li>${esc(item)}</li>`).join("")}</ul>`;
+    const tokens = (items, extra = "") => (items || []).map(item => `<span class="token ${extra}">${esc(item)}</span>`).join("");
+
+    function visibleFiles() {
+      const needle = state.query.trim().toLowerCase();
+      return LLD_DOCUMENT.files.filter(file => {
+        const actionMatch = state.action === "all" || file.action === state.action;
+        const haystack = [file.path, file.layer, file.purpose, ...(file.symbols || []), ...(file.responsibilities || []), ...(file.implementation || []), ...(file.verification || []), ...(file.trace || [])].join(" ").toLowerCase();
+        return actionMatch && (!needle || haystack.includes(needle));
+      });
+    }
+
+    function renderHeader() {
+      document.getElementById("doc-crumb").textContent = LLD_DOCUMENT.meta.crumb;
+      document.getElementById("doc-title").textContent = LLD_DOCUMENT.meta.title;
+      document.getElementById("doc-summary").textContent = LLD_DOCUMENT.meta.summary;
+      document.getElementById("doc-status").textContent = LLD_DOCUMENT.meta.status;
+      document.getElementById("scope-lede").textContent = LLD_DOCUMENT.scope.lede;
+      document.getElementById("scope-list").innerHTML = LLD_DOCUMENT.scope.in.map(item => `<li>${esc(item)}</li>`).join("");
+      document.getElementById("boundary-list").innerHTML = LLD_DOCUMENT.scope.boundaries.map(item => `<li>${esc(item)}</li>`).join("");
+      const counts = Object.keys(actionLabels).filter(action => action !== "all").map(action => ({ action, count: LLD_DOCUMENT.files.filter(file => file.action === action).length })).filter(item => item.count);
+      document.getElementById("metrics").innerHTML = counts.map(item => `<div class="metric"><span class="action-dot ${item.action}" aria-hidden="true">${item.action[0].toUpperCase()}</span><b>${item.count}</b><span>${actionLabels[item.action]}</span></div>`).join("");
+    }
+
+    function renderFilters() {
+      const actions = ["all", ...new Set(LLD_DOCUMENT.files.map(file => file.action))];
+      const count = action => action === "all" ? LLD_DOCUMENT.files.length : LLD_DOCUMENT.files.filter(file => file.action === action).length;
+      document.getElementById("filters").innerHTML = actions.map(action => `<button class="filter" type="button" data-action="${action}" aria-pressed="${state.action === action}">${actionLabels[action] || action}<small>${count(action)}</small></button>`).join("");
+      document.querySelectorAll(".filter").forEach(button => button.addEventListener("click", () => {
+        state.action = button.dataset.action;
+        renderFilters();
+        renderFiles();
+        document.querySelector(`[data-action="${CSS.escape(state.action)}"]`)?.focus();
+      }));
+    }
+
+    function renderFiles() {
+      const files = visibleFiles();
+      if (!files.some(file => file.id === state.selected)) state.selected = files[0]?.id || null;
+      const groups = Map.groupBy ? Map.groupBy(files, file => directory(file.path)) : files.reduce((map, file) => map.set(directory(file.path), [...(map.get(directory(file.path)) || []), file]), new Map());
+      const rail = document.getElementById("file-rail");
+      rail.innerHTML = files.length ? [...groups.entries()].map(([dir, entries]) => `<div class="dir-group"><div class="dir-label"><span title="${esc(dir)}">${esc(dir)}/</span><b>${entries.length}</b></div>${entries.map(file => `<button class="file-button" type="button" role="option" data-file="${esc(file.id)}" aria-selected="${file.id === state.selected}" title="${esc(file.path)} · ${esc(actionLabels[file.action] || file.action)}"><span class="action-dot ${esc(file.action)}" aria-label="${esc(actionLabels[file.action] || file.action)}">${esc((file.action || "?")[0].toUpperCase())}</span><span class="file-name">${esc(basename(file.path))}</span><span class="file-meta">${esc(file.layer)}</span></button>`).join("")}</div>`).join("") : `<div class="rail-empty">No files match this view.</div>`;
+      rail.querySelectorAll(".file-button").forEach(button => {
+        button.addEventListener("click", () => selectFile(button.dataset.file));
+        button.addEventListener("keydown", event => navigateFiles(event, button.dataset.file));
+      });
+      renderInspector();
+    }
+
+    function selectFile(id) {
+      state.selected = id;
+      document.querySelectorAll(".file-button").forEach(button => button.setAttribute("aria-selected", String(button.dataset.file === id)));
+      renderInspector();
+      history.replaceState(null, "", `#file:${encodeURIComponent(id)}`);
+    }
+
+    function navigateFiles(event, id) {
+      if (!['ArrowDown', 'ArrowUp'].includes(event.key)) return;
+      event.preventDefault();
+      const files = visibleFiles();
+      const index = files.findIndex(file => file.id === id);
+      const next = event.key === 'ArrowDown' ? Math.min(index + 1, files.length - 1) : Math.max(index - 1, 0);
+      selectFile(files[next]?.id || id);
+      document.querySelector(`[data-file="${CSS.escape(state.selected)}"]`)?.focus();
+    }
+
+    function renderInspector() {
+      const file = LLD_DOCUMENT.files.find(entry => entry.id === state.selected);
+      const inspector = document.getElementById("file-inspector");
+      if (!file) { inspector.innerHTML = `<p class="rail-empty">Choose a file to inspect.</p>`; return; }
+      inspector.innerHTML = `
+        <div class="inspector-head">
+          <div><h3 class="path">${esc(file.path)}</h3><p class="purpose">${esc(file.purpose)}</p></div>
+          <span class="action-badge ${esc(file.action)}">${esc(actionLabels[file.action] || file.action)}</span>
+        </div>
+        <div class="symbol-row" aria-label="Symbols">${tokens(file.symbols)}</div>
+        <div class="inspector-grid">
+          <div class="info-block"><h4>Responsibilities</h4>${list(file.responsibilities)}</div>
+          <div class="info-block no"><h4>Preserved boundary</h4>${list(file.nonResponsibilities)}</div>
+          <div class="info-block"><h4>Implementation</h4>${list(file.implementation)}</div>
+          <div class="info-block"><h4>Verification</h4>${list(file.verification)}</div>
+        </div>
+        <div class="dependency-strip"><b>Dependency position</b><p>${esc(file.dependencies)}</p></div>
+        <div class="trace-row" aria-label="Tests and requirement trace">${tokens(file.tests)}${tokens(file.trace, "trace-token")}</div>`;
+    }
+
+    function renderTimeline() {
+      document.getElementById("timeline").innerHTML = LLD_DOCUMENT.execution.map(step => `<article class="step"><div><b>${esc(step.title)}</b><p>${esc(step.detail)}</p></div><code>${esc(step.gate)}</code></article>`).join("");
+      document.getElementById("acceptance-list").innerHTML = LLD_DOCUMENT.acceptance.map(item => `<article class="acceptance-item"><strong>${esc(item.id)}</strong><p>${esc(item.text)}</p></article>`).join("");
+    }
+
+    document.getElementById("file-search").addEventListener("input", event => { state.query = event.target.value; renderFiles(); });
+    document.addEventListener("keydown", event => {
+      if (event.key === "/" && document.activeElement !== document.getElementById("file-search")) { event.preventDefault(); document.getElementById("file-search").focus(); }
+      if (event.key === "Escape" && document.activeElement === document.getElementById("file-search")) { state.query = ""; document.getElementById("file-search").value = ""; renderFiles(); }
+    });
+
+    function readDeepLink() {
+      if (!location.hash.startsWith("#file:")) return;
+      let id;
+      try { id = decodeURIComponent(location.hash.slice(6)); } catch { return; }
+      if (!LLD_DOCUMENT.files.some(file => file.id === id)) return;
+      state.selected = id;
+      state.action = "all";
+      state.query = "";
+      document.getElementById("file-search").value = "";
+    }
+    window.addEventListener("hashchange", () => { readDeepLink(); renderFilters(); renderFiles(); });
+    readDeepLink();
+    renderHeader();
+    renderFilters();
+    renderFiles();
+    renderTimeline();
+  </script>
+</body>
+</html>

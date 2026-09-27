@@ -1,4 +1,4 @@
-import { useQuery } from "@apollo/client/react";
+import { useCallback, useSyncExternalStore } from "react";
 import {
   acknowledgeOnboarding as writeOnboardingAcknowledgement,
   readOnboardingProjects,
@@ -103,12 +103,14 @@ export async function acknowledgeOnboarding(projectId: string): Promise<void> {
     onboarding_required: project.onboarding_required,
   };
   const nodes = cached() ?? [];
-  const known = nodes.some((node) => node.id === acknowledged.id);
+  const sameProject = (node: CachedProject) =>
+    compactWorktrackerId(node.id) === acknowledged.id;
+  const known = nodes.some(sameProject);
   studioApolloClient().writeQuery({
     query: WorkTrackerOnboardingDocument,
     data: onboardingQueryData(
       known
-        ? nodes.map((node) => (node.id === acknowledged.id ? acknowledged : node))
+        ? nodes.map((node) => (sameProject(node) ? acknowledged : node))
         : [...nodes, acknowledged],
     ),
   });
@@ -120,9 +122,18 @@ export function getOnboardingRequiredSnapshot(): boolean {
 }
 
 export function useOnboardingRequired(): boolean {
-  const { data } = useQuery(WorkTrackerOnboardingDocument, {
-    client: studioApolloClient(),
-    fetchPolicy: "cache-only",
-  });
-  return data ? onboardingRequired(data.projects.nodes) : false;
+  const client = studioApolloClient();
+  const subscribe = useCallback(
+    (onStoreChange: () => void) => client.cache.watch({
+      query: WorkTrackerOnboardingDocument,
+      optimistic: true,
+      callback: onStoreChange,
+    }),
+    [client],
+  );
+  const getSnapshot = useCallback(
+    () => getOnboardingRequiredSnapshot(),
+    [client],
+  );
+  return useSyncExternalStore(subscribe, getSnapshot, () => false);
 }

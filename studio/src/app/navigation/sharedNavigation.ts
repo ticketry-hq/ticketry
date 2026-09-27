@@ -23,6 +23,7 @@ import {
 import { getVisibleModulesSnapshot } from "../../features/module-tabs";
 import { useStudioStore } from "../../features/projects";
 import { useClientStore } from "../../state/clientStore";
+import { openConversationComposer } from "../../features/conversations";
 import {
   startNormalRunForSelectedItem,
   startRunNowForSelectedItem,
@@ -119,6 +120,12 @@ export function routeSharedNavigation(
     case "instant-change":
       if (ctx.tasks.selectedModuleId) {
         startInstantChangeFlow();
+        event.preventDefault();
+      }
+      return;
+    case "instant-change-with-prompt":
+      if (ctx.tasks.selectedModuleId) {
+        openConversationComposer();
         event.preventDefault();
       }
       return;

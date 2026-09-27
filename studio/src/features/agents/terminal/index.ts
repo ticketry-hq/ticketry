@@ -59,6 +59,7 @@ export type {
 export {
   isTerminalProvider,
   providerToneClasses,
+  providerTextClass,
   type TerminalProvider,
 } from "./presentation/providerPresentation";
 export { isLiveTerminalState } from "./presentation/terminalLiveness";

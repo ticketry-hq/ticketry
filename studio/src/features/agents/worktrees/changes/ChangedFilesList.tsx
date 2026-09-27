@@ -9,6 +9,7 @@ import {
   type ChangedFileTreeRow,
 } from "./changedFileTree";
 import { CHANGES_FILE_ACTIONS, type ChangesFileAction } from "./changesKeyboardNavigation";
+import { focusChangesDiff, focusChangesToolbar, isPlainKey } from "./changesZoneFocus";
 
 const INDENT_STEP = 12;
 const ROOT_INDENT = 8;
@@ -34,6 +35,8 @@ function rowKey(row: ChangedFileTreeRow): string {
  * selection, Left/Right collapse and expand a directory, Enter or Space
  * activates. Focus follows a row's path across refreshes; when the focused row
  * disappears, the row now at its position takes over, or the empty message.
+ * At the edges the same keys cross zones: Up from the first row returns to
+ * the toolbar and Right on a file moves into the diff (`changesZoneFocus`).
  */
 export function ChangedFilesList({
   checkoutKey,
@@ -107,7 +110,10 @@ export function ChangedFilesList({
     const index = visibleKeys.indexOf(rowKey(row));
     const directory = row.kind === "directory" ? row.path : undefined;
     const isCollapsed = directory !== undefined && collapsed.includes(directory);
-    if (action === "changes.file.previous") focusRow(visibleKeys[Math.max(0, index - 1)]);
+    if (action === "changes.file.previous") {
+      if (index === 0 && focusChangesToolbar(event.currentTarget)) return;
+      focusRow(visibleKeys[Math.max(0, index - 1)]);
+    }
     else if (action === "changes.file.next") focusRow(visibleKeys[Math.min(visibleKeys.length - 1, index + 1)]);
     else if (action === "changes.file.first") focusRow(visibleKeys[0]);
     else if (action === "changes.file.last") focusRow(visibleKeys.at(-1));
@@ -118,6 +124,8 @@ export function ChangedFilesList({
       toggle(directory, event.currentTarget);
     } else if (action === "changes.file.collapse" && directory !== undefined && !isCollapsed) {
       toggle(directory, event.currentTarget);
+    } else if (action === "changes.file.expand" && row.kind === "file") {
+      focusChangesDiff(event.currentTarget);
     }
   };
 
@@ -133,6 +141,9 @@ export function ChangedFilesList({
         role="region"
         tabIndex={0}
         aria-label={`${label} empty`}
+        onKeyDown={(event) => {
+          if (isPlainKey(event, "ArrowUp") && focusChangesToolbar(event.currentTarget)) event.preventDefault();
+        }}
         className="p-3 text-sm text-text-muted focus-visible:ring-1 focus-visible:ring-focus-accent"
       >
         {emptyMessage}

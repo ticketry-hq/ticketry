@@ -114,6 +114,10 @@ export interface DefaultInteractiveTaskLaunchInput {
 export interface DefaultInstantConversationLaunchInput {
   readonly projectId: string;
   readonly moduleId: string;
+  /** Omitted: launch authority uses the configured default provider. */
+  readonly provider?: TerminalProvider;
+  /** The user's first message, appended to the conversation starter prompt. */
+  readonly prompt?: string;
 }
 
 export interface CreatedInstantConversation {
@@ -135,6 +139,9 @@ export async function createDefaultInstantConversation(
     moduleId: input.moduleId,
     targetId: input.moduleId,
     kind: "instant",
+    // Omitted rather than null, so launch authority resolves the defaults.
+    ...(input.provider ? { provider: input.provider } : {}),
+    ...(input.prompt ? { prompt: input.prompt } : {}),
     workingDirectoryIdentity: `module:${compactIdentity(input.moduleId)}`,
     columns: DEFAULT_COLUMNS,
     rows: DEFAULT_ROWS,

@@ -74,3 +74,16 @@ export function providerToneClasses({
     ? `${classes.fill} ${classes.edge} text-provider-ink`
     : `bg-pane-bg ${classes.edge} ${classes.text}`;
 }
+
+/** Just the provider ink, for rows that sit on a menu's own ground. */
+export function providerTextClass({
+  agent,
+  live,
+}: {
+  agent: string | null | undefined;
+  live: boolean;
+}): string {
+  return live && isTerminalProvider(agent)
+    ? PROVIDER_CLASSES[agent].text
+    : ENDED_CLASSES.text;
+}

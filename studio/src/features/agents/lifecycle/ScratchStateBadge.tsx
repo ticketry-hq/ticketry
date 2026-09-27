@@ -5,6 +5,7 @@ import {
   type TaskLifecycleChip,
 } from "../status";
 import { LifecycleBadge } from "../terminal/LifecycleBadge";
+import { ClaudeStartupAttentionAction } from "./ClaudeStartupAttentionAction";
 
 interface Props {
   projectId: string | null;
@@ -51,6 +52,10 @@ export function ScratchStateBadge({
           alwaysShowCount
         />
       ))}
+      <ClaudeStartupAttentionAction
+        projectId={projectId ?? ""}
+        moduleId={moduleId ?? ""}
+      />
     </span>
   );
 }

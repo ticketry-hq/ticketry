@@ -36,6 +36,45 @@ async fn startup_migrates_then_reopens_without_changing_history_or_evidence() {
 }
 
 #[tokio::test]
+async fn existing_owned_runs_gain_attention_reason_on_reopen() {
+    let directory = tempfile::tempdir().unwrap();
+    ticketry_installation::provision(directory.path())
+        .await
+        .unwrap();
+    ensure_all(directory.path()).await;
+    let database = Database::connect(format!(
+        "sqlite:{}?mode=rw",
+        directory.path().join("state.db").display()
+    ))
+    .await
+    .unwrap();
+    database
+        .execute_unprepared("ALTER TABLE agent_runs DROP COLUMN attention_reason")
+        .await
+        .unwrap();
+    database.close().await.unwrap();
+    ticketry_runs::ensure_adopted(directory.path())
+        .await
+        .unwrap();
+    let database = Database::connect(format!(
+        "sqlite:{}?mode=ro",
+        directory.path().join("state.db").display()
+    ))
+    .await
+    .unwrap();
+    let columns = database
+        .query_all_raw(sea_orm::Statement::from_string(
+            sea_orm::DbBackend::Sqlite,
+            "PRAGMA table_info('agent_runs')".to_owned(),
+        ))
+        .await
+        .unwrap();
+    assert!(columns
+        .iter()
+        .any(|row| row.try_get::<String>("", "name").unwrap() == "attention_reason"));
+}
+
+#[tokio::test]
 async fn startup_reopen_still_rejects_damaged_owned_schemas() {
     for table in [
         "worktracker_issue",

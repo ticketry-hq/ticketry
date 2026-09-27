@@ -14,6 +14,7 @@ type AgentRunHolding {
 	provider_session_id: String
 	output_sequence: Int!
 	last_output_at: String
+	attention_reason: String
 }
 
 type AgentRunViewerLeases {

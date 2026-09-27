@@ -32,6 +32,7 @@ pub const RECOVERABLE_CODES: &[&str] = &[
     "model_required",
     "module_folder_unusable",
     "module_not_found",
+    "no_activated_providers",
     "prompt_not_configured",
     "provider_not_activated",
     "unattended_launch_unsupported",

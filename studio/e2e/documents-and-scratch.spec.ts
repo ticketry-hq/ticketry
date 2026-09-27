@@ -341,7 +341,8 @@ test.describe.serial("Documents and Local scratch workspace", () => {
     await expect(workspaceTabs.getByRole("tab", { name: "DESIGN" }))
       .toHaveCount(0);
 
-    const reopen = page.getByRole("button", { name: "Reopen DESIGN" });
+    await page.getByTestId("dormant-tabs-trigger").click();
+    const reopen = page.getByRole("menuitem", { name: "Reopen DESIGN" });
     await expect(reopen).toBeVisible();
     await reopen.click();
     await expect.poll(visibleOrder).toEqual(initialOrder);
@@ -535,7 +536,7 @@ test.describe.serial("Documents and Local scratch workspace", () => {
     await openModule(page, moduleRow.name);
     await openWorkItem(page, workItem.name);
     await expect(liveTab).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Reopen LIVE" }))
+    await expect(page.getByRole("menuitem", { name: "Reopen LIVE" }))
       .toHaveCount(0);
     await expect(page.getByRole("tablist", { name: "Workspace tabs" })
       .getByRole("tab", { name: "LIVE" })).toHaveCount(0);

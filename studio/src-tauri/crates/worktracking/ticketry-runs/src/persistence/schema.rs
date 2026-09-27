@@ -40,7 +40,31 @@ pub const AGENT_RUN_COLUMNS: &[&str] = &[
     "initial_prompt",
     "launch_reasoning",
     "launch_unattended",
+    "attention_reason",
 ];
+
+pub(crate) const AGENT_RUN_RECONCILED_COLUMNS: &[(&str, &str)] =
+    &[("attention_reason", "text NULL")];
+
+pub(crate) async fn reconcile_agent_run_columns(
+    database: &impl ConnectionTrait,
+) -> Result<(), RunsPersistenceError> {
+    let installed = columns(database, "agent_runs").await?;
+    if installed.is_empty() {
+        return Ok(());
+    }
+    for (column, definition) in AGENT_RUN_RECONCILED_COLUMNS {
+        if !installed.contains(*column) {
+            database
+                .execute_unprepared(&format!(
+                    "ALTER TABLE agent_runs ADD COLUMN {column} {definition};"
+                ))
+                .await
+                .map_err(storage)?;
+        }
+    }
+    Ok(())
+}
 
 pub const ATTEMPT_BASE_COLUMNS: &[&str] = &[
     "id",
@@ -102,6 +126,7 @@ pub async fn install(
     let transaction = database.begin().await.map_err(storage)?;
     bridge(&transaction, bridge_from).await?;
     reconcile_attempt_columns(&transaction).await?;
+    reconcile_agent_run_columns(&transaction).await?;
     transaction
         .execute_unprepared(FOCUSED_SCHEMA)
         .await
@@ -128,6 +153,7 @@ pub async fn upgrade_v1(
     let transaction = database.begin().await.map_err(storage)?;
     rebuild_premerge_agent_runs(&transaction).await?;
     reconcile_attempt_columns(&transaction).await?;
+    reconcile_agent_run_columns(&transaction).await?;
     transaction
         .execute_unprepared(
             "CREATE TABLE ticketry_runs_adoption__v2 (\n\
@@ -410,7 +436,8 @@ CREATE TABLE agent_runs__rust (
     launch_model varchar NULL,
     initial_prompt text NULL,
     launch_reasoning varchar NULL,
-    launch_unattended bool NOT NULL DEFAULT 0
+    launch_unattended bool NOT NULL DEFAULT 0,
+    attention_reason text NULL
 );
 "#;
 

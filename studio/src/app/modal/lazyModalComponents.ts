@@ -29,6 +29,9 @@ export function createLazyModalComponents() {
     StatusUpdate: lazy(async () => ({
       default: (await import("../../features/studio/modals/StatusUpdate")).StatusUpdate,
     })),
+    StoryWorkflowGuideDialog: lazy(async () => ({
+      default: (await import("./StoryWorkflowGuideModal")).StoryWorkflowGuideModal,
+    })),
     ParentUpdate: lazy(async () => ({
       default: (await import("../../features/studio/modals/ParentUpdate")).ParentUpdate,
     })),

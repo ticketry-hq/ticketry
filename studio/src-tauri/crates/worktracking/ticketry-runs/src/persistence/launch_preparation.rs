@@ -365,6 +365,7 @@ async fn mint_or_validate_run(
         initial_prompt: Set(request.snapshot.initial_prompt.clone()),
         launch_reasoning: Set(request.snapshot.reasoning.clone()),
         launch_unattended: Set(request.snapshot.unattended),
+        attention_reason: NotSet,
     }
     .insert(transaction)
     .await

@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { toast } from "../../../../../../state/clientStore";
-import { ApiError, apiErrorMessage } from "../../../../../../shared/api/errors";
+import { ApiError } from "../../../../../../shared/api/errors";
+import { launchFailureMessage } from "../../../../../../features/agents/terminal";
 import {
   executeTaskSubtree,
   type GraphRunExecutionMode,
@@ -113,7 +114,7 @@ export function useSubtreeRunLaunch({
             : `${actionName} is no longer available in this item's current state.`,
         );
       } else {
-        toast.error(`${failureMessage}: ${apiErrorMessage(error)}`);
+        toast.error(`${failureMessage}: ${launchFailureMessage(error)}`);
       }
     } finally {
       inFlightRef.current = false;

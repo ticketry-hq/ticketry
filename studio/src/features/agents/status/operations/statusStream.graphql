@@ -13,6 +13,7 @@ fragment RunHoldingFields on AgentRunHolding {
   started_at
   state
   effective_state
+  attention_reason
   updated_at
   provider_session_id
   output_sequence

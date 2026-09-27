@@ -147,7 +147,7 @@ named gate before the full Studio suite, typecheck, and build.
 | 162 | A retained native viewer releases once when the WebView lifecycle ends, including listener-cleanup failure. |
 | 163 | Apollo is Studio's only server-state client. |
 | 164 | Module tickets with blocker edges render from the WorkTracker read contract. |
-| 165 | The selected Work Item owns one worktree block inside the hideable Details panel. |
+| 165 | Details fills the pane width without a centered width cap, with a small matching side inset on the toolbar and document, compact section spacing, and one compact worktree control in the toolbar beside the run actions. |
 | 166 | Worktree confirmation and mutation errors do not leak across task selection. |
 | 167 | Apollo is Studio's only application-state owner; client-only UI state lives in the same cache as server records. |
 | 168 | A module drag rejected because its cached neighbors are stale refreshes the authoritative order, recomputes the same gesture, and completes without asking the person to retry. |
@@ -230,7 +230,7 @@ named gate before the full Studio suite, typecheck, and build.
 | 245 | A fresh bound launch passes one composed prompt, including any Stage skills, in provider argv and submits no follow-on skill command; a handoff submits the same composed destination prompt once to the live agent. |
 | 246 | An untouched launch-configuration form follows canonical binding changes instead of retaining a stale mounted snapshot. |
 | 247 | A transitioned Story stays first in its destination state while the update is pending and after the authoritative result replaces it. |
-| 248 | Changing the selected Story discards its unsaved description draft, opens the new Story's saved description in view mode, and keeps later description updates bound to the new Story. |
+| 248 | Changing the selected Story writes its dirty description draft, opens the new Story's saved description in the always-live editor, and keeps later description updates bound to the new Story. Story names and Details descriptions share sans-serif typography at regular weight. |
 | 249 | Resuming one stopped terminal conversation opens and focuses one successor while every unselected stopped conversation stays independently resumable through holding refreshes and reload. |
 | 250 | The Stories pane says whether an automated transition continued the Story's live agent session or started a fresh one, and follows the newest delivery across the rolled-up subtree. |
 | 251 | The + Agent launcher follows every workspace tab inside the shared horizontal scroller and opens the same provider picker used by Cmd+Enter instead of an inline dropdown. |
@@ -277,7 +277,7 @@ named gate before the full Studio suite, typecheck, and build.
 | 285 | Moving a Story through the sidebar refreshes both the source and destination module, including a previously cached empty destination. |
 
 | 286 | Same-Story description writes are serialized so the newest draft persists last. |
-| 287 | Details shows its description before shared rich-editor code warms after a frame; preloading creates no editor instance, and clicking the description reuses the loaded code. |
+| 287 | Details shows its rendered description before shared rich-editor code warms after a frame; the editor mounts in place once that code loads, with no click and no second load. |
 | 288 | Launch selects Details for the restored Story or scratch workspace even if a terminal, document, or changes tab was previously selected; document and terminal tab state remains available for subsequent selection. |
 | 289 | Studio opens from the initial ready configuration when backend startup finishes before the WebView subscribes to health events. |
 | 290 | Module fetching and hierarchy derivation stay shared as more Stories rows mount; normalized nonstructural task updates refresh their row and selected Details without rebuilding the module tree. |
@@ -348,6 +348,44 @@ named gate before the full Studio suite, typecheck, and build.
 | 355 | Closing the Branch inspector after opening Changes from a task tab returns focus to the visible Branch button while the planning copy remains mounted. |
 | 356 | Changes-only checkout and file-list keys stay out of planning capture, and shortcut help labels every Changes action instead of showing raw action IDs. |
 | 357 | Changes has a top command section and a bottom review section: Left/Right moves between enabled toolbar controls, Down enters the selected or first file, Right on a file focuses the diff, Left on an unscrolled diff returns to files, Up on the first row or at the top of the diff returns to commands, and directory rows keep their disclosure keys. |
+| 358 | Module folder trust names and inspects only the providers the user activated. |
+| 359 | A module folder saves with no trust prompt when no provider is activated. |
+| 360 | The state picker offers only workflow destinations configured from the current state. |
+| 361 | A missing-folder module keeps its unsent Idea entry draft when the Modules pane opens or closes. |
+| 362 | Provider onboarding allows planning without a provider and persists an empty provider catalog. |
+| 363 | After an interrupted tour, zero providers remains a valid choice through resume, skip, and restart. |
+| 364 | A user can create, read, and edit a work item with no active provider or agent launch. |
+| 365 | The production bundle initializes workspace navigation without a circular-import crash that leaves the desktop window blank. |
+| 366 | A planner completes zero-provider onboarding, receives launch guidance, activates a provider in Model configuration, and launches only after an explicit retry. |
+| 367 | A refused New conversation shows provider guidance without opening a conversation tab. |
+| 368 | Keyboard binding controls expose default, customized, unassigned, and recording states in their accessible names. |
+| 369 | An unmatched story search names the query, explains when the selected story remains open outside the filtered results, and clears without losing selection. |
+| 370 | Finishing zero-provider or selected-Codex onboarding keeps the real created module and selected Story visible immediately and restores both from retained server state after reload without returning to welcome or leaving guidance behind. |
+| 371 | A delayed onboarding acknowledgement keeps the final guidance and selected Story usable, blocks duplicate Finish requests, shows one failure for retry, then completes without a welcome flash and restores the same Story after reload. |
+| 372 | Welcome introduces Ticketry before provider setup; with zero or selected providers, the Story example leaves the real idea field empty, creates no sample Story or execution request, and Enter captures only the user's Story. |
+| 373 | A saved Story opens its persistent, read-only workflow guide from Details and closing it creates no run or state write. |
+| 374 | The guide shows only configured workflow stages and actual branching destinations, including the current state. |
+| 375 | Custom stage names and configured instructions appear as inert text without adding absent familiar stages. |
+| 376 | A current Story state outside the configured workflow is marked honestly and has no invented outgoing transition. |
+| 377 | Provider activation, stage binding, and entry auto-start are distinct facts beside the existing launch-control explanations. |
+| 378 | With zero activated providers, the guide gives a useful manual Details step and points to later Model configuration without launching. |
+| 379 | Scratch conversations and module-only selections have no Story workflow guide trigger. |
+| 380 | The guide contains keyboard focus, closes with Escape, and returns focus to its surviving trigger. |
+| 381 | A failed workflow read shows an accessible error and Retry without substituting default stages. |
+| 382 | Open guidance follows workflow revision, Story state, and provider changes from live cache updates. |
+| 383 | Selection changes discard prior Story guidance, and deleting the Story closes its guide. |
+| 384 | A renamed familiar stage receives the custom-stage explanation and an expandable empty-instructions message. |
+| 385 | While workflow details load, manual next-step and launch-control guidance stays visible without a fabricated workflow. |
+| 386 | Real first-Story capture teaches the Details planning step and states that saving does not launch an agent. |
+| 387 | Zero-provider and activated-provider handoffs offer appropriate next steps; the shared guide temporarily replaces the coach mark and restores it without acknowledging or launching. |
+| 388 | After tour completion and completed-state bootstrap, the selected Story's Details toolbar reopens the same guide without restarting onboarding. |
+| 389 | A workflow read failure in optional help does not block project-owned Finish tour acknowledgement. |
+| 390 | An activated provider with a current-stage launch binding receives Run item guidance with explicit executable, login, profile, and backend-readiness limits. |
+| 391 | Model configuration offers GPT-6 Sol and Luna for Codex, and a selected model saves as the launch default. |
+| 392 | Background automation Claude folder-trust attention stays passive and opens the original run's terminal without changing the pending attempt; activity clears its action. |
+| 393 | Reloaded startup attention retains the generic guidance and the original run identity without alleging trust failure. |
+| 394 | A Plan run's Claude trust attention remains passive and opens its existing terminal. |
+| 395 | An Instant run's trust action reattaches the persisted run after the terminal store is cleared. |
 
 Each executable case carries one stable `[overhaul-NN]` marker. The gate has a
 contract test that fails if a marker is missing or duplicated. A case whose
@@ -373,5 +411,3 @@ outside Studio, or repository-backed documents remain explicitly skipped in
 the web suite. They must not be counted as automated until the harness has safe
 fixture support for those boundaries; their existing Vitest cases are not a
 substitute for running-application verification.
-| 358 | Module folder trust names and inspects only the providers the user activated. |
-| 359 | A module folder saves with no trust prompt when no provider is activated. |

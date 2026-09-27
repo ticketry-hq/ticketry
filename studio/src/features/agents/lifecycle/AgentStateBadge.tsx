@@ -3,6 +3,7 @@ import {
   useTaskLifecycleChips,
 } from "../status";
 import { LifecycleBadge } from "../terminal/LifecycleBadge";
+import { ClaudeStartupAttentionAction } from "./ClaudeStartupAttentionAction";
 
 interface Props {
   /** The issue's UUID (what the agent host keys runs by). */
@@ -38,6 +39,7 @@ export function AgentStateBadge({ issueId, descendantIds, className }: Props) {
           alwaysShowCount
         />
       ))}
+      <ClaudeStartupAttentionAction issueId={issueId} />
     </span>
   );
 }

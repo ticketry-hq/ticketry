@@ -18,6 +18,7 @@ import { TEMP_TASK_ID } from "../../../../features/agents/types";
 import { PaneShell } from "../../PaneShell";
 import { TaskRow } from "./components/TaskRow";
 import { StateHeaderRow } from "./components/StateHeaderRow";
+import { ConversationsHeaderRow } from "./components/ConversationsHeaderRow";
 import { LoadingPlaceholderRow } from "./components/LoadingPlaceholderRow";
 import { IdeaEntry } from "./components/IdeaEntry";
 import { StoriesSearchInput } from "./components/StoriesSearchInput";
@@ -323,6 +324,15 @@ function TasksPaneContent() {
   }, [selectedModuleId, selectedProjectId]);
 
   function renderNonTaskRow(r: Exclude<TreeRow, Row>) {
+    if ("kind" in r && r.kind === HEADER && r.key === "header-conversations") {
+      return (
+        <ConversationsHeaderRow
+          key={r.key}
+          count={r.count}
+          onConfigure={handleToggleConversationConfiguration}
+        />
+      );
+    }
     if ("kind" in r && r.kind === HEADER) {
       const targetId = r.stateId ? stateDropTargetId(r.stateId) : null;
       const isTarget =
@@ -342,11 +352,6 @@ function TasksPaneContent() {
           }
           onToggle={handleToggleStateCollapsed}
           onConfigure={handleToggleStateConfiguration}
-          onConfigureSection={
-            r.stateId === null && r.stateName === "Conversations"
-              ? handleToggleConversationConfiguration
-              : undefined
-          }
           stateId={r.stateId}
           dropTargetProps={
             targetId && !isSearchActive
@@ -448,7 +453,7 @@ function TasksPaneContent() {
         <ConversationDesignPrototype />
       ) : loadingTasks && tree.order.length === 0 ? (
         <div className="text-text-muted">…</div>
-      ) : !rows.some(isPlanningRow) ? (
+      ) : rows.length === 0 ? (
         <div className="text-text-muted">No stories</div>
       ) : (
         <ul role="tree" tabIndex={-1}>

@@ -2,12 +2,13 @@ import { TEMP_TASK_ID } from "../types";
 import { useClientStore } from "../../../state/clientStore";
 import { attachToRun } from "./internal/actions";
 import { scratchBucketId, useTerminalStore } from "./internal/sessionStore";
-import { createDefaultInstantConversation } from "./internal/mutationTransport";
+import {
+  createDefaultInstantConversation,
+  type DefaultInstantConversationLaunchInput,
+} from "./internal/mutationTransport";
 
-export interface InstantConversationLaunchRequest {
-  projectId: string;
-  moduleId: string;
-}
+export type InstantConversationLaunchRequest =
+  DefaultInstantConversationLaunchInput;
 
 /** Launch and select one Instant conversation backed by one terminal run. */
 export async function launchInstantConversation(

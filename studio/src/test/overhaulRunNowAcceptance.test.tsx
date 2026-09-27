@@ -108,7 +108,9 @@ describe("overhaul acceptance — Run Now", () => {
     const details = await screen.findByRole("region", { name: "Details" });
     const runNow = await within(details).findByRole("button", { name: "Run now" });
     expect(runNow).toHaveAttribute("aria-busy", "false");
-    expect(screen.getByRole("button", { name: "Record Run now binding" }))
+    expect(screen.getByRole("button", {
+      name: "Run now, current shortcut R, change binding",
+    }))
       .toHaveTextContent("R");
 
     const release = http.holdRunNow();
@@ -174,6 +176,24 @@ describe("overhaul acceptance — Run Now", () => {
     );
     expect(http.runNowCount("refusal-idea")).toBe(2);
 
+    http.failNextRunNow(422, {
+      target_id: "refusal-idea",
+      committed_state: null,
+      run: null,
+      code: "no_activated_providers",
+      detail: "No activated providers are configured.",
+      remedy: "Activate a provider.",
+    });
+    fireEvent.click(refusalRunNow);
+    await waitFor(() => expect(hasToast(
+      "error",
+      "To run agent work, activate a provider in Settings > Model configuration. "
+        + "You can keep planning without one.",
+    )).toBe(true));
+    expect(within(details).getByRole("button", { name: "Run now" })).toBeVisible();
+    expect(useClientStore.getState().workspaces["refusal-idea"]?.active)
+      .not.toBe("terminal");
+
     http.failNextRunNow(503, {
       target_id: "refusal-idea",
       committed_state: { id: "implement", name: "Implement" },
@@ -186,7 +206,7 @@ describe("overhaul acceptance — Run Now", () => {
       expect(within(details).queryByRole("button", { name: "Run now" }))
         .toBeNull(),
     );
-    expect(http.runNowCount("refusal-idea")).toBe(3);
+    expect(http.runNowCount("refusal-idea")).toBe(4);
 
     useClientStore.getState().selectTask("ticketed-story");
     await waitFor(() =>

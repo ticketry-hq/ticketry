@@ -2,11 +2,16 @@
 
 mod codex_5_6;
 mod codex_6_astra;
+mod codex_6_sol_luna;
 mod codex_glm_5_3_flash;
 mod codex_spark;
 mod ledger;
 
 use sea_orm::{DatabaseConnection, DbErr, TransactionTrait};
+
+pub use codex_6_sol_luna::{
+    install_codex_6_sol_luna, CODEX_6_SOL_LUNA_LEDGER, CODEX_6_SOL_LUNA_MIGRATION_ID,
+};
 
 pub const CODEX_5_6_LEDGER: &str = "ticketry_codex_5_6_catalog_migration";
 pub const CODEX_5_6_MIGRATION_ID: &str = "0044_codex_5_6_model_catalog";

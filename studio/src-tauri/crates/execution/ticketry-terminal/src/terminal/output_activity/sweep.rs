@@ -33,11 +33,28 @@ fn parse_sweep_interval(raw: Option<&str>) -> Option<Duration> {
 pub struct LiveOutputSweepRuntime {
     cancellation: CancellationToken,
     worker: Option<JoinHandle<()>>,
+    startup_worker: JoinHandle<()>,
 }
 
 impl LiveOutputSweepRuntime {
     pub fn start(service: TerminalOutputActivityService, interval: Option<Duration>) -> Self {
         let cancellation = CancellationToken::new();
+        let startup_stop = cancellation.clone();
+        let startup_service = service.clone();
+        let startup_worker = tauri::async_runtime::spawn(async move {
+            loop {
+                tokio::select! {
+                    biased;
+                    _ = startup_stop.cancelled() => break,
+                    _ = super::startup::observe_claude_startups(&startup_service) => {}
+                }
+                tokio::select! {
+                    biased;
+                    _ = startup_stop.cancelled() => break,
+                    _ = tokio::time::sleep(Duration::from_secs(1)) => {}
+                }
+            }
+        });
         let worker = interval.map(|interval| {
             let stop = cancellation.clone();
             tauri::async_runtime::spawn(async move {
@@ -58,6 +75,7 @@ impl LiveOutputSweepRuntime {
         Self {
             cancellation,
             worker,
+            startup_worker,
         }
     }
 
@@ -67,6 +85,12 @@ impl LiveOutputSweepRuntime {
             if timeout(SHUTDOWN_TIMEOUT, &mut worker).await.is_err() {
                 worker.abort();
             }
+        }
+        if timeout(SHUTDOWN_TIMEOUT, &mut self.startup_worker)
+            .await
+            .is_err()
+        {
+            self.startup_worker.abort();
         }
     }
 }

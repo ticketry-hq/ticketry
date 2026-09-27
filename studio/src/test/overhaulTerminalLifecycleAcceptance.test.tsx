@@ -21,6 +21,9 @@ import {
   installDesktopGraphQlRuntime,
   terminalSessionReadExecutor,
 } from "./desktopGraphQlRuntime";
+import {
+  getDormantItem,
+} from "./dormantTabsFixture";
 
 const terminalApi = vi.hoisted(() => ({
   resumeTerminal: vi.fn(),
@@ -266,6 +269,7 @@ describe("overhaul acceptance — terminals", () => {
           launch_state: "Implement",
           launch_model: "gpt-5.6",
           effective_state: "working",
+          attention_reason: null,
           output_sequence: 1,
           last_output_at: updatedAt,
         }],
@@ -431,7 +435,7 @@ describe("overhaul acceptance — terminals", () => {
     await waitFor(() => {
       expect(screen.queryByRole("tab", { name: "codex terminal" }))
         .not.toBeInTheDocument();
-      expect(screen.getByRole("button", { name: "Resume codex terminal" }))
+      expect(getDormantItem("Resume codex terminal"))
         .toBeInTheDocument();
     });
     expect(useTerminalStore.getState().sessions).toEqual({});

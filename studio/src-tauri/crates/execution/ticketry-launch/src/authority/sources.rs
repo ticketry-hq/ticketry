@@ -56,11 +56,25 @@ pub(super) struct DefaultScratchLaunch {
 pub(super) async fn default_scratch_launch(
     database: &DatabaseConnection,
 ) -> Result<DefaultScratchLaunch, LaunchAuthorityError> {
-    let default = read_global_launch_default(database).await?.ok_or_else(|| {
-        LaunchAuthorityError::unresolvable(
-            "Choose a default model in Settings before starting a conversation.",
-        )
-    })?;
+    let default = match read_global_launch_default(database).await? {
+        Some(default) => default,
+        None => {
+            let active = provider::Entity::find()
+                .filter(provider::Column::Activated.eq(true))
+                .one(database)
+                .await?
+                .is_some();
+            if !active {
+                return Err(LaunchAuthorityError::new(
+                    LaunchAuthorityErrorCode::PolicyRejected,
+                    "no_activated_providers: No activated providers are available. Activate one in Settings > Model configuration.",
+                ));
+            }
+            return Err(LaunchAuthorityError::unresolvable(
+                "Choose a default model in Settings before starting a conversation.",
+            ));
+        }
+    };
     let provider = activated_provider(database, Some(&default.provider)).await?;
     // A profile owns its model and reasoning, mirroring launch policy.
     let profiled = default.profile.is_some();

@@ -7,6 +7,7 @@ const DEFAULT_HANDOFF_READINESS_TIMEOUT: Duration = Duration::from_secs(120);
 pub enum PromptDeliveryFailureReason {
     ReadinessMarkerMissing,
     ReadinessTimeout,
+    TrustDialogBlocked,
     InvalidMessage,
     SessionVerificationFailed,
     CaptureFailed,
@@ -21,6 +22,7 @@ impl PromptDeliveryFailureReason {
         match self {
             Self::ReadinessMarkerMissing => "readiness_marker_missing",
             Self::ReadinessTimeout => "readiness_timeout",
+            Self::TrustDialogBlocked => "trust_dialog_blocked",
             Self::InvalidMessage => "invalid_message",
             Self::SessionVerificationFailed => "session_verification_failed",
             Self::CaptureFailed => "capture_failed",

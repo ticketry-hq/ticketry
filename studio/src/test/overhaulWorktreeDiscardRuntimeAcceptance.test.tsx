@@ -100,6 +100,7 @@ describe("worktree discard desktop runtime acceptance", () => {
     render(<WorktreeBlock taskId={TASK} moduleId="m1" />);
 
     // The first click asks; nothing has been sent yet.
+    fireEvent.click(await screen.findByRole("button", { name: "Show worktree details" }));
     fireEvent.click(await screen.findByRole("button", { name: "Discard" }));
     expect(
       screen.getByText("Discard — work is thrown away?"),
@@ -113,7 +114,7 @@ describe("worktree discard desktop runtime acceptance", () => {
     // The mutation's own response is the authority for the window that asked:
     // the block renders the absent state without a follow-up status read.
     expect(
-      await screen.findByRole("button", { name: "+ Create worktree" }),
+      await screen.findByRole("button", { name: "+ Worktree" }),
     ).toBeTruthy();
     await waitFor(() =>
       expect(screen.queryByRole("button", { name: "Discard" })).toBeNull(),
@@ -142,6 +143,7 @@ describe("worktree discard desktop runtime acceptance", () => {
 
     render(<WorktreeBlock taskId={TASK} moduleId="m1" />);
 
+    fireEvent.click(await screen.findByRole("button", { name: "Show worktree details" }));
     fireEvent.click(await screen.findByRole("button", { name: "Discard" }));
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
 
@@ -152,6 +154,6 @@ describe("worktree discard desktop runtime acceptance", () => {
       ),
     ).toHaveLength(0);
     // The checkout is still what the block shows.
-    expect(screen.getByText("wt/CODIN-881-parent-story → main")).toBeTruthy();
+    expect(screen.getByText("wt/CODIN-881-parent-story")).toBeTruthy();
   });
 });

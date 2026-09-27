@@ -1,9 +1,10 @@
 import type { ReactNode } from "react";
 /**
  * CODING-1527 — an agent or another client changes the selected Story's
- * description. The fact refetches the authoritative row: the read view
- * repaints, and an open editor keeps its draft behind a non-blocking notice
- * offering to keep the draft or load the server version. Nothing merges.
+ * description. The fact refetches the authoritative row: a clean editor
+ * follows it, and a dirty draft stays put behind a non-blocking notice
+ * offering to keep the draft or load the server version. Autosave waits for
+ * that choice. Nothing merges.
  */
 import { configure, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -62,7 +63,7 @@ async function mountWithFeed() {
   statusStreamFeed.start(PROJECT, { createProxy: feed.createProxy });
   await waitFor(() => expect(feed.ready()).toBe(true));
   const details = screen.getByRole("region", { name: "Details" });
-  expect(await within(details).findByText(ORIGINAL)).toBeVisible();
+  expect(await within(details).findByLabelText("Story description")).toHaveValue(ORIGINAL);
 
   /** Another client writes the row on the server, then its fact arrives. */
   const externalWrite = (description: string) => {
@@ -73,7 +74,6 @@ async function mountWithFeed() {
 }
 
 async function openDirtyEditor(details: HTMLElement) {
-  fireEvent.click(within(details).getByTestId("issue-description"));
   const editor = await within(details).findByLabelText("Story description");
   fireEvent.change(editor, { target: { value: DRAFT } });
   return editor;
@@ -90,12 +90,15 @@ afterEach(() => {
 });
 
 describe("overhaul acceptance — external description change while editing", () => {
-  it("[CODING-1527 a] a fact-driven external change repaints the read view without reload", async () => {
-    const { details, externalWrite } = await mountWithFeed();
+  it("[CODING-1527 a] a fact-driven external change repaints a clean editor without reload", async () => {
+    const { details, updates, externalWrite } = await mountWithFeed();
     externalWrite(AGENT_WROTE);
-    expect(await within(details).findByText(AGENT_WROTE)).toBeVisible();
-    expect(within(details).queryByText(ORIGINAL)).toBeNull();
+    await waitFor(() =>
+      expect(within(details).getByLabelText("Story description")).toHaveValue(AGENT_WROTE),
+    );
     expect(within(details).queryByRole("status")).toBeNull();
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    expect(updates).toHaveLength(0);
   });
 
   it("[CODING-1527 b] an open editor keeps its draft behind a notice; keep my draft preserves it", async () => {
@@ -107,13 +110,15 @@ describe("overhaul acceptance — external description change while editing", ()
     expect(notice).toHaveTextContent(NOTICE);
     expect(within(details).getByLabelText("Story description")).toHaveValue(DRAFT);
 
+    // Autosave holds while the choice is pending.
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    expect(updates).toHaveLength(0);
+
     fireEvent.click(within(notice).getByRole("button", { name: "Keep my draft" }));
     await waitFor(() => expect(within(details).queryByRole("status")).toBeNull());
     expect(editor).toHaveValue(DRAFT);
 
-    fireEvent.click(within(details).getByRole("button", { name: "Save" }));
     await http.expectPatch("story-a", { description: DRAFT });
-    expect(await within(details).findByText(DRAFT)).toBeVisible();
     expect(updates).toHaveLength(1);
   });
 
@@ -130,10 +135,8 @@ describe("overhaul acceptance — external description change while editing", ()
     );
     expect(within(details).queryByRole("status")).toBeNull();
 
-    // The loaded version is the new baseline: Save has nothing to write.
-    fireEvent.click(within(details).getByRole("button", { name: "Save" }));
-    expect(await within(details).findByText(AGENT_WROTE)).toBeVisible();
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    // The loaded version is the new baseline: autosave has nothing to write.
+    await new Promise((resolve) => setTimeout(resolve, 1000));
     expect(updates).toHaveLength(0);
   });
 

@@ -126,11 +126,16 @@ export function ModuleFolderSelection({
           </div>
           <ul
             aria-label="Recent folders"
-            className="border border-pane-border bg-pane-bg"
+            className="max-h-48 overflow-y-auto border border-pane-border bg-pane-bg"
           >
             {selection.recentFolders.map((folder, index) => (
               <li
                 key={folder}
+                ref={
+                  index === selection.highlight
+                    ? (item) => item?.scrollIntoView({ block: "nearest" })
+                    : undefined
+                }
                 aria-disabled={disabled || undefined}
                 onClick={() => {
                   if (disabled) return;

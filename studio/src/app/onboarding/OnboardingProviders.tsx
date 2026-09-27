@@ -58,7 +58,12 @@ export function OnboardingProviders({ continueLabel, onContinue }: Props) {
 
   useEffect(() => {
     const value = catalogQuery.data;
-    if (value && !hydratedCatalog.current) {
+    if (
+      value
+      && !catalogQuery.isPending
+      && !catalogQuery.error
+      && !hydratedCatalog.current
+    ) {
       hydratedCatalog.current = true;
       // An absent backend setting intentionally reads as all providers active
       // with no default for pre-onboarding compatibility. On a pending first
@@ -72,15 +77,9 @@ export function OnboardingProviders({ continueLabel, onContinue }: Props) {
         setLaunchDefault(EMPTY_DEFAULT);
       }
     }
-  }, [catalogQuery.data]);
+  }, [catalogQuery.data, catalogQuery.error, catalogQuery.isPending]);
 
-  useEffect(() => {
-    const cause = catalogQuery.error ?? configurableCapabilitiesQuery.error;
-    if (cause) setError(apiErrorMessage(cause));
-  }, [
-    catalogQuery.error,
-    configurableCapabilitiesQuery.error,
-  ]);
+  const loadError = catalogQuery.error ?? configurableCapabilitiesQuery.error;
 
   const pickerCapabilities = useMemo(
     () =>
@@ -128,8 +127,8 @@ export function OnboardingProviders({ continueLabel, onContinue }: Props) {
     activated.length >= 2 && !draft.global_default;
   const canContinue =
     !loading
+    && !loadError
     && !saving
-    && activated.length > 0
     && !needsExplicitDefault
     && validationError === null;
 
@@ -183,6 +182,11 @@ export function OnboardingProviders({ continueLabel, onContinue }: Props) {
         Which coding-agent subscriptions do you hold? We’ll only offer agents
         you can run.
       </p>
+      <p className="mt-2 text-sm leading-6 text-text-secondary">
+        You can plan work without an agent subscription. Select the providers
+        you use, or leave them unchecked and configure them later in Settings
+        &gt; Model configuration.
+      </p>
 
       {loading ? (
         <p className="mt-7 text-sm text-text-muted">Loading providers…</p>
@@ -235,12 +239,13 @@ export function OnboardingProviders({ continueLabel, onContinue }: Props) {
         </div>
       )}
 
-      {validationError || error ? (
+      {validationError || loadError || error ? (
         <p
           role="alert"
           className="mt-4 text-sm text-lifecycle-danger"
         >
-          {validationError?.message ?? error}
+          {validationError?.message
+            ?? (loadError ? apiErrorMessage(loadError) : error)}
         </p>
       ) : null}
 

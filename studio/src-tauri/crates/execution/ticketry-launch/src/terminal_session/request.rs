@@ -233,7 +233,10 @@ mod tests {
         // The run belongs to the Work Item, not the scratch bucket a
         // module shell lands in.
         assert_eq!(request.terminal_task_id(), "task");
-        assert_eq!(shell().terminal_task_id(), ticketry_documents::SCRATCH_TASK_ID);
+        assert_eq!(
+            shell().terminal_task_id(),
+            ticketry_documents::SCRATCH_TASK_ID
+        );
         assert_eq!(
             TerminalLaunchKind::parse("task_shell").expect("parse task_shell"),
             TerminalLaunchKind::TaskShell

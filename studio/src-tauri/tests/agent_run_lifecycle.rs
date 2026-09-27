@@ -18,7 +18,8 @@ async fn fixture() -> (tempfile::TempDir, DatabaseConnection, RunsServices) {
             error TEXT, cwd TEXT, provider_session_id TEXT, lifecycle_state TEXT,
             lifecycle_updated_at TEXT, design_dir TEXT, resumed_from TEXT, scope TEXT NOT NULL,
             launch_state TEXT, launch_model TEXT, initial_prompt TEXT,
-            launch_reasoning TEXT, launch_unattended BOOL NOT NULL DEFAULT 0
+            launch_reasoning TEXT, launch_unattended BOOL NOT NULL DEFAULT 0,
+            attention_reason TEXT
         );
         CREATE TABLE agent_terminal_sessions (
             agent_run_id TEXT PRIMARY KEY, tmux_session_name TEXT NOT NULL,
@@ -65,6 +66,151 @@ async fn fixture() -> (tempfile::TempDir, DatabaseConnection, RunsServices) {
     "#).await.unwrap();
     let services = RunsServices::new(database.clone());
     (directory, database, services)
+}
+
+#[tokio::test]
+async fn startup_attention_is_durable_and_clears_when_claude_becomes_ready() {
+    let (_directory, database, services) = fixture().await;
+    insert_run(
+        &database,
+        "claude-run",
+        "task-a",
+        "2026-08-12T07:00:00Z",
+        None,
+        "running",
+        Some("starting"),
+        Some("2026-08-12T07:00:00Z"),
+        None,
+        "task",
+    )
+    .await;
+    let trust = services
+        .lifecycle()
+        .apply_lifecycle_fact(LifecycleFact {
+            agent_run_id: "claude-run".into(),
+            kind: "startup_trust".into(),
+            occurred_at: "2026-08-12T07:00:01Z".into(),
+            provider_session_id: None,
+        })
+        .await
+        .unwrap();
+    assert!(trust.applied);
+    let holding = services
+        .queries()
+        .run_holdings_at("project-a", Some("task-a"), "2026-08-12T07:00:02Z")
+        .await
+        .unwrap();
+    assert_eq!(holding[0].state, "needs_input");
+    assert_eq!(
+        holding[0].attention_reason.as_deref(),
+        Some("Claude is waiting for folder trust. Open its terminal to approve or decline.")
+    );
+    let duplicate = services
+        .lifecycle()
+        .apply_lifecycle_fact(LifecycleFact {
+            agent_run_id: "claude-run".into(),
+            kind: "startup_trust".into(),
+            occurred_at: "2026-08-12T07:00:03Z".into(),
+            provider_session_id: None,
+        })
+        .await
+        .unwrap();
+    assert!(!duplicate.applied);
+    let session_capture = services
+        .lifecycle()
+        .apply_lifecycle_fact(LifecycleFact {
+            agent_run_id: "claude-run".into(),
+            kind: "startup_trust".into(),
+            occurred_at: "2026-08-12T07:00:03Z".into(),
+            provider_session_id: Some("claude-session".into()),
+        })
+        .await
+        .unwrap();
+    assert!(session_capture.applied);
+    let event = database
+        .query_one_raw(Statement::from_string(
+            DbBackend::Sqlite,
+            "SELECT payload FROM runs_status_events ORDER BY cursor DESC LIMIT 1".to_owned(),
+        ))
+        .await
+        .unwrap()
+        .unwrap();
+    let payload: serde_json::Value =
+        serde_json::from_str(&event.try_get::<String>("", "payload").unwrap()).unwrap();
+    assert_eq!(
+        payload["attentionReason"],
+        "Claude is waiting for folder trust. Open its terminal to approve or decline."
+    );
+    services
+        .lifecycle()
+        .apply_lifecycle_fact(LifecycleFact {
+            agent_run_id: "claude-run".into(),
+            kind: "idle".into(),
+            occurred_at: "2026-08-12T07:00:04Z".into(),
+            provider_session_id: None,
+        })
+        .await
+        .unwrap();
+    let holding = services
+        .queries()
+        .run_holdings_at("project-a", Some("task-a"), "2026-08-12T07:00:05Z")
+        .await
+        .unwrap();
+    assert_eq!(holding[0].attention_reason, None);
+}
+
+#[tokio::test]
+async fn unknown_startup_has_generic_attention_and_activity_clears_it() {
+    let (_directory, database, services) = fixture().await;
+    insert_run(
+        &database,
+        "unknown-run",
+        "task-a",
+        "2026-08-12T07:00:00Z",
+        None,
+        "running",
+        Some("starting"),
+        Some("2026-08-12T07:00:00Z"),
+        None,
+        "task",
+    )
+    .await;
+    services
+        .lifecycle()
+        .apply_lifecycle_fact(LifecycleFact {
+            agent_run_id: "unknown-run".into(),
+            kind: "startup_attention".into(),
+            occurred_at: "2026-08-12T07:02:00Z".into(),
+            provider_session_id: None,
+        })
+        .await
+        .unwrap();
+    let holding = services
+        .queries()
+        .run_holdings_at("project-a", Some("task-a"), "2026-08-12T07:02:01Z")
+        .await
+        .unwrap();
+    assert_eq!(
+        holding[0].attention_reason.as_deref(),
+        Some("Claude startup needs attention. Open its terminal to continue.")
+    );
+    services
+        .lifecycle()
+        .apply_lifecycle_fact(LifecycleFact {
+            agent_run_id: "unknown-run".into(),
+            kind: "turn_start".into(),
+            occurred_at: "2026-08-12T07:02:02Z".into(),
+            provider_session_id: None,
+        })
+        .await
+        .unwrap();
+    let holding = services
+        .queries()
+        .run_holdings_at("project-a", Some("task-a"), "2026-08-12T07:02:03Z")
+        .await
+        .unwrap();
+    assert_eq!(holding[0].state, "working");
+    assert_eq!(holding[0].attention_reason, None);
 }
 
 async fn insert_run(

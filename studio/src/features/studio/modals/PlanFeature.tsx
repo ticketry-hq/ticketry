@@ -12,7 +12,11 @@ import type {
 import { useModalStore } from "../../../app/modal/modalStore";
 import { getModuleFolder } from "../../module-links";
 import { TEMP_TASK_ID } from "../../agents/types";
-import { launchInstantConversation } from "../../agents/terminal";
+import {
+  launchFailureMessage,
+  launchInstantConversation,
+  type TerminalProvider,
+} from "../../agents/terminal";
 import { useStudioStore } from "../../projects";
 import { useClientStore } from "../../../state/clientStore";
 import { getWorkItemSnapshot } from "../../work-items";
@@ -88,11 +92,10 @@ export function startPlanFlow(): void {
 function launchSelectedConversation(
   projectId: string,
   moduleId: string,
+  options: InstantConversationOptions,
 ): void {
-  void launchInstantConversation({ projectId, moduleId }).catch((error) => {
-    const message = error instanceof Error
-      ? error.message
-      : "The conversation could not be started.";
+  void launchInstantConversation({ projectId, moduleId, ...options }).catch((error) => {
+    const message = launchFailureMessage(error);
     useModalStore.getState().notifyUser({
       id: `conversation-launch:${crypto.randomUUID()}`,
       severity: "error",
@@ -103,8 +106,19 @@ function launchSelectedConversation(
   });
 }
 
-/** Launch the configured global default and let the user type in its terminal. */
-export function startInstantChangeFlow(): void {
+export interface InstantConversationOptions {
+  provider?: TerminalProvider;
+  prompt?: string;
+}
+
+/**
+ * Launch an Instant conversation. With no options it uses the configured
+ * global default and the user types in its terminal; the inline composer
+ * passes its chosen provider and first message.
+ */
+export function startInstantChangeFlow(
+  options: InstantConversationOptions = {},
+): void {
   const tasks = {
     ...useStudioStore.getState(),
     ...useClientStore.getState(),
@@ -121,13 +135,14 @@ export function startInstantChangeFlow(): void {
         onSaved: () => launchSelectedConversation(
           selectedProjectId,
           selectedModuleId,
+          options,
         ),
       },
     });
     return;
   }
 
-  launchSelectedConversation(selectedProjectId, selectedModuleId);
+  launchSelectedConversation(selectedProjectId, selectedModuleId, options);
 }
 
 function selectedTaskLaunchContext(): {

@@ -19,14 +19,21 @@ export function StudioLayout() {
 
   return (
     <PanelGroup
-      key={sidebarVisible ? "with-sidebar" : "without-sidebar"}
       ref={outerGroupRef}
       direction="horizontal"
       className="h-full w-full"
       onLayout={handleOuterLayout}
     >
-      {sidebarVisible ? <StudioSidebar layout={layout} /> : null}
-      <Panel id="workspace" defaultSize={outerLayout.at(-1)} minSize={30} order={3}>
+      {sidebarVisible ? (
+        <StudioSidebar key="modules-sidebar" layout={layout} />
+      ) : null}
+      <Panel
+        key="ticket-workspace"
+        id="workspace"
+        defaultSize={outerLayout.at(-1)}
+        minSize={30}
+        order={3}
+      >
         <TicketWorkspace
           tasksSize={tasksSize}
           workspaceSize={workspaceSize}

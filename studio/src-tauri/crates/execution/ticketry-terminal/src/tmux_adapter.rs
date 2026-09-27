@@ -18,6 +18,7 @@ mod session_naming;
 mod session_records;
 mod snapshot;
 mod types;
+mod wheel_scroll;
 
 use hosted_command::HostedCommand;
 pub use runtime_namespace::current_runtime_namespace;
@@ -29,6 +30,9 @@ use types::{validate_geometry, validate_identifier};
 pub use types::{
     ApprovedArgv, CreateOutcome, CreateSession, InventoryConflictKind, InventoryEntry, KillOutcome,
     OwnedSession, RuntimeIdentity, RuntimeObservation, TerminalGeometry, TmuxAdapterError,
+};
+use wheel_scroll::{
+    hex_key_arguments, plan_wheel_delivery, WheelDelivery, PANE_WHEEL_STATE_FORMAT,
 };
 
 const DEFAULT_SOCKET: &str = "muxed";
@@ -251,26 +255,38 @@ impl TmuxAdapter {
             return Err(TmuxAdapterError::InvalidScrollLines { lines });
         }
         let session = session_name(run_id);
-        checked(
-            self.command_with(["copy-mode", "-e", "-H", "-t", &session]),
-            "enter copy mode",
-        )?;
-        let action = match direction {
-            ScrollDirection::Up => "scroll-up",
-            ScrollDirection::Down => "scroll-down",
-        };
-        checked(
+        let state = checked(
             self.command_with([
-                "send-keys",
+                "display-message",
+                "-p",
                 "-t",
                 &session,
-                "-X",
-                "-N",
-                &lines.to_string(),
-                action,
+                PANE_WHEEL_STATE_FORMAT,
             ]),
-            "scroll copy mode",
+            "read pane scroll state",
         )?;
+        let count = lines.to_string();
+        match plan_wheel_delivery(&String::from_utf8_lossy(&state.stdout), direction, lines) {
+            WheelDelivery::CopyMode => {
+                checked(
+                    self.command_with(["copy-mode", "-e", "-H", "-t", &session]),
+                    "enter copy mode",
+                )?;
+                let action = match direction {
+                    ScrollDirection::Up => "scroll-up",
+                    ScrollDirection::Down => "scroll-down",
+                };
+                checked(
+                    self.command_with(["send-keys", "-t", &session, "-X", "-N", &count, action]),
+                    "scroll copy mode",
+                )?;
+            }
+            WheelDelivery::MouseReports(reports) => {
+                let mut command = self.command_with(["send-keys", "-t", &session, "-H"]);
+                command.args(hex_key_arguments(&reports));
+                checked(command, "send wheel reports")?;
+            }
+        }
         Ok(())
     }
 

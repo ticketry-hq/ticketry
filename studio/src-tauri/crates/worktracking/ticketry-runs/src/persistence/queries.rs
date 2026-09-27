@@ -29,6 +29,7 @@ struct HoldingRow {
     provider_session_id: Option<String>,
     launch_state: Option<String>,
     launch_model: Option<String>,
+    attention_reason: Option<String>,
     output_sequence: i64,
     last_output_at: Option<String>,
 }
@@ -213,6 +214,7 @@ fn project(
             provider_session_id: row.provider_session_id,
             launch_state: row.launch_state,
             launch_model: row.launch_model,
+            attention_reason: row.attention_reason,
             output_sequence: row.output_sequence,
             last_output_at: row.last_output_at,
         },
@@ -250,6 +252,7 @@ fn holding_row(
         provider_session_id: run.provider_session_id,
         launch_state: run.launch_state,
         launch_model: run.launch_model,
+        attention_reason: run.attention_reason,
         output_sequence: terminal.map(|row| row.output_sequence).unwrap_or(0),
         last_output_at: terminal.and_then(|row| row.last_output_at.clone()),
     }

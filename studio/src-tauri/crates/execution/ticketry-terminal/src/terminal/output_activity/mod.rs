@@ -7,6 +7,7 @@
 mod capture;
 mod error;
 mod service;
+mod startup;
 mod sweep;
 
 pub use capture::TerminalScreenCapture;

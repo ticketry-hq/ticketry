@@ -29,9 +29,16 @@ pub struct Model {
     pub initial_prompt: Option<String>,
     pub launch_reasoning: Option<String>,
     pub launch_unattended: bool,
+    #[sea_orm(column_type = "Text", nullable)]
+    #[seaography(ignore)]
+    pub attention_reason: Option<String>,
     #[sea_orm(belongs_to, from = "issue_id", to = "id")]
     pub issue: BelongsTo<crate::work_management::issue::Entity>,
-    #[sea_orm(has_one, relation_enum = "TerminalSession", relation_reverse = "AgentRun")]
+    #[sea_orm(
+        has_one,
+        relation_enum = "TerminalSession",
+        relation_reverse = "AgentRun"
+    )]
     pub terminal_session: HasOne<crate::terminals::session::Entity>,
 }
 

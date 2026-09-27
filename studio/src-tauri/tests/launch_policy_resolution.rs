@@ -983,6 +983,39 @@ async fn resolution_reads_the_stored_default_exactly_as_the_catalogue_query_does
     );
 }
 
+#[tokio::test]
+async fn an_unresolved_binding_reports_zero_providers_only_when_none_are_active() {
+    let (_directory, database, resolver) = fixture().await;
+    database
+        .execute_unprepared(
+            "UPDATE worktracker_launchbinding SET model_id = NULL, profile = NULL, reasoning_id = NULL",
+        )
+        .await
+        .unwrap();
+    store_catalog(&database, r#"{"global_default":null}"#).await;
+
+    database
+        .execute_unprepared("UPDATE worktracker_provider SET activated = 0")
+        .await
+        .unwrap();
+    let error = resolver
+        .resolve(request(CallerScope::Interactive, "zero-providers"))
+        .await
+        .unwrap_err();
+    assert_eq!(error.code(), "no_activated_providers");
+    assert!(error.to_string().starts_with("No activated providers"));
+
+    database
+        .execute_unprepared("UPDATE worktracker_provider SET activated = 1 WHERE slug = 'codex'")
+        .await
+        .unwrap();
+    let error = resolver
+        .resolve(request(CallerScope::Interactive, "unresolved-binding"))
+        .await
+        .unwrap_err();
+    assert_eq!(error.code(), "agent_not_configured");
+}
+
 /// A handoff edge decides how the destination is delivered, not what it is.
 /// The resolved decision must carry the flag and change nothing else, or the
 /// continued session would receive a different destination than a fresh spawn.

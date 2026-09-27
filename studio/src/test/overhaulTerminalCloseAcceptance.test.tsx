@@ -13,6 +13,10 @@ import {
   installDesktopGraphQlRuntime,
   terminalSessionReadExecutor,
 } from "./desktopGraphQlRuntime";
+import {
+  findDormantItem,
+  queryDormantItem,
+} from "./dormantTabsFixture";
 
 const terminalApi = vi.hoisted(() => ({
   getDocuments: vi.fn(),
@@ -168,9 +172,7 @@ describe("overhaul acceptance — terminal close synchronization", () => {
       }));
     });
 
-    expect(await screen.findByRole("button", {
-      name: "Resume codex terminal",
-    })).toBeInTheDocument();
+    expect(await findDormantItem("Resume codex terminal")).toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: "codex terminal" }))
       .not.toBeInTheDocument();
     expect(screen.getByText("Issue details")).toBeInTheDocument();
@@ -198,7 +200,7 @@ describe("overhaul acceptance — terminal close synchronization", () => {
     expect(screen.getByRole("tab", { name: "codex terminal" }))
       .toBeInTheDocument();
     expect(terminalReads.readTaskResumableTerminalSessions).toHaveBeenCalledTimes(1);
-    expect(screen.queryByRole("button", { name: "Resume codex terminal" }))
+    expect(queryDormantItem("Resume codex terminal"))
       .not.toBeInTheDocument();
   });
 

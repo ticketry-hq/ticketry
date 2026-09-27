@@ -4,6 +4,7 @@ import { useClientStore } from "../../../state/clientStore";
 import { useStudioStore } from "../../projects";
 import {
   type PlanningTreeRow,
+  CONVERSATIONS_SECTION_ID,
   LOADING_PLACEHOLDER,
   orderedTaskSections,
   searchHits,
@@ -77,14 +78,16 @@ export function useDerivedStoriesTree() {
         stateColor: "",
         count: instantRunTickets.length,
       });
-      out.push({ kind: "scratch", moduleId: selectedModuleId });
-      out.push(...instantRunTickets.map((ticket) => ({
-        kind: "instant-run" as const,
-        runId: ticket.agentRunId,
-        moduleId: selectedModuleId,
-        name: ticket.title,
-        startedAt: ticket.startedAt,
-      })));
+      if (!collapsedStateIds.has(CONVERSATIONS_SECTION_ID)) {
+        out.push({ kind: "scratch", moduleId: selectedModuleId });
+        out.push(...instantRunTickets.map((ticket) => ({
+          kind: "instant-run" as const,
+          runId: ticket.agentRunId,
+          moduleId: selectedModuleId,
+          name: ticket.title,
+          startedAt: ticket.startedAt,
+        })));
+      }
     }
 
     const hits = isSearchActive

@@ -3,4 +3,4 @@ export {
   openTaskChangesWorkspace,
   selectChangesCheckout,
   useChangesWorkspace as useChangesCheckoutSelection,
-} from "../../../../../features/agents/worktrees/changes/changesWorkspaceState";
+} from "../../../../../features/agents/worktrees";

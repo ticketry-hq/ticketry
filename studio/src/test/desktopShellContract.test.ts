@@ -102,6 +102,7 @@ describe("desktop shell security contract", () => {
         "allow-native-terminal-detach",
         "allow-native-terminal-retention-benchmark",
         "launchkey-adaptor:default",
+        "opener:default",
         "core:event:allow-listen",
         "core:event:allow-unlisten",
         "core:webview:allow-set-webview-zoom",
@@ -315,7 +316,9 @@ describe("desktop shell security contract", () => {
     expect(presenter).toContain("nativeGhosttyAvailable");
     expect(presenter).toContain("<NativeGhosttyTerminal");
     expect(presenter).toContain("<LazyXtermTerminal");
-    expect(presenter).toContain("if (!nativeFailureReason) return fallback");
+    expect(presenter).toContain(
+      "if (!nativeFailureReason || session?.transport === \"ready\") return fallback",
+    );
     expect(presenter).toContain("onUnavailable={markNativeUnavailable}");
   });
 

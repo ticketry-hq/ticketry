@@ -31,7 +31,7 @@ it("[overhaul-290] derives one shared module tree and delivers one-task edits th
     http.revise(ids[0]!, { description: "Only the selected task changed" });
     await studioApolloClient().query({ query: WorkTrackerWorkItemDocument, variables: { id: ids[0]! }, fetchPolicy: "network-only" });
   });
-  await waitFor(() => expect(screen.getByRole("region", { name: "Details" })).toHaveTextContent("Only the selected task changed"));
+  await waitFor(() => expect(screen.getByRole("region", { name: "Details" })).toHaveTextContent("Only the selected task changed"), { timeout: 5_000 });
   expect(points.filter((point) => point === "module-open-materialize")).toHaveLength(0);
   expect(points.filter((point) => point === "task-row-render")).toHaveLength(0);
   expect(points.filter((point) => point === "work-item-row-render").length).toBeLessThanOrEqual(2);

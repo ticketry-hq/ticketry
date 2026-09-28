@@ -53,4 +53,4 @@ export function isCancellable(item: WorkItem, states: readonly State[]): boolean
   return !isResolved(states.find((state) => state.id === item.state));
 }
 
-export { parseFindingLocation, formatFindingLocation, type FindingLocation } from "../../../../../../features/work-items/findingLocation";
+export { parseFindingLocation, formatFindingLocation, type FindingLocation } from "../../../../../../features/work-items";

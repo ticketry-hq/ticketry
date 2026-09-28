@@ -4,7 +4,7 @@ import type { Module, WorkItem } from "../../../../../../shared/api/types";
 import { IconCornerDownRight } from "../../../../../../shared/ui/icons";
 import Popover from "../../../../../../shared/ui/Popover";
 import PickerTrigger from "./PickerTrigger";
-import WorkItemSearchList from "../../../../../../features/work-items/WorkItemSearchList";
+import { WorkItemSearchList } from "../../../../../../features/work-items";
 
 const EMPTY_MODULES: Module[] = [];
 

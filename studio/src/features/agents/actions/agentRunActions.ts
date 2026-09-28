@@ -101,6 +101,7 @@ async function submitSelectedRunTerminal(): Promise<boolean> {
 }
 
 export { AGENT_RUN_ACTIONS };
+export { selectedRunSession };
 
 export {
   readSelectedAgentRunId,

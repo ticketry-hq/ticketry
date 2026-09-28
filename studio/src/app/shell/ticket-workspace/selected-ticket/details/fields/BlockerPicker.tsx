@@ -4,7 +4,7 @@ import type { WorkItem } from "../../../../../../shared/api/types";
 import { stateColor } from "../../../../../../shared/utilities/display";
 import Popover from "../../../../../../shared/ui/Popover";
 import { GhostChipAdd } from "./QuietChipControls";
-import WorkItemSearchList from "../../../../../../features/work-items/WorkItemSearchList";
+import { WorkItemSearchList } from "../../../../../../features/work-items";
 
 interface Props {
   /** The issue being edited. */

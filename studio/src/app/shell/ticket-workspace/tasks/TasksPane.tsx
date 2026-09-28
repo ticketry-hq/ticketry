@@ -51,7 +51,7 @@ export {
   type WorkItemRow,
 } from "../../../../features/work-items";
 import { recordSelectionProfilePoint } from "../../../../shared/utilities/selectionProfile";
-import { selectedRunSession } from "../../../../features/agents/actions/selectedAgentRun";
+import { selectedRunSession } from "../../../../features/agents/actions/agentRunActions";
 import { useTerminalStore } from "../../../../features/agents/terminal/appNavigation";
 
 export function planningRowId(row: Row): string {

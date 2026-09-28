@@ -18,7 +18,7 @@ import {
 import { StateConfigurationPanel } from "../../../../features/workflows";
 import { ConversationConfigurationPanel } from "../../../../features/settings";
 import { recordSelectionProfilePoint } from "../../../../shared/utilities/selectionProfile";
-import { selectedRunSession } from "../../../../features/agents/actions/selectedAgentRun";
+import { selectedRunSession } from "../../../../features/agents/actions/agentRunActions";
 
 /** Adapts Studio selection state to the selected-ticket workspace. */
 export function SelectedTicket({ active = true }: { active?: boolean }) {

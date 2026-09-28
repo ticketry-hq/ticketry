@@ -35,6 +35,7 @@ const PUBLIC_ENTRYPOINTS = new Set([
   "features/agents/terminal/instantRunTickets",
   "features/agents/types",
   "features/agents/worktrees",
+  "features/agents/worktrees/worktreeTrustDeferrals",
   "features/studio/lib/liveTerminalCycle",
   "features/studio/lib/moduleFolderPath",
   "features/studio/lib/defaultProject",

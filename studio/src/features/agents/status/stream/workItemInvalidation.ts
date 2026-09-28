@@ -21,7 +21,7 @@ import {
   WorkTrackerWorkItemDocument,
 } from "../../../work-items";
 import type { WorkItemFact } from "./statusFacts";
-import { consumeLocalWorkItemConvergence } from "../../../work-items/workItemConvergence";
+import { consumeLocalWorkItemConvergence } from "../../../work-items";
 
 export const WORK_ITEM_INVALIDATION_WINDOW_MS = 50;
 

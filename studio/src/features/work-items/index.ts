@@ -103,3 +103,12 @@ export {
   useRunNowPending,
   useRunNowTransitions,
 } from "./runNow";
+export { default as WorkItemSearchList } from "./WorkItemSearchList";
+export { FindingLocationLabel } from "./FindingLocationLabel";
+export {
+  formatFindingLocation,
+  parseFindingLocation,
+  type FindingLocation,
+} from "./findingLocation";
+export { watchNewTaskRunTab, type NewTaskRunTabWatch } from "./taskRunTabActivation";
+export { consumeLocalWorkItemConvergence } from "./workItemConvergence";

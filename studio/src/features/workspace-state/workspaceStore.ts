@@ -9,7 +9,17 @@ import { taskSelectionActions } from "./taskSelection";
 import { statusCursorActions } from "./statusCursor";
 import { shellCompatibility } from "./shellCompatibility";
 
-export type * from "./types";
+export type {
+  FocusedPane,
+  EditViewZone,
+  NavigationModality,
+  SelectionSurface,
+  ClientState,
+  TicketWorkspaceViewState,
+  WorkspaceSelection,
+  SetWorkspaceState,
+  GetWorkspaceState,
+} from "./types";
 export { DEFAULT_WORKSPACE } from "./workspaceTabs";
 export { editViewZoneOrder, isEngageableZone, visiblePaneOrder, resolveCursorId } from "./navigation";
 

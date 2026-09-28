@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createBrowserRuntime, initializeStudioRuntime } from "../../../../runtime";
 import { studioApolloClient } from "../../../../shared/apollo/client";
+import { CurrentWorktreesDocument } from "../../worktrees/generated/currentWorktrees.documents";
 import { WorktreeStatusDocument } from "../../worktrees/generated/worktreeStatus.documents";
 import {
   createWorktreeInvalidator,
@@ -29,13 +30,16 @@ describe("converging worktree holdings through Apollo", () => {
     }));
   });
 
-  it("refreshes every active worktree status query through Apollo", async () => {
+  it("refreshes every active worktree status and current-worktrees query through Apollo", async () => {
     const refetch = vi
       .spyOn(studioApolloClient(), "refetchQueries")
       .mockResolvedValue([]);
 
     await refreshWorktreeHoldings();
 
-    expect(refetch).toHaveBeenCalledWith({ include: [WorktreeStatusDocument] });
+    expect(refetch).toHaveBeenCalledWith({
+      include: [WorktreeStatusDocument, CurrentWorktreesDocument],
+      updateCache: expect.any(Function),
+    });
   });
 });

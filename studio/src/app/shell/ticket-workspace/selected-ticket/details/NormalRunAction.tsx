@@ -16,7 +16,7 @@ import {
 import {
   watchNewTaskRunTab,
   type NewTaskRunTabWatch,
-} from "../../../../../features/work-items/taskRunTabActivation";
+} from "../../../../../features/work-items";
 import type { WorkItem } from "../../../../../shared/api/types";
 import { IconPlay } from "../../../../../shared/ui/icons";
 import { KeyBadge } from "../../../../../shared/ui/KeyChordHint";

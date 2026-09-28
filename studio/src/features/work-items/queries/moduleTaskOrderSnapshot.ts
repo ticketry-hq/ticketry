@@ -1,4 +1,4 @@
-import { getStatesSnapshot } from "../../projects/stateCatalog";
+import { getStatesSnapshot } from "../../projects";
 import { selectModuleTaskOrder, type TreeWorkItem } from "../selectors/taskTree";
 import { getModuleTreeSnapshot, getWorkItemSnapshot } from ".";
 

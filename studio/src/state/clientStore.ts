@@ -1,2 +1,20 @@
 // Compatibility facade. Workspace behavior belongs to its feature module.
-export * from "../features/workspace-state/workspaceStore";
+export {
+  useClientStore,
+  DEFAULT_WORKSPACE,
+  editViewZoneOrder,
+  isEngageableZone,
+  visiblePaneOrder,
+  resolveCursorId,
+  dialog,
+  toast,
+  type FocusedPane,
+  type EditViewZone,
+  type NavigationModality,
+  type SelectionSurface,
+  type ClientState,
+  type TicketWorkspaceViewState,
+  type WorkspaceSelection,
+  type SetWorkspaceState,
+  type GetWorkspaceState,
+} from "../features/workspace-state/workspaceStore";

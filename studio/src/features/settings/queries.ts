@@ -1,4 +1,4 @@
-import { setIssueTypeMetadata as setIssueTypes } from "../workflows/queries/issueTypeMetadata";
+import { setIssueTypeMetadata as setIssueTypes } from "../workflows";
 import { skipToken, useQuery } from "@apollo/client/react";
 import type { IssueType, SubtreeRunCapabilityMap } from "../../shared/api/types";
 import {

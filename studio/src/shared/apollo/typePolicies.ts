@@ -2,8 +2,10 @@ import type { TypePolicies } from "@apollo/client";
 
 import { normalizedEntityPolicies } from "./cacheKeys";
 
+const entityPolicies = normalizedEntityPolicies();
+
 export const typePolicies: TypePolicies = {
-  ...normalizedEntityPolicies(),
+  ...entityPolicies,
   ProviderCatalog: {
     keyFields: false,
     fields: { codex_profiles: { read: (value: string[] | undefined) => value ?? [] } },
@@ -17,6 +19,7 @@ export const typePolicies: TypePolicies = {
     fields: { profile: { read: (value: string | null | undefined) => value ?? null } },
   },
   WorktrackerLaunchbinding: {
+    ...entityPolicies.WorktrackerLaunchbinding,
     fields: { profile: { read: (value: string | null | undefined) => value ?? null } },
   },
 };

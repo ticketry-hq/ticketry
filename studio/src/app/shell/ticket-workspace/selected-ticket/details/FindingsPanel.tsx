@@ -1,4 +1,4 @@
-import { FindingLocationLabel } from "../../../../../features/work-items/FindingLocationLabel";
+import { FindingLocationLabel } from "../../../../../features/work-items";
 import { type WorkItem } from "../../../../../shared/api/types";
 import { stateColor, stateLabel } from "../../../../../shared/utilities/display";
 import { useClientStore } from "../../../../../state/clientStore";

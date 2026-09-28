@@ -13,7 +13,8 @@ jobs:
     if: >-
       github.event_name == 'push' ||
       github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: macos-14
+    # libghostty needs the macOS 26 SDK (e.g. kCVPixelFormatType_30RGB_r210).
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
 

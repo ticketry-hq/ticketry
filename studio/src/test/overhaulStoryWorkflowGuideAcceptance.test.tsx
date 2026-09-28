@@ -218,7 +218,12 @@ describe("overhaul acceptance — Story workflow guide", () => {
   it("[overhaul-373] opens the saved Story's read-only guide from Details", async () => {
     const { http, mount, graphQlOperations } = storyFixture();
     mount();
-    const { trigger, dialog } = await openGuide();
+    const details = await screen.findByRole("region", { name: "Details" });
+    const trigger = await within(details).findByRole("button", { name: "Story workflow guide" });
+    expect(trigger).toHaveTextContent("Story workflow guide");
+    trigger.focus();
+    fireEvent.click(trigger);
+    const dialog = await screen.findByRole("dialog", { name: "Story workflow guide" });
     expect(dialog).toBeVisible();
     expect(screen.getAllByText("Search saved notes").length).toBeGreaterThan(0);
     fireEvent.click(within(dialog).getByRole("button", { name: "Close" }));

@@ -147,9 +147,9 @@ export function WorkflowStatePicker({
           event.currentTarget.focus();
           onOpenGuide();
         }}
-        className="grid h-7 w-7 flex-none place-items-center border border-pane-border text-sm text-text-muted hover:border-text-muted hover:text-text-primary"
+        className="inline-flex h-7 flex-none items-center whitespace-nowrap border border-pane-border px-2 text-sm text-text-muted hover:border-text-muted hover:text-text-primary"
       >
-        ?
+        Story workflow guide
       </button>
     </span>
   );

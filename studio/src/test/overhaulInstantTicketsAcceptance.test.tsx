@@ -305,10 +305,14 @@ describe("overhaul acceptance — Conversations", () => {
 
     expectNoLifecycleBadge(conversationsHeader);
     expectNoLifecycleBadge(newConversation);
-    expect(within(needsInputRow).getByLabelText("Agent is waiting for your input"))
-      .toBeInTheDocument();
-    expect(within(workingRow).getByLabelText("Agent is actively working"))
-      .toBeInTheDocument();
+    const needsInputBadge = within(needsInputRow).getByLabelText(
+      "Agent is waiting for your input",
+    );
+    const workingBadge = within(workingRow).getByLabelText(
+      "Agent is actively working",
+    );
+    expect(within(needsInputBadge).getByText("1")).toBeVisible();
+    expect(within(workingBadge).getByText("1")).toBeVisible();
 
     act(() => useAgentStatusStore.getState().upsertRun({
       agent_run_id: "other-module-run",

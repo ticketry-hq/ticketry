@@ -92,7 +92,12 @@ export function InstantRunPlanningRow({
           <ClaudeStartupAttentionAction runId={row.runId} />
           {live && runState ? (
             <span className="ml-2">
-              <LifecycleBadge state={runState} agent={agent} />
+              <LifecycleBadge
+                state={runState}
+                agent={agent}
+                showLabel={false}
+                alwaysShowCount
+              />
             </span>
           ) : null}
           {started ? (

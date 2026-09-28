@@ -99,6 +99,7 @@ export function launchFailureMessage(error: unknown): string {
     ? (body as { detail?: unknown }).detail
     : null;
   if (
+    isZeroProviderRefusal(error) ||
     isZeroProviderRefusal(code) ||
     isZeroProviderRefusal(message) ||
     isZeroProviderRefusal(detail) ||
@@ -108,5 +109,6 @@ export function launchFailureMessage(error: unknown): string {
     return `Launch unavailable: ${message}`;
   }
   if (code) return launchFailureReason(code);
+  if (typeof error === "string") return launchFailureReason(error);
   return error instanceof Error ? error.message : "launch_failed";
 }

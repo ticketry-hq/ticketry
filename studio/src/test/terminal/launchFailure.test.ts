@@ -19,6 +19,12 @@ describe("launchFailureMessage", () => {
     ))).toBe(guidance);
   });
 
+  it("translates bare rejection codes returned by desktop launches", () => {
+    expect(launchFailureMessage("no_activated_providers")).toBe(guidance);
+    expect(launchFailureMessage("provider_not_activated"))
+      .toContain("this launch configuration names a provider that is deactivated");
+  });
+
   it("keeps inactive binding and missing default refusals specific", () => {
     expect(launchFailureMessage({ body: { code: "provider_not_activated" } }))
       .toContain("this launch configuration names a provider that is deactivated");

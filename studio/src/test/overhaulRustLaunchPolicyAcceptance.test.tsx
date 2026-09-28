@@ -28,11 +28,6 @@ vi.mock("../features/agents/terminal/refresh", () => ({
   refreshTerminalHoldings: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock("../features/agents/terminal", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../features/agents/terminal")>()),
-  launchFailureMessage: (error: unknown) => String(error),
-}));
-
 function task(id = "task-1"): WorkItem {
   return {
     id,
@@ -177,6 +172,36 @@ describe("Rust launch-policy acceptance", () => {
           .toasts.some((toast) => toast.message === "Agent run started."),
       ).toBe(true);
     });
+  });
+
+  it("[overhaul-396] explains a desktop zero-provider refusal returned as a bare code", async () => {
+    const recorded = installGraphQlViewerLeases();
+    tauri.invoke.mockRejectedValue("no_activated_providers");
+    render(
+      <RunItemAction
+        task={task()}
+        moduleId="module-1"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Run item" }));
+
+    await waitFor(() => {
+      expect(useClientStore.getState().toasts).toContainEqual(
+        expect.objectContaining({
+          kind: "error",
+          message:
+            "Agent run could not be started: To run agent work, activate a provider in Settings > Model configuration. You can keep planning without one.",
+        }),
+      );
+    });
+    expect(tauri.invoke).toHaveBeenCalledWith(
+      "desktop_launch_default_coding_agent",
+      { issueId: "task-1" },
+    );
+    expect(recorded).toHaveLength(0);
+    expect(useClientStore.getState().workspaces["task-1"]?.active)
+      .not.toBe("terminal");
   });
 
   it("launches a browser run over the GraphQL terminal seam without overriding launch authority", async () => {

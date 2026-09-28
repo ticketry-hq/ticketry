@@ -173,20 +173,6 @@ export function selectScratchLifecycleChips(
   );
 }
 
-/** Lifecycle chicklets for the Instant runs listed under Conversations. */
-export function selectConversationLifecycleChips(
-  state: AgentStatusData,
-  projectId: string,
-  moduleId: string,
-): TaskLifecycleChip[] {
-  return selectModuleScopedLifecycleChips(
-    state,
-    projectId,
-    moduleId,
-    (run) => run.scope === "instant",
-  );
-}
-
 function selectModuleScopedLifecycleChips(
   state: AgentStatusData,
   projectId: string,

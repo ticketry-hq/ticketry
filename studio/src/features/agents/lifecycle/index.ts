@@ -8,5 +8,4 @@ export { AgentStateBadge } from "./AgentStateBadge";
 export { ClaudeStartupAttentionAction } from "./ClaudeStartupAttentionAction";
 export { AutomationDeliveryChicklet } from "./AutomationDeliveryChicklet";
 export { AutomationFailureChicklet } from "./AutomationFailureChicklet";
-export { ConversationStateBadge } from "./ConversationStateBadge";
 export { ScratchStateBadge } from "./ScratchStateBadge";

@@ -1,7 +1,6 @@
 export {
   isLiveAgentRunState,
   MODULE_LIFECYCLE_STATES,
-  selectConversationLifecycleChips,
   selectModuleLifecycleChips,
   selectModuleLifecycleCounts,
   selectRunState,
@@ -31,7 +30,6 @@ export { ModuleLifecycleChicklets } from "./ModuleLifecycleChicklets";
 export {
   useAgentStatusRuns,
   useAgentStatusSelection,
-  useConversationLifecycleChips,
   useModuleLifecycleChips,
   useRunState,
   useScratchLifecycleChips,

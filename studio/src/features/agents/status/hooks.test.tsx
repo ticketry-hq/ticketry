@@ -60,7 +60,7 @@ describe("Apollo status hooks", () => {
       );
     });
 
-    expect(hook.result.current).toEqual([{ state: "working", count: 1 }]);
+    expect(hook.result.current).toEqual([{ state: "working", count: 1, agent: "codex" }]);
     expect(renders).toBe(initialRenders);
   });
 

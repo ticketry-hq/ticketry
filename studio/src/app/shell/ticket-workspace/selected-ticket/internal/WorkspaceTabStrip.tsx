@@ -247,7 +247,7 @@ export function WorkspaceTabStrip({
               selected: active,
             })}
             /* Attention axis — its own palette, independent of provider tone. */
-            badge={<LifecycleBadge state={tab.lifecycle} />}
+            badge={<LifecycleBadge state={tab.lifecycle} agent={tab.meta.agent} />}
             onClick={(event) => {
               if (!reorderDrag.consumePostDropClick(event)) {
                 onActivateTerminal(tab.id);

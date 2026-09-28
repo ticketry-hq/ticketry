@@ -32,6 +32,33 @@ const LIFECYCLE_STATE_ORDER: RunPresentationState[] = [
 export interface TaskLifecycleChip {
   state: RunPresentationState;
   count: number;
+  /** Set only on running chips, which wear their provider's colour (#2251). */
+  agent?: string;
+}
+
+// Running chips split by provider so each can wear its provider hue; every
+// other state stays one chip on the lifecycle palette.
+const RUNNING = new Set<RunPresentationState>(["starting", "working"]);
+
+function lifecycleChips(
+  runs: Iterable<RunRecord>,
+  order: readonly RunPresentationState[],
+): TaskLifecycleChip[] {
+  const chips = new Map<string, TaskLifecycleChip>();
+  for (const run of runs) {
+    const state = presentationOf(run);
+    if (!state || !isLiveAgentRunState(state) || !order.includes(state)) continue;
+    const agent = RUNNING.has(state) && run.agent ? run.agent : undefined;
+    const key = `${state}|${agent ?? ""}`;
+    const chip = chips.get(key) ?? { state, count: 0, ...(agent && { agent }) };
+    chip.count += 1;
+    chips.set(key, chip);
+  }
+  return [...chips.values()].sort(
+    (left, right) =>
+      order.indexOf(left.state) - order.indexOf(right.state) ||
+      (left.agent ?? "").localeCompare(right.agent ?? ""),
+  );
 }
 
 /**
@@ -127,17 +154,10 @@ export function selectTaskLifecycleChips(
   taskId: string,
   descendantTaskIds: readonly string[] = [],
 ): TaskLifecycleChip[] {
-  const counts = new Map<RunPresentationState, number>();
-  for (const runId of taskRunIds(state, taskId, descendantTaskIds)) {
-    const lifecycle = presentationOf(state.runs[runId]);
-    if (!lifecycle || !isLiveAgentRunState(lifecycle)) continue;
-    if (!LIFECYCLE_STATE_ORDER.includes(lifecycle)) continue;
-    counts.set(lifecycle, (counts.get(lifecycle) ?? 0) + 1);
-  }
-  return LIFECYCLE_STATE_ORDER.flatMap((lifecycle) => {
-    const count = counts.get(lifecycle);
-    return count ? [{ state: lifecycle, count }] : [];
-  });
+  return lifecycleChips(
+    taskRunIds(state, taskId, descendantTaskIds).map((runId) => state.runs[runId]),
+    LIFECYCLE_STATE_ORDER,
+  );
 }
 
 export function selectScratchLifecycleChips(
@@ -174,20 +194,12 @@ function selectModuleScopedLifecycleChips(
   includes: (run: RunRecord) => boolean,
 ): TaskLifecycleChip[] {
   if (state.projectId !== projectId) return [];
-
-  const counts = new Map<RunPresentationState, number>();
-  for (const run of Object.values(state.runs)) {
-    if (run.module_id !== moduleId) continue;
-    if (!includes(run)) continue;
-    const presented = projectRunPresentation(run);
-    if (!isLiveAgentRunState(presented)) continue;
-    if (!LIFECYCLE_STATE_ORDER.includes(presented)) continue;
-    counts.set(presented, (counts.get(presented) ?? 0) + 1);
-  }
-  return LIFECYCLE_STATE_ORDER.flatMap((lifecycle) => {
-    const count = counts.get(lifecycle);
-    return count ? [{ state: lifecycle, count }] : [];
-  });
+  return lifecycleChips(
+    Object.values(state.runs).filter(
+      (run) => run.module_id === moduleId && includes(run),
+    ),
+    LIFECYCLE_STATE_ORDER,
+  );
 }
 
 /**
@@ -249,4 +261,17 @@ export function selectModuleLifecycleCounts(
     counts[presented] += 1;
   }
   return counts;
+}
+
+/** A module's badge chicklets: its agent runs in the module lifecycle states. */
+export function selectModuleLifecycleChips(
+  state: AgentStatusData,
+  moduleId: string,
+): TaskLifecycleChip[] {
+  return lifecycleChips(
+    Object.values(state.runs).filter(
+      (run) => !isAgentlessRun(run) && run.module_id === moduleId,
+    ),
+    MODULE_LIFECYCLE_STATES,
+  );
 }

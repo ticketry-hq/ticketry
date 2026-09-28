@@ -351,7 +351,7 @@ describe("terminal panel shell exit acceptance", () => {
     expect(selectModuleLifecycleCounts(status, "module-1").working).toBe(1);
     expect(selectTaskRunCount(status, "task-1")).toBe(1);
     expect(selectTaskLifecycleChips(status, "task-1")).toEqual([
-      { state: "working", count: 1 },
+      { state: "working", count: 1, agent: "codex" },
     ]);
     // The module's scratch chicklets are plan/instant work; a shell is neither.
     expect(selectScratchLifecycleChips(status, "project-1", "module-1")).toEqual([]);

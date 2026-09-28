@@ -6,7 +6,7 @@ import {
 } from "./apolloHolding";
 import { selectTaskAutomationDelivery } from "./automationDelivery";
 import {
-  selectModuleLifecycleCounts,
+  selectModuleLifecycleChips,
   selectConversationLifecycleChips,
   selectRunState,
   selectScratchLifecycleChips,
@@ -136,8 +136,8 @@ export const useConversationLifecycleChips = (
   selectionEqual,
 );
 
-export const useModuleLifecycleCounts = (moduleId: string) =>
+export const useModuleLifecycleChips = (moduleId: string) =>
   useAgentStatusSelection(
-    (holding) => selectModuleLifecycleCounts(holding, moduleId),
+    (holding) => selectModuleLifecycleChips(holding, moduleId),
     selectionEqual,
   );

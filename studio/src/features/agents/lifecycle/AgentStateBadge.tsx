@@ -32,8 +32,9 @@ export function AgentStateBadge({ issueId, descendantIds, className }: Props) {
     >
       {chips.map((chip) => (
         <LifecycleBadge
-          key={chip.state}
+          key={`${chip.state}|${chip.agent ?? ""}`}
           state={chip.state}
+          agent={chip.agent}
           count={chip.count}
           showLabel={false}
           alwaysShowCount

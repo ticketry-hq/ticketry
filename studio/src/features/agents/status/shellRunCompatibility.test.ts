@@ -107,7 +107,7 @@ describe("agent activity surfaces stay agent-only", () => {
     // The plan run's own chip is unchanged by the shell run sharing its module.
     expect(
       selectScratchLifecycleChips(data, "project-1", "module-1"),
-    ).toEqual([{ state: "working", count: 1 }]);
+    ).toEqual([{ state: "working", count: 1, agent: "codex" }]);
   });
 
   it("moves no module lifecycle count", () => {

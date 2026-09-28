@@ -387,6 +387,7 @@ named gate before the full Studio suite, typecheck, and build.
 | 394 | A Plan run's Claude trust attention remains passive and opens its existing terminal. |
 | 395 | An Instant run's trust action reattaches the persisted run after the terminal store is cleared. |
 | 396 | A desktop Run item refusal returned as the bare `no_activated_providers` code shows provider activation guidance and does not open a terminal. |
+| 397 | A rejected current-worktree list shows its alert inside the checkout switcher, which still opens and switches to the module checkout. |
 
 Each executable case carries one stable `[overhaul-NN]` marker. The gate has a
 contract test that fails if a marker is missing or duplicated. A case whose

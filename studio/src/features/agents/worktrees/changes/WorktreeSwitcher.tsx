@@ -49,7 +49,6 @@ export function WorktreeSwitcher({ moduleId, selectedTaskId, onOpenModule, onOpe
     if (restore) requestAnimationFrame(() => triggerRef.current?.focus({ preventScroll: true }));
   };
   const show = () => {
-    if (failed) return;
     const id = current ? rowId(current.taskId) : null;
     setOpen(true);
     setActiveId(id);
@@ -101,18 +100,13 @@ export function WorktreeSwitcher({ moduleId, selectedTaskId, onOpenModule, onOpe
   };
   useEffect(() => {
     if (!open) return;
-    if (failed) {
-      setOpen(false);
-      if (ownsFocusRef.current) close(true);
-      return;
-    }
     if (activeId && rows.some((row) => rowId(row.taskId) === activeId)) return;
     const fallback = rows.find((row) => isSelected(row.taskId)) ?? rows[0];
     if (!fallback) return;
     const id = rowId(fallback.taskId);
     setActiveId(id);
     if (ownsFocusRef.current) requestAnimationFrame(() => optionRefs.current.get(id)?.focus({ preventScroll: true }));
-  }, [activeId, failed, open, rowIds]);
+  }, [activeId, open, rowIds]);
   return (
     <div
       ref={rootRef}

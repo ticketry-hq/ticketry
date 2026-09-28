@@ -1,72 +1,18 @@
 mod common;
 
-use std::collections::HashSet;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
-use async_trait::async_trait;
+use common::graph_run_fixture::*;
 use common::submitted_launch_authority::launch_service;
-use common::terminal_lifecycle_harness::{
-    TerminalLifecycleHarness, MODULE_ID, PROJECT_ID, TASK_ID,
-};
-use sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, Statement};
+use common::terminal_lifecycle_harness::{TerminalLifecycleHarness, PROJECT_ID, TASK_ID};
+use sea_orm::ConnectionTrait;
 use seaography::{Builder, BuilderContext};
 use ticketry_agent_execution::graph::{ExecutionMode, GraphAccess};
 use ticketry_agent_execution::reconciliation::ExecutionReconciliationService;
 use ticketry_agent_execution::{GraphRunCaller, GraphRunRequest, GraphRunService};
-use ticketry_entities::{agent_run, launch_material, session};
-use ticketry_launch::TerminalLaunchError;
-use ticketry_terminal::{
-    TerminalLaunchBoundary, TerminalLaunchCheckpoint, TerminalLaunchRuntime, TerminalLaunchService,
-    TerminalRuntimeObservation, VerifiedTerminalRuntime,
-};
+use ticketry_entities::{agent_run, session};
+use ticketry_terminal::TerminalLaunchBoundary;
 use ticketry_work_management::launch_policy::LaunchPolicyResolver;
-
-const CHILD_A: &str = "00000000000000000000000000008951";
-const CHILD_B: &str = "00000000000000000000000000008952";
-const BLOCKED: &str = "00000000000000000000000000008953";
-const READY: &str = "00000000000000000000000000008954";
-const EXTERNAL: &str = "00000000000000000000000000008955";
-const REVIEW: &str = "00000000000000000000000000008956";
-const PROVIDER: &str = "00000000000000000000000000008957";
-const MODEL: &str = "00000000000000000000000000008958";
-const INVALID_ROOT: &str = "00000000000000000000000000000001";
-
-#[derive(Default)]
-struct Runtime {
-    created: Mutex<HashSet<String>>,
-}
-
-#[async_trait]
-impl TerminalLaunchRuntime for Runtime {
-    async fn observe(&self, agent_run_id: &str) -> TerminalRuntimeObservation {
-        if self.created.lock().unwrap().contains(agent_run_id) {
-            TerminalRuntimeObservation::Running(VerifiedTerminalRuntime {
-                tmux_session_name: format!("graph-{agent_run_id}"),
-                runtime_namespace: "graph-run-test".to_owned(),
-            })
-        } else {
-            TerminalRuntimeObservation::Missing
-        }
-    }
-
-    async fn materialize_and_create(
-        &self,
-        material: &launch_material::Model,
-        checkpoint: &dyn TerminalLaunchCheckpoint,
-    ) -> Result<(), TerminalLaunchError> {
-        self.created
-            .lock()
-            .unwrap()
-            .insert(material.agent_run_id.clone());
-        checkpoint
-            .checkpoint(TerminalLaunchBoundary::TmuxCreated)
-            .await?;
-        checkpoint
-            .checkpoint(TerminalLaunchBoundary::OwnershipMetadataWritten)
-            .await?;
-        Ok(())
-    }
-}
 
 #[tokio::test]
 async fn create_press_policy_refresh_inert_success_and_reset_are_serialized() {
@@ -534,14 +480,15 @@ async fn serial_advancement_treats_satisfaction_and_termination_as_symmetric_fac
             .collect::<Vec<_>>(),
         [CHILD_B]
     );
+    // Automatic advancement samples the current status binding, so the later
+    // child sees the edited Stage Skills while Child A keeps its material.
     let child_b_prompt = launch_prompt(&database, CHILD_B).await;
     assert!(child_b_prompt.starts_with(
-        "Selected workflow prompt:\nInitial policy.\n\nStage skills:\nUse these skills for this stage: [\"tdd\",\"quote \\\"and\\\\slash\\\"\"]\n\nWork item context (factual):"
+        "Selected workflow prompt:\nInitial policy.\n\nStage skills:\nUse these skills for this stage: [\"replacement\"]\n\nWork item context (factual):"
     ));
-    assert!(child_b_prompt.contains(
-        "Stage skills:\nUse these skills for this stage: [\"tdd\",\"quote \\\"and\\\\slash\\\"\"]"
-    ));
-    assert!(!child_b_prompt.contains("replacement"));
+    assert!(!child_b_prompt.contains("quote"));
+    assert!(launch_prompt(&database, CHILD_A).await.contains("\"tdd\""));
+    assert_eq!(claim_tuple(&database, CHILD_A).await, claim);
     assert!(child_b_prompt.contains("Description:\nChild B launch details."));
     drop(first_service);
     drop(database);
@@ -685,162 +632,4 @@ async fn an_invalid_armed_root_does_not_starve_a_later_ready_root() {
     assert_eq!(report.roots.len(), 2);
     assert!(report.roots[0].error.is_some());
     assert_eq!(report.roots[1].launched_task_ids, [BLOCKED]);
-}
-
-fn service(database: &DatabaseConnection) -> GraphRunService {
-    let policy = LaunchPolicyResolver::new(database.clone());
-    let terminal = launch_service(database.clone(), Arc::new(Runtime::default()));
-    GraphRunService::new(database.clone(), policy, terminal)
-}
-
-fn service_with_terminal(
-    database: &DatabaseConnection,
-    terminal: TerminalLaunchService,
-) -> GraphRunService {
-    let policy = LaunchPolicyResolver::new(database.clone());
-    GraphRunService::new(database.clone(), policy, terminal)
-}
-
-async fn seed(database: &DatabaseConnection, directory: &std::path::Path) {
-    let compact_project = compact(PROJECT_ID);
-    let compact_module = compact(MODULE_ID);
-    let compact_root = compact(TASK_ID);
-    database
-        .execute_unprepared(&format!(
-            r#"
-            INSERT INTO worktracker_state
-                (id,project_id,name,"group",color,sort_order,is_protected,created_at,updated_at)
-                VALUES ('{REVIEW}','{compact_project}','Review','started','',99,0,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP);
-            INSERT INTO worktracker_issue
-                (id,project_id,type,issue_type_id,parent_id,module_id,state_id,state_revision,name,sequence_id,is_archived,rank,description,created_at,updated_at)
-                SELECT '{CHILD_A}',project_id,'task',issue_type_id,'{compact_root}','{compact_module}',state_id,0,'Child A',9001,0,'a','<p>Child A launch details.</p>',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP FROM worktracker_issue WHERE id='{compact_root}';
-            INSERT INTO worktracker_issue
-                (id,project_id,type,issue_type_id,parent_id,module_id,state_id,state_revision,name,sequence_id,is_archived,rank,description,created_at,updated_at)
-                SELECT '{CHILD_B}',project_id,'task',issue_type_id,'{compact_root}','{compact_module}',state_id,0,'Child B',9002,0,'b','<p>Child B launch details.</p>',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP FROM worktracker_issue WHERE id='{compact_root}';
-            INSERT INTO worktracker_issue
-                (id,project_id,type,issue_type_id,parent_id,module_id,state_id,state_revision,name,sequence_id,is_archived,rank,description,created_at,updated_at)
-                SELECT '{BLOCKED}',project_id,'task',issue_type_id,'{compact_root}','{compact_module}',state_id,0,'Blocked',9003,0,'c','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP FROM worktracker_issue WHERE id='{compact_root}';
-            INSERT INTO worktracker_issue
-                (id,project_id,type,issue_type_id,parent_id,module_id,state_id,state_revision,name,sequence_id,is_archived,rank,description,created_at,updated_at)
-                SELECT '{READY}',project_id,'task',issue_type_id,'{compact_root}','{compact_module}',state_id,0,'Ready',9004,0,'d','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP FROM worktracker_issue WHERE id='{compact_root}';
-            INSERT INTO worktracker_issue
-                (id,project_id,type,issue_type_id,parent_id,module_id,state_id,state_revision,name,sequence_id,is_archived,rank,description,created_at,updated_at)
-                SELECT '{EXTERNAL}',project_id,'task',issue_type_id,'{compact_module}','{compact_module}',state_id,0,'External',9005,0,'e','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP FROM worktracker_issue WHERE id='{compact_root}';
-            INSERT OR IGNORE INTO worktracker_provider(id,slug,activated,supports_unattended)
-                VALUES ('{PROVIDER}','codex',1,1);
-            INSERT OR IGNORE INTO worktracker_agentmodel(id,provider_id,name)
-                SELECT '{MODEL}',id,'graph-run-test-model' FROM worktracker_provider WHERE slug='codex' LIMIT 1;
-            DELETE FROM worktracker_launchbinding WHERE issue_type_id=(SELECT issue_type_id FROM worktracker_issue WHERE id='{compact_root}');
-            INSERT INTO worktracker_launchbinding
-                (issue_type_id,state_id,prompt,required_skills,model_id,reasoning_id,auto_start,subtree_run_enabled,created_at,updated_at)
-                SELECT issue_type_id,state_id,'Initial policy.','[]','{MODEL}',NULL,0,1,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP
-                FROM worktracker_issue WHERE id='{compact_root}';
-            INSERT OR REPLACE INTO app_settings(scope,"key",value,updated_at)
-                VALUES ('host','provider_catalog','{{"global_default":{{"provider":"codex","model":"graph-run-test-model","reasoning":null}}}}',CURRENT_TIMESTAMP);
-            "#
-        ))
-        .await
-        .unwrap();
-    std::fs::write(
-        directory.join("profiles.json"),
-        r#"{"recent_profile_index":0,"profiles":[{"name":"Local","workspace_slug":"terminal-harness"}]}"#,
-    )
-    .unwrap();
-    // The folder a graph run launches in is the Module's typed link. The
-    // profile above still decides which workspace may launch at all.
-    ticketry_work_management::schema::install(database)
-        .await
-        .unwrap();
-    ticketry_work_management::ModuleLinkStore::new(database.clone())
-        .set(&compact_module, &directory.display().to_string())
-        .await
-        .expect("link the harness module");
-}
-
-fn task_ids(result: &ticketry_agent_execution::GraphRunResult) -> Vec<&str> {
-    result
-        .launched
-        .iter()
-        .map(|row| row.task_id.as_str())
-        .collect()
-}
-
-async fn claim_runs(database: &DatabaseConnection) -> std::collections::HashMap<String, String> {
-    database
-        .query_all_raw(Statement::from_string(
-            DbBackend::Sqlite,
-            "SELECT task_id, agent_run_id FROM launched_tasks ORDER BY task_id".to_owned(),
-        ))
-        .await
-        .unwrap()
-        .into_iter()
-        .map(|row| {
-            (
-                row.try_get("", "task_id").unwrap(),
-                row.try_get("", "agent_run_id").unwrap(),
-            )
-        })
-        .collect()
-}
-
-async fn launch_prompt(database: &DatabaseConnection, task_id: &str) -> String {
-    database
-        .query_one_raw(Statement::from_string(
-            DbBackend::Sqlite,
-            format!(
-                "SELECT prompt FROM terminal_launch_material WHERE task_id='{task_id}' ORDER BY created_at DESC LIMIT 1"
-            ),
-        ))
-        .await
-        .unwrap()
-        .unwrap()
-        .try_get("", "prompt")
-        .unwrap()
-}
-
-async fn claim_tuple(
-    database: &DatabaseConnection,
-    child_id: &str,
-) -> (String, String, String, i64) {
-    let row = database
-        .query_one_raw(Statement::from_string(
-            DbBackend::Sqlite,
-            format!("SELECT claim_id, agent_run_id, launch_effect_id, launch_generation FROM launched_tasks WHERE task_id='{child_id}'"),
-        ))
-        .await
-        .unwrap()
-        .unwrap();
-    (
-        row.try_get("", "claim_id").unwrap(),
-        row.try_get("", "agent_run_id").unwrap(),
-        row.try_get("", "launch_effect_id").unwrap(),
-        row.try_get("", "launch_generation").unwrap(),
-    )
-}
-
-async fn scalar(database: &DatabaseConnection, sql: &str) -> i64 {
-    database
-        .query_one_raw(Statement::from_string(DbBackend::Sqlite, sql.to_owned()))
-        .await
-        .unwrap()
-        .unwrap()
-        .try_get_by_index(0)
-        .unwrap()
-}
-
-async fn scalar_where(
-    database: &DatabaseConnection,
-    table: &str,
-    column: &str,
-    value: &str,
-) -> i64 {
-    scalar(
-        database,
-        &format!("SELECT COUNT(*) FROM {table} WHERE {column}='{value}'"),
-    )
-    .await
-}
-
-fn compact(value: &str) -> String {
-    uuid::Uuid::parse_str(value).unwrap().simple().to_string()
 }

@@ -88,6 +88,7 @@ impl Authorization {
             launch_model: Set(None),
             launch_reasoning: Set(None),
             launch_unattended: Set(false),
+            attention_reason: Set(None),
         }
         .insert(database)
         .await

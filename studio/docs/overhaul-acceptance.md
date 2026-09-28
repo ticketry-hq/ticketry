@@ -386,6 +386,7 @@ named gate before the full Studio suite, typecheck, and build.
 | 393 | Reloaded startup attention retains the generic guidance and the original run identity without alleging trust failure. |
 | 394 | A Plan run's Claude trust attention remains passive and opens its existing terminal. |
 | 395 | An Instant run's trust action reattaches the persisted run after the terminal store is cleared. |
+| 396 | A subtree campaign's next automatic Agent Run uses the current status launch configuration, while already prepared runs keep their launch material. |
 
 Each executable case carries one stable `[overhaul-NN]` marker. The gate has a
 contract test that fails if a marker is missing or duplicated. A case whose
@@ -394,7 +395,9 @@ the Rust test that exercises it, and the contract test counts those markers too.
 Case 245 is the current example: the runtime-path case lives in
 `studio/src-tauri/crates/execution/ticketry-terminal/src/terminal/lifecycle/work.rs`,
 with failed-delivery pane teardown covered beside the delivery helper, so
-`cargo test` runs it rather than the Vitest gate. When a Studio UI
+`cargo test` runs it rather than the Vitest gate. Case 396 lives in the
+desktop package's `studio/src-tauri/tests/graph_run_launch_freshness.rs`
+integration test. When a Studio UI
 change affects one of these behaviors, update that case in the same change. If
 the change introduces a new durable user behavior, add a new acceptance case
 and extend this matrix rather than returning to a manual checklist.

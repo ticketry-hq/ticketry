@@ -1,5 +1,10 @@
 import { useModalStore } from "../../modal/modalStore";
-import { startInstantChangeFlow } from "../../../features/studio/modals/PlanFeature";
+import {
+  requireModuleFolderForLaunch,
+  startInstantChangeFlow,
+  startInstantConversation,
+} from "../../../features/studio/modals/PlanFeature";
+import { getModuleFolder } from "../../../features/module-links";
 import {
   foregroundKey,
   useTerminalForegroundStore,
@@ -221,8 +226,17 @@ function routeModulesPane(
   const module = tasks.modules.find((candidate) => candidate.id === moduleId);
   if (event.shiftKey && module) {
     consume(event);
-    selectSidebarModule(module.id);
-    startInstantChangeFlow();
+    const projectId = useStudioStore.getState().selectedProjectId;
+    if (!projectId) return true;
+    // The conversation is bound to the activated module, not whichever
+    // module happens to be selected when a pending folder setup completes.
+    const launch = () => startInstantConversation(projectId, module.id);
+    if (getModuleFolder(module.id)) {
+      selectSidebarModule(module.id);
+      launch();
+    } else {
+      requireModuleFolderForLaunch(module.id, launch, { resumeModuleSelection: true });
+    }
     return true;
   }
 
@@ -275,20 +289,23 @@ function openAgentPicker(ctx: NavigationContext): boolean {
     taskId: row.id,
   };
 
-  if (ctx.event.shiftKey) {
-    useModalStore.getState().pushModal({
-      type: "prompt-input",
-      payload: {
-        next: "agent-picker",
-        nextPayload: { mode: "open-with-prompt", ...launchContext },
-      },
-    });
-  } else {
-    useModalStore.getState().pushModal({
-      type: "agent-picker",
-      payload: { mode: "open", ...launchContext },
-    });
-  }
+  const withPrompt = ctx.event.shiftKey;
+  requireModuleFolderForLaunch(selectedModuleId, () => {
+    if (withPrompt) {
+      useModalStore.getState().pushModal({
+        type: "prompt-input",
+        payload: {
+          next: "agent-picker",
+          nextPayload: { mode: "open-with-prompt", ...launchContext },
+        },
+      });
+    } else {
+      useModalStore.getState().pushModal({
+        type: "agent-picker",
+        payload: { mode: "open", ...launchContext },
+      });
+    }
+  });
   return true;
 }
 

@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { RunItemAction } from "../app/shell/ticket-workspace/selected-ticket/details/NormalRunAction";
 import { useAgentStatusStore } from "../features/agents/status/testStore";
 import { Terminal, useTerminalStore } from "../features/agents/terminal";
+import { seedModuleLinks } from "../features/module-links";
 import { useClientStore } from "../state/clientStore";
 import {
   installGraphQlViewerLeases,
@@ -66,6 +67,7 @@ describe("Rust launch-policy acceptance", () => {
     useAgentStatusStore.setState({ projectId: "project-1", runs: {} });
     useTerminalStore.setState({ sessions: {}, sessionByRun: {} });
     useClientStore.setState({ workspaces: {}, activeByTask: {} });
+    seedModuleLinks([{ id: "link-1", moduleId: "module-1", path: "/repos/ticketry" }]);
   });
 
   it("[overhaul-231] selects the Run item terminal early but waits to attach until launch returns", async () => {
@@ -198,6 +200,8 @@ describe("Rust launch-policy acceptance", () => {
       }
       return {} as never;
     });
+    // Installing the runtime replaces the Apollo client, so seed after it.
+    seedModuleLinks([{ id: "link-1", moduleId: "module-1", path: "/repos/ticketry" }]);
     render(
       <RunItemAction
         task={task("11111111-1111-4111-8111-111111111111")}

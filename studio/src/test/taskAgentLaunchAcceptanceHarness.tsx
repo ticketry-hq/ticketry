@@ -123,6 +123,19 @@ const { useTerminalPanelStore } = await import(
   "../features/terminal-panel/panelStore"
 );
 const { studioApolloClient } = await import("../shared/apollo/client");
+const { seedModuleLinks } = await import("../features/module-links");
+
+// Launch cases start from configured modules; folderless launch setup has its
+// own acceptance (CODING-2245).
+const CONFIGURED_MODULES = [
+  "module-570",
+  "module-571",
+  "module-572",
+  "module-574",
+  "module-1417",
+  "module-1463",
+  "module-1992",
+];
 
 /**
  * Drop the cached provider catalog so the next launch surface mounts cold —
@@ -170,6 +183,11 @@ beforeEach(() => {
   useTerminalPanelStore.setState({ openModules: {}, focusSignal: 0 });
   useModalStore.setState({ modalStack: [] });
   useStudioStore.setState({ selectedProjectId: null });
+  seedModuleLinks(CONFIGURED_MODULES.map((moduleId) => ({
+    id: `link-${moduleId}`,
+    moduleId,
+    path: `/repos/${moduleId}`,
+  })));
   terminalApi.getDocuments.mockResolvedValue({ documents: [] });
   terminalApi.createTerminalRun.mockResolvedValue({ agent_run_id: "run-570" });
   shellApi.createModuleShell.mockResolvedValue("run-shell-570");

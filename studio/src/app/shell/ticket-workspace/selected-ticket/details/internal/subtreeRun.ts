@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { toast } from "../../../../../../state/clientStore";
 import { ApiError } from "../../../../../../shared/api/errors";
 import { launchFailureMessage } from "../../../../../../features/agents/terminal";
+import { requireModuleFolderForLaunch } from "../../../../../../features/studio/modals/PlanFeature";
 import {
   executeTaskSubtree,
   type GraphRunExecutionMode,
@@ -42,6 +43,8 @@ interface SubtreeRunLaunch {
 
 interface SubtreeRunLaunchOptions {
   item: WorkItem;
+  /** The module whose folder the run needs; a missing folder is set up first. */
+  moduleId?: string | null;
   /** Omitted mode keeps the historical parallel campaign. */
   mode?: GraphRunExecutionMode;
   /** The action's accessible name, reused in stale-capability feedback. */
@@ -63,6 +66,7 @@ interface SubtreeRunLaunchOptions {
  */
 export function useSubtreeRunLaunch({
   item,
+  moduleId,
   mode,
   actionName,
   successMessage,
@@ -122,5 +126,8 @@ export function useSubtreeRunLaunch({
     }
   }
 
-  return { pending, launch: () => void run() };
+  return {
+    pending,
+    launch: () => requireModuleFolderForLaunch(moduleId, () => void run()),
+  };
 }

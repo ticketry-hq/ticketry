@@ -5,6 +5,7 @@ import { SelectedTicketContent } from "../app/shell/ticket-workspace/selected-ti
 import { readAgentStatusHolding } from "../features/agents/status/apolloHolding";
 import { statusStreamFeed } from "../features/agents/status/stream/statusStreamFeed";
 import { useTerminalStore } from "../features/agents/terminal";
+import { seedModuleLinks } from "../features/module-links";
 import { documentOperationName } from "../graphql-foundation/typedDocument";
 import { studioApolloClient } from "../shared/apollo/client";
 import { fixture, mountStudio, workItem } from "./seam";
@@ -150,6 +151,7 @@ describe("overhaul acceptance - acknowledged Agent Run visibility", () => {
         />
       ),
     });
+    seedModuleLinks([{ id: "link-1", moduleId: "module-1", path: "/repos/ticketry" }]);
     vi.spyOn(studioApolloClient(), "refetchQueries").mockResolvedValue([]);
 
     const status = controlledStatusTransport();

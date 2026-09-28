@@ -4,6 +4,7 @@ import { useGlobalKeymap } from "../app/navigation/useGlobalKeymap";
 import { useModalStore } from "../app/modal/modalStore";
 import { TEMP_TASK_ID } from "../features/agents/types";
 import { documentOperationName } from "../graphql-foundation/typedDocument";
+import { seedModuleLinks } from "../features/module-links";
 import { fixture, mountStudio, workItem } from "./seam";
 import { useClientStore } from "../state/clientStore";
 import { useAgentStatusStore } from "../features/agents/status/testStore";
@@ -118,6 +119,7 @@ describe("overhaul acceptance — subtree execution", () => {
         return http.executeGraphQl(document, variables);
       },
     });
+    seedModuleLinks([{ id: "link-1", moduleId: "module-1", path: "/repos/ticketry" }]);
 
     const details = await screen.findByRole("region", { name: "Details" });
     const runItem = await within(details).findByRole("button", {
@@ -227,6 +229,7 @@ describe("overhaul acceptance — subtree execution", () => {
         return http.executeGraphQl(document, variables);
       },
     });
+    seedModuleLinks([{ id: "link-1", moduleId: "module-1", path: "/repos/ticketry" }]);
 
     const details = await screen.findByRole("region", { name: "Details" });
     await within(details).findByRole("button", { name: "Run item" });
@@ -309,6 +312,7 @@ describe("overhaul acceptance — subtree execution", () => {
         } as never;
       },
     });
+    seedModuleLinks([{ id: "link-1", moduleId: "module-1", path: "/repos/ticketry" }]);
 
     const details = await screen.findByRole("region", { name: "Details" });
     await within(details).findByRole("button", { name: "Run subtree" });
@@ -319,6 +323,7 @@ describe("overhaul acceptance — subtree execution", () => {
   it("[overhaul-21] repeats Run subtree to revive an inactive campaign", async () => {
     const http = campaignFixture();
     mountStudio({ http, graphQlExecution: true });
+    seedModuleLinks([{ id: "link-1", moduleId: "module-1", path: "/repos/ticketry" }]);
 
     const details = await openCampaignDetails();
     const runSubtree = within(details).getByRole("button", {
@@ -340,6 +345,7 @@ describe("overhaul acceptance — subtree execution", () => {
   it("[overhaul-57] runs a subtree serially beside the parallel action under one capability", async () => {
     const http = campaignFixture();
     mountStudio({ http, graphQlExecution: true });
+    seedModuleLinks([{ id: "link-1", moduleId: "module-1", path: "/repos/ticketry" }]);
 
     const details = await openCampaignDetails();
     const runSubtree = within(details).getByRole("button", {
@@ -442,6 +448,7 @@ describe("overhaul acceptance — subtree execution", () => {
       children: <NormalRunShortcutSurface />,
       graphQlExecution: true,
     });
+    seedModuleLinks([{ id: "link-1", moduleId: "module-1", path: "/repos/ticketry" }]);
     useAgentStatusStore.getState().upsertRun({
       agent_run_id: "campaign-child-run",
       project_id: "project-1",
@@ -497,6 +504,7 @@ describe("overhaul acceptance — subtree execution", () => {
       children: <NormalRunShortcutSurface />,
       graphQlExecution: true,
     });
+    seedModuleLinks([{ id: "link-1", moduleId: "module-1", path: "/repos/ticketry" }]);
 
     const details = await screen.findByRole("region", { name: "Details" });
     const runSubtree = await within(details).findByRole("button", {

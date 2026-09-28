@@ -33,7 +33,7 @@ fn nullable_strings() -> Value {
 pub fn tools() -> Vec<Tool> {
     vec![
         tool("mcp_ping", "Verify MCP transport and tool execution without touching a backend.", json!({}), &[]),
-        tool("terminate_current_run", "Terminate only the Studio run bound to this MCP request. This stops the run without changing or archiving its ticket. When blocked, record the blocker and leave the ticket in its current state; do not move it to Review or Cancelled just to stop. A committed handoff keeps the run alive and returns \"continued_by_handoff\" so its queued destination prompt can run.", json!({}), &[]),
+        tool("terminate_current_run", "Terminate only the Studio run bound to this MCP request. This stops the run without changing or archiving its ticket. Do not call it to escape a blocker: decide the blocker yourself when you reasonably can, otherwise present the user options to unblock and wait; never move the ticket to Review or Cancelled just to stop. A committed handoff keeps the run alive and returns \"continued_by_handoff\" so its queued destination prompt can run.", json!({}), &[]),
         tool("add_issue_type_workflow_transition", "Add one transition to a type's workflow at the supplied revision.", json!({
             "type_id": {"type": "string"}, "from_state_id": {"type": "string"}, "to_state_id": {"type": "string"},
             "workflow_revision": {"type": "integer"}, "agent_allowed": {"type": "boolean", "default": true},

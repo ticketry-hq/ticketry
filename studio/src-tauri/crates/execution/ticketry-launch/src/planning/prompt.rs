@@ -132,7 +132,7 @@ pub fn build_task_prompt(input: &TaskPromptInput) -> String {
     prompt.push_str("Available tools: WorkTracker MCP server; coding agent status tool.");
     if !facts.state.is_empty() {
         prompt.push_str(&format!(
-            "\n\nEnding this run: terminate_current_run stops only the agent run, not the work item. If blocked, record the blocker, leave the task in '{}', and end the run without cancelling or advancing it. Change ticket state only when the actual stage outcome warrants it. A committed handoff keeps the run alive for its queued destination prompt.",
+            "\n\nEnding this run: terminate_current_run stops only the agent run, not the work item. Do not end the run because you are blocked. If the blocker is a decision you can reasonably make, decide it yourself and continue. Otherwise present the user concrete options to unblock, with your recommendation, and wait for their choice. Leave the task in '{}' until the actual stage outcome warrants a state change. A committed handoff keeps the run alive for its queued destination prompt.",
             facts.state
         ));
     }
@@ -286,11 +286,13 @@ mod tests {
             "Additional user instructions:\nAlso preserve 🦀.",
             "Design directory: spec/module/T867--launch",
             "terminate_current_run stops only the agent run, not the work item",
-            "leave the task in 'Implement'",
-            "without cancelling or advancing it",
+            "Leave the task in 'Implement'",
+            "decide it yourself and continue",
+            "present the user concrete options to unblock",
         ] {
             assert!(prompt.contains(expected), "missing {expected:?}");
         }
+        assert!(!prompt.contains("If blocked, record the blocker"));
     }
 
     #[test]
@@ -369,7 +371,7 @@ mod tests {
                 previous_state_name: previous_state_name.clone(),
             });
             assert!(
-                !prompt.contains("handoff"),
+                !prompt.contains("Handoff note:"),
                 "no handoff line expected without a note (previous state {previous_state_name:?}): {prompt}"
             );
         }

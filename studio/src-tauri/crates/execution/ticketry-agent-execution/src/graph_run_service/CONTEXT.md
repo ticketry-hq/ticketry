@@ -7,8 +7,10 @@ but those descendants are never launch candidates for that root.
 ## Language
 
 **Armed root**:
-The root-keyed `GraphRun` header. It stores the execution mode and immutable
-launch-policy data for children that have not started.
+The root-keyed `GraphRun` header. It stores the execution mode and the
+launch-policy snapshot of the last manual press. The snapshot is campaign
+identity: a launch attempt commits only while the header still carries the
+snapshot it read. It is not replayed as launch configuration.
 
 **Execution mode**:
 The armed root's scheduling mode, `parallel` or `serial`. An omitted mode means
@@ -42,8 +44,23 @@ starting another agent.
 
 **Manual press**:
 A request that creates or updates the root's Graph Run and starts its currently
-startable direct children. It refreshes mode and launch policy only for future
-children and preserves existing launch claims.
+startable direct children. It refreshes mode and the header snapshot and
+preserves existing launch claims. An explicit provider override applies only
+to the children that press launches.
+
+**Launch freshness**:
+Each automatic attempt resolves the root's current status binding — provider,
+profile, model, reasoning, prompt, Required Skills and Stage Skills — through
+the shared launch-policy resolver immediately before preparation. That
+resolution is the sampling boundary: later edits affect later attempts. The
+stored provider is never an implicit override. An invalid current binding is
+the ordinary policy rejection and commits nothing; normal reconciliation
+launches the child once after repair.
+
+**Prepared-run immutability**:
+Once preparation commits, the attempt's Agent Run, launch material and claim
+are fixed. Replay, restart and recovery adopt that material unchanged, and
+configuration edits never alter or clear a prepared or running attempt.
 
 **Satisfied issue**:
 A work item that is archived, in a completed or cancelled workflow group, or

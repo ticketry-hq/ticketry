@@ -1,5 +1,6 @@
 //! Serialized create, manual press, and reset for one dependency-graph campaign.
 
+mod attempt_launch;
 mod claim;
 mod error;
 mod graphql_scope;

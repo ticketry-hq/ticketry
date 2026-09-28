@@ -7,7 +7,7 @@ use sea_orm::{
 use crate::execution::graph::{
     automatic_candidates, manual_candidates, scheduling_facts, ExecutionMode, GraphAccess,
 };
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
@@ -15,12 +15,8 @@ use std::sync::{
 use ticketry_entities::{
     issue, {graph_run, launch_claim},
 };
-use ticketry_launch::{compose_task_prompt, TaskPromptSource};
-use ticketry_launch::{CreateTerminalSession, TerminalLaunchKind};
 use ticketry_terminal::TerminalLaunchService;
-use ticketry_work_management::launch_policy::{
-    CallerScope, LaunchPolicyDecision, LaunchPolicyRequest, LaunchPolicyResolver,
-};
+use ticketry_work_management::launch_policy::{LaunchPolicyDecision, LaunchPolicyResolver};
 
 static PRODUCTION_MUTATIONS_OPEN: AtomicBool = AtomicBool::new(false);
 
@@ -28,10 +24,11 @@ pub(crate) fn set_production_mutations_open(open: bool) {
     PRODUCTION_MUTATIONS_OPEN.store(open, Ordering::Release);
 }
 
+use super::attempt_launch::{launch_attempt, resolve_attempt_policy};
 use super::claim::{serial_frontier_pending, CampaignClaim, ClaimGeneration, ClaimSelection};
 use super::{
     DeletedGraphRunResult, GraphRunAdvanceResult, GraphRunRequest, GraphRunResult,
-    GraphRunServiceError, GraphRunServiceErrorCode, LaunchedChild, ResetGraphRunResult,
+    GraphRunServiceError, GraphRunServiceErrorCode, ResetGraphRunResult,
 };
 
 #[derive(Clone)]
@@ -64,23 +61,6 @@ struct GraphRunPolicySnapshot<'a> {
     stage_skills: &'a [String],
     module_id: &'a str,
     module_link_path: Option<&'a str>,
-}
-
-#[derive(Deserialize)]
-struct StoredGraphRunPolicy {
-    policy_identity: String,
-    prompt: String,
-    agent: String,
-    #[serde(default)]
-    profile: Option<String>,
-    model: Option<String>,
-    reasoning: Option<String>,
-    required_skills: Vec<String>,
-    #[serde(default)]
-    stage_skills: Vec<String>,
-    module_id: String,
-    #[serde(default)]
-    module_link_path: Option<String>,
 }
 
 impl GraphRunService {
@@ -217,26 +197,14 @@ impl GraphRunService {
                 "Dependency graph root has no Module scope.",
             )
         })?;
-        let decision = self
-            .policy
-            .resolve(LaunchPolicyRequest {
-                task_id: root_id.clone(),
-                destination_state_id: None,
-                provider_override: request.provider_override.clone(),
-                caller_scope: CallerScope::Subtree,
-                idempotency_key: uuid::Uuid::new_v4().simple().to_string(),
-                handoff: false,
-            })
-            .await?;
-        if compact(&decision.project_id) != root.project_id
-            || compact(&decision.module_link.module_id) != module_id
-        {
-            return Err(GraphRunServiceError::new(
-                GraphRunServiceErrorCode::LaunchPolicy,
-                "launch_context_incomplete",
-                "Launch policy resolved outside the dependency graph scope.",
-            ));
-        }
+        let decision = resolve_attempt_policy(
+            &self.policy,
+            &root_id,
+            &root.project_id,
+            &module_id,
+            request.provider_override.clone(),
+        )
+        .await?;
         let policy_snapshot = serde_json::to_string(&GraphRunPolicySnapshot {
             policy_version: POLICY_SNAPSHOT_VERSION,
             workflow_revision: decision.policy_version,
@@ -276,47 +244,15 @@ impl GraphRunService {
                 policy_snapshot: &policy_snapshot,
                 mode,
                 access: &request.access,
-                identity: identity.clone(),
+                identity,
                 selection: ClaimSelection::Manual,
             };
-            let prompt = compose_task_prompt(
+            let accepted = launch_attempt(
                 &self.database,
-                TaskPromptSource {
-                    task_id: &child_id,
-                    module_id: &module_id,
-                    local_module_folder: decision.module_link.path.as_deref().unwrap_or_default(),
-                    state_name: None,
-                    workflow_prompt: &decision.prompt,
-                    stage_skills: &decision.stage_skills,
-                    additional_user_input: None,
-                    design_directory: None,
-                    design_directory_root: None,
-                },
-            )
-            .await?;
-            // One child is one launch attempt, and the whole attempt — its
-            // preparation and its runtime — is traced under that identity.
-            let accepted = ticketry_diagnostics::requested_by(
-                ticketry_diagnostics::LaunchSurface::DependencyGraph,
-                async {
-                    let accepted = self
-                        .terminal_launch
-                        .prepare_with_participant(
-                            terminal_request(&decision, &identity, &child_id, &module_id, prompt),
-                            &claim,
-                        )
-                        .await?;
-                    // Runtime settlement is status-driven. Once preparation
-                    // commits, a terminal error must not erase this request's
-                    // accepted child.
-                    let launched = LaunchedChild {
-                        task_id: child_id.clone(),
-                        agent_run_id: accepted.agent_run_id.clone(),
-                        provider: decision.provider.clone(),
-                    };
-                    let _ = self.terminal_launch.execute_accepted(accepted).await;
-                    Ok::<LaunchedChild, GraphRunServiceError>(launched)
-                },
+                &self.terminal_launch,
+                &decision,
+                &claim,
+                &module_id,
             )
             .await?;
             launched.push(accepted);
@@ -333,7 +269,8 @@ impl GraphRunService {
     }
 
     /// Re-evaluate one armed campaign from durable Work Item, Run, and Terminal
-    /// facts without changing its mode or stored launch policy.
+    /// facts without changing its mode or header. Each automatic attempt
+    /// resolves the root's current status binding at launch time.
     pub async fn advance(
         &self,
         root_id: &str,
@@ -364,11 +301,11 @@ impl GraphRunService {
                 "Graph Run launch policy is missing.",
             )
         })?;
-        let policy: StoredGraphRunPolicy = serde_json::from_str(policy_json).map_err(|error| {
+        let module_id = graph.module_id.as_deref().ok_or_else(|| {
             GraphRunServiceError::new(
-                GraphRunServiceErrorCode::LaunchPolicy,
-                "launch_policy_invalid",
-                format!("Stored Graph Run launch policy is invalid: {error}"),
+                GraphRunServiceErrorCode::GraphFacts,
+                "module_id_required",
+                "Dependency graph root has no Module scope.",
             )
         })?;
         let access = GraphAccess::project(&graph.project_id);
@@ -389,6 +326,12 @@ impl GraphRunService {
             .collect::<Vec<_>>();
         let mut launched = Vec::with_capacity(selected.len());
         for child_id in selected {
+            // Each attempt samples the root's current status binding. The
+            // header snapshot is only the campaign guard, and the stored
+            // provider is never replayed as an implicit override.
+            let decision =
+                resolve_attempt_policy(&self.policy, &root_id, &graph.project_id, module_id, None)
+                    .await?;
             let identity = ClaimGeneration::next(&self.database, &root_id, &child_id).await?;
             let claim = CampaignClaim {
                 root_id: &root_id,
@@ -396,48 +339,15 @@ impl GraphRunService {
                 policy_snapshot: policy_json,
                 mode,
                 access: &access,
-                identity: identity.clone(),
+                identity,
                 selection: ClaimSelection::Automatic,
             };
-            let prompt = compose_task_prompt(
+            let launched_child = launch_attempt(
                 &self.database,
-                TaskPromptSource {
-                    task_id: &child_id,
-                    module_id: &policy.module_id,
-                    local_module_folder: policy.module_link_path.as_deref().unwrap_or_default(),
-                    state_name: None,
-                    workflow_prompt: &policy.prompt,
-                    stage_skills: &policy.stage_skills,
-                    additional_user_input: None,
-                    design_directory: None,
-                    design_directory_root: None,
-                },
-            )
-            .await?;
-            let launched_child = ticketry_diagnostics::requested_by(
-                ticketry_diagnostics::LaunchSurface::DependencyGraph,
-                async {
-                    let accepted = self
-                        .terminal_launch
-                        .prepare_with_participant(
-                            stored_terminal_request(
-                                &policy,
-                                &identity,
-                                &child_id,
-                                &graph.project_id,
-                                prompt,
-                            ),
-                            &claim,
-                        )
-                        .await?;
-                    let launched = LaunchedChild {
-                        task_id: child_id.clone(),
-                        agent_run_id: accepted.agent_run_id.clone(),
-                        provider: policy.agent.clone(),
-                    };
-                    let _ = self.terminal_launch.execute_accepted(accepted).await;
-                    Ok::<LaunchedChild, GraphRunServiceError>(launched)
-                },
+                &self.terminal_launch,
+                &decision,
+                &claim,
+                module_id,
             )
             .await?;
             launched.push(launched_child);
@@ -583,68 +493,6 @@ impl GraphRunService {
             "execution_reconciliation_unavailable",
             "Execution reconciliation is not ready.",
         ))
-    }
-}
-
-fn terminal_request(
-    decision: &LaunchPolicyDecision,
-    identity: &ClaimGeneration,
-    child_id: &str,
-    module_id: &str,
-    prompt: String,
-) -> CreateTerminalSession {
-    CreateTerminalSession {
-        client_request_id: identity.request_id.clone(),
-        project_id: decision.project_id.clone(),
-        issue_id: child_id.to_owned(),
-        module_id: module_id.to_owned(),
-        target_id: child_id.to_owned(),
-        kind: TerminalLaunchKind::Automation,
-        provider: Some(decision.provider.clone()),
-        profile: decision.profile.clone(),
-        model: decision.model.clone(),
-        reasoning: decision.reasoning.clone(),
-        policy_reference: Some(decision.policy_identity.clone()),
-        prompt: Some(prompt),
-        resume_from_agent_run_id: None,
-        automation_attempt_id: None,
-        required_skills: decision.required_skills.clone(),
-        working_directory_identity: format!("task:{}", compact(child_id)),
-        design_directory_identity: None,
-        document_relative_path: None,
-        columns: 120,
-        rows: 32,
-    }
-}
-
-fn stored_terminal_request(
-    policy: &StoredGraphRunPolicy,
-    identity: &ClaimGeneration,
-    child_id: &str,
-    project_id: &str,
-    prompt: String,
-) -> CreateTerminalSession {
-    CreateTerminalSession {
-        client_request_id: identity.request_id.clone(),
-        project_id: project_id.to_owned(),
-        issue_id: child_id.to_owned(),
-        module_id: policy.module_id.clone(),
-        target_id: child_id.to_owned(),
-        kind: TerminalLaunchKind::Automation,
-        provider: Some(policy.agent.clone()),
-        profile: policy.profile.clone(),
-        model: policy.model.clone(),
-        reasoning: policy.reasoning.clone(),
-        policy_reference: Some(policy.policy_identity.clone()),
-        prompt: Some(prompt),
-        resume_from_agent_run_id: None,
-        automation_attempt_id: None,
-        required_skills: policy.required_skills.clone(),
-        working_directory_identity: format!("task:{}", compact(child_id)),
-        design_directory_identity: None,
-        document_relative_path: None,
-        columns: 120,
-        rows: 32,
     }
 }
 

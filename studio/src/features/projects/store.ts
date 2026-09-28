@@ -20,7 +20,6 @@ import type {
   View,
 } from "../../shared/api/types";
 import { loadIssueTypes } from "../settings";
-import { getModuleFolder } from "../module-links";
 import { readRecentModule } from "../../state/persistence";
 import {
   getModulePresentationsSnapshot,
@@ -34,7 +33,7 @@ export function normalizeView(raw: string | undefined): View {
   return raw && (VIEWS as string[]).includes(raw) ? (raw as View) : "backlog";
 }
 
-/** Restore a visible linked module without opening a folder prompt at startup. */
+/** Restore the remembered visible module, or the first visible one. */
 function startupModuleId(projectId: string): string | null {
   const moduleId = readRecentModule();
   if (!moduleId) return null;
@@ -46,10 +45,8 @@ function startupModuleId(projectId: string): string | null {
     modules,
     getModulePresentationsSnapshot(projectId),
   );
-  if (visible.some((module) => module.id === moduleId)) {
-    return getModuleFolder(moduleId) ? moduleId : null;
-  }
-  return visible.find((module) => getModuleFolder(module.id))?.id ?? null;
+  if (visible.some((module) => module.id === moduleId)) return moduleId;
+  return visible[0]?.id ?? null;
 }
 
 function errMessage(e: unknown): string {

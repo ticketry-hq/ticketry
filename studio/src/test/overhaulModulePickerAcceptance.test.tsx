@@ -223,7 +223,7 @@ describe("restore-aware module picker acceptance", () => {
     expect(useModalStore.getState().modalStack).toEqual([{ type: "add-module" }]);
   });
 
-  it("selects a linked fallback when the active module tab is hidden", async () => {
+  it("selects the next shown module, linked or not, when the active module tab is hidden", async () => {
     seedModuleLinks([{
       id: "link-charlie",
       moduleId: "module-c",
@@ -238,11 +238,11 @@ describe("restore-aware module picker acceptance", () => {
 
     await waitFor(() =>
       expect(useClientStore.getState().selectModule).toHaveBeenCalledWith(
-        "module-c",
+        "module-b",
       )
     );
     expect(useClientStore.getState().selectModule).not.toHaveBeenCalledWith(
-      "module-b",
+      "module-c",
     );
     expect(useModalStore.getState().modalStack).toEqual([]);
   });

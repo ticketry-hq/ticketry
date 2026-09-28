@@ -34,6 +34,9 @@ const FOLDER_REFUSAL_MESSAGE: Record<ModuleFolderRefusal, string> = {
  * Folder persistence happens only after the new module ID exists. If that
  * persistence fails, retrying reuses the created ID instead of creating a
  * duplicate module.
+ *
+ * Only the onboarding tour's module step may defer the folder (CODING-2248),
+ * and only through its explicit button with the folder left blank.
  */
 export function AddModule({ runtime }: { runtime?: StudioRuntime } = {}) {
   const selectedProjectId = useStudioStore((s) => s.selectedProjectId);
@@ -52,6 +55,9 @@ export function AddModule({ runtime }: { runtime?: StudioRuntime } = {}) {
   const submittingRef = useRef(false);
   const createdModuleIdRef = useRef<string | null>(null);
   const folderSelection = useModuleFolderSelection({ runtime });
+  const onboarding = useOnboardingTourStore(
+    (s) => s.step === "module-create" && s.projectId === selectedProjectId,
+  );
 
   useEffect(() => {
     setFolderError(null);
@@ -63,6 +69,51 @@ export function AddModule({ runtime }: { runtime?: StudioRuntime } = {}) {
     folderSelection.isValid &&
     !busy &&
     !!selectedProjectId;
+  const canDefer =
+    onboarding &&
+    name.trim().length > 0 &&
+    folderSelection.value.trim().length === 0 &&
+    !busy &&
+    !!selectedProjectId;
+
+  async function ensureModule(projectId: string): Promise<string> {
+    if (createdModuleIdRef.current) return createdModuleIdRef.current;
+    const created = await useStudioStore
+      .getState()
+      .createModuleForProjectWithError(projectId, name.trim());
+    if (!created.id) throw new Error("The created module has no id.");
+    createdModuleIdRef.current = created.id;
+    setCreatedModuleId(created.id);
+    return created.id;
+  }
+
+  async function finishCreation(projectId: string, moduleId: string): Promise<void> {
+    if (useClientStore.getState().selectedModuleId !== moduleId) {
+      await useClientStore.getState().selectModule(moduleId);
+    }
+    const tour = useOnboardingTourStore.getState();
+    if (tour.step === "module-create" && tour.projectId === projectId) {
+      tour.moduleCreated(moduleId);
+    }
+    popModal();
+  }
+
+  async function deferFolder(): Promise<void> {
+    if (!canDefer || !selectedProjectId || submittingRef.current) return;
+    submittingRef.current = true;
+    setBusy(true);
+    setError(null);
+    setFolderError(null);
+    try {
+      await finishCreation(selectedProjectId, await ensureModule(selectedProjectId));
+    } catch (cause) {
+      console.error("Failed to create module", cause);
+      setError("Failed to create module.");
+    } finally {
+      submittingRef.current = false;
+      setBusy(false);
+    }
+  }
 
   async function submit(): Promise<void> {
     if (!canSubmit || !selectedProjectId || submittingRef.current) return;
@@ -99,35 +150,14 @@ export function AddModule({ runtime }: { runtime?: StudioRuntime } = {}) {
         return;
       }
 
-      let moduleId = createdModuleIdRef.current;
-      if (!moduleId) {
-        const created = await useStudioStore
-          .getState()
-          .createModuleForProjectWithError(selectedProjectId, name.trim());
-        moduleId = created.id;
-        if (!moduleId) throw new Error("The created module has no id.");
-        createdModuleIdRef.current = moduleId;
-        setCreatedModuleId(moduleId);
-      }
-
-      const resolvedModuleId = moduleId;
+      const resolvedModuleId = await ensureModule(selectedProjectId);
       try {
         await writeModuleLink(resolvedModuleId, folder);
       } catch (cause) {
         setError(moduleFolderSaveError(cause, "Module created, but its folder could not be saved. Retry to save the folder."));
         return;
       }
-      if (useClientStore.getState().selectedModuleId !== resolvedModuleId) {
-        await useClientStore.getState().selectModule(resolvedModuleId);
-      }
-      const onboarding = useOnboardingTourStore.getState();
-      if (
-        onboarding.step === "module-create" &&
-        onboarding.projectId === selectedProjectId
-      ) {
-        onboarding.moduleCreated(resolvedModuleId);
-      }
-      popModal();
+      await finishCreation(selectedProjectId, resolvedModuleId);
     } catch (cause) {
       console.error("Failed to create module", cause);
       // Surface the failure without tearing down the pane.
@@ -211,6 +241,12 @@ export function AddModule({ runtime }: { runtime?: StudioRuntime } = {}) {
           use the same folder.
         </p>
       </div>
+      {onboarding && (
+        <p className="mt-2 text-xs text-text-muted">
+          You can capture ideas now. Choose a local folder before running an
+          agent.
+        </p>
+      )}
       {folderError && (
         <div
           id={moduleFolderErrorId}
@@ -233,6 +269,16 @@ export function AddModule({ runtime }: { runtime?: StudioRuntime } = {}) {
         >
           Cancel
         </button>
+        {onboarding && (
+          <button
+            type="button"
+            disabled={!canDefer}
+            onClick={() => void deferFolder()}
+            className="border border-pane-border bg-pane-bg px-3 py-1 disabled:opacity-50"
+          >
+            Set up folder later
+          </button>
+        )}
         <button
           type="button"
           disabled={!canSubmit}

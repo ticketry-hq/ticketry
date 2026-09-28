@@ -53,6 +53,15 @@ function seedLinkedModule(): void {
   ]);
 }
 
+// Selecting a folderless module opens it directly (CODING-2248). A launch from
+// the sidebar still asks for the folder first and then finishes the switch.
+function requestFolderThenSelect(moduleId: string): void {
+  useModalStore.getState().pushModal({
+    type: "module-folder",
+    payload: { moduleId, resumeModuleSelection: true },
+  });
+}
+
 describe("module-folder selection acceptance", () => {
   beforeEach(() => {
     initializeStudioRuntime(trustRuntime(async () => ({
@@ -85,21 +94,11 @@ describe("module-folder selection acceptance", () => {
     useModalStore.setState({ modalStack: [] });
   });
 
-  it("preserves the current module when the pathless-module prompt is cancelled", async () => {
-    await useClientStore.getState().selectModule("module-new");
+  it("preserves the current module when a folder prompt that resumes selection is cancelled", async () => {
+    requestFolderThenSelect("module-new");
 
     expect(useClientStore.getState().selectedModuleId).toBe("module-current");
     expect(getTasks).not.toHaveBeenCalled();
-    expect(useModalStore.getState().modalStack).toEqual([
-      {
-        type: "module-folder",
-        payload: {
-          moduleId: "module-new",
-          resumeModuleSelection: true,
-        },
-      },
-    ]);
-
     render(<ModalHost />);
     await act(async () => {
       await vi.dynamicImportSettled();
@@ -112,7 +111,7 @@ describe("module-folder selection acceptance", () => {
 
   it("preserves the current module when the folder link cannot be saved", async () => {
     writeModuleLink.mockRejectedValueOnce(new Error("save failed"));
-    await useClientStore.getState().selectModule("module-new");
+    requestFolderThenSelect("module-new");
     render(<ModalHost />);
     await act(async () => {
       await vi.dynamicImportSettled();
@@ -132,7 +131,7 @@ describe("module-folder selection acceptance", () => {
   });
 
   it("[overhaul-292] resumes module selection for an already-trusted folder after its link is saved", async () => {
-    await useClientStore.getState().selectModule("module-new");
+    requestFolderThenSelect("module-new");
     render(<ModalHost />);
     await act(async () => {
       await vi.dynamicImportSettled();
@@ -161,7 +160,7 @@ describe("module-folder selection acceptance", () => {
       directory: "/repos/new",
     })));
     seedLinkedModule();
-    await useClientStore.getState().selectModule("module-new");
+    requestFolderThenSelect("module-new");
     render(<><ModalHost /><DialogHost /></>);
     await act(async () => { await vi.dynamicImportSettled(); });
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "/repos/new" } });

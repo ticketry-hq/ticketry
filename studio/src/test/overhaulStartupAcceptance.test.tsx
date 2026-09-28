@@ -221,12 +221,12 @@ describe("startup acceptance", () => {
     expect(useModalStore.getState().modalStack).toEqual([]);
   });
 
-  it("leaves an unlinked remembered module unopened rather than prompting", async () => {
+  it("reopens an unlinked remembered module for planning without prompting", async () => {
     localStorage.setItem(RECENT_MODULE_KEY, "module-2");
 
     expect(await bootstrapStudio()).toBe("ready");
 
-    expect(useClientStore.getState().selectedModuleId).toBeNull();
+    expect(useClientStore.getState().selectedModuleId).toBe("module-2");
     expect(useModalStore.getState().modalStack).toEqual([]);
     expect(useClientStore.getState().focusedPane).toBe("tasks");
   });

@@ -1,6 +1,4 @@
 import type { ClientState, SetWorkspaceState, GetWorkspaceState } from "./types";
-import { getModuleFolder } from "../module-links";
-import { useModalStore } from "../../app/modal/modalStore";
 import { useStudioStore } from "../projects";
 import { TEMP_TASK_ID } from "../agents/types";
 import { writeRecentModule, clearRecentModule, readTaskSelections } from "../../state/persistence";
@@ -27,13 +25,7 @@ export function moduleSelectionActions(set: SetWorkspaceState, get: GetWorkspace
     async selectModule(id) {
       const projectId = useStudioStore.getState().selectedProjectId;
       if (!projectId) return;
-      if (!getModuleFolder(id)) {
-        useModalStore.getState().pushModal({
-          type: "module-folder",
-          payload: { moduleId: id, resumeModuleSelection: true },
-        });
-        return;
-      }
+      // Planning never needs a folder (CODING-2248); agent launch asks for it.
       beginTaskDetailModuleInput("module-selection");
       beginModuleLoad(id);
       const probe = moduleLoadPoint(id);

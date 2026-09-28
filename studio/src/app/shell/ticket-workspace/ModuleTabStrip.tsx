@@ -13,7 +13,6 @@ import {
   useModulesQuery,
   useStudioStore,
 } from "../../../features/projects";
-import { getModuleFolder } from "../../../features/module-links";
 import { useClientStore } from "../../../state/clientStore";
 import { ModuleTab } from "./ModuleTab";
 import { ModulesPaneToggle } from "./ModulesPaneToggle";
@@ -57,13 +56,11 @@ export function ModuleTabStrip() {
         const shownIds = new Set(shownModules.map((module) => module.id));
         const fallback =
           modules.slice(hiddenIndex + 1).find((module) =>
-            shownIds.has(module.id) && getModuleFolder(module.id)
+            shownIds.has(module.id)
           )
           ?? [...modules.slice(0, hiddenIndex)]
             .reverse()
-            .find((module) =>
-              shownIds.has(module.id) && getModuleFolder(module.id)
-            );
+            .find((module) => shownIds.has(module.id));
         if (fallback) void selectModule(fallback.id);
         else deselectModule();
       }

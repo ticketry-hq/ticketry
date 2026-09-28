@@ -103,7 +103,7 @@ export default function OnboardingTour({ onSelectStory }: Props) {
         <CoachMark
           anchor="module-folder"
           title="Choose where work runs"
-          description="This is the project's working directory (CWD): the folder containing the code this module works on. Ticketry opens terminals and starts coding agents here. Multiple modules can share the same folder."
+          description="This is the project's working directory (CWD): the folder containing the code this module works on. Ticketry opens terminals and starts coding agents here. Multiple modules can share the same folder. Not ready? Set it up later; you only need it before running an agent."
           focusDialog={false}
         >
           <button

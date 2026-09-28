@@ -37,7 +37,7 @@ named gate before the full Studio suite, typecheck, and build.
 | 28 | Disabled-Projects onboarding resolves a valid default project and keeps failures retryable on the composed welcome screen. |
 | 29 | Guided module creation retries a failed folder link against the already-created module. |
 | 30 | Ordinary module creation stays open through folder-link failure and closes only after a successful retry. |
-| 31 | Pathless module selection preserves the prior selection on cancel or save failure and resumes after a valid link. |
+| 31 | A folder prompt that resumes module selection preserves the prior selection on cancel or save failure and resumes after a valid link. |
 | 32 | A native attachment-process exit closes its viewer and releases outside viewer ownership without ending the durable terminal. |
 | 33 | Story-tree rows read as one left-aligned, truncating `identifier · name` label with state color on the identifier alone, keep trailing operational indicators separate, omit the separator when no compact identifier resolves, and leave canonical-key, sequence, and title search available. |
 | 34 | The Task workspace names child issues, review findings and their cancel labels, dependency chips and blocker candidates, the parent picker and Module link, and deletion confirmation copy as compact ticket identifiers without leaking canonical keys. A child description edit refreshes its finding location through its normalized task subscription. |
@@ -392,6 +392,12 @@ named gate before the full Studio suite, typecheck, and build.
 | 399 | Invalid input or a failed folder save blocks launch with a retry; a launch failure after saving keeps the folder association. |
 | 400 | A module with a folder launches through the existing flow without the missing-folder prompt. |
 | 401 | Work-item ＋ Agent and Run launches from a folderless module require the folder first, stop on cancel, and continue for the original work item after save. |
+| 402 | Onboarding creates a named module with folder setup explicitly deferred, selects it, and explains the agent-launch requirement; cancelling is not creation, and ordinary Add Module still requires a valid folder. |
+| 403 | Enter in Capture an idea creates exactly one Story in a folderless module without a folder or trust dialog, shows it, and clears the draft. |
+| 404 | A failed capture keeps the draft and reports an error; retry creates one Story, repeated Enter while pending adds none, and blank input creates nothing. |
+| 405 | Selecting or reopening a folderless module loads planning without a folder prompt, including after onboarding. |
+| 406 | Onboarding with a supplied folder validates and links it; an invalid supplied folder is refused and never treated as deferral. |
+| 407 | Onboarding deferral, idea capture, a cancelled launch-time folder setup, and a retried setup continue into exactly one agent launch for the new module. |
 
 Each executable case carries one stable `[overhaul-NN]` marker. The gate has a
 contract test that fails if a marker is missing or duplicated. A case whose

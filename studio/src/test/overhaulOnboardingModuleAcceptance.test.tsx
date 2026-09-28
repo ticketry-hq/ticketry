@@ -607,15 +607,17 @@ describe("onboarding and module-folder acceptance", () => {
     expect(useClientStore.getState().selectedModuleId).toBe("module-added");
   });
 
-  it("[overhaul-31] preserves selection on cancel and save failure, then resumes after a valid link", async () => {
+  it("[overhaul-31] preserves selection on folder-prompt cancel and save failure, then resumes after a valid link", async () => {
     seedModuleLinks([{ id: "link-module-old", moduleId: "module-old", path: "/repos/old" }]);
     useStudioStore.setState({ selectedProjectId: "project-1" });
     useClientStore.setState({ selectedModuleId: "module-old", selectedTaskId: "story-old" });
 
     render(<ModalHost />);
-    await act(async () => {
-      await useClientStore.getState().selectModule("module-new");
-    });
+    // A launch from the sidebar asks for the folder, then finishes the switch.
+    act(() => useModalStore.getState().pushModal({
+      type: "module-folder",
+      payload: { moduleId: "module-new", resumeModuleSelection: true },
+    }));
     expect(await screen.findByRole("dialog", { name: "Module Folder" })).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(useClientStore.getState().selectedModuleId).toBe("module-old");
@@ -624,9 +626,11 @@ describe("onboarding and module-folder acceptance", () => {
       .mockReset()
       .mockRejectedValueOnce(new Error("disk unavailable"))
       .mockImplementation(acceptModuleLink);
-    await act(async () => {
-      await useClientStore.getState().selectModule("module-new");
-    });
+    // A launch from the sidebar asks for the folder, then finishes the switch.
+    act(() => useModalStore.getState().pushModal({
+      type: "module-folder",
+      payload: { moduleId: "module-new", resumeModuleSelection: true },
+    }));
     fireEvent.change(await screen.findByRole("textbox"), {
       target: { value: "/repos/new" },
     });

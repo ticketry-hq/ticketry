@@ -59,7 +59,11 @@ import {
 } from "./moduleReorderHarness";
 
 describe("module sidebar reorder acceptance", () => {
-  beforeEach(resetModuleReorderHarness);
+  beforeEach(() => {
+    // Selecting a module now opens it directly, and its tab scrolls into view.
+    Element.prototype.scrollIntoView = vi.fn();
+    return resetModuleReorderHarness();
+  });
 
   it("[overhaul-42] freezes the visible module order on the first sidebar drag", async () => {
     await renderAutomaticProject();

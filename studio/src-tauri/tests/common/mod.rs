@@ -2,6 +2,7 @@ pub mod execution_authorization;
 pub mod execution_fixture;
 pub mod execution_harness;
 pub mod execution_legacy_fixture;
+pub mod graph_run_campaign_steps;
 pub mod graph_run_fixture;
 pub mod installation_corpus;
 pub mod isolated_tmux;

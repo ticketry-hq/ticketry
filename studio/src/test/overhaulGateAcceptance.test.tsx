@@ -19,6 +19,7 @@ function markedFiles(): string[] {
   return [
     ...sourceFiles(join(process.cwd(), "src", "test"), /\.test\.tsx?$/),
     ...sourceFiles(join(process.cwd(), "src-tauri", "crates"), /\.rs$/),
+    ...sourceFiles(join(process.cwd(), "src-tauri", "tests"), /\.rs$/),
   ];
 }
 
@@ -36,7 +37,7 @@ describe("overhaul acceptance gate", () => {
 
     expect(Object.fromEntries(counts)).toEqual(
       Object.fromEntries(
-        Array.from({ length: 395 }, (_, index) => [
+        Array.from({ length: 396 }, (_, index) => [
           String(index + 1).padStart(2, "0"),
           1,
         ]),

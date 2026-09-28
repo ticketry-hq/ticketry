@@ -5,13 +5,13 @@ use std::sync::Arc;
 use common::graph_run_fixture::*;
 use common::submitted_launch_authority::launch_service;
 use common::terminal_lifecycle_harness::{TerminalLifecycleHarness, PROJECT_ID, TASK_ID};
-use sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, Statement};
+use sea_orm::ConnectionTrait;
 use seaography::{Builder, BuilderContext};
 use ticketry_agent_execution::graph::{ExecutionMode, GraphAccess};
 use ticketry_agent_execution::reconciliation::ExecutionReconciliationService;
 use ticketry_agent_execution::{GraphRunCaller, GraphRunRequest, GraphRunService};
-use ticketry_entities::{agent_run, launch_material, session};
-use ticketry_terminal::TerminalLaunchService;
+use ticketry_entities::{agent_run, session};
+use ticketry_terminal::TerminalLaunchBoundary;
 use ticketry_work_management::launch_policy::LaunchPolicyResolver;
 
 #[tokio::test]

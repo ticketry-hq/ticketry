@@ -30,7 +30,7 @@ pub const INVALID_ROOT: &str = "00000000000000000000000000000001";
 
 #[derive(Default)]
 pub struct Runtime {
-    created: Mutex<HashSet<String>>,
+    pub created: Mutex<HashSet<String>>,
 }
 
 #[async_trait]
@@ -223,4 +223,53 @@ pub async fn scalar_where(
 
 pub fn compact(value: &str) -> String {
     uuid::Uuid::parse_str(value).unwrap().simple().to_string()
+}
+
+/// The newest launch material a child was prepared with, joined to its Agent
+/// Run's recorded launch selection.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PreparedLaunch {
+    pub effect_id: String,
+    pub request_id: String,
+    pub agent_run_id: String,
+    pub provider: Option<String>,
+    pub profile: Option<String>,
+    pub model: Option<String>,
+    pub reasoning: Option<String>,
+    pub required_skills: String,
+    pub prompt: String,
+    pub run_agent: Option<String>,
+    pub run_model: Option<String>,
+    pub run_reasoning: Option<String>,
+}
+
+pub async fn prepared_launch(database: &DatabaseConnection, task_id: &str) -> PreparedLaunch {
+    let row = database
+        .query_one_raw(Statement::from_string(
+            DbBackend::Sqlite,
+            format!(
+                "SELECT m.effect_id, m.request_id, m.agent_run_id, m.provider, m.profile, m.model, \
+                        m.reasoning, CAST(m.required_skills AS TEXT) AS required_skills, m.prompt, \
+                        r.agent, r.launch_model, r.launch_reasoning \
+                 FROM terminal_launch_material m JOIN agent_runs r ON r.id = m.agent_run_id \
+                 WHERE m.task_id='{task_id}' ORDER BY m.created_at DESC LIMIT 1"
+            ),
+        ))
+        .await
+        .unwrap()
+        .unwrap_or_else(|| panic!("no launch material for {task_id}"));
+    PreparedLaunch {
+        effect_id: row.try_get("", "effect_id").unwrap(),
+        request_id: row.try_get("", "request_id").unwrap(),
+        agent_run_id: row.try_get("", "agent_run_id").unwrap(),
+        provider: row.try_get("", "provider").unwrap(),
+        profile: row.try_get("", "profile").unwrap(),
+        model: row.try_get("", "model").unwrap(),
+        reasoning: row.try_get("", "reasoning").unwrap(),
+        required_skills: row.try_get("", "required_skills").unwrap(),
+        prompt: row.try_get("", "prompt").unwrap(),
+        run_agent: row.try_get("", "agent").unwrap(),
+        run_model: row.try_get("", "launch_model").unwrap(),
+        run_reasoning: row.try_get("", "launch_reasoning").unwrap(),
+    }
 }

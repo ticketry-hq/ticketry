@@ -1,4 +1,4 @@
-//! Automatic Graph Run advancement resolves the root's current status binding
+//! [overhaul-396] Automatic Graph Run advancement resolves the root's current status binding
 //! for each new attempt, while prepared attempts keep their launch material.
 
 mod common;

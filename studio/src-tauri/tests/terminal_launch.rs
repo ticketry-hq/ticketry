@@ -264,7 +264,7 @@ fn request(id: &str, kind: TerminalLaunchKind) -> CreateTerminalSession {
         _ => TASK_ID,
     };
     let working_directory_identity = match kind {
-        TerminalLaunchKind::Task | TerminalLaunchKind::Automation => {
+        TerminalLaunchKind::Task | TerminalLaunchKind::Automation | TerminalLaunchKind::TaskShell => {
             format!("task:{}", TASK_ID.replace('-', ""))
         }
         TerminalLaunchKind::Planning | TerminalLaunchKind::Instant | TerminalLaunchKind::Shell => {

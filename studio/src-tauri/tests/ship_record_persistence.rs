@@ -71,6 +71,8 @@ fn insert_for(
         pr_number: sea_orm::Set(None),
         pr_state: sea_orm::Set(None),
         pr_refreshed_at: sea_orm::Set(None),
+        pr_target_branch: sea_orm::Set(None),
+        pr_head_commit: sea_orm::Set(None),
     }
 }
 
@@ -302,6 +304,8 @@ fn receipt(operation_id: &str, _failed: bool) -> ship_record::AppendReceipt {
         pr_url: None,
         pr_number: None,
         pr_state: None,
+        pr_target_branch: None,
+        pr_head_commit: None,
     }
 }
 

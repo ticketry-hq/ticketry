@@ -28,15 +28,17 @@ jobs:
       - name: Install JavaScript packages
         run: npm ci
 
+      # Studio acceptance tests compile native code against the prepared
+      # libghostty headers, so preparation must come first.
+      - name: Prepare native terminal renderer
+        run: npm run libghostty:prepare --workspace @worktracker/studio
+
       - name: Studio typecheck, tests, and build
         run: |
           npm run typecheck
           npm run test:overhaul --workspace @worktracker/studio
           npm run test --workspace @worktracker/studio
           npm run build
-
-      - name: Prepare native terminal renderer
-        run: npm run libghostty:prepare --workspace @worktracker/studio
 
       - name: Desktop Rust tests
         run: cargo test --manifest-path studio/src-tauri/Cargo.toml --features native-libghostty

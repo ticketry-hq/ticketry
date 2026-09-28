@@ -80,6 +80,7 @@ import {
   loadOnboardingState,
 } from "../app/onboarding/onboardingStore";
 import { useOnboardingTourStore } from "../app/onboarding/onboardingTourStore";
+import { seedModuleLinks } from "../features/module-links";
 import { useStudioStore } from "../features/projects/store";
 import { loadProviderCatalog } from "../features/workflows/providerQueries";
 import { WorkTrackerWorkItemDocument } from "../features/work-items/generated/workItems.documents";
@@ -153,6 +154,8 @@ describe("zero-provider planning acceptance", () => {
       }
       return { terminal_session: { agent_run_id: "explicit-retry-run" } } as never;
     });
+    // Installing the runtime replaces the Apollo client, so seed after it.
+    seedModuleLinks([{ id: "link-1", moduleId: "module-1", path: "/repos/ticketry" }]);
     useModalStore.setState({ modalStack: [], presentedNoticeIds: new Set() });
     useClientStore.setState({ toasts: [], workspaces: {}, activeByTask: {} });
     await loadOnboardingState();

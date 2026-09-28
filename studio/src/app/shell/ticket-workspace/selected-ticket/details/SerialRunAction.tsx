@@ -22,6 +22,7 @@ export function SerialRunAction({
   const eligible = useSubtreeRunEligibility(task, moduleId);
   const serial = useSubtreeRunLaunch({
     item: task,
+    moduleId,
     mode: "serial",
     actionName: "Run subtree serially",
     successMessage: "Serial subtree run started.",

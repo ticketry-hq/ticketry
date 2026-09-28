@@ -5,6 +5,7 @@ import { studioKeymapRegistry } from "../app/navigation/keymapRegistry";
 import { useTerminalStore } from "../features/agents/terminal/appNavigation";
 import { KeyboardSettingsPanel } from "../features/studio/modals/KeyboardSettingsPanel";
 import { useClientStore } from "../state/clientStore";
+import { seedModuleLinks } from "../features/module-links";
 import { fixture, mountStudio, workItem } from "./seam";
 
 const ideas = {
@@ -104,6 +105,7 @@ describe("overhaul acceptance — Run Now", () => {
       children: <RunNowAcceptanceSurface />,
       graphQlExecution: true,
     });
+    seedModuleLinks([{ id: "link-1", moduleId: "module-1", path: "/repos/ticketry" }]);
 
     const details = await screen.findByRole("region", { name: "Details" });
     const runNow = await within(details).findByRole("button", { name: "Run now" });

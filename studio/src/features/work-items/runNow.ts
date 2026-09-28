@@ -1,6 +1,8 @@
 import { skipToken, useQuery } from "@apollo/client/react";
 import { useSyncExternalStore } from "react";
 import { launchFailureMessage } from "../agents/terminal";
+import { requireModuleFolderForLaunch } from "../studio/modals/PlanFeature";
+import { getModuleFolder } from "../module-links";
 import { toast, useClientStore } from "../../state/clientStore";
 import type {
   IssueType,
@@ -181,6 +183,11 @@ export function startRunNow(item: WorkItem, moduleId: string | null): boolean {
     )
   ) {
     return false;
+  }
+  if (moduleId && !getModuleFolder(moduleId)) {
+    // Once the folder saves, the same request re-runs every check above.
+    requireModuleFolderForLaunch(moduleId, () => void startRunNow(item, moduleId));
+    return true;
   }
 
   setPending(item.id, true);

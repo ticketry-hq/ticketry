@@ -19,6 +19,7 @@ import {
   useTerminalStore,
   type SessionMeta,
 } from "../features/agents/terminal";
+import { seedModuleLinks } from "../features/module-links";
 import { setStatesSorted } from "../features/projects";
 import { setProviderCapabilities } from "../features/workflows";
 import { useClientStore, type EditViewZone } from "../state/clientStore";
@@ -518,6 +519,7 @@ describe("overhaul acceptance — Edit view navigation zones", () => {
         reasoning_levels: [],
       },
     ]);
+    seedModuleLinks([{ id: "link-1", moduleId: "module-1", path: "/repos/ticketry" }]);
     await renderEditViewWorkspace(EXPANDED_ROWS, {
       kind: "task",
       taskId: "story-1",

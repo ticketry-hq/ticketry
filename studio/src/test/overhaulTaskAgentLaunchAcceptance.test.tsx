@@ -277,6 +277,11 @@ describe("overhaul acceptance — task agent launch", () => {
       }),
     );
     setProviderCapabilities([providerCapability("codex")]);
+    // The desktop runtime starts a fresh client, so its module needs its folder.
+    const { seedModuleLinks } = await import("../features/module-links");
+    seedModuleLinks([
+      { id: "link-module-1992", moduleId: "module-1992", path: "/repos/ticketry" },
+    ]);
 
     render(workspaceView({
       launchContext: {

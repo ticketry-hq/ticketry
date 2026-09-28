@@ -19,6 +19,8 @@ export interface ModuleFolderPayload {
   resumeModuleSelection?: boolean;
   /** Continue a non-modal action after the folder is saved. */
   onSaved?: () => void;
+  /** An agent launch is waiting on this folder; say why it is required. */
+  forLaunch?: boolean;
 }
 
 export function ModuleFolder({
@@ -115,7 +117,19 @@ export function ModuleFolder({
       onAction={onAction}
       width="w-[80ch]"
     >
-      <ModuleFolderSelection selection={selection} autoFocus disabled={busy} />
+      {payload?.forLaunch && (
+        <p id="module-folder-launch-reason" className="mb-2 text-sm text-text-muted">
+          Choose a local folder before running an agent. The agent works in
+          this folder.
+        </p>
+      )}
+      <ModuleFolderSelection
+        selection={selection}
+        autoFocus
+        disabled={busy}
+        placeholder="Local folder (required)"
+        ariaDescribedBy={payload?.forLaunch ? "module-folder-launch-reason" : undefined}
+      />
       {error && (
         <div className="mt-2 text-sm text-red-400" role="alert">
           {error}

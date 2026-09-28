@@ -3,6 +3,7 @@ import {
   launchDefaultAgent,
   launchFailureMessage,
 } from "../../../../../features/agents/terminal";
+import { requireModuleFolderForLaunch } from "../../../../../features/studio/modals/PlanFeature";
 import { TEMP_TASK_ID } from "../../../../../features/agents/types";
 import {
   refreshSubtreeRunCapabilities,
@@ -74,6 +75,7 @@ export function SubtreeRunAction({
   const shortcut = useGlobalShortcutLabel("normal-run-command");
   const branch = useSubtreeRunLaunch({
     item: task,
+    moduleId,
     actionName: "Run subtree",
     successMessage: "Subtree run started.",
     inertMessage:
@@ -184,11 +186,15 @@ export function RunItemAction({
       setPending(false);
     }
   }, [moduleId, task]);
+  const requestRun = useCallback(
+    () => requireModuleFolderForLaunch(moduleId, () => void runLeaf()),
+    [moduleId, runLeaf],
+  );
 
   useEffect(() => {
     if (!registerShortcut) return;
-    return registerNormalRunCommand(task.id, () => void runLeaf());
-  }, [registerShortcut, runLeaf, task.id]);
+    return registerNormalRunCommand(task.id, requestRun);
+  }, [registerShortcut, requestRun, task.id]);
 
   return (
     <button
@@ -197,7 +203,7 @@ export function RunItemAction({
       aria-busy={pending}
       title="Run item"
       disabled={pending}
-      onClick={() => void runLeaf()}
+      onClick={requestRun}
       className="inline-flex h-7 flex-none items-center gap-2 border border-focus-accent px-2.5 text-sm text-text-primary hover:bg-pane-title disabled:cursor-wait disabled:opacity-60"
     >
       <IconPlay size={14} />

@@ -21,6 +21,29 @@ import { useStudioStore } from "../../projects";
 import { useClientStore } from "../../../state/clientStore";
 import { getWorkItemSnapshot } from "../../work-items";
 
+/**
+ * Every user-facing agent launch passes through here (CODING-2245). A module
+ * without a folder first asks for one, explaining why; a successful save
+ * continues this same launch once, bound to the module it was requested for.
+ * Cancelling launches nothing. A launch without module context goes straight
+ * to execution, which keeps its own folder validation.
+ */
+export function requireModuleFolderForLaunch(
+  moduleId: string | null | undefined,
+  launch: () => void,
+  /** Also finish a module switch that was waiting on the same folder. */
+  options: { resumeModuleSelection?: boolean } = {},
+): void {
+  if (!moduleId || getModuleFolder(moduleId)) {
+    launch();
+    return;
+  }
+  useModalStore.getState().pushModal({
+    type: "module-folder",
+    payload: { moduleId, forLaunch: true, onSaved: launch, ...options },
+  });
+}
+
 function selectScratchWorkspace(): void {
   useClientStore.getState().selectTask(TEMP_TASK_ID);
 }
@@ -57,7 +80,7 @@ function studioPlanFlow(): TerminalCreateFlow {
           };
       modal.pushModal({
         type: "module-folder",
-        payload: { moduleId: req.moduleId, ...nextPayload },
+        payload: { moduleId: req.moduleId, forLaunch: true, ...nextPayload },
       });
     },
     openPromptInput(req) {
@@ -125,24 +148,18 @@ export function startInstantChangeFlow(
   };
   const { selectedProjectId, selectedModuleId } = tasks;
   if (!selectedProjectId || !selectedModuleId) return;
-  const folder = getModuleFolder(selectedModuleId);
+  startInstantConversation(selectedProjectId, selectedModuleId, options);
+}
 
-  if (!folder) {
-    useModalStore.getState().pushModal({
-      type: "module-folder",
-      payload: {
-        moduleId: selectedModuleId,
-        onSaved: () => launchSelectedConversation(
-          selectedProjectId,
-          selectedModuleId,
-          options,
-        ),
-      },
-    });
-    return;
-  }
-
-  launchSelectedConversation(selectedProjectId, selectedModuleId, options);
+/** Launch an Instant conversation in an explicitly named module. */
+export function startInstantConversation(
+  projectId: string,
+  moduleId: string,
+  options: InstantConversationOptions = {},
+): void {
+  requireModuleFolderForLaunch(moduleId, () =>
+    launchSelectedConversation(projectId, moduleId, options),
+  );
 }
 
 function selectedTaskLaunchContext(): {
@@ -172,52 +189,27 @@ function selectedTaskLaunchContext(): {
 
 /** Equivalent entry for `o` (open agent on selected task). */
 export function startOpenFlow(): void {
-  const modal = useModalStore.getState();
   const context = selectedTaskLaunchContext();
   if (!context) return;
-  const folder = getModuleFolder(context.moduleId);
-  if (!folder) {
-    modal.pushModal({
-      type: "module-folder",
-      payload: {
-        moduleId: context.moduleId,
-        next: "agent-picker",
-        nextPayload: { mode: "open", ...context },
-      },
-    });
-    return;
-  }
-  modal.pushModal({
-    type: "agent-picker",
-    payload: { mode: "open", ...context },
-  });
+  requireModuleFolderForLaunch(context.moduleId, () =>
+    useModalStore.getState().pushModal({
+      type: "agent-picker",
+      payload: { mode: "open", ...context },
+    }),
+  );
 }
 
 /** Entry for shift+enter (open with prompt). */
 export function startOpenWithPromptFlow(): void {
-  const modal = useModalStore.getState();
   const context = selectedTaskLaunchContext();
   if (!context) return;
-  const folder = getModuleFolder(context.moduleId);
-  if (!folder) {
-    modal.pushModal({
-      type: "module-folder",
+  requireModuleFolderForLaunch(context.moduleId, () =>
+    useModalStore.getState().pushModal({
+      type: "prompt-input",
       payload: {
-        moduleId: context.moduleId,
-        next: "prompt-input",
-        nextPayload: {
-          next: "agent-picker",
-          nextPayload: { mode: "open-with-prompt", ...context },
-        },
+        next: "agent-picker",
+        nextPayload: { mode: "open-with-prompt", ...context },
       },
-    });
-    return;
-  }
-  modal.pushModal({
-    type: "prompt-input",
-    payload: {
-      next: "agent-picker",
-      nextPayload: { mode: "open-with-prompt", ...context },
-    },
-  });
+    }),
+  );
 }

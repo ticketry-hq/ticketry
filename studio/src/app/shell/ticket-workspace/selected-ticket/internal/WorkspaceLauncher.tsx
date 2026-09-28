@@ -9,6 +9,7 @@ import { createPortal } from "react-dom";
 import { useModalStore } from "../../../../../app/modal/modalStore";
 import { prefetchProviderCatalog } from "../../../../../features/workflows";
 import { openTerminalPanel } from "../../../../../features/terminal-panel";
+import { requireModuleFolderForLaunch } from "../../../../../features/studio/modals/PlanFeature";
 import { loadSelectedTicketTerminal } from "../terminals/selectedTicketTerminalLoader";
 
 /** Taskless scratch run intents offered by the scratch launcher menu. */
@@ -244,7 +245,7 @@ export function WorkspaceLauncher({
         ref={launchTriggerRef}
         onClick={() => {
           if (launchContext.kind === "task") {
-            pushModal({
+            requireModuleFolderForLaunch(launchContext.moduleId, () => pushModal({
               type: "agent-picker",
               payload: {
                 mode: "open",
@@ -258,7 +259,7 @@ export function WorkspaceLauncher({
                   : {}),
                 onLaunched: onTaskAgentLaunched,
               },
-            });
+            }));
             return;
           }
           const scratchContext: ScratchLaunchContext = launchContext;

@@ -386,6 +386,12 @@ named gate before the full Studio suite, typecheck, and build.
 | 393 | Reloaded startup attention retains the generic guidance and the original run identity without alleging trust failure. |
 | 394 | A Plan run's Claude trust attention remains passive and opens its existing terminal. |
 | 395 | An Instant run's trust action reattaches the persisted run after the terminal store is cleared. |
+| 396 | Requesting an agent launch from a folderless module opens required Module Folder setup that explains why the folder is needed; nothing launches first. |
+| 397 | Saving a valid folder continues the original launch exactly once for its original module, even after navigation or repeated Save. |
+| 398 | Cancelling folder setup or its trust prompt launches nothing, keeps the module and planning data, and a later launch asks again. |
+| 399 | Invalid input or a failed folder save blocks launch with a retry; a launch failure after saving keeps the folder association. |
+| 400 | A module with a folder launches through the existing flow without the missing-folder prompt. |
+| 401 | Work-item ＋ Agent and Run launches from a folderless module require the folder first, stop on cancel, and continue for the original work item after save. |
 
 Each executable case carries one stable `[overhaul-NN]` marker. The gate has a
 contract test that fails if a marker is missing or duplicated. A case whose

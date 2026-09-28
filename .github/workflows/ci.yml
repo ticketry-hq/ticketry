@@ -45,6 +45,14 @@ jobs:
           npm run test --workspace @worktracker/studio
           npm run build
 
+      # tauri-build requires the externalBin sidecar to exist; stage it the
+      # same way desktop:dev does.
+      - name: Stage ticketry-hook sidecar
+        run: >-
+          node --input-type=module -e 'import { prepareDesktopHookRunner } from
+          "./studio/scripts/desktop-hook-runner.mjs";
+          prepareDesktopHookRunner({ root: process.cwd() });'
+
       - name: Desktop Rust tests
         run: cargo test --manifest-path studio/src-tauri/Cargo.toml --features native-libghostty
 

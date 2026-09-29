@@ -33,6 +33,12 @@ jobs:
       - name: Install JavaScript packages
         run: npm ci
 
+      # Rust terminal tests need tmux before desktop acceptance runs.
+      - name: Install terminal prerequisite
+        run: |
+          command -v tmux || brew install tmux
+          tmux -V
+
       # Studio acceptance tests compile native code against the prepared
       # libghostty headers, so preparation must come first.
       - name: Prepare native terminal renderer
@@ -58,9 +64,7 @@ jobs:
 
       - name: Frontend-to-agent desktop acceptance
         timeout-minutes: 30
-        run: |
-          command -v tmux || brew install tmux
-          npm run test:e2e:desktop --workspace @worktracker/studio
+        run: npm run test:e2e:desktop --workspace @worktracker/studio
 
       - name: Release contract tests
         run: |

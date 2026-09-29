@@ -936,6 +936,70 @@ async fn a_repository_that_moved_under_a_prepared_operation_becomes_a_conflict()
     );
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_task_moved_to_another_module_while_git_runs_is_not_indexed_under_the_old_one() {
+    let fixture = fixture().await;
+    // A post-checkout hook holds `git worktree add` open until the task has
+    // been moved, which is exactly the window between replan and settlement.
+    let started = fixture.directory.path().join("checkout-started");
+    let go = fixture.directory.path().join("task-moved");
+    let hook = fixture.repository_root.join(".git/hooks/post-checkout");
+    write(
+        &hook,
+        &format!(
+            "#!/bin/sh\ntouch '{}'\ni=0\nwhile [ ! -f '{}' ] && [ $i -lt 400 ]; do sleep 0.05; i=$((i+1)); done\n",
+            started.display(),
+            go.display()
+        ),
+    );
+    std::fs::set_permissions(&hook, std::os::unix::fs::PermissionsExt::from_mode(0o755))
+        .expect("make the hook executable");
+
+    let database = fixture.database().await;
+    let move_task = tokio::spawn(async move {
+        tokio::time::timeout(std::time::Duration::from_secs(15), async {
+            while !started.exists() {
+                tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+            }
+        })
+        .await
+        .expect("Git reaches the post-checkout hook");
+        // Move before settlement, while no worktree row exists.
+        database
+            .execute_unprepared(&format!(
+                "UPDATE worktracker_issue SET parent_id = '{SECOND_MODULE}', module_id = '{SECOND_MODULE}' WHERE id = '{PARENT_TASK}'"
+            ))
+            .await
+            .expect("move the task to another module");
+        std::fs::write(&go, "").expect("release the hook");
+    });
+
+    let response = fixture
+        .create(PARENT_TASK, &uuid::Uuid::new_v4().to_string())
+        .await;
+    move_task.await.expect("the move completes");
+
+    assert_eq!(
+        response["errors"][0]["extensions"]["code"], "worktree_external_conflict",
+        "{response}"
+    );
+    assert!(
+        fixture.rows().await.is_empty(),
+        "no active row is left under the module the task left"
+    );
+    let operations = fixture.operations().await;
+    assert_eq!(operations.len(), 1);
+    assert_eq!(operations[0].state, "conflicted");
+    assert_eq!(
+        operations[0].last_error_code.as_deref(),
+        Some("worktree_owner_module_changed")
+    );
+    assert!(
+        fixture.facts().await.is_empty(),
+        "a conflict publishes nothing"
+    );
+}
+
 /// Journal a prepared creation exactly as the mutation does, and stop there —
 /// the durable state a process that died mid-effect leaves behind.
 async fn prepared_operation(fixture: &Fixture, task_id: &str) -> String {

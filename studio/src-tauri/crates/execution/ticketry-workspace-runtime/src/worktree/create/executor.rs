@@ -44,7 +44,7 @@ use super::error::WorktreeCreateError;
 use super::git_effects::{self, CheckoutObservation};
 use super::identity::CreateIntent;
 use super::plan::{self, CreatePlan};
-use super::settlement::{self, SettledWorktree};
+use super::settlement::SettledWorktree;
 
 /// Everything a creation needs that is not derived per request.
 #[derive(Clone)]
@@ -82,6 +82,10 @@ impl CreateExecutor {
 
     pub fn journal(&self) -> &WorkspaceOperationJournal {
         &self.journal
+    }
+
+    pub(super) fn events(&self) -> Option<&StatusEventRepository> {
+        self.events.as_ref()
     }
 
     /// Re-derive the plan a journalled intent describes. A repository that can
@@ -279,82 +283,8 @@ impl CreateExecutor {
         }))
     }
 
-    /// Settle a proved checkout together with its row and its durable fact.
-    async fn settle_created(
-        &self,
-        claim: &ClaimedOperation,
-        plan: &CreatePlan,
-        settled: SettledWorktree,
-    ) -> WorkspaceOperationOutcome {
-        let outcome = WorkspaceOperationOutcome::Applied {
-            result: settled.result(plan),
-            evidence: json!({
-                "adopted": settled.adopted,
-                "branch": plan.branch,
-                "baseRef": settled.base_ref,
-                "baseCommit": settled.base_commit,
-                "checkoutName": plan.checkout_name,
-                "worktreeId": settled.worktree_id,
-            }),
-        };
-        let events = self.events.clone();
-        let settlement_outcome = outcome.clone();
-        // Resolved before the transaction opens: the fact's project and owner
-        // come from the Work Item graph, and reading them is not settlement
-        // work that should hold the settlement transaction open.
-        let scope =
-            crate::worktree::facts::resolve_scope(self.work_items(), &plan.owner.top_level_task_id)
-                .await;
-        let written = self
-            .journal
-            .settle_with(
-                &claim.operation_id,
-                &claim.lease_owner,
-                settlement_outcome,
-                |transaction| {
-                    let plan = plan.clone();
-                    let settled = settled.clone();
-                    let events = events.clone();
-                    let scope = scope.clone();
-                    Box::pin(async move {
-                        settlement::insert_row(transaction, &plan, &settled)
-                            .await
-                            .map_err(settlement_failure)?;
-                        settlement::append_fact(
-                            events.as_ref(),
-                            transaction,
-                            scope.as_ref(),
-                            &plan,
-                            &settled,
-                        )
-                        .await
-                        .map_err(settlement_failure)
-                    })
-                },
-            )
-            .await;
-        match written {
-            Ok(_) => {
-                if let Some(events) = &self.events {
-                    // Waking subscribers happens only after the transaction
-                    // committed, so nothing is published that did not commit.
-                    events.wake_committed();
-                }
-                outcome
-            }
-            Err(error) => WorkspaceOperationOutcome::Failed {
-                code: error.code_str().to_owned(),
-                message: error.to_string(),
-                // The checkout is real and proved; only its bookkeeping
-                // failed, so the next attempt adopts rather than recreates.
-                retryable: true,
-                cleanup_confirmed: true,
-            },
-        }
-    }
-
     /// Settle an outcome that owns no model write of its own.
-    async fn settled(
+    pub(super) async fn settled(
         &self,
         claim: &ClaimedOperation,
         outcome: WorkspaceOperationOutcome,
@@ -391,7 +321,11 @@ enum Converged {
     Proved(SettledWorktree),
 }
 
-fn conflicted(code: &str, message: &str, evidence: serde_json::Value) -> WorkspaceOperationOutcome {
+pub(super) fn conflicted(
+    code: &str,
+    message: &str,
+    evidence: serde_json::Value,
+) -> WorkspaceOperationOutcome {
     WorkspaceOperationOutcome::Conflicted {
         code: code.to_owned(),
         message: message.to_owned(),
@@ -408,10 +342,4 @@ fn retryable(code: &str, message: impl Into<String>) -> WorkspaceOperationOutcom
         // that could survive it.
         cleanup_confirmed: true,
     }
-}
-
-fn settlement_failure(
-    error: WorktreeCreateError,
-) -> crate::workspace::operations::WorkspaceOperationError {
-    crate::workspace::operations::WorkspaceOperationError::settlement(error.to_string())
 }

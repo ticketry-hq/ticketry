@@ -26,6 +26,7 @@
 //! interactive path and by startup reconciliation, and [`probe`] is what
 //! recovery is allowed to conclude before that performer is ever invoked.
 
+mod created_settlement;
 mod error;
 mod executor;
 mod git_effects;

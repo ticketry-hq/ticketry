@@ -14,6 +14,8 @@ use crate::worktree::facts::{record_worktree, WorktreeChange, WorktreeFact, Work
 use ticketry_entities::worktree;
 use ticketry_runs::StatusEventRepository;
 
+use crate::worktree::status::owner;
+
 use super::error::{WorktreeCreateError, WorktreeCreateErrorCode};
 use super::plan::CreatePlan;
 
@@ -44,6 +46,19 @@ impl SettledWorktree {
             "adopted": self.adopted,
         })
     }
+}
+
+/// True when the owner still sits where the plan found it. Read inside the
+/// settlement transaction, which already holds the write lock, so a reparent
+/// cannot commit between this check and the row it guards: it either
+/// committed first and is seen here, or it waits and then sees the row.
+pub async fn owner_unmoved(
+    transaction: &DatabaseTransaction,
+    plan: &CreatePlan,
+) -> Result<bool, WorktreeCreateError> {
+    let current = owner::resolve(transaction, &plan.owner.top_level_task_id).await?;
+    Ok(current.top_level_task_id == plan.owner.top_level_task_id
+        && current.module_id == plan.owner.module_id)
 }
 
 /// Insert the index row for a proved checkout. Runs inside the settlement

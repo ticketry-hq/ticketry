@@ -9,7 +9,7 @@
 //! A module is a container, never an owner. Ancestry therefore stops at the
 //! first module and the Work Item below it is the owner.
 
-use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
+use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter};
 
 use ticketry_entities::issue;
 
@@ -39,8 +39,10 @@ impl WorktreeOwner {
     }
 }
 
+/// Generic over the connection so a settlement can re-read the owner inside
+/// its own transaction.
 pub async fn resolve(
-    database: &DatabaseConnection,
+    database: &impl ConnectionTrait,
     requested_task_id: &str,
 ) -> Result<WorktreeOwner, WorktreeStatusError> {
     let requested = active_issue(database, requested_task_id)
@@ -78,7 +80,7 @@ pub async fn resolve(
 }
 
 async fn active_issue(
-    database: &DatabaseConnection,
+    database: &impl ConnectionTrait,
     identity: &str,
 ) -> Result<Option<issue::Model>, WorktreeStatusError> {
     Ok(issue::Entity::find_by_id(compact_uuid(identity))

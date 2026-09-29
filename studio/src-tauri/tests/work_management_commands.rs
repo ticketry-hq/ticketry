@@ -190,6 +190,9 @@ async fn fixture() -> (tempfile::TempDir, sea_orm::DatabaseConnection) {
     module_presentation_migration::install(&database)
         .await
         .expect("install module presentation");
+    ticketry_work_management::tag_migration::install(&database)
+        .await
+        .expect("install tag relations");
     let issue_column_count = database
         .query_all_raw(sea_orm::Statement::from_string(
             sea_orm::DbBackend::Sqlite,
@@ -1594,6 +1597,7 @@ async fn graphql_project_updates_preserve_results_errors_and_atomicity() {
 #[tokio::test]
 async fn graphql_exposes_only_authored_mutations_and_structured_errors() {
     let (directory, database) = fixture().await;
+    install_worktrees(&database).await;
     database
         .execute_unprepared(&format!(
             "INSERT INTO worktracker_state VALUES ('{READY}', '{PROJECT}', 'Ready', 'started', '', 2, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"

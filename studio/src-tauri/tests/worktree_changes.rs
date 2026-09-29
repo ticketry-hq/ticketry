@@ -1568,7 +1568,7 @@ async fn generated_worktree_list_and_module_files_load_independently() {
 
     fixture.execute("DROP TABLE worktrees").await;
     let response = fixture.api.clone().graphql_execute(serde_json::json!({
-        "query": include_str!("../../src/features/agents/worktrees/operations/moduleVersionControl.graphql"),
+        "query": "query ModuleFiles($moduleId: String!) { module_version_control(module_id: $moduleId) { checkout { available files { path } } } }",
         "variables": { "moduleId": MODULE_PUBLIC },
     }).to_string()).await;
     let response: serde_json::Value = serde_json::from_str(&response).unwrap();

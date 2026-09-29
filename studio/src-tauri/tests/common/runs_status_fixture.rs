@@ -30,7 +30,7 @@ pub async fn open() -> (tempfile::TempDir, DatabaseConnection) {
             error TEXT, cwd TEXT, provider_session_id TEXT, lifecycle_state TEXT,
             lifecycle_updated_at TEXT, design_dir TEXT, resumed_from TEXT, scope TEXT NOT NULL,
             launch_state TEXT, launch_model TEXT, initial_prompt TEXT,
-            launch_reasoning TEXT, launch_unattended BOOL NOT NULL DEFAULT 0
+            launch_reasoning TEXT, launch_unattended BOOL NOT NULL DEFAULT 0, attention_reason TEXT
         );
         CREATE TABLE runs_status_events (
             cursor INTEGER PRIMARY KEY AUTOINCREMENT, event_id TEXT NOT NULL UNIQUE,

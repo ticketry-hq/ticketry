@@ -210,8 +210,8 @@ fn delivers_wheel_scroll_to_alternate_screen_programs_instead_of_copy_mode() {
     let viewer = TerminalAttachment::attach(RUN_ID, 80, 24).expect("attach terminal");
     let (mut viewer, _reader) = viewer.into_control_and_reader();
 
-    // A program without mouse reporting gets cursor keys, like Codex relying
-    // on the terminal's alternate scroll mode.
+    // Alternate-screen programs receive SGR wheel reports even when they do
+    // not enable mouse reporting, matching Codex's scroll handling.
     viewer
         .write_all(b"printf '\\033[?1049h'; cat -v\r")
         .expect("start alternate-screen program");
@@ -219,7 +219,7 @@ fn delivers_wheel_scroll_to_alternate_screen_programs_instead_of_copy_mode() {
     viewer
         .scroll(TerminalScrollDirection::Up, 3)
         .expect("scroll alternate screen");
-    await_pane_contents(&server, "^[[A^[[A^[[A");
+    await_pane_contents(&server, "^[[<64;41;13M^[[<64;41;13M^[[<64;41;13M");
     assert_eq!(server.pane_value("#{pane_in_mode}"), "0");
 
     // A program that asked for SGR mouse reports gets wheel reports.

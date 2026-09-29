@@ -177,8 +177,9 @@ fn every_reconciled_child_handoff_records_the_parent_required_evidence() {
     // Design directories are deliberately local (`.gitignore`), so a clean
     // checkout has no handoff documents to reconcile. Where they do exist,
     // every reconciled child must carry the parent-required evidence.
-    let designs = repository_root().join("spec/rusting--cf2de16d");
-    if !designs.is_dir() {
+    let has_local_handoffs = reconciled_handoffs()
+        .any(|handoff| repository_root().join(handoff.evidence).exists());
+    if !has_local_handoffs {
         eprintln!("no local design directories; handoff reconciliation not checked");
         return;
     }

@@ -57,8 +57,9 @@ async fn the_current_generation_runs_every_rule_its_schema_can_answer() {
     // The only rules a current Django installation cannot answer are the ones
     // about tables Rust itself introduces during adoption — the status-event
     // ledger, the launch and cleanup effect journals, and the reconciliation
-    // journal. Those rules exist for reopening an installation Rust already
-    // owns, which is the other input this preflight has to cover.
+    // journal, plus columns added by Rust adoption migrations. Those rules
+    // exist for reopening an installation Rust already owns, which is the
+    // other input this preflight has to cover.
     let rust_owned = [
         "runs_status_events",
         "runs_project_compaction_watermarks",
@@ -72,7 +73,11 @@ async fn the_current_generation_runs_every_rule_its_schema_can_answer() {
             rust_owned
                 .iter()
                 .any(|table| skipped.missing_requirement.starts_with(table))
-                || skipped.missing_requirement == "worktracker_project.onboarding_required",
+                || matches!(
+                    skipped.missing_requirement.as_str(),
+                    "worktracker_project.onboarding_required"
+                        | "worktracker_launchbinding.stage_skills"
+                ),
             "{} was skipped on the current generation because {} is absent",
             skipped.code,
             skipped.missing_requirement

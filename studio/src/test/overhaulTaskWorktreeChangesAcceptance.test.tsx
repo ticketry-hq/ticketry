@@ -1050,6 +1050,12 @@ describe("overhaul acceptance - task worktree Changes", () => {
     const tabs = await screen.findByRole("tablist", { name: "Workspace tabs" });
     fireEvent.click(within(tabs).getByRole("tab", { name: "Changes" }));
     await openBranchInspector();
+    expect(await screen.findByLabelText("Pull request state")).toHaveTextContent("Closed without merge");
+    // Reopening Changes reads the persisted verdict and keeps replacement available.
+    fireEvent.click(screen.getByRole("button", { name: "Back to planning workspace" }));
+    fireEvent.click(within(tabs).getByRole("tab", { name: "Changes" }));
+    await openBranchInspector();
+    expect(await screen.findByLabelText("Pull request state")).toHaveTextContent("Closed without merge");
     fireEvent.click(await screen.findByRole("button", { name: "Replace PR" }));
     await waitFor(() =>
       expect(screen.getByRole("link", { name: "Open PR" })).toHaveAttribute(

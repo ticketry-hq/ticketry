@@ -323,7 +323,7 @@ mod work_item_update {
             .await
             .expect("build generated contract");
         assert!(sdl.contains(
-            "update_work_item(id: String!, name: String, description: String, issue_type_id: String, state_id: String, parent_id: String, blocked_by_ids: [String!], is_archived: Boolean, workspace_tab_order: Json): WorktrackerIssue!"
+            "update_work_item(id: String!, name: String, description: String, issue_type_id: String, state_id: String, parent_id: String, blocked_by_ids: [String!], tag_names: [String!], is_archived: Boolean, workspace_tab_order: Json): WorktrackerIssue!"
         ));
 
         let database = Database::connect("sqlite::memory:").await.unwrap();

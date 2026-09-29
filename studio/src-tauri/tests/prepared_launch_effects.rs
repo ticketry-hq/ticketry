@@ -272,8 +272,15 @@ async fn one_prepared_effect_produces_exactly_one_deterministic_runtime() {
     assert!(first.effect.applied_at.is_some());
     assert!(first.effect.lease_owner.is_none());
     assert_eq!(
-        first.effect.runtime_evidence.as_deref(),
-        Some(r#"{"adopted":false,"runtimeId":"runtime-run-902"}"#)
+        serde_json::from_str::<serde_json::Value>(
+            first
+                .effect
+                .runtime_evidence
+                .as_deref()
+                .expect("runtime evidence")
+        )
+        .expect("valid runtime evidence"),
+        serde_json::json!({"adopted": false, "runtimeId": "runtime-run-902"})
     );
 
     // The same transport request arriving twice is a retry, not a second

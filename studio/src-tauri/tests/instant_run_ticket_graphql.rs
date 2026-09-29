@@ -25,12 +25,12 @@ async fn database() -> DatabaseConnection {
                ended_at TEXT, exit_code INTEGER, error TEXT, cwd TEXT, provider_session_id TEXT,\n\
                lifecycle_state TEXT, lifecycle_updated_at TEXT, design_dir TEXT, resumed_from TEXT,\n\
                scope TEXT NOT NULL, launch_state TEXT, launch_model TEXT, initial_prompt TEXT,\n\
-               launch_reasoning TEXT, launch_unattended BOOL NOT NULL DEFAULT 0\n\
+               launch_reasoning TEXT, launch_unattended BOOL NOT NULL DEFAULT 0, attention_reason TEXT\n\
              );\n\
              CREATE TABLE terminal_launch_material (\n\
                effect_id TEXT PRIMARY KEY, agent_run_id TEXT NOT NULL UNIQUE, schema_version INTEGER NOT NULL,\n\
                request_id TEXT NOT NULL UNIQUE, issue_id TEXT NOT NULL, project_id TEXT NOT NULL,\n\
-               module_id TEXT NOT NULL, task_id TEXT NOT NULL, provider TEXT, model TEXT, reasoning TEXT,\n\
+               module_id TEXT NOT NULL, task_id TEXT NOT NULL, provider TEXT, profile TEXT, model TEXT, reasoning TEXT,\n\
                scope TEXT NOT NULL, doc_rel_path TEXT, prompt TEXT, resume_from_agent_run_id TEXT,\n\
                required_skills TEXT NOT NULL, working_directory_identity TEXT NOT NULL,\n\
                design_directory_identity TEXT, initial_columns INTEGER NOT NULL, initial_rows INTEGER NOT NULL,\n\
@@ -54,7 +54,11 @@ async fn database() -> DatabaseConnection {
            ('run-no-session', 'scratch', 'codex', 'running', '2026-08-30T07:10:00Z', NULL, NULL, 'instant'),\n\
            ('run-blank-session', 'scratch', 'codex', 'running', '2026-08-30T07:05:00Z', NULL, '   ', 'instant'),\n\
            ('run-foreign', 'scratch', 'codex', 'running', '2026-08-30T07:00:00Z', NULL, 'thread-foreign', 'instant');\n\
-         INSERT INTO terminal_launch_material VALUES\n\
+         INSERT INTO terminal_launch_material (\n\
+           effect_id, agent_run_id, schema_version, request_id, issue_id, project_id, module_id,\n\
+           task_id, provider, model, reasoning, scope, doc_rel_path, prompt, resume_from_agent_run_id,\n\
+           required_skills, working_directory_identity, design_directory_identity, initial_columns,\n\
+           initial_rows, created_at) VALUES\n\
            ('effect-active', 'run-active', 1, 'request-active', 'scratch', '{project}', '{module}', 'scratch', 'codex', NULL, NULL, 'instant', NULL, '{sql_prompt}', NULL, '[]', '/private/repo', NULL, 80, 24, '2026-08-30T10:00:00Z'),\n\
            ('effect-ended', 'run-ended', 1, 'request-ended', 'scratch', '{project}', '{module}', 'scratch', 'codex', NULL, NULL, 'instant', NULL, '{sql_prompt}', NULL, '[]', '/private/repo', NULL, 80, 24, '2026-08-30T09:00:00Z'),\n\
            ('effect-plan', 'run-plan', 1, 'request-plan', 'scratch', '{project}', '{module}', 'scratch', 'codex', NULL, NULL, 'plan', NULL, '{sql_prompt}', NULL, '[]', '/private/repo', NULL, 80, 24, '2026-08-30T08:00:00Z'),\n\

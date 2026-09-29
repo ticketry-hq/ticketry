@@ -64,7 +64,7 @@ fn worktree_intent(value: u128, resource_key: &str) -> WorkspaceOperationIntent 
     WorkspaceOperationIntent {
         operation_id: id(value),
         kind: WorkspaceOperationKind::WorktreeCreate,
-        intent_version: 1,
+        intent_version: 2,
         resource_key: resource_key.to_owned(),
         payload: json!({ "branch": "task/coding-756" }),
     }

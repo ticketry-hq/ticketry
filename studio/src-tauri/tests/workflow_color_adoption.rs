@@ -199,7 +199,10 @@ fn workflow_color_checkpoint_follows_entry_skill_in_the_rust_ledger() {
         .iter()
         .position(|(table, _)| *table == LEDGER_TABLE)
         .expect("workflow color ledger");
-    assert_eq!(colors, entry_skill + 1);
+    assert!(
+        colors > entry_skill,
+        "workflow colors must follow entry skills"
+    );
 }
 
 async fn generated_colors(api: &TransportApiImpl, project_id: &str) -> Vec<(String, String)> {

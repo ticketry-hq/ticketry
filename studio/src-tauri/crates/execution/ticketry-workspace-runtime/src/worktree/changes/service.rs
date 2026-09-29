@@ -201,10 +201,10 @@ async fn cache_terminal_verdict(
     };
     let mut update: ship_record::ActiveModel = record.into();
     update.pr_state = Set(Some(
-        if view.state == "merged" {
-            "merged"
-        } else {
+        if view.state == "closed_unmerged" {
             "closed"
+        } else {
+            "merged"
         }
         .to_owned(),
     ));

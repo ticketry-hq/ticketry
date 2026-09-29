@@ -130,22 +130,19 @@ impl PullRequestStatusView {
         recorded_base_branch: &str,
         checkout_head: &str,
     ) -> Self {
-        let mut view = Self {
-            url: Some(url),
-            state: state.to_owned(),
-            target_branch: target_branch.map(str::to_owned),
-            head_commit: head_commit.map(str::to_owned),
-            integrated: state == "merged" && target_branch == Some(recorded_base_branch),
-            post_merge_work: state == "merged"
-                && head_commit.is_some()
-                && head_commit != Some(checkout_head),
-            replacement_eligible: state == "closed",
-            follow_up_eligible: false,
-            merge_preparation_eligible: false,
-            reason: None,
-        };
-        view.follow_up_eligible = view.integrated && view.post_merge_work;
-        view
+        Self::available(
+            url,
+            GithubPullRequest {
+                state: state.to_uppercase(),
+                base_branch: target_branch.unwrap_or_default().to_owned(),
+                head_commit: head_commit.unwrap_or_default().to_owned(),
+                mergeable: String::new(),
+                review_decision: None,
+                required_check_buckets: Vec::new(),
+            },
+            recorded_base_branch,
+            checkout_head,
+        )
     }
 }
 
@@ -174,7 +171,9 @@ mod tests {
             "main",
             &"b".repeat(40),
         );
+        assert_eq!(retargeted.state, "wrong_base");
         assert!(!retargeted.integrated);
+        assert!(!retargeted.post_merge_work);
         assert!(!retargeted.follow_up_eligible);
     }
 
@@ -188,6 +187,7 @@ mod tests {
             "main",
             &"a".repeat(40),
         );
+        assert_eq!(closed.state, "closed_unmerged");
         assert!(!closed.integrated);
         assert!(closed.replacement_eligible);
     }

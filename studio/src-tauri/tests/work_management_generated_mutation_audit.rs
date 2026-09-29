@@ -9,9 +9,9 @@ use seaography::{
     Builder, BuilderContext,
 };
 use ticketry_entities::{
-    agent_model, agent_model_reasoning_level, attachment, issue, issue_blocker, issue_type,
-    issue_type_transition, launch_binding, module_presentation, project, provider, reasoning_level,
-    state,
+    agent_model, agent_model_reasoning_level, attachment, issue, issue_blocker, issue_label,
+    issue_type, issue_type_transition, label, launch_binding, module_presentation, project,
+    provider, reasoning_level, state,
 };
 
 static AUDIT_CONTEXT: LazyLock<BuilderContext> = LazyLock::new(BuilderContext::default);
@@ -29,6 +29,8 @@ async fn generated_crud_schema() -> Schema {
     seaography::register_entity!(builder, state);
     seaography::register_entity!(builder, issue_type);
     seaography::register_entity!(builder, issue);
+    seaography::register_entity!(builder, label);
+    seaography::register_entity!(builder, issue_label);
     seaography::register_entity!(builder, module_presentation);
     seaography::register_entity!(builder, issue_blocker);
     seaography::register_entity!(builder, attachment);
@@ -54,6 +56,8 @@ async fn audit_schema_blindly_enables_every_generated_worktracker_bundle() {
         "worktrackerState",
         "worktrackerIssuetype",
         "worktrackerIssue",
+        "worktrackerLabel",
+        "worktrackerIssueLabels",
         "worktrackerModulepresentation",
         "worktrackerIssueBlockedBy",
         "worktrackerAttachment",

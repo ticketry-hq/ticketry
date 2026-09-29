@@ -459,6 +459,39 @@ async fn closure_refusal_and_every_cleanup_blocker_remain_separate_live_facts() 
         })
     };
 
+    // Each terminal verdict belongs to its own PR; merged PRs cannot become
+    // open, unmerged, or retargeted later.
+    for (state, base, blocker) in [
+        ("unavailable", "main", "pull_request_unavailable"),
+        ("OPEN", "main", "pull_request_not_merged"),
+        ("CLOSED", "main", "pull_request_closed_unmerged"),
+        ("MERGED", "release", "pull_request_wrong_base"),
+    ] {
+        let blocked = fixture(Scenario::Clean).await;
+        let _blocked_remote = attach_remote(blocked.repository_path());
+        commit_file(blocked.checkout_path(), "blocked.txt");
+        let head = git(&["rev-parse", "HEAD"], blocked.checkout_path());
+        github.set_view(provider("OPEN", "main", &head));
+        let created = blocked
+            .graphql(
+                TASK_PULL_REQUEST,
+                serde_json::json!({"taskId": TASK, "operationId": operation_id()}),
+            )
+            .await;
+        assert_eq!(created["errors"], serde_json::Value::Null, "{created:#}");
+        blocked.complete().await;
+        if state == "unavailable" {
+            github.select("unavailable");
+        } else {
+            github.set_view(provider(state, base, &head));
+        }
+        assert_cleanup_blocker(&blocked, blocker).await;
+        if state != "unavailable" && state != "OPEN" {
+            assert_cleanup_blocker(&blocked, blocker).await;
+        }
+        github.select("success");
+    }
+
     task.set_transition_agent_allowed(false).await;
     github.set_view(provider("MERGED", "main", &merged_head));
     let refused = task
@@ -476,16 +509,12 @@ async fn closure_refusal_and_every_cleanup_blocker_remain_separate_live_facts() 
     task.complete().await;
     assert_eq!(work_item_state(&task).await, "Done");
 
+    // Confirmed terminal verdicts remain usable when GitHub is unavailable.
     github.select("unavailable");
-    assert_cleanup_blocker(&task, "pull_request_unavailable").await;
+    let cached = pull_request_status(&task).await;
+    assert_eq!(cached["state"], "merged");
+    assert_eq!(cached["integrated"], true);
     github.select("success");
-    github.set_view(provider("OPEN", "main", &merged_head));
-    assert_cleanup_blocker(&task, "pull_request_not_merged").await;
-    github.set_view(provider("CLOSED", "main", &merged_head));
-    assert_cleanup_blocker(&task, "pull_request_closed_unmerged").await;
-    github.set_view(provider("MERGED", "release", &merged_head));
-    assert_cleanup_blocker(&task, "pull_request_wrong_base").await;
-    github.set_view(provider("MERGED", "main", &merged_head));
 
     write(&task.checkout_path().join("dirty.txt"), "uncommitted\n");
     assert_cleanup_blocker(&task, "checkout_dirty").await;
@@ -513,7 +542,10 @@ async fn assert_cleanup_blocker(task: &support::Fixture, blocker: &str) {
         .await;
     assert_eq!(response["errors"], serde_json::Value::Null, "{response:#}");
     let cleanup = &response["data"]["worktree_changes"]["cleanup"];
-    assert_eq!(cleanup["eligible"], false);
+    assert_eq!(
+        cleanup["eligible"], false,
+        "expected {blocker}: {response:#}"
+    );
     assert_eq!(cleanup["blocker"], blocker);
     assert!(cleanup["reason"]
         .as_str()
@@ -735,11 +767,38 @@ async fn mapped_pull_request_reads_classify_every_approved_provider_state_live()
     assert_eq!(approval["state"], "approval_required");
     assert_eq!(approval["merge_preparation_eligible"], false);
 
-    github.set_view(view("MERGED", "release", "MERGEABLE", Some("APPROVED")));
-    let wrong_base = pull_request_status(&task).await;
-    assert_eq!(wrong_base["state"], "wrong_base");
-    assert_eq!(wrong_base["target_branch"], "release");
-    assert_eq!(wrong_base["integrated"], false);
+    for (state, base, expected) in [
+        ("MERGED", "release", "wrong_base"),
+        ("CLOSED", "main", "closed_unmerged"),
+        ("CLOSED", "release", "closed_unmerged"),
+    ] {
+        let terminal = fixture(Scenario::Clean).await;
+        let _terminal_remote = attach_remote(terminal.repository_path());
+        commit_file(terminal.checkout_path(), "terminal.txt");
+        let head = git(&["rev-parse", "HEAD"], terminal.checkout_path());
+        github.set_view(serde_json::json!({
+            "state": "OPEN", "baseRefName": "main", "headRefOid": head,
+            "mergeable": "MERGEABLE", "reviewDecision": "APPROVED",
+        }));
+        let created = terminal
+            .graphql(
+                TASK_PULL_REQUEST,
+                serde_json::json!({"taskId": TASK, "operationId": operation_id()}),
+            )
+            .await;
+        assert_eq!(created["errors"], serde_json::Value::Null, "{created:#}");
+        github.set_view(serde_json::json!({
+            "state": state, "baseRefName": base, "headRefOid": head,
+            "mergeable": "MERGEABLE", "reviewDecision": "APPROVED",
+        }));
+        for _ in 0..2 {
+            let status = pull_request_status(&terminal).await;
+            assert_eq!(status["state"], expected);
+            assert_eq!(status["target_branch"], base);
+            assert_eq!(status["integrated"], false);
+            assert_eq!(status["replacement_eligible"], state == "CLOSED");
+        }
+    }
 
     github.set_view(view("MERGED", "main", "MERGEABLE", Some("APPROVED")));
     let merged = pull_request_status(&task).await;
@@ -753,17 +812,6 @@ async fn mapped_pull_request_reads_classify_every_approved_provider_state_live()
     assert_eq!(post_merge["state"], "merged");
     assert_eq!(post_merge["post_merge_work"], true);
     assert_eq!(post_merge["follow_up_eligible"], true);
-
-    github.set_view(view("CLOSED", "main", "MERGEABLE", Some("APPROVED")));
-    let closed = pull_request_status(&task).await;
-    assert_eq!(closed["state"], "closed_unmerged");
-    assert_eq!(closed["replacement_eligible"], true);
-    assert_eq!(closed["integrated"], false);
-
-    github.set_view(view("CLOSED", "release", "MERGEABLE", Some("APPROVED")));
-    let retargeted_closed = pull_request_status(&task).await;
-    assert_eq!(retargeted_closed["state"], "closed_unmerged");
-    assert_eq!(retargeted_closed["replacement_eligible"], true);
 
     git(
         &[

@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import {
   chmodSync,
   copyFileSync,
+  constants as fsConstants,
   cpSync,
   existsSync,
   mkdirSync,
@@ -25,7 +26,7 @@ import {
 import { proveDescriptionSaveAndStorySwitch } from "./desktop-description-acceptance.mjs";
 import { verifyLiveMcpRecovery } from "./desktop-mcp-recovery-acceptance.mjs";
 import { callSocketMcpTool } from "./mcp-socket-client.mjs";
-import { captureIdea, click, openExistingStory } from "./desktop-studio-ui.mjs";
+import { captureIdea, click, expectResumableRun, openExistingStory } from "./desktop-studio-ui.mjs";
 
 const studioRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const repositoryRoot = path.resolve(studioRoot, "..");
@@ -145,6 +146,7 @@ async function createStoryThroughStudio(browser, workspaceDirectory) {
   await moduleName.setValue("Acceptance Module");
   await (await browser.$("aria/Module folder")).setValue(workspaceDirectory);
   await click(await browser.$("aria/Create module"));
+  await click(await browser.$("aria/Trust folder"));
 
   const skipTour = await browser.$('[data-testid="onboarding-skip-tour"]');
   await click(skipTour);
@@ -152,7 +154,7 @@ async function createStoryThroughStudio(browser, workspaceDirectory) {
   const taskId = await captureIdea(browser, "Prove desktop agent execution");
   await openExistingStory(browser, taskId);
   return {
-    launch: await browser.$("aria/Run agent"),
+    launch: await browser.$("aria/Run item"),
     taskId,
   };
 }
@@ -316,7 +318,7 @@ async function main() {
     mkdirSync(runtimeTempDirectory);
     const binary = path.join(applicationDirectory, "ticketry");
     const hook = path.join(applicationDirectory, "ticketry-hook");
-    copyFileSync(builtBinary, binary);
+    copyFileSync(builtBinary, binary, fsConstants.COPYFILE_FICLONE);
     tools = provisionDisposableTools(root);
     copyFileSync(tools.hook, hook);
     chmodSync(binary, 0o755);
@@ -325,6 +327,7 @@ async function main() {
     let port = await availablePort();
     const applicationEnvironment = {
       MUXED_DATA_DIR: tools.dataDirectory,
+      CODEX_HOME: path.join(root, "codex-settings"),
       MUXED_FORCE_SQLITE: "true",
       MUXED_TMUX_SOCKET: "ticketry-e2e",
       TMUX_TMPDIR: tmuxDirectory,
@@ -358,7 +361,7 @@ async function main() {
       await proveDescriptionSaveAndStorySwitch(browser, story.taskId);
     }
     await openExistingStory(browser, story.taskId);
-    story.launch = await browser.$("aria/Run agent");
+    story.launch = await browser.$("aria/Run item");
     writeFileSync(path.join(root, "provider-task"), `${story.taskId}\nCoding\n`);
     if (!existsSync(tools.marker)) {
       await click(story.launch);
@@ -368,7 +371,7 @@ async function main() {
       await toast.waitForDisplayed({ timeout: 20_000 });
       const launchResult = await toast.getText();
       if (!launchResult.includes("Agent run started.")) {
-        throw new Error(`Run agent failed through the visible UI: ${launchResult}`);
+        throw new Error(`Run item failed through the visible UI: ${launchResult}`);
       }
     }
     const deadline = Date.now() + 20_000;
@@ -399,6 +402,7 @@ async function main() {
     await moduleActivity.waitForDisplayed({ timeout: 30_000 });
     const terminalTab = await browser.$("aria/Ideas codex terminal");
     await terminalTab.waitForDisplayed({ timeout: 30_000 });
+    await click(terminalTab);
     await (await terminalTab.$("aria/Agent is actively working"))
       .waitForDisplayed({ timeout: 30_000 });
     if (!process.argv.includes("--mcp-recovery")) {
@@ -428,8 +432,7 @@ async function main() {
     }
 
     writeFileSync(path.join(root, "provider-exit"), "");
-    const completedRun = await browser.$("aria/Resume Ideas codex terminal");
-    await completedRun.waitForDisplayed({ timeout: 30_000 });
+    await expectResumableRun(browser, "Ideas codex terminal");
     if (process.argv.includes("--mcp-recovery")) {
       const hooks = readFileSync(path.join(root, "provider-hooks.log"), "utf8");
       for (const event of ["SessionStart", "UserPromptSubmit", "PostToolUse", "Stop"]) {
@@ -473,7 +476,7 @@ async function main() {
     await browser.refresh();
     await openExistingStory(browser, story.taskId);
     await waitForState(browser, "Done");
-    await (await browser.$("aria/Resume Ideas codex terminal")).waitForDisplayed({ timeout: 30_000 });
+    await expectResumableRun(browser, "Ideas codex terminal");
     await waitForTmuxEmpty(root);
 
     await browser.deleteSession();
@@ -489,7 +492,7 @@ async function main() {
     browser = await connectToStudio(port, child);
     await openExistingStory(browser, story.taskId);
     await waitForState(browser, "Done");
-    await (await browser.$("aria/Resume Ideas codex terminal")).waitForDisplayed({ timeout: 30_000 });
+    await expectResumableRun(browser, "Ideas codex terminal");
 
     await browser.deleteSession();
     browser = undefined;

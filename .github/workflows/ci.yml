@@ -70,3 +70,12 @@ jobs:
         run: |
           npm run release:test --workspace @worktracker/studio
           npm run release:validate --workspace @worktracker/studio
+
+      - name: Preserve desktop acceptance diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-acceptance-diagnostics
+          path: studio/test-results/
+          if-no-files-found: ignore
+          retention-days: 7

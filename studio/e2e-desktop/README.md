@@ -11,18 +11,21 @@ WebDriver feature, then drives Ticketry's visible React UI inside its macOS
 WKWebView. It does not need a running Vite development server.
 
 The run starts from a fresh temporary installation, completes provider
-onboarding, and creates a module and Story.
+onboarding, confirms the module-folder trust prompt using a temporary Codex
+configuration directory, and creates a module and Story.
 
 It then proves the Story description seam in WebKit before anything is running
 (CODING-1528): it clicks the description, types into the rich Markdown editor
-through real key events rather than a scripted value, clicks **Save**, switches
-to a second Story and saves a different description there, reloads the webview,
+through WebDriver contenteditable text input rather than assigning an editor
+value, leaves the editor to
+autosave, switches
+to a second Story and autosaves a different description there, reloads the webview,
 and requires each Story to show its own authoritative description — the text
 the server returned, not a surviving local draft. The rich editor must be the
 path taken; falling back to the Markdown source textarea fails the scenario.
 The Chromium suite keeps its own Save and Cancel coverage unchanged.
 
-The run then clicks **Run agent**. The click
+The run then clicks **Run item**. The click
 enters the production Tauri command and real Rust launch authority, terminal,
 MCP, hook-spool, lifecycle, and reconciliation services. Ticketry starts a real
 child process in an isolated private tmux server.

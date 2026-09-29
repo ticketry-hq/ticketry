@@ -51,3 +51,11 @@ export async function openExistingStory(browser, taskId) {
     timeoutMsg: `Story ${taskId} did not open in the details surface`,
   });
 }
+
+/** Requires a completed run in the current UI's collapsed dormant-tabs menu. */
+export async function expectResumableRun(browser, label) {
+  const menu = await browser.$('[data-testid="dormant-tabs-trigger"]');
+  await click(menu);
+  await (await browser.$(`aria/Resume ${label}`)).waitForDisplayed({ timeout: 30_000 });
+  await click(menu);
+}

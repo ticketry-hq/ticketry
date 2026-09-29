@@ -4,8 +4,8 @@
  *
  * The browser suite covers autosave in Chromium. WebKit is where the
  * rich editor's own selection and focus behaviour differs, so this scenario
- * types through the editor's real input path (key events into the
- * contenteditable, not a scripted value), leaves the editor so it saves,
+ * types through WebDriver's contenteditable text-input command (not a
+ * direct editor-value assignment), leaves the editor so it saves,
  * switches Stories, reloads the webview, and requires both Stories to show their authoritative descriptions
  * — the text the server returned, not a surviving local draft.
  *
@@ -27,7 +27,7 @@ async function openEditor(browser) {
   return surface;
 }
 
-/** Types `text` through real key events, then moves focus out so autosave writes it. */
+/** Types through contenteditable input, then leaves focus so autosave writes it. */
 async function typeAndSave(browser, text) {
   const surface = await openEditor(browser);
   const existing = (await surface.getText()).trim();
@@ -35,9 +35,15 @@ async function typeAndSave(browser, text) {
     throw new Error(`the editor opened holding foreign text: ${existing}`);
   }
   await surface.click();
-  await browser.keys(text);
+  if (!await surface.isFocused()) {
+    throw new Error("workspace navigation took focus from the rich description editor");
+  }
+  // The pinned WKWebView driver implements element text input through the
+  // browser editing path; its keyboard Actions command only inserts into
+  // input/textarea elements and cannot type into this rich editor.
+  await surface.addValue(text);
   if (!(await surface.getText()).includes(text)) {
-    throw new Error("the rich editor did not receive typed keystrokes in WKWebView");
+    throw new Error("the rich editor did not receive text input in WKWebView");
   }
   await browser.execute(() => document.activeElement?.blur());
 }

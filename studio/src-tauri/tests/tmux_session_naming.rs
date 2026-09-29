@@ -37,7 +37,7 @@ fn source_roots() -> Vec<PathBuf> {
     slices.sort();
     assert_eq!(
         slices.len(),
-        20,
+        21,
         "tmux naming guard must scan all workspace crates"
     );
     roots.extend(slices);

@@ -130,7 +130,7 @@ impl PullRequestStatusView {
         recorded_base_branch: &str,
         checkout_head: &str,
     ) -> Self {
-        Self::available(
+        let mut view = Self::available(
             url,
             GithubPullRequest {
                 state: state.to_uppercase(),
@@ -142,7 +142,14 @@ impl PullRequestStatusView {
             },
             recorded_base_branch,
             checkout_head,
-        )
+        );
+        view.target_branch = target_branch.map(str::to_owned);
+        view.head_commit = head_commit.map(str::to_owned);
+        if head_commit.is_none() {
+            view.post_merge_work = false;
+            view.follow_up_eligible = false;
+        }
+        view
     }
 }
 
@@ -175,6 +182,22 @@ mod tests {
         assert!(!retargeted.integrated);
         assert!(!retargeted.post_merge_work);
         assert!(!retargeted.follow_up_eligible);
+    }
+
+    #[test]
+    fn cached_merge_without_reviewed_head_does_not_offer_follow_up() {
+        let merged = PullRequestStatusView::cached(
+            "https://github.com/acme/repo/pull/1".into(),
+            "merged",
+            Some("main"),
+            None,
+            "main",
+            &"b".repeat(40),
+        );
+        assert!(merged.integrated);
+        assert_eq!(merged.head_commit, None);
+        assert!(!merged.post_merge_work);
+        assert!(!merged.follow_up_eligible);
     }
 
     #[test]

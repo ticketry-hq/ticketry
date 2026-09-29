@@ -60,7 +60,7 @@ jobs:
           prepareDesktopHookRunner({ root: process.cwd() });'
 
       - name: Desktop Rust tests
-        run: cargo test --manifest-path studio/src-tauri/Cargo.toml --features native-libghostty
+        run: cargo test --manifest-path studio/src-tauri/Cargo.toml --features native-libghostty --no-fail-fast
 
       - name: Frontend-to-agent desktop acceptance
         timeout-minutes: 30
